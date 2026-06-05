@@ -1,0 +1,4 @@
+interface:
+  display_name: "FT Scope Analyzer"
+  short_description: "Scopes requirement sections and coverage gaps"
+  default_prompt: "Use $ft-scope-analyzer after source-selection.md to isolate relevant FT sections, produce scope artifacts, and identify coverage gaps before writing cases."

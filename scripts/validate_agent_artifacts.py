@@ -1,0 +1,14820 @@
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import re
+import sys
+import warnings
+from collections import Counter, defaultdict
+from dataclasses import asdict, dataclass
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+warnings.filterwarnings("ignore", message="ARC4 has been moved", category=Warning)
+
+from test_case_agent import analyze_sections, classify_source_quality_issue, load_sections
+from test_case_agent.chunking import split_section
+
+ALLOWED_CURRENT_STAGES = {
+    "ft-source-locator",
+    "ft-scope-analyzer",
+    "ft-test-case-writer",
+    "ft-test-case-reviewer",
+    "ft-test-case-iteration",
+    "ft-ui-automation-prep",
+}
+ALLOWED_STAGE_STATUSES = {
+    "ready-for-next-stage",
+    "ready-for-gap-review",
+    "ready-for-review",
+    "ready-for-writer-revision",
+    "signed-off",
+    "round-cap-reached",
+    "blocked-input",
+}
+ALLOWED_NEXT_SKILLS = ALLOWED_CURRENT_STAGES | {"none", None}
+SESSION_BASED_REVIEW_CYCLE_STATUSES = {
+    "scope-ready-for-gap-review",
+    "scope-gap-review-passed",
+    "scope-ready-for-writer",
+    "writer-draft-ready",
+    "structure-preflight-blocked",
+    "semantic-review-ready",
+    "semantic-revision-needed",
+    "semantic-review-passed",
+    "format-review-ready",
+    "format-revision-needed",
+    "final-regression-ready",
+    "signed-off",
+    "round-cap-reached",
+    "blocked-input",
+}
+ALLOWED_UI_STATUSES = {
+    "confirmed",
+    "mismatch-ft-ui",
+    "blocked-ui-unavailable",
+    "blocked-access",
+    "blocked-observability",
+    "not-automatable-manual-only",
+}
+ALLOWED_ARTIFACT_EXPORT_POLICIES = {
+    "repo-tracked",
+    "alias-copy",
+    "local-output-index-only",
+    "external",
+    "not-collected",
+}
+REPO_TRACKED_ARTIFACT_POLICIES = {"repo-tracked", "alias-copy"}
+SOURCE_SUPPORT_EXTENSIONS = {
+    ".docx",
+    ".pdf",
+    ".xlsx",
+    ".xlsb",
+    ".vsdx",
+    ".png",
+    ".json",
+    ".txt",
+    ".wsdl",
+}
+REQUIRED_WORKFLOW_FIELDS = {
+    "ft_slug",
+    "scope_slug",
+    "current_stage",
+    "stage_status",
+    "current_round",
+    "next_skill",
+    "required_inputs",
+    "latest_artifacts",
+    "open_questions",
+    "blocking_reasons",
+}
+REQUIRED_SOURCE_SELECTION_SECTIONS = {
+    "Context",
+    "Main FT Documents",
+    "Structural Cross-Check PDF",
+    "Support Files And Mockups",
+    "Source Quality",
+    "Ambiguity And Decision Log",
+    "Handoff",
+}
+REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
+    "selected_ft_slug",
+    "selection_status",
+}
+ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
+REQUIRED_FINAL_ARTIFACT_ALIASES = {
+    "final_findings",
+    "final_traceability_matrix",
+    "final_traceability_matrix_xlsx",
+    "loop_summary",
+}
+ALLOWED_REVIEW_MODES = {"traceability", "structure", "test-design", "scope_gap_review"}
+ALLOWED_FINDING_SEVERITIES = {"error", "warning", "info"}
+ALLOWED_FINDING_CATEGORIES = {
+    "coverage",
+    "atomarity",
+    "traceability",
+    "expected-result",
+    "scope",
+    "duplication",
+    "format",
+    "structure",
+    "test-design",
+}
+ALLOWED_FINDING_STATUSES = {"open", "closed", "partially-closed"}
+REQUIRED_FINDING_FIELDS = {
+    "review_mode",
+    "severity",
+    "category",
+    "title",
+    "problem",
+    "evidence",
+    "required_change",
+    "source_reference",
+    "status",
+}
+REQUIRED_REVIEWER_SIGNOFF_FIELDS = {
+    "traceability_checked",
+    "structure_checked",
+    "test_case_grouping_checked",
+    "test_case_numbering_checked",
+    "test_design_checked",
+    "applicability_dimensions_checked",
+    "blocking_findings_absent",
+    "traceability_gaps_absent",
+    "known_unclear_items",
+    "sign_off_rationale",
+}
+REQUIRED_RESIDUAL_RISK_FIELDS = {
+    "remaining_blocking_findings",
+    "remaining_traceability_gaps",
+    "remaining_coverage_gaps",
+    "remaining_unclear_items",
+    "decision_rationale",
+    "next_action",
+}
+REVIEWER_SIGNOFF_YES_FIELDS = {
+    "structure_checked",
+    "test_case_grouping_checked",
+    "test_case_numbering_checked",
+    "test_design_checked",
+    "applicability_dimensions_checked",
+    "blocking_findings_absent",
+}
+REVIEWER_SIGNOFF_YES_OR_NA_FIELDS = {
+    "source_parity_checked",
+    "traceability_checked",
+    "traceability_gaps_absent",
+}
+ALLOWED_RESOLUTION_STATUSES = {"fixed", "not-fixed-scope", "needs-clarification"}
+REQUIRED_WRITER_RESPONSE_FIELDS = {
+    "resolution_status",
+    "change_summary",
+    "affected_test_case_ids",
+}
+MIN_TEST_CASE_FIELD_COUNT = 8
+TEST_CASE_ID_RE = re.compile(r"\bTC-[A-Za-z0-9_-]+\b")
+ATOM_ID_RE = re.compile(r"\bATOM-\d{3,}\b")
+SCOPED_ATOM_ID_RE = re.compile(r"[A-Z0-9-]+-ATOM-\d{3,}")
+ANY_ATOM_ID_RE = re.compile(r"\b(?:[A-Z0-9-]+-)?ATOM-\d{3,}\b")
+GAP_ID_RE = re.compile(r"\b(?:GAP-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b")
+FINDING_ID_RE = re.compile(r"\b(?:USER-)?FINDING(?:-[A-Z]+)?-\d{3,}\b")
+REQUIREMENT_CODE_RANGE_RE = re.compile(
+    r"\b([A-ZА-Я]{2,10})\s*[-:]?\s*(\d+)\b\s*`?\s*(?:-|–|—)\s*`?\s*(?:\1\s*[-:]?\s*)?(\d+)\b",
+    flags=re.IGNORECASE,
+)
+REQUIREMENT_CODE_TOKEN_RE = re.compile(r"\b([A-ZА-Я]{2,10})\s*[-:]?\s*(\d+)\b", flags=re.IGNORECASE)
+NON_REQUIREMENT_CODE_PREFIXES = {
+    "ATOM",
+    "GAP",
+    "SRC",
+    "TC",
+    "WP",
+    "PDF",
+    "PAGE",
+    "P",
+}
+ALLOWED_COVERAGE_STATUSES = {"covered", "gap", "unclear"}
+ALLOWED_COVERAGE_DIMENSIONS = {
+    "role-permission",
+    "status-lifecycle",
+    "decision-table",
+    "pairwise",
+    "boundary",
+    "equivalence",
+    "dependency",
+    "conditional-visibility",
+    "api-server-validation",
+    "integration",
+    "security",
+    "async",
+    "persistence",
+    "table-list",
+    "file-upload",
+    "calculation",
+    "numeric",
+    "date-time",
+    "length",
+    "scenario-use-case",
+    "performance",
+    "reliability",
+    "compatibility",
+    "usability",
+    "accessibility-ui",
+    "traceability",
+    "expected-result",
+    "atomarity",
+    "format",
+    "scope",
+    "other",
+}
+APPLICABILITY_MATRIX_REQUIRED_COLUMNS = {
+    "dimension",
+    "applicable",
+    "source_ref",
+    "reason",
+    "linked_atoms",
+    "linked_test_cases",
+    "gap_id",
+}
+RISK_PRIORITY_MAP_REQUIRED_COLUMNS = {
+    "atom_id",
+    "risk_level",
+    "risk_factors",
+    "source_ref",
+    "required_priority",
+    "linked_test_cases",
+    "gap_id",
+    "rationale",
+}
+SOURCE_ROW_INVENTORY_REQUIRED_COLUMNS = {
+    "source_row_id",
+    "package_id",
+    "field_or_action",
+    "source_ref",
+    "requirement_codes",
+    "in_scope",
+    "mapped_atom_or_gap",
+}
+SOURCE_ROW_COMPLETENESS_MATRIX_REQUIRED_COLUMNS = {
+    "source_row_id",
+    "source_requirement_codes",
+    "normalized_property_ids",
+    "linked_atoms",
+    "gap_ids",
+    "coverage_decision",
+}
+SOURCE_NORMALIZATION_DIAGNOSTIC_COMPLETENESS_MATRIX_REQUIRED_COLUMNS = (
+    SOURCE_ROW_COMPLETENESS_MATRIX_REQUIRED_COLUMNS | {"diagnostic_atom_status"}
+)
+SOURCE_NORMALIZATION_DIAGNOSTIC_NORMALIZATION_REQUIRED_COLUMNS = {
+    "source_column",
+    "source_text_fragment",
+}
+SOURCE_NORMALIZATION_DIAGNOSTIC_REQUIRED_SECTIONS = {
+    "Source Row Completeness Matrix",
+    "Source Table Normalization",
+    "Self-check",
+}
+TEST_DESIGN_DECISION_TABLE_REQUIRED_COLUMNS = {
+    "decision_id",
+    "package_id",
+    "source_property_id",
+    "linked_atom_id",
+    "property_type",
+    "decision",
+    "decision_reason",
+    "planned_tc_or_gap",
+    "oracle_source",
+    "must_be_executable",
+    "review_risk",
+}
+COVERAGE_OBLIGATION_TABLE_REQUIRED_COLUMNS = {
+    "obligation_id",
+    "package_id",
+    "source_property_id",
+    "linked_atom_id",
+    "property_type",
+    "obligation_class",
+    "required_behavior",
+    "source_ref",
+    "planned_tc_or_gap",
+    "status",
+    "review_notes",
+}
+DICTIONARY_INVENTORY_REQUIRED_COLUMNS = {
+    "dictionary_id",
+    "dictionary_name",
+    "source_file",
+    "source_location",
+    "extraction_status",
+    "active_values",
+    "archived_values",
+    "used_by_source_properties",
+    "gap_id",
+}
+COVERAGE_OBLIGATION_REQUIRED_CLASSES_BY_PROPERTY_TYPE = {
+    "numeric-format": (
+        "valid-digits",
+        "reject-letters",
+        "reject-spaces",
+        "reject-special-chars",
+        "reject-decimal-separator",
+        "reject-sign",
+    ),
+    "amount-tags": (
+        "dictionary-values-shown",
+        "tag-selection-fills-field",
+    ),
+    "format-mask": (
+        "mask-pattern-applied",
+    ),
+    "mask-format": (
+        "mask-pattern-applied",
+    ),
+    "default-mask": (
+        "default-mask-visible",
+    ),
+    "маска-формата": (
+        "mask-pattern-applied",
+    ),
+    "формат-маска": (
+        "mask-pattern-applied",
+    ),
+    "маска-по-умолчанию": (
+        "default-mask-visible",
+    ),
+    "date-passport-validity": (
+        "passport-before-14-rejected",
+        "passport-14-to-20-plus-45-window",
+        "passport-20-plus-1-to-45-plus-45-window",
+        "passport-45-plus-indefinite-window",
+    ),
+    "date-validity-window": (
+        "lower-boundary-accepted",
+        "upper-boundary-accepted",
+        "off-boundary-rejected",
+    ),
+    "hint-behavior": (
+        "hint-triggered",
+        "hint-cleared",
+    ),
+    "validation-message": (
+        "message-triggered",
+    ),
+    "red-highlight": (
+        "highlight-triggered",
+    ),
+    "action-confirmation": (
+        "confirmation-message-shown",
+        "confirmation-accept-continues",
+        "confirmation-cancel-stays",
+    ),
+    "action-navigation": (
+        "navigation-target-opened",
+    ),
+    "address-required-components": (
+        "region-and-house-required",
+        "missing-apartment-or-private-house-hint",
+    ),
+}
+COVERAGE_OBLIGATION_ALLOWED_STATUSES = {
+    "covered",
+    "gap",
+    "unclear",
+    "blocked",
+    "not-applicable",
+    "n/a",
+}
+ALLOWED_TEST_DESIGN_DECISIONS = {
+    "standalone_tc",
+    "covered_by_existing_tc",
+    "gap_unclear",
+    "metadata_only",
+    "scenario_only",
+    "out_of_scope",
+}
+SPLIT_TEST_DESIGN_SECTION_FILES = {
+    "Artifact Write Strategy": "artifact-write-strategy.md",
+    "Mockup Usage": "mockup-usage.md",
+    "Source Row Inventory": "source-row-inventory.md",
+    "Source Row Completeness Matrix": "source-row-completeness-matrix.md",
+    "Source Table Normalization": "source-table-normalization.md",
+    "Test Design Decision Table": "test-design-decision-table.md",
+    "Coverage Obligation Table": "coverage-obligation-table.md",
+    "Atomic Requirements Ledger": "atomic-requirements-ledger.md",
+    "Internal Work Package Coverage": "internal-work-package-coverage.md",
+    "Package Ledger Self-Check": "package-ledger-self-check.md",
+    "Package Test Design Plan": "package-test-design-plan.md",
+    "Package Design Plan Self-Check": "package-design-plan-self-check.md",
+    "Test Design Review": "test-design-review.md",
+    "Dependency Matrix": "dependency-matrix.md",
+    "Test-design Applicability Matrix": "test-design-applicability-matrix.md",
+    "Risk / Priority Map": "risk-priority-map.md",
+    "Combinatorial Coverage Table": "combinatorial-coverage-table.md",
+    "Coverage Map": "coverage-map.md",
+    "Coverage Gaps": "coverage-gaps.md",
+    "Writer Quality Gate": "writer-quality-gate.md",
+    "Writer Self-Check": "writer-self-check.md",
+}
+SPLIT_TEST_DESIGN_SECTIONS = frozenset(SPLIT_TEST_DESIGN_SECTION_FILES)
+REQUIRED_TEST_CASE_TEMPLATE_FIELDS = {
+    "Цель": ["Goal", "Цель"],
+    "Ссылка на ФТ": ["FT Reference", "Ссылка на ФТ"],
+    "Источник требования": ["Requirement Source", "Источник требования"],
+    "Источник / цитата требования": [
+        "Requirement Quote",
+        "Requirement Source Quote",
+        "Source Requirement Quote",
+        "Источник / цитата требования",
+    ],
+}
+TRACEABILITY_REMAP_TEST_CASE_TYPES = {"traceability-remap"}
+TRACEABILITY_REMAP_TEXT_RE = re.compile(
+    r"traceability[-\s]?remap|compatibility\s+(?:anchor|section)|"
+    r"not\s+(?:a\s+)?standalone\s+(?:executable\s+)?(?:check|coverage|tc)|"
+    r"does\s+not\s+create\s+(?:a\s+)?separate\s+standalone|"
+    r"covered\s+within|remapped\s+to|canonical\s+coverage\s+is|"
+    r"не\s+созда[её]т\s+.*самостоятельн|не\s+является\s+.*самостоятельн",
+    flags=re.IGNORECASE,
+)
+SOURCE_PROPERTY_ID_RE = re.compile(r"\bSRC-[A-Za-z0-9_-]+\.P\d+\b", flags=re.IGNORECASE)
+DIAGNOSTIC_PLACEHOLDER_GAP_RE = re.compile(r"\bGAP-900\b", flags=re.IGNORECASE)
+GSR_ONLY_EXPECTED_BEHAVIOR_RE = re.compile(
+    r"\b(?:follows|per|according\s+to|as\s+described\s+in)\s+GSR\b|"
+    r"\b(?:по|согласно)\s+GSR\b|"
+    r"\bGSR\s+\d+\b\s*(?:rule|requirement|требовани[ея])",
+    flags=re.IGNORECASE,
+)
+INTEGRATION_OR_INTERNAL_PROPERTY_RE = re.compile(
+    r"\b(?:integration|api|backend|internal|model|database|db|rabbitmq|async|persistence|kladr|dadata)\b",
+    flags=re.IGNORECASE,
+)
+OBSERVABLE_BEHAVIOR_RE = re.compile(
+    r"\b(?:displayed|shown|visible|hint|message|screen|form|button|opened|click|"
+    r"decomposed|manual\s+input\s+block|fills?\s+[^|]{0,80}fields?)\b|"
+    r"(?:отображ|видим|подсказ|сообщен|экран|форма|кнопк|открыва|расклад|заполня)",
+    flags=re.IGNORECASE,
+)
+GAP_ADMISSIBILITY_VISIBLE_RESULT_RE = re.compile(
+    r"\b(?:displayed|shown|visible|hint|message|notification|toast|modal|screen|"
+    r"button|opened|closed|red|highlighted|required|mandatory|validation|"
+    r"error|warning|tooltip|mask|tag|dictionary|confirmation|confirm|cancel|"
+    r"navigate|navigation)\b|"
+    r"(?:отображ|показыва|видим|скрыва|подсказ|сообщен|уведомлен|ошибк|"
+    r"предупрежден|подсвеч|красн|обязател|валидац|маск|шаблон|"
+    r"справочн|подтверждени|отмен|переход|открыва|закрыва)|\bтег[а-я]*\b",
+    flags=re.IGNORECASE,
+)
+GAP_ADMISSIBILITY_EXECUTABLE_PROPERTY_RE = re.compile(
+    r"hint[-_ ]?behavior|validation[-_ ]?message|red[-_ ]?highlight|"
+    r"action[-_ ]?(?:confirmation|exit)|conditional[-_ ]?visibility|"
+    r"format[-_ ]?mask|default[-_ ]?mask|amount[-_ ]?tags|dictionary[-_ ]?(?:closed[-_ ]?set|source|values)|"
+    r"date[-_ ]?(?:passport[-_ ]?)?validity[-_ ]?window|date[-_ ]?passport[-_ ]?validity|"
+    r"address[-_ ]?required[-_ ]?components|visible[-_ ]?result|"
+    r"подсказ|сообщен|подсвет|маск|справочник|\bтег[а-я]*\b|"
+    r"дата[^|]{0,40}паспорт|паспорт[^|]{0,40}дат|"
+    r"обязательн[^|]{0,40}адрес|компонент[^|]{0,40}адрес|"
+    r"действи[^|]{0,40}(?:подтверждени|выход)|условн[^|]{0,40}видим",
+    flags=re.IGNORECASE,
+)
+GAP_ADMISSIBILITY_BLOCKER_RE = re.compile(
+    r"\b(?:catalog|fixture|support\s+workbook|source\s+missing|not\s+available|"
+    r"not\s+defined|unknown|backend|api|rabbitmq|model|database|db|kladr|dadata|"
+    r"integration|internal|status|dictionary)\b|"
+    r"(?:отсутств|не\s+найден|не\s+задан|не\s+указан|недоступ|нет\s+данных|"
+    r"справочник|каталог|фикстур|статус|бэкенд|модель|интеграц|внутренн|клада?р|дадата)",
+    flags=re.IGNORECASE,
+)
+PASSPORT_VALIDITY_WINDOW_RE = re.compile(
+    r"(?:паспорт|passport).{0,160}(?:14|20|45|просроч|недействител)|"
+    r"(?:14|20|45).{0,160}(?:паспорт|passport|просроч|недействител)|"
+    r"date[-_ ]?passport[-_ ]?validity",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+HIGH_RISK_DIMENSION_CANDIDATES = {
+    "role-permission",
+    "status-lifecycle",
+    "api-server-validation",
+    "integration",
+    "security",
+    "file-upload",
+    "calculation",
+}
+SEVERITY_ORDER = {"error": 0, "warning": 1, "info": 2}
+SOURCE_QUALITY_MAX_CHARS = 12000
+PROMPT_REQUIRED_SECTION_GROUPS = {"goal", "inputs", "guardrails"}
+PROMPT_SECTION_ALIASES = {
+    "goal": {
+        "цель этапа",
+        "цель следующего этапа",
+        "goal",
+    },
+    "inputs": {
+        "входные артефакты",
+        "входы",
+        "inputs",
+    },
+    "actions": {
+        "обязательные действия",
+        "required actions",
+        "required changes",
+    },
+    "guardrails": {
+        "не делать",
+        "ограничения",
+        "guardrails",
+        "constraints",
+    },
+    "outputs": {
+        "ожидаемые выходы",
+        "outputs",
+    },
+    "gate": {
+        "gate завершения",
+        "gate",
+    },
+}
+
+
+@dataclass(frozen=True)
+class Finding:
+    id: str
+    severity: str
+    category: str
+    title: str
+    details: str
+    path: str
+    evidence: list[str]
+    recommended_action: str
+
+
+@dataclass(frozen=True)
+class Check:
+    name: str
+    status: str
+    details: str
+    path: str
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Read-only validator for QA agent workflow artifacts."
+    )
+    parser.add_argument("--root", type=Path, default=ROOT_DIR)
+    parser.add_argument("--json", action="store_true", dest="json_only")
+    parser.add_argument("--text", action="store_true", dest="text_only")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--fail-on", choices=("error", "warning"))
+    parser.add_argument(
+        "--source-quality-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select source quality severity policy. "
+            "compatible keeps structural extraction risks as info; "
+            "strict reports analyzer severities as warnings."
+        ),
+    )
+    parser.add_argument(
+        "--findings-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select reviewer findings severity policy. "
+            "compatible records legacy traceability_ref gaps as info; "
+            "strict reports them as warnings."
+        ),
+    )
+    parser.add_argument(
+        "--writer-response-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select writer response severity policy. "
+            "compatible records legacy/noncanonical response gaps as info; "
+            "strict reports them as warnings."
+        ),
+    )
+    parser.add_argument(
+        "--test-case-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select test-case artifact severity policy. "
+            "compatible records structural test-case gaps and missing applicability matrices as info; "
+            "strict reports them as warnings."
+        ),
+    )
+    parser.add_argument(
+        "--reviewer-signoff-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select reviewer sign-off self-check severity policy. "
+            "compatible records missing or invalid self-checks as info; "
+            "strict reports them as warnings."
+        ),
+    )
+    parser.add_argument(
+        "--final-alias-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select completed reviewer-loop final artifact alias policy. "
+            "compatible records missing final_* aliases as info; "
+            "strict reports them as warnings."
+        ),
+    )
+    parser.add_argument(
+        "--session-log-policy",
+        choices=("compatible", "strict", "audit"),
+        default="compatible",
+        help=(
+            "Select session log severity policy. "
+            "compatible records missing session logs as info; "
+            "strict reports missing or malformed base session logs as warnings; "
+            "audit also requires timeline, quality checkpoints and handoff notes."
+        ),
+    )
+    parser.add_argument(
+        "--decision-log-policy",
+        choices=("compatible", "strict"),
+        default="compatible",
+        help=(
+            "Select intermediate decision log policy. "
+            "compatible validates decision logs when present; "
+            "strict reports missing or malformed linked agent-decision-log.md artifacts as warnings."
+        ),
+    )
+    return parser.parse_args()
+
+
+def rel(path: Path, root: Path) -> str:
+    try:
+        return path.relative_to(root).as_posix()
+    except ValueError:
+        return path.as_posix()
+
+
+def strip_quotes(value: str) -> str:
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+        return value[1:-1]
+    return value
+
+
+def parse_scalar(value: str) -> Any:
+    value = strip_quotes(value.strip())
+    lowered = value.lower()
+    if lowered in {"null", "none", "~"}:
+        return None
+    if lowered == "true":
+        return True
+    if lowered == "false":
+        return False
+    if re.fullmatch(r"-?\d+", value):
+        return int(value)
+    return value
+
+
+def parse_workflow_state(path: Path) -> dict[str, Any]:
+    state: dict[str, Any] = {}
+    current_key: str | None = None
+
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        raw_line = raw_line.lstrip("\ufeff")
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+
+        top_match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):(?:\s*(.*))?$", raw_line)
+        if top_match:
+            key, raw_value = top_match.groups()
+            current_key = key
+            if raw_value:
+                state[key] = parse_scalar(raw_value)
+            else:
+                state[key] = []
+            continue
+
+        if current_key is None or not raw_line.startswith(" "):
+            continue
+
+        stripped = raw_line.strip()
+        current_value = state.get(current_key)
+
+        if stripped.startswith("- "):
+            if not isinstance(current_value, list):
+                current_value = []
+                state[current_key] = current_value
+            current_value.append(parse_scalar(stripped[2:]))
+            continue
+
+        nested_match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*):(?:\s*(.*))?$", stripped)
+        if nested_match:
+            if not isinstance(current_value, dict):
+                current_value = {}
+                state[current_key] = current_value
+            nested_key, raw_value = nested_match.groups()
+            current_value[nested_key] = parse_scalar(raw_value) if raw_value else {}
+
+    return state
+
+
+def iter_workflow_states(root: Path) -> list[Path]:
+    if root.is_file() and root.name == "workflow-state.yaml":
+        return [root]
+    if (root / "fts").is_dir():
+        return sorted((root / "fts").rglob("workflow-state.yaml"))
+    return sorted(root.rglob("workflow-state.yaml"))
+
+
+def find_authoritative_session_cycle_state(
+    workflow_state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> tuple[Path, dict[str, Any]] | None:
+    scope_slug = workflow_state.get("scope_slug")
+    if not isinstance(scope_slug, str) or not scope_slug:
+        return None
+
+    candidate_values = [
+        value
+        for value in flatten_string_values(workflow_state.get("latest_artifacts"))
+        if Path(strip_quotes(value)).name == "cycle-state.yaml"
+    ]
+    candidates = [
+        resolved
+        for value in candidate_values
+        for resolved in [resolve_artifact_path(value, workflow_path, root, ft_root)]
+        if resolved is not None
+    ]
+    candidates.append(ft_root / "work" / "review-cycles" / scope_slug / "cycle-state.yaml")
+
+    try:
+        workflow_mtime = workflow_path.stat().st_mtime
+    except OSError:
+        workflow_mtime = 0.0
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        if candidate in seen or not candidate.exists() or candidate == workflow_path:
+            continue
+        seen.add(candidate)
+        try:
+            if candidate.stat().st_mtime < workflow_mtime:
+                continue
+            cycle_state = parse_workflow_state(candidate)
+        except (OSError, UnicodeDecodeError):
+            continue
+        if cycle_state.get("scope_slug") != scope_slug:
+            continue
+        workflow_ft_slug = workflow_state.get("ft_slug")
+        if isinstance(workflow_ft_slug, str) and cycle_state.get("ft_slug") != workflow_ft_slug:
+            continue
+        if cycle_state.get("stage_status") not in SESSION_BASED_REVIEW_CYCLE_STATUSES:
+            continue
+        return candidate, cycle_state
+
+    return None
+
+
+def validation_scope(root: Path) -> Path:
+    if root.is_file():
+        return root.parent
+    if (root / "fts").is_dir():
+        return root / "fts"
+    return root
+
+
+ROOT_LEVEL_HANDOFF_ARTIFACT_NAMES = {
+    "workflow-state.yaml",
+    "source-selection.md",
+    "scope-options.md",
+    "scope-selection-prompts.md",
+    "source-locator-session-log.md",
+    "scope-analyzer-session-log.md",
+}
+
+
+def iter_ft_package_roots(root: Path) -> list[Path]:
+    if root.is_file():
+        return []
+    if root.parent.name == "fts" and ((root / "source").is_dir() or (root / "AGENT-NOTES.md").exists()):
+        return [root]
+    fts_root = root / "fts"
+    if fts_root.is_dir():
+        return sorted(
+            package_root
+            for package_root in fts_root.iterdir()
+            if package_root.is_dir()
+            and ((package_root / "source").is_dir() or (package_root / "AGENT-NOTES.md").exists())
+        )
+    return []
+
+
+def validate_ft_package_handoff_layout(root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    package_roots = iter_ft_package_roots(root)
+    if not package_roots:
+        return findings, checks
+
+    for package_root in package_roots:
+        root_level_artifacts = sorted(
+            artifact_name
+            for artifact_name in ROOT_LEVEL_HANDOFF_ARTIFACT_NAMES
+            if (package_root / artifact_name).exists()
+        )
+        root_level_handoff_artifacts = [
+            artifact_name for artifact_name in root_level_artifacts if artifact_name != "workflow-state.yaml"
+        ]
+        display_path = rel(package_root, root)
+        if root_level_handoff_artifacts:
+            findings.append(
+                Finding(
+                    id="ft-package-root-level-handoff-artifacts",
+                    severity="warning",
+                    category="stage-transition",
+                    title="FT package has root-level workflow handoff artifacts",
+                    details=(
+                        "Clean FT package workflow artifacts must live under "
+                        "`work/stage-handoffs/NN-<scope-or-container>/`. Root-level handoff files can be missed by "
+                        "downstream prompts, create competing workflow-state files, and contaminate clean eval runs."
+                    ),
+                    path=display_path,
+                    evidence=[f"{display_path}/{artifact_name}" for artifact_name in root_level_artifacts],
+                    recommended_action=(
+                        "Move or recreate these files in `work/stage-handoffs/00-source-selection/` for source/scope "
+                        "selection, or in the numbered scope handoff folder for confirmed scope work. Remove root-level copies."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "ft-package-handoff-layout",
+                    "warn",
+                    "Root-level handoff artifacts found.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "ft-package-handoff-layout",
+                    "pass",
+                    "No root-level handoff artifacts found.",
+                    display_path,
+                )
+            )
+    return findings, checks
+
+
+def iter_named_markdown(root: Path, name: str) -> list[Path]:
+    if root.is_file() and root.name == name:
+        return [root]
+    return sorted(validation_scope(root).rglob(name))
+
+
+def iter_traceability_matrices(root: Path) -> list[Path]:
+    if root.is_file() and root.name.endswith("traceability-matrix.md"):
+        return [root]
+    return sorted(validation_scope(root).rglob("*traceability-matrix.md"))
+
+
+def iter_review_findings(root: Path) -> list[Path]:
+    if root.is_file() and re.fullmatch(r"round-\d+-findings\.md", root.name):
+        return [root]
+    return sorted(validation_scope(root).rglob("round-*-findings.md"))
+
+
+def iter_writer_responses(root: Path) -> list[Path]:
+    if root.is_file() and re.fullmatch(r"round-\d+-writer-response\.md", root.name):
+        return [root]
+    return sorted(validation_scope(root).rglob("round-*-writer-response.md"))
+
+
+def iter_test_case_files(root: Path) -> list[Path]:
+    if root.is_file() and root.suffix == ".md" and root.parent.name == "test-cases" and root.name != "README.md":
+        return [root]
+    return sorted(
+        path
+        for path in validation_scope(root).rglob("test-cases/*.md")
+        if path.name != "README.md"
+    )
+
+
+def iter_source_normalization_diagnostics(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "source-normalization-diagnostic.md")
+
+
+def iter_writer_process_diagnostics(root: Path) -> list[Path]:
+    if root.is_file() and root.suffix == ".md" and root.name.startswith("writer-process-diagnostic"):
+        return [root]
+    return sorted(validation_scope(root).rglob("writer-process-diagnostic*.md"))
+
+
+def iter_session_logs(root: Path) -> list[Path]:
+    if root.is_file() and root.suffix == ".md" and "session-log" in root.name.lower():
+        return [root]
+    return sorted(
+        path
+        for path in validation_scope(root).rglob("*session-log*.md")
+        if path.is_file()
+    )
+
+
+def iter_decision_logs(root: Path) -> list[Path]:
+    if root.is_file() and root.suffix == ".md" and "decision-log" in root.name.lower():
+        return [root]
+    return sorted(
+        path
+        for path in validation_scope(root).rglob("*decision-log*.md")
+        if path.is_file()
+    )
+
+
+def iter_mockup_visual_inventories(root: Path) -> list[Path]:
+    return iter_named_markdown(root, MOCKUP_VISUAL_INVENTORY_NAME)
+
+
+def iter_dictionary_inventories(root: Path) -> list[Path]:
+    return iter_named_markdown(root, DICTIONARY_INVENTORY_NAME)
+
+
+def iter_source_table_normalizations(root: Path) -> list[Path]:
+    if root.is_file() and root.name == "source-table-normalization.md":
+        return [root]
+    return []
+
+
+def repository_root(root: Path) -> Path:
+    base = root.parent if root.is_file() else root
+    if base.name == "fts":
+        return base.parent
+    return base
+
+
+def dedupe_paths(paths: list[Path]) -> list[Path]:
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = path.resolve().as_posix()
+        if key in seen:
+            continue
+        deduped.append(path)
+        seen.add(key)
+    return deduped
+
+
+def iter_artifact_manifests(root: Path) -> list[Path]:
+    if root.is_file() and root.name == "artifact-manifest.json":
+        return [root]
+
+    scope = validation_scope(root)
+    base = repository_root(root)
+    candidates = [base / "artifact-manifest.json", scope / "artifact-manifest.json"]
+    candidates.extend(scope.rglob("artifact-manifest.json"))
+    return sorted(path for path in dedupe_paths(candidates) if path.is_file())
+
+
+def manifest_path_candidates(raw_path: str, root: Path, manifest_path: Path | None = None) -> list[Path]:
+    value = strip_quotes(raw_path)
+    if not value or value.startswith(("http://", "https://")):
+        return []
+
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return [candidate]
+
+    parents: list[Path] = [repository_root(root), validation_scope(root)]
+    if manifest_path is not None:
+        parents.append(manifest_path.parent)
+    return dedupe_paths([parent / value for parent in parents])
+
+
+def resolve_manifest_path(raw_path: str, root: Path, manifest_path: Path | None = None) -> Path | None:
+    candidates = manifest_path_candidates(raw_path, root, manifest_path)
+    if not candidates:
+        return None
+    return next((candidate for candidate in candidates if candidate.exists()), candidates[0])
+
+
+def normalized_path(path: Path) -> str:
+    return path.resolve().as_posix()
+
+
+def ft_scope_key(path: Path, root: Path) -> str:
+    base = repository_root(root).resolve()
+    try:
+        relative_parts = path.resolve().relative_to(base).parts
+    except ValueError:
+        relative_parts = path.resolve().parts
+
+    if "fts" in relative_parts:
+        index = relative_parts.index("fts")
+        if index + 1 < len(relative_parts):
+            return (base / Path(*relative_parts[: index + 2])).resolve().as_posix()
+    return base.as_posix()
+
+
+def extract_test_case_ids_from_text(value: str) -> list[str]:
+    return sorted(set(TEST_CASE_ID_RE.findall(value)))
+
+
+def extract_atom_ids_from_text(value: str) -> list[str]:
+    return sorted(set(ATOM_ID_RE.findall(value)))
+
+
+def extract_any_atom_ids_from_text(value: str) -> list[str]:
+    return sorted(set(ANY_ATOM_ID_RE.findall(value)))
+
+
+def extract_gap_ids_from_text(value: str) -> list[str]:
+    return sorted(set(GAP_ID_RE.findall(value)))
+
+
+def extract_finding_ids_from_text(value: str) -> list[str]:
+    return sorted(set(FINDING_ID_RE.findall(value)))
+
+
+def build_test_case_id_index(test_case_files: list[Path], root: Path) -> dict[str, set[str]]:
+    index: dict[str, set[str]] = {}
+    for path in test_case_files:
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        ids = {test_case_id for test_case_id, _ in extract_test_case_blocks(content)}
+        if not ids:
+            continue
+        index.setdefault(ft_scope_key(path, root), set()).update(ids)
+    return index
+
+
+def ft_root_for_test_case_path(path: Path) -> Path | None:
+    parts = path.parts
+    if "test-cases" not in parts:
+        return None
+
+    test_cases_index = len(parts) - 1 - list(reversed(parts)).index("test-cases")
+    if test_cases_index < 1:
+        return None
+
+    ft_root = Path(*parts[:test_cases_index])
+    return ft_root
+
+
+def split_test_design_dir_for_test_case(path: Path) -> Path | None:
+    ft_root = ft_root_for_test_case_path(path)
+    if ft_root is None:
+        return None
+    return ft_root / "work" / "test-design" / path.stem
+
+
+def normalize_cycle_state_path(value: str) -> str:
+    normalized = value.strip().strip("`'\"")
+    normalized = normalized.replace("\\", "/").lstrip("./")
+    return normalized.rstrip("/")
+
+
+def cycle_state_values(path: Path, key: str) -> list[str]:
+    values: list[str] = []
+    collecting_list = False
+    key_pattern = re.compile(rf"^{re.escape(key)}:\s*(.*)$")
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return values
+
+    for line in lines:
+        match = key_pattern.match(line)
+        if match:
+            collecting_list = False
+            raw_value = match.group(1).strip()
+            if not raw_value:
+                collecting_list = True
+                continue
+            if raw_value == "[]":
+                return []
+            if raw_value.startswith("[") and raw_value.endswith("]"):
+                return [
+                    item.strip().strip("`'\"")
+                    for item in raw_value.strip("[]").split(",")
+                    if item.strip()
+                ]
+            return [raw_value.strip().strip("`'\"")]
+
+        if collecting_list:
+            if line.startswith("  - "):
+                values.append(line[4:].strip().strip("`'\""))
+                continue
+            if line and not line.startswith(" "):
+                break
+
+    return values
+
+
+@lru_cache(maxsize=None)
+def cycle_state_test_design_dir_map(ft_root: Path) -> dict[str, tuple[Path, ...]]:
+    review_cycles_dir = ft_root / "work" / "review-cycles"
+    if not review_cycles_dir.is_dir():
+        return {}
+
+    mapped: dict[str, list[Path]] = defaultdict(list)
+    for state_path in sorted(review_cycles_dir.glob("*/cycle-state.yaml")):
+        canonical_paths = [
+            normalize_cycle_state_path(value)
+            for value in cycle_state_values(state_path, "canonical_test_cases")
+        ]
+        test_design_dirs = [
+            normalize_cycle_state_path(value)
+            for value in cycle_state_values(state_path, "test_design_dir")
+        ]
+        for canonical_path in canonical_paths:
+            for test_design_dir in test_design_dirs:
+                directory = ft_root / test_design_dir
+                if directory not in mapped[canonical_path]:
+                    mapped[canonical_path].append(directory)
+
+    return {canonical_path: tuple(paths) for canonical_path, paths in mapped.items()}
+
+
+def split_test_design_dirs_for_test_case(path: Path) -> list[Path]:
+    ft_root = ft_root_for_test_case_path(path)
+    candidates: list[Path] = []
+    if ft_root is not None:
+        try:
+            canonical_rel = normalize_cycle_state_path(str(path.relative_to(ft_root)))
+        except ValueError:
+            canonical_rel = ""
+        if canonical_rel:
+            candidates.extend(cycle_state_test_design_dir_map(ft_root).get(canonical_rel, ()))
+
+    stem_dir = split_test_design_dir_for_test_case(path)
+    if stem_dir is not None:
+        candidates.append(stem_dir)
+
+    unique_candidates: list[Path] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def split_test_design_artifact_paths(path: Path) -> dict[str, Path]:
+    paths: dict[str, Path] = {}
+    for directory in split_test_design_dirs_for_test_case(path):
+        if not directory.is_dir():
+            continue
+        for section_title, file_name in SPLIT_TEST_DESIGN_SECTION_FILES.items():
+            if section_title in paths:
+                continue
+            candidate = directory / file_name
+            if candidate.is_file():
+                paths[section_title] = candidate
+    return paths
+
+
+def normalize_split_test_design_section(section_title: str, content: str) -> str:
+    if extract_markdown_section(content, section_title) is not None:
+        return content.strip()
+
+    h1_pattern = re.compile(
+        rf"^#\s+{re.escape(section_title)}\s*$",
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if h1_pattern.search(content):
+        return h1_pattern.sub(f"## {section_title}", content, count=1).strip()
+
+    return f"## {section_title}\n\n{content.strip()}".strip()
+
+
+def test_case_validation_content(path: Path, root: Path) -> str:
+    content = path.read_text(encoding="utf-8")
+    split_sections: list[str] = []
+    for section_title, artifact_path in split_test_design_artifact_paths(path).items():
+        if extract_markdown_section(content, section_title) is not None:
+            continue
+        artifact_content = artifact_path.read_text(encoding="utf-8")
+        split_sections.append(normalize_split_test_design_section(section_title, artifact_content))
+
+    if not split_sections:
+        return content
+
+    return (
+        content.rstrip()
+        + "\n\n"
+        + "<!-- Split canonical test-design artifacts appended for validation context. -->"
+        + "\n\n"
+        + "\n\n".join(split_sections)
+        + "\n"
+    )
+
+
+def duplicate_split_sections_in_test_case(content: str, path: Path) -> list[str]:
+    if not split_test_design_artifact_paths(path):
+        return []
+
+    duplicated: list[str] = []
+    for section_title in SPLIT_TEST_DESIGN_SECTIONS:
+        section = extract_markdown_section(content, section_title)
+        if section is None:
+            continue
+        if markdown_table_rows_from_text(section):
+            duplicated.append(section_title)
+    return sorted(duplicated)
+
+
+def known_test_case_ids_for_artifact(
+    path: Path,
+    root: Path,
+    test_case_id_index: dict[str, set[str]],
+) -> set[str]:
+    if not test_case_id_index:
+        return set()
+
+    scoped_ids = test_case_id_index.get(ft_scope_key(path, root), set())
+    if scoped_ids:
+        return scoped_ids
+    if len(test_case_id_index) == 1:
+        return set(next(iter(test_case_id_index.values())))
+    return set()
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def validate_manifest_file_metadata(
+    artifact_id: str,
+    path: Path,
+    artifact: dict[str, Any],
+    display_path: str,
+) -> list[Finding]:
+    findings: list[Finding] = []
+
+    expected_size = artifact.get("size_bytes")
+    if expected_size is not None:
+        if not isinstance(expected_size, int):
+            findings.append(
+                Finding(
+                    id="artifact-manifest-invalid-size",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest size_bytes is not an integer",
+                    details=f"Artifact {artifact_id!r} has non-integer size_bytes.",
+                    path=display_path,
+                    evidence=[str(expected_size)],
+                    recommended_action="Set size_bytes to the file size in bytes or remove the field.",
+                )
+            )
+        elif path.stat().st_size != expected_size:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-size-mismatch",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest size does not match the file",
+                    details=f"Artifact {artifact_id!r} points to a file with a different size.",
+                    path=display_path,
+                    evidence=[f"expected={expected_size}", f"actual={path.stat().st_size}", path.as_posix()],
+                    recommended_action="Update the manifest metadata or replace the stale artifact.",
+                )
+            )
+
+    expected_hash = artifact.get("sha256")
+    if expected_hash is not None:
+        if not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", expected_hash):
+            findings.append(
+                Finding(
+                    id="artifact-manifest-invalid-sha256",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest sha256 is invalid",
+                    details=f"Artifact {artifact_id!r} has an invalid sha256 value.",
+                    path=display_path,
+                    evidence=[str(expected_hash)],
+                    recommended_action="Use a 64-character hexadecimal SHA-256 digest or remove the field.",
+                )
+            )
+        else:
+            actual_hash = sha256_file(path)
+            if actual_hash.lower() != expected_hash.lower():
+                findings.append(
+                    Finding(
+                        id="artifact-manifest-sha256-mismatch",
+                        severity="error",
+                        category="artifact-manifest",
+                        title="Artifact manifest checksum does not match the file",
+                        details=f"Artifact {artifact_id!r} points to a file with a different SHA-256 digest.",
+                        path=display_path,
+                        evidence=[f"expected={expected_hash.lower()}", f"actual={actual_hash}", path.as_posix()],
+                        recommended_action="Update the manifest metadata or replace the stale artifact.",
+                    )
+                )
+
+    return findings
+
+
+def validate_artifact_manifest(path: Path, root: Path) -> tuple[list[Finding], list[Check], set[str]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    declared_paths: set[str] = set()
+    display_path = rel(path, root)
+
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        findings.append(
+            Finding(
+                id="artifact-manifest-unreadable",
+                severity="error",
+                category="artifact-manifest",
+                title="artifact-manifest.json is not readable JSON",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save artifact-manifest.json as UTF-8 JSON.",
+            )
+        )
+        checks.append(Check("artifact-manifest", "fail", "Manifest is not readable JSON.", display_path))
+        return findings, checks, declared_paths
+
+    if not isinstance(manifest, dict):
+        findings.append(
+            Finding(
+                id="artifact-manifest-invalid-root",
+                severity="error",
+                category="artifact-manifest",
+                title="Artifact manifest root must be an object",
+                details="The manifest must contain top-level metadata and an artifacts array.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the schema from references/agent/artifact-manifest-format.md.",
+            )
+        )
+        checks.append(Check("artifact-manifest", "fail", "Manifest root is invalid.", display_path))
+        return findings, checks, declared_paths
+
+    if manifest.get("manifest_version") != 1:
+        findings.append(
+            Finding(
+                id="artifact-manifest-invalid-version",
+                severity="error",
+                category="artifact-manifest",
+                title="Artifact manifest version is unsupported",
+                details="Only manifest_version 1 is supported.",
+                path=display_path,
+                evidence=[str(manifest.get("manifest_version"))],
+                recommended_action="Set manifest_version to 1 or update the validator before using a new schema.",
+            )
+        )
+
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        findings.append(
+            Finding(
+                id="artifact-manifest-missing-artifacts",
+                severity="error",
+                category="artifact-manifest",
+                title="Artifact manifest does not contain an artifacts list",
+                details="The manifest cannot declare canonical artifacts or aliases without an artifacts array.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add an artifacts array.",
+            )
+        )
+        checks.append(Check("artifact-manifest", "fail", "Manifest artifacts list is missing.", display_path))
+        return findings, checks, declared_paths
+
+    seen_ids: set[str] = set()
+    for index, artifact in enumerate(artifacts):
+        artifact_label = f"artifacts[{index}]"
+        if not isinstance(artifact, dict):
+            findings.append(
+                Finding(
+                    id="artifact-manifest-invalid-artifact",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest entry must be an object",
+                    details=f"{artifact_label} is not an object.",
+                    path=display_path,
+                    evidence=[str(artifact)],
+                    recommended_action="Represent each artifact as an object with id, role, export_policy, and path fields.",
+                )
+            )
+            continue
+
+        artifact_id = artifact.get("id")
+        artifact_id_text = artifact_id if isinstance(artifact_id, str) and artifact_id else artifact_label
+        if not isinstance(artifact_id, str) or not artifact_id:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-missing-id",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest entry has no id",
+                    details=f"{artifact_label} must have a stable id.",
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Add a stable artifact id.",
+                )
+            )
+        elif artifact_id in seen_ids:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-duplicate-id",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest contains duplicate ids",
+                    details=f"Artifact id {artifact_id!r} is declared more than once.",
+                    path=display_path,
+                    evidence=[artifact_id],
+                    recommended_action="Use unique artifact ids.",
+                )
+            )
+        else:
+            seen_ids.add(artifact_id)
+
+        role = artifact.get("role")
+        if not isinstance(role, str) or not role:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-missing-role",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest entry has no role",
+                    details=f"Artifact {artifact_id_text!r} must declare its role.",
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Add a short role such as main-ft-docx, support-docx, or ui-evidence-output.",
+                )
+            )
+
+        policy = artifact.get("export_policy")
+        if policy not in ALLOWED_ARTIFACT_EXPORT_POLICIES:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-invalid-export-policy",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest has an unsupported export_policy",
+                    details=f"Artifact {artifact_id_text!r} uses unsupported export_policy {policy!r}.",
+                    path=display_path,
+                    evidence=[str(policy)],
+                    recommended_action="Use one of the canonical export_policy values.",
+                )
+            )
+
+        canonical_raw = artifact.get("canonical_path")
+        canonical_path: Path | None = None
+        if isinstance(canonical_raw, str) and canonical_raw:
+            canonical_path = resolve_manifest_path(canonical_raw, root, path)
+            if canonical_path is not None:
+                declared_paths.add(normalized_path(canonical_path))
+        elif policy != "not-collected":
+            findings.append(
+                Finding(
+                    id="artifact-manifest-missing-canonical-path",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest entry has no canonical_path",
+                    details=f"Artifact {artifact_id_text!r} needs a canonical_path unless it is not-collected.",
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Add canonical_path or use export_policy not-collected.",
+                )
+            )
+
+        if policy in REPO_TRACKED_ARTIFACT_POLICIES:
+            if canonical_path is None or not canonical_path.exists():
+                findings.append(
+                    Finding(
+                        id="artifact-manifest-canonical-path-missing",
+                        severity="error",
+                        category="artifact-manifest",
+                        title="Artifact manifest canonical_path is missing",
+                        details=f"Artifact {artifact_id_text!r} points to a missing repo-tracked artifact.",
+                        path=display_path,
+                        evidence=[str(canonical_raw)],
+                        recommended_action="Restore the artifact or update the manifest path.",
+                    )
+                )
+            elif not canonical_path.is_file():
+                findings.append(
+                    Finding(
+                        id="artifact-manifest-canonical-path-not-file",
+                        severity="error",
+                        category="artifact-manifest",
+                        title="Artifact manifest canonical_path is not a file",
+                        details=f"Artifact {artifact_id_text!r} uses a file policy for a non-file path.",
+                        path=display_path,
+                        evidence=[canonical_path.as_posix()],
+                        recommended_action="Use a file path or change export_policy for directory/local evidence.",
+                    )
+                )
+            else:
+                findings.extend(validate_manifest_file_metadata(artifact_id_text, canonical_path, artifact, display_path))
+
+        aliases = artifact.get("aliases", [])
+        if aliases is None:
+            aliases = []
+        if not isinstance(aliases, list):
+            findings.append(
+                Finding(
+                    id="artifact-manifest-invalid-aliases",
+                    severity="error",
+                    category="artifact-manifest",
+                    title="Artifact manifest aliases must be a list",
+                    details=f"Artifact {artifact_id_text!r} has non-list aliases.",
+                    path=display_path,
+                    evidence=[str(aliases)],
+                    recommended_action="Use an aliases array or remove the field.",
+                )
+            )
+            continue
+
+        canonical_hash = sha256_file(canonical_path) if canonical_path and canonical_path.is_file() else None
+        for alias_raw in aliases:
+            if not isinstance(alias_raw, str) or not alias_raw:
+                findings.append(
+                    Finding(
+                        id="artifact-manifest-invalid-alias-path",
+                        severity="error",
+                        category="artifact-manifest",
+                        title="Artifact manifest alias path is invalid",
+                        details=f"Artifact {artifact_id_text!r} contains an invalid alias path.",
+                        path=display_path,
+                        evidence=[str(alias_raw)],
+                        recommended_action="Use non-empty string paths in aliases.",
+                    )
+                )
+                continue
+
+            alias_path = resolve_manifest_path(alias_raw, root, path)
+            if alias_path is not None:
+                declared_paths.add(normalized_path(alias_path))
+
+            if policy in REPO_TRACKED_ARTIFACT_POLICIES:
+                if alias_path is None or not alias_path.exists():
+                    findings.append(
+                        Finding(
+                            id="artifact-manifest-alias-path-missing",
+                            severity="error",
+                            category="artifact-manifest",
+                            title="Artifact manifest alias path is missing",
+                            details=f"Artifact {artifact_id_text!r} declares a missing alias.",
+                            path=display_path,
+                            evidence=[alias_raw],
+                            recommended_action="Restore the alias copy or remove the stale alias.",
+                        )
+                    )
+                elif not alias_path.is_file():
+                    findings.append(
+                        Finding(
+                            id="artifact-manifest-alias-path-not-file",
+                            severity="error",
+                            category="artifact-manifest",
+                            title="Artifact manifest alias path is not a file",
+                            details=f"Artifact {artifact_id_text!r} declares a non-file alias.",
+                            path=display_path,
+                            evidence=[alias_path.as_posix()],
+                            recommended_action="Use file aliases only for repo-tracked artifacts.",
+                        )
+                    )
+                elif canonical_hash is not None and sha256_file(alias_path) != canonical_hash:
+                    findings.append(
+                        Finding(
+                            id="artifact-manifest-alias-sha256-mismatch",
+                            severity="error",
+                            category="artifact-manifest",
+                            title="Artifact manifest alias content differs from canonical artifact",
+                            details=f"Artifact {artifact_id_text!r} declares an alias with different bytes.",
+                            path=display_path,
+                            evidence=[alias_path.as_posix()],
+                            recommended_action="Replace the alias copy or split it into a separate artifact entry.",
+                        )
+                    )
+
+    manifest_errors = [finding for finding in findings if finding.severity == "error"]
+    manifest_warnings = [finding for finding in findings if finding.severity == "warning"]
+    checks.append(
+        Check(
+            "artifact-manifest",
+            "fail" if manifest_errors else "warn" if manifest_warnings else "pass",
+            "Manifest validation failed."
+            if manifest_errors
+            else "Manifest validation has warnings."
+            if manifest_warnings
+            else "Manifest metadata and declared aliases are valid.",
+            display_path,
+        )
+    )
+    return findings, checks, declared_paths
+
+
+def iter_source_support_files(root: Path) -> list[Path]:
+    scope = validation_scope(root)
+    candidates = [root] if root.is_file() else scope.rglob("*")
+    files: list[Path] = []
+    for path in candidates:
+        if not path.is_file() or path.suffix.lower() not in SOURCE_SUPPORT_EXTENSIONS:
+            continue
+        if path.name.startswith("~$"):
+            continue
+        if {"source", "support"}.isdisjoint({part.lower() for part in path.parts}):
+            continue
+        files.append(path)
+    return sorted(files)
+
+
+def validate_source_support_duplicates(root: Path, declared_paths: set[str]) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    files = iter_source_support_files(root)
+    display_path = rel(validation_scope(root), root)
+
+    by_hash: dict[str, list[Path]] = {}
+    for path in files:
+        try:
+            digest = sha256_file(path)
+        except OSError as exc:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-source-support-unreadable",
+                    severity="warning",
+                    category="artifact-manifest",
+                    title="Source/support artifact could not be hashed",
+                    details=str(exc),
+                    path=rel(path, root),
+                    evidence=[],
+                    recommended_action="Check file permissions or remove the stale artifact.",
+                )
+            )
+            continue
+        by_hash.setdefault(digest, []).append(path)
+
+    duplicate_groups = {
+        digest: paths
+        for digest, paths in by_hash.items()
+        if len(paths) > 1
+    }
+    for digest, paths in sorted(duplicate_groups.items()):
+        untracked = [
+            path
+            for path in paths
+            if normalized_path(path) not in declared_paths
+        ]
+        if untracked:
+            findings.append(
+                Finding(
+                    id="artifact-manifest-duplicate-untracked",
+                    severity="warning",
+                    category="artifact-manifest",
+                    title="Duplicate source/support files are not declared in artifact manifest",
+                    details=(
+                        "The same bytes appear in multiple source/support paths. "
+                        "Without a manifest, future changes can update one alias but not the other."
+                    ),
+                    path=display_path,
+                    evidence=[f"sha256={digest}", *[rel(path, repository_root(root)) for path in paths]],
+                    recommended_action="Declare the canonical artifact and aliases in fts/artifact-manifest.json.",
+                )
+            )
+
+    checks.append(
+        Check(
+            "source-support-duplicate-manifest",
+            "warn" if findings else "pass",
+            "Some duplicate source/support files are not manifest-declared."
+            if findings
+            else "Duplicate source/support files are covered by artifact manifest or absent.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def find_ft_root(path: Path, root: Path, state: dict[str, Any]) -> Path:
+    ft_slug = state.get("ft_slug")
+    if isinstance(ft_slug, str):
+        candidate = root / "fts" / ft_slug
+        if candidate.is_dir():
+            return candidate
+
+    parts = path.parts
+    if "fts" in parts:
+        index = parts.index("fts")
+        if index + 1 < len(parts):
+            return Path(*parts[: index + 2])
+
+    return path.parent
+
+
+def flatten_string_values(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        values: list[str] = []
+        for item in value:
+            values.extend(flatten_string_values(item))
+        return values
+    if isinstance(value, dict):
+        values = []
+        for item in value.values():
+            values.extend(flatten_string_values(item))
+        return values
+    return []
+
+
+def candidate_artifact_paths(
+    raw_path: str,
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    value = strip_quotes(raw_path)
+    if not value or value.startswith(("http://", "https://")):
+        return []
+
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return [candidate]
+
+    validation_root = root.parent if root.is_file() else root
+    candidates = [validation_root / value, ft_root / value, workflow_path.parent / value]
+    deduped: list[Path] = []
+    for item in candidates:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
+def artifact_exists(raw_path: str, workflow_path: Path, root: Path, ft_root: Path) -> bool:
+    candidates = candidate_artifact_paths(raw_path, workflow_path, root, ft_root)
+    return bool(candidates) and any(candidate.exists() for candidate in candidates)
+
+
+def resolve_artifact_path(
+    raw_path: str,
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> Path | None:
+    return next(
+        (candidate for candidate in candidate_artifact_paths(raw_path, workflow_path, root, ft_root) if candidate.exists()),
+        None,
+    )
+
+
+def resolving_artifact_by_name(
+    expected_name: str,
+    values: list[str],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> Path | None:
+    return next(
+        (
+            resolved
+            for value in values
+            if Path(strip_quotes(value)).name == expected_name
+            for resolved in [resolve_artifact_path(value, workflow_path, root, ft_root)]
+            if resolved is not None
+        ),
+        None,
+    )
+
+
+def resolve_workflow_test_case_artifacts(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    values = [
+        *flatten_string_values(state.get("required_inputs")),
+        *flatten_string_values(state.get("latest_artifacts")),
+    ]
+    resolved_paths: list[Path] = []
+    for value in values:
+        candidate_name = Path(strip_quotes(value)).name
+        if not candidate_name.endswith(".md") or candidate_name == "README.md":
+            continue
+        resolved = resolve_artifact_path(value, workflow_path, root, ft_root)
+        if resolved is None:
+            continue
+        if resolved.parent.name == "test-cases" or "test-cases" in resolved.parts:
+            resolved_paths.append(resolved)
+    return dedupe_paths(resolved_paths)
+
+
+def resolve_workflow_artifacts_by_name(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+    expected_name: str,
+) -> list[Path]:
+    values = [
+        *flatten_string_values(state.get("required_inputs")),
+        *flatten_string_values(state.get("latest_artifacts")),
+    ]
+    resolved_paths: list[Path] = []
+    for value in values:
+        if Path(strip_quotes(value)).name != expected_name:
+            continue
+        resolved = resolve_artifact_path(value, workflow_path, root, ft_root)
+        if resolved is not None:
+            resolved_paths.append(resolved)
+    default_candidate = workflow_path.parent / expected_name
+    if default_candidate.exists():
+        resolved_paths.append(default_candidate)
+    return dedupe_paths(resolved_paths)
+
+
+def workflow_scope_contract_paths(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    return resolve_workflow_artifacts_by_name(state, workflow_path, root, ft_root, "scope-contract.md")
+
+
+def workflow_requires_mockup_visual_inventory(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> bool:
+    for scope_contract in workflow_scope_contract_paths(state, workflow_path, root, ft_root):
+        try:
+            content = scope_contract.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if MOCKUP_SOURCE_RE.search(content):
+            return True
+    return False
+
+
+def workflow_mockup_visual_inventory_paths(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    return resolve_workflow_artifacts_by_name(
+        state,
+        workflow_path,
+        root,
+        ft_root,
+        MOCKUP_VISUAL_INVENTORY_NAME,
+    )
+
+
+SESSION_LOG_REQUIRED_STAGES = {
+    "ft-source-locator",
+    "ft-scope-analyzer",
+    "ft-test-case-writer",
+    "ft-test-case-reviewer",
+    "ft-test-case-iteration",
+}
+
+SESSION_LOG_STAGE_FILE_HINTS = {
+    "ft-source-locator": ("source-locator-session-log.md",),
+    "ft-scope-analyzer": ("scope-analyzer-session-log.md",),
+    "ft-test-case-writer": ("writer-session-log.md",),
+    "ft-test-case-reviewer": ("reviewer-session-log",),
+    "ft-test-case-iteration": ("iteration-session-log.md",),
+}
+
+SESSION_LOG_REQUIRED_SECTIONS = {
+    "Session Metadata",
+    "Inputs Read",
+    "Inputs Not Used",
+    "Key Decisions",
+    "Risks And Fallbacks",
+    "Validation",
+    "Contamination Check",
+}
+
+SESSION_LOG_AUDIT_SECTIONS = {
+    "Event Timeline",
+    "Quality Checkpoints",
+    "Technical Fallbacks",
+    "Handoff Notes For Next Session",
+}
+
+SESSION_LOG_TECHNICAL_FALLBACK_REQUIRED_COLUMNS = {
+    "fallback_id",
+    "trigger",
+    "failed_method",
+    "fallback_method",
+    "helper_artifact_path",
+    "retained",
+    "quality_risk",
+    "follow_up",
+}
+
+SESSION_LOG_ARTIFACT_WRITE_STRATEGY_REQUIRED_COLUMNS = {
+    "artifact_path",
+    "artifact_size_class",
+    "write_strategy",
+    "declared_before_first_write",
+    "helper",
+    "forbidden_methods_checked",
+}
+
+SESSION_LOG_ARTIFACT_WRITE_STRATEGY_HINT_RE = re.compile(
+    r"("
+    r"source-row-inventory\.md|"
+    r"source-normalization-diagnostic\.md|"
+    r"mockup-visual-inventory\.md|"
+    r"test-cases[\\/][^\s`|]+\.md|"
+    r"canonical\s+(?:test[-\s]?case\s+)?file|"
+    r"round-\d+-traceability-matrix\.(?:md|xlsx)|"
+    r"large\s+artifact|package[-\s]?based|"
+    r"generated\s+artifact|artifact\s+write|"
+    r"write_artifact_sections\.py"
+    r")",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_LARGE_ARTIFACT_SIZE_RE = re.compile(
+    r"large|package[-\s]?based|table[-\s]?heavy|generated|chunked|multi[-\s]?section|diagnostic",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_ARTIFACT_WRITER_HELPER_RE = re.compile(
+    r"scripts[\\/]write_artifact_sections\.py|write_artifact_sections\.py",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_DECLARED_BEFORE_WRITE_RE = re.compile(r"^(yes|true|pass|passed)$", re.IGNORECASE)
+
+SESSION_LOG_TECHNICAL_FALLBACK_HINT_RE = re.compile(
+    r"("
+    r"command\s+length|windows\s+command|"
+    r"длин[ауы]\s+команд|лимит\s+windows|"
+    r"failed\s+patch|patch\s+limit|context\s+limit|"
+    r"chunked\s+(artifact\s+)?writing|"
+    r"helper\s+script|local\s+generator|generate_[\w-]+|"
+    r"temporary\s+file|temp\s+content\s+file|"
+    r"encoding\s+issue|utf-?8\s+console|mojibake|"
+    r"кодировк\w*\s+искаж|искаж\w*\s+.*кирилл|бит\w*\s+кодиров|"
+    r"technical\s+fallback|"
+    r"коротк\w*\s+локальн\w*\s+генератор|"
+    r"техническ\w*\s+fallback|"
+    r"ограничени\w*\s+.*командн\w*\s+строк"
+    r")",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_FORBIDDEN_INITIAL_WRITE_RE = re.compile(
+    r"("
+    r"command\s+length|"
+    r"command[-\s]?line\s+limit|"
+    r"windows\s+command[-\s]?line\s+limit|"
+    r"one[-\s]?shot|"
+    r"here[-\s]?string|"
+    r"inline\s+(?:giant\s+)?command|"
+    r"giant\s+command|"
+    r"long\s+(?:shell\s+)?command|"
+    r"command[-\s]?line\s+transport|"
+    r"PowerShell\s+(?:argument|markdown\s+write|write|here[-\s]?string)|"
+    r"длинн\w*\s+команд|"
+    r"одн\w+\s+команд|"
+    r"командн\w*\s+строк"
+    r")",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_ENCODING_FALLBACK_RE = re.compile(
+    r"encoding|utf-?8|mojibake|кирилл|кодиров|кракозябр|искаж\w*\s+вывод|бит\w*\s+текст",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_ENCODING_UTF8_REREAD_RE = re.compile(
+    r"("
+    r"explicit\s+utf-?8|utf-?8\s+(?:file\s+)?read|read_text\([^)]*encoding\s*=\s*[\"']utf-?8|"
+    r"Get-Content[^\n|]*-Encoding\s+UTF8|PYTHONIOENCODING|PYTHONUTF8|"
+    r"перечит\w*[^\n|]*utf-?8|явн\w*[^\n|]*utf-?8|utf-?8[^\n|]*(?:файл|источник)"
+    r")",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_ENCODING_STDOUT_NOT_USED_RE = re.compile(
+    r"("
+    r"(?:stdout|console|terminal|output|вывод|консол\w*)[^\n|;,.]*"
+    r"(?:not\s+used|discard\w*|ignored|не\s+использ|не\s+опира|отброш)|"
+    r"(?:not\s+used|discard\w*|ignored|не\s+использ|не\s+опира|отброш)[^\n|;,.]*"
+    r"(?:stdout|console|terminal|output|вывод|консол\w*)|"
+    r"distorted\s+stdout\s+not\s+used\s+as\s+evidence|"
+    r"испорчен\w*\s+вывод[^\n|;,.]*(?:не\s+использ|не\s+опира|отброш)|"
+    r"mojibake[^\n|;,.]*(?:not\s+used|discard\w*|ignored)"
+    r")",
+    re.IGNORECASE,
+)
+
+SESSION_LOG_NONE_VALUES = {
+    "",
+    "-",
+    "n/a",
+    "na",
+    "none",
+    "no",
+    "no fallback",
+    "not applicable",
+    "not-applicable",
+    "нет",
+    "не применимо",
+}
+
+DECISION_LOG_REQUIRED_STAGES = SESSION_LOG_REQUIRED_STAGES
+
+DECISION_LOG_REQUIRED_COLUMNS = {
+    "decision_id",
+    "step",
+    "decision_type",
+    "input_or_trigger",
+    "decision",
+    "rationale",
+    "artifact_or_output",
+    "risk_or_confidence",
+}
+
+DECISION_LOG_ID_RE = re.compile(r"^(?:DEC|DL)-\d{3,}$", re.IGNORECASE)
+
+WRITER_PROCESS_DIAGNOSTIC_REQUIRED_FIELDS = {
+    "diagnostic_scope",
+    "diagnostic_target",
+    "active_for_current_workflow",
+    "verdict",
+    "process_readiness",
+    "validator_gap_suspected",
+}
+
+WRITER_PROCESS_DIAGNOSTIC_FAIL_VALUES = {"fail", "failed", "not-pass", "not passed"}
+WRITER_PROCESS_DIAGNOSTIC_CONTAMINATED_VALUES = {
+    "contaminated",
+    "technical-contaminated",
+    "technically-contaminated",
+    "not-clean",
+    "dirty",
+}
+WRITER_PROCESS_DIAGNOSTIC_YES_VALUES = {"yes", "true", "y", "1"}
+WRITER_PROCESS_DIAGNOSTIC_NO_VALUES = {"no", "false", "n", "0"}
+
+
+def is_session_log_reference(value: str) -> bool:
+    name = Path(strip_quotes(value)).name.lower()
+    return name.endswith(".md") and "session-log" in name
+
+
+def is_decision_log_reference(value: str) -> bool:
+    name = Path(strip_quotes(value)).name.lower()
+    return name.endswith(".md") and "decision-log" in name
+
+
+def resolve_workflow_session_logs(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    values = [
+        *flatten_string_values(state.get("required_inputs")),
+        *flatten_string_values(state.get("latest_artifacts")),
+    ]
+    resolved_paths: list[Path] = []
+    for value in values:
+        if not is_session_log_reference(value):
+            continue
+        resolved = resolve_artifact_path(value, workflow_path, root, ft_root)
+        if resolved is not None:
+            resolved_paths.append(resolved)
+    return dedupe_paths(resolved_paths)
+
+
+def resolve_workflow_decision_logs(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    values = [
+        *flatten_string_values(state.get("required_inputs")),
+        *flatten_string_values(state.get("latest_artifacts")),
+    ]
+    resolved_paths: list[Path] = []
+    for value in values:
+        if not is_decision_log_reference(value):
+            continue
+        resolved = resolve_artifact_path(value, workflow_path, root, ft_root)
+        if resolved is not None:
+            resolved_paths.append(resolved)
+    return dedupe_paths(resolved_paths)
+
+
+def session_log_declared_skill(path: Path) -> str:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return ""
+    metadata_section = extract_markdown_section(content, "Session Metadata") or ""
+    skill_match = re.search(r"\|\s*skill\s*\|\s*`?([^`|\s]+)`?\s*\|", metadata_section)
+    return skill_match.group(1).strip() if skill_match else ""
+
+
+def session_log_matches_stage(path: Path, stage: str) -> bool:
+    declared_skill = session_log_declared_skill(path)
+    if declared_skill == stage:
+        return True
+    file_name = path.name.lower()
+    return any(hint in file_name for hint in SESSION_LOG_STAGE_FILE_HINTS.get(stage, ()))
+
+
+def prompt_ref_candidates(
+    raw_path: str,
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    candidates = candidate_artifact_paths(raw_path, workflow_path, root, ft_root)
+    value = strip_quotes(raw_path).replace("\\", "/")
+
+    for marker in ("/test-cases/", "/work/", "/source/", "/support/"):
+        if marker in value:
+            suffix = value.split(marker, 1)[1]
+            candidates.append(ft_root / marker.strip("/") / suffix)
+
+    if value.endswith("/AGENT-NOTES.md"):
+        candidates.append(ft_root / "AGENT-NOTES.md")
+
+    return dedupe_paths(candidates)
+
+
+def prompt_ref_exists(raw_path: str, workflow_path: Path, root: Path, ft_root: Path) -> bool:
+    return any(candidate.exists() for candidate in prompt_ref_candidates(raw_path, workflow_path, root, ft_root))
+
+
+def prompt_section_key(heading: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", heading.strip().lower().rstrip(":"))
+    for key, aliases in PROMPT_SECTION_ALIASES.items():
+        if normalized in aliases:
+            return key
+    return None
+
+
+def split_prompt_sections(content: str) -> list[tuple[str | None, str, str]]:
+    matches = list(re.finditer(r"^##\s+(.+?)\s*$", content, flags=re.MULTILINE))
+    sections: list[tuple[str | None, str, str]] = []
+    for index, match in enumerate(matches):
+        body_start = match.end()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        heading = match.group(1).strip()
+        sections.append((prompt_section_key(heading), heading, content[body_start:body_end]))
+    return sections
+
+
+def extract_prompt_refs(content: str) -> list[str]:
+    refs: list[str] = []
+    for match in re.finditer(r"`([^`\n]+)`", content):
+        value = match.group(1).strip()
+        if "/" in value or "\\" in value or Path(value).suffix:
+            refs.append(value)
+    return refs
+
+
+def validate_active_transition_prompt(
+    prompt_path: Path,
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(prompt_path, root)
+
+    try:
+        content = prompt_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="prompt-format-unreadable",
+                severity="error",
+                category="prompt-format",
+                title="Active transition prompt is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save the active handoff prompt as UTF-8.",
+            )
+        )
+        checks.append(Check("active-transition-prompt-format", "fail", "Active prompt is not UTF-8.", display_path))
+        return findings, checks
+
+    sections = split_prompt_sections(content)
+    present_groups = {key for key, _, _ in sections if key is not None}
+    missing_required_groups = sorted(PROMPT_REQUIRED_SECTION_GROUPS - present_groups)
+    if missing_required_groups:
+        findings.append(
+            Finding(
+                id="prompt-format-missing-required-sections",
+                severity="error",
+                category="prompt-format",
+                title="Active transition prompt misses required sections",
+                details="The active handoff prompt must state the stage goal, resolving inputs, and guardrails.",
+                path=display_path,
+                evidence=missing_required_groups,
+                recommended_action="Add canonical or accepted alias sections for goal, inputs, and guardrails.",
+            )
+        )
+
+    input_refs = [
+        ref
+        for key, _, body in sections
+        if key == "inputs"
+        for ref in extract_prompt_refs(body)
+    ]
+    resolving_input_refs = [
+        ref
+        for ref in input_refs
+        if prompt_ref_exists(ref, workflow_path, root, ft_root)
+    ]
+    if not input_refs:
+        findings.append(
+            Finding(
+                id="prompt-format-missing-input-artifact-refs",
+                severity="error",
+                category="prompt-format",
+                title="Active transition prompt has no input artifact references",
+                details="The next skill should not have to infer its inputs from chat history.",
+                path=display_path,
+                evidence=[],
+                recommended_action="List concrete input artifact paths in the input section.",
+            )
+        )
+    elif not resolving_input_refs:
+        findings.append(
+            Finding(
+                id="prompt-format-no-resolving-input-artifacts",
+                severity="error",
+                category="prompt-format",
+                title="Active transition prompt input artifacts do not resolve",
+                details="The input section lists artifact references, but none can be found in the current checkout.",
+                path=display_path,
+                evidence=input_refs[:10],
+                recommended_action="Replace stale prompt references with existing artifact paths.",
+            )
+        )
+
+    if prompt_path.name in {
+        "prompt.scope-to-writer.md",
+        "prompt.scope-to-iteration.md",
+        "prompt.scope-gaps-to-reviewer.md",
+    }:
+        state = parse_workflow_state(workflow_path)
+        workflow_artifact_values = [
+            *flatten_string_values(state.get("required_inputs")),
+            *flatten_string_values(state.get("latest_artifacts")),
+        ]
+        required_scope_input_names = {
+            "source-selection.md",
+            "scope-contract.md",
+            "scope-coverage-gaps.md",
+        }
+        if prompt_path.name == "prompt.scope-gaps-to-reviewer.md":
+            required_scope_input_names.add("workflow-state.yaml")
+        for conditional_name in ("source-parity-check.md", "mockup-visual-inventory.md"):
+            if resolving_artifact_by_name(conditional_name, workflow_artifact_values, workflow_path, root, ft_root) is not None:
+                required_scope_input_names.add(conditional_name)
+
+        source_parity_path = resolving_artifact_by_name(
+            "source-parity-check.md",
+            workflow_artifact_values,
+            workflow_path,
+            root,
+            ft_root,
+        )
+        if (
+            resolving_artifact_by_name("source-row-inventory.md", workflow_artifact_values, workflow_path, root, ft_root)
+            is not None
+            or (source_parity_path is not None and source_parity_requires_source_row_inventory(source_parity_path))
+        ):
+            required_scope_input_names.add("source-row-inventory.md")
+
+        scope_gaps_path = resolving_artifact_by_name(
+            "scope-coverage-gaps.md",
+            workflow_artifact_values,
+            workflow_path,
+            root,
+            ft_root,
+        )
+        if scope_gaps_path is not None:
+            try:
+                scope_gap_total = get_int(extract_scope_coverage_metrics(scope_gaps_path).get("total")) or 0
+            except UnicodeDecodeError:
+                scope_gap_total = 0
+            if scope_gap_total > 0:
+                required_scope_input_names.add("scope-clarification-requests.md")
+        if prompt_path.name == "prompt.scope-gaps-to-reviewer.md":
+            required_scope_input_names.add("scope-clarification-requests.md")
+        if (
+            prompt_path.name == "prompt.scope-to-writer.md"
+            and resolving_artifact_by_name("scope-gap-review.md", workflow_artifact_values, workflow_path, root, ft_root) is not None
+        ):
+            required_scope_input_names.add("scope-gap-review.md")
+
+        missing_scope_prompt_inputs = [
+            name
+            for name in sorted(required_scope_input_names)
+            if not any(
+                Path(strip_quotes(ref)).name == name and prompt_ref_exists(ref, workflow_path, root, ft_root)
+                for ref in input_refs
+            )
+        ]
+        if missing_scope_prompt_inputs:
+            findings.append(
+                Finding(
+                    id="prompt-format-missing-required-scope-inputs",
+                    severity="error",
+                    category="prompt-format",
+                    title="Scope transition prompt misses required input artifacts",
+                    details=(
+                        "Scope transition prompts must list the concrete source/scope handoff artifacts that "
+                        "the next skill must read."
+                    ),
+                    path=display_path,
+                    evidence=missing_scope_prompt_inputs,
+                    recommended_action=(
+                        "Add resolving references to the missing artifacts in the prompt input section, or keep the "
+                        "workflow blocked instead of routing to writer/iteration."
+                    ),
+                )
+            )
+
+    has_errors = any(finding.severity == "error" for finding in findings)
+    checks.append(
+        Check(
+            "active-transition-prompt-format",
+            "fail" if has_errors else "pass",
+            "Active prompt format contract failed." if has_errors else "Active prompt format contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def collect_active_source_documents(workflow_path: Path, root: Path) -> list[Path]:
+    state = parse_workflow_state(workflow_path)
+    ft_root = find_ft_root(workflow_path, root, state)
+    artifact_values = [
+        *flatten_string_values(state.get("required_inputs")),
+        *flatten_string_values(state.get("latest_artifacts")),
+    ]
+
+    def is_source_docx_ref(value: str) -> bool:
+        normalized = strip_quotes(value).replace("\\", "/")
+        return Path(normalized).suffix.lower() == ".docx" and (
+            normalized.startswith("source/") or "/source/" in normalized
+        )
+
+    raw_source_refs = [
+        value
+        for value in artifact_values
+        if is_source_docx_ref(value)
+    ]
+
+    source_selection_values = [
+        value
+        for value in artifact_values
+        if Path(strip_quotes(value)).name == "source-selection.md" and artifact_exists(value, workflow_path, root, ft_root)
+    ]
+    for source_selection_value in source_selection_values:
+        source_selection_path = resolve_artifact_path(source_selection_value, workflow_path, root, ft_root)
+        if source_selection_path is None:
+            continue
+        refs = extract_prompt_refs(source_selection_path.read_text(encoding="utf-8"))
+        raw_source_refs.extend(
+            ref
+            for ref in refs
+            if is_source_docx_ref(ref)
+        )
+
+    source_paths: list[Path] = []
+    for ref in raw_source_refs:
+        resolved = next(
+            (candidate for candidate in prompt_ref_candidates(ref, workflow_path, root, ft_root) if candidate.exists()),
+            None,
+        )
+        if resolved is not None and resolved.suffix.lower() == ".docx":
+            source_paths.append(resolved)
+
+    return dedupe_paths(source_paths)
+
+
+def validate_active_source_document(
+    path: Path,
+    root: Path,
+    *,
+    source_quality_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        sections = load_sections(path)
+    except Exception as exc:
+        findings.append(
+            Finding(
+                id="source-quality-unreadable-active-source",
+                severity="error",
+                category="source-quality",
+                title="Active source document cannot be parsed",
+                details=f"{type(exc).__name__}: {exc}",
+                path=display_path,
+                evidence=[],
+                recommended_action="Replace the active source path with a readable DOCX or remove it from active handoff inputs.",
+            )
+        )
+        checks.append(Check("active-source-quality", "fail", "Active source document cannot be parsed.", display_path))
+        return findings, checks
+
+    oversized_chunks = [
+        f"{chunk.chunk_id}:{len(chunk.text)}"
+        for section in sections
+        if section.section_id != "preface"
+        for chunk in split_section(section, max_chars=SOURCE_QUALITY_MAX_CHARS)
+        if len(chunk.text) > SOURCE_QUALITY_MAX_CHARS
+    ]
+    if oversized_chunks:
+        findings.append(
+            Finding(
+                id="source-quality-chunk-limit-breached",
+                severity="error",
+                category="source-quality",
+                title="Active source chunk exceeds max_chars after splitting",
+                details="The chunker must not pass oversized source chunks to downstream agents.",
+                path=display_path,
+                evidence=oversized_chunks[:10],
+                recommended_action="Fix source block splitting before using this document for test-case generation.",
+            )
+        )
+
+    for issue in analyze_sections(sections, max_chars=SOURCE_QUALITY_MAX_CHARS):
+        severity = classify_source_quality_issue(issue, policy=source_quality_policy)  # type: ignore[arg-type]
+        findings.append(
+            Finding(
+                id=issue.issue_id,
+                severity=severity,
+                category="source-quality",
+                title="Active source extraction has quality risk",
+                details=issue.details,
+                path=display_path,
+                evidence=issue.evidence,
+                recommended_action="Inspect source extraction before relying on downstream test cases.",
+            )
+        )
+
+    blocking = any(finding.severity in {"error", "warning"} for finding in findings)
+    checks.append(
+        Check(
+            "active-source-quality",
+            "fail" if blocking else "pass",
+            "Active source quality gate failed." if blocking else "Active source quality gate passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def extract_loop_summary_residual_risk_fields(content: str) -> dict[str, str] | None:
+    section = extract_markdown_section(content, "Final Residual Risk")
+    if section is None:
+        return None
+    return parse_markdown_fields(section)
+
+
+def extract_loop_summary_metrics(path: Path) -> dict[str, Any]:
+    content = path.read_text(encoding="utf-8")
+
+    def number(pattern: str) -> int | None:
+        match = re.search(pattern, content)
+        if match:
+            return int(match.group(1))
+        return None
+
+    final_status_match = re.search(r"Final status:\s*`([^`]+)`", content)
+    status_match = re.search(r"\*\*Status:\*\*\s*`([^`]+)`", content)
+    return {
+        "final_status": (
+            final_status_match.group(1)
+            if final_status_match
+            else status_match.group(1)
+            if status_match
+            else None
+        ),
+        "findings_error": number(r"Findings `error`:\s*`(\d+)`"),
+        "findings_warning": number(r"Findings `warning`:\s*`(\d+)`"),
+        "traceability_gap": number(r"Traceability `gap`:\s*`(\d+)`"),
+        "traceability_unclear": number(r"Traceability `unclear`:\s*`(\d+)`"),
+        "gap_mentions": len(re.findall(r"`GAP-\d+`", content)),
+        "residual_risk_fields": extract_loop_summary_residual_risk_fields(content),
+    }
+
+
+def extract_scope_coverage_metrics(path: Path) -> dict[str, int | str | list[str] | None]:
+    content = path.read_text(encoding="utf-8")
+
+    blocking_match = re.search(
+        r"blocking gaps:\s*`?(yes|no)`?",
+        content,
+        flags=re.IGNORECASE,
+    )
+    total_match = re.search(r"gaps:\s*`?(\d+)", content, flags=re.IGNORECASE)
+    impact_blocking = len(
+        re.findall(r"\*\*Impact:\*\*\s*`blocking`", content, flags=re.IGNORECASE)
+    )
+    gap_headers = len(re.findall(r"^###\s+GAP-\d+", content, flags=re.MULTILINE))
+    gap_blocks = list(re.finditer(r"^###\s+(GAP-\d+)\s*$", content, flags=re.MULTILINE))
+    blocking_gap_ids: list[str] = []
+    for index, match in enumerate(gap_blocks):
+        block_start = match.end()
+        block_end = gap_blocks[index + 1].start() if index + 1 < len(gap_blocks) else len(content)
+        block = content[block_start:block_end]
+        if re.search(r"\*\*Impact:\*\*\s*`?blocking`?", block, flags=re.IGNORECASE) or re.search(
+            r"\*\*Blocks Ready For Review:\*\*\s*`?yes`?",
+            block,
+            flags=re.IGNORECASE,
+        ):
+            blocking_gap_ids.append(match.group(1))
+
+    return {
+        "blocking_gaps": blocking_match.group(1).lower() if blocking_match else None,
+        "impact_blocking": impact_blocking,
+        "total": int(total_match.group(1)) if total_match else gap_headers,
+        "gap_mentions": gap_headers,
+        "blocking_gap_ids": blocking_gap_ids,
+    }
+
+
+def markdown_table_rows_from_text(content: str) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("|") or "---" in line:
+            continue
+        cells = [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+        rows.append(cells)
+    return rows
+
+
+def markdown_table_rows(path: Path) -> list[list[str]]:
+    return markdown_table_rows_from_text(path.read_text(encoding="utf-8"))
+
+
+def extract_test_design_applicability_section(content: str) -> str | None:
+    match = re.search(
+        r"^##\s+Test-design Applicability Matrix\s*$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if not match:
+        return None
+
+    next_heading = re.search(r"^##\s+", content[match.end():], flags=re.MULTILINE)
+    section_end = match.end() + next_heading.start() if next_heading else len(content)
+    return content[match.end():section_end]
+
+
+def extract_markdown_section(content: str, heading: str) -> str | None:
+    match = re.search(
+        rf"^#{{2,6}}\s+{re.escape(heading)}\s*$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if not match:
+        return None
+
+    next_heading = re.search(r"^#{1,6}\s+", content[match.end():], flags=re.MULTILINE)
+    section_end = match.end() + next_heading.start() if next_heading else len(content)
+    return content[match.end():section_end]
+
+
+def extract_coverage_gaps_section(content: str) -> str | None:
+    match = re.search(
+        r"^#{2,6}\s+Coverage Gaps\b.*$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if not match:
+        return None
+
+    next_heading = re.search(r"^#{1,6}\s+", content[match.end():], flags=re.MULTILINE)
+    section_end = match.end() + next_heading.start() if next_heading else len(content)
+    return content[match.end():section_end]
+
+
+def declared_coverage_gap_ids(content: str) -> set[str]:
+    section = extract_coverage_gaps_section(content)
+    if section is None:
+        return set()
+    return set(extract_gap_ids_from_text(section))
+
+
+def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(path, root)
+    coverage_gaps_section = extract_coverage_gaps_section(content)
+    if coverage_gaps_section is None:
+        return findings, [Check("coverage-gap-inventory", "pass", "Coverage gap inventory section not present.", display_path)]
+
+    declared_gap_ids = declared_coverage_gap_ids(content)
+    referenced_gap_ids = set(extract_gap_ids_from_text(content))
+    missing_gap_ids = sorted(referenced_gap_ids - declared_gap_ids)
+    if missing_gap_ids:
+        findings.append(
+            Finding(
+                id="test-case-gap-reference-missing-from-coverage-gaps",
+                severity="warning",
+                category="traceability",
+                title="Canonical file references GAP ids missing from Coverage Gaps",
+                details=(
+                    "Every GAP-* referenced by atoms, matrices, TC coverage notes, self-checks or expected results "
+                    "must be declared in the canonical Coverage Gaps section. Otherwise reviewer cannot distinguish "
+                    "a real accepted gap from a stale or invented traceability link."
+                ),
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_gap_ids[:20])}"],
+                recommended_action=(
+                    "Add the missing GAP-* rows to Coverage Gaps with status/handling, or remove stale references "
+                    "from atoms, matrices and test cases."
+                ),
+            )
+        )
+
+    checks = [
+        Check(
+            "coverage-gap-inventory",
+            "warn" if findings else "pass",
+            "Coverage gap inventory has missing declarations." if findings else "Coverage gap inventory passed.",
+            display_path,
+        )
+    ]
+    return findings, checks
+
+
+def parse_bullet_context_fields(section: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in section.splitlines():
+        match = re.match(r"^\s*(?:[-*]\s*)?([^:|\n]+):\s*(.*?)\s*$", line)
+        if not match:
+            continue
+        key = normalize_markdown_field_name(match.group(1))
+        value = normalize_markdown_field_value(match.group(2))
+        fields[key] = value
+    return fields
+
+
+def source_selection_routes_downstream(state: dict[str, Any]) -> bool:
+    return (
+        state.get("stage_status") in {"ready-for-next-stage", "ready-for-review", "ready-for-writer-revision"}
+        and state.get("next_skill")
+        in {"ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-iteration", "ft-test-case-reviewer"}
+    )
+
+
+def validate_source_selection_artifact(
+    path: Path,
+    root: Path,
+    state: dict[str, Any],
+    workflow_path: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="source-selection-unreadable",
+                severity="error",
+                category="source-selection",
+                title="source-selection.md is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save source-selection.md as UTF-8.",
+            )
+        )
+        checks.append(Check("source-selection-readable", "fail", "File is not UTF-8.", display_path))
+        return findings, checks
+
+    missing_sections = [
+        section
+        for section in sorted(REQUIRED_SOURCE_SELECTION_SECTIONS)
+        if extract_markdown_section(content, section) is None
+    ]
+    if missing_sections:
+        findings.append(
+            Finding(
+                id="source-selection-missing-required-sections",
+                severity="warning",
+                category="source-selection",
+                title="source-selection.md misses required sections",
+                details="The source selection artifact must be a reproducible handoff, not only a placeholder file.",
+                path=display_path,
+                evidence=missing_sections,
+                recommended_action=(
+                    "Add the required sections from references/agent/source-selection-format.md before routing "
+                    "to ft-scope-analyzer."
+                ),
+            )
+        )
+        checks.append(Check("source-selection-required-sections", "fail", "Required sections are missing.", display_path))
+    else:
+        checks.append(Check("source-selection-required-sections", "pass", "Required sections are present.", display_path))
+
+    context_section = extract_markdown_section(content, "Context") or ""
+    context_fields = parse_bullet_context_fields(context_section)
+    missing_context_fields = sorted(REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS - set(context_fields))
+    if missing_context_fields:
+        findings.append(
+            Finding(
+                id="source-selection-missing-context-fields",
+                severity="warning",
+                category="source-selection",
+                title="source-selection.md misses required context fields",
+                details="Downstream stages need an explicit FT slug and selection status from the source locator.",
+                path=display_path,
+                evidence=missing_context_fields,
+                recommended_action="Add `selected_ft_slug` and `selection_status` to the Context section.",
+            )
+        )
+        checks.append(Check("source-selection-context-fields", "fail", "Required context fields are missing.", display_path))
+    else:
+        checks.append(Check("source-selection-context-fields", "pass", "Required context fields are present.", display_path))
+
+    raw_status = context_fields.get("selection_status", "")
+    selection_status = normalize_markdown_field_value(raw_status).lower()
+    if raw_status and selection_status not in ALLOWED_SOURCE_SELECTION_STATUSES:
+        findings.append(
+            Finding(
+                id="source-selection-invalid-selection-status",
+                severity="error",
+                category="source-selection",
+                title="source-selection.md has invalid selection_status",
+                details="Source selection status controls whether downstream stages may start.",
+                path=display_path,
+                evidence=[f"selection_status={raw_status}"],
+                recommended_action="Use one of: `selected`, `ambiguous`, `blocked-input`.",
+            )
+        )
+        checks.append(Check("source-selection-status", "fail", "selection_status is invalid.", display_path))
+    elif raw_status:
+        checks.append(Check("source-selection-status", "pass", "selection_status is canonical.", display_path))
+
+    if selection_status and selection_status != "selected" and source_selection_routes_downstream(state):
+        findings.append(
+            Finding(
+                id="workflow-state-source-selection-not-selected",
+                severity="error",
+                category="workflow-state",
+                title="Workflow routes downstream with unresolved source selection",
+                details=(
+                    "`source-selection.md` is not `selected`, so `ft-scope-analyzer`/writer/reviewer work must "
+                    "not start from this handoff."
+                ),
+                path=rel(workflow_path, root),
+                evidence=[f"{rel(path, root)} selection_status={selection_status}"],
+                recommended_action="Keep the workflow in `blocked-input` or update source-selection.md to `selected` after resolution.",
+            )
+        )
+        checks.append(Check("workflow-state-source-selection-selected", "fail", "Source selection is not selected.", rel(workflow_path, root)))
+    elif selection_status:
+        checks.append(Check("workflow-state-source-selection-selected", "pass", "Source selection status does not block routing.", rel(workflow_path, root)))
+
+    return findings, checks
+
+
+def source_parity_requires_source_row_inventory(path: Path) -> bool:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return False
+
+    section = extract_markdown_section(content, "Table / Row Parity")
+    if section is None:
+        return False
+
+    rows = markdown_table_rows_from_text(section)
+    return len(rows) > 1
+
+
+def normalize_table_header(cells: list[str]) -> list[str]:
+    return [normalize_markdown_field_name(cell.strip().strip("`")) for cell in cells]
+
+
+def atomic_requirement_ledger_atom_ids(content: str) -> set[str]:
+    section = extract_markdown_section(content, "Atomic Requirements Ledger")
+    if section is None:
+        return set()
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return set()
+
+    header = normalize_table_header(rows[0])
+    if "atom_id" not in header:
+        return set()
+
+    atom_id_index = header.index("atom_id")
+    atom_ids: set[str] = set()
+    for row in rows[1:]:
+        if atom_id_index >= len(row):
+            continue
+        atom_id = row[atom_id_index].strip().strip("`")
+        if atom_id:
+            atom_ids.add(atom_id)
+    return atom_ids
+
+
+def parsed_atomic_requirement_ledger_rows(content: str) -> tuple[list[str], list[dict[str, str]]]:
+    section = extract_markdown_section(content, "Atomic Requirements Ledger")
+    if section is None:
+        return [], []
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return [], []
+
+    header = normalize_table_header(rows[0])
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_row: dict[str, str] = {}
+        for index, column_name in enumerate(header):
+            parsed_row[column_name] = row[index].strip().strip("`") if index < len(row) else ""
+        parsed_rows.append(parsed_row)
+    return header, parsed_rows
+
+
+def is_valid_atom_id_value(atom_id: str) -> bool:
+    return bool(re.fullmatch(r"ATOM-\d{3,}", atom_id) or SCOPED_ATOM_ID_RE.fullmatch(atom_id))
+
+
+def is_valid_risk_priority_atom_id(atom_id: str, ledger_atom_ids: set[str]) -> bool:
+    if re.fullmatch(r"ATOM-\d{3,}", atom_id):
+        return True
+    if SCOPED_ATOM_ID_RE.fullmatch(atom_id):
+        return atom_id in ledger_atom_ids
+    return False
+
+
+def meaningful_matrix_value(value: str) -> bool:
+    normalized = value.strip().strip("`").strip().lower()
+    return bool(normalized and normalized not in {"-", "n/a", "na", "none", "null"})
+
+
+def parsed_test_design_applicability_rows(content: str) -> list[dict[str, str]]:
+    section = extract_test_design_applicability_section(content)
+    if section is None:
+        return []
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return []
+
+    header = normalize_table_header(rows[0])
+    if not APPLICABILITY_MATRIX_REQUIRED_COLUMNS.issubset(set(header)):
+        return []
+
+    column_index = {name: index for index, name in enumerate(header)}
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_row: dict[str, str] = {}
+        for name in APPLICABILITY_MATRIX_REQUIRED_COLUMNS:
+            index = column_index[name]
+            parsed_row[name] = row[index].strip().strip("`") if index < len(row) else ""
+        parsed_rows.append(parsed_row)
+    return parsed_rows
+
+
+def validate_test_design_applicability_matrix(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    structural_severity: str,
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    section = extract_test_design_applicability_section(content)
+
+    if section is None:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-missing",
+                severity=structural_severity,
+                category="test-design",
+                title="Test-case file has no Test-design applicability matrix",
+                details=(
+                    "Canonical initial drafts should explicitly record which coverage dimensions apply, "
+                    "do not apply, or remain unclear."
+                ),
+                path=display_path,
+                evidence=[],
+                recommended_action="Add a Test-design Applicability Matrix before review handoff.",
+            )
+        )
+        checks.append(
+            Check(
+                "test-design-applicability-matrix",
+                "warn" if structural_severity == "warning" else "pass",
+                "Applicability matrix is missing." if structural_severity == "warning" else "Applicability matrix missing recorded as legacy info.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-no-table",
+                severity="warning",
+                category="test-design",
+                title="Test-design applicability matrix has no Markdown table",
+                details="The matrix section exists but has no parseable Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical table columns: dimension, applicable, source_ref, reason, linked_atoms, linked_test_cases, gap_id.",
+            )
+        )
+        checks.append(Check("test-design-applicability-matrix", "warn", "Applicability matrix table is missing.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(rows[0])
+    missing_columns = sorted(APPLICABILITY_MATRIX_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-missing-columns",
+                severity="warning",
+                category="test-design",
+                title="Test-design applicability matrix misses required columns",
+                details="The matrix must expose all required columns so reviewer can audit coverage decisions.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:12])}"],
+                recommended_action="Add the missing columns from writer-output-format.md.",
+            )
+        )
+        checks.append(Check("test-design-applicability-matrix", "warn", "Applicability matrix columns are incomplete.", display_path))
+        return findings, checks
+
+    column_index = {name: index for index, name in enumerate(header)}
+    invalid_applicability: list[str] = []
+    unknown_dimensions: list[str] = []
+    missing_yes_links: list[str] = []
+    missing_unclear_gap: list[str] = []
+    unsupported_no_rows: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    invalid_gap_refs: list[str] = []
+    hidden_integration_gap_rows: list[str] = []
+    hidden_numeric_equivalence_rows: list[str] = []
+    hidden_numeric_rows: list[str] = []
+    linked_tc_dimension_mismatches: list[str] = []
+    linked_atom_contamination_rows: list[str] = []
+    has_integration_gap_evidence = bool(INTEGRATION_GAP_EVIDENCE_RE.search(content))
+    has_numeric_only_evidence = bool(NUMERIC_ONLY_CONTEXT_RE.search(content))
+    test_case_blocks_by_id = {test_case_id: block for test_case_id, block in extract_test_case_blocks(content)}
+
+    for row_number, row in enumerate(rows[1:], start=2):
+        def cell(name: str) -> str:
+            index = column_index[name]
+            return row[index].strip().strip("`") if index < len(row) else ""
+
+        dimension = cell("dimension").lower()
+        applicable = cell("applicable").lower()
+        linked_atoms = cell("linked_atoms")
+        linked_test_cases = cell("linked_test_cases")
+        gap_id = cell("gap_id")
+        source_ref = cell("source_ref")
+        reason = cell("reason")
+        row_label = f"row {row_number}:{dimension or '<missing dimension>'}"
+
+        if dimension and dimension not in ALLOWED_COVERAGE_DIMENSIONS:
+            unknown_dimensions.append(row_label)
+        if applicable not in {"yes", "no", "unclear"}:
+            invalid_applicability.append(f"{row_label}:applicable={applicable or '<missing>'}")
+            continue
+
+        atom_ids = extract_atom_ids_from_text(linked_atoms)
+        test_case_ids = extract_test_case_ids_from_text(linked_test_cases)
+        gap_ids = extract_gap_ids_from_text(gap_id)
+
+        if meaningful_matrix_value(gap_id) and not gap_ids:
+            invalid_gap_refs.append(f"{row_label}:gap_id={gap_id}")
+
+        if known_test_case_ids:
+            for test_case_id in test_case_ids:
+                if test_case_id not in known_test_case_ids:
+                    unknown_test_case_ids.append(f"{row_label}:{test_case_id}")
+
+        if applicable == "yes" and (not atom_ids or (not test_case_ids and not gap_ids)):
+            missing_yes_links.append(
+                f"{row_label}:atoms={linked_atoms or '-'}; test_cases={linked_test_cases or '-'}; gap={gap_id or '-'}"
+            )
+        if applicable == "yes" and test_case_ids:
+            linked_tc_atom_ids: set[str] = set()
+            dimension_context_re = APPLICABILITY_LINKED_TC_DIMENSION_CONTEXT_RE.get(dimension)
+            for test_case_id in test_case_ids:
+                block = test_case_blocks_by_id.get(test_case_id, "")
+                if not block:
+                    continue
+                linked_tc_atom_ids.update(extract_any_atom_ids_from_text(block))
+                if dimension_context_re is not None:
+                    tc_context = " ".join(
+                        [
+                            extract_test_case_field_block(block, ["Title", "title", "Название"]),
+                            extract_test_case_field_block(block, ["Goal", "goal", "Цель"]),
+                            extract_test_case_field_block(block, ["Test Data", "test_data", "test data", "Тестовые данные"]),
+                            extract_test_case_field_block(block, ["Steps", "steps", "Шаги"]),
+                            extract_test_case_expected_result(block),
+                        ]
+                    )
+                    if not dimension_context_re.search(tc_context):
+                        linked_tc_dimension_mismatches.append(
+                            f"{row_label}:{test_case_id}:context={tc_context[:140] or '<empty>'}"
+                        )
+            if atom_ids and not gap_ids:
+                unmapped_atom_ids = [atom_id for atom_id in atom_ids if atom_id not in linked_tc_atom_ids]
+                if unmapped_atom_ids:
+                    linked_atom_contamination_rows.append(
+                        f"{row_label}:unmapped_atoms={', '.join(unmapped_atom_ids[:12])}; linked_tcs={', '.join(test_case_ids[:8])}"
+                    )
+        if applicable == "unclear" and not gap_ids:
+            missing_unclear_gap.append(f"{row_label}:gap={gap_id or '-'}")
+        if applicable == "no" and not (meaningful_matrix_value(source_ref) or meaningful_matrix_value(reason)):
+            unsupported_no_rows.append(row_label)
+        if applicable == "no" and dimension in INTEGRATION_RELATED_DIMENSIONS and has_integration_gap_evidence:
+            hidden_integration_gap_rows.append(f"{row_label}:source_ref={source_ref or '-'}; reason={reason or '-'}")
+        if applicable == "no" and dimension == "equivalence" and has_numeric_only_evidence:
+            hidden_numeric_equivalence_rows.append(f"{row_label}:source_ref={source_ref or '-'}; reason={reason or '-'}")
+        if applicable == "no" and dimension == "numeric" and has_numeric_only_evidence:
+            hidden_numeric_rows.append(f"{row_label}:source_ref={source_ref or '-'}; reason={reason or '-'}")
+
+    if invalid_applicability:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-invalid-applicable",
+                severity="warning",
+                category="test-design",
+                title="Test-design applicability matrix has invalid applicable values",
+                details="The applicable column must use exactly yes, no, or unclear.",
+                path=display_path,
+                evidence=invalid_applicability[:20],
+                recommended_action="Normalize applicable values to yes, no, or unclear.",
+            )
+        )
+    if unknown_dimensions:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-unknown-dimension",
+                severity="warning",
+                category="test-design",
+                title="Test-design applicability matrix uses unknown coverage dimensions",
+                details="Dimension values should use the coverage_dimension vocabulary from review-findings-format.md.",
+                path=display_path,
+                evidence=unknown_dimensions[:20],
+                recommended_action="Use a canonical coverage_dimension value or `other` with an explanation.",
+            )
+        )
+    if missing_yes_links:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-uncovered-applicable-dimension",
+                severity="warning",
+                category="test-design",
+                title="Applicable test-design dimensions lack test-case or gap links",
+                details="Rows with applicable = yes must link at least one ATOM-* and either TC-* or GAP-*.",
+                path=display_path,
+                evidence=missing_yes_links[:20],
+                recommended_action="Link the applicable dimension to covered test cases or record a coverage gap before ready-for-review.",
+            )
+        )
+    if missing_unclear_gap:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-unclear-without-gap",
+                severity="warning",
+                category="test-design",
+                title="Unclear applicability rows lack gap ids",
+                details="Rows with applicable = unclear must link a GAP-* so the missing decision is traceable.",
+                path=display_path,
+                evidence=missing_unclear_gap[:20],
+                recommended_action="Create a GAP-* with the analyst question and link it from the matrix row.",
+            )
+        )
+    if unsupported_no_rows:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-unsupported-no",
+                severity="warning",
+                category="test-design",
+                title="Not-applicable rows lack source-based reason",
+                details="Rows with applicable = no need source_ref or reason; otherwise reviewer cannot distinguish non-applicability from omission.",
+                path=display_path,
+                evidence=unsupported_no_rows[:20],
+                recommended_action="Add a concrete source_ref or reason proving the dimension is absent or out of scope.",
+            )
+        )
+    if invalid_gap_refs:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-invalid-gap-id",
+                severity="warning",
+                category="test-design",
+                title="Test-design applicability matrix has invalid gap ids",
+                details="Gap links must use GAP-* or coverage_gap:<short-id>.",
+                path=display_path,
+                evidence=invalid_gap_refs[:20],
+                recommended_action="Replace noncanonical gap references with stable GAP-* ids.",
+            )
+        )
+    if linked_tc_dimension_mismatches:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-linked-tc-dimension-mismatch",
+                severity="warning",
+                category="test-design",
+                title="Applicability matrix links a dimension to TC-* that does not exercise it",
+                details=(
+                    "A matrix row is not covered merely because it names a TC id. The linked TC must contain steps, "
+                    "data and an expected result that actually exercise the declared coverage dimension."
+                ),
+                path=display_path,
+                evidence=linked_tc_dimension_mismatches[:20],
+                recommended_action=(
+                    "Link the matrix row to TC-* that really cover the dimension, add missing TC-* coverage, "
+                    "or replace the link with a concrete GAP-*."
+                ),
+            )
+        )
+    if linked_atom_contamination_rows:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-linked-atom-contamination",
+                severity="warning",
+                category="test-design",
+                title="Applicability matrix linked atoms are not exercised by linked test cases",
+                details=(
+                    "Rows with applicable = yes should not inflate coverage by listing ATOM-* ids that are not "
+                    "referenced by the linked TC-* blocks and are not routed to a GAP-*. This often means metadata "
+                    "or source-property atoms were counted as coverage for the row dimension."
+                ),
+                path=display_path,
+                evidence=linked_atom_contamination_rows[:20],
+                recommended_action=(
+                    "Remove unrelated metadata/source-property atoms from the matrix row, add real TC-* coverage "
+                    "for them, or link the blocked/non-executable atoms to a concrete GAP-*."
+                ),
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-unknown-test-case-id",
+                severity="warning",
+                category="test-design",
+                title="Test-design applicability matrix references unknown test-case ids",
+                details="linked_test_cases must point to canonical ## TC-* sections in the same FT package.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced test cases or update linked_test_cases to existing TC-* ids.",
+            )
+        )
+    if hidden_integration_gap_rows:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-hidden-integration-gap",
+                severity="warning",
+                category="test-design",
+                title="Applicability matrix marks integration/API-like dimension as not applicable despite GAP evidence",
+                details=(
+                    "If the artifact contains GAP evidence for API, RabbitMQ, DaData, kladr, Connect, backend, "
+                    "database, async or external reference behavior, related applicability rows cannot be hidden "
+                    "as `no`. They should be `yes` or `unclear` and linked to the relevant GAP-*."
+                ),
+                path=display_path,
+                evidence=hidden_integration_gap_rows[:20],
+                recommended_action=(
+                    "Change the affected dimension to `yes` with TC/GAP links or to `unclear` with GAP-* links. "
+                    "Do not classify unresolved integration/internal behavior as not applicable."
+                ),
+            )
+        )
+    if hidden_numeric_equivalence_rows:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-hidden-numeric-equivalence-gap",
+                severity="warning",
+                category="test-design",
+                title="Applicability matrix marks equivalence as not applicable despite numeric-only rules",
+                details=(
+                    "A numeric-only or digits-only source rule creates equivalence classes for valid numeric values "
+                    "and invalid nonnumeric values. The matrix should not mark `equivalence = no` unless the file "
+                    "gives a source-based reason why those classes are intentionally out of scope."
+                ),
+                path=display_path,
+                evidence=hidden_numeric_equivalence_rows[:20],
+                recommended_action=(
+                    "Change equivalence to `yes` and link the relevant TC/GAP rows, or document an explicit "
+                    "source-based non-applicability decision that does not hide numeric-only invalid classes."
+                ),
+            )
+        )
+    if hidden_numeric_rows:
+        findings.append(
+            Finding(
+                id="test-design-applicability-matrix-hidden-numeric-gap",
+                severity="warning",
+                category="test-design",
+                title="Applicability matrix marks numeric as not applicable despite numeric-only rules",
+                details=(
+                    "A numeric-only or digits-only source rule makes numeric input coverage applicable. "
+                    "The matrix should not mark `numeric = no` while the same artifact contains numeric/digits-only "
+                    "requirements or numeric invalid-class coverage."
+                ),
+                path=display_path,
+                evidence=hidden_numeric_rows[:20],
+                recommended_action=(
+                    "Change numeric to `yes` and link the relevant ATOM/TC/GAP rows, or document a source-backed "
+                    "reason why numeric coverage is genuinely outside the selected scope."
+                ),
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "test-design-applicability-matrix",
+            "warn" if has_warnings else "pass",
+            "Applicability matrix contract has issues." if has_warnings else "Applicability matrix contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_pairwise_supporting_table(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    rows = parsed_test_design_applicability_rows(content)
+    pairwise_yes_rows = [
+        row
+        for row in rows
+        if row.get("dimension", "").strip().lower() == "pairwise"
+        and row.get("applicable", "").strip().lower() == "yes"
+    ]
+    if not pairwise_yes_rows:
+        return findings, checks
+
+    section = extract_markdown_section(content, "Combinatorial Coverage Table")
+    if section is None:
+        findings.append(
+            Finding(
+                id="test-case-pairwise-table-missing",
+                severity="warning",
+                category="test-design",
+                title="Pairwise applicability has no Combinatorial Coverage Table",
+                details=(
+                    "When the applicability matrix marks pairwise as applicable, the canonical test-case file "
+                    "must record factors, constraints, selected combinations, high-risk additions, and TC/GAP links."
+                ),
+                path=display_path,
+                evidence=[
+                    f"pairwise row: source_ref={row.get('source_ref', '-')}; linked_test_cases={row.get('linked_test_cases', '-')}; gap_id={row.get('gap_id', '-')}"
+                    for row in pairwise_yes_rows[:5]
+                ],
+                recommended_action="Add a ## Combinatorial Coverage Table section or link the unresolved decision to GAP-* before review.",
+            )
+        )
+        checks.append(Check("test-case-pairwise-supporting-table", "warn", "Pairwise table is missing.", display_path))
+        return findings, checks
+
+    table_rows = markdown_table_rows_from_text(section)
+    headers = [normalize_table_header(row) for row in table_rows]
+    has_factor_table = any(
+        {"factor", "values", "source_ref"}.issubset(set(header))
+        and any("constraints" in column for column in header)
+        for header in headers
+    )
+    has_combination_table = any(
+        {"combination_id", "factor_values", "reason", "linked_atoms"}.issubset(set(header))
+        and any(column in {"tc_gap", "tc_or_gap", "tc_gap"} or "tc" in column and "gap" in column for column in header)
+        for header in headers
+    )
+
+    if not has_factor_table or not has_combination_table:
+        missing_parts = []
+        if not has_factor_table:
+            missing_parts.append("factor table")
+        if not has_combination_table:
+            missing_parts.append("combination table")
+        findings.append(
+            Finding(
+                id="test-case-pairwise-table-incomplete",
+                severity="warning",
+                category="test-design",
+                title="Combinatorial Coverage Table misses required pairwise structure",
+                details="Pairwise coverage needs both a factors/values table and a selected combinations table.",
+                path=display_path,
+                evidence=missing_parts,
+                recommended_action=(
+                    "Add factor | values | source_ref | constraints / impossible combinations and "
+                    "combination_id | factor_values | reason | linked_atoms | TC/gap tables."
+                ),
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "test-case-pairwise-supporting-table",
+            "warn" if has_warnings else "pass",
+            "Pairwise supporting table has issues." if has_warnings else "Pairwise supporting table contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def extract_test_case_expected_result(block: str) -> str:
+    match = re.search(
+        r"^\*\*(?:Expected Result|expected_result|expected result|Итоговый ожидаемый результат|Ожидаемый результат):\*\*\s*(.*)$",
+        block,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def extract_test_case_type(block: str) -> str:
+    match = re.search(
+        r"^\*\*(?:Type|\u0422\u0438\u043f):\*\*\s*`?([^`\n]+?)`?\s*$",
+        block,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    return match.group(1).strip().lower() if match else ""
+
+
+def calculation_oracle_issue(test_case_id: str, block: str) -> str | None:
+    block_lower = block.lower()
+    expected_result = extract_test_case_expected_result(block)
+    expected_lower = expected_result.lower()
+
+    vague_expected = bool(
+        re.search(
+            r"(корректн|согласно\s+формул|according\s+to\s+formula|calculated\s+correctly)",
+            expected_lower,
+        )
+    )
+    has_formula_or_source = bool(
+        re.search(r"(formula|формул|source|источник|req[-\s]?\d+|gsr\s+\d+|=|×|\bx\b|\*|%)", block_lower)
+    )
+    has_input_values = bool(
+        re.search(
+            r"(test data|тестовые данные|input|входн|сумм|amount|rate|ставк)[\s\S]{0,200}\d",
+            block_lower,
+        )
+    )
+    has_expected_numeric_result = bool(expected_result and re.search(r"\d", expected_result))
+
+    missing_parts: list[str] = []
+    if vague_expected:
+        missing_parts.append("expected result is vague")
+    if not has_formula_or_source:
+        missing_parts.append("formula/source reference")
+    if not has_input_values:
+        missing_parts.append("input values")
+    if not has_expected_numeric_result:
+        missing_parts.append("manually calculated expected result")
+
+    return f"{test_case_id}: missing {', '.join(missing_parts)}" if missing_parts else None
+
+
+def validate_calculation_oracles(
+    content: str,
+    path: Path,
+    root: Path,
+    blocks: list[tuple[str, str]],
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    rows = parsed_test_design_applicability_rows(content)
+    calculation_rows = [
+        row
+        for row in rows
+        if row.get("dimension", "").strip().lower() == "calculation"
+        and row.get("applicable", "").strip().lower() == "yes"
+    ]
+    if not calculation_rows:
+        return findings, checks
+
+    block_by_id = {test_case_id: block for test_case_id, block in blocks}
+    linked_case_ids: set[str] = set()
+    for row in calculation_rows:
+        linked_case_ids.update(extract_test_case_ids_from_text(row.get("linked_test_cases", "")))
+
+    if not linked_case_ids:
+        return findings, checks
+
+    oracle_issues = [
+        issue
+        for test_case_id in sorted(linked_case_ids)
+        if (block := block_by_id.get(test_case_id))
+        if (issue := calculation_oracle_issue(test_case_id, block))
+    ]
+
+    if oracle_issues:
+        findings.append(
+            Finding(
+                id="test-case-calculation-oracle-missing",
+                severity="warning",
+                category="test-design",
+                title="Calculation test cases miss required calculation oracle",
+                details=(
+                    "Calculation cases linked from the applicability matrix must include a formula/source reference, "
+                    "concrete input values, and a manually calculated expected result."
+                ),
+                path=display_path,
+                evidence=oracle_issues[:20],
+                recommended_action=(
+                    "Add calculation oracle details to each affected TC-* or move undefined formula/rounding behavior "
+                    "to a traceable GAP-*."
+                ),
+            )
+        )
+
+    checks.append(
+        Check(
+            "test-case-calculation-oracle",
+            "warn" if oracle_issues else "pass",
+            "Calculation oracle has issues." if oracle_issues else "Calculation oracle contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def extract_test_case_priority(block: str) -> str | None:
+    match = re.search(
+        r"^\*\*(?:Priority|Приоритет):\*\*\s*`?(High|Medium|Low)`?",
+        block,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    return match.group(1).capitalize() if match else None
+
+
+def validate_risk_priority_map(
+    content: str,
+    path: Path,
+    root: Path,
+    blocks: list[tuple[str, str]],
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    applicability_rows = parsed_test_design_applicability_rows(content)
+    high_risk_applicable_rows = [
+        row
+        for row in applicability_rows
+        if row.get("dimension", "").strip().lower() in HIGH_RISK_DIMENSION_CANDIDATES
+        and row.get("applicable", "").strip().lower() == "yes"
+    ]
+
+    section = extract_markdown_section(content, "Risk / Priority Map")
+    if section is None:
+        if high_risk_applicable_rows:
+            findings.append(
+                Finding(
+                    id="test-case-risk-priority-map-missing",
+                    severity="warning",
+                    category="test-design",
+                    title="High-risk applicability has no Risk / Priority Map",
+                    details=(
+                        "When high-risk dimensions are applicable, the canonical test-case file must map "
+                        "high-risk atoms to required priority, linked High TC-* cases, or blocking GAP-* ids."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"{row.get('dimension', '-')}: source_ref={row.get('source_ref', '-')}; linked_atoms={row.get('linked_atoms', '-')}"
+                        for row in high_risk_applicable_rows[:10]
+                    ],
+                    recommended_action="Add a ## Risk / Priority Map section or mark the unresolved high-risk coverage as GAP-*.",
+                )
+            )
+            checks.append(Check("test-case-risk-priority-map", "warn", "Risk / Priority Map is missing.", display_path))
+        return findings, checks
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-no-table",
+                severity="warning",
+                category="test-design",
+                title="Risk / Priority Map has no Markdown table",
+                details="The section exists but has no parseable Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Risk / Priority Map columns from writer-output-format.md.",
+            )
+        )
+        checks.append(Check("test-case-risk-priority-map", "warn", "Risk / Priority Map table is missing.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(rows[0])
+    missing_columns = sorted(RISK_PRIORITY_MAP_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-missing-columns",
+                severity="warning",
+                category="test-design",
+                title="Risk / Priority Map misses required columns",
+                details="The map must expose atom id, risk, required priority, TC/GAP links, and rationale.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:12])}"],
+                recommended_action="Add the missing columns from writer-output-format.md.",
+            )
+        )
+        checks.append(Check("test-case-risk-priority-map", "warn", "Risk / Priority Map columns are incomplete.", display_path))
+        return findings, checks
+
+    column_index = {name: index for index, name in enumerate(header)}
+    ledger_atom_ids = atomic_requirement_ledger_atom_ids(content)
+    priority_by_tc = {test_case_id: extract_test_case_priority(block) for test_case_id, block in blocks}
+    invalid_risk_levels: list[str] = []
+    invalid_priorities: list[str] = []
+    invalid_atom_ids: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    high_without_high_priority: list[str] = []
+    high_without_coverage: list[str] = []
+    high_without_high_tc_or_gap: list[str] = []
+
+    for row_number, row in enumerate(rows[1:], start=2):
+        def cell(name: str) -> str:
+            index = column_index[name]
+            return row[index].strip().strip("`") if index < len(row) else ""
+
+        atom_id = cell("atom_id")
+        risk_level = cell("risk_level").lower()
+        required_priority = cell("required_priority").lower()
+        linked_test_cases = cell("linked_test_cases")
+        gap_id = cell("gap_id")
+        row_label = f"row {row_number}:{atom_id or '<missing atom>'}"
+
+        if atom_id and not is_valid_risk_priority_atom_id(atom_id, ledger_atom_ids):
+            invalid_atom_ids.append(row_label)
+        if risk_level not in {"high", "medium", "low"}:
+            invalid_risk_levels.append(f"{row_label}:risk_level={risk_level or '<missing>'}")
+            continue
+        if required_priority not in {"high", "medium", "low"}:
+            invalid_priorities.append(f"{row_label}:required_priority={required_priority or '<missing>'}")
+
+        test_case_ids = extract_test_case_ids_from_text(linked_test_cases)
+        gap_ids = extract_gap_ids_from_text(gap_id)
+        unknown_ids = [test_case_id for test_case_id in test_case_ids if test_case_id not in priority_by_tc]
+        unknown_test_case_ids.extend(f"{row_label}:{test_case_id}" for test_case_id in unknown_ids)
+
+        if risk_level == "high":
+            has_high_tc = any(priority_by_tc.get(test_case_id) == "High" for test_case_id in test_case_ids)
+            if required_priority != "high":
+                high_without_high_priority.append(f"{row_label}:required_priority={required_priority or '<missing>'}")
+            if not test_case_ids and not gap_ids:
+                high_without_coverage.append(row_label)
+            if test_case_ids and not has_high_tc and not gap_ids:
+                priorities = ", ".join(f"{test_case_id}={priority_by_tc.get(test_case_id) or '<missing>'}" for test_case_id in test_case_ids)
+                high_without_high_tc_or_gap.append(f"{row_label}:{priorities}")
+
+    if invalid_atom_ids:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-invalid-atom-id",
+                severity="warning",
+                category="test-design",
+                title="Risk / Priority Map contains invalid atom ids",
+                details="Risk rows should point to stable ATOM-* ids or scoped *-ATOM-* ids declared in the Atomic Requirements Ledger.",
+                path=display_path,
+                evidence=invalid_atom_ids[:20],
+                recommended_action="Use stable ATOM-* ids or existing scoped *-ATOM-* ids from the Atomic Requirements Ledger.",
+            )
+        )
+    if invalid_risk_levels:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-invalid-risk-level",
+                severity="warning",
+                category="test-design",
+                title="Risk / Priority Map has invalid risk levels",
+                details="risk_level must be high, medium, or low.",
+                path=display_path,
+                evidence=invalid_risk_levels[:20],
+                recommended_action="Normalize risk_level values to high, medium, or low.",
+            )
+        )
+    if invalid_priorities:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-invalid-required-priority",
+                severity="warning",
+                category="test-design",
+                title="Risk / Priority Map has invalid required priorities",
+                details="required_priority must be High, Medium, or Low.",
+                path=display_path,
+                evidence=invalid_priorities[:20],
+                recommended_action="Normalize required_priority values to High, Medium, or Low.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-unknown-test-case-id",
+                severity="warning",
+                category="test-design",
+                title="Risk / Priority Map references unknown test-case ids",
+                details="linked_test_cases must point to canonical ## TC-* sections in the same file.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced test cases or update linked_test_cases to existing TC-* ids.",
+            )
+        )
+    if high_without_high_priority:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-high-risk-without-high-required-priority",
+                severity="warning",
+                category="test-design",
+                title="High-risk atoms do not require High priority",
+                details="Rows with risk_level = high must use required_priority = High.",
+                path=display_path,
+                evidence=high_without_high_priority[:20],
+                recommended_action="Set required_priority to High or downgrade risk only with source-backed rationale.",
+            )
+        )
+    if high_without_coverage:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-high-risk-uncovered",
+                severity="warning",
+                category="test-design",
+                title="High-risk atoms have no linked test case or gap",
+                details="High-risk atoms must link to at least one TC-* or to a blocking GAP-*.",
+                path=display_path,
+                evidence=high_without_coverage[:20],
+                recommended_action="Link a High priority test case or create a blocking coverage gap.",
+            )
+        )
+    if high_without_high_tc_or_gap:
+        findings.append(
+            Finding(
+                id="test-case-risk-priority-map-high-risk-without-high-test-case",
+                severity="warning",
+                category="test-design",
+                title="High-risk atoms are not covered by High priority test cases",
+                details="High-risk rows with linked TC-* ids need at least one linked test case with Priority: High unless a blocking GAP-* is recorded.",
+                path=display_path,
+                evidence=high_without_high_tc_or_gap[:20],
+                recommended_action="Raise at least one linked test case to Priority: High or record a blocking GAP-*.",
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "test-case-risk-priority-map",
+            "warn" if has_warnings else "pass",
+            "Risk / Priority Map contract has issues." if has_warnings else "Risk / Priority Map contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_traceability_matrix(
+    path: Path,
+    root: Path,
+    *,
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        rows = markdown_table_rows(path)
+    except UnicodeDecodeError:
+        findings.append(
+            Finding(
+                id="traceability-matrix-not-utf8",
+                severity="error",
+                category="traceability",
+                title="Traceability matrix is not UTF-8",
+                details="Traceability matrix artifacts must be readable as UTF-8 Markdown.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Save the matrix as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("traceability-matrix-format", "fail", "Traceability matrix is not UTF-8.", display_path))
+        return findings, checks
+
+    if not rows:
+        findings.append(
+            Finding(
+                id="traceability-matrix-no-table",
+                severity="warning",
+                category="traceability",
+                title="Traceability matrix has no Markdown table",
+                details="The validator could not find a Markdown table in the matrix artifact.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical traceability matrix table format.",
+            )
+        )
+        checks.append(Check("traceability-matrix-format", "warn", "Traceability matrix table is missing.", display_path))
+        return findings, checks
+
+    header = [cell.strip().strip("`").lower() for cell in rows[0]]
+    if "atom_id" not in header:
+        findings.append(
+            Finding(
+                id="traceability-matrix-legacy-missing-atom-id",
+                severity="info",
+                category="traceability",
+                title="Legacy traceability matrix has no atom_id column",
+                details=(
+                    "This matrix predates the atom_id / traceability_ref contract. "
+                    "Do not mechanically migrate it without a reviewer pass."
+                ),
+                path=display_path,
+                evidence=[f"columns={', '.join(header[:10])}"],
+                recommended_action=(
+                    "Treat this as a legacy baseline. New or updated matrices should add stable ATOM-* ids."
+                ),
+            )
+        )
+        checks.append(Check("traceability-matrix-atom-id", "pass", "Legacy matrix without atom_id recorded as info.", display_path))
+        return findings, checks
+
+    atom_index = header.index("atom_id")
+    covered_by_tc_index = header.index("covered_by_tc") if "covered_by_tc" in header else None
+    atom_ids: list[str] = []
+    invalid_atom_ids: list[str] = []
+    legacy_unclear_ids: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    for row in rows[1:]:
+        atom_id = row[atom_index].strip().strip("`") if atom_index < len(row) else ""
+        if not re.fullmatch(r"ATOM-\d{3,}", atom_id):
+            if re.fullmatch(r"UNCLEAR-\d{3,}", atom_id):
+                legacy_unclear_ids.append(atom_id)
+            else:
+                invalid_atom_ids.append(atom_id or "<missing>")
+        else:
+            atom_ids.append(atom_id)
+        if known_test_case_ids and covered_by_tc_index is not None and covered_by_tc_index < len(row):
+            referenced_ids = extract_test_case_ids_from_text(row[covered_by_tc_index])
+            for test_case_id in referenced_ids:
+                if test_case_id not in known_test_case_ids:
+                    unknown_test_case_ids.append(f"{atom_id or '<missing>'}:{test_case_id}")
+
+    duplicate_atom_ids = [
+        atom_id
+        for atom_id, count in Counter(atom_ids).items()
+        if count > 1
+    ]
+    if invalid_atom_ids:
+        findings.append(
+            Finding(
+                id="traceability-matrix-invalid-atom-id",
+                severity="warning",
+                category="traceability",
+                title="Traceability matrix contains invalid atom_id values",
+                details="New traceability matrices must use stable ATOM-* ids for every row.",
+                path=display_path,
+                evidence=invalid_atom_ids[:10],
+                recommended_action="Assign stable ids like ATOM-001 without reusing ids for different statements.",
+            )
+        )
+    if legacy_unclear_ids:
+        findings.append(
+            Finding(
+                id="traceability-matrix-legacy-unclear-atom-id",
+                severity="info",
+                category="traceability",
+                title="Traceability matrix uses legacy UNCLEAR-* ids",
+                details=(
+                    "The matrix has an atom_id column, but some rows use a legacy UNCLEAR-* "
+                    "identifier scheme instead of canonical ATOM-* ids."
+                ),
+                path=display_path,
+                evidence=legacy_unclear_ids[:10],
+                recommended_action=(
+                    "Keep as legacy baseline until the next reviewer pass; new or updated rows should use ATOM-* ids."
+                ),
+            )
+        )
+    if duplicate_atom_ids:
+        findings.append(
+            Finding(
+                id="traceability-matrix-duplicate-atom-id",
+                severity="warning",
+                category="traceability",
+                title="Traceability matrix contains duplicate atom_id values",
+                details="Each atom_id must identify one atomic statement within the matrix.",
+                path=display_path,
+                evidence=duplicate_atom_ids[:10],
+                recommended_action="Split or rename duplicated atom ids so findings can target one row unambiguously.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="traceability-matrix-unknown-test-case-id",
+                severity="warning",
+                category="traceability",
+                title="Traceability matrix references unknown test-case ids",
+                details="covered_by_tc values must point to canonical ## TC-* sections in the same FT package.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced test cases or update covered_by_tc to existing TC-* ids.",
+            )
+        )
+
+    has_warnings = bool(invalid_atom_ids or duplicate_atom_ids or unknown_test_case_ids)
+    checks.append(
+        Check(
+            "traceability-matrix-atom-id",
+            "warn" if has_warnings else "pass",
+            "Traceability matrix atom_id contract has issues." if has_warnings else "Traceability matrix atom_id contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def normalize_markdown_field_name(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+
+
+def normalize_markdown_field_value(value: str) -> str:
+    return strip_quotes(value.strip().strip("`").strip())
+
+
+def extract_finding_blocks(content: str) -> list[tuple[str, str]]:
+    matches = list(
+        re.finditer(
+            r"^###\s+(FINDING(?:-[A-Z]+)?-\d{3,})\s*$",
+            content,
+            flags=re.MULTILINE,
+        )
+    )
+    blocks: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        body_start = match.end()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        blocks.append((match.group(1), content[body_start:body_end]))
+    return blocks
+
+
+def extract_response_blocks(content: str) -> list[tuple[str, str]]:
+    matches = list(
+        re.finditer(
+            r"^###\s+((?:USER-)?FINDING(?:-[A-Z]+)?-\d{3,})\s*$",
+            content,
+            flags=re.MULTILINE,
+        )
+    )
+    blocks: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        body_start = match.end()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        blocks.append((match.group(1), content[body_start:body_end]))
+    return blocks
+
+
+def parse_markdown_fields(block: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for line in block.splitlines():
+        match = re.match(r"^\*\*([^*:\n]+):\*\*\s*(.*)$", line.strip())
+        if not match:
+            continue
+        key = normalize_markdown_field_name(match.group(1))
+        fields[key] = normalize_markdown_field_value(match.group(2))
+    return fields
+
+
+def extract_reviewer_signoff_fields(content: str) -> dict[str, str] | None:
+    match = re.search(
+        r"^##\s+Reviewer Sign-off Self-check\s*$",
+        content,
+        flags=re.MULTILINE,
+    )
+    if not match:
+        return None
+
+    next_heading = re.search(r"^##\s+", content[match.end():], flags=re.MULTILINE)
+    body_end = match.end() + next_heading.start() if next_heading else len(content)
+    return parse_markdown_fields(content[match.end():body_end])
+
+
+def reviewer_signoff_field_issues(fields: dict[str, str]) -> list[str]:
+    issues: list[str] = []
+    missing = sorted(REQUIRED_REVIEWER_SIGNOFF_FIELDS - set(fields))
+    issues.extend(f"missing:{field}" for field in missing)
+
+    for field in sorted(REVIEWER_SIGNOFF_YES_FIELDS):
+        value = fields.get(field)
+        if value is not None and value != "yes":
+            issues.append(f"{field}={value or '<empty>'}")
+
+    for field in sorted(REVIEWER_SIGNOFF_YES_OR_NA_FIELDS):
+        value = fields.get(field)
+        if value is not None and value not in {"yes", "not-applicable"}:
+            issues.append(f"{field}={value or '<empty>'}")
+
+    known_unclear_items = fields.get("known_unclear_items")
+    if known_unclear_items is not None and (not known_unclear_items or "<" in known_unclear_items):
+        issues.append(f"known_unclear_items={known_unclear_items or '<empty>'}")
+
+    rationale = fields.get("sign_off_rationale")
+    if rationale is not None:
+        normalized = re.sub(r"[^a-z]+", "", rationale.lower())
+        if not rationale or normalized in {"signedoff", "signoff"} or "<" in rationale:
+            issues.append(f"sign_off_rationale={rationale or '<empty>'}")
+
+    return issues
+
+
+def finding_refs_by_id(path: Path) -> dict[str, list[str]]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return {}
+
+    refs: dict[str, list[str]] = {}
+    for finding_id, block in extract_finding_blocks(content):
+        fields = parse_markdown_fields(block)
+        if fields.get("review_mode") != "traceability":
+            continue
+
+        candidates = [
+            fields.get("traceability_ref", ""),
+            fields.get("coverage_gap", ""),
+        ]
+        values: list[str] = []
+        for candidate in candidates:
+            values.extend(
+                match.group(1)
+                for match in re.finditer(
+                    r"\b(ATOM-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b",
+                    candidate,
+                )
+            )
+        if values:
+            refs[finding_id] = sorted(set(values))
+    return refs
+
+
+def response_traceability_refs(block: str, fields: dict[str, str]) -> list[str]:
+    values: list[str] = []
+    field_value = fields.get("affected_traceability_refs", "")
+    candidates = [field_value, block]
+    for candidate in candidates:
+        values.extend(
+            match.group(1)
+            for match in re.finditer(
+                r"\b(ATOM-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b",
+                candidate,
+            )
+        )
+    return sorted(set(values))
+
+
+def validate_review_findings(
+    path: Path,
+    root: Path,
+    *,
+    findings_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="review-findings-not-utf8",
+                severity="error",
+                category="review-findings",
+                title="Review findings artifact is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save the findings artifact as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("review-findings-format", "fail", "Review findings artifact is not UTF-8.", display_path))
+        return findings, checks
+
+    blocks = extract_finding_blocks(content)
+    if not blocks:
+        checks.append(Check("review-findings-format", "pass", "No structured findings blocks found.", display_path))
+        return findings, checks
+
+    seen_ids: set[str] = set()
+    missing_fields: list[str] = []
+    invalid_enums: list[str] = []
+    invalid_traceability_refs: list[str] = []
+    missing_traceability_refs: list[str] = []
+    duplicate_ids: list[str] = []
+
+    for finding_id, block in blocks:
+        if finding_id in seen_ids:
+            duplicate_ids.append(finding_id)
+        seen_ids.add(finding_id)
+
+        fields = parse_markdown_fields(block)
+        missing = sorted(REQUIRED_FINDING_FIELDS - set(fields))
+        if "test_case_id" not in fields and "coverage_gap" not in fields:
+            missing.append("test_case_id|coverage_gap")
+        missing_fields.extend(f"{finding_id}:{field}" for field in missing)
+
+        review_mode = fields.get("review_mode")
+        severity = fields.get("severity")
+        category = fields.get("category")
+        status = fields.get("status")
+        if review_mode is not None and review_mode not in ALLOWED_REVIEW_MODES:
+            invalid_enums.append(f"{finding_id}:review_mode={review_mode}")
+        if severity is not None and severity not in ALLOWED_FINDING_SEVERITIES:
+            invalid_enums.append(f"{finding_id}:severity={severity}")
+        if category is not None and category not in ALLOWED_FINDING_CATEGORIES:
+            invalid_enums.append(f"{finding_id}:category={category}")
+        if status is not None and status not in ALLOWED_FINDING_STATUSES:
+            invalid_enums.append(f"{finding_id}:status={status}")
+
+        if review_mode == "traceability":
+            traceability_ref = fields.get("traceability_ref")
+            if traceability_ref:
+                if not re.fullmatch(r"(ATOM-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)", traceability_ref):
+                    invalid_traceability_refs.append(f"{finding_id}:{traceability_ref}")
+            else:
+                fallback_ref = fields.get("coverage_gap", "")
+                missing_traceability_refs.append(
+                    f"{finding_id}:legacy coverage_gap={fallback_ref}" if fallback_ref else f"{finding_id}:<missing traceability_ref>"
+                )
+
+    if duplicate_ids:
+        findings.append(
+            Finding(
+                id="review-findings-duplicate-id",
+                severity="warning",
+                category="review-findings",
+                title="Review findings artifact contains duplicate finding ids",
+                details="Each finding id should identify one reviewer finding.",
+                path=display_path,
+                evidence=duplicate_ids[:10],
+                recommended_action="Rename duplicate findings so writer responses can target one finding unambiguously.",
+            )
+        )
+    if missing_fields:
+        findings.append(
+            Finding(
+                id="review-findings-missing-required-fields",
+                severity="warning",
+                category="review-findings",
+                title="Review findings artifact misses required fields",
+                details="Structured findings must include the canonical fields from review-findings-format.md.",
+                path=display_path,
+                evidence=missing_fields[:20],
+                recommended_action="Add the missing canonical fields to every structured finding block.",
+            )
+        )
+    if invalid_enums:
+        findings.append(
+            Finding(
+                id="review-findings-invalid-enum",
+                severity="warning",
+                category="review-findings",
+                title="Review findings artifact contains invalid enum values",
+                details="Structured finding enum values must match review-findings-format.md.",
+                path=display_path,
+                evidence=invalid_enums[:20],
+                recommended_action="Replace non-canonical enum values with the allowed values.",
+            )
+        )
+    if invalid_traceability_refs:
+        findings.append(
+            Finding(
+                id="review-findings-invalid-traceability-ref",
+                severity="warning",
+                category="review-findings",
+                title="Traceability findings have invalid traceability_ref values",
+                details="Traceability findings must point to ATOM-* or coverage_gap:<short-id>.",
+                path=display_path,
+                evidence=invalid_traceability_refs[:20],
+                recommended_action="Use traceability_ref from the matrix atom_id column or a coverage_gap:<short-id> placeholder.",
+            )
+        )
+    if missing_traceability_refs:
+        severity = "warning" if findings_policy == "strict" else "info"
+        findings.append(
+            Finding(
+                id="review-findings-legacy-missing-traceability-ref",
+                severity=severity,
+                category="review-findings",
+                title="Traceability findings use legacy coverage_gap instead of traceability_ref",
+                details=(
+                    "The finding is targetable through coverage_gap text, but it does not use the canonical "
+                    "traceability_ref field required for stable reviewer-writer handoff."
+                ),
+                path=display_path,
+                evidence=missing_traceability_refs[:20],
+                recommended_action="When this artifact is next updated, add Traceability Ref with the same ATOM-* or coverage_gap:<short-id> key.",
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "review-findings-format",
+            "warn" if has_warnings else "pass",
+            "Review findings format contract has issues." if has_warnings else "Review findings format contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_writer_response(
+    path: Path,
+    root: Path,
+    *,
+    writer_response_policy: str = "compatible",
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    legacy_severity = "warning" if writer_response_policy == "strict" else "info"
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="writer-response-not-utf8",
+                severity="error",
+                category="writer-response",
+                title="Writer response artifact is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save the writer response artifact as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("writer-response-format", "fail", "Writer response artifact is not UTF-8.", display_path))
+        return findings, checks
+
+    blocks = extract_response_blocks(content)
+    if not blocks:
+        findings.append(
+            Finding(
+                id="writer-response-legacy-noncanonical",
+                severity=legacy_severity,
+                category="writer-response",
+                title="Writer response artifact has no canonical response blocks",
+                details="Canonical writer response artifacts use one ### FINDING-* block per handled finding.",
+                path=display_path,
+                evidence=[],
+                recommended_action="When this artifact is next updated, rewrite it using canonical writer response blocks.",
+            )
+        )
+        checks.append(
+            Check(
+                "writer-response-format",
+                "warn" if legacy_severity == "warning" else "pass",
+                "Legacy writer response recorded." if legacy_severity == "info" else "Writer response format contract has issues.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    sibling_findings = path.with_name(path.name.replace("-writer-response.md", "-findings.md"))
+    related_traceability_refs = finding_refs_by_id(sibling_findings) if sibling_findings.exists() else {}
+
+    seen_ids: set[str] = set()
+    duplicate_ids: list[str] = []
+    missing_fields: list[str] = []
+    invalid_statuses: list[str] = []
+    missing_traceability_refs: list[str] = []
+    missing_response_ids: list[str] = []
+    unknown_test_case_ids: list[str] = []
+
+    for response_id, block in blocks:
+        if response_id in seen_ids:
+            duplicate_ids.append(response_id)
+        seen_ids.add(response_id)
+
+        fields = parse_markdown_fields(block)
+        missing_fields.extend(
+            f"{response_id}:{field}"
+            for field in sorted(REQUIRED_WRITER_RESPONSE_FIELDS - set(fields))
+        )
+
+        resolution_status = fields.get("resolution_status")
+        if resolution_status is not None and resolution_status not in ALLOWED_RESOLUTION_STATUSES:
+            invalid_statuses.append(f"{response_id}:resolution_status={resolution_status}")
+
+        expected_refs = related_traceability_refs.get(response_id, [])
+        if expected_refs:
+            actual_refs = response_traceability_refs(block, fields)
+            missing_expected_refs = [ref for ref in expected_refs if ref not in actual_refs]
+            if missing_expected_refs:
+                missing_traceability_refs.append(f"{response_id}:{', '.join(missing_expected_refs)}")
+
+        if known_test_case_ids:
+            for test_case_id in extract_test_case_ids_from_text(block):
+                if test_case_id not in known_test_case_ids:
+                    unknown_test_case_ids.append(f"{response_id}:{test_case_id}")
+
+    if related_traceability_refs:
+        missing_response_ids = sorted(set(related_traceability_refs) - seen_ids)
+
+    if duplicate_ids:
+        findings.append(
+            Finding(
+                id="writer-response-duplicate-id",
+                severity="warning",
+                category="writer-response",
+                title="Writer response contains duplicate response ids",
+                details="Each writer response block should target one finding id.",
+                path=display_path,
+                evidence=duplicate_ids[:10],
+                recommended_action="Rename or merge duplicate response blocks so each finding has one response.",
+            )
+        )
+    if missing_fields:
+        findings.append(
+            Finding(
+                id="writer-response-missing-required-fields",
+                severity="warning",
+                category="writer-response",
+                title="Writer response misses required canonical fields",
+                details="Each writer response block must include resolution status, change summary, and affected test case ids.",
+                path=display_path,
+                evidence=missing_fields[:20],
+                recommended_action="Add the missing canonical fields from review-findings-format.md.",
+            )
+        )
+    if invalid_statuses:
+        findings.append(
+            Finding(
+                id="writer-response-invalid-resolution-status",
+                severity="warning",
+                category="writer-response",
+                title="Writer response uses invalid resolution status",
+                details="Resolution status must be fixed, not-fixed-scope, or needs-clarification.",
+                path=display_path,
+                evidence=invalid_statuses[:20],
+                recommended_action="Replace non-canonical statuses with an allowed resolution_status value.",
+            )
+        )
+    if missing_response_ids:
+        findings.append(
+            Finding(
+                id="writer-response-missing-finding-responses",
+                severity=legacy_severity,
+                category="writer-response",
+                title="Writer response does not answer every traceability finding",
+                details="The sibling findings artifact contains traceability findings with stable refs that have no response block.",
+                path=display_path,
+                evidence=missing_response_ids[:20],
+                recommended_action="Add one response block for every finding in the related findings artifact.",
+            )
+        )
+    if missing_traceability_refs:
+        findings.append(
+            Finding(
+                id="writer-response-missing-affected-traceability-refs",
+                severity=legacy_severity,
+                category="writer-response",
+                title="Writer response does not preserve affected traceability refs",
+                details="Responses to traceability findings should keep the same ATOM-* or coverage_gap:<short-id> refs.",
+                path=display_path,
+                evidence=missing_traceability_refs[:20],
+                recommended_action="Add Affected Traceability Refs or explicitly explain split/merge in Change Summary.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="writer-response-unknown-test-case-id",
+                severity="warning",
+                category="writer-response",
+                title="Writer response references unknown test-case ids",
+                details="Affected Test Case IDs should point to canonical ## TC-* sections in the same FT package.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced test cases or update Affected Test Case IDs to existing TC-* ids.",
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "writer-response-format",
+            "warn" if has_warnings else "pass",
+            "Writer response format contract has issues." if has_warnings else "Writer response format contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_dependency_matrix_support(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    structural_severity: str,
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    rows = parsed_test_design_applicability_rows(content)
+    dependency_required = any(
+        row.get("dimension", "").strip().lower() == "dependency"
+        and row.get("applicable", "").strip().lower() == "yes"
+        and not extract_gap_ids_from_text(row.get("gap_id", ""))
+        for row in rows
+    )
+    if not dependency_required:
+        return findings, checks
+
+    section = extract_markdown_section(content, "Dependency Matrix")
+    if section is None:
+        findings.append(
+            Finding(
+                id="test-case-dependency-matrix-missing",
+                severity=structural_severity,
+                category="test-design",
+                title="Dependency applicability has no Dependency Matrix",
+                details=(
+                    "When dependency is applicable and not fully deferred to GAP-*, the canonical test-case file "
+                    "must record controlling values, dependent fields, expected properties, and TC/GAP links."
+                ),
+                path=display_path,
+                evidence=[],
+                recommended_action="Add a ## Dependency Matrix section or link unresolved dependency behavior to GAP-*.",
+            )
+        )
+        checks.append(
+            Check(
+                "test-case-dependency-matrix",
+                "warn" if structural_severity == "warning" else "pass",
+                "Dependency matrix is missing." if structural_severity == "warning" else "Dependency matrix missing recorded as legacy info.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    table_rows = markdown_table_rows_from_text(section)
+    if not table_rows:
+        findings.append(
+            Finding(
+                id="test-case-dependency-matrix-no-table",
+                severity=structural_severity,
+                category="test-design",
+                title="Dependency Matrix has no Markdown table",
+                details="The dependency matrix section exists but contains no parseable table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical dependency matrix columns from coverage-checklist.md.",
+            )
+        )
+        checks.append(
+            Check(
+                "test-case-dependency-matrix",
+                "warn" if structural_severity == "warning" else "pass",
+                "Dependency matrix table is missing." if structural_severity == "warning" else "Dependency matrix table missing recorded as legacy info.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    header = normalize_table_header(table_rows[0])
+    required_any = {
+        "controlling_value": {"controlling_value", "trigger_field", "trigger"},
+        "dependent_field": {"dependent_field", "dependent"},
+        "tc_gap": {"tc_gap", "tc_gaps", "tc_or_gap"},
+    }
+    missing_groups = [
+        group_name
+        for group_name, alternatives in required_any.items()
+        if not alternatives.intersection(header)
+    ]
+    if missing_groups:
+        findings.append(
+            Finding(
+                id="test-case-dependency-matrix-missing-columns",
+                severity=structural_severity,
+                category="test-design",
+                title="Dependency Matrix misses required columns",
+                details="The matrix must expose controlling value, dependent field, and TC/GAP links.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_groups)}", f"columns={', '.join(header[:12])}"],
+                recommended_action="Add controlling_value, dependent_field, and TC/gap columns.",
+            )
+        )
+
+    if not missing_groups and known_test_case_ids:
+        column_index = {name: index for index, name in enumerate(header)}
+        tc_gap_column = next(
+            (column for column in ("tc_gap", "tc_gaps", "tc_or_gap") if column in column_index),
+            None,
+        )
+        unknown_test_case_ids: list[str] = []
+        if tc_gap_column:
+            tc_gap_index = column_index[tc_gap_column]
+            for row_number, raw_row in enumerate(table_rows[1:], start=2):
+                value = raw_row[tc_gap_index].strip() if tc_gap_index < len(raw_row) else ""
+                for test_case_id in extract_test_case_ids_from_text(value):
+                    if test_case_id not in known_test_case_ids:
+                        unknown_test_case_ids.append(f"row {row_number}:{test_case_id}")
+        if unknown_test_case_ids:
+            findings.append(
+                Finding(
+                    id="test-case-dependency-matrix-unknown-tc-id",
+                    severity=structural_severity,
+                    category="traceability",
+                    title="Dependency Matrix references unknown TC ids",
+                    details="Dependency Matrix TC/GAP links must point to existing TC-* sections or GAP-* ids.",
+                    path=display_path,
+                    evidence=unknown_test_case_ids[:20],
+                    recommended_action="Update Dependency Matrix TC links to existing test cases or replace unresolved checks with GAP-*.",
+                )
+            )
+
+    checks.append(
+        Check(
+            "test-case-dependency-matrix",
+            "warn" if findings and structural_severity == "warning" else "pass",
+            "Dependency matrix contract has issues." if findings and structural_severity == "warning" else "Dependency matrix contract passed or legacy info only.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+SOURCE_TABLE_RESIDUE_PATTERNS = [
+    re.compile(
+        r"Название\s+Видимость\s+О\s+Р\s+Тип\s+ввода\s+поля\s+Тип\s+значения\s+Примечание",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(r"Тип\s+ввода\s+поля\s+Тип\s+значения\s+Примечание", flags=re.IGNORECASE),
+    re.compile(r"\b\d{1,3}\s+Название\s+Видимость\b", flags=re.IGNORECASE),
+    re.compile(r"\bО\s+Р\s+Тип\s+ввода\s+поля\b", flags=re.IGNORECASE),
+]
+
+COMBINED_BEHAVIOR_SMELL_PATTERNS = [
+    re.compile(r"\brequiredness\s+and\s+format\b", flags=re.IGNORECASE),
+    re.compile(r"\bvisibility\s+and\s+format\b", flags=re.IGNORECASE),
+    re.compile(r"\bconditional\s+visibility\s+and\s+format\b", flags=re.IGNORECASE),
+    re.compile(r"\bdependency\s+and\s+validation\b", flags=re.IGNORECASE),
+    re.compile(r"\blength\s+and\s+repeated\s+digits\b", flags=re.IGNORECASE),
+    re.compile(r"\bvisibility\s+and\s+requiredness\b", flags=re.IGNORECASE),
+    re.compile(r"\b(?:visible|displayed|hidden|visibility)\b[\s\S]{0,100}\b(?:required|requiredness|mandatory)\b", flags=re.IGNORECASE),
+    re.compile(r"\b(?:required|requiredness|mandatory)\b[\s\S]{0,100}\b(?:visible|displayed|hidden|visibility)\b", flags=re.IGNORECASE),
+    re.compile(r"(?:видим|отображ|скрыт)[\s\S]{0,120}(?:обязател|не\s+обязател)", flags=re.IGNORECASE),
+    re.compile(r"(?:обязател|не\s+обязател)[\s\S]{0,120}(?:видим|отображ|скрыт)", flags=re.IGNORECASE),
+    re.compile(r"(?:длин[аы]|формат|числов\w+\s+символ\w*|цифр\w*)[\s\S]{0,90}\bи\b[\s\S]{0,90}(?:повтор|одинаков)", flags=re.IGNORECASE),
+    re.compile(r"допустим\w+\s+только[\s\S]{0,90}\bи\b[\s\S]{0,90}(?:нет|не\s+долж\w*)", flags=re.IGNORECASE),
+    re.compile(r"\bcondition\s*=\s*true\s*/\s*false\b", flags=re.IGNORECASE),
+    re.compile(r"\bprevious\s+data\s+branches\b", flags=re.IGNORECASE),
+    re.compile(r"\bvalidate\s+by\s+FT\s+rules\b", flags=re.IGNORECASE),
+    re.compile(r"\bsame\s+constraints\b", flags=re.IGNORECASE),
+    re.compile(r"\brequiredness\s*/\s*editability\b", flags=re.IGNORECASE),
+    re.compile(r"\bformat\s*/\s*date\b", flags=re.IGNORECASE),
+    re.compile(r"\bvisibility\s*/\s*requiredness\b", flags=re.IGNORECASE),
+]
+
+SOURCE_NORMALIZATION_PROPERTY_CLASS_PATTERNS = {
+    "visibility": re.compile(r"\bvisibility\b|\bvisible\b|\bhidden\b|видим|отображ|скрыт", flags=re.IGNORECASE),
+    "requiredness": re.compile(r"\brequired(?:ness)?\b|\bmandatory\b|обязател", flags=re.IGNORECASE),
+    "editability": re.compile(r"\bedit(?:able|ability)\b|\benabled\b|редактир", flags=re.IGNORECASE),
+    "input-widget": re.compile(r"\bwidget\b|\binput[-_ ]?type\b|\bdropdown\b|\bselect\b|\bcheckbox\b|тип\s+ввода|список|переключ", flags=re.IGNORECASE),
+    "dictionary-source": re.compile(r"\bdictionary\b|\breference[-_ ]?list\b|справочник|справочн|перечень", flags=re.IGNORECASE),
+    "numeric-format": re.compile(r"\bnumeric\b|\bnumber\b|\bdigits?\b|числов|цифр", flags=re.IGNORECASE),
+    "length-format": re.compile(r"\blength\b|длин", flags=re.IGNORECASE),
+    "max-boundary": re.compile(r"\bmax(?:imum)?\b|максимальн|верхн", flags=re.IGNORECASE),
+    "min-boundary": re.compile(r"\bmin(?:imum)?\b|минимальн|нижн", flags=re.IGNORECASE),
+    "default-value": re.compile(r"\bdefault\b|по\s+умолч|предзаполн", flags=re.IGNORECASE),
+    "integration-prefill": re.compile(r"\bprefill\b|\bauto[-_ ]?fill\b|\bapi\b|dadata|автозаполн|интеграц", flags=re.IGNORECASE),
+}
+
+DICTIONARY_SOURCE_TEXT_RE = re.compile(
+    r"\bdictionary\b|\breference[-_ ]?(?:list|source)\b|справочн|справочник|перечень\s+значени",
+    flags=re.IGNORECASE,
+)
+DICTIONARY_PROPERTY_TYPE_RE = re.compile(
+    r"dictionary|reference[-_ ]?list|amount-tags|tag-values|table-list|checkbox-list|"
+    r"справочн|справочник|выбор-из-списка|список-чекбоксов|теги-суммы",
+    flags=re.IGNORECASE,
+)
+
+WRITER_QUALITY_GATE_REQUIRED_COLUMNS = {
+    "gate_item",
+    "status",
+    "evidence",
+    "affected_package",
+    "required_action",
+    "blocks_ready_for_review",
+}
+
+WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
+    "artifact-write-strategy",
+    "mockup-visual-inventory",
+    "source-row-inventory",
+    "source-normalization-atomic",
+    "test-design-decision-table",
+    "test-design-review",
+    "gap-admissibility",
+    "ledger-atomicity",
+    "gsr-range-compression",
+    "design-plan-atomicity",
+    "scenario-does-not-replace-atomic",
+    "tc-atomicity",
+    "test-data-specificity",
+    "internal-observability",
+    "action-observability",
+    "semantic-req-id-parity",
+    "package-ready",
+}
+
+WRITER_QUALITY_GATE_FAIL_STATUSES = {"fail", "failed", "blocked", "needs-rewrite", "no"}
+WRITER_QUALITY_GATE_PASS_STATUSES = {"pass", "passed", "ok", "yes"}
+WRITER_QUALITY_GATE_BLOCK_VALUES = {"yes", "no"}
+
+TEST_DESIGN_REVIEW_REQUIRED_COLUMNS = {
+    "review_item",
+    "status",
+    "severity",
+    "affected_package",
+    "evidence",
+    "required_action",
+    "blocks_ready_for_review",
+}
+TEST_DESIGN_REVIEW_REQUIRED_ITEMS = {
+    "decision-table-classification",
+    "ledger-plan-alignment",
+    "coverage-class-completeness",
+    "numeric-length-boundaries",
+    "unsupported-ui-mechanism",
+    "mask-format-coverage",
+    "dictionary-closed-set",
+    "conditional-branches",
+    "negative-fixture-isolation",
+    "applicability-linked-tc-semantics",
+    "gap-specificity",
+    "gap-admissibility",
+    "internal-observability",
+    "metadata-only-exclusion",
+    "tc-mapping-atomicity",
+    "ready-for-tc-writing",
+}
+TEST_DESIGN_REVIEW_FAIL_STATUSES = {"fail", "failed", "blocked", "needs-rewrite", "no"}
+TEST_DESIGN_REVIEW_PASS_STATUSES = {"pass", "passed", "ok", "yes"}
+TEST_DESIGN_REVIEW_SEVERITIES = {"error", "warning", "info"}
+TEST_DESIGN_REVIEW_BLOCK_VALUES = {"yes", "no"}
+
+READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
+    "source-row-inventory-missing",
+    "source-row-inventory-no-table",
+    "source-row-inventory-missing-columns",
+    "source-row-inventory-invalid-in-scope",
+    "source-row-inventory-in-scope-row-without-atom-or-gap",
+    "source-row-inventory-unknown-atom-id",
+    "source-row-inventory-misses-normalized-source-row",
+    "source-table-normalization-missing-for-dirty-ledger",
+    "source-table-normalization-no-table",
+    "source-table-normalization-missing-columns",
+    "source-table-normalization-low-confidence-without-gap",
+    "source-table-normalization-residue-smell",
+    "source-normalization-combined-property-smell",
+    "source-normalization-combined-property-class-smell",
+    "source-normalization-missing-property-id",
+    "source-normalization-duplicate-property-id",
+    "source-normalization-row-has-multiple-gsr",
+    "source-row-completeness-matrix-missing",
+    "source-row-gsr-count-mismatch",
+    "source-normalization-unmapped-property",
+    "source-table-normalization-unknown-atom-id",
+    "test-design-decision-table-missing",
+    "test-design-decision-table-no-table",
+    "test-design-decision-table-missing-columns",
+    "test-design-decision-table-missing-source-property",
+    "test-design-decision-table-duplicate-source-property",
+    "test-design-decision-table-invalid-decision",
+    "test-design-decision-table-metadata-links-tc",
+    "test-design-decision-table-metadata-cross-section-conflict",
+    "test-design-decision-table-gap-without-gap-id",
+    "test-design-decision-table-gap-cross-section-conflict",
+    "test-design-decision-table-gap-executable-behavior-smell",
+    "test-design-decision-table-overbroad-gap-smell",
+    "test-design-decision-table-metadata-behavior-smell",
+    "test-design-decision-table-date-window-gap-smell",
+    "test-design-decision-table-standalone-without-tc-or-oracle",
+    "test-design-decision-table-covered-existing-without-tc",
+    "test-design-decision-table-scenario-without-tc",
+    "test-design-decision-table-scenario-remap-executable-conflict",
+    "test-design-decision-table-executable-cross-section-conflict",
+    "test-design-decision-table-out-of-scope-without-reason",
+    "test-design-decision-table-value-type-standalone-smell",
+    "test-design-decision-table-unknown-test-case-id",
+    "coverage-obligation-table-missing",
+    "coverage-obligation-table-no-table",
+    "coverage-obligation-table-missing-columns",
+    "coverage-obligation-table-missing-required-class",
+    "coverage-obligation-table-unknown-source-property",
+    "coverage-obligation-table-duplicate-class",
+    "coverage-obligation-table-missing-tc-or-gap",
+    "coverage-obligation-table-invalid-status",
+    "coverage-obligation-table-unknown-test-case-id",
+    "coverage-obligation-table-mask-oracle-missing",
+    "test-design-review-missing",
+    "test-design-review-no-table",
+    "test-design-review-missing-columns",
+    "test-design-review-missing-required-items",
+    "test-design-review-invalid-status",
+    "test-design-review-invalid-severity",
+    "test-design-review-invalid-blocks-value",
+    "test-design-review-failed",
+    "artifact-write-strategy-forbidden-initial-method",
+    "atomic-ledger-generic-atom-smell",
+    "atomic-ledger-compressed-range-smell",
+    "covered-atom-gsr-range-compression-smell",
+    "atomic-ledger-combined-behavior-smell",
+    "atomic-ledger-source-table-residue-smell",
+    "test-case-package-design-plan-missing",
+    "test-case-package-design-plan-empty",
+    "test-case-package-design-plan-missing-columns",
+    "test-case-package-design-plan-missing-package",
+    "test-case-package-design-plan-missing-atoms",
+    "test-case-package-design-plan-missing-tc-or-gap",
+    "test-case-package-design-plan-unknown-test-case-id",
+    "test-case-package-design-plan-generic-check-smell",
+    "test-case-package-design-plan-generic-gap-row",
+    "test-case-package-design-plan-missing-exact-length-boundary",
+    "test-case-package-design-plan-missing-repeated-digits-check",
+    "test-case-package-design-plan-merged-check-smell",
+    "design-plan-combined-class-smell",
+    "test-case-package-design-plan-missing-conditional-branch",
+    "test-case-package-design-plan-negative-without-positive-acceptance",
+    "test-case-package-design-plan-many-rows-one-tc-smell",
+    "scenario-plan-replaces-atomic-coverage-smell",
+    "test-case-generic-title-smell",
+    "test-case-generic-executable-smell",
+    "test-case-value-type-list-selection-smell",
+    "test-case-dependency-placeholder-setup-smell",
+    "test-case-mockup-interaction-hints-not-used",
+    "test-case-positive-type-with-negative-oracle",
+    "test-case-negative-type-without-negative-oracle",
+    "test-case-generic-valid-fixture-smell",
+    "test-case-generic-test-data-reference-smell",
+    "test-case-generic-expected-result-smell",
+    "test-case-generic-test-data-oracle-smell",
+    "test-case-generic-rule-oracle-smell",
+    "test-case-source-dump-oracle-smell",
+    "test-case-value-type-metadata-as-behavior-smell",
+    "test-case-extraction-artifact-oracle-smell",
+    "test-case-requiredness-without-empty-or-marker-check",
+    "test-case-boundary-without-boundary-classes",
+    "test-case-boundary-rejection-without-on-boundary-acceptance",
+    "test-case-merged-valid-invalid-smell",
+    "test-case-numeric-only-valid-data-invalid-smell",
+    "test-case-valid-data-class-label-mismatch-smell",
+    "test-case-numeric-class-label-raw-literal-smell",
+    "test-case-unsupported-input-filtering-oracle-smell",
+    "test-case-input-restriction-transition-oracle-smell",
+    "test-case-mechanical-field-step-smell",
+    "test-case-negative-transition-without-valid-fixture-smell",
+    "test-case-forbidden-formulation-smell",
+    "test-case-abstract-oracle-smell",
+    "test-case-negative-input-without-observable-oracle",
+    "test-case-date-dependent-absolute-date-smell",
+    "test-case-action-treated-as-required-field-smell",
+    "test-case-action-without-observable-artifact-smell",
+    "test-case-gap-reference-missing-from-coverage-gaps",
+    "test-case-gap-placeholder-section-smell",
+    "test-case-nondeterministic-alternative-oracle-smell",
+    "scenario-tc-replaces-atomic-coverage-smell",
+    "test-case-excessive-atom-fan-in",
+    "test-design-applicability-matrix-hidden-integration-gap",
+    "test-design-applicability-matrix-hidden-numeric-equivalence-gap",
+    "test-design-applicability-matrix-hidden-numeric-gap",
+    "test-design-applicability-matrix-linked-tc-dimension-mismatch",
+    "test-design-applicability-matrix-linked-atom-contamination",
+    "source-normalization-dictionary-misclassified-smell",
+    "test-case-file-no-structured-cases",
+    "test-case-file-not-utf8",
+    "test-case-duplicate-id",
+    "test-case-missing-required-template-sections",
+    "test-case-missing-package-id",
+    "test-case-sparse-required-fields",
+    "test-case-missing-numbered-steps",
+    "test-case-missing-traceability-token",
+}
+
+ARTIFACT_WRITE_STRATEGY_MIN_TC_COUNT = 20
+ARTIFACT_WRITE_STRATEGY_MIN_ATOM_COUNT = 30
+ARTIFACT_WRITE_STRATEGY_MIN_CHARS = 20_000
+
+ARTIFACT_WRITE_STRATEGY_SAFE_METHOD_RE = re.compile(
+    r"("
+    r"file[-\s]?based|chunked|"
+    r"write_artifact_sections\.py|"
+    r"update_markdown_section\.py|"
+    r"--content-file|--stdin"
+    r")",
+    re.IGNORECASE,
+)
+
+ARTIFACT_WRITE_STRATEGY_PREFLIGHT_RE = re.compile(
+    r"preflight|write\s+strategy|artifact\s+write|tc\s+count|atom\s+count|packages?|WP-\d{2}",
+    re.IGNORECASE,
+)
+
+ARTIFACT_WRITE_STRATEGY_TMP_GENERATOR_RE = re.compile(
+    r"(?:^|[`'\s]|[\\/])tmp[\\/][^\n|`]*generate[^\n|`]*\.py|"
+    r"(?:^|[`'\s]|[\\/])tmp[\\/][^\n|`]*generator",
+    re.IGNORECASE,
+)
+
+ARTIFACT_WRITE_STRATEGY_METHOD_ITEM_RE = re.compile(
+    r"write[_\s-]?method|selected[_\s-]?method|method|transport",
+    re.IGNORECASE,
+)
+
+DICTIONARY_INVENTORY_NAME = "dictionary-inventory.md"
+DICTIONARY_INVENTORY_EXTRACTED_STATUSES = {"extracted"}
+DICTIONARY_INVENTORY_INCOMPLETE_STATUSES = {"partial", "missing", "ambiguous"}
+DICTIONARY_INVENTORY_ALLOWED_STATUSES = (
+    DICTIONARY_INVENTORY_EXTRACTED_STATUSES
+    | DICTIONARY_INVENTORY_INCOMPLETE_STATUSES
+    | {"not-needed"}
+)
+
+MOCKUP_VISUAL_INVENTORY_NAME = "mockup-visual-inventory.md"
+
+MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS = {
+    "mockup_path",
+    "opened",
+    "method",
+    "screen_name",
+    "visible_blocks",
+    "visible_fields",
+    "visible_actions",
+    "interaction_hints",
+    "mockup_only_items",
+    "ft_conflicts",
+    "used_for_steps",
+    "not_used_as_requirement_source",
+}
+
+MOCKUP_SOURCE_RE = re.compile(
+    r"\bmockup\b|mockups?[\\/]|макет|макеты|\.(?:png|jpe?g|webp)\b",
+    re.IGNORECASE,
+)
+
+
+def has_source_table_residue(value: str) -> bool:
+    return any(pattern.search(value) for pattern in SOURCE_TABLE_RESIDUE_PATTERNS)
+
+
+def has_combined_behavior_smell(value: str) -> bool:
+    return any(pattern.search(value) for pattern in COMBINED_BEHAVIOR_SMELL_PATTERNS)
+
+
+def source_normalization_property_classes(row: dict[str, str]) -> list[str]:
+    inspected_text = " | ".join(
+        row.get(field, "")
+        for field in ("property", "expected_behavior")
+        if row.get(field)
+    )
+    if not inspected_text:
+        return []
+    return sorted(
+        class_name
+        for class_name, pattern in SOURCE_NORMALIZATION_PROPERTY_CLASS_PATTERNS.items()
+        if pattern.search(inspected_text)
+    )
+
+
+def real_gap_ids(value: str) -> list[str]:
+    return [gap_id for gap_id in extract_gap_ids_from_text(value) if gap_id.upper() != "GAP-900"]
+
+
+def should_require_writer_quality_gate(content: str) -> bool:
+    return any(
+        marker in content
+        for marker in (
+            "Package Test Design Plan",
+            "Internal Work Package Coverage",
+            "Source Table Normalization",
+            "package_id",
+        )
+    )
+
+
+def parsed_writer_quality_gate_rows(content: str) -> tuple[list[str], list[dict[str, str]]]:
+    section = extract_markdown_section(content, "Writer Quality Gate")
+    if section is None:
+        return [], []
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return [], []
+
+    header = normalize_table_header(rows[0])
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+    return header, parsed_rows
+
+
+def writer_quality_gate_summary(content: str) -> dict[str, Any]:
+    section = extract_markdown_section(content, "Writer Quality Gate")
+    header, rows = parsed_writer_quality_gate_rows(content)
+    missing_columns = sorted(WRITER_QUALITY_GATE_REQUIRED_COLUMNS - set(header))
+    present_items = {
+        row.get("gate_item", "").strip().strip("`")
+        for row in rows
+        if row.get("gate_item", "").strip()
+    }
+    missing_items = sorted(WRITER_QUALITY_GATE_REQUIRED_ITEMS - present_items)
+
+    invalid_status_rows: list[str] = []
+    invalid_blocks_rows: list[str] = []
+    failed_rows: list[str] = []
+    package_ready_pass = False
+    for index, row in enumerate(rows, start=2):
+        gate_item = row.get("gate_item", "").strip().strip("`") or f"row-{index}"
+        status = row.get("status", "").strip().strip("`").lower()
+        blocks = row.get("blocks_ready_for_review", "").strip().strip("`").lower()
+        if gate_item == "package-ready" and status in WRITER_QUALITY_GATE_PASS_STATUSES:
+            package_ready_pass = True
+        if status and status not in WRITER_QUALITY_GATE_PASS_STATUSES | WRITER_QUALITY_GATE_FAIL_STATUSES:
+            invalid_status_rows.append(f"{gate_item}:status={status}")
+        if blocks and blocks not in WRITER_QUALITY_GATE_BLOCK_VALUES:
+            invalid_blocks_rows.append(f"{gate_item}:blocks_ready_for_review={blocks}")
+        if status in WRITER_QUALITY_GATE_FAIL_STATUSES:
+            failed_rows.append(f"{gate_item}:status={status};blocks={blocks or '-'}")
+        if blocks == "yes" and status not in WRITER_QUALITY_GATE_PASS_STATUSES:
+            failed_rows.append(f"{gate_item}:status={status or '-'};blocks=yes")
+        if blocks == "yes" and status in WRITER_QUALITY_GATE_PASS_STATUSES:
+            failed_rows.append(f"{gate_item}:status={status};blocks=yes")
+            invalid_blocks_rows.append(f"{gate_item}:status={status};blocks_ready_for_review=yes")
+
+    failed_rows = sorted(set(failed_rows))
+    package_ready_conflicts = failed_rows if package_ready_pass and failed_rows else []
+
+    known_risk_not_blocking = False
+    if rows and not failed_rows:
+        known_risk_not_blocking = bool(
+            re.search(
+                r"possible\s+merged\s+checks\s*(?:=|:|\|)?\s*known\s+risk|"
+                r"merged\s+checks[\s\S]{0,80}known\s+risk|"
+                r"semantic\s+compression[\s\S]{0,80}known\s+risk",
+                content,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    return {
+        "present": section is not None,
+        "parseable": bool(header and rows),
+        "missing_columns": missing_columns,
+        "missing_items": missing_items,
+        "invalid_status_rows": invalid_status_rows,
+        "invalid_blocks_rows": invalid_blocks_rows,
+        "failed_rows": failed_rows,
+        "package_ready_conflicts": package_ready_conflicts,
+        "known_risk_not_blocking": known_risk_not_blocking,
+    }
+
+
+def should_require_test_design_review(content: str) -> bool:
+    return extract_markdown_section(content, "Package Test Design Plan") is not None
+
+
+def parsed_test_design_review_rows(content: str) -> tuple[list[str], list[dict[str, str]]]:
+    section = extract_markdown_section(content, "Test Design Review")
+    if section is None:
+        return [], []
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return [], []
+
+    header = normalize_table_header(rows[0])
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+    return header, parsed_rows
+
+
+def test_design_review_summary(content: str) -> dict[str, Any]:
+    section = extract_markdown_section(content, "Test Design Review")
+    header, rows = parsed_test_design_review_rows(content)
+    missing_columns = sorted(TEST_DESIGN_REVIEW_REQUIRED_COLUMNS - set(header))
+    present_items = {
+        row.get("review_item", "").strip().strip("`")
+        for row in rows
+        if row.get("review_item", "").strip()
+    }
+    missing_items = sorted(TEST_DESIGN_REVIEW_REQUIRED_ITEMS - present_items)
+
+    invalid_status_rows: list[str] = []
+    invalid_severity_rows: list[str] = []
+    invalid_blocks_rows: list[str] = []
+    failed_rows: list[str] = []
+    for index, row in enumerate(rows, start=2):
+        review_item = row.get("review_item", "").strip().strip("`") or f"row-{index}"
+        status = row.get("status", "").strip().strip("`").lower()
+        severity = row.get("severity", "").strip().strip("`").lower()
+        blocks = row.get("blocks_ready_for_review", "").strip().strip("`").lower()
+        if status and status not in TEST_DESIGN_REVIEW_PASS_STATUSES | TEST_DESIGN_REVIEW_FAIL_STATUSES:
+            invalid_status_rows.append(f"{review_item}:status={status}")
+        if severity and severity not in TEST_DESIGN_REVIEW_SEVERITIES:
+            invalid_severity_rows.append(f"{review_item}:severity={severity}")
+        if blocks and blocks not in TEST_DESIGN_REVIEW_BLOCK_VALUES:
+            invalid_blocks_rows.append(f"{review_item}:blocks_ready_for_review={blocks}")
+        if status in TEST_DESIGN_REVIEW_FAIL_STATUSES:
+            failed_rows.append(f"{review_item}:status={status};blocks={blocks or '-'}")
+        if blocks == "yes" and status not in TEST_DESIGN_REVIEW_PASS_STATUSES:
+            failed_rows.append(f"{review_item}:status={status or '-'};blocks=yes")
+        if blocks == "yes" and status in TEST_DESIGN_REVIEW_PASS_STATUSES:
+            invalid_blocks_rows.append(f"{review_item}:status={status};blocks_ready_for_review=yes")
+
+    return {
+        "required": should_require_test_design_review(content),
+        "present": section is not None,
+        "parseable": bool(header and rows),
+        "missing_columns": missing_columns,
+        "missing_items": missing_items,
+        "invalid_status_rows": invalid_status_rows,
+        "invalid_severity_rows": invalid_severity_rows,
+        "invalid_blocks_rows": invalid_blocks_rows,
+        "failed_rows": sorted(set(failed_rows)),
+    }
+
+
+def parsed_section_table_rows(content: str, section_title: str) -> tuple[list[str], list[dict[str, str]]]:
+    section = extract_markdown_section(content, section_title)
+    if section is None:
+        return [], []
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return [], []
+    header = normalize_table_header(rows[0])
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+    return header, parsed_rows
+
+
+def test_case_type_from_block(block: str) -> str:
+    return normalize_markdown_field_value(
+        extract_test_case_field_block(block, ["type", "Type", "Тип"])
+    ).strip("`").lower()
+
+
+def test_case_is_traceability_remap(block: str) -> bool:
+    return test_case_type_from_block(block) in TRACEABILITY_REMAP_TEST_CASE_TYPES
+
+
+def test_case_has_remap_language(block: str) -> bool:
+    return bool(TRACEABILITY_REMAP_TEXT_RE.search(block))
+
+
+def validate_test_design_decision_table(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    normalization_header, normalization_rows = parsed_section_table_rows(content, "Source Table Normalization")
+    source_property_ids = [
+        row.get("source_property_id", "").strip()
+        for row in normalization_rows
+        if row.get("source_property_id", "").strip() not in {"", "-"}
+    ]
+    is_required = bool(source_property_ids) and (
+        extract_markdown_section(content, "Package Test Design Plan") is not None
+        or extract_markdown_section(content, "Atomic Requirements Ledger") is not None
+        or bool(extract_test_case_blocks(content))
+    )
+    section = extract_markdown_section(content, "Test Design Decision Table")
+
+    if not is_required and section is None:
+        checks.append(
+            Check(
+                "test-design-decision-table",
+                "pass",
+                "Test Design Decision Table is not required for this artifact.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    if section is None:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-missing",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table is missing",
+                details=(
+                    "A table/extraction writer output with Source Table Normalization must decide whether each "
+                    "normalized source property becomes a standalone TC, is covered by another TC, remains GAP/unclear, "
+                    "is metadata-only, scenario-only, or out of scope before creating ledger and TC-*."
+                ),
+                path=display_path,
+                evidence=[f"normalized_source_properties={len(set(source_property_ids))}"],
+                recommended_action=(
+                    "Add `## Test Design Decision Table` after Source Table Normalization and before Atomic "
+                    "Requirements Ledger. Do not mechanically create TC-* for metadata-only source properties."
+                ),
+            )
+        )
+        checks.append(Check("test-design-decision-table", "warn", "Test Design Decision Table is missing.", display_path))
+        return findings, checks
+
+    header, rows = parsed_section_table_rows(content, "Test Design Decision Table")
+    if not rows:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-no-table",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table has no parseable table",
+                details="The section exists but has no Markdown table rows.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Test Design Decision Table columns from test-design-decision-table-format.md.",
+            )
+        )
+        checks.append(Check("test-design-decision-table", "warn", "Test Design Decision Table table is missing.", display_path))
+        return findings, checks
+
+    missing_columns = sorted(TEST_DESIGN_DECISION_TABLE_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-missing-columns",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table misses required columns",
+                details="The decision table must expose source property identity, design decision, planned TC/GAP, oracle source and execution decision.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:14])}"],
+                recommended_action="Rewrite the table with the canonical columns from test-design-decision-table-format.md.",
+            )
+        )
+
+    decision_source_ids: list[str] = []
+    invalid_decisions: list[str] = []
+    metadata_links_tc: list[str] = []
+    gap_without_gap: list[str] = []
+    standalone_without_tc_or_oracle: list[str] = []
+    covered_without_tc: list[str] = []
+    scenario_without_tc: list[str] = []
+    out_of_scope_without_reason: list[str] = []
+    value_type_standalone: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    metadata_cross_section_conflicts: list[str] = []
+    gap_cross_section_conflicts: list[str] = []
+    scenario_remap_executable_conflicts: list[str] = []
+    executable_cross_section_conflicts: list[str] = []
+    gap_executable_behavior_smells: list[str] = []
+    gap_overbroad_smells: list[str] = []
+    metadata_behavior_smells: list[str] = []
+    date_window_gap_smells: list[str] = []
+
+    _, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
+    ledger_rows_by_atom: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for ledger_row in ledger_rows:
+        atom_id = ledger_row.get("atom_id", "").strip().strip("`")
+        if atom_id:
+            ledger_rows_by_atom[atom_id].append(ledger_row)
+
+    normalization_rows_by_property_id = {
+        row.get("source_property_id", "").strip(): row
+        for row in normalization_rows
+        if row.get("source_property_id", "").strip()
+    }
+
+    _, plan_rows = parsed_section_table_rows(content, "Package Test Design Plan")
+    plan_rows_by_atom: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for plan_row in plan_rows:
+        for atom_id in extract_any_atom_ids_from_text(plan_row.get("linked_atoms", "")):
+            plan_rows_by_atom[atom_id].append(plan_row)
+
+    _, risk_rows = parsed_section_table_rows(content, "Risk / Priority Map")
+    risk_rows_by_atom: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for risk_row in risk_rows:
+        atom_id = risk_row.get("atom_id", "").strip().strip("`")
+        if atom_id:
+            risk_rows_by_atom[atom_id].append(risk_row)
+
+    test_case_blocks_by_id = {test_case_id: block for test_case_id, block in extract_test_case_blocks(content)}
+    test_case_blocks_by_atom: dict[str, list[tuple[str, str]]] = defaultdict(list)
+    for test_case_id, block in test_case_blocks_by_id.items():
+        for atom_id in extract_any_atom_ids_from_text(block):
+            test_case_blocks_by_atom[atom_id].append((test_case_id, block))
+
+    for index, row in enumerate(rows, start=2):
+        source_property_id = row.get("source_property_id", "").strip()
+        decision_id = row.get("decision_id", "").strip() or f"row {index}"
+        decision = row.get("decision", "").strip().strip("`").lower()
+        property_type = row.get("property_type", "").strip().lower()
+        decision_reason = row.get("decision_reason", "").strip()
+        planned = row.get("planned_tc_or_gap", "").strip()
+        oracle_source = row.get("oracle_source", "").strip()
+        row_label = f"{decision_id}:{source_property_id or '<missing source_property_id>'}"
+
+        if source_property_id and source_property_id != "-":
+            decision_source_ids.append(source_property_id)
+
+        test_case_ids = extract_test_case_ids_from_text(planned)
+        gap_ids = extract_gap_ids_from_text(planned)
+        linked_atom_ids = extract_any_atom_ids_from_text(row.get("linked_atom_id", ""))
+        if known_test_case_ids:
+            for test_case_id in test_case_ids:
+                if test_case_id not in known_test_case_ids:
+                    unknown_test_case_ids.append(f"{row_label}:{test_case_id}")
+
+        if decision not in ALLOWED_TEST_DESIGN_DECISIONS:
+            invalid_decisions.append(f"{row_label}:decision={decision or '<missing>'}")
+            continue
+
+        normalization_row = normalization_rows_by_property_id.get(source_property_id, {})
+        normalization_context = " | ".join(
+            value
+            for value in (
+                normalization_row.get("field_or_block", ""),
+                normalization_row.get("property", ""),
+                normalization_row.get("condition", ""),
+                normalization_row.get("expected_behavior", ""),
+                normalization_row.get("source_ref", ""),
+                normalization_row.get("source_text_fragment", ""),
+            )
+            if value
+        )
+        row_context = " | ".join(
+            value
+            for value in (
+                property_type,
+                decision_reason,
+                oracle_source,
+                row.get("observable_oracle", ""),
+                row.get("testable_part", ""),
+                row.get("blocked_part", ""),
+                row.get("gap_admissibility", ""),
+                normalization_context,
+            )
+            if value
+        )
+        has_visible_result = bool(GAP_ADMISSIBILITY_VISIBLE_RESULT_RE.search(row_context))
+        has_executable_property = bool(GAP_ADMISSIBILITY_EXECUTABLE_PROPERTY_RE.search(property_type))
+        has_blocker_evidence = bool(
+            GAP_ADMISSIBILITY_BLOCKER_RE.search(
+                " | ".join(
+                    value
+                    for value in (
+                        decision_reason,
+                        oracle_source,
+                        row.get("blocked_part", ""),
+                        row.get("gap_admissibility", ""),
+                    )
+                    if value
+                )
+            )
+        )
+        has_testable_part = meaningful_matrix_value(row.get("testable_part", ""))
+        is_internal_only_gap = (
+            bool(INTEGRATION_OR_INTERNAL_PROPERTY_RE.search(row_context))
+            and not has_visible_result
+            and not has_executable_property
+            and not has_testable_part
+        )
+        has_passport_window = bool(PASSPORT_VALIDITY_WINDOW_RE.search(row_context))
+
+        if decision == "metadata_only" and (has_visible_result or has_executable_property or has_testable_part):
+            metadata_behavior_smells.append(
+                f"{row_label}:property_type={property_type or '-'};source={normalization_context[:160] or '-'}"
+            )
+        if decision == "gap_unclear" and not is_internal_only_gap:
+            if has_executable_property or has_testable_part or (has_visible_result and not has_blocker_evidence):
+                gap_executable_behavior_smells.append(
+                    f"{row_label}:property_type={property_type or '-'};source={normalization_context[:160] or '-'}"
+                )
+            if has_passport_window:
+                date_window_gap_smells.append(
+                    f"{row_label}:property_type={property_type or '-'};source={normalization_context[:160] or '-'}"
+                )
+            if has_blocker_evidence and (has_executable_property or has_testable_part):
+                gap_overbroad_smells.append(
+                    f"{row_label}:blocker={decision_reason[:120] or oracle_source[:120] or '-'};source={normalization_context[:160] or '-'}"
+                )
+
+        if decision == "metadata_only" and test_case_ids:
+            metadata_links_tc.append(f"{row_label}:planned_tc_or_gap={planned}")
+        if decision == "metadata_only":
+            for atom_id in linked_atom_ids:
+                for ledger_row in ledger_rows_by_atom.get(atom_id, []):
+                    ledger_status = ledger_row.get("coverage_status", "").strip().strip("`").lower()
+                    ledger_tc_ids = extract_test_case_ids_from_text(ledger_row.get("covered_by_tc", ""))
+                    if ledger_status == "covered" or ledger_tc_ids:
+                        metadata_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:ledger coverage_status={ledger_status or '-'};covered_by_tc={ledger_row.get('covered_by_tc', '-') or '-'}"
+                        )
+                for plan_row in plan_rows_by_atom.get(atom_id, []):
+                    plan_tc_ids = extract_test_case_ids_from_text(plan_row.get("planned_tc_or_gap", ""))
+                    if plan_tc_ids:
+                        metadata_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:plan {plan_row.get('design_item_id', '<row>')}:planned_tc_or_gap={plan_row.get('planned_tc_or_gap', '-') or '-'}"
+                        )
+                for risk_row in risk_rows_by_atom.get(atom_id, []):
+                    risk_tc_ids = extract_test_case_ids_from_text(risk_row.get("linked_test_cases", ""))
+                    if risk_tc_ids:
+                        metadata_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:risk linked_test_cases={risk_row.get('linked_test_cases', '-') or '-'}"
+                        )
+                for test_case_id, block in test_case_blocks_by_atom.get(atom_id, []):
+                    if not test_case_is_traceability_remap(block):
+                        metadata_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:{test_case_id}:type={test_case_type_from_block(block) or '-'}"
+                        )
+        if decision == "gap_unclear" and not gap_ids:
+            gap_without_gap.append(f"{row_label}:planned_tc_or_gap={planned or '-'}")
+        if decision == "gap_unclear":
+            expected_gap_ids = set(gap_ids)
+            for atom_id in linked_atom_ids:
+                for ledger_row in ledger_rows_by_atom.get(atom_id, []):
+                    ledger_status = ledger_row.get("coverage_status", "").strip().strip("`").lower()
+                    ledger_text = " | ".join(ledger_row.values())
+                    ledger_tc_ids = extract_test_case_ids_from_text(ledger_row.get("covered_by_tc", ""))
+                    ledger_gap_ids = set(extract_gap_ids_from_text(ledger_text))
+                    if ledger_status == "covered" or ledger_tc_ids:
+                        gap_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:ledger coverage_status={ledger_status or '-'};covered_by_tc={ledger_row.get('covered_by_tc', '-') or '-'}"
+                        )
+                    elif expected_gap_ids and not expected_gap_ids.intersection(ledger_gap_ids):
+                        gap_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:ledger missing expected gap {', '.join(sorted(expected_gap_ids))}"
+                        )
+                for plan_row in plan_rows_by_atom.get(atom_id, []):
+                    plan_text = " | ".join(plan_row.values())
+                    plan_tc_ids = extract_test_case_ids_from_text(plan_row.get("planned_tc_or_gap", ""))
+                    plan_gap_ids = set(extract_gap_ids_from_text(plan_text))
+                    if plan_tc_ids:
+                        gap_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:plan {plan_row.get('design_item_id', '<row>')}:planned_tc_or_gap={plan_row.get('planned_tc_or_gap', '-') or '-'}"
+                        )
+                    elif expected_gap_ids and not expected_gap_ids.intersection(plan_gap_ids):
+                        gap_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:plan {plan_row.get('design_item_id', '<row>')} missing expected gap {', '.join(sorted(expected_gap_ids))}"
+                        )
+                for risk_row in risk_rows_by_atom.get(atom_id, []):
+                    risk_tc_ids = extract_test_case_ids_from_text(risk_row.get("linked_test_cases", ""))
+                    risk_gap_ids = set(extract_gap_ids_from_text(" | ".join(risk_row.values())))
+                    if risk_tc_ids:
+                        gap_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:risk linked_test_cases={risk_row.get('linked_test_cases', '-') or '-'}"
+                        )
+                    elif expected_gap_ids and not expected_gap_ids.intersection(risk_gap_ids):
+                        gap_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:risk missing expected gap {', '.join(sorted(expected_gap_ids))}"
+                        )
+        if decision == "standalone_tc" and (not test_case_ids or not meaningful_matrix_value(oracle_source)):
+            standalone_without_tc_or_oracle.append(
+                f"{row_label}:planned_tc_or_gap={planned or '-'};oracle_source={oracle_source or '-'}"
+            )
+        if decision == "covered_by_existing_tc" and not test_case_ids:
+            covered_without_tc.append(f"{row_label}:planned_tc_or_gap={planned or '-'}")
+        if decision == "scenario_only" and not test_case_ids:
+            scenario_without_tc.append(f"{row_label}:planned_tc_or_gap={planned or '-'}")
+        if decision == "scenario_only":
+            for test_case_id in test_case_ids:
+                block = test_case_blocks_by_id.get(test_case_id)
+                if block and test_case_has_remap_language(block) and not test_case_is_traceability_remap(block):
+                    scenario_remap_executable_conflicts.append(
+                        f"{row_label}:{test_case_id}:type={test_case_type_from_block(block) or '-'}"
+                    )
+        if decision in {"standalone_tc", "covered_by_existing_tc"}:
+            row_test_case_ids = set(test_case_ids)
+            for atom_id in linked_atom_ids:
+                ledger_test_case_ids: set[str] = set()
+                ledger_statuses: set[str] = set()
+                for ledger_row in ledger_rows_by_atom.get(atom_id, []):
+                    ledger_status = ledger_row.get("coverage_status", "").strip().strip("`").lower()
+                    ledger_statuses.add(ledger_status or "-")
+                    ledger_test_case_ids.update(extract_test_case_ids_from_text(ledger_row.get("covered_by_tc", "")))
+                if ledger_rows_by_atom.get(atom_id):
+                    if not ledger_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:ledger has no covered_by_tc for executable decision"
+                        )
+                    if ledger_statuses and ledger_statuses != {"covered"}:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:ledger coverage_status={', '.join(sorted(ledger_statuses))}"
+                        )
+                    extra_test_case_ids = sorted(row_test_case_ids - ledger_test_case_ids)
+                    missing_test_case_ids = sorted(ledger_test_case_ids - row_test_case_ids)
+                    if extra_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:planned_tc_or_gap has TC not in ledger covered_by_tc: {', '.join(extra_test_case_ids)}"
+                        )
+                    if missing_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:ledger covered_by_tc missing from TDDT planned_tc_or_gap: {', '.join(missing_test_case_ids)}"
+                        )
+
+                plan_test_case_ids: set[str] = set()
+                for plan_row in plan_rows_by_atom.get(atom_id, []):
+                    plan_test_case_ids.update(extract_test_case_ids_from_text(plan_row.get("planned_tc_or_gap", "")))
+                if plan_test_case_ids:
+                    extra_test_case_ids = sorted(row_test_case_ids - plan_test_case_ids)
+                    missing_test_case_ids = sorted(plan_test_case_ids - row_test_case_ids)
+                    if extra_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:planned_tc_or_gap has TC not in Package Test Design Plan: {', '.join(extra_test_case_ids)}"
+                        )
+                    if missing_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:Package Test Design Plan TC missing from TDDT planned_tc_or_gap: {', '.join(missing_test_case_ids)}"
+                        )
+
+                block_test_case_ids = {test_case_id for test_case_id, _ in test_case_blocks_by_atom.get(atom_id, [])}
+                if block_test_case_ids:
+                    extra_test_case_ids = sorted(row_test_case_ids - block_test_case_ids)
+                    missing_test_case_ids = sorted(block_test_case_ids - row_test_case_ids)
+                    if extra_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:planned_tc_or_gap references TC without this atom: {', '.join(extra_test_case_ids)}"
+                        )
+                    if missing_test_case_ids:
+                        executable_cross_section_conflicts.append(
+                            f"{row_label}:{atom_id}:TC sections with atom missing from TDDT planned_tc_or_gap: {', '.join(missing_test_case_ids)}"
+                        )
+        if decision == "out_of_scope" and not (meaningful_matrix_value(decision_reason) or meaningful_matrix_value(oracle_source)):
+            out_of_scope_without_reason.append(f"{row_label}:decision_reason={decision_reason or '-'}")
+
+        value_type_text = " | ".join(
+            value
+            for value in (
+                property_type,
+                decision_reason.lower(),
+                oracle_source.lower(),
+            )
+            if value
+        )
+        if decision == "standalone_tc" and re.search(r"value[-_\s]?type|тип\s+значения|metadata[-_\s]?only|тип\s+контрола", value_type_text):
+            if not re.search(
+                r"format|input|widget|control|numeric|date|phone|email|length|"
+                r"формат|ввод|контрол|числ|дат|телефон|почт|длин",
+                value_type_text,
+                flags=re.IGNORECASE,
+            ):
+                value_type_standalone.append(f"{row_label}:property_type={property_type or '-'};oracle_source={oracle_source or '-'}")
+
+    source_id_counts = Counter(decision_source_ids)
+    duplicate_source_ids = [source_id for source_id, count in source_id_counts.items() if count > 1]
+    missing_source_ids = sorted(set(source_property_ids) - set(decision_source_ids))
+
+    if missing_source_ids:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-missing-source-property",
+                severity="warning",
+                category="traceability",
+                title="Test Design Decision Table misses normalized source properties",
+                details="Every source_property_id from Source Table Normalization must have exactly one design decision before ledger and TC writing.",
+                path=display_path,
+                evidence=missing_source_ids[:20],
+                recommended_action="Add one decision row for each missing source_property_id.",
+            )
+        )
+    if duplicate_source_ids:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-duplicate-source-property",
+                severity="warning",
+                category="traceability",
+                title="Test Design Decision Table has duplicate source property decisions",
+                details="A normalized source property should have one design decision, not competing rows.",
+                path=display_path,
+                evidence=duplicate_source_ids[:20],
+                recommended_action="Keep exactly one decision row per source_property_id.",
+            )
+        )
+    if invalid_decisions:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-invalid-decision",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table uses invalid decision values",
+                details="Decision must be one of standalone_tc, covered_by_existing_tc, gap_unclear, metadata_only, scenario_only or out_of_scope.",
+                path=display_path,
+                evidence=invalid_decisions[:20],
+                recommended_action="Normalize decision values to the canonical vocabulary.",
+            )
+        )
+    if metadata_links_tc:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-metadata-links-tc",
+                severity="warning",
+                category="test-design",
+                title="Metadata-only source properties are linked to TC-*",
+                details="Metadata-only rows such as value type must not create pseudo test cases. They should be covered through concrete behavior, GAP/unclear, or traceability only.",
+                path=display_path,
+                evidence=metadata_links_tc[:20],
+                recommended_action="Remove TC-* links from metadata_only rows or change the decision to a concrete source-backed executable behavior.",
+            )
+        )
+    if metadata_cross_section_conflicts:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-metadata-cross-section-conflict",
+                severity="warning",
+                category="test-design",
+                title="Metadata-only decisions conflict with executable coverage in other sections",
+                details=(
+                    "A metadata_only TDDT decision is not enough if the same atom is still marked covered in the "
+                    "ledger, planned as an executable TC in Package Test Design Plan, linked from Risk / Priority Map, "
+                    "or present in non-remap TC sections."
+                ),
+                path=display_path,
+                evidence=metadata_cross_section_conflicts[:20],
+                recommended_action=(
+                    "Synchronize TDDT, Atomic Requirements Ledger, Package Test Design Plan, Risk / Priority Map and TC sections: "
+                    "metadata-only atoms must route to GAP/unclear or traceability-remap, not executable coverage."
+                ),
+            )
+        )
+    if gap_without_gap:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-gap-without-gap-id",
+                severity="warning",
+                category="traceability",
+                title="Gap/unclear decisions have no GAP-* link",
+                details="A gap_unclear decision needs a canonical GAP-* reference so the limitation is reviewable.",
+                path=display_path,
+                evidence=gap_without_gap[:20],
+                recommended_action="Declare and link GAP-* for every gap_unclear row.",
+            )
+        )
+    if gap_cross_section_conflicts:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-gap-cross-section-conflict",
+                severity="warning",
+                category="test-design",
+                title="Gap/unclear decisions conflict with covered status in other sections",
+                details=(
+                    "A gap_unclear TDDT row must stay gap/unclear throughout the canonical file. "
+                    "It must not be covered in the ledger, planned as an executable TC, or linked as executable risk coverage."
+                ),
+                path=display_path,
+                evidence=gap_cross_section_conflicts[:20],
+                recommended_action=(
+                    "Make the gap decision consistent across Coverage Gaps, Atomic Requirements Ledger, "
+                    "Package Test Design Plan and Risk / Priority Map, or reclassify the TDDT row as executable with a real oracle."
+                ),
+            )
+        )
+    if gap_executable_behavior_smells:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-gap-executable-behavior-smell",
+                severity="warning",
+                category="test-design",
+                title="Gap/unclear decisions hide source-backed executable behavior",
+                details=(
+                    "A gap_unclear row is admissible only for the part that is not derivable from sources. "
+                    "If the source names a visible UI result, validation message, highlight, navigation, mask, "
+                    "dictionary/tag behavior, or another observable oracle, that executable part must become "
+                    "standalone_tc or covered_by_existing_tc; only the blocked remainder may stay GAP-*."
+                ),
+                path=display_path,
+                evidence=gap_executable_behavior_smells[:20],
+                recommended_action=(
+                    "Split each broad gap into executable TC coverage plus a narrow GAP-* for the actually missing fixture, "
+                    "catalog, backend artifact, status, or source detail."
+                ),
+            )
+        )
+    if gap_overbroad_smells:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-overbroad-gap-smell",
+                severity="warning",
+                category="test-design",
+                title="Gap/unclear decisions mix blocked input with testable behavior",
+                details=(
+                    "A missing catalog, fixture, status, backend artifact, or source detail can block a specific branch, "
+                    "but it must not erase visible behavior that is already stated in the FT/support materials."
+                ),
+                path=display_path,
+                evidence=gap_overbroad_smells[:20],
+                recommended_action=(
+                    "Move the visible/testable part to planned TC coverage and keep GAP-* only for the named blocker."
+                ),
+            )
+        )
+    if metadata_behavior_smells:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-metadata-behavior-smell",
+                severity="warning",
+                category="test-design",
+                title="Metadata-only decisions contain observable behavior",
+                details=(
+                    "metadata_only is only for structural context or input classification. Source-backed visible behavior "
+                    "such as hints, messages, highlights, actions, masks, dictionaries, tags, or navigation must be routed "
+                    "to executable coverage or a narrow GAP-*."
+                ),
+                path=display_path,
+                evidence=metadata_behavior_smells[:20],
+                recommended_action=(
+                    "Reclassify the row as standalone_tc/covered_by_existing_tc, or split it into a metadata row and a "
+                    "separate executable/gap row."
+                ),
+            )
+        )
+    if date_window_gap_smells:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-date-window-gap-smell",
+                severity="warning",
+                category="test-design",
+                title="Date validity windows are routed to gap/unclear despite source-backed boundaries",
+                details=(
+                    "Passport/date validity rules with source-backed age windows, boundary days, or exact hint texts "
+                    "must be decomposed into boundary/equivalence obligations. A GAP-* is valid only for a missing "
+                    "test clock, fixture, or unresolved boundary convention."
+                ),
+                path=display_path,
+                evidence=date_window_gap_smells[:20],
+                recommended_action=(
+                    "Create date-window obligation rows and TC coverage for stated boundaries; keep GAP-* only for "
+                    "unavailable clock/fixture semantics."
+                ),
+            )
+        )
+    if standalone_without_tc_or_oracle:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-standalone-without-tc-or-oracle",
+                severity="warning",
+                category="test-design",
+                title="Standalone TC decisions lack TC-* or observable oracle source",
+                details="A standalone_tc decision is valid only when it names the planned/existing TC and the source-backed observable oracle.",
+                path=display_path,
+                evidence=standalone_without_tc_or_oracle[:20],
+                recommended_action="Add planned TC-* and a concrete oracle_source, or change the decision to gap_unclear/metadata_only.",
+            )
+        )
+    if covered_without_tc:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-covered-existing-without-tc",
+                severity="warning",
+                category="test-design",
+                title="Covered-by-existing decisions do not name a TC-*",
+                details="covered_by_existing_tc must point to the executable TC that really covers the source property.",
+                path=display_path,
+                evidence=covered_without_tc[:20],
+                recommended_action="Link the existing/planned executable TC-* or use gap_unclear/metadata_only.",
+            )
+        )
+    if scenario_without_tc:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-scenario-without-tc",
+                severity="warning",
+                category="test-design",
+                title="Scenario-only decisions do not name a scenario TC",
+                details="scenario_only is allowed only when the scenario TC is named and atomic coverage is not silently replaced.",
+                path=display_path,
+                evidence=scenario_without_tc[:20],
+                recommended_action="Link a scenario TC or split the property into standalone/gap decisions.",
+            )
+        )
+    if scenario_remap_executable_conflicts:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-scenario-remap-executable-conflict",
+                severity="warning",
+                category="test-design",
+                title="Scenario-only remap anchors look like executable scenario test cases",
+                details=(
+                    "scenario_only rows may point to retained executable scenario TC, but compatibility/remap anchors "
+                    "must not present themselves as executable scenario-use-case test cases."
+                ),
+                path=display_path,
+                evidence=scenario_remap_executable_conflicts[:20],
+                recommended_action=(
+                    "Change remap/compatibility sections to type `traceability-remap` or point scenario_only rows to the actual retained executable scenario TC."
+                ),
+            )
+        )
+    if executable_cross_section_conflicts:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-executable-cross-section-conflict",
+                severity="warning",
+                category="test-design",
+                title="Executable TDDT decisions conflict with ledger, plan, or TC links",
+                details=(
+                    "A standalone_tc or covered_by_existing_tc decision must stay synchronized with the same atom in "
+                    "Atomic Requirements Ledger, Package Test Design Plan and real TC sections. Extra or missing TC-* "
+                    "links create false coverage in the decision table."
+                ),
+                path=display_path,
+                evidence=executable_cross_section_conflicts[:20],
+                recommended_action=(
+                    "Synchronize planned_tc_or_gap with the atom's covered_by_tc, package plan row and TC sections, "
+                    "or reclassify the row as gap_unclear/metadata_only when no executable coverage exists."
+                ),
+            )
+        )
+    if out_of_scope_without_reason:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-out-of-scope-without-reason",
+                severity="warning",
+                category="scope",
+                title="Out-of-scope decisions lack a source or scope reason",
+                details="out_of_scope rows need a concrete scope/source reason to avoid hiding omissions.",
+                path=display_path,
+                evidence=out_of_scope_without_reason[:20],
+                recommended_action="Add the scope decision/source reference that excludes the property.",
+            )
+        )
+    if value_type_standalone:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-value-type-standalone-smell",
+                severity="warning",
+                category="test-design",
+                title="Value-type or control-type metadata is planned as standalone TC without concrete behavior",
+                details="Rows such as `тип значения` or `тип контрола` should not become standalone pseudo tests unless the oracle names concrete observable input/widget/format behavior.",
+                path=display_path,
+                evidence=value_type_standalone[:20],
+                recommended_action="Use metadata_only, gap_unclear, or covered_by_existing_tc through concrete format/input/widget checks.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-unknown-test-case-id",
+                severity="warning",
+                category="traceability",
+                title="Test Design Decision Table references unknown TC-* ids",
+                details="planned_tc_or_gap must point to canonical TC-* sections in the same artifact/package.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced TC-* or update planned_tc_or_gap to existing ids.",
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "test-design-decision-table",
+            "warn" if has_warnings else "pass",
+            "Test Design Decision Table has issues." if has_warnings else "Test Design Decision Table contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def coverage_obligation_relevant_source_rows(content: str) -> list[dict[str, str]]:
+    _, normalization_rows = parsed_section_table_rows(content, "Source Table Normalization")
+    relevant_rows: list[dict[str, str]] = []
+    for row in normalization_rows:
+        source_property_id = row.get("source_property_id", "").strip()
+        property_type = row.get("property", "").strip().strip("`").lower()
+        if not source_property_id or source_property_id == "-":
+            continue
+        if property_type not in COVERAGE_OBLIGATION_REQUIRED_CLASSES_BY_PROPERTY_TYPE:
+            continue
+        if real_gap_ids(row.get("gap_id", "")):
+            continue
+        relevant_rows.append(row)
+    return relevant_rows
+
+
+def should_require_coverage_obligation_table(content: str) -> bool:
+    if not coverage_obligation_relevant_source_rows(content):
+        return False
+    return (
+        extract_markdown_section(content, "Test Design Decision Table") is not None
+        or extract_markdown_section(content, "Package Test Design Plan") is not None
+        or extract_markdown_section(content, "Atomic Requirements Ledger") is not None
+        or bool(extract_test_case_blocks(content))
+    )
+
+
+def validate_coverage_obligation_table(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    relevant_source_rows = coverage_obligation_relevant_source_rows(content)
+    relevant_by_source_property = {
+        row.get("source_property_id", "").strip(): row
+        for row in relevant_source_rows
+        if row.get("source_property_id", "").strip()
+    }
+    is_required = should_require_coverage_obligation_table(content)
+    section = extract_markdown_section(content, "Coverage Obligation Table")
+
+    if not is_required and section is None:
+        checks.append(
+            Check(
+                "coverage-obligation-table",
+                "pass",
+                "Coverage Obligation Table is not required for this artifact.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    if section is None:
+        evidence = [
+            (
+                f"{row.get('source_property_id', '-')}:"
+                f"{row.get('property', '-')}:"
+                f"{row.get('requirement_code', '-')}"
+            )
+            for row in relevant_source_rows[:20]
+        ]
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-missing",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table is missing",
+                details=(
+                    "Source properties with mandatory coverage classes, such as numeric-format and amount-tags, "
+                    "must be expanded into explicit coverage obligations before Package Test Design Plan and TC-* "
+                    "can be trusted."
+                ),
+                path=display_path,
+                evidence=evidence,
+                recommended_action=(
+                    "Add `## Coverage Obligation Table` after Test Design Decision Table. For each relevant "
+                    "source_property_id, list every required obligation_class and map it to a TC-* or GAP-*."
+                ),
+            )
+        )
+        checks.append(Check("coverage-obligation-table", "warn", "Coverage Obligation Table is missing.", display_path))
+        return findings, checks
+
+    header, rows = parsed_section_table_rows(content, "Coverage Obligation Table")
+    if not rows:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-no-table",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table has no parseable table",
+                details="The section exists but has no Markdown table rows.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Coverage Obligation Table columns from coverage-obligation-table-format.md.",
+            )
+        )
+        checks.append(Check("coverage-obligation-table", "warn", "Coverage Obligation Table table is missing.", display_path))
+        return findings, checks
+
+    missing_columns = sorted(COVERAGE_OBLIGATION_TABLE_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-missing-columns",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table misses required columns",
+                details="The obligation table must expose source property, atom, obligation class, required behavior and TC/GAP mapping.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:14])}"],
+                recommended_action="Rewrite the table with the canonical columns from coverage-obligation-table-format.md.",
+            )
+        )
+
+    classes_by_source_property: dict[str, set[str]] = defaultdict(set)
+    duplicate_keys: list[str] = []
+    unknown_source_properties: list[str] = []
+    missing_tc_or_gap_rows: list[str] = []
+    invalid_status_rows: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    mask_obligations_without_mask_oracle: list[str] = []
+    seen_keys: set[tuple[str, str]] = set()
+    test_case_blocks_by_id = {test_case_id: block for test_case_id, block in extract_test_case_blocks(content)}
+
+    for index, row in enumerate(rows, start=2):
+        obligation_id = row.get("obligation_id", "").strip() or f"row {index}"
+        source_property_id = row.get("source_property_id", "").strip()
+        obligation_class = row.get("obligation_class", "").strip().strip("`").lower()
+        status = row.get("status", "").strip().strip("`").lower()
+        planned_tc_or_gap = row.get("planned_tc_or_gap", "").strip()
+        row_label = f"{obligation_id}:{source_property_id or '<missing source_property_id>'}:{obligation_class or '<missing class>'}"
+
+        if source_property_id and source_property_id not in relevant_by_source_property:
+            unknown_source_properties.append(row_label)
+
+        if source_property_id and obligation_class:
+            key = (source_property_id, obligation_class)
+            if key in seen_keys:
+                duplicate_keys.append(row_label)
+            seen_keys.add(key)
+            classes_by_source_property[source_property_id].add(obligation_class)
+
+        if status and status not in COVERAGE_OBLIGATION_ALLOWED_STATUSES:
+            invalid_status_rows.append(f"{row_label}:status={status}")
+
+        planned_test_case_ids = extract_test_case_ids_from_text(planned_tc_or_gap)
+        planned_gap_ids = extract_gap_ids_from_text(planned_tc_or_gap)
+        if status not in {"not-applicable", "n/a"} and not planned_test_case_ids and not planned_gap_ids:
+            missing_tc_or_gap_rows.append(f"{row_label}:planned_tc_or_gap={planned_tc_or_gap or '-'}")
+
+        if known_test_case_ids:
+            for test_case_id in planned_test_case_ids:
+                if test_case_id not in known_test_case_ids:
+                    unknown_test_case_ids.append(f"{row_label}:{test_case_id}")
+        if planned_test_case_ids and MASK_OBLIGATION_CLASS_RE.search(obligation_class):
+            for test_case_id in planned_test_case_ids:
+                block = test_case_blocks_by_id.get(test_case_id, "")
+                if not block:
+                    continue
+                tc_context = " ".join(
+                    [
+                        extract_test_case_field_block(block, ["Title", "title", "Название"]),
+                        extract_test_case_field_block(block, ["Goal", "goal", "Цель"]),
+                        extract_test_case_field_block(block, ["Test Data", "test_data", "test data", "Тестовые данные"]),
+                        extract_test_case_field_block(block, ["Steps", "steps", "Шаги"]),
+                        extract_test_case_expected_result(block),
+                    ]
+                )
+                if not MASK_OBSERVABLE_ORACLE_RE.search(tc_context):
+                    mask_obligations_without_mask_oracle.append(
+                        f"{row_label}:{test_case_id}:context={tc_context[:160] or '<empty>'}"
+                    )
+
+    missing_required_classes: list[str] = []
+    for source_property_id, source_row in sorted(relevant_by_source_property.items()):
+        property_type = source_row.get("property", "").strip().strip("`").lower()
+        required_classes = set(COVERAGE_OBLIGATION_REQUIRED_CLASSES_BY_PROPERTY_TYPE.get(property_type, ()))
+        missing_classes = sorted(required_classes - classes_by_source_property.get(source_property_id, set()))
+        if missing_classes:
+            missing_required_classes.append(
+                (
+                    f"{source_property_id}:"
+                    f"{property_type}:"
+                    f"{source_row.get('requirement_code', '-')}:"
+                    f"missing={', '.join(missing_classes)}"
+                )
+            )
+
+    if missing_required_classes:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-missing-required-class",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table misses required coverage classes",
+                details=(
+                    "A covered source property can still be under-tested when required obligation classes are absent. "
+                    "For example, numeric-format needs valid digits plus separate rejection classes for letters, spaces, "
+                    "special characters, decimal separators and signs."
+                ),
+                path=display_path,
+                evidence=missing_required_classes[:20],
+                recommended_action="Add one obligation row for each missing class and map it to a TC-* or a source-specific GAP-*.",
+            )
+        )
+    if unknown_source_properties:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-unknown-source-property",
+                severity="warning",
+                category="traceability",
+                title="Coverage Obligation Table references unknown or non-obligatory source properties",
+                details="Obligation rows must point to source_property_id values from Source Table Normalization that need obligation expansion.",
+                path=display_path,
+                evidence=unknown_source_properties[:20],
+                recommended_action="Use the exact source_property_id from Source Table Normalization or remove the row if it is not an obligation-bearing property.",
+            )
+        )
+    if duplicate_keys:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-duplicate-class",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table has duplicate source/class rows",
+                details="A source_property_id should have at most one row per obligation_class. Split behavior only when it is a different class.",
+                path=display_path,
+                evidence=duplicate_keys[:20],
+                recommended_action="Merge duplicate obligation rows or give each row a distinct obligation_class.",
+            )
+        )
+    if missing_tc_or_gap_rows:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-missing-tc-or-gap",
+                severity="warning",
+                category="traceability",
+                title="Coverage obligation rows have no TC-* or GAP-* mapping",
+                details="Every required coverage obligation must resolve to executable coverage or an explicit source-specific gap.",
+                path=display_path,
+                evidence=missing_tc_or_gap_rows[:20],
+                recommended_action="Fill planned_tc_or_gap with an existing/planned TC-* or GAP-*.",
+            )
+        )
+    if invalid_status_rows:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-invalid-status",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table uses invalid status values",
+                details="Status must be one of covered, gap, unclear, blocked, not-applicable or n/a.",
+                path=display_path,
+                evidence=invalid_status_rows[:20],
+                recommended_action="Normalize status values to the canonical vocabulary.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-unknown-test-case-id",
+                severity="warning",
+                category="traceability",
+                title="Coverage Obligation Table references unknown TC-* ids",
+                details="planned_tc_or_gap must point to canonical TC-* sections in the same artifact/package.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced TC-* or update planned_tc_or_gap to existing ids.",
+            )
+        )
+    if mask_obligations_without_mask_oracle:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-mask-oracle-missing",
+                severity="warning",
+                category="test-design",
+                title="Mask coverage obligations are linked to TC-* without mask oracle",
+                details=(
+                    "A format-mask/default-mask obligation is not covered by generic numeric input or letter rejection. "
+                    "The linked TC must verify the displayed mask/template or route the exact mask behavior to GAP-*."
+                ),
+                path=display_path,
+                evidence=mask_obligations_without_mask_oracle[:20],
+                recommended_action=(
+                    "Rewrite the linked TC to assert the source-backed mask/template, or replace the TC mapping "
+                    "with a source-specific GAP-* if exact mask rendering is unclear."
+                ),
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "coverage-obligation-table",
+            "warn" if has_warnings else "pass",
+            "Coverage Obligation Table has issues." if has_warnings else "Coverage Obligation Table contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_writer_quality_gate(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    summary = writer_quality_gate_summary(content)
+
+    if not summary["present"]:
+        if should_require_writer_quality_gate(content):
+            findings.append(
+                Finding(
+                    id="writer-quality-gate-missing",
+                    severity="warning",
+                    category="test-case-format",
+                    title="Package-based test-case file has no Writer Quality Gate",
+                    details=(
+                        "Package-based writer output must self-reject semantic compression, merged TC, "
+                        "broad GSR ranges and unobservable internal behavior before it is sent to reviewer."
+                    ),
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Add `## Writer Quality Gate` with the canonical gate items and block failed packages before ready-for-review.",
+                )
+            )
+            checks.append(Check("writer-quality-gate", "warn", "Writer Quality Gate is missing.", display_path))
+        else:
+            checks.append(Check("writer-quality-gate", "pass", "Writer Quality Gate is not required for this legacy/simple file.", display_path))
+        return findings, checks
+
+    if not summary["parseable"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-no-table",
+                severity="warning",
+                category="test-case-format",
+                title="Writer Quality Gate has no parseable Markdown table",
+                details="The section exists but has no canonical Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Writer Quality Gate table format.",
+            )
+        )
+    if summary["missing_columns"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-missing-columns",
+                severity="warning",
+                category="test-case-format",
+                title="Writer Quality Gate misses required columns",
+                details="The gate must expose item, status, evidence, affected package, required action and blocking flag.",
+                path=display_path,
+                evidence=[f"missing={', '.join(summary['missing_columns'])}"],
+                recommended_action="Rewrite the gate table with the canonical columns from writer-quality-gate-format.md.",
+            )
+        )
+    if summary["missing_items"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-missing-required-items",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate misses required gate items",
+                details="The gate must explicitly check artifact write strategy, mockup visual inventory, source normalization, ledger atomicity, GSR compression, plan atomicity, scenarios, TC atomicity, observability and package readiness.",
+                path=display_path,
+                evidence=summary["missing_items"][:20],
+                recommended_action="Add one row for each required gate item before moving the writer artifact to review.",
+            )
+        )
+    if summary["invalid_status_rows"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-invalid-status",
+                severity="warning",
+                category="test-case-format",
+                title="Writer Quality Gate has noncanonical status values",
+                details="Gate status values must be canonical pass/fail-style values.",
+                path=display_path,
+                evidence=summary["invalid_status_rows"][:20],
+                recommended_action="Use `pass` for passed checks or `fail`/`blocked`/`needs-rewrite` for failed checks.",
+            )
+        )
+    if summary["invalid_blocks_rows"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-invalid-blocks-value",
+                severity="warning",
+                category="test-case-format",
+                title="Writer Quality Gate has invalid blocks_ready_for_review values",
+                details="The blocking flag must be `yes` or `no`.",
+                path=display_path,
+                evidence=summary["invalid_blocks_rows"][:20],
+                recommended_action="Set `blocks_ready_for_review` to `yes` only for blocking failed gate rows, otherwise `no`.",
+            )
+        )
+    if summary["failed_rows"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-failed",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate contains blocking failures",
+                details="The writer file self-identifies failed quality gates. It must not be routed to reviewer until the affected packages are rewritten or the workflow is blocked.",
+                path=display_path,
+                evidence=summary["failed_rows"][:20],
+                recommended_action="Rewrite affected packages from Source Table Normalization through TC, or set workflow-state to blocked-input.",
+            )
+        )
+    if summary["package_ready_conflicts"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-package-ready-conflict",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate marks package-ready despite failed gates",
+                details=(
+                    "`package-ready` cannot pass while any other gate item is failed or blocking. "
+                    "This creates a false ready-for-review signal."
+                ),
+                path=display_path,
+                evidence=summary["package_ready_conflicts"][:20],
+                recommended_action=(
+                    "Either fix the failed gate rows and then mark package-ready pass, or set package-ready to fail/blocking."
+                ),
+            )
+        )
+    if summary["known_risk_not_blocking"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-known-risk-not-blocking",
+                severity="warning",
+                category="test-design",
+                title="Writer self-check reports merged checks as known risk without blocking the gate",
+                details="A known semantic-compression or merged-check risk cannot be accepted in ready-for-review output.",
+                path=display_path,
+                evidence=["possible merged checks / semantic compression marked as known risk"],
+                recommended_action="Add a failed blocking Writer Quality Gate row and rewrite the affected package before review.",
+            )
+        )
+
+    has_findings = any(finding.id.startswith("writer-quality-gate") for finding in findings)
+    checks.append(
+        Check(
+            "writer-quality-gate",
+            "warn" if has_findings else "pass",
+            "Writer Quality Gate has issues." if has_findings else "Writer Quality Gate passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def should_require_artifact_write_strategy(content: str, blocks: list[tuple[str, str]]) -> bool:
+    atom_count = len(atomic_requirement_ledger_atom_ids(content))
+    has_internal_work_packages = bool(re.search(r"\bWP-\d{2}\b|Internal Work Package Coverage", content))
+    return (
+        len(blocks) > ARTIFACT_WRITE_STRATEGY_MIN_TC_COUNT
+        or atom_count > ARTIFACT_WRITE_STRATEGY_MIN_ATOM_COUNT
+        or len(content) > ARTIFACT_WRITE_STRATEGY_MIN_CHARS
+        or has_internal_work_packages
+    )
+
+
+def validate_artifact_write_strategy(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    blocks: list[tuple[str, str]],
+    structural_severity: str,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    section = extract_markdown_section(content, "Artifact Write Strategy")
+    required = should_require_artifact_write_strategy(content, blocks)
+
+    if not required:
+        checks.append(
+            Check(
+                "artifact-write-strategy",
+                "pass",
+                "Artifact Write Strategy is not required for this small/simple file.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    atom_count = len(atomic_requirement_ledger_atom_ids(content))
+    requirement_evidence = [
+        f"chars={len(content)}",
+        f"tc_count={len(blocks)}",
+        f"atom_count={atom_count}",
+        "has_wp=yes" if re.search(r"\bWP-\d{2}\b|Internal Work Package Coverage", content) else "has_wp=no",
+    ]
+
+    if section is None:
+        findings.append(
+            Finding(
+                id="artifact-write-strategy-missing",
+                severity="warning",
+                category="test-case-format",
+                title="Large canonical test-case file has no Artifact Write Strategy",
+                details=(
+                    "Large or package-based writer outputs must record the preflight write strategy before "
+                    "content generation so the writer does not hit Windows command-line limits or switch to "
+                    "compact/ad-hoc generation."
+                ),
+                path=display_path,
+                evidence=requirement_evidence,
+                recommended_action=(
+                    "Add `## Artifact Write Strategy` with preflight result, file-based/chunked write method, "
+                    "WP chunk plan, helper artifact policy and validation plan."
+                ),
+            )
+        )
+        checks.append(Check("artifact-write-strategy", "warn", "Artifact Write Strategy is missing.", display_path))
+        return findings, checks
+
+    if not ARTIFACT_WRITE_STRATEGY_PREFLIGHT_RE.search(section) or not ARTIFACT_WRITE_STRATEGY_SAFE_METHOD_RE.search(section):
+        findings.append(
+            Finding(
+                id="artifact-write-strategy-unsafe-or-vague",
+                severity="warning",
+                category="test-case-format",
+                title="Artifact Write Strategy does not prove safe file-based writing",
+                details=(
+                    "The strategy must show a preflight decision and an explicitly safe file-based/chunked method "
+                    "such as `scripts/update_markdown_section.py --content-file` or `--stdin`."
+                ),
+                path=display_path,
+                evidence=[section.strip()[:500]],
+                recommended_action=(
+                    "State the preflight trigger, selected write method, chunk plan by `WP-*`, forbidden methods "
+                    "and validation checkpoints."
+                ),
+            )
+        )
+
+    unsafe_method_rows: list[str] = []
+    strategy_rows = markdown_table_rows_from_text(section)
+    if strategy_rows:
+        header = normalize_table_header(strategy_rows[0])
+        for row in strategy_rows[1:]:
+            row_map = {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+            item = row_map.get("item", "") or row_map.get("field", "") or row_map.get("name", "")
+            if "forbidden" in item.lower():
+                continue
+            if not ARTIFACT_WRITE_STRATEGY_METHOD_ITEM_RE.search(item):
+                continue
+            inspected = " | ".join(value for value in row_map.values() if value)
+            if SESSION_LOG_FORBIDDEN_INITIAL_WRITE_RE.search(inspected):
+                unsafe_method_rows.append(inspected[:220])
+    else:
+        unsafe_method_rows = [
+            line.strip()[:220]
+            for line in section.splitlines()
+            if ARTIFACT_WRITE_STRATEGY_METHOD_ITEM_RE.search(line)
+            and SESSION_LOG_FORBIDDEN_INITIAL_WRITE_RE.search(line)
+        ]
+
+    if unsafe_method_rows:
+        findings.append(
+            Finding(
+                id="artifact-write-strategy-forbidden-initial-method",
+                severity="warning",
+                category="test-case-format",
+                title="Artifact Write Strategy selects a forbidden one-shot write method",
+                details=(
+                    "Large/package-based canonical files must not start with one-shot PowerShell, here-string, "
+                    "inline giant command or command-line transport. The safe file/chunked method must be selected "
+                    "before the first write attempt."
+                ),
+                path=display_path,
+                evidence=unsafe_method_rows[:10],
+                recommended_action=(
+                    "Rewrite the strategy to use `scripts/update_markdown_section.py --content-file` / `--stdin` "
+                    "or another committed file-based helper before content generation."
+                ),
+            )
+        )
+
+    if ARTIFACT_WRITE_STRATEGY_TMP_GENERATOR_RE.search(section):
+        findings.append(
+            Finding(
+                id="artifact-write-strategy-ad-hoc-tmp-generator",
+                severity="warning",
+                category="test-case-format",
+                title="Artifact Write Strategy uses an ad-hoc tmp generator",
+                details=(
+                    "A temporary `tmp/generate_*.py` writer can turn test-case writing into template generation and "
+                    "hide quality risks. Large canonical files should use the project section updater or a committed, "
+                    "reviewable helper under `scripts/`."
+                ),
+                path=display_path,
+                evidence=[match.group(0) for match in ARTIFACT_WRITE_STRATEGY_TMP_GENERATOR_RE.finditer(section)][:10],
+                recommended_action=(
+                    "Use `scripts/update_markdown_section.py --content-file` / `--stdin`, or move the helper into "
+                    "`scripts/` with tests before relying on it."
+                ),
+            )
+        )
+
+    if not SESSION_LOG_ARTIFACT_WRITER_HELPER_RE.search(section):
+        findings.append(
+            Finding(
+                id="artifact-write-strategy-helper-missing",
+                severity="warning",
+                category="test-case-format",
+                title="Artifact Write Strategy does not use the canonical artifact writer helper",
+                details=(
+                    "Large/package-based canonical files must use `scripts/write_artifact_sections.py` as the "
+                    "default write path. Older single-section helpers are acceptable for small targeted edits, but "
+                    "not as the primary path for large generated artifacts."
+                ),
+                path=display_path,
+                evidence=[section.strip()[:500]],
+                recommended_action="Use `scripts/write_artifact_sections.py --manifest <manifest.json>`.",
+            )
+        )
+
+    has_findings = any(finding.id.startswith("artifact-write-strategy") for finding in findings)
+    checks.append(
+        Check(
+            "artifact-write-strategy",
+            "warn" if has_findings else "pass",
+            "Artifact Write Strategy has issues." if has_findings else "Artifact Write Strategy contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def ledger_source_table_residue_evidence(content: str) -> list[str]:
+    _, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
+    evidence: list[str] = []
+    for row in ledger_rows:
+        atom_id = row.get("atom_id", "").strip() or "<missing>"
+        inspected_text = " | ".join(
+            row.get(field, "")
+            for field in ("atomic_statement", "expected_behavior", "condition")
+            if row.get(field)
+        )
+        if inspected_text and has_source_table_residue(inspected_text):
+            evidence.append(f"{atom_id}:{inspected_text[:180]}")
+    return evidence
+
+
+def validate_source_table_normalization(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    section = extract_markdown_section(content, "Source Table Normalization")
+    residue_evidence = ledger_source_table_residue_evidence(content)
+
+    if section is None:
+        if residue_evidence:
+            findings.append(
+                Finding(
+                    id="source-table-normalization-missing-for-dirty-ledger",
+                    severity="warning",
+                    category="traceability",
+                    title="Source table normalization is missing while ledger contains table extraction residue",
+                    details=(
+                        "Ledger rows appear to include source table headers, neighboring fields, or extraction residue. "
+                        "A Source Table Normalization section is required before such rows can become ATOM-* coverage."
+                    ),
+                    path=display_path,
+                    evidence=residue_evidence[:20],
+                    recommended_action=(
+                        "Add Source Table Normalization, split dirty source rows into clean field/property/condition/"
+                        "expected_behavior rows, and route low-confidence rows to GAP-* instead of covered atoms."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "source-table-normalization",
+                    "warn",
+                    "Source Table Normalization is missing for dirty ledger rows.",
+                    display_path,
+                )
+            )
+        return findings, checks
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        findings.append(
+            Finding(
+                id="source-table-normalization-no-table",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization has no Markdown table",
+                details="The section exists but has no parseable Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Source Table Normalization table.",
+            )
+        )
+        checks.append(Check("source-table-normalization", "warn", "Source Table Normalization table is missing.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(rows[0])
+    required_columns = {
+        "source_row_id",
+        "package_id",
+        "field_or_block",
+        "property",
+        "condition",
+        "expected_behavior",
+        "requirement_code",
+        "source_ref",
+        "confidence",
+        "gap_id",
+    }
+    missing_columns = sorted(required_columns - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="source-table-normalization-missing-columns",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization misses required columns",
+                details="Normalization rows must expose source row, package, field/block, property, condition, expected behavior, requirement code, source ref, confidence and gap.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:14])}"],
+                recommended_action="Rewrite the table with the canonical columns from source-table-normalization-format.md.",
+            )
+        )
+
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+
+    low_conf_without_gap: list[str] = []
+    residue_rows: list[str] = []
+    combined_rows: list[str] = []
+    combined_property_class_rows: list[str] = []
+    dictionary_source_rows: list[str] = []
+    dictionary_misclassified_rows: list[str] = []
+    missing_property_ids: list[str] = []
+    duplicate_property_ids: list[str] = []
+    multiple_gsr_rows: list[str] = []
+    unmapped_property_rows: list[str] = []
+    unknown_atoms: list[str] = []
+    property_ids_seen: set[str] = set()
+    normalization_rows_by_source: dict[str, list[dict[str, str]]] = {}
+    ledger_atom_ids = atomic_requirement_ledger_atom_ids(content)
+    has_source_property_id_column = "source_property_id" in header
+    for index, row in enumerate(parsed_rows, start=2):
+        row_id = row.get("source_row_id", "").strip() or f"row {index}"
+        source_property_id = row.get("source_property_id", "").strip()
+        normalization_rows_by_source.setdefault(row_id, []).append(row)
+        if not has_source_property_id_column or source_property_id in {"", "-"}:
+            missing_property_ids.append(f"{row_id}:source_property_id={source_property_id or '-'}")
+        elif source_property_id in property_ids_seen:
+            duplicate_property_ids.append(f"{row_id}:source_property_id={source_property_id}")
+        else:
+            property_ids_seen.add(source_property_id)
+
+        confidence = row.get("confidence", "").strip().lower()
+        gap_id = row.get("gap_id", "").strip()
+        if confidence in {"low", "unclear"} and not re.search(r"\bGAP-\d+\b", gap_id):
+            low_conf_without_gap.append(f"{row_id}:confidence={confidence};gap_id={gap_id or '-'}")
+
+        requirement_codes = extract_requirement_codes_from_text(row.get("requirement_code", ""))
+        if len(requirement_codes) > 1:
+            property_ref = source_property_id or "-"
+            multiple_gsr_rows.append(f"{row_id}:{property_ref}:{'; '.join(requirement_codes[:12])}")
+
+        inspected_text = " | ".join(
+            row.get(field, "")
+            for field in ("field_or_block", "property", "condition", "expected_behavior")
+            if row.get(field)
+        )
+        if inspected_text and has_source_table_residue(inspected_text):
+            residue_rows.append(f"{row_id}:{inspected_text[:180]}")
+        if inspected_text and has_combined_behavior_smell(inspected_text):
+            combined_rows.append(f"{row_id}:{inspected_text[:180]}")
+        property_classes = source_normalization_property_classes(row)
+        if len(property_classes) > 1:
+            property_ref = source_property_id or "-"
+            combined_property_class_rows.append(
+                f"{row_id}:{property_ref}:classes={', '.join(property_classes)}:{inspected_text[:160]}"
+            )
+        property_type = row.get("property", "").strip().strip("`")
+        if (
+            "dictionary-source" in property_classes
+            or DICTIONARY_PROPERTY_TYPE_RE.search(property_type)
+            or (inspected_text and DICTIONARY_SOURCE_TEXT_RE.search(inspected_text))
+        ):
+            property_ref = source_property_id or "-"
+            dictionary_source_rows.append(f"{row_id}:{property_ref}:property={property_type or '-'}")
+        if (
+            inspected_text
+            and DICTIONARY_SOURCE_TEXT_RE.search(inspected_text)
+            and not DICTIONARY_PROPERTY_TYPE_RE.search(property_type)
+            and not real_gap_ids(gap_id)
+        ):
+            property_ref = source_property_id or "-"
+            dictionary_misclassified_rows.append(
+                f"{row_id}:{property_ref}:property={property_type or '-'}:{inspected_text[:160]}"
+            )
+
+        linked_atoms_value = row.get("linked_atoms", "")
+        if not extract_any_atom_ids_from_text(linked_atoms_value) and not extract_gap_ids_from_text(gap_id):
+            property_ref = source_property_id or "-"
+            unmapped_property_rows.append(f"{row_id}:{property_ref}:linked_atoms={linked_atoms_value or '-'};gap_id={gap_id or '-'}")
+        if linked_atoms_value and ledger_atom_ids:
+            for atom_id in extract_any_atom_ids_from_text(linked_atoms_value):
+                if atom_id not in ledger_atom_ids:
+                    unknown_atoms.append(f"{row_id}:{atom_id}")
+
+    inventory_rows = parsed_source_row_inventory_rows(content)
+    source_rows_with_many_codes: list[str] = []
+    source_row_code_mismatches: list[str] = []
+    for index, inventory_row in enumerate(inventory_rows, start=2):
+        source_row_id = inventory_row.get("source_row_id", "").strip() or f"row {index}"
+        in_scope = inventory_row.get("in_scope", "").strip().strip("`").lower()
+        if in_scope not in {"yes", "unclear"}:
+            continue
+        inventory_codes = extract_requirement_codes_from_text(inventory_row.get("requirement_codes", ""))
+        if len(inventory_codes) <= 1:
+            continue
+        source_rows_with_many_codes.append(f"{source_row_id}:{'; '.join(inventory_codes[:12])}")
+        normalized_rows = normalization_rows_by_source.get(source_row_id, [])
+        normalized_codes: set[str] = set()
+        normalized_property_ids: set[str] = set()
+        for normalized_row in normalized_rows:
+            row_codes = set(extract_requirement_codes_from_text(normalized_row.get("requirement_code", "")))
+            normalized_codes.update(row_codes)
+            if row_codes.intersection(inventory_codes):
+                property_id = normalized_row.get("source_property_id", "").strip()
+                if property_id and property_id != "-":
+                    normalized_property_ids.add(property_id)
+        missing_codes = [code for code in inventory_codes if code not in normalized_codes]
+        if missing_codes or len(normalized_property_ids) < len(inventory_codes):
+            source_row_code_mismatches.append(
+                (
+                    f"{source_row_id}:inventory_codes={len(inventory_codes)};"
+                    f"normalized_property_ids={len(normalized_property_ids)};"
+                    f"missing_codes={', '.join(missing_codes[:12]) or '-'}"
+                )
+            )
+
+    if source_rows_with_many_codes and extract_markdown_section(content, "Source Row Completeness Matrix") is None:
+        findings.append(
+            Finding(
+                id="source-row-completeness-matrix-missing",
+                severity="warning",
+                category="traceability",
+                title="Source rows with multiple requirement codes have no completeness matrix",
+                details=(
+                    "When one source row contains multiple GSR/REQ codes, writer must prove that each code was split "
+                    "into an explicit normalized property, ATOM-* or GAP-* before test design."
+                ),
+                path=display_path,
+                evidence=source_rows_with_many_codes[:20],
+                recommended_action=(
+                    "Add `## Source Row Completeness Matrix` with source_row_id, source_requirement_codes, "
+                    "normalized_property_ids, linked_atoms, gap_ids and coverage_decision."
+                ),
+            )
+        )
+
+    has_embedded_dictionary_inventory = extract_markdown_section(content, "Dictionary Inventory") is not None
+    sibling_dictionary_inventory = path.parent / DICTIONARY_INVENTORY_NAME
+    if (
+        dictionary_source_rows
+        and path.name != "source-normalization-diagnostic.md"
+        and not has_embedded_dictionary_inventory
+        and not sibling_dictionary_inventory.is_file()
+    ):
+        findings.append(
+            Finding(
+                id="dictionary-inventory-missing-for-source-normalization",
+                severity="warning",
+                category="test-design",
+                title="Dictionary-source normalization rows have no Dictionary Inventory",
+                details=(
+                    "When Source Table Normalization contains dictionary/reference-list properties, writer must "
+                    "extract the referenced support/source dictionary into dictionary-inventory.md before TDDT, "
+                    "plan and TC writing."
+                ),
+                path=display_path,
+                evidence=dictionary_source_rows[:20],
+                recommended_action=(
+                    "Create `dictionary-inventory.md` with DICT-* rows for the referenced dictionaries, or link a "
+                    "source-specific GAP-* if the dictionary cannot be extracted."
+                ),
+            )
+        )
+
+    if missing_property_ids:
+        findings.append(
+            Finding(
+                id="source-normalization-missing-property-id",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization rows have no source_property_id",
+                details=(
+                    "`source_property_id` is the stable identity of one extracted source property. Without it, "
+                    "reviewer cannot prove that a multi-rule source row was decomposed instead of compressed."
+                ),
+                path=display_path,
+                evidence=missing_property_ids[:20],
+                recommended_action=(
+                    "Add `source_property_id` values such as `SRC-003.P01`, `SRC-003.P02` and link each one to "
+                    "exactly one atomic rule, ATOM-* or GAP-*."
+                ),
+            )
+        )
+    if duplicate_property_ids:
+        findings.append(
+            Finding(
+                id="source-normalization-duplicate-property-id",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization reuses source_property_id values",
+                details="Each normalized source property must have a unique source_property_id.",
+                path=display_path,
+                evidence=duplicate_property_ids[:20],
+                recommended_action="Give each normalization row a unique source_property_id.",
+            )
+        )
+    if multiple_gsr_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-row-has-multiple-gsr",
+                severity="warning",
+                category="atomarity",
+                title="Source Table Normalization rows still combine multiple requirement codes",
+                details=(
+                    "A normalized property row should not carry several GSR/REQ codes when those codes can pass/fail "
+                    "independently. This usually creates one broad ATOM-* and false coverage."
+                ),
+                path=display_path,
+                evidence=multiple_gsr_rows[:20],
+                recommended_action=(
+                    "Split the row into one source_property_id per independent GSR/REQ assertion, or route "
+                    "unobservable/ambiguous assertions to GAP-*."
+                ),
+            )
+        )
+    if source_row_code_mismatches:
+        findings.append(
+            Finding(
+                id="source-row-gsr-count-mismatch",
+                severity="warning",
+                category="traceability",
+                title="Source row requirement codes are not preserved as distinct normalized properties",
+                details=(
+                    "Every in-scope source row requirement code must be represented by a distinct normalized property "
+                    "when the codes describe independent assertions."
+                ),
+                path=display_path,
+                evidence=source_row_code_mismatches[:20],
+                recommended_action=(
+                    "Compare Source Row Inventory with Source Table Normalization and add missing `source_property_id` "
+                    "rows before building ledger and TC."
+                ),
+            )
+        )
+    if unmapped_property_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-unmapped-property",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization rows are not mapped to ATOM-* or GAP-*",
+                details="Each normalized source property must become explicit coverage or an explicit gap.",
+                path=display_path,
+                evidence=unmapped_property_rows[:20],
+                recommended_action="Fill linked_atoms or gap_id for every normalized property row.",
+            )
+        )
+
+    if low_conf_without_gap:
+        findings.append(
+            Finding(
+                id="source-table-normalization-low-confidence-without-gap",
+                severity="warning",
+                category="traceability",
+                title="Low-confidence source normalization rows are not linked to GAP-*",
+                details="Rows with confidence = low or unclear cannot become covered atoms without an explicit GAP-*.",
+                path=display_path,
+                evidence=low_conf_without_gap[:20],
+                recommended_action="Add GAP-* links or raise confidence only after the row is cleanly confirmed from source.",
+            )
+        )
+    if residue_rows:
+        findings.append(
+            Finding(
+                id="source-table-normalization-residue-smell",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization still contains table extraction residue",
+                details="Normalization rows must remove table headers, neighboring fields and page/table artifacts before ledger creation.",
+                path=display_path,
+                evidence=residue_rows[:20],
+                recommended_action="Clean the affected normalization rows or mark them low-confidence with GAP-*.",
+            )
+        )
+    if combined_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-combined-property-smell",
+                severity="warning",
+                category="atomarity",
+                title="Source Table Normalization rows combine multiple properties",
+                details=(
+                    "One normalization row should contain one property, condition or expected behavior. "
+                    "Combined phrases such as requiredness+format or condition=true/false usually produce compressed atoms."
+                ),
+                path=display_path,
+                evidence=combined_rows[:20],
+                recommended_action=(
+                    "Split affected normalization rows into separate rows before creating ledger, design plan and TC. "
+                    "If the source is ambiguous, create GAP-* instead of covered atoms."
+                ),
+            )
+        )
+    if combined_property_class_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-combined-property-class-smell",
+                severity="warning",
+                category="atomarity",
+                title="Source Table Normalization rows combine different property classes",
+                details=(
+                    "One normalized source property must represent one semantic property class. Rows that combine "
+                    "dictionary/reference source, min boundary, max boundary, format, visibility, requiredness, "
+                    "editability or integration behavior hide independent test-design decisions even when they use "
+                    "one requirement code or are routed to GAP-*."
+                ),
+                path=display_path,
+                evidence=combined_property_class_rows[:20],
+                recommended_action=(
+                    "Split affected rows into separate `source_property_id` values, for example "
+                    "`dictionary-source`, `min-boundary` and `max-boundary`, then map each row to ATOM-* or GAP-*."
+                ),
+            )
+        )
+    if dictionary_misclassified_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-dictionary-misclassified-smell",
+                severity="warning",
+                category="test-design",
+                title="Reference-list source rows are classified as non-dictionary properties",
+                details=(
+                    "When a normalized row says a field is reference-list/dictionary-backed, test design must either "
+                    "use the confirmed support dictionary, assert the closed active value set, or create a source-specific GAP. "
+                    "Classifying it as structural context hides list coverage."
+                ),
+                path=display_path,
+                evidence=dictionary_misclassified_rows[:20],
+                recommended_action=(
+                    "Reclassify affected rows as dictionary/reference-list properties and add closed-set obligations, "
+                    "or link a GAP explaining why the support dictionary cannot be used."
+                ),
+            )
+        )
+    if unknown_atoms:
+        findings.append(
+            Finding(
+                id="source-table-normalization-unknown-atom-id",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization references unknown atom ids",
+                details="linked_atoms values should point to ATOM-* rows declared in Atomic Requirements Ledger.",
+                path=display_path,
+                evidence=unknown_atoms[:20],
+                recommended_action="Update linked_atoms to existing ATOM-* ids or create the missing ledger rows.",
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "source-table-normalization",
+            "warn" if has_warnings else "pass",
+            "Source Table Normalization has issues." if has_warnings else "Source Table Normalization contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_source_normalization_diagnostic(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    content = path.read_text(encoding="utf-8")
+
+    missing_sections = sorted(
+        section_title
+        for section_title in SOURCE_NORMALIZATION_DIAGNOSTIC_REQUIRED_SECTIONS
+        if extract_markdown_section(content, section_title) is None
+    )
+    if missing_sections:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-missing-sections",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic misses required sections",
+                details=(
+                    "A diagnostic normalization artifact must be self-contained enough to prove source-row split "
+                    "quality before writer creates ledger and TC-* coverage."
+                ),
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_sections)}"],
+                recommended_action=(
+                    "Add `Source Row Completeness Matrix`, `Source Table Normalization` and `Self-check` sections."
+                ),
+            )
+        )
+
+    normalization_findings, normalization_checks = validate_source_table_normalization(content, path, root)
+    findings.extend(normalization_findings)
+    checks.extend(normalization_checks)
+
+    matrix_section = extract_markdown_section(content, "Source Row Completeness Matrix")
+    matrix_header, matrix_rows = parsed_section_table_rows(content, "Source Row Completeness Matrix")
+    matrix_property_ids: set[str] = set()
+    matrix_source_ids: set[str] = set()
+    matrix_requirement_codes_by_source: dict[str, set[str]] = defaultdict(set)
+    placeholder_gap_rows: list[str] = []
+    invalid_diagnostic_atom_status_rows: list[str] = []
+    linked_atom_status_mismatch_rows: list[str] = []
+    if matrix_section is not None and not matrix_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-completeness-matrix-no-table",
+                severity="warning",
+                category="traceability",
+                title="Source Row Completeness Matrix has no parseable table",
+                details="The diagnostic must expose which source rows were split into which normalized properties.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Rewrite the matrix as a Markdown table with canonical columns.",
+            )
+        )
+    if matrix_rows:
+        missing_columns = sorted(
+            SOURCE_NORMALIZATION_DIAGNOSTIC_COMPLETENESS_MATRIX_REQUIRED_COLUMNS - set(matrix_header)
+        )
+        if missing_columns:
+            findings.append(
+                Finding(
+                    id="source-normalization-diagnostic-completeness-matrix-missing-columns",
+                    severity="warning",
+                    category="traceability",
+                    title="Source Row Completeness Matrix misses required columns",
+                    details=(
+                        "The completeness matrix must prove the relationship between source rows, source "
+                        "requirement codes, normalized property ids, atoms and gaps."
+                    ),
+                    path=display_path,
+                    evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(matrix_header[:12])}"],
+                    recommended_action="Use the canonical Source Row Completeness Matrix columns.",
+                )
+        )
+        for row in matrix_rows:
+            source_row_id = normalize_markdown_field_value(row.get("source_row_id", "")) or "row"
+            matrix_source_ids.add(source_row_id)
+            matrix_requirement_codes_by_source[source_row_id].update(
+                extract_requirement_codes_from_text(row.get("source_requirement_codes", ""))
+            )
+            matrix_property_ids.update(SOURCE_PROPERTY_ID_RE.findall(row.get("normalized_property_ids", "")))
+            gap_ids = row.get("gap_ids", "")
+            if DIAGNOSTIC_PLACEHOLDER_GAP_RE.search(gap_ids):
+                placeholder_gap_rows.append(f"{source_row_id}:gap_ids={gap_ids}")
+            diagnostic_atom_status = row.get("diagnostic_atom_status", "").strip().strip("`").lower()
+            if diagnostic_atom_status not in {"not-created", "created", "not-applicable", "n/a"}:
+                invalid_diagnostic_atom_status_rows.append(
+                    f"{source_row_id}:diagnostic_atom_status={diagnostic_atom_status or '-'}"
+                )
+            linked_atoms = row.get("linked_atoms", "").strip()
+            if (
+                linked_atoms in {"", "-"}
+                and diagnostic_atom_status not in {"not-created", "not-applicable", "n/a"}
+            ):
+                linked_atom_status_mismatch_rows.append(
+                    f"{source_row_id}:linked_atoms={linked_atoms or '-'};diagnostic_atom_status={diagnostic_atom_status or '-'}"
+                )
+
+    _, normalization_rows = parsed_section_table_rows(content, "Source Table Normalization")
+    normalization_source_ids: set[str] = set()
+    normalization_requirement_codes_by_source: dict[str, set[str]] = defaultdict(set)
+    normalization_property_ids = {
+        row.get("source_property_id", "").strip()
+        for row in normalization_rows
+        if row.get("source_property_id", "").strip() not in {"", "-"}
+    }
+    normalization_header, _ = parsed_section_table_rows(content, "Source Table Normalization")
+    missing_normalization_columns = sorted(
+        SOURCE_NORMALIZATION_DIAGNOSTIC_NORMALIZATION_REQUIRED_COLUMNS - set(normalization_header)
+    )
+    if normalization_rows and missing_normalization_columns:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-missing-source-fragment-columns",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic misses source fragment columns",
+                details=(
+                    "A diagnostic row must expose the exact source column and source text fragment it was normalized from. "
+                    "Otherwise reviewer cannot tell whether behavior was copied from source or reconstructed from memory."
+                ),
+                path=display_path,
+                evidence=[
+                    f"missing={', '.join(missing_normalization_columns)}",
+                    f"columns={', '.join(normalization_header[:16])}",
+                ],
+                recommended_action="Add `source_column` and `source_text_fragment` columns to Source Table Normalization.",
+            )
+        )
+
+    missing_source_fragment_rows: list[str] = []
+    placeholder_normalization_gap_rows: list[str] = []
+    gsr_only_expected_rows: list[str] = []
+    integration_without_observability_rows: list[str] = []
+    for row in normalization_rows:
+        source_row_id = normalize_markdown_field_value(row.get("source_row_id", "")) or "row"
+        normalization_source_ids.add(source_row_id)
+        normalization_requirement_codes_by_source[source_row_id].update(
+            extract_requirement_codes_from_text(row.get("requirement_code", ""))
+        )
+        property_ref = row.get("source_property_id", "").strip() or "-"
+        source_column = row.get("source_column", "").strip()
+        source_fragment = row.get("source_text_fragment", "").strip()
+        if not missing_normalization_columns and (not source_column or not source_fragment or source_fragment == "-"):
+            missing_source_fragment_rows.append(
+                f"{source_row_id}:{property_ref}:source_column={source_column or '-'};source_text_fragment={source_fragment or '-'}"
+            )
+
+        gap_id = row.get("gap_id", "").strip()
+        if DIAGNOSTIC_PLACEHOLDER_GAP_RE.search(gap_id):
+            placeholder_normalization_gap_rows.append(f"{source_row_id}:{property_ref}:gap_id={gap_id}")
+
+        expected_behavior = row.get("expected_behavior", "").strip()
+        if expected_behavior and GSR_ONLY_EXPECTED_BEHAVIOR_RE.search(expected_behavior):
+            gsr_only_expected_rows.append(f"{source_row_id}:{property_ref}:{expected_behavior[:160]}")
+
+        integration_text = " | ".join(
+            row.get(field, "")
+            for field in ("property", "condition", "expected_behavior")
+            if row.get(field)
+        )
+        if (
+            integration_text
+            and INTEGRATION_OR_INTERNAL_PROPERTY_RE.search(integration_text)
+            and not real_gap_ids(gap_id)
+            and not OBSERVABLE_BEHAVIOR_RE.search(expected_behavior)
+        ):
+            integration_without_observability_rows.append(
+                f"{source_row_id}:{property_ref}:gap_id={gap_id or '-'}:{integration_text[:160]}"
+            )
+
+    unknown_matrix_property_ids = sorted(matrix_property_ids - normalization_property_ids)
+    missing_from_matrix = sorted(normalization_property_ids - matrix_property_ids) if matrix_rows else []
+    inventory_path = path.with_name("source-row-inventory.md")
+    missing_inventory_rows: list[str] = []
+    missing_inventory_codes: list[str] = []
+    if inventory_path.exists():
+        try:
+            inventory_content = inventory_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            inventory_content = ""
+        for index, inventory_row in enumerate(parsed_source_row_inventory_rows(inventory_content), start=2):
+            source_row_id = normalize_markdown_field_value(inventory_row.get("source_row_id", "")) or f"row {index}"
+            in_scope = normalize_markdown_field_value(inventory_row.get("in_scope", "")).lower()
+            if in_scope not in {"yes", "unclear"}:
+                continue
+            missing_parts: list[str] = []
+            if source_row_id not in matrix_source_ids:
+                missing_parts.append("matrix")
+            if source_row_id not in normalization_source_ids:
+                missing_parts.append("normalization")
+            if missing_parts:
+                missing_inventory_rows.append(f"{source_row_id}:missing={','.join(missing_parts)}")
+
+            inventory_codes = set(extract_requirement_codes_from_text(inventory_row.get("requirement_codes", "")))
+            if inventory_codes:
+                missing_matrix_codes = sorted(inventory_codes - matrix_requirement_codes_by_source[source_row_id])
+                missing_normalization_codes = sorted(
+                    inventory_codes - normalization_requirement_codes_by_source[source_row_id]
+                )
+                if missing_matrix_codes or missing_normalization_codes:
+                    missing_inventory_codes.append(
+                        (
+                            f"{source_row_id}:"
+                            f"missing_matrix={'; '.join(missing_matrix_codes) or '-'};"
+                            f"missing_normalization={'; '.join(missing_normalization_codes) or '-'}"
+                        )
+                    )
+    if placeholder_gap_rows or placeholder_normalization_gap_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-placeholder-gap-used",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic uses placeholder GAP-900 as a coverage gap",
+                details=(
+                    "`GAP-900` must not be used as a real gap. Diagnostic runs should record atom absence with "
+                    "`diagnostic_atom_status = not-created`; functional uncertainty must use a real GAP-* from the scope."
+                ),
+                path=display_path,
+                evidence=[*placeholder_gap_rows[:10], *placeholder_normalization_gap_rows[:10]],
+                recommended_action=(
+                    "Remove `GAP-900` from gap columns. Use `diagnostic_atom_status` for the no-ATOM diagnostic state "
+                    "and keep only functional GAP-* values in `gap_ids` / `gap_id`."
+                ),
+            )
+        )
+    if invalid_diagnostic_atom_status_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-invalid-atom-status",
+                severity="warning",
+                category="traceability",
+                title="Source Row Completeness Matrix has invalid diagnostic atom status",
+                details="Diagnostic runs must state whether atoms were intentionally not created.",
+                path=display_path,
+                evidence=invalid_diagnostic_atom_status_rows[:20],
+                recommended_action="Use `diagnostic_atom_status` values `not-created`, `created`, or `not-applicable`.",
+            )
+        )
+    if linked_atom_status_mismatch_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-linked-atom-status-mismatch",
+                severity="warning",
+                category="traceability",
+                title="Source Row Completeness Matrix does not explain missing linked atoms",
+                details="When linked_atoms is empty in a diagnostic-only run, the matrix must explicitly say atoms were not created.",
+                path=display_path,
+                evidence=linked_atom_status_mismatch_rows[:20],
+                recommended_action="Set `diagnostic_atom_status = not-created` for rows where linked_atoms is `-`.",
+            )
+        )
+    if missing_source_fragment_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-missing-source-fragment",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic rows miss source text fragments",
+                details="Each diagnostic normalization row must point to the source column and exact text fragment it normalized.",
+                path=display_path,
+                evidence=missing_source_fragment_rows[:20],
+                recommended_action="Fill `source_column` and `source_text_fragment` for every Source Table Normalization row.",
+            )
+        )
+    if gsr_only_expected_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-gsr-only-expected-behavior",
+                severity="warning",
+                category="expected-result",
+                title="Source normalization diagnostic uses GSR reference instead of expected behavior",
+                details=(
+                    "`expected_behavior` must restate the observable source behavior itself. "
+                    "A phrase like `follows GSR 10` preserves a code but loses the test oracle."
+                ),
+                path=display_path,
+                evidence=gsr_only_expected_rows[:20],
+                recommended_action="Replace GSR-only wording with the concrete behavior from the source row.",
+            )
+        )
+    if integration_without_observability_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-integration-without-observability-decision",
+                severity="warning",
+                category="expected-result",
+                title="Source normalization diagnostic treats integration/internal behavior as directly testable",
+                details=(
+                    "Integration, API, model, DB, async and queue effects need either an observable UI/artifact oracle "
+                    "or a real GAP-* decision. A diagnostic placeholder is not enough."
+                ),
+                path=display_path,
+                evidence=integration_without_observability_rows[:20],
+                recommended_action=(
+                    "Split observable behavior from internal effects. Link internal effects to a real GAP-* unless the "
+                    "source provides a visible artifact, log, API, DB or queue evidence rule."
+                ),
+            )
+        )
+    if unknown_matrix_property_ids:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-matrix-unknown-property-id",
+                severity="warning",
+                category="traceability",
+                title="Source Row Completeness Matrix references unknown source_property_id values",
+                details="Every normalized_property_ids value must exist in Source Table Normalization.",
+                path=display_path,
+                evidence=unknown_matrix_property_ids[:20],
+                recommended_action="Fix normalized_property_ids or add the missing Source Table Normalization rows.",
+            )
+        )
+    if missing_from_matrix:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-property-missing-from-matrix",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization rows are missing from completeness matrix",
+                details="Diagnostic normalization must prove every normalized property in the completeness matrix.",
+                path=display_path,
+                evidence=missing_from_matrix[:20],
+                recommended_action="Add every Source Table Normalization source_property_id to the matrix.",
+            )
+        )
+    if missing_inventory_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-missing-inventory-row",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic does not cover all in-scope inventory rows",
+                details=(
+                    "When a source-normalization diagnostic sits next to source-row-inventory.md, it is a handoff "
+                    "input for writer and must normalize every inventory row with in_scope = yes/unclear, not only "
+                    "high-risk or gap rows."
+                ),
+                path=display_path,
+                evidence=missing_inventory_rows[:30],
+                recommended_action=(
+                    "Add every in-scope/unclear source_row_id from source-row-inventory.md to both Source Row "
+                    "Completeness Matrix and Source Table Normalization, or mark it out of scope in the inventory."
+                ),
+            )
+        )
+    if missing_inventory_codes:
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-inventory-code-mismatch",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic loses requirement codes from inventory",
+                details=(
+                    "Every GSR/REQ code on an in-scope/unclear source-row-inventory.md row must remain attached to "
+                    "the same source_row_id in the completeness matrix and at least one normalized property row."
+                ),
+                path=display_path,
+                evidence=missing_inventory_codes[:30],
+                recommended_action=(
+                    "Copy the missing requirement codes into Source Row Completeness Matrix and split them into "
+                    "source_property_id rows, or link the non-testable code to a real GAP-* without dropping it."
+                ),
+            )
+        )
+
+    self_check_section = extract_markdown_section(content, "Self-check") or ""
+    if re.search(r"\b(?:fail|failed|blocked|needs[- ]rewrite)\b|не\s+пройден|провален", self_check_section, flags=re.IGNORECASE):
+        findings.append(
+            Finding(
+                id="source-normalization-diagnostic-self-check-failed",
+                severity="warning",
+                category="traceability",
+                title="Source normalization diagnostic self-check is failed",
+                details="A failed diagnostic self-check must block writer progression to ledger and TC generation.",
+                path=display_path,
+                evidence=[self_check_section.strip()[:500]],
+                recommended_action="Fix the diagnostic normalization or keep the workflow blocked before writer-pass.",
+            )
+        )
+
+    has_warnings = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "source-normalization-diagnostic",
+            "warn" if has_warnings else "pass",
+            "Source normalization diagnostic has issues." if has_warnings else "Source normalization diagnostic passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def source_row_inventory_required(content: str) -> bool:
+    return (
+        "Source Table Normalization" in content
+        or "Package Test Design Plan" in content
+        or "Internal Work Package Coverage" in content
+        or re.search(r"\bpackage_id\b", content, flags=re.IGNORECASE) is not None
+    )
+
+
+def parsed_source_row_inventory_rows(content: str) -> list[dict[str, str]]:
+    normalized_content = content
+    if re.search(r"^#\s+Source Row Inventory\s*$", normalized_content, flags=re.MULTILINE):
+        normalized_content = re.sub(
+            r"^#\s+Source Row Inventory\s*$",
+            "## Source Row Inventory",
+            normalized_content,
+            count=1,
+            flags=re.MULTILINE,
+        )
+    elif extract_markdown_section(normalized_content, "Source Row Inventory") is None:
+        normalized_content = "## Source Row Inventory\n\n" + normalized_content
+
+    section = extract_markdown_section(normalized_content, "Source Row Inventory")
+    if section is None:
+        return []
+    table_rows = markdown_table_rows_from_text(section)
+    if not table_rows:
+        return []
+
+    header = normalize_table_header(table_rows[0])
+    parsed_rows: list[dict[str, str]] = []
+    for raw_row in table_rows[1:]:
+        row: dict[str, str] = {}
+        for index, column_name in enumerate(header):
+            row[column_name] = raw_row[index].strip().strip("`") if index < len(raw_row) else ""
+        parsed_rows.append(row)
+    return parsed_rows
+
+
+def source_row_inventory_required_source_ids(content: str) -> set[str]:
+    source_ids: set[str] = set()
+    for index, row in enumerate(parsed_source_row_inventory_rows(content), start=2):
+        source_row_id = row.get("source_row_id", "").strip() or f"row {index}"
+        in_scope = row.get("in_scope", "").strip().strip("`").lower()
+        if in_scope in {"yes", "unclear"}:
+            source_ids.add(source_row_id)
+    return source_ids
+
+
+def source_row_inventory_all_source_ids(content: str) -> set[str]:
+    source_ids: set[str] = set()
+    for index, row in enumerate(parsed_source_row_inventory_rows(content), start=2):
+        source_row_id = row.get("source_row_id", "").strip() or f"row {index}"
+        source_ids.add(source_row_id)
+    return source_ids
+
+
+def validate_source_row_inventory(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    required = source_row_inventory_required(content)
+    section = extract_markdown_section(content, "Source Row Inventory")
+
+    if section is None:
+        if required:
+            findings.append(
+                Finding(
+                    id="source-row-inventory-missing",
+                    severity="warning",
+                    category="traceability",
+                    title="Package-based test-case file has no Source Row Inventory",
+                    details=(
+                        "Writer output must inventory every source row in the confirmed scope before normalization, "
+                        "so a source row cannot silently disappear from the ledger and TC coverage."
+                    ),
+                    path=display_path,
+                    evidence=[],
+                    recommended_action=(
+                        "Add `## Source Row Inventory` with source_row_id, package_id, field_or_action, "
+                        "source_ref, requirement_codes, in_scope and mapped_atom_or_gap."
+                    ),
+                )
+            )
+            checks.append(Check("source-row-inventory", "warn", "Source Row Inventory is missing.", display_path))
+        else:
+            checks.append(Check("source-row-inventory", "pass", "Source Row Inventory is not required for this file.", display_path))
+        return findings, checks
+
+    table_rows = markdown_table_rows_from_text(section)
+    if not table_rows:
+        findings.append(
+            Finding(
+                id="source-row-inventory-no-table",
+                severity="warning",
+                category="traceability",
+                title="Source Row Inventory has no Markdown table",
+                details="The inventory section exists but has no parseable table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Source Row Inventory table.",
+            )
+        )
+        checks.append(Check("source-row-inventory", "warn", "Source Row Inventory table is missing.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(table_rows[0])
+    missing_columns = sorted(SOURCE_ROW_INVENTORY_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="source-row-inventory-missing-columns",
+                severity="warning",
+                category="traceability",
+                title="Source Row Inventory misses required columns",
+                details="The inventory must expose source row identity, package, scope decision and ATOM/GAP mapping.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:12])}"],
+                recommended_action="Rewrite the table with the canonical columns from source-row-inventory-format.md.",
+            )
+        )
+
+    parsed_rows = parsed_source_row_inventory_rows(content)
+
+    ledger_atom_ids = atomic_requirement_ledger_atom_ids(content)
+    inventory_source_ids: set[str] = set()
+    missing_mapping: list[str] = []
+    unknown_atom_refs: list[str] = []
+    invalid_in_scope: list[str] = []
+    for index, row in enumerate(parsed_rows, start=2):
+        source_row_id = row.get("source_row_id", "").strip() or f"row {index}"
+        inventory_source_ids.add(source_row_id)
+        in_scope = row.get("in_scope", "").strip().strip("`").lower()
+        mapped = row.get("mapped_atom_or_gap", "")
+        if in_scope and in_scope not in {"yes", "no", "unclear", "out-of-scope"}:
+            invalid_in_scope.append(f"{source_row_id}:in_scope={in_scope}")
+        if in_scope == "yes" and not (extract_any_atom_ids_from_text(mapped) or extract_gap_ids_from_text(mapped)):
+            missing_mapping.append(f"{source_row_id}:mapped_atom_or_gap={mapped or '-'}")
+        for atom_id in extract_any_atom_ids_from_text(mapped):
+            if ledger_atom_ids and atom_id not in ledger_atom_ids:
+                unknown_atom_refs.append(f"{source_row_id}:{atom_id}")
+
+    normalization_section = extract_markdown_section(content, "Source Table Normalization")
+    normalization_missing_inventory: list[str] = []
+    if normalization_section:
+        normalization_rows = markdown_table_rows_from_text(normalization_section)
+        if normalization_rows:
+            normalization_header = normalize_table_header(normalization_rows[0])
+            if "source_row_id" in normalization_header:
+                source_row_index = normalization_header.index("source_row_id")
+                for row in normalization_rows[1:]:
+                    source_row_id = row[source_row_index].strip().strip("`") if source_row_index < len(row) else ""
+                    if source_row_id and source_row_id not in inventory_source_ids:
+                        normalization_missing_inventory.append(source_row_id)
+
+    if invalid_in_scope:
+        findings.append(
+            Finding(
+                id="source-row-inventory-invalid-in-scope",
+                severity="warning",
+                category="traceability",
+                title="Source Row Inventory uses noncanonical in_scope values",
+                details="in_scope must be yes, no, unclear or out-of-scope.",
+                path=display_path,
+                evidence=invalid_in_scope[:20],
+                recommended_action="Normalize in_scope values and keep ambiguous rows linked to GAP-*.",
+            )
+        )
+    if missing_mapping:
+        findings.append(
+            Finding(
+                id="source-row-inventory-in-scope-row-without-atom-or-gap",
+                severity="warning",
+                category="traceability",
+                title="In-scope source rows are not mapped to ATOM-* or GAP-*",
+                details="Every in-scope source row must become either explicit coverage or an explicit gap.",
+                path=display_path,
+                evidence=missing_mapping[:20],
+                recommended_action="Map each in-scope source row to ATOM-* or GAP-* before handing off to reviewer.",
+            )
+        )
+    if unknown_atom_refs:
+        findings.append(
+            Finding(
+                id="source-row-inventory-unknown-atom-id",
+                severity="warning",
+                category="traceability",
+                title="Source Row Inventory references unknown atom ids",
+                details="mapped_atom_or_gap values should point to ATOM-* rows declared in Atomic Requirements Ledger.",
+                path=display_path,
+                evidence=unknown_atom_refs[:20],
+                recommended_action="Update mapped_atom_or_gap to existing ATOM-* ids or create the missing ledger rows.",
+            )
+        )
+    if normalization_missing_inventory:
+        findings.append(
+            Finding(
+                id="source-row-inventory-misses-normalized-source-row",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization contains rows absent from Source Row Inventory",
+                details="The inventory should be the source completeness checklist; normalization rows must not appear outside it.",
+                path=display_path,
+                evidence=sorted(set(normalization_missing_inventory))[:20],
+                recommended_action="Add missing source rows to Source Row Inventory or correct the normalization source_row_id.",
+            )
+        )
+
+    has_warnings = any(finding.id.startswith("source-row-inventory") for finding in findings)
+    checks.append(
+        Check(
+            "source-row-inventory",
+            "warn" if has_warnings else "pass",
+            "Source Row Inventory has issues." if has_warnings else "Source Row Inventory contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_atomic_ledger_structure(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    structural_severity: str,
+    blocks: list[tuple[str, str]],
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    header, rows = parsed_atomic_requirement_ledger_rows(content)
+    if not header and not rows:
+        return findings, checks
+
+    if "atom_id" not in header:
+        findings.append(
+            Finding(
+                id="test-case-ledger-missing-atom-id-column",
+                severity=structural_severity,
+                category="traceability",
+                title="Atomic Requirements Ledger has no atom_id column",
+                details="Canonical test-case files need stable ATOM-* ids for review findings and coverage closure.",
+                path=display_path,
+                evidence=[f"columns={', '.join(header[:12])}"],
+                recommended_action="Add atom_id to the Atomic Requirements Ledger.",
+            )
+        )
+        checks.append(Check("test-case-atomic-ledger", "warn" if structural_severity == "warning" else "pass", "Ledger atom_id column missing.", display_path))
+        return findings, checks
+
+    atom_ids: list[str] = []
+    invalid_atom_ids: list[str] = []
+    invalid_statuses: list[str] = []
+    covered_without_tc: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    missing_package_rows: list[str] = []
+
+    tc_text_by_id = {test_case_id: block for test_case_id, block in blocks}
+    atoms_referenced_by_tc: set[str] = set()
+    for _, block in blocks:
+        atoms_referenced_by_tc.update(extract_any_atom_ids_from_text(block))
+
+    has_package_contract = "package_id" in header or "Internal Work Package Coverage" in content
+    has_covered_by_tc = "covered_by_tc" in header
+    all_test_case_ids = known_test_case_ids or set(tc_text_by_id)
+
+    for row_number, row in enumerate(rows, start=2):
+        atom_id = row.get("atom_id", "").strip()
+        if atom_id:
+            atom_ids.append(atom_id)
+        row_label = f"row {row_number}:{atom_id or '<missing>'}"
+        if not atom_id or not is_valid_atom_id_value(atom_id):
+            invalid_atom_ids.append(row_label)
+
+        status = row.get("coverage_status", "").strip().lower()
+        if status and status not in ALLOWED_COVERAGE_STATUSES:
+            invalid_statuses.append(f"{row_label}:coverage_status={status}")
+
+        if has_package_contract and not meaningful_matrix_value(row.get("package_id", "")):
+            missing_package_rows.append(row_label)
+
+        covered_refs: list[str] = []
+        if has_covered_by_tc:
+            covered_refs = extract_test_case_ids_from_text(row.get("covered_by_tc", ""))
+            for test_case_id in covered_refs:
+                if all_test_case_ids and test_case_id not in all_test_case_ids:
+                    unknown_test_case_ids.append(f"{row_label}:{test_case_id}")
+        if status == "covered":
+            if has_covered_by_tc:
+                if not covered_refs:
+                    covered_without_tc.append(f"{row_label}:covered_by_tc=-")
+            elif atom_id and atom_id not in atoms_referenced_by_tc:
+                covered_without_tc.append(f"{row_label}:not referenced by any TC-* block")
+
+    duplicate_atom_ids = [
+        atom_id
+        for atom_id, count in Counter(atom_ids).items()
+        if count > 1
+    ]
+    if invalid_atom_ids:
+        findings.append(
+            Finding(
+                id="test-case-ledger-invalid-atom-id",
+                severity=structural_severity,
+                category="traceability",
+                title="Atomic Requirements Ledger contains invalid atom ids",
+                details="Ledger atom ids must use stable ATOM-* ids or declared scoped *-ATOM-* ids.",
+                path=display_path,
+                evidence=invalid_atom_ids[:20],
+                recommended_action="Rename invalid atom ids to stable ATOM-* values and update all TC/matrix references.",
+            )
+        )
+    if duplicate_atom_ids:
+        findings.append(
+            Finding(
+                id="test-case-ledger-duplicate-atom-id",
+                severity=structural_severity,
+                category="traceability",
+                title="Atomic Requirements Ledger contains duplicate atom ids",
+                details="Each atom_id must identify one atomic statement.",
+                path=display_path,
+                evidence=duplicate_atom_ids[:20],
+                recommended_action="Split or rename duplicate atom ids so reviewer findings can target one row.",
+            )
+        )
+    if invalid_statuses:
+        findings.append(
+            Finding(
+                id="test-case-ledger-invalid-coverage-status",
+                severity=structural_severity,
+                category="traceability",
+                title="Atomic Requirements Ledger contains invalid coverage statuses",
+                details="coverage_status must be covered, gap, or unclear.",
+                path=display_path,
+                evidence=invalid_statuses[:20],
+                recommended_action="Normalize coverage_status values to covered, gap, or unclear.",
+            )
+        )
+    if covered_without_tc:
+        findings.append(
+            Finding(
+                id="test-case-ledger-covered-without-tc",
+                severity=structural_severity,
+                category="traceability",
+                title="Atomic Requirements Ledger marks atoms covered without TC references",
+                details="An atom with coverage_status = covered must be linked to at least one executable TC-* block.",
+                path=display_path,
+                evidence=covered_without_tc[:20],
+                recommended_action="Link each covered atom to a TC-* or change coverage_status to gap/unclear.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="test-case-ledger-unknown-test-case-id",
+                severity=structural_severity,
+                category="traceability",
+                title="Atomic Requirements Ledger references unknown test-case ids",
+                details="covered_by_tc values must point to canonical ## TC-* sections.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced test cases or update covered_by_tc to existing TC-* ids.",
+            )
+        )
+    if missing_package_rows:
+        findings.append(
+            Finding(
+                id="test-case-ledger-missing-package-id",
+                severity=structural_severity,
+                category="test-design",
+                title="Package-based ledger rows are missing package_id",
+                details="When internal work packages are used, every atomic ledger row must carry package_id.",
+                path=display_path,
+                evidence=missing_package_rows[:20],
+                recommended_action="Add package_id to every ledger row or remove the package-based coverage claim.",
+            )
+        )
+
+    has_blocking = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "test-case-atomic-ledger",
+            "warn" if has_blocking else "pass",
+            "Atomic ledger structural contract has issues." if has_blocking else "Atomic ledger structural contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_test_case_package_ids(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    structural_severity: str,
+    blocks: list[tuple[str, str]],
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    header, _ = parsed_atomic_requirement_ledger_rows(content)
+    package_contract_active = "Internal Work Package Coverage" in content or "package_id" in header
+    if not package_contract_active or not blocks:
+        return findings, checks
+
+    package_id_severity = "warning" if structural_severity == "info" else structural_severity
+    missing_package_id = [
+        test_case_id
+        for test_case_id, block in blocks
+        if not re.search(r"(?im)^\*\*package_id:\*\*|package_id\s*=", block)
+    ]
+    if missing_package_id:
+        findings.append(
+            Finding(
+                id="test-case-missing-package-id",
+                severity=package_id_severity,
+                category="test-design",
+                title="Package-based test-case file has TC blocks without package_id",
+                details="When internal work packages are used, every TC-* must identify its package so reviewer can detect cross-package leakage.",
+                path=display_path,
+                evidence=missing_package_id[:20],
+                recommended_action="Add `package_id` to every affected TC-* or remove the package-based coverage claim.",
+            )
+        )
+
+    checks.append(
+        Check(
+            "test-case-package-id",
+            "warn" if missing_package_id else "pass",
+            "Some TC blocks miss package_id." if missing_package_id else "Package id contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def package_ids_from_test_case_file(content: str) -> set[str]:
+    package_ids: set[str] = set()
+
+    package_section = extract_markdown_section(content, "Internal Work Package Coverage")
+    if package_section:
+        rows = markdown_table_rows_from_text(package_section)
+        if rows:
+            header = normalize_table_header(rows[0])
+            if "package_id" in header:
+                package_id_index = header.index("package_id")
+                for row in rows[1:]:
+                    if package_id_index < len(row):
+                        package_id = row[package_id_index].strip().strip("`")
+                        if meaningful_matrix_value(package_id):
+                            package_ids.add(package_id)
+
+    ledger_header, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
+    if "package_id" in ledger_header:
+        for row in ledger_rows:
+            package_id = row.get("package_id", "").strip().strip("`")
+            if meaningful_matrix_value(package_id):
+                package_ids.add(package_id)
+
+    return package_ids
+
+
+PACKAGE_DESIGN_PLAN_REQUIRED_COLUMNS = {
+    "design_item_id",
+    "package_id",
+    "design_dimension",
+    "source_ref",
+    "linked_atoms",
+    "planned_check",
+    "check_type",
+    "coverage_class",
+    "input_class",
+    "single_expected_behavior",
+    "oracle_source",
+    "planned_tc_or_gap",
+    "status",
+}
+
+GENERIC_PLAN_SMELL_PATTERNS = [
+    re.compile(r"проверить\s+требован", flags=re.IGNORECASE),
+    re.compile(r"проверить\s+выполнени", flags=re.IGNORECASE),
+    re.compile(r"валидн\w+\s*/\s*невалидн", flags=re.IGNORECASE),
+    re.compile(r"валидное\s+и\s+невалидное\s+значение", flags=re.IGNORECASE),
+    re.compile(r"(?:принима\w*|valid|accepted)[\s\S]{0,120}(?:не\s+принима\w*|отклон\w*|invalid|rejected)", flags=re.IGNORECASE),
+    re.compile(r"(?:не\s+принима\w*|отклон\w*|invalid|rejected)[\s\S]{0,120}(?:принима\w*|valid|accepted)", flags=re.IGNORECASE),
+    re.compile(r"установить\s+условие", flags=re.IGNORECASE),
+    re.compile(r"выполнить\s+действие\s+согласно\s+фт", flags=re.IGNORECASE),
+    re.compile(r"видимое\s+состояние\s+после\s+действия\s+соответствует\s+одному\s+наблюдаемому\s+правилу", flags=re.IGNORECASE),
+    re.compile(r"поле\s+изменяет,\s*отображает\s+или\s+ограничивает\s+значение\s+без\s+утверждения\s+внутренних\s+эффектов", flags=re.IGNORECASE),
+]
+
+GENERIC_GAP_PLAN_ROW_RE = re.compile(
+    r"зафиксировать\s+непроверяем\w+\s+поведение(?:\s+[^|]{0,80})?\s+как\s+gap|"
+    r"непроверяем\w+\s+поведение[^|]{0,80}\bgap\b|"
+    r"record\s+unverifiable\s+behavior[^|]{0,80}\bgap\b|"
+    r"unverifiable\s+behavior[^|]{0,80}\bgap\b",
+    flags=re.IGNORECASE,
+)
+
+EXACT_DIGIT_COUNT_RE = re.compile(
+    r"\bexact\s+(\d+)\s+digits?\b|"
+    r"(?:ровно|точн(?:о|ое|ых|ая)?)\s+(\d+)\s+цифр",
+    flags=re.IGNORECASE,
+)
+PLAN_DIGIT_BOUNDARY_RE_TEMPLATE = (
+    r"\bN\s*{sign}\s*1\b|"
+    r"\b{target}\s+digits?\b|"
+    r"\b{target}\s+цифр"
+)
+PLAN_DIGIT_ONLY_RE = re.compile(r"\bdigit[-\s]?only\b|\bdigits?\b|цифр", flags=re.IGNORECASE)
+REPEATED_DIGITS_REQUIREMENT_RE = re.compile(
+    r"same\s+consecutive\s+digits?|repeated\s+digits?|"
+    r"повтор\w+\s+цифр|одинаков\w+\s+(?:подряд|цифр)|"
+    r"(?:три|шесть)\s+одинаков\w+",
+    flags=re.IGNORECASE,
+)
+REPEATED_DIGITS_NEGATIVE_PLAN_RE = re.compile(
+    r"same\s+consecutive\s+digits?|repeated\s+digits?|"
+    r"повтор\w+\s+цифр|одинаков\w+\s+(?:подряд|цифр)|"
+    r"(?:три|шесть)\s+одинаков\w+|\b1{3,6}\b",
+    flags=re.IGNORECASE,
+)
+
+MERGED_PLAN_CHECK_TYPE_RE = re.compile(
+    r"\b(?:positive|negative|boundary|format|dependency|integration|async|gap|scenario|action[- ]flow)\b\s*/\s*"
+    r"\b(?:positive|negative|boundary|format|dependency|integration|async|gap|scenario|action[- ]flow)\b",
+    flags=re.IGNORECASE,
+)
+
+CONDITIONAL_BRANCH_PLAN_RE = re.compile(
+    r"\bdependency\b|\bconditional[- ]visibility\b|condition\s*=\s*true|true\s+branch|"
+    r"\bonly\s+if\b|\bvisible\s+when\b|\brequired\s+when\b|\beditable\s+when\b|"
+    r"если|только\s+если|при\s+`?(?:да|нет)|отобража\w*\s+при|видим\w*\s+при|"
+    r"обязател\w*\s+при|доступн\w*\s+при",
+    flags=re.IGNORECASE,
+)
+
+INVERSE_OR_GAP_BRANCH_PLAN_RE = re.compile(
+    r"\bnegative\b|\bgap\b|GAP-\d+|condition\s*=\s*false|false\s+branch|otherwise|else|"
+    r"not\s+visible|hidden|not\s+required|unavailable|forbidden|"
+    r"невыполн|обратн|иначе|не\s+отображ|скрыт|не\s+обязател|недоступ|запрещ",
+    flags=re.IGNORECASE,
+)
+
+PLAN_NEGATIVE_OR_REJECTION_RE = re.compile(
+    r"\bnegative\b|\binvalid\b|not\s+accepted|rejected?|forbidden|"
+    r"не\s+принима\w*|отклон\w*|невалидн\w*|недопустим\w*|нечислов\w*|"
+    r"букв\w*|спецсимвол|пробел|слишком|выше\s+(?:max|p_max)|ниже\s+(?:min|p_min)|"
+    r"\b(?:p_)?max\s*\+|\b(?:p_)?min\s*-|\bn\+1\b|\bn-1\b",
+    flags=re.IGNORECASE,
+)
+
+PLAN_POSITIVE_ACCEPTANCE_RE = re.compile(
+    r"\bpositive\b|\bvalid\b|accepted?|accepts?|saved|displayed|"
+    r"принима\w*|валидн\w*|допустим\w*|корректн\w*|сохраня\w*|отображ\w*|применя\w*",
+    flags=re.IGNORECASE,
+)
+
+PLAN_DIMENSIONS_REQUIRING_POSITIVE_ACCEPTANCE = {
+    "boundary",
+    "date-time",
+    "dependency",
+    "equivalence",
+    "format",
+    "length",
+    "numeric",
+    "validation",
+    "conditional-visibility",
+}
+
+
+def plan_row_allows_multi_row_tc(row: dict[str, str]) -> bool:
+    text = " ".join(
+        row.get(field, "")
+        for field in ("design_dimension", "planned_check", "check_type", "coverage_class")
+    )
+    return bool(re.search(r"scenario|use[-\s]?case|сценар|e2e|end[-\s]?to[-\s]?end|recovery|восстанов", text, flags=re.IGNORECASE))
+
+
+def plan_row_semantic_text(row: dict[str, str]) -> str:
+    return " | ".join(
+        row.get(field, "")
+        for field in (
+            "design_dimension",
+            "source_ref",
+            "linked_atoms",
+            "planned_check",
+            "check_type",
+            "coverage_class",
+            "input_class",
+            "single_expected_behavior",
+            "planned_tc_or_gap",
+        )
+        if row.get(field)
+    )
+
+
+def plan_rows_share_branch_context(row: dict[str, str], other: dict[str, str]) -> bool:
+    if row is other:
+        return False
+    if row.get("package_id", "").strip() != other.get("package_id", "").strip():
+        return False
+
+    row_atoms = set(extract_any_atom_ids_from_text(row.get("linked_atoms", "")))
+    other_atoms = set(extract_any_atom_ids_from_text(other.get("linked_atoms", "")))
+    if row_atoms and other_atoms and row_atoms.intersection(other_atoms):
+        return True
+
+    source_ref = row.get("source_ref", "").strip().strip("`")
+    other_source_ref = other.get("source_ref", "").strip().strip("`")
+    return meaningful_matrix_value(source_ref) and source_ref == other_source_ref
+
+
+def plan_row_is_inverse_or_gap_branch(row: dict[str, str]) -> bool:
+    text = plan_row_semantic_text(row)
+    if extract_gap_ids_from_text(row.get("planned_tc_or_gap", "")):
+        return True
+    return bool(INVERSE_OR_GAP_BRANCH_PLAN_RE.search(text))
+
+
+def plan_row_dimension(row: dict[str, str]) -> str:
+    return row.get("design_dimension", "").strip().strip("`").lower()
+
+
+def plan_row_is_gap_or_scenario(row: dict[str, str]) -> bool:
+    text = plan_row_semantic_text(row)
+    check_type = row.get("check_type", "").strip().strip("`").lower()
+    return bool(
+        extract_gap_ids_from_text(row.get("planned_tc_or_gap", ""))
+        or check_type in {"gap", "scenario"}
+        or re.search(r"\bgap\b|scenario|use[-\s]?case|сценар", text, flags=re.IGNORECASE)
+    )
+
+
+def plan_row_requires_positive_acceptance_sibling(row: dict[str, str]) -> bool:
+    if plan_row_is_gap_or_scenario(row):
+        return False
+    dimension = plan_row_dimension(row)
+    if dimension and dimension not in PLAN_DIMENSIONS_REQUIRING_POSITIVE_ACCEPTANCE:
+        return False
+    text = plan_row_semantic_text(row)
+    return bool(PLAN_NEGATIVE_OR_REJECTION_RE.search(text))
+
+
+def plan_row_is_positive_acceptance(row: dict[str, str]) -> bool:
+    if plan_row_is_gap_or_scenario(row):
+        return False
+    text = plan_row_semantic_text(row)
+    check_type = row.get("check_type", "").strip().strip("`").lower()
+    if "negative" in check_type or PLAN_NEGATIVE_OR_REJECTION_RE.search(text):
+        return False
+    return bool(PLAN_POSITIVE_ACCEPTANCE_RE.search(text))
+
+
+def plan_row_exact_digit_count(row: dict[str, str]) -> int | None:
+    if plan_row_is_gap_or_scenario(row) or not plan_row_is_positive_acceptance(row):
+        return None
+    text = plan_row_semantic_text(row)
+    match = EXACT_DIGIT_COUNT_RE.search(text)
+    if not match:
+        return None
+    for group in match.groups():
+        if group:
+            return int(group)
+    return None
+
+
+def plan_row_covers_digit_boundary(row: dict[str, str], atom_id: str, exact_count: int, offset: int) -> bool:
+    linked_atoms = set(extract_any_atom_ids_from_text(row.get("linked_atoms", "")))
+    if atom_id not in linked_atoms:
+        return False
+    text = plan_row_semantic_text(row)
+    if not text or not PLAN_DIGIT_ONLY_RE.search(text):
+        return False
+    target_count = exact_count + offset
+    if target_count < 0:
+        return False
+    sign = r"\+" if offset > 0 else "-"
+    boundary_re = re.compile(
+        PLAN_DIGIT_BOUNDARY_RE_TEMPLATE.format(sign=sign, target=target_count),
+        flags=re.IGNORECASE,
+    )
+    if not boundary_re.search(text):
+        return False
+    if plan_row_is_gap_or_scenario(row):
+        return bool(extract_gap_ids_from_text(row.get("planned_tc_or_gap", "")))
+    return bool(PLAN_NEGATIVE_OR_REJECTION_RE.search(text))
+
+
+def plan_row_has_repeated_digits_negative_check(row: dict[str, str], atom_id: str) -> bool:
+    linked_atoms = set(extract_any_atom_ids_from_text(row.get("linked_atoms", "")))
+    if atom_id not in linked_atoms:
+        return False
+    text = plan_row_semantic_text(row)
+    if not text or not REPEATED_DIGITS_NEGATIVE_PLAN_RE.search(text):
+        return False
+    if plan_row_is_gap_or_scenario(row):
+        return bool(extract_gap_ids_from_text(row.get("planned_tc_or_gap", "")))
+    return bool(PLAN_NEGATIVE_OR_REJECTION_RE.search(text))
+
+
+def validate_package_test_design_plan(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    structural_severity: str,
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    package_ids = package_ids_from_test_case_file(content)
+    package_contract_active = bool(package_ids) or "Internal Work Package Coverage" in content
+    if not package_contract_active:
+        return findings, checks
+
+    plan_section = extract_markdown_section(content, "Package Test Design Plan")
+    plan_severity = "warning" if structural_severity == "info" else structural_severity
+    if not plan_section:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing",
+                severity=plan_severity,
+                category="test-design",
+                title="Package-based test-case file has no Package Test Design Plan",
+                details="New package-based writer flow must record planned positive, negative, boundary, dependency/action and gap decisions before TC-* sections.",
+                path=display_path,
+                evidence=sorted(package_ids)[:20],
+                recommended_action="Add `## Package Test Design Plan` with one row per planned check or GAP before handing the file to review.",
+            )
+        )
+        checks.append(
+            Check(
+                "test-case-package-design-plan",
+                "warn",
+                "Package Test Design Plan is missing.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    rows = markdown_table_rows_from_text(plan_section)
+    if not rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-empty",
+                severity=plan_severity,
+                category="test-design",
+                title="Package Test Design Plan has no table rows",
+                details="The plan must be a structured table so reviewer and validator can trace planned checks.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the canonical Package Test Design Plan table.",
+            )
+        )
+        checks.append(Check("test-case-package-design-plan", "warn", "Package Test Design Plan is empty.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(rows[0])
+    missing_columns = sorted(PACKAGE_DESIGN_PLAN_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-columns",
+                severity=plan_severity,
+                category="test-design",
+                title="Package Test Design Plan is missing required columns",
+                details="The design plan must expose package, dimension, linked atoms, planned check, coverage class and TC/GAP mapping.",
+                path=display_path,
+                evidence=missing_columns,
+                recommended_action="Use the canonical columns from references/agent/package-test-design-plan-format.md.",
+            )
+        )
+
+    plan_rows: list[dict[str, str]] = []
+    for raw_row in rows[1:]:
+        row: dict[str, str] = {}
+        for index, column_name in enumerate(header):
+            row[column_name] = raw_row[index].strip().strip("`") if index < len(raw_row) else ""
+        plan_rows.append(row)
+
+    plan_package_ids = {
+        row.get("package_id", "").strip().strip("`")
+        for row in plan_rows
+        if meaningful_matrix_value(row.get("package_id", ""))
+    }
+    missing_package_ids = sorted(package_ids - plan_package_ids)
+    if missing_package_ids:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-package",
+                severity=plan_severity,
+                category="test-design",
+                title="Package Test Design Plan does not cover every package",
+                details="Every internal work package must have at least one design-plan row.",
+                path=display_path,
+                evidence=missing_package_ids[:20],
+                recommended_action="Add design-plan rows for every missing package_id.",
+            )
+        )
+
+    rows_missing_atoms: list[str] = []
+    rows_missing_tc_or_gap: list[str] = []
+    unknown_test_case_ids: list[str] = []
+    generic_plan_rows: list[str] = []
+    generic_gap_rows: list[str] = []
+    merged_plan_rows: list[str] = []
+    combined_plan_rows: list[str] = []
+    broad_scenario_plan_rows: list[str] = []
+    missing_conditional_branch_rows: list[str] = []
+    missing_positive_acceptance_rows: list[str] = []
+    exact_digit_boundary_candidates: list[tuple[str, str, int]] = []
+    tc_to_plan_rows: dict[str, list[str]] = {}
+    multi_row_tc_allowed: dict[str, bool] = {}
+    _, ledger_rows_for_plan = parsed_atomic_requirement_ledger_rows(content)
+    ledger_req_by_atom = {
+        row.get("atom_id", "").strip().strip("`"): (
+            row.get("req_id", "")
+            or row.get("source_reference", "")
+            or row.get("source_ref", "")
+            or row.get("atomic_statement", "")
+        )
+        for row in ledger_rows_for_plan
+    }
+    repeated_digit_atoms = {
+        row.get("atom_id", "").strip().strip("`")
+        for row in ledger_rows_for_plan
+        if row.get("atom_id", "").strip()
+        and REPEATED_DIGITS_REQUIREMENT_RE.search(
+            " | ".join(
+                row.get(field, "")
+                for field in ("atomic_statement", "expected_behavior", "condition", "source_reference", "gap_note")
+                if row.get(field)
+            )
+        )
+    }
+    all_test_case_ids = known_test_case_ids or {
+        test_case_id for test_case_id, _ in extract_test_case_blocks(content)
+    }
+    for index, row in enumerate(plan_rows, start=2):
+        design_item_id = row.get("design_item_id", "").strip() or f"row {index}"
+        linked_atoms = row.get("linked_atoms", "")
+        planned_tc_or_gap = row.get("planned_tc_or_gap", "")
+        planned_check = row.get("planned_check", "")
+        check_type = row.get("check_type", "")
+        semantic_plan_text = " | ".join(
+            row.get(field, "")
+            for field in ("planned_check", "check_type", "coverage_class", "input_class", "single_expected_behavior")
+            if row.get(field)
+        )
+        full_semantic_plan_text = plan_row_semantic_text(row)
+
+        if not extract_any_atom_ids_from_text(linked_atoms):
+            rows_missing_atoms.append(design_item_id)
+        if not extract_test_case_ids_from_text(planned_tc_or_gap) and not extract_gap_ids_from_text(planned_tc_or_gap):
+            rows_missing_tc_or_gap.append(design_item_id)
+        for test_case_id in extract_test_case_ids_from_text(planned_tc_or_gap):
+            if all_test_case_ids and test_case_id not in all_test_case_ids:
+                unknown_test_case_ids.append(f"{design_item_id}:{test_case_id}")
+            tc_to_plan_rows.setdefault(test_case_id, []).append(design_item_id)
+            multi_row_tc_allowed[test_case_id] = (
+                multi_row_tc_allowed.get(test_case_id, False)
+                or plan_row_allows_multi_row_tc(row)
+            )
+        if planned_check and any(pattern.search(planned_check) for pattern in GENERIC_PLAN_SMELL_PATTERNS):
+            generic_plan_rows.append(f"{design_item_id}:{planned_check[:160]}")
+        if plan_row_is_gap_or_scenario(row) and GENERIC_GAP_PLAN_ROW_RE.search(full_semantic_plan_text):
+            generic_gap_rows.append(f"{design_item_id}:{full_semantic_plan_text[:180]}")
+        exact_digit_count = plan_row_exact_digit_count(row)
+        if exact_digit_count is not None:
+            for atom_id in extract_any_atom_ids_from_text(linked_atoms):
+                exact_digit_boundary_candidates.append((design_item_id, atom_id, exact_digit_count))
+        if check_type and MERGED_PLAN_CHECK_TYPE_RE.search(check_type):
+            merged_plan_rows.append(f"{design_item_id}:check_type={check_type}; planned_check={planned_check[:120]}")
+        if semantic_plan_text and has_combined_behavior_smell(semantic_plan_text):
+            combined_plan_rows.append(f"{design_item_id}:{semantic_plan_text[:180]}")
+        if (
+            full_semantic_plan_text
+            and CONDITIONAL_BRANCH_PLAN_RE.search(full_semantic_plan_text)
+            and not plan_row_is_inverse_or_gap_branch(row)
+            and not any(
+                plan_rows_share_branch_context(row, other) and plan_row_is_inverse_or_gap_branch(other)
+                for other in plan_rows
+            )
+        ):
+            missing_conditional_branch_rows.append(f"{design_item_id}:{full_semantic_plan_text[:180]}")
+        if (
+            full_semantic_plan_text
+            and plan_row_requires_positive_acceptance_sibling(row)
+            and not any(
+                plan_rows_share_branch_context(row, other) and plan_row_is_positive_acceptance(other)
+                for other in plan_rows
+            )
+        ):
+            missing_positive_acceptance_rows.append(f"{design_item_id}:{full_semantic_plan_text[:180]}")
+        if re.search(r"scenario|use[-\s]?case|сценар", check_type + " " + row.get("design_dimension", ""), flags=re.IGNORECASE):
+            linked_atom_ids = extract_any_atom_ids_from_text(linked_atoms)
+            broad_refs = [
+                f"{atom_id}:{ledger_req_by_atom.get(atom_id, '')}"
+                for atom_id in linked_atom_ids
+                if max_requirement_range_span(ledger_req_by_atom.get(atom_id, "")) >= 4
+            ]
+            if broad_refs:
+                broad_scenario_plan_rows.append(
+                    f"{design_item_id}:linked={','.join(broad_refs[:4])}; planned_check={planned_check[:120]}"
+                )
+    tc_reused_by_plan_rows = [
+        f"{test_case_id}:{','.join(design_item_ids[:8])}"
+        for test_case_id, design_item_ids in sorted(tc_to_plan_rows.items())
+        if len(design_item_ids) > 1 and not multi_row_tc_allowed.get(test_case_id, False)
+    ]
+    missing_exact_length_boundary_rows: list[str] = []
+    for design_item_id, atom_id, exact_digit_count in exact_digit_boundary_candidates:
+        missing_offsets = [
+            label
+            for label, offset in (("N-1", -1), ("N+1", 1))
+            if not any(plan_row_covers_digit_boundary(other, atom_id, exact_digit_count, offset) for other in plan_rows)
+        ]
+        if missing_offsets:
+            missing_exact_length_boundary_rows.append(
+                f"{design_item_id}:{atom_id}:exact {exact_digit_count} digits missing={','.join(missing_offsets)}"
+            )
+    missing_repeated_digit_rows = [
+        f"{atom_id}:{ledger_req_by_atom.get(atom_id, '')}"
+        for atom_id in sorted(repeated_digit_atoms)
+        if atom_id and not any(plan_row_has_repeated_digits_negative_check(row, atom_id) for row in plan_rows)
+    ]
+
+    if rows_missing_atoms:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-atoms",
+                severity=plan_severity,
+                category="traceability",
+                title="Package Test Design Plan rows are missing linked atoms",
+                details="Each design-plan row must point to the exact ATOM-* it plans to cover or gap.",
+                path=display_path,
+                evidence=rows_missing_atoms[:20],
+                recommended_action="Fill linked_atoms with ATOM-* ids from the Atomic Requirements Ledger.",
+            )
+        )
+    if rows_missing_tc_or_gap:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-tc-or-gap",
+                severity=plan_severity,
+                category="test-design",
+                title="Package Test Design Plan rows have no planned TC or GAP",
+                details="Each planned check must resolve to an executable TC-* or an explicit GAP-* before ready-for-review.",
+                path=display_path,
+                evidence=rows_missing_tc_or_gap[:20],
+                recommended_action="Set planned_tc_or_gap to an existing/planned TC-* or GAP-*.",
+            )
+        )
+    if unknown_test_case_ids:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-unknown-test-case-id",
+                severity=plan_severity,
+                category="traceability",
+                title="Package Test Design Plan references unknown test-case ids",
+                details="planned_tc_or_gap values must point to canonical ## TC-* sections or GAP-* ids.",
+                path=display_path,
+                evidence=unknown_test_case_ids[:20],
+                recommended_action="Create the referenced TC-* sections or update planned_tc_or_gap.",
+            )
+        )
+    if generic_plan_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-generic-check-smell",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan contains generic planned checks",
+                details="Plan rows must name a concrete positive, negative, boundary, dependency/action or gap decision, not a placeholder.",
+                path=display_path,
+                evidence=generic_plan_rows[:20],
+                recommended_action="Rewrite generic planned checks into explicit test-design classes before writing TC-* sections.",
+            )
+        )
+    if generic_gap_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-generic-gap-row",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan has generic GAP rows",
+                details=(
+                    "A GAP row must explain the concrete untestable behavior and the missing fixture, source, "
+                    "integration evidence or environment dependency. Generic `record as GAP` rows hide coverage "
+                    "holes from reviewers."
+                ),
+                path=display_path,
+                evidence=generic_gap_rows[:20],
+                recommended_action=(
+                    "Rewrite each GAP row so planned_check and single_expected_behavior name the exact missing "
+                    "catalog value, backend branch, DaData behavior, dirty-state trigger, role/status fixture, "
+                    "or other source-backed blocker."
+                ),
+            )
+        )
+    if missing_exact_length_boundary_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-exact-length-boundary",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan misses exact-length digit boundaries",
+                details=(
+                    "For an exact N-digits rule, a positive exact-N row is not enough. The design plan needs "
+                    "separate digit-only N-1 and N+1 rejection/GAP rows; a letters-only negative row does not "
+                    "prove length-boundary behavior."
+                ),
+                path=display_path,
+                evidence=missing_exact_length_boundary_rows[:20],
+                recommended_action=(
+                    "Add separate plan rows and TC/GAP links for digit-only N-1 and N+1 classes for each affected atom."
+                ),
+            )
+        )
+    if missing_repeated_digit_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-repeated-digits-check",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan misses repeated-digits rejection checks",
+                details=(
+                    "Ledger atoms that forbid repeated/same consecutive digits need a negative plan row for "
+                    "that class, not only a positive non-repeating example."
+                ),
+                path=display_path,
+                evidence=missing_repeated_digit_rows[:20],
+                recommended_action=(
+                    "Add a separate negative TC/GAP row for each repeated-digits atom, with the concrete repeated "
+                    "digit class in input_class or planned_check."
+                ),
+            )
+        )
+    if merged_plan_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-merged-check-smell",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan merges multiple check types in one row",
+                details=(
+                    "One design-plan row should represent one planned check or one GAP. "
+                    "Slash-combined check_type values often hide positive/negative, boundary/format, "
+                    "dependency/integration, or async/gap decomposition."
+                ),
+                path=display_path,
+                evidence=merged_plan_rows[:20],
+                recommended_action="Split merged design-plan rows so each row has one check_type and one planned check or GAP.",
+            )
+        )
+    if combined_plan_rows:
+        findings.append(
+            Finding(
+                id="design-plan-combined-class-smell",
+                severity="warning",
+                category="atomarity",
+                title="Package Test Design Plan rows combine multiple classes",
+                details=(
+                    "Design-plan rows should describe one check type, one input class and one expected behavior. "
+                    "Combined classes such as condition=true/false, length and repeated digits, or previous data branches "
+                    "hide multiple executable checks."
+                ),
+                path=display_path,
+                evidence=combined_plan_rows[:20],
+                recommended_action="Split affected rows into separate positive, negative, boundary, dependency/action or GAP rows.",
+            )
+        )
+    if broad_scenario_plan_rows:
+        findings.append(
+            Finding(
+                id="scenario-plan-replaces-atomic-coverage-smell",
+                severity="warning",
+                category="atomarity",
+                title="Scenario plan rows appear to replace broad atomic coverage",
+                details=(
+                    "Scenario/use-case rows may supplement atomic coverage, but they must not replace decomposition "
+                    "of broad GSR/REQ ranges into atomic plan rows and TC/GAP items."
+                ),
+                path=display_path,
+                evidence=broad_scenario_plan_rows[:20],
+                recommended_action="Create atomic design rows and TC/GAP items for the underlying requirements; keep scenario rows only as additional use-case coverage.",
+            )
+        )
+    if missing_conditional_branch_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-missing-conditional-branch",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan misses inverse conditional/dependency branches",
+                details=(
+                    "Rules such as `only if`, conditional visibility, required-when and dependency checks need "
+                    "both the applicable/true branch and the inverse/negative branch, or an explicit GAP-* if the "
+                    "inverse behavior is not derivable from the source."
+                ),
+                path=display_path,
+                evidence=missing_conditional_branch_rows[:20],
+                recommended_action=(
+                    "Add a separate negative/false-branch design row and TC, or link the unresolved inverse "
+                    "branch to GAP-* before marking the package ready for review."
+                ),
+            )
+        )
+    if missing_positive_acceptance_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-negative-without-positive-acceptance",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan has rejection/invalid checks without positive acceptance",
+                details=(
+                    "For field/input validation classes, rejection of invalid input does not prove that a valid "
+                    "representative is accepted. The plan needs a sibling positive acceptance row for the same "
+                    "source/atom context, or an explicit GAP-* if the acceptance oracle cannot be derived."
+                ),
+                path=display_path,
+                evidence=missing_positive_acceptance_rows[:20],
+                recommended_action=(
+                    "Add a separate positive acceptance design row and TC for a valid representative value, "
+                    "or link the missing acceptance oracle to GAP-*."
+                ),
+            )
+        )
+    if tc_reused_by_plan_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-many-rows-one-tc-smell",
+                severity="warning",
+                category="atomarity",
+                title="Package Test Design Plan maps multiple independent rows to one test case",
+                details=(
+                    "One executable plan row should resolve to one TC-* or GAP-*. Reusing one TC-* for several "
+                    "independent rows is usually a sign that writer merged positive, negative, boundary, dependency "
+                    "or action checks to reduce TC count."
+                ),
+                path=display_path,
+                evidence=tc_reused_by_plan_rows[:20],
+                recommended_action=(
+                    "Split the affected TC-* into separate executable cases, or model the row as an explicit "
+                    "scenario/recovery check that does not replace atomic TC coverage."
+                ),
+            )
+        )
+
+    has_findings = bool(
+        missing_columns
+        or missing_package_ids
+        or rows_missing_atoms
+        or rows_missing_tc_or_gap
+        or unknown_test_case_ids
+        or generic_plan_rows
+        or generic_gap_rows
+        or missing_exact_length_boundary_rows
+        or missing_repeated_digit_rows
+        or merged_plan_rows
+        or combined_plan_rows
+        or broad_scenario_plan_rows
+        or missing_conditional_branch_rows
+        or missing_positive_acceptance_rows
+        or tc_reused_by_plan_rows
+    )
+    checks.append(
+        Check(
+            "test-case-package-design-plan",
+            "warn" if has_findings else "pass",
+            "Package Test Design Plan has issues." if has_findings else "Package Test Design Plan contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_test_design_review(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    summary = test_design_review_summary(content)
+
+    if not summary["required"]:
+        checks.append(
+            Check(
+                "test-design-review",
+                "pass",
+                "Test Design Review is not required for this artifact.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    if not summary["present"]:
+        findings.append(
+            Finding(
+                id="test-design-review-missing",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan has no Test Design Review",
+                details=(
+                    "Package-based writer output must include an explicit critical review of TDDT, ledger, "
+                    "Package Test Design Plan and coverage gaps before it is routed to reviewer."
+                ),
+                path=display_path,
+                evidence=["Package Test Design Plan present", "Test Design Review missing"],
+                recommended_action=(
+                    "Create `test-design-review.md` with the canonical required review items, then fix or block "
+                    "any failed package before ready-for-review."
+                ),
+            )
+        )
+        checks.append(Check("test-design-review", "warn", "Test Design Review is missing.", display_path))
+        return findings, checks
+
+    if not summary["parseable"]:
+        findings.append(
+            Finding(
+                id="test-design-review-no-table",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review has no parseable Markdown table",
+                details="The section exists but has no canonical Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Use the canonical Test Design Review table from test-design-review-format.md.",
+            )
+        )
+    if summary["missing_columns"]:
+        findings.append(
+            Finding(
+                id="test-design-review-missing-columns",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review misses required columns",
+                details=(
+                    "The review gate must expose item, status, severity, affected package, evidence, "
+                    "required action and blocking flag."
+                ),
+                path=display_path,
+                evidence=[f"missing={', '.join(summary['missing_columns'])}"],
+                recommended_action="Rewrite the table with the canonical columns from test-design-review-format.md.",
+            )
+        )
+    if summary["missing_items"]:
+        findings.append(
+            Finding(
+                id="test-design-review-missing-required-items",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review misses required review items",
+                details=(
+                    "The review must explicitly criticize decision-table classification, ledger/plan alignment, "
+                    "coverage classes, numeric length/boundary classes, conditional branches, gap specificity, "
+                    "internal observability, metadata-only exclusion and TC mapping atomicity."
+                ),
+                path=display_path,
+                evidence=summary["missing_items"][:20],
+                recommended_action="Add one row for each required review item before moving the writer artifact to review.",
+            )
+        )
+    if summary["invalid_status_rows"]:
+        findings.append(
+            Finding(
+                id="test-design-review-invalid-status",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review has noncanonical status values",
+                details="Review status values must be pass/fail-style values.",
+                path=display_path,
+                evidence=summary["invalid_status_rows"][:20],
+                recommended_action="Use `pass` for passed checks or `fail`/`blocked`/`needs-rewrite` for failed checks.",
+            )
+        )
+    if summary["invalid_severity_rows"]:
+        findings.append(
+            Finding(
+                id="test-design-review-invalid-severity",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review has invalid severity values",
+                details="Review severity values must be `error`, `warning` or `info`.",
+                path=display_path,
+                evidence=summary["invalid_severity_rows"][:20],
+                recommended_action="Use `error`, `warning` or `info` in the severity column.",
+            )
+        )
+    if summary["invalid_blocks_rows"]:
+        findings.append(
+            Finding(
+                id="test-design-review-invalid-blocks-value",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review has invalid blocks_ready_for_review values",
+                details="The blocking flag must be `yes` or `no`, and passing rows must not keep `blocks_ready_for_review = yes`.",
+                path=display_path,
+                evidence=summary["invalid_blocks_rows"][:20],
+                recommended_action="Set `blocks_ready_for_review` to `yes` only for failed blocking rows, otherwise `no`.",
+            )
+        )
+    if summary["failed_rows"]:
+        findings.append(
+            Finding(
+                id="test-design-review-failed",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review contains blocking failures",
+                details=(
+                    "The writer-side design critique found issues that block ready-for-review. The affected "
+                    "package must be rewritten or the workflow must be blocked."
+                ),
+                path=display_path,
+                evidence=summary["failed_rows"][:20],
+                recommended_action=(
+                    "Rewrite affected packages from Source Table Normalization/TDDT through Package Test Design Plan "
+                    "and TC, or set workflow-state to blocked-input."
+                ),
+            )
+        )
+
+    has_findings = any(finding.id.startswith("test-design-review") for finding in findings)
+    checks.append(
+        Check(
+            "test-design-review",
+            "warn" if has_findings else "pass",
+            "Test Design Review has issues." if has_findings else "Test Design Review passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+GENERIC_ATOM_SMELL_PATTERNS = [
+    re.compile(r"требовани[ея]\s+[a-zа-я]+\s*\d+.*выполня", flags=re.IGNORECASE),
+    re.compile(r"см\.\s*(?:gsr|source\s+row|строк[ауи])", flags=re.IGNORECASE),
+    re.compile(r"поведение\s+.*соответствует\s+фт", flags=re.IGNORECASE),
+    re.compile(r"без\s+проверяемого\s+expected\s+behavior", flags=re.IGNORECASE),
+]
+
+GENERIC_TC_SMELL_PATTERNS = [
+    re.compile(r"\u043f\u0440\u0438\u0432\u0435\u0441\u0442\u0438\s+\u0434\u0430\u043d\u043d\u044b\u0435\s+\u043a\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u044e", flags=re.IGNORECASE),
+    re.compile(r"\u0432\u0432\u0435\u0441\u0442\u0438\s+\u0438\u043b\u0438\s+\u0432\u044b\u0431\u0440\u0430\u0442\u044c", flags=re.IGNORECASE),
+    re.compile(r"\u0441\u043e\u0433\u043b\u0430\u0441\u043d\u043e\s+\u0442\u0435\u0441\u0442\u043e\u0432\u044b\u043c\s+\u0434\u0430\u043d\u043d\u044b\u043c", flags=re.IGNORECASE),
+    re.compile(r"\u0437\u043d\u0430\u0447\u0435\u043d\u0438\w+\s+\u0438\u0437\s+\u0442\u0435\u0441\u0442\u043e\u0432\u044b\w+\s+\u0434\u0430\u043d\u043d\w+\s+\u0434\u043b\u044f\s+\u044d\u0442\u043e\u0439\s+\u0441\u0442\u0440\u043e\u043a\u0438", flags=re.IGNORECASE),
+    re.compile(r"\u043f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c\s+\u043d\u0430\u0431\u043b\u044e\u0434\u0430\u0435\u043c\w*\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\w*\s+\u044d\u043b\u0435\u043c\u0435\u043d\u0442", flags=re.IGNORECASE),
+    re.compile(r"\u0441\u0440\u0430\u0432\u043d\u0438\u0442\u044c\s+\u043d\u0430\u0431\u043b\u044e\u0434\u0430\u0435\u043c\w*\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\w*", flags=re.IGNORECASE),
+    re.compile(r"\u0437\u0430\u0444\u0438\u043a\u0441\u0438\u0440\u043e\u0432\u0430\w*\s+\u0432\u0438\u0434\u0438\u043c\w*\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\w*[\s\S]{0,120}\u043f\u043e\u0441\u043b\u0435\s+\u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\w*\s+\u0434\u0435\u0439\u0441\u0442\u0432\w*", flags=re.IGNORECASE),
+    re.compile(r"\u0441\u043e\u0433\u043b\u0430\u0441\u043d\u043e\s+\u0447\u0435\u043a-?\u043b\u0438\u0441\u0442", flags=re.IGNORECASE),
+    re.compile(r"\u043d\u0435\s+\u0442\u0440\u0435\u0431\u0443\u044e\u0442\u0441\u044f", flags=re.IGNORECASE),
+    re.compile(r"\u0435\u0441\u043b\u0438\s+\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430\s+\u0442\u0440\u0435\u0431\u0443\u0435\u0442", flags=re.IGNORECASE),
+    re.compile(r"подготовить\s+состояние(?:\s+раздела)?", flags=re.IGNORECASE),
+    re.compile(r"установить\s+условие", flags=re.IGNORECASE),
+    re.compile(r"выполнить\s+проверяемое\s+действие", flags=re.IGNORECASE),
+    re.compile(r"выполнить\s+действие\s+согласно\s+фт", flags=re.IGNORECASE),
+    re.compile(r"проверить\s+выполнени[ея]\s+требован", flags=re.IGNORECASE),
+    re.compile(r"проверить\s+итоговое\s+состояние", flags=re.IGNORECASE),
+    re.compile(r"данные,\s+достаточные\s+для\s+проверки", flags=re.IGNORECASE),
+    re.compile(r"значени[ея],?\s+нарушающ\w+\s+(?:указанн\w+\s+)?(?:числов\w+|length|форматн\w+|правил)", flags=re.IGNORECASE),
+    re.compile(r"значени[ея]\s+из\s+проверяемого\s+класс[а-я\s]+по\s+фт", flags=re.IGNORECASE),
+    re.compile(r"дат[аы],?\s+соответствующ\w+\s+проверяем\w+\s+календарн\w+\s+ветк\w+\s+фт", flags=re.IGNORECASE),
+    re.compile(r"ввести\s+или\s+выбрать\s+значени[ея]\s+из\s+тестовых\s+данных", flags=re.IGNORECASE),
+    re.compile(r"выполнены\s+условия\s+применимости", flags=re.IGNORECASE),
+    re.compile(r"см\.\s+связанн\w+\s+строк\w+\s+atomic\s+requirements\s+ledger", flags=re.IGNORECASE),
+    re.compile(r"поведение\s+наблюдаемо\s+через\s+ui\s+и\s+соответствует\s+фт", flags=re.IGNORECASE),
+    re.compile(r"подготовить\s+ветку", flags=re.IGNORECASE),
+    re.compile(r"сравнить\s+состояние\s+поля\s+с\s+ожидаемым\s+правилом\s+фт", flags=re.IGNORECASE),
+    re.compile(r"проверить\s+соответствие\s+фт", flags=re.IGNORECASE),
+    re.compile(r"убедиться,\s+что\s+правило\s+выполнено", flags=re.IGNORECASE),
+    re.compile(r"проверить\s+поле\s+согласно\s+фт", flags=re.IGNORECASE),
+    re.compile(r"выполнить\s+проверку\s+значения", flags=re.IGNORECASE),
+    re.compile(r"при\s+необходимости", flags=re.IGNORECASE),
+]
+
+GENERIC_VALID_FIXTURE_PLACEHOLDER_RE = re.compile(
+    r"минимальн\w+\s+валидн\w+\s+набор|"
+    r"валидн\w+\s+(?:заявк|анкет|карточк|данн\w+)|"
+    r"если\s+требуется\s+запуск\s+действи|"
+    r"full\s+valid\s+(?:fixture|data|set)",
+    flags=re.IGNORECASE,
+)
+GENERIC_TEST_DATA_REFERENCE_RE = re.compile(
+    r"значени[ея]\s+из\s+тестов\w+\s+данн\w+",
+    flags=re.IGNORECASE,
+)
+GENERIC_TEST_DATA_ORACLE_RE = re.compile(
+    r"значени[ея]\s+из\s+тестов\w+\s+данн\w+\s+"
+    r"(?:принят\w*|не\s+принима\w*|отобража\w*|сохран\w*)",
+    flags=re.IGNORECASE,
+)
+
+VALUE_TYPE_PROPERTY_RE = re.compile(r"\bvalue[-_ ]?type\b|тип\s+значени", flags=re.IGNORECASE)
+NON_LIST_VALUE_TYPE_RE = re.compile(
+    r"тип\s+значени\w*\s*:\s*(?:строка|дата|логическ|числ|number|string|date|boolean)",
+    flags=re.IGNORECASE,
+)
+LIST_VALUE_TYPE_RE = re.compile(
+    r"тип\s+значени\w*\s*:\s*(?:значени[ея]\s+из|список|справочник|перечень|list|dictionary|dropdown)",
+    flags=re.IGNORECASE,
+)
+VALUE_TYPE_LIST_SELECTION_RE = re.compile(
+    r"значени[ея]\s+выбира\w+\s+из\s+отображаем\w+\s+списк|"
+    r"открыть\s+контрол[\s\S]{0,120}выбрать\s+доступн\w+\s+значени|"
+    r"открывает\s+список\s+или\s+выбор\s+значени",
+    flags=re.IGNORECASE,
+)
+DEPENDENCY_PLACEHOLDER_SETUP_RE = re.compile(
+    r"в\s+форме\s+задать\s+данные,\s+при\s+которых(?:\s+условие\s+источника)?",
+    flags=re.IGNORECASE,
+)
+GENERIC_RULE_ORACLE_RE = re.compile(
+    r"видимое\s+состояние\s+после\s+действия\s+соответствует\s+одному\s+наблюдаемому\s+правилу|"
+    r"поле\s+изменяет,\s*отображает\s+или\s+ограничивает\s+значение\s+без\s+утверждения\s+внутренних\s+эффектов",
+    flags=re.IGNORECASE,
+)
+SOURCE_DUMP_RULE_ORACLE_RE = re.compile(
+    r"наблюда\w+\s+правило\s+из\s+`?(?:GSR|REQ|[A-ZА-Я]{2,}[-\s]?\d+)\b|"
+    r"для\s+`?[^`\n]{1,120}`?\s+наблюда\w+\s+правило\s+из\s+`?(?:GSR|REQ|[A-ZА-Я]{2,}[-\s]?\d+)\b",
+    flags=re.IGNORECASE,
+)
+VALUE_TYPE_METADATA_AS_BEHAVIOR_RE = re.compile(
+    r"контрольн\w+\s+строков\w+\s+значени\w+|"
+    r"принима\w+\s+и\s+отобража\w+\s+введенн\w+\s+строков\w+\s+значени\w+",
+    flags=re.IGNORECASE,
+)
+EXTRACTION_ARTIFACT_ORACLE_PATTERNS = [
+    re.compile(r"\b[ДП]\s+[ао]\b", flags=re.IGNORECASE),
+    re.compile(r"Рефинансировани\s+е", flags=re.IGNORECASE),
+    re.compile(r"Переключат\s+ель", flags=re.IGNORECASE),
+    re.compile(r"выведенног\s+о", flags=re.IGNORECASE),
+    re.compile(r"подразде\s+ление", flags=re.IGNORECASE),
+    re.compile(r"активир\s+ован", flags=re.IGNORECASE),
+    re.compile(r"остальн\s+ых", flags=re.IGNORECASE),
+    re.compile(r"клиент\s+прожива\s+ет", flags=re.IGNORECASE),
+]
+
+MOCKUP_INTERACTION_HINT_RE = re.compile(
+    r"segmented\s+tab|amount\s+tag|slider|toggle|checkbox|dropdown|calendar|date\s+field|"
+    r"переключател|тумблер|чек-?бокс|checkbox|список|dropdown|выпадающ|календар|слайдер|вкладк",
+    flags=re.IGNORECASE,
+)
+MOCKUP_GENERIC_UI_STEP_RE = re.compile(
+    r"в\s+поле\s+`?[^`\n]+`?\s+ввести\s+значени[ея]\s+из\s+тестовых\s+данных|"
+    r"найти\s+(?:область|элемент|поле)|"
+    r"перейти\s+к\s+нужн\w+\s+(?:элемент|пол|област)|"
+    r"выполнить\s+действие\s+согласно\s+(?:макету|фт)|"
+    r"установить\s+значение\s+из\s+тестовых\s+данных",
+    flags=re.IGNORECASE,
+)
+
+GENERIC_TC_TITLE_PATTERNS = [
+    re.compile(r"проверяет\s+поле\b", flags=re.IGNORECASE),
+    re.compile(r"отображает\s+отображ", flags=re.IGNORECASE),
+    re.compile(r"отклоняет\s+значен", flags=re.IGNORECASE),
+    re.compile(r"^\s*.+:\s+(?:проверяет|отклоняет|отображает)\s+.+$", flags=re.IGNORECASE),
+]
+
+ATOM_COMPRESSION_MARKERS: dict[str, re.Pattern[str]] = {
+    "visibility": re.compile(r"\bвидим|отображ|скрыт", flags=re.IGNORECASE),
+    "requiredness": re.compile(r"обязател|не\s+обязател", flags=re.IGNORECASE),
+    "editability": re.compile(r"редакт|доступн|enabled|disabled", flags=re.IGNORECASE),
+    "default": re.compile(r"default|по\s+умолчан|дефолт", flags=re.IGNORECASE),
+    "format": re.compile(r"формат|маск|только\s+цифр|только\s+числ|текст|символ", flags=re.IGNORECASE),
+    "boundary": re.compile(r"\bmin\b|\bmax\b|границ|лимит|длин|n-1|n\+1", flags=re.IGNORECASE),
+    "dictionary": re.compile(r"список|справочник|каталог|тег", flags=re.IGNORECASE),
+    "validation": re.compile(r"принима|отклон|валид|ошибк|подсказ", flags=re.IGNORECASE),
+    "dependency": re.compile(r"завис|при\s+`?да|при\s+`?нет|если|услов", flags=re.IGNORECASE),
+    "integration": re.compile(r"dadata|api|rabbitmq|connect|цп|интеграц", flags=re.IGNORECASE),
+    "persistence": re.compile(r"сохран|модел|database|db|kladr|esiauserid|correlationid", flags=re.IGNORECASE),
+    "status-action": re.compile(r"статус|переход|инициир|кнопк|действи|отправ", flags=re.IGNORECASE),
+}
+
+MERGED_VALID_INVALID_EXPECTED_PATTERNS = [
+    re.compile(
+        r"(?:не\s+принима\w*|отклон\w*|не\s+сохраня\w*|счита[её]тся\s+невалидн\w*)"
+        r"[\s\S]{0,180}\bи\b[\s\S]{0,180}"
+        r"(?:принима\w*|сохраня\w*|счита[её]тся\s+валидн\w*)",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:принима\w*|сохраня\w*|счита[её]тся\s+валидн\w*)"
+        r"[\s\S]{0,180}\bи\b[\s\S]{0,180}"
+        r"(?:не\s+принима\w*|отклон\w*|не\s+сохраня\w*|счита[её]тся\s+невалидн\w*)",
+        flags=re.IGNORECASE,
+    ),
+    re.compile(r"(?:invalid|rejected|not\s+accepted)[\s\S]{0,180}(?:valid|accepted)", flags=re.IGNORECASE),
+    re.compile(r"(?:valid|accepted)[\s\S]{0,180}(?:invalid|rejected|not\s+accepted)", flags=re.IGNORECASE),
+]
+
+MERGED_VALID_INVALID_DATA_STEP_RE = re.compile(
+    r"(?:невалидн\w*|недопустим\w*|нечислов\w*|invalid|forbidden|non[-\s]?numeric)"
+    r"[\s\S]{0,260}"
+    r"(?:валидн\w*|допустим\w*|valid|allowed)",
+    flags=re.IGNORECASE,
+)
+
+ACTION_INITIATION_WITHOUT_ARTIFACT_RE = re.compile(
+    r"(?:действи[ея]\s+)?(?:проверить|отправить\s+повторно|[\w\s]+)?\s*"
+    r"(?:инициир\w+|запуска\w+|started|initiated)",
+    flags=re.IGNORECASE,
+)
+
+CONCRETE_OBSERVABLE_ARTIFACT_RE = re.compile(
+    r"уведомлен|сообщен|подсказ|ошибк|отображ|открыва|переход|статус\s+измен|"
+    r"значени[ея]\s+(?:отображ|измен|сохран)|поле\s+(?:отображ|заполн|очищ)|"
+    r"документ|журнал|лог\s+`|api\s+response|http|mock|fixture|artifact|evidence",
+    flags=re.IGNORECASE,
+)
+
+NEGATIVE_OR_REJECTION_EXPECTED_RE = re.compile(
+    r"не\s+принима\w*|отклон\w*|не\s+сохраня\w*|невалидн\w*|ошибк|"
+    r"не\s+применя\w*|выше\s+(?:max|p_max|максим)|ниже\s+(?:min|p_min|миним)|"
+    r"переход\s+не\s+выполня\w*|переход\s+заблок\w*|заблок\w*|"
+    r"(?:раздел|экран|форма)\s+[^.\n;]{0,120}не\s+откры\w*|подсвеч\w*\s+красн\w*|"
+    r"above\s+max|below\s+min|reject|rejected|not\s+accepted|invalid|transition\s+blocked|does\s+not\s+proceed",
+    flags=re.IGNORECASE,
+)
+
+NONDETERMINISTIC_ALTERNATIVE_ORACLE_RE = re.compile(
+    r"(?:значени[ея]\s+)?(?:очищ\w+|не\s+сохран\w+|не\s+принима\w+|отклон\w+|подсвеч\w+|ошибк\w+)"
+    r"[\s\S]{0,140}\bили\b[\s\S]{0,140}"
+    r"(?:значени[ея]\s+)?(?:очищ\w+|не\s+сохран\w+|не\s+принима\w+|отклон\w+|подсвеч\w+|ошибк\w+)",
+    flags=re.IGNORECASE,
+)
+
+GAP_PLACEHOLDER_EXPECTED_RE = re.compile(
+    r"(?:^|\b)GAP-\d{3,}\b[\s\S]{0,220}"
+    r"(?:нет\s+отдельн|не\s+выводится|не\s+задает\s+отдельн|metadata-only|no\s+standalone|no\s+observable)",
+    flags=re.IGNORECASE,
+)
+
+GENERIC_EXPECTED_RESULT_PATTERNS = [
+    re.compile(r"соответствует\s+(?:фт|gsr|ожидаем\w+\s+правил)", flags=re.IGNORECASE),
+    re.compile(r"\u0441\u043e\u043e\u0442\u0432\u0435\u0442\u0441\u0442\u0432\w+\s+\u043f\u0440\u0430\u0432\u0438\u043b\w+\s+\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\w+", flags=re.IGNORECASE),
+    re.compile(r"\u0441\u0432\u043e\u0439\u0441\u0442\u0432\w+[\s\S]{0,120}\u0437\u0430\u0444\u0438\u043a\u0441\u0438\u0440\u043e\u0432\u0430\w+\s+\u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\w+\s+\u043a\u0430\u043a\s+gsr", flags=re.IGNORECASE),
+    re.compile(r"\u0432\u0435\u0434\w+\s+\u043a\s+\u0431\u0438\u0437\u043d\u0435\u0441-\u0446\u0435\u043b\w+|business-need", flags=re.IGNORECASE),
+    re.compile(r"gsr\s+\d+\s*/\s*[^/]+/\s*(?:format|visibility|requiredness|editability|dictionary|source|action|validation)", flags=re.IGNORECASE),
+    re.compile(r"\u0446\u0435\u043b\u0435\u0432\w+\s+(?:\u044d\u043a\u0440\u0430\u043d|\u0440\u0430\u0437\u0434\u0435\u043b)[\s\S]{0,160}\u0443\u043a\u0430\u0437\u0430\w+[\s\S]{0,80}\u0432\s+\u0444\u0442", flags=re.IGNORECASE),
+    re.compile(r"\u0443\u043a\u0430\u0437\u0430\w+\s+\u0434\u043b\u044f\s+\u044d\u0442\u043e\u0433\u043e\s+\u0434\u0435\u0439\u0441\u0442\u0432\w+\s+\u0432\s+\u0444\u0442", flags=re.IGNORECASE),
+    re.compile(r"согласно\s+фт", flags=re.IGNORECASE),
+    re.compile(r"ожидаем\w+\s+правил\w+\s+фт", flags=re.IGNORECASE),
+    re.compile(r"^поле\s+.+\s+принимает\s+только\s+.+$", flags=re.IGNORECASE),
+    re.compile(r"^поле\s+.+\s+обязательно\s+к\s+заполнению\.?$", flags=re.IGNORECASE),
+]
+
+REQUIREDNESS_RE = re.compile(r"обязател", flags=re.IGNORECASE)
+EMPTY_REQUIREDNESS_CHECK_RE = re.compile(r"\bпуст|\bочист|не\s+заполня|без\s+значени", flags=re.IGNORECASE)
+REQUIREDNESS_MARKER_RE = re.compile(r"признак|маркер|зв[её]здоч|asterisk|label|обознач", flags=re.IGNORECASE)
+BOUNDARY_CLASS_RE = re.compile(r"\bmin(?:[-+]|$)|\bmax(?:[-+]|$)|p_min|p_max|n-1|n\+1|границ|\d+\s*(?:символ|цифр)", flags=re.IGNORECASE)
+OFF_BOUNDARY_MAX_RE = re.compile(
+    r"\b(?:p_)?max\s*(?:\+\s*(?:delta|1|\d+)|\+\d)|above\s+(?:p_)?max|>\s*(?:p_)?max|"
+    r"выше\s+(?:p_)?max|больше\s+(?:p_)?max",
+    flags=re.IGNORECASE,
+)
+OFF_BOUNDARY_MIN_RE = re.compile(
+    r"\b(?:p_)?min\s*(?:-\s*(?:delta|1|\d+)|-\d)|below\s+(?:p_)?min|<\s*(?:p_)?min|"
+    r"ниже\s+(?:p_)?min|меньше\s+(?:p_)?min",
+    flags=re.IGNORECASE,
+)
+EXACT_BOUNDARY_MAX_RE = re.compile(r"\b(?:p_)?max\b|максимальн\w+\s+границ", flags=re.IGNORECASE)
+EXACT_BOUNDARY_MIN_RE = re.compile(r"\b(?:p_)?min\b|минимальн\w+\s+границ", flags=re.IGNORECASE)
+BOUNDARY_ACCEPTANCE_RESULT_RE = re.compile(
+    r"accept\w*|accepted|saved|displayed|принима\w*|сохраня\w*|отображ\w*|применя\w*",
+    flags=re.IGNORECASE,
+)
+POSITIVE_ACCEPTANCE_EXPECTED_RE = re.compile(
+    r"accept\w*|accepted|valid|saved|displayed|принима\w*|валидн\w*|допустим\w*|"
+    r"корректн\w*|сохраня\w*|отображ\w*|применя\w*",
+    flags=re.IGNORECASE,
+)
+NUMERIC_ONLY_CONTEXT_RE = re.compile(
+    r"numeric|number|digits?|\u0447\u0438\u0441\u043b\u043e\u0432|\u0446\u0438\u0444\u0440|"
+    r"\u0442\u043e\u043b\u044c\u043a\u043e\s+(?:\u0447\u0438\u0441\u043b|\u0446\u0438\u0444\u0440)",
+    flags=re.IGNORECASE,
+)
+INPUT_FILTERING_ORACLE_RE = re.compile(
+    r"(?:букв|символ|пробел|знак|спецсимвол)[^.\n;]{0,80}не\s+(?:появля|отображ|добавля|ввод)|"
+    r"не\s+(?:появля|отображ|добавля|ввод)[^.\n;]{0,80}(?:букв|символ|пробел|знак|спецсимвол)|"
+    r"отобража\w+\s+только\s+(?:цифров|числов)|"
+    r"поле\s+[^.\n;]{0,80}(?:содержит|отображает)\s+только\s+(?:цифров|числов)|"
+    r"фильтр\w+|отфильтр\w+|игнорир\w+\s+(?:ввод|символ)|"
+    r"(?:does\s+not|not)\s+appear|filtered|stripped|input\s+is\s+ignored",
+    flags=re.IGNORECASE,
+)
+
+FIELD_LEVEL_INPUT_RESTRICTION_RE = re.compile(
+    r"только\s+(?:\d+\s+)?(?:цифр|числов|текстов)|"
+    r"содержит\s+только\s+\d+\s+цифр|"
+    r"содержит\s+\d+\s+цифр|"
+    r"маск\w+|максимальн\w+\s+длин|точн\w+\s+длин|"
+    r"exact\s+\d+\s+digits?|only\s+\d+\s+digits?|digits?\s+only|numeric[-\s]?only|"
+    r"allowed\s+characters?|forbidden\s+characters?",
+    flags=re.IGNORECASE,
+)
+
+OVERLIMIT_INPUT_RESTRICTION_RE = re.compile(
+    r"длиннее|лишн\w+\s+(?:цифр|символ)|сверх\s+(?:лимит|длин)|"
+    r"\b(?:n|max)\s*\+\s*1\b|above\s+max|longer\s+than|max(?:imum)?\s*\+\s*1|"
+    r"седьм\w+\s+цифр|пят\w+\s+цифр|одиннадцат\w+\s+цифр",
+    flags=re.IGNORECASE,
+)
+
+INVALID_CHARACTER_INPUT_RESTRICTION_RE = re.compile(
+    r"букв|пробел|спецсимвол|символ\s*#|запят|минус|нечислов|"
+    r"недопустим\w+\s+символ|letter|space|special\s+character|comma|minus|non[-\s]?digit",
+    flags=re.IGNORECASE,
+)
+
+UNDERLIMIT_INPUT_RESTRICTION_RE = re.compile(
+    r"короче|меньше\s+(?:требуем|миним)|ниже\s+(?:min|миним)|under\s+min|below\s+min|shorter",
+    flags=re.IGNORECASE,
+)
+
+TRANSITION_VALIDATION_ORACLE_RE = re.compile(
+    r"переход\s+(?:отклон|заблок|не\s+выполня)|"
+    r"(?:раздел|экран|форма)\s+[^.\n;]{0,120}не\s+открыва|"
+    r"нажатие\s+[^.\n;]{0,120}заблок|"
+    r"transition\s+(?:blocked|rejected)|does\s+not\s+proceed",
+    flags=re.IGNORECASE,
+)
+POSITIVE_TRANSITION_ORACLE_RE = re.compile(
+    r"(?:раздел\w*|экран\w*|форм\w*)\s+[^.\n;]{0,160}(?:открыт|открыва|доступн|сформирован)|"
+    r"(?:открыт|открыва|доступн|сформирован)\w*\s+[^.\n;]{0,120}(?:раздел|экран|форм)|"
+    r"(?:opened|available|generated)",
+    flags=re.IGNORECASE,
+)
+
+FORBIDDEN_TEST_CASE_FORMULATION_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    ("standalone validity verdict", re.compile(r"счита[её]тся\s+(?:не)?валидн\w*", flags=re.IGNORECASE)),
+    ("abstract validation pass/fail", re.compile(r"не\s+проходит\s+валидац\w*", flags=re.IGNORECASE)),
+    ("generic whitespace character", re.compile(r"пробельн\w+\s+символ", flags=re.IGNORECASE)),
+    ("generic alphabetic character", re.compile(r"буквенн\w+\s+символ", flags=re.IGNORECASE)),
+    ("negative data residue", re.compile(r"недопустим\w+\s+символ\w*\s+из\s+ввода", flags=re.IGNORECASE)),
+    ("generic decimal separator", re.compile(r"десятичн\w+\s+разделител", flags=re.IGNORECASE)),
+    ("fixture shorthand dictionary values", re.compile(r"\bDictionary\s+values?\b", flags=re.IGNORECASE)),
+    ("fixture shorthand selected tag", re.compile(r"\bSelected\s+tag\b", flags=re.IGNORECASE)),
+    ("fixture shorthand branch state", re.compile(r"\bBranch\s+state\b|\bcondition\s*=\s*false\b", flags=re.IGNORECASE)),
+    ("generic corresponding block", re.compile(r"соответствующ\w+\s+блок", flags=re.IGNORECASE)),
+    ("abstract ordinary state", re.compile(r"обычн\w+\s+состояни", flags=re.IGNORECASE)),
+    ("undefined UI reaction", re.compile(r"способ\s+реакции\s+UI", flags=re.IGNORECASE)),
+    ("duplicated default placeholder", re.compile(r"значени[ея]\s+по\s+умолчанию\s+значени[ея]\s+по\s+умолчанию", flags=re.IGNORECASE)),
+]
+
+ABSTRACT_TEST_CASE_ORACLE_RE = re.compile(
+    r"счита[её]тся\s+(?:не)?валидн\w*|"
+    r"не\s+проходит\s+валидац\w*|"
+    r"не\s+соответствует\s+правил\w+|"
+    r"соответствует\s+правил\w+|"
+    r"по\s+правил\w+\s+[`«\"]?[^`»\"]+[`»\"]?\s*\.?$",
+    flags=re.IGNORECASE,
+)
+
+OBSERVABLE_TEST_CASE_ORACLE_RE = re.compile(
+    r"отображ|подсказ|сообщен|ошибк|подсвеч|"
+    r"переход\s+(?:не\s+выполня|заблок|отклон)|"
+    r"(?:раздел|экран|форма)\s+[^.\n;]{0,100}не\s+открыва|"
+    r"сохранени[ея]\s+не\s+выполня|не\s+сохраня|"
+    r"очищ|заполн|доступн|недоступн|скрыт|видим|выбран|"
+    r"значени[ея]\s+[^.\n;]{0,100}(?:принима|не\s+принима)",
+    flags=re.IGNORECASE,
+)
+
+NEGATIVE_INPUT_ACTION_RE = re.compile(r"\b(?:ввести|набрать|указать|enter|type)\b", flags=re.IGNORECASE)
+MECHANICAL_FIELD_STEP_RE = re.compile(
+    r"(?:\u0449\u0435\u043b\u043a\u043d\u0443\u0442\u044c\s+\u043f\u043e\u043b\u0435|"
+    r"\u043a\u043b\u0438\u043a\u043d\u0443\u0442\u044c\s+\u043f\u043e\u043b\u0435|"
+    r"\u043d\u0430\u0436\u0430\u0442\u044c\s+\u043d\u0430\s+\u043f\u043e\u043b\u0435|"
+    r"\u043d\u0430\u0431\u0440\u0430\u0442\u044c)",
+    flags=re.IGNORECASE,
+)
+
+FIELD_LEVEL_OBSERVABLE_ORACLE_RE = re.compile(
+    r"отображ|подсказ|сообщен|ошибк|подсвеч|очищ|не\s+сохраня|сохранени[ея]\s+не\s+выполня|"
+    r"значени[ея]\s+[^.\n;]{0,100}не\s+принима\w*\s+в\s+поле|"
+    r"переход\s+(?:не\s+выполня|заблок|отклон)|(?:раздел|экран|форма)\s+[^.\n;]{0,100}не\s+открыва",
+    flags=re.IGNORECASE,
+)
+
+DATE_DEPENDENT_SOURCE_RE = re.compile(r"текущ\w+\s+дат|current\s+date|минус\s+\d+\s+лет", flags=re.IGNORECASE)
+ABSOLUTE_DATE_RE = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
+FIXED_BUSINESS_DATE_CONTEXT_RE = re.compile(
+    r"бизнес-дата|системн\w+\s+дат\w+\s+зафиксирован|"
+    r"дата\s+проверки\s+зафиксирован|тестов\w+\s+дат\w+\s+зафиксирован|fixed\s+(?:business\s+)?date",
+    flags=re.IGNORECASE,
+)
+VALID_TEST_DATA_VALUE_RE = re.compile(
+    r"(?:valid(?:\s+value)?|allowed(?:\s+value)?|"
+    r"\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\w*\s+\u0437\u043d\u0430\u0447\u0435\u043d\w*)\s*:\s*`?([^`;\n]+)`?",
+    flags=re.IGNORECASE,
+)
+VALID_TEST_DATA_CLASS_RE = re.compile(
+    r"(?:class|\u043a\u043b\u0430\u0441\u0441)\s*:\s*`?([^`;\n.]+)`?",
+    flags=re.IGNORECASE,
+)
+NUMERIC_PARAMETER_VALUE_RE = re.compile(
+    r"(?:p_)?(?:min|max)(?:\s*[-+]\s*(?:delta|1|\d+))?|delta|n(?:[-+]\d+)?|"
+    r"\d+(?:[\s.,]\d+)*(?:[.,]\d+)?",
+    flags=re.IGNORECASE,
+)
+ACTION_CONTROL_CONTEXT_RE = re.compile(
+    r"\b(?:button|action|next\s+step|back|edit|retry)\b|"
+    r"\u043a\u043d\u043e\u043f\u043a|\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439\s+\u0448\u0430\u0433|"
+    r"\u041d\u0430\u0437\u0430\u0434|\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c|"
+    r"\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c|\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c\s+\u043f\u043e\u0432\u0442\u043e\u0440\u043d\u043e",
+    flags=re.IGNORECASE,
+)
+ACTION_CONTROL_AS_FIELD_RE = re.compile(
+    r"(?:Следующий\s+шаг|Назад|Редактировать|Проверить|Отправить\s+повторно|button|action)"
+    r"[\s\S]{0,140}(?:как\s+обязател\w+\s+пол|обрабатыва\w+[\s\S]{0,80}как\s+обязател\w+\s+пол|пуст|empty|required\s+field)",
+    flags=re.IGNORECASE,
+)
+ACTION_EMPTY_CONTROL_MISUSE_RE = re.compile(
+    r"(?:\u043e\u0441\u0442\u0430\u0432\u0438\w+|leave)[^\n.;]{0,80}"
+    r"(?:\u0421\u043b\u0435\u0434\u0443\u044e\u0449\u0438\u0439\s+\u0448\u0430\u0433|\u041d\u0430\u0437\u0430\u0434|"
+    r"\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c|\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c|"
+    r"\u041e\u0442\u043f\u0440\u0430\u0432\u0438\u0442\u044c\s+\u043f\u043e\u0432\u0442\u043e\u0440\u043d\u043e|button|action)[^\n.;]{0,80}"
+    r"(?:\u043f\u0443\u0441\u0442|empty)",
+    flags=re.IGNORECASE,
+)
+VALID_FIXTURE_CONTEXT_RE = re.compile(
+    r"\bVALID_[A-Z0-9_]+\b|full\s+valid|valid\s+fixture|"
+    r"валидн\w+\s+(?:fixture|набор|баз|сценар)|"
+    r"все\s+поля,\s+кроме\s+проверяемого,\s+заполнены\s+валидн\w*|"
+    r"(?:все\s+)?остальн\w+\s+обязательн\w+\s+пол[яе]\s+[^.\n;]{0,80}(?:заполн|валид)",
+    flags=re.IGNORECASE,
+)
+NEXT_STEP_ACTION_RE = re.compile(r"Следующий\s+шаг|next\s+step|continue|продолж", flags=re.IGNORECASE)
+INTEGRATION_GAP_EVIDENCE_RE = re.compile(
+    r"(?:gap-\d+[\s\S]{0,260}(?:api|rabbitmq|dadata|kladr|connect|internal|backend|model|database|db|async|"
+    r"\u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446|\u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d|\u0432\u043d\u0435\u0448\u043d)|"
+    r"(?:api|rabbitmq|dadata|kladr|connect|internal|backend|model|database|db|async|"
+    r"\u0438\u043d\u0442\u0435\u0433\u0440\u0430\u0446|\u0441\u043f\u0440\u0430\u0432\u043e\u0447\u043d|\u0432\u043d\u0435\u0448\u043d)[\s\S]{0,260}gap-\d+)",
+    flags=re.IGNORECASE,
+)
+INTEGRATION_RELATED_DIMENSIONS = {
+    "integration",
+    "api-server-validation",
+    "async",
+    "persistence",
+}
+
+APPLICABILITY_LINKED_TC_DIMENSION_CONTEXT_RE = {
+    "numeric": re.compile(
+        r"\bnumeric\b|\bdigits?\b|\bnumber\b|числов|цифр|только\s+(?:числ|цифр)|\b\d{2,}\b",
+        flags=re.IGNORECASE,
+    ),
+    "length": re.compile(
+        r"\blength\b|длин|n-1|n\+1|коротк|длинн|\b\d+\s*(?:digit|digits|цифр|символ)",
+        flags=re.IGNORECASE,
+    ),
+    "format": re.compile(
+        r"\bformat\b|формат|маск|mask|шаблон|xxx|@\b|email|почт",
+        flags=re.IGNORECASE,
+    ),
+    "table-list": re.compile(
+        r"\blist\b|\bdictionary\b|список|справочн|перечень|значени|checkbox|чекбокс",
+        flags=re.IGNORECASE,
+    ),
+}
+
+MASK_OBLIGATION_CLASS_RE = re.compile(r"mask|маск|шаблон", flags=re.IGNORECASE)
+MASK_OBSERVABLE_ORACLE_RE = re.compile(
+    r"mask|маск|шаблон|формат|xxx|x{2,}\s*[-–—]\s*x{2,}|\d{2,}\s*[-–—]\s*\d{2,}|\+7\s*\(",
+    flags=re.IGNORECASE,
+)
+
+
+def max_requirement_range_span(value: str) -> int:
+    max_span = 1
+    for match in REQUIREMENT_CODE_RANGE_RE.finditer(value):
+        start = int(match.group(2))
+        end = int(match.group(3))
+        if end >= start:
+            max_span = max(max_span, end - start + 1)
+    return max_span
+
+
+def extract_requirement_codes_from_text(value: str) -> list[str]:
+    codes: list[str] = []
+    occupied_spans: list[tuple[int, int]] = []
+
+    def add_code(prefix: str, number: int) -> None:
+        normalized_prefix = prefix.upper()
+        if normalized_prefix in NON_REQUIREMENT_CODE_PREFIXES:
+            return
+        code = f"{normalized_prefix} {number}"
+        if code not in codes:
+            codes.append(code)
+
+    for match in REQUIREMENT_CODE_RANGE_RE.finditer(value):
+        prefix = match.group(1)
+        start = int(match.group(2))
+        end = int(match.group(3))
+        occupied_spans.append(match.span())
+        if end >= start and end - start <= 500:
+            for number in range(start, end + 1):
+                add_code(prefix, number)
+        else:
+            add_code(prefix, start)
+            add_code(prefix, end)
+
+    for match in REQUIREMENT_CODE_TOKEN_RE.finditer(value):
+        start, end = match.span()
+        if any(range_start <= start and end <= range_end for range_start, range_end in occupied_spans):
+            continue
+        add_code(match.group(1), int(match.group(2)))
+
+    return codes
+
+
+def atom_compression_marker_names(text: str) -> list[str]:
+    return [
+        name
+        for name, pattern in ATOM_COMPRESSION_MARKERS.items()
+        if pattern.search(text)
+    ]
+
+
+def extract_test_case_field_block(block: str, field_names: list[str]) -> str:
+    names_pattern = "|".join(re.escape(name) for name in field_names)
+    match = re.search(
+        rf"^\*\*(?:{names_pattern}):\*\*\s*(.*)$",
+        block,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    if not match and any(name.lower() == "steps" or name == "Шаги" for name in field_names):
+        match = re.search(
+            rf"^(?:{names_pattern}):\s*$",
+            block,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        if not match:
+            return ""
+        start = match.end()
+    else:
+        if not match:
+            return ""
+        start = match.start(1)
+    if not match:
+        return ""
+    next_field = re.search(
+        r"^(?:\*\*[^*\n]+:\*\*|(?:Steps|steps|Шаги):\s*$)",
+        block[match.end() :],
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    end = match.end() + next_field.start() if next_field else len(block)
+    return block[start:end].strip()
+
+
+def validate_required_test_case_template_sections(
+    blocks: list[tuple[str, str]],
+    path: Path,
+    root: Path,
+    *,
+    structural_severity: str,
+) -> tuple[list[Finding], list[Check]]:
+    display_path = rel(path, root)
+    missing_by_case: list[str] = []
+    for test_case_id, block in blocks:
+        missing_fields = [
+            field_name
+            for field_name, aliases in REQUIRED_TEST_CASE_TEMPLATE_FIELDS.items()
+            if not extract_test_case_field_block(block, aliases)
+        ]
+        if missing_fields:
+            missing_by_case.append(f"{test_case_id}: {', '.join(missing_fields)}")
+
+    if not missing_by_case:
+        return [], [
+            Check(
+                "test-case-template-sections",
+                "pass",
+                "Required test-case template sections are present.",
+                display_path,
+            )
+        ]
+
+    return [
+        Finding(
+            id="test-case-missing-required-template-sections",
+            severity=structural_severity,
+            category="test-case-format",
+            title="Some test cases miss required source/goal template sections",
+            details=(
+                "Each TC-* must keep the canonical sections `Цель`, `Ссылка на ФТ`, "
+                "`Источник требования`, and `Источник / цитата требования`. A compact "
+                "`Трассировка` field is not a substitute because it hides the check goal, "
+                "navigation reference, source hierarchy, and short requirement quote."
+            ),
+            path=display_path,
+            evidence=missing_by_case[:20],
+            recommended_action=(
+                "Add the missing canonical sections to every affected TC-* before moving "
+                "the writer stage to ready-for-review."
+            ),
+        )
+    ], [
+        Check(
+            "test-case-template-sections",
+            "warn" if structural_severity == "warning" else "pass",
+            "Required test-case template sections are missing.",
+            display_path,
+        )
+    ]
+
+
+def numeric_only_valid_values_that_look_invalid(test_data: str) -> list[str]:
+    invalid_values: list[str] = []
+    has_valid_value = bool(VALID_TEST_DATA_VALUE_RE.search(test_data))
+    for match in VALID_TEST_DATA_VALUE_RE.finditer(test_data):
+        value = match.group(1).strip().strip("`'\" ")
+        if not value:
+            continue
+        normalized = re.sub(r"\s+", " ", value)
+        if NUMERIC_PARAMETER_VALUE_RE.fullmatch(normalized):
+            continue
+        if re.search(r"[A-Za-zА-Яа-я]", normalized) or re.search(r"[^0-9\s.,+\-]", normalized):
+            invalid_values.append(value)
+    if has_valid_value:
+        for match in VALID_TEST_DATA_CLASS_RE.finditer(test_data):
+            value = match.group(1).strip().strip("`'\" ")
+            if not value:
+                continue
+            normalized = re.sub(r"\s+", " ", value)
+            if NUMERIC_PARAMETER_VALUE_RE.fullmatch(normalized):
+                continue
+            if re.search(r"[A-Za-zА-Яа-я]", normalized) or re.search(r"[^0-9\s.,+\-]", normalized):
+                invalid_values.append(f"class:{value}")
+    return invalid_values
+
+
+def valid_data_class_label_mismatches(test_data: str) -> list[str]:
+    valid_match = next(VALID_TEST_DATA_VALUE_RE.finditer(test_data), None)
+    class_match = next(VALID_TEST_DATA_CLASS_RE.finditer(test_data), None)
+    if not valid_match or not class_match:
+        return []
+    value = valid_match.group(1).strip().strip("`'\" ")
+    class_label = class_match.group(1).strip().strip("`'\" ")
+    if not value or not class_label:
+        return []
+    value_is_numeric = bool(NUMERIC_PARAMETER_VALUE_RE.fullmatch(re.sub(r"\s+", " ", value)))
+    class_is_alpha_or_invalid = bool(
+        re.search(r"\b(?:abc|letters?|alpha|alphabetic|special|symbols?|nonnumeric|non[-\s]?numeric)\b", class_label, flags=re.IGNORECASE)
+        or re.search(r"\b(?:букв|символ|нечисл)", class_label, flags=re.IGNORECASE)
+    )
+    if value_is_numeric and class_is_alpha_or_invalid:
+        return [f"value={value}; class={class_label}"]
+    return []
+
+
+def numeric_class_label_raw_literal_mismatches(test_data: str) -> list[str]:
+    raw_literal_mismatches: list[str] = []
+    valid_matches = list(VALID_TEST_DATA_VALUE_RE.finditer(test_data))
+    class_matches = list(VALID_TEST_DATA_CLASS_RE.finditer(test_data))
+    if not valid_matches or not class_matches:
+        return raw_literal_mismatches
+
+    for valid_match, class_match in zip(valid_matches, class_matches):
+        value = valid_match.group(1).strip().strip("`'\" ")
+        class_label = class_match.group(1).strip().strip("`'\" ")
+        if not value or not class_label:
+            continue
+        value_digits = re.sub(r"\D", "", value)
+        class_digits = re.sub(r"\D", "", class_label)
+        value_is_numeric = bool(value_digits) and bool(NUMERIC_PARAMETER_VALUE_RE.fullmatch(re.sub(r"\s+", " ", value)))
+        class_is_raw_numeric = bool(class_digits) and not re.search(r"[A-Za-zА-Яа-я]", class_label)
+        if value_is_numeric and class_is_raw_numeric and value_digits != class_digits:
+            raw_literal_mismatches.append(f"value={value}; class={class_label}")
+    return raw_literal_mismatches
+
+
+def boundary_group_label(title: str, goal: str) -> str:
+    source = title or goal or "<unknown>"
+    label = re.split(r"\s*[:—–-]\s*", source, maxsplit=1)[0].strip().lower()
+    return label or "<unknown>"
+
+
+def is_positive_test_case_type(test_case_type: str) -> bool:
+    return (
+        test_case_type.startswith("positive")
+        or test_case_type.startswith("позитив")
+        or test_case_type == "positive"
+    )
+
+
+def is_negative_test_case_type(test_case_type: str) -> bool:
+    return test_case_type.startswith("negative") or test_case_type.startswith("негатив")
+
+
+def validate_test_case_quality_smells(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    blocks: list[tuple[str, str]],
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    _, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
+    mockup_usage_section = extract_markdown_section(content, "Mockup Usage") or ""
+    mockup_hints_expected = (
+        "mockup-visual-inventory" in content.lower()
+        and re.search(r"used_for_steps\s*\|\s*yes|used_for_steps\s*[:=]\s*yes", mockup_usage_section, flags=re.IGNORECASE)
+        and MOCKUP_INTERACTION_HINT_RE.search(mockup_usage_section)
+    )
+    generic_atoms: list[str] = []
+    compressed_atoms: list[str] = []
+    covered_range_atoms: list[str] = []
+    combined_atoms: list[str] = []
+    table_residue_atoms: list[str] = []
+    ledger_text_by_atom: dict[str, str] = {}
+    for row in ledger_rows:
+        atom_id = row.get("atom_id", "").strip() or "<missing>"
+        inspected_text = " | ".join(
+            row.get(field, "")
+            for field in ("atomic_statement", "expected_behavior", "condition")
+            if row.get(field)
+        )
+        ledger_text_by_atom[atom_id] = " | ".join(
+            row.get(field, "")
+            for field in (
+                "source_property_id",
+                "property",
+                "atomic_statement",
+                "expected_behavior",
+                "condition",
+                "source_ref",
+                "source_reference",
+            )
+            if row.get(field)
+        )
+        if inspected_text and any(pattern.search(inspected_text) for pattern in GENERIC_ATOM_SMELL_PATTERNS):
+            generic_atoms.append(f"{atom_id}:{inspected_text[:160]}")
+        req_id = row.get("req_id", "") or row.get("source_reference", "") or row.get("source_ref", "")
+        req_span = max_requirement_range_span(req_id)
+        marker_names = atom_compression_marker_names(inspected_text)
+        if req_span >= 3 and len(marker_names) >= 3:
+            compressed_atoms.append(
+                f"{atom_id}:req_span={req_span}; markers={','.join(marker_names[:6])}; text={inspected_text[:140]}"
+            )
+        coverage_status = row.get("coverage_status", "").strip().strip("`").lower()
+        if coverage_status == "covered" and req_span >= 4:
+            covered_range_atoms.append(f"{atom_id}:req_span={req_span}; req_id={req_id[:120]}; text={inspected_text[:140]}")
+        if inspected_text and has_combined_behavior_smell(inspected_text):
+            combined_atoms.append(f"{atom_id}:{inspected_text[:180]}")
+        if inspected_text and has_source_table_residue(inspected_text):
+            table_residue_atoms.append(f"{atom_id}:{inspected_text[:180]}")
+
+    generic_test_cases: list[str] = []
+    value_type_list_selection_smells: list[str] = []
+    dependency_placeholder_setup_smells: list[str] = []
+    merged_valid_invalid_test_cases: list[str] = []
+    numeric_only_valid_data_invalid: list[str] = []
+    valid_data_class_label_mismatch: list[str] = []
+    numeric_class_label_raw_literal_mismatch: list[str] = []
+    unsupported_input_filtering_oracles: list[str] = []
+    input_restriction_transition_oracles: list[str] = []
+    mechanical_field_steps: list[str] = []
+    negative_transition_without_valid_fixture: list[str] = []
+    forbidden_formulations: list[str] = []
+    abstract_oracles: list[str] = []
+    negative_input_without_observable_oracle: list[str] = []
+    date_dependent_absolute_dates: list[str] = []
+    action_treated_as_required_field: list[str] = []
+    action_without_observable_artifact: list[str] = []
+    broad_scenario_test_cases: list[str] = []
+    excessive_atom_fan_in: list[str] = []
+    mockup_generic_ui_steps: list[str] = []
+    generic_titles: list[str] = []
+    positive_type_negative_oracle: list[str] = []
+    negative_type_without_negative_oracle: list[str] = []
+    generic_valid_fixture_placeholders: list[str] = []
+    generic_test_data_references: list[str] = []
+    generic_expected_results: list[str] = []
+    generic_test_data_oracles: list[str] = []
+    generic_rule_oracles: list[str] = []
+    source_dump_oracles: list[str] = []
+    value_type_metadata_as_behavior: list[str] = []
+    extraction_artifact_oracles: list[str] = []
+    requiredness_without_empty_or_marker: list[str] = []
+    boundary_without_classes: list[str] = []
+    boundary_rejection_without_acceptance: list[str] = []
+    gap_placeholder_sections: list[str] = []
+    nondeterministic_alternative_oracles: list[str] = []
+    boundary_groups: dict[str, dict[str, Any]] = {}
+    for test_case_id, block in blocks:
+        if any(pattern.search(block) for pattern in GENERIC_TC_SMELL_PATTERNS):
+            generic_test_cases.append(test_case_id)
+        expected_result = extract_test_case_expected_result(block)
+        test_case_type = extract_test_case_type(block)
+        title = extract_test_case_field_block(block, ["Title", "title", "Название"])
+        goal = extract_test_case_field_block(block, ["Goal", "goal", "Цель"])
+        preconditions = extract_test_case_field_block(
+            block, ["Preconditions", "preconditions", "Предусловия"]
+        )
+        test_data = extract_test_case_field_block(block, ["Test Data", "test_data", "test data", "Тестовые данные"])
+        steps = extract_test_case_field_block(block, ["Steps", "steps", "Шаги"])
+        status = extract_test_case_field_block(block, ["Status", "status", "Статус"]).lower()
+        atom_ids_in_block = extract_any_atom_ids_from_text(block)
+        for formulation_label, formulation_pattern in FORBIDDEN_TEST_CASE_FORMULATION_PATTERNS:
+            if match := formulation_pattern.search(block):
+                forbidden_formulations.append(
+                    f"{test_case_id}:{formulation_label}: {match.group(0).strip()[:120]}"
+                )
+        if (
+            expected_result
+            and ABSTRACT_TEST_CASE_ORACLE_RE.search(expected_result)
+            and not OBSERVABLE_TEST_CASE_ORACLE_RE.search(expected_result)
+        ):
+            abstract_oracles.append(f"{test_case_id}:expected={expected_result[:180]}")
+        if (
+            is_negative_test_case_type(test_case_type)
+            and steps
+            and expected_result
+            and NEGATIVE_INPUT_ACTION_RE.search(steps)
+            and not NEXT_STEP_ACTION_RE.search(steps)
+            and not FIELD_LEVEL_OBSERVABLE_ORACLE_RE.search(expected_result)
+        ):
+            negative_input_without_observable_oracle.append(
+                f"{test_case_id}:steps={steps[:100]}; expected={expected_result[:160]}"
+            )
+        if (
+            DATE_DEPENDENT_SOURCE_RE.search(block)
+            and ABSOLUTE_DATE_RE.search(" ".join([test_data, steps]))
+            and not FIXED_BUSINESS_DATE_CONTEXT_RE.search(preconditions)
+        ):
+            date_dependent_absolute_dates.append(
+                f"{test_case_id}:preconditions={preconditions[:100] or '-'}"
+            )
+        linked_atom_text = " | ".join(
+            ledger_text_by_atom.get(atom_id, "")
+            for atom_id in atom_ids_in_block
+            if ledger_text_by_atom.get(atom_id)
+        )
+        value_type_context = " ".join([title, goal, linked_atom_text])
+        if (
+            VALUE_TYPE_PROPERTY_RE.search(value_type_context)
+            and VALUE_TYPE_LIST_SELECTION_RE.search(" ".join([test_data, steps, expected_result]))
+            and (not linked_atom_text or NON_LIST_VALUE_TYPE_RE.search(linked_atom_text) or not LIST_VALUE_TYPE_RE.search(linked_atom_text))
+        ):
+            value_type_list_selection_smells.append(
+                f"{test_case_id}:title={title[:80]}; atoms={','.join(atom_ids_in_block[:5])}; data={test_data[:120]}"
+            )
+        if steps and DEPENDENCY_PLACEHOLDER_SETUP_RE.search(steps):
+            dependency_placeholder_setup_smells.append(f"{test_case_id}:{steps[:180]}")
+        if steps and MECHANICAL_FIELD_STEP_RE.search(steps):
+            mechanical_field_steps.append(f"{test_case_id}:steps={steps[:180]}")
+        rule_oracle_context = " ".join([steps, expected_result])
+        if rule_oracle_context and GENERIC_RULE_ORACLE_RE.search(rule_oracle_context):
+            generic_rule_oracles.append(f"{test_case_id}:{rule_oracle_context[:180]}")
+        if rule_oracle_context and SOURCE_DUMP_RULE_ORACLE_RE.search(rule_oracle_context):
+            source_dump_oracles.append(f"{test_case_id}:{rule_oracle_context[:220]}")
+        if (
+            VALUE_TYPE_PROPERTY_RE.search(value_type_context)
+            and NON_LIST_VALUE_TYPE_RE.search(value_type_context)
+            and VALUE_TYPE_METADATA_AS_BEHAVIOR_RE.search(" ".join([test_data, steps, expected_result]))
+        ):
+            value_type_metadata_as_behavior.append(
+                f"{test_case_id}:title={title[:80]}; atoms={','.join(atom_ids_in_block[:5])}; expected={expected_result[:140]}"
+            )
+        extraction_context = " ".join([steps, expected_result])
+        if extraction_context and (
+            has_source_table_residue(extraction_context)
+            or any(pattern.search(extraction_context) for pattern in EXTRACTION_ARTIFACT_ORACLE_PATTERNS)
+        ):
+            extraction_artifact_oracles.append(f"{test_case_id}:{extraction_context[:220]}")
+        if mockup_hints_expected and steps and MOCKUP_GENERIC_UI_STEP_RE.search(steps):
+            mockup_generic_ui_steps.append(f"{test_case_id}:{steps[:180]}")
+        boundary_context = " ".join([title, goal, test_data, steps, expected_result])
+        boundary_group = boundary_groups.setdefault(
+            boundary_group_label(title, goal),
+            {
+                "above_max_rejection": [],
+                "below_min_rejection": [],
+                "max_acceptance": False,
+                "min_acceptance": False,
+            },
+        )
+        negative_oracle = bool(expected_result and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result))
+        if negative_oracle and OFF_BOUNDARY_MAX_RE.search(boundary_context):
+            boundary_group["above_max_rejection"].append(test_case_id)
+        if negative_oracle and OFF_BOUNDARY_MIN_RE.search(boundary_context):
+            boundary_group["below_min_rejection"].append(test_case_id)
+        acceptance_context = " ".join([test_case_type, title, test_data, steps, expected_result])
+        boundary_acceptance = (
+            bool(expected_result)
+            and not negative_oracle
+            and BOUNDARY_ACCEPTANCE_RESULT_RE.search(expected_result)
+            and not test_case_type.startswith("negative")
+            and not test_case_type.startswith("негатив")
+        )
+        if boundary_acceptance and EXACT_BOUNDARY_MAX_RE.search(acceptance_context):
+            boundary_group["max_acceptance"] = True
+        if boundary_acceptance and EXACT_BOUNDARY_MIN_RE.search(acceptance_context):
+            boundary_group["min_acceptance"] = True
+        if title and any(pattern.search(title) for pattern in GENERIC_TC_TITLE_PATTERNS):
+            generic_titles.append(f"{test_case_id}:{title[:140]}")
+        if is_positive_test_case_type(test_case_type) and expected_result and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result):
+            positive_type_negative_oracle.append(f"{test_case_id}:type={test_case_type}; expected={expected_result[:150]}")
+        if is_negative_test_case_type(test_case_type) and not negative_oracle:
+            if expected_result and POSITIVE_ACCEPTANCE_EXPECTED_RE.search(expected_result):
+                negative_type_without_negative_oracle.append(
+                    f"{test_case_id}:type={test_case_type}; expected={expected_result[:150]}"
+                )
+            elif expected_result:
+                negative_type_without_negative_oracle.append(
+                    f"{test_case_id}:type={test_case_type}; expected_has_no_negative_oracle={expected_result[:150]}"
+                )
+        generic_fixture_context = " ".join([preconditions, test_data])
+        if generic_fixture_context and GENERIC_VALID_FIXTURE_PLACEHOLDER_RE.search(generic_fixture_context):
+            generic_valid_fixture_placeholders.append(
+                f"{test_case_id}:preconditions={preconditions[:100] or '-'}; test_data={test_data[:120] or '-'}"
+            )
+        if (
+            steps
+            and GENERIC_TEST_DATA_REFERENCE_RE.search(steps)
+            and test_data
+            and GENERIC_VALID_FIXTURE_PLACEHOLDER_RE.search(test_data)
+        ):
+            generic_test_data_references.append(
+                f"{test_case_id}:steps={steps[:120]}; test_data={test_data[:120]}"
+            )
+        if expected_result and any(pattern.search(expected_result) for pattern in GENERIC_EXPECTED_RESULT_PATTERNS):
+            generic_expected_results.append(f"{test_case_id}:{expected_result[:150]}")
+        if expected_result and GENERIC_TEST_DATA_ORACLE_RE.search(expected_result):
+            generic_test_data_oracles.append(f"{test_case_id}:expected={expected_result[:150]}; test_data={test_data[:120] or '-'}")
+        if (
+            is_negative_test_case_type(test_case_type)
+            and expected_result
+            and NONDETERMINISTIC_ALTERNATIVE_ORACLE_RE.search(expected_result)
+        ):
+            nondeterministic_alternative_oracles.append(f"{test_case_id}:expected={expected_result[:180]}")
+        gap_placeholder_context = " ".join([test_case_type, status, expected_result, steps])
+        if (
+            extract_gap_ids_from_text(gap_placeholder_context)
+            and ("gap" in test_case_type or "gap" in status or "unclear" in status)
+            and GAP_PLACEHOLDER_EXPECTED_RE.search(" ".join([expected_result, steps]))
+        ):
+            gap_placeholder_sections.append(
+                f"{test_case_id}:type={test_case_type or '-'}; status={status or '-'}; expected={expected_result[:160]}"
+            )
+        action_identity_context = " ".join([title, goal])
+        action_requiredness_context = " ".join([title, goal, test_data, expected_result])
+        action_step_context = " ".join([test_data, steps, expected_result])
+        is_positive_action_transition_check = bool(
+            action_identity_context
+            and ACTION_CONTROL_CONTEXT_RE.search(action_identity_context)
+            and NEXT_STEP_ACTION_RE.search(steps)
+            and POSITIVE_TRANSITION_ORACLE_RE.search(expected_result)
+        )
+        requiredness_context = " ".join([title, goal, test_data, steps, expected_result])
+        if (
+            requiredness_context
+            and REQUIREDNESS_RE.search(requiredness_context)
+            and not EMPTY_REQUIREDNESS_CHECK_RE.search(requiredness_context)
+            and not REQUIREDNESS_MARKER_RE.search(requiredness_context)
+            and not is_positive_action_transition_check
+        ):
+            requiredness_without_empty_or_marker.append(f"{test_case_id}:{requiredness_context[:150]}")
+        if ACTION_CONTROL_AS_FIELD_RE.search(action_requiredness_context) or ACTION_EMPTY_CONTROL_MISUSE_RE.search(action_step_context):
+            action_treated_as_required_field.append(f"{test_case_id}:{requiredness_context[:180]}")
+        if test_data and NUMERIC_ONLY_CONTEXT_RE.search(boundary_context):
+            invalid_valid_values = numeric_only_valid_values_that_look_invalid(test_data)
+            if invalid_valid_values:
+                numeric_only_valid_data_invalid.append(
+                    f"{test_case_id}:valid_values={', '.join(invalid_valid_values[:3])}; context={boundary_context[:130]}"
+                )
+        if (
+            expected_result
+            and NEXT_STEP_ACTION_RE.search(steps)
+            and TRANSITION_VALIDATION_ORACLE_RE.search(expected_result)
+            and FIELD_LEVEL_INPUT_RESTRICTION_RE.search(block)
+            and not UNDERLIMIT_INPUT_RESTRICTION_RE.search(boundary_context)
+            and (
+                INVALID_CHARACTER_INPUT_RESTRICTION_RE.search(boundary_context)
+                or OVERLIMIT_INPUT_RESTRICTION_RE.search(boundary_context)
+            )
+        ):
+            input_restriction_transition_oracles.append(
+                f"{test_case_id}:steps={steps[:100]}; expected={expected_result[:160]}"
+            )
+        transition_context = " ".join([title, goal, preconditions, test_data, steps, expected_result])
+        if (
+            NEXT_STEP_ACTION_RE.search(steps)
+            and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result)
+            and not VALID_FIXTURE_CONTEXT_RE.search(transition_context)
+        ):
+            negative_transition_without_valid_fixture.append(
+                f"{test_case_id}:steps={steps[:90]}; expected={expected_result[:140]}"
+            )
+        if test_data:
+            class_mismatches = valid_data_class_label_mismatches(test_data)
+            if class_mismatches:
+                valid_data_class_label_mismatch.append(f"{test_case_id}:{'; '.join(class_mismatches[:3])}")
+            raw_literal_mismatches = numeric_class_label_raw_literal_mismatches(test_data)
+            if raw_literal_mismatches:
+                numeric_class_label_raw_literal_mismatch.append(f"{test_case_id}:{'; '.join(raw_literal_mismatches[:3])}")
+        if (
+            test_case_type.startswith("boundary")
+            or test_case_type.startswith("границ")
+        ) and not BOUNDARY_CLASS_RE.search(" ".join([test_data, steps, expected_result])):
+            boundary_without_classes.append(f"{test_case_id}:type={test_case_type}")
+        if expected_result and any(pattern.search(expected_result) for pattern in MERGED_VALID_INVALID_EXPECTED_PATTERNS):
+            merged_valid_invalid_test_cases.append(f"{test_case_id}:expected={expected_result[:160]}")
+        else:
+            test_data_and_steps = " ".join(
+                [
+                    test_data,
+                    steps,
+                ]
+            )
+            if (
+                test_data_and_steps
+                and MERGED_VALID_INVALID_DATA_STEP_RE.search(test_data_and_steps)
+                and re.search(r"^\*\*(?:Type|Тип):\*\*\s*`?(?:Negative|Негативн\w*)`?", block, flags=re.IGNORECASE | re.MULTILINE)
+            ):
+                merged_valid_invalid_test_cases.append(f"{test_case_id}:data/steps={test_data_and_steps[:160]}")
+        action_context = " ".join(
+            [
+                title,
+                goal,
+                expected_result,
+            ]
+        )
+        if (
+            action_context
+            and ACTION_INITIATION_WITHOUT_ARTIFACT_RE.search(action_context)
+            and not CONCRETE_OBSERVABLE_ARTIFACT_RE.search(action_context)
+        ):
+            action_without_observable_artifact.append(f"{test_case_id}:{action_context[:180]}")
+        if re.search(r"^\*\*(?:Type|Тип):\*\*\s*`?(?:Scenario|Сценар\w*)`?", block, flags=re.IGNORECASE | re.MULTILINE):
+            if max_requirement_range_span(block) >= 4 or re.search(
+                r"same\s+constraints|те\s+же\s+огранич|соответствуют\s+`?GSR|validate\s+by\s+FT\s+rules",
+                block,
+                flags=re.IGNORECASE,
+            ):
+                broad_scenario_test_cases.append(f"{test_case_id}:scenario_range_or_deferred_oracle")
+
+        if len(atom_ids_in_block) > 5 and not re.search(
+            r"(?i)\bscenario\b|\buse[-\s]?case\b|сценар|сквозн|e2e|end[-\s]?to[-\s]?end",
+            block,
+        ):
+            excessive_atom_fan_in.append(f"{test_case_id}:atoms={len(atom_ids_in_block)}")
+
+    for group, boundary_flags in boundary_groups.items():
+        above_max_rejection = boundary_flags["above_max_rejection"]
+        below_min_rejection = boundary_flags["below_min_rejection"]
+        if above_max_rejection and not boundary_flags["max_acceptance"]:
+            boundary_rejection_without_acceptance.append(
+                f"{group}: above-max rejection without exact max acceptance; examples={','.join(above_max_rejection[:5])}"
+            )
+        if below_min_rejection and not boundary_flags["min_acceptance"]:
+            boundary_rejection_without_acceptance.append(
+                f"{group}: below-min rejection without exact min acceptance; examples={','.join(below_min_rejection[:5])}"
+            )
+
+    if generic_atoms:
+        findings.append(
+            Finding(
+                id="atomic-ledger-generic-atom-smell",
+                severity="warning",
+                category="traceability",
+                title="Atomic ledger contains generic non-verifiable atom statements",
+                details=(
+                    "Ledger rows should decompose source requirements into concrete, checkable behavior. "
+                    "Generic rows such as 'Требование GSR N выполняется' hide missing decomposition."
+                ),
+                path=display_path,
+                evidence=generic_atoms[:20],
+                recommended_action="Rewrite affected atoms into concrete field/action/condition/expected behavior rows or mark non-observable parts as GAP/unclear.",
+            )
+        )
+    if compressed_atoms:
+        findings.append(
+            Finding(
+                id="atomic-ledger-compressed-range-smell",
+                severity="warning",
+                category="atomarity",
+                title="Atomic ledger appears to compress multiple requirement codes into broad atoms",
+                details=(
+                    "A ledger row that spans several requirement codes and mixes multiple independent behavior "
+                    "markers is likely a compact draft. Writer should split it instead of optimizing for a shorter, "
+                    "validator-friendly artifact."
+                ),
+                path=display_path,
+                evidence=compressed_atoms[:20],
+                recommended_action=(
+                    "Split the affected ATOM-* rows by independent rule/property, or leave non-observable parts "
+                    "as GAP/unclear. If the file was shortened because of a command/context limit, rewrite it "
+                    "package-by-package with chunked artifact writing."
+                ),
+            )
+        )
+    if covered_range_atoms:
+        findings.append(
+            Finding(
+                id="covered-atom-gsr-range-compression-smell",
+                severity="warning",
+                category="atomarity",
+                title="Covered atoms use broad requirement-code ranges",
+                details=(
+                    "A covered ATOM-* that spans a broad GSR/REQ range is likely compressing independent rules. "
+                    "Traceability preservation is not enough; each independent rule needs its own atom or GAP."
+                ),
+                path=display_path,
+                evidence=covered_range_atoms[:20],
+                recommended_action="Split broad covered atoms into atomic rows, or mark unobservable/ambiguous parts as GAP/unclear.",
+            )
+        )
+    if combined_atoms:
+        findings.append(
+            Finding(
+                id="atomic-ledger-combined-behavior-smell",
+                severity="warning",
+                category="atomarity",
+                title="Atomic ledger rows combine multiple behaviors",
+                details=(
+                    "ATOM-* rows should not combine independent properties such as visibility, requiredness, "
+                    "editability, format, dependency branches and validation classes."
+                ),
+                path=display_path,
+                evidence=combined_atoms[:20],
+                recommended_action="Split affected ATOM-* rows into one behavior per atom before mapping them to plan rows and TC.",
+            )
+        )
+    if table_residue_atoms:
+        findings.append(
+            Finding(
+                id="atomic-ledger-source-table-residue-smell",
+                severity="warning",
+                category="traceability",
+                title="Atomic ledger contains source table extraction residue",
+                details=(
+                    "ATOM-* rows should be built from clean normalized source rows. Table headers, neighboring fields "
+                    "and page/table residue make coverage claims unreliable."
+                ),
+                path=display_path,
+                evidence=table_residue_atoms[:20],
+                recommended_action=(
+                    "Add or fix Source Table Normalization, split polluted rows into clean atoms, and change partial or "
+                    "low-confidence rows to GAP/unclear until the source is confirmed."
+                ),
+            )
+        )
+
+    if generic_titles:
+        findings.append(
+            Finding(
+                id="test-case-generic-title-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case titles are templated instead of naming the concrete check",
+                details=(
+                    "A TC title should name the field/action and the single behavior under test. "
+                    "Template phrases such as 'проверяет Поле...' hide weak decomposition."
+                ),
+                path=display_path,
+                evidence=generic_titles[:20],
+                recommended_action="Rewrite titles so each one states one concrete positive, negative, boundary, dependency or gap check.",
+            )
+        )
+
+    if generic_test_cases:
+        findings.append(
+            Finding(
+                id="test-case-generic-executable-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases contain generic non-executable steps or data",
+                details=(
+                    "Manual TC steps must be executable without reconstructing the action from the ledger. "
+                    "Generic phrases such as 'Выполнить проверяемое действие' are not enough for pass/fail execution."
+                ),
+                path=display_path,
+                evidence=generic_test_cases[:20],
+                recommended_action="Replace generic placeholders with concrete preconditions, data, steps, and observable expected results.",
+            )
+        )
+
+    if value_type_list_selection_smells:
+        findings.append(
+            Finding(
+                id="test-case-value-type-list-selection-smell",
+                severity="warning",
+                category="traceability",
+                title="Value-type atoms are covered by list-selection checks",
+                details=(
+                    "A source property such as `тип значения: Строка/Дата/Логическое` is metadata or an input "
+                    "class, not proof that the control opens a reference list. Covering value-type atoms with "
+                    "generic list-selection TC creates fake coverage and masks missing format/input checks."
+                ),
+                path=display_path,
+                evidence=value_type_list_selection_smells[:20],
+                recommended_action=(
+                    "Remap non-list value-type atoms to observable format/input behavior or GAP/unclear. "
+                    "Use list-selection TC only for source rows that explicitly define a list/dictionary value source."
+                ),
+            )
+        )
+
+    if dependency_placeholder_setup_smells:
+        findings.append(
+            Finding(
+                id="test-case-dependency-placeholder-setup-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Dependency test cases use placeholder setup instead of concrete controlling values",
+                details=(
+                    "A dependency TC is not executable when it says only `В форме задать данные, при которых ...`. "
+                    "The steps must name the controlling field, exact value/action, and the branch being exercised."
+                ),
+                path=display_path,
+                evidence=dependency_placeholder_setup_smells[:20],
+                recommended_action=(
+                    "Rewrite each dependency setup as concrete UI actions, for example set the named toggle/list field "
+                    "to the exact value that makes the condition true or false."
+                ),
+            )
+        )
+
+    if mockup_generic_ui_steps:
+        findings.append(
+            Finding(
+                id="test-case-mockup-interaction-hints-not-used",
+                severity="warning",
+                category="test-case-format",
+                title="UI steps stay generic despite available mockup interaction hints",
+                details=(
+                    "When `mockup-visual-inventory.md` is opened and `used_for_steps = yes`, TC steps should use "
+                    "the recorded UI mechanics such as click/select/toggle/check/open calendar. Generic instructions "
+                    "like entering a value from test data into every field ignore the mockup's purpose."
+                ),
+                path=display_path,
+                evidence=mockup_generic_ui_steps[:20],
+                recommended_action=(
+                    "Rewrite affected UI steps using the interaction hints from mockup-visual-inventory.md. "
+                    "Keep FT/source artifacts as the source of business rules and expected results."
+                ),
+            )
+        )
+
+    if positive_type_negative_oracle:
+        findings.append(
+            Finding(
+                id="test-case-positive-type-with-negative-oracle",
+                severity="warning",
+                category="expected-result",
+                title="Positive test-case type conflicts with rejection/invalid expected result",
+                details=(
+                    "`Type: Positive` cannot be used for TC whose primary oracle is rejection, invalid state, "
+                    "no-save behavior or a value outside min/max. This hides missing negative/boundary coverage."
+                ),
+                path=display_path,
+                evidence=positive_type_negative_oracle[:20],
+                recommended_action="Change the TC type to Negative/Boundary or split positive acceptance and negative rejection into separate cases.",
+            )
+        )
+
+    if negative_type_without_negative_oracle:
+        findings.append(
+            Finding(
+                id="test-case-negative-type-without-negative-oracle",
+                severity="warning",
+                category="expected-result",
+                title="Negative test-case type has no negative oracle",
+                details=(
+                    "`Type: Negative` must prove a rejection, invalid state, no-save behavior or another negative "
+                    "outcome. A negative TC that only shows acceptance/valid behavior is not negative coverage."
+                ),
+                path=display_path,
+                evidence=negative_type_without_negative_oracle[:20],
+                recommended_action=(
+                    "Replace the expected result with an observable negative oracle and invalid input class, "
+                    "or change the TC type to Positive if it is a valid acceptance check."
+                ),
+            )
+        )
+
+    if generic_valid_fixture_placeholders:
+        findings.append(
+            Finding(
+                id="test-case-generic-valid-fixture-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases use unresolved generic valid fixture data",
+                details=(
+                    "A manual TC is not reproducible when it relies on `Минимальный валидный набор данных`, "
+                    "`валидные данные` or conditional baseline wording without a concrete fixture, values or "
+                    "explicitly linked artifact."
+                ),
+                path=display_path,
+                evidence=generic_valid_fixture_placeholders[:20],
+                recommended_action=(
+                    "Replace generic baseline wording with executable preconditions/test data, link a concrete "
+                    "fixture artifact, or move the blocked setup to GAP/unclear."
+                ),
+            )
+        )
+
+    if generic_test_data_references:
+        findings.append(
+            Finding(
+                id="test-case-generic-test-data-reference-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Steps refer to test data while the data are only a generic baseline",
+                details=(
+                    "A step such as `ввести значение из тестовых данных` is executable only when the test data "
+                    "contain the concrete input value. If test data contain a generic valid baseline, the TC has "
+                    "no actual value to enter."
+                ),
+                path=display_path,
+                evidence=generic_test_data_references[:20],
+                recommended_action="Put the concrete literal/parameter in Test Data and name it in the step, or create a GAP/unclear.",
+            )
+        )
+
+    if generic_expected_results:
+        findings.append(
+            Finding(
+                id="test-case-generic-expected-result-smell",
+                severity="warning",
+                category="expected-result",
+                title="Expected results restate the FT rule instead of a pass/fail oracle",
+                details=(
+                    "Expected results must describe an observable state. Repeating 'соответствует ФТ' or "
+                    "'поле принимает только ...' forces the executor to reconstruct the oracle from the source."
+                ),
+                path=display_path,
+                evidence=generic_expected_results[:20],
+                recommended_action="Replace rule restatements with observable UI/API/document/log outcomes or move unobservable behavior to GAP/unclear.",
+            )
+        )
+
+    if generic_test_data_oracles:
+        findings.append(
+            Finding(
+                id="test-case-generic-test-data-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Expected results refer to test data instead of naming the checked value",
+                details=(
+                    "Expected results such as `Значение из тестовых данных принято` force the executor or reviewer "
+                    "to look elsewhere for the oracle. The expected result should name the exact value or the "
+                    "observable field state directly."
+                ),
+                path=display_path,
+                evidence=generic_test_data_oracles[:20],
+                recommended_action=(
+                    "Rewrite expected results to name the concrete value and observable result, for example "
+                    "`значение 2000 отображается в поле` or `значение 1999 не добавляется/не принимается`."
+                ),
+            )
+        )
+
+    if generic_rule_oracles:
+        findings.append(
+            Finding(
+                id="test-case-generic-rule-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Test cases use a generic rule-oracle instead of a concrete observable result",
+                details=(
+                    "Phrases such as `видимое состояние после действия соответствует одному наблюдаемому правилу` "
+                    "do not tell the tester what state to observe. They restate that some rule exists instead of "
+                    "providing an executable oracle."
+                ),
+                path=display_path,
+                evidence=generic_rule_oracles[:20],
+                recommended_action=(
+                    "Replace the generic rule-oracle with the exact observable UI state, value, marker, rejection, "
+                    "transition or GAP/unclear for the affected atom."
+                ),
+            )
+        )
+
+    if source_dump_oracles:
+        findings.append(
+            Finding(
+                id="test-case-source-dump-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Test cases paste source/GSR text instead of an executable oracle",
+                details=(
+                    "Expected results must describe what the tester observes. Phrases such as "
+                    "`наблюдается правило из GSR ...` followed by a source fragment make the TC depend on "
+                    "re-interpreting the FT instead of providing a concrete pass/fail oracle."
+                ),
+                path=display_path,
+                evidence=source_dump_oracles[:20],
+                recommended_action=(
+                    "Rewrite the affected expected results into explicit observable states, values, validation "
+                    "outcomes, control availability or GAP/unclear. Keep raw GSR/source text only in traceability "
+                    "or source quote fields."
+                ),
+            )
+        )
+
+    if value_type_metadata_as_behavior:
+        findings.append(
+            Finding(
+                id="test-case-value-type-metadata-as-behavior-smell",
+                severity="warning",
+                category="traceability",
+                title="Value-type metadata is treated as standalone executable behavior",
+                details=(
+                    "`тип значения: Строка/Дата/Логическое` is metadata unless the source also defines a concrete "
+                    "observable UI/input behavior. Turning it into a standalone TC such as `field accepts a string "
+                    "value` creates fake coverage, especially when the same field has numeric, date, phone, email, "
+                    "length or format constraints."
+                ),
+                path=display_path,
+                evidence=value_type_metadata_as_behavior[:20],
+                recommended_action=(
+                    "Cover non-list value-type rows through the concrete input/format/widget rules derived from "
+                    "source artifacts, or mark the metadata-only row as GAP/unclear. Do not create separate positive "
+                    "TC for generic string acceptance."
+                ),
+            )
+        )
+
+    if extraction_artifact_oracles:
+        findings.append(
+            Finding(
+                id="test-case-extraction-artifact-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Expected results contain DOCX/PDF extraction artifacts",
+                details=(
+                    "Split words, table-header residue and column spillover in expected results indicate that the "
+                    "writer copied raw extraction text instead of normalizing it into executable UI behavior."
+                ),
+                path=display_path,
+                evidence=extraction_artifact_oracles[:20],
+                recommended_action=(
+                    "Clean the source fragment in Source Table Normalization first, then rewrite TC expected "
+                    "results as observable behavior. Put uncertain extraction fragments into GAP/unclear."
+                ),
+            )
+        )
+
+    if requiredness_without_empty_or_marker:
+        findings.append(
+            Finding(
+                id="test-case-requiredness-without-empty-or-marker-check",
+                severity="warning",
+                category="test-design",
+                title="Requiredness checks do not test an empty value or a visible required marker",
+                details=(
+                    "Requiredness marker coverage and requiredness enforcement are different checks. "
+                    "Filling a required field does not prove either unless the TC observes a marker or validates an empty value."
+                ),
+                path=display_path,
+                evidence=requiredness_without_empty_or_marker[:20],
+                recommended_action=(
+                    "For UI marker checks, observe the required indicator. For enforcement checks, leave the field empty "
+                    "and trigger the confirmed validation action; if that action is out of scope, use GAP/unclear."
+                ),
+            )
+        )
+
+    if boundary_without_classes:
+        findings.append(
+            Finding(
+                id="test-case-boundary-without-boundary-classes",
+                severity="warning",
+                category="test-design",
+                title="Boundary test cases do not name boundary classes",
+                details="Boundary TC need concrete or parameterized classes such as min-1/min/min+1 and max-1/max/max+1.",
+                path=display_path,
+                evidence=boundary_without_classes[:20],
+                recommended_action="Add concrete values or named parameterized boundary classes, or move unknown limits to GAP/unclear.",
+            )
+        )
+
+    if boundary_rejection_without_acceptance:
+        findings.append(
+            Finding(
+                id="test-case-boundary-rejection-without-on-boundary-acceptance",
+                severity="warning",
+                category="test-design",
+                title="Boundary rejection checks do not prove acceptance at the boundary",
+                details=(
+                    "Rejecting min-1/max+1 values is not enough for boundary coverage. The suite also needs "
+                    "separate acceptance checks for exact min and exact max, or a GAP if the exact limits are not known."
+                ),
+                path=display_path,
+                evidence=boundary_rejection_without_acceptance[:20],
+                recommended_action=(
+                    "Add separate positive/boundary-positive TC for exact min and exact max values using concrete "
+                    "or parameterized values, or link the missing boundary oracle to GAP/unclear."
+                ),
+            )
+        )
+
+    if merged_valid_invalid_test_cases:
+        findings.append(
+            Finding(
+                id="test-case-merged-valid-invalid-smell",
+                severity="warning",
+                category="atomarity",
+                title="Test cases merge valid and invalid checks",
+                details=(
+                    "A TC should have one primary pass/fail oracle. Checking that invalid input is rejected and "
+                    "valid input is accepted in the same executable TC hides two independent checks."
+                ),
+                path=display_path,
+                evidence=merged_valid_invalid_test_cases[:20],
+                recommended_action=(
+                    "Split valid acceptance and invalid rejection into separate TC-* sections. If valid input is "
+                    "used only to recover after an error, mark the TC as an explicit recovery scenario and make "
+                    "recovery the single expected behavior."
+                ),
+            )
+        )
+
+    if numeric_only_valid_data_invalid:
+        findings.append(
+            Finding(
+                id="test-case-numeric-only-valid-data-invalid-smell",
+                severity="warning",
+                category="test-data",
+                title="Numeric-only checks use non-numeric data as valid input",
+                details=(
+                    "When a TC claims a numeric-only rule, the marked valid value must be numeric or an explicit "
+                    "numeric boundary parameter. A value such as `A-123` is an invalid class, not positive data."
+                ),
+                path=display_path,
+                evidence=numeric_only_valid_data_invalid[:20],
+                recommended_action=(
+                    "Replace the valid value with a concrete numeric value or parameterized numeric boundary, and keep "
+                    "non-numeric values in separate negative TC-* sections."
+                ),
+            )
+        )
+
+    if valid_data_class_label_mismatch:
+        findings.append(
+            Finding(
+                id="test-case-valid-data-class-label-mismatch-smell",
+                severity="warning",
+                category="test-data",
+                title="Valid test data has a contradictory equivalence class label",
+                details=(
+                    "A positive test datum must not pair a numeric value with an alphabetic/special-character class "
+                    "label such as `ABC` or `letters`. That makes the intended equivalence class ambiguous."
+                ),
+                path=display_path,
+                evidence=valid_data_class_label_mismatch[:20],
+                recommended_action=(
+                    "Align the class label with the valid value, or split the alphabetic/special-character class into "
+                    "a separate negative TC/GAP."
+                ),
+            )
+        )
+
+    if numeric_class_label_raw_literal_mismatch:
+        findings.append(
+            Finding(
+                id="test-case-numeric-class-label-raw-literal-smell",
+                severity="warning",
+                category="test-data",
+                title="Numeric test data uses a raw literal as an equivalence class label",
+                details=(
+                    "The `class` field should name the equivalence or boundary class, not a second numeric value. "
+                    "Pairs such as `Допустимое значение: 123456; класс: 12345` make it unclear which input is "
+                    "actually valid and often hide off-by-one length mistakes."
+                ),
+                path=display_path,
+                evidence=numeric_class_label_raw_literal_mismatch[:20],
+                recommended_action=(
+                    "Replace numeric raw class labels with semantic classes such as `6 digits`, `N digits`, "
+                    "`exact max length`, or split the second numeric value into a separate TC if it is a real input."
+                ),
+            )
+        )
+
+    if input_restriction_transition_oracles:
+        findings.append(
+            Finding(
+                id="test-case-input-restriction-transition-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Field-level input restriction is tested through transition validation",
+                details=(
+                    "When the source defines an input or format restriction for a field, such as `only N digits`, "
+                    "`only numeric characters`, a mask, maximum/exact length or allowed characters, the TC should "
+                    "verify the displayed field value after input. Transition/save validation is a different "
+                    "mechanism and should be used only when the source explicitly defines validation on that action. "
+                    "Underlength or empty required values may still require a validation action."
+                ),
+                path=display_path,
+                evidence=input_restriction_transition_oracles[:30],
+                recommended_action=(
+                    "Remove the transition action from the input-restriction TC and assert the field state after "
+                    "the attempted input, for example `123456` is displayed and the seventh digit is not added."
+                ),
+            )
+        )
+
+    if mechanical_field_steps:
+        findings.append(
+            Finding(
+                id="test-case-mechanical-field-step-smell",
+                severity="warning",
+                category="steps",
+                title="Test-case step uses mechanical field interaction wording",
+                details=(
+                    "Manual TC steps should describe the user's intent, not mouse-specific field mechanics. "
+                    "For ordinary text input use `Ввести <значение> в поле <название>`; for dates use "
+                    "`Указать <дату> в поле <название>`. Use field activation wording only when activation/focus "
+                    "is the source-backed behavior under test."
+                ),
+                path=display_path,
+                evidence=mechanical_field_steps[:30],
+                recommended_action=(
+                    "Replace `щелкнуть поле ... и набрать ...` / `набрать ...` with intention-level steps such as "
+                    "`Ввести <значение> в поле <название>`."
+                ),
+            )
+        )
+
+    if unsupported_input_filtering_oracles:
+        findings.append(
+            Finding(
+                id="test-case-unsupported-input-filtering-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Numeric-only test cases assume input filtering without source evidence",
+                details=(
+                    "A source rule such as `only digits` defines the allowed value class, but it does not by itself "
+                    "prove the UI mechanism. Filtering, ignored characters, stripped symbols, field-level errors and "
+                    "transition validation are different observable behaviors."
+                ),
+                path=display_path,
+                evidence=unsupported_input_filtering_oracles[:20],
+                recommended_action=(
+                    "Rewrite the expected result to a source-backed validation outcome, add evidence that the UI "
+                    "filters input, or move the exact enforcement mechanism to GAP/unclear."
+                ),
+            )
+        )
+
+    if negative_transition_without_valid_fixture:
+        findings.append(
+            Finding(
+                id="test-case-negative-transition-without-valid-fixture-smell",
+                severity="warning",
+                category="test-design",
+                title="Negative transition validation is not isolated by a full valid fixture",
+                details=(
+                    "When a negative TC clicks `Следующий шаг` or another transition action, all unrelated required "
+                    "fields in the selected branch must be valid. Otherwise the rejected transition cannot be "
+                    "attributed to the field under test."
+                ),
+                path=display_path,
+                evidence=negative_transition_without_valid_fixture[:20],
+                recommended_action=(
+                    "Add a named full-valid fixture for every other required field, or limit the TC to a field-level "
+                    "validation marker that does not depend on the transition action."
+                ),
+            )
+        )
+
+    if forbidden_formulations:
+        findings.append(
+            Finding(
+                id="test-case-forbidden-formulation-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases contain forbidden or noncanonical formulations",
+                details=(
+                    "Canonical TC wording must name a concrete value, action and observable oracle. Phrases such as "
+                    "`считается невалидным`, generic `пробельный/буквенный символ`, fixture shorthands and "
+                    "`соответствующий блок` let weak wording pass as a test oracle."
+                ),
+                path=display_path,
+                evidence=forbidden_formulations[:30],
+                recommended_action=(
+                    "Replace every listed phrase with a concrete input value and observable UI outcome, or move the "
+                    "undefined behavior to Coverage Gaps instead of keeping it inside an executable TC."
+                ),
+            )
+        )
+
+    if abstract_oracles:
+        findings.append(
+            Finding(
+                id="test-case-abstract-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Expected result is an abstract rule verdict, not an observable oracle",
+                details=(
+                    "A manual TC cannot be passed or failed from `valid/invalid according to the rule` alone. The "
+                    "expected result must name what the tester observes: displayed value, blocked transition, "
+                    "message, marker, hidden/visible element, saved value, or another concrete artifact."
+                ),
+                path=display_path,
+                evidence=abstract_oracles[:30],
+                recommended_action="Rewrite the expected result using one concrete oracle class from the canonical test-case format reference.",
+            )
+        )
+
+    if negative_input_without_observable_oracle:
+        findings.append(
+            Finding(
+                id="test-case-negative-input-without-observable-oracle",
+                severity="warning",
+                category="expected-result",
+                title="Negative input TC lacks an observable enforcement point",
+                details=(
+                    "Typing an invalid value and saying it is invalid does not define how the tester verifies the "
+                    "system response. A negative input TC must either check a field-level observable state or perform "
+                    "a validated action with all unrelated required fields isolated by a valid baseline."
+                ),
+                path=display_path,
+                evidence=negative_input_without_observable_oracle[:30],
+                recommended_action=(
+                    "Add a source-backed field-level oracle, or trigger a validation action such as `Следующий шаг` "
+                    "and include a valid baseline for all unrelated required fields."
+                ),
+            )
+        )
+
+    if date_dependent_absolute_dates:
+        findings.append(
+            Finding(
+                id="test-case-date-dependent-absolute-date-smell",
+                severity="warning",
+                category="test-data",
+                title="Date-dependent TC uses absolute dates without a fixed baseline date",
+                details=(
+                    "Rules tied to the current date are not stable unless the TC fixes the business/system date in "
+                    "preconditions. Putting `Дата проверки` only in test data does not isolate the environment."
+                ),
+                path=display_path,
+                evidence=date_dependent_absolute_dates[:30],
+                recommended_action=(
+                    "Move the fixed business/system date to preconditions, then calculate every absolute test date "
+                    "relative to that baseline."
+                ),
+            )
+        )
+
+    if action_treated_as_required_field:
+        findings.append(
+            Finding(
+                id="test-case-action-treated-as-required-field-smell",
+                severity="warning",
+                category="traceability",
+                title="Action/button is treated as a required input field",
+                details=(
+                    "Actions such as `Следующий шаг`, `Назад`, `Проверить` or `Отправить повторно` are not input "
+                    "fields. Requiredness or empty-value checks for these controls usually indicate semantic drift "
+                    "from the source requirement."
+                ),
+                path=display_path,
+                evidence=action_treated_as_required_field[:20],
+                recommended_action=(
+                    "Re-map the action requirement to availability, click result, transition or GAP/unclear; do not "
+                    "test action controls by leaving them empty as fields."
+                ),
+            )
+        )
+
+    if action_without_observable_artifact:
+        findings.append(
+            Finding(
+                id="test-case-action-without-observable-artifact-smell",
+                severity="warning",
+                category="expected-result",
+                title="Action test cases claim initiation without an observable artifact",
+                details=(
+                    "A TC cannot mark an async/API/internal action as covered by saying the action is initiated "
+                    "unless the expected result names a concrete UI, log, API, mock, document or other artifact "
+                    "that proves the initiation."
+                ),
+                path=display_path,
+                evidence=action_without_observable_artifact[:20],
+                recommended_action=(
+                    "Name the confirmed observable artifact and expected state, or move the affected action atom "
+                    "to GAP/unclear instead of `covered`."
+                ),
+            )
+        )
+
+    if gap_placeholder_sections:
+        findings.append(
+            Finding(
+                id="test-case-gap-placeholder-section-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Gap-only placeholder sections are listed as TC cases",
+                details=(
+                    "A GAP/unclear note is not an executable manual test case. Keeping metadata-only GAP placeholders "
+                    "under `## TC-*` inflates TC counts and makes downstream coverage look stronger than it is."
+                ),
+                path=display_path,
+                evidence=gap_placeholder_sections[:20],
+                recommended_action=(
+                    "Move gap-only placeholders to Coverage Gaps, Atomic Requirements Ledger, Package Test Design Plan "
+                    "or traceability matrix. Keep `## TC-*` sections for executable checks with steps and observable oracle."
+                ),
+            )
+        )
+
+    if nondeterministic_alternative_oracles:
+        findings.append(
+            Finding(
+                id="test-case-nondeterministic-alternative-oracle-smell",
+                severity="warning",
+                category="expected-result",
+                title="Negative expected results use alternative possible outcomes",
+                details=(
+                    "Expected results such as `value is cleared, not saved, or highlighted` are not deterministic "
+                    "pass/fail oracles. They allow several materially different UI behaviors without source-backed "
+                    "selection of the expected one."
+                ),
+                path=display_path,
+                evidence=nondeterministic_alternative_oracles[:20],
+                recommended_action=(
+                    "Choose one confirmed observable outcome from FT/mockup/API evidence, or mark the exact UI reaction "
+                    "as GAP/unclear instead of allowing alternative outcomes in one TC."
+                ),
+            )
+        )
+
+    if broad_scenario_test_cases:
+        findings.append(
+            Finding(
+                id="scenario-tc-replaces-atomic-coverage-smell",
+                severity="warning",
+                category="atomarity",
+                title="Scenario test cases appear to replace atomic coverage",
+                details=(
+                    "Scenario/use-case TC are allowed as an additional flow check, but they must not replace atomic "
+                    "positive, negative, boundary, dependency or action checks for broad requirement ranges."
+                ),
+                path=display_path,
+                evidence=broad_scenario_test_cases[:20],
+                recommended_action="Keep scenario TC only as supplemental coverage and add atomic TC/GAP items for the underlying requirement classes.",
+            )
+        )
+
+    if excessive_atom_fan_in:
+        findings.append(
+            Finding(
+                id="test-case-excessive-atom-fan-in",
+                severity="warning",
+                category="atomarity",
+                title="Some test cases reference too many atoms without scenario rationale",
+                details=(
+                    "A TC that closes many atoms often hides independent checks and makes coverage unverifiable. "
+                    "Use separate cases unless this is an explicit scenario/use-case package."
+                ),
+                path=display_path,
+                evidence=excessive_atom_fan_in[:20],
+                recommended_action="Split high fan-in TC blocks into atomic checks or add an explicit scenario/use-case rationale and keep atomic checks elsewhere.",
+            )
+        )
+
+    has_smells = bool(
+        generic_atoms
+        or compressed_atoms
+        or covered_range_atoms
+        or combined_atoms
+        or table_residue_atoms
+        or generic_titles
+        or generic_test_cases
+        or value_type_list_selection_smells
+        or dependency_placeholder_setup_smells
+        or mockup_generic_ui_steps
+        or positive_type_negative_oracle
+        or negative_type_without_negative_oracle
+        or generic_valid_fixture_placeholders
+        or generic_test_data_references
+        or generic_expected_results
+        or generic_test_data_oracles
+        or generic_rule_oracles
+        or source_dump_oracles
+        or value_type_metadata_as_behavior
+        or extraction_artifact_oracles
+        or requiredness_without_empty_or_marker
+        or boundary_without_classes
+        or boundary_rejection_without_acceptance
+        or merged_valid_invalid_test_cases
+        or numeric_only_valid_data_invalid
+        or valid_data_class_label_mismatch
+        or numeric_class_label_raw_literal_mismatch
+        or unsupported_input_filtering_oracles
+        or input_restriction_transition_oracles
+        or mechanical_field_steps
+        or negative_transition_without_valid_fixture
+        or forbidden_formulations
+        or abstract_oracles
+        or negative_input_without_observable_oracle
+        or date_dependent_absolute_dates
+        or action_treated_as_required_field
+        or action_without_observable_artifact
+        or gap_placeholder_sections
+        or nondeterministic_alternative_oracles
+        or broad_scenario_test_cases
+        or excessive_atom_fan_in
+    )
+    checks.append(
+        Check(
+            "test-case-quality-smells",
+            "warn" if has_smells else "pass",
+            "Generic atom/TC quality smells found." if has_smells else "No generic atom/TC quality smells found.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def extract_test_case_blocks(content: str) -> list[tuple[str, str]]:
+    matches = list(
+        re.finditer(
+            r"^##\s+(TC-[A-Za-z0-9_-]+)\s*$",
+            content,
+            flags=re.MULTILINE,
+        )
+    )
+    blocks: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        body_start = match.end()
+        body_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
+        next_section_match = re.search(r"^##\s+(?!TC-[A-Za-z0-9_-]+\s*$).+", content[body_start:], flags=re.MULTILINE)
+        if next_section_match:
+            body_end = min(body_end, body_start + next_section_match.start())
+        blocks.append((match.group(1), content[body_start:body_end]))
+    return blocks
+
+
+def test_case_numbering_issues(test_case_ids: list[str]) -> list[str]:
+    parsed_numbers: list[tuple[str, int]] = []
+    unnumbered: list[str] = []
+    for test_case_id in test_case_ids:
+        match = re.search(r"-(\d+)$", test_case_id)
+        if match:
+            parsed_numbers.append((test_case_id, int(match.group(1))))
+        else:
+            unnumbered.append(test_case_id)
+
+    issues: list[str] = []
+    if unnumbered:
+        issues.append("missing_numeric_suffix:" + ", ".join(unnumbered[:10]))
+
+    if len(parsed_numbers) != len(test_case_ids):
+        return issues
+
+    expected_numbers = list(range(1, len(parsed_numbers) + 1))
+    actual_numbers = [number for _, number in parsed_numbers]
+    if actual_numbers == expected_numbers:
+        return issues
+
+    missing = [number for number in expected_numbers if number not in actual_numbers]
+    duplicate_numbers = [
+        number
+        for number, count in Counter(actual_numbers).items()
+        if count > 1
+    ]
+    out_of_range = [
+        number
+        for number in actual_numbers
+        if number < 1 or number > len(parsed_numbers)
+    ]
+    if missing:
+        issues.append("missing_numbers:" + ", ".join(f"{number:03d}" for number in missing[:20]))
+    if duplicate_numbers:
+        issues.append("duplicate_numbers:" + ", ".join(f"{number:03d}" for number in sorted(duplicate_numbers)[:20]))
+    if out_of_range:
+        issues.append("out_of_range:" + ", ".join(f"{number:03d}" for number in sorted(out_of_range)[:20]))
+    issues.append(
+        "actual_order:"
+        + ", ".join(f"{test_case_id}={number:03d}" for test_case_id, number in parsed_numbers[:20])
+    )
+    return issues
+
+
+def validate_test_case_file(
+    path: Path,
+    root: Path,
+    *,
+    test_case_policy: str = "compatible",
+    known_test_case_ids: set[str] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    structural_severity = "warning" if test_case_policy == "strict" else "info"
+
+    try:
+        raw_content = path.read_text(encoding="utf-8")
+        content = test_case_validation_content(path, root)
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="test-case-file-not-utf8",
+                severity="error",
+                category="test-case-format",
+                title="Test-case file is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save the canonical test-case file as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("test-case-format", "fail", "Test-case file is not UTF-8.", display_path))
+        return findings, checks
+
+    duplicated_split_sections = duplicate_split_sections_in_test_case(raw_content, path)
+    if duplicated_split_sections:
+        findings.append(
+            Finding(
+                id="test-case-split-artifact-duplicated-sections",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case file duplicates canonical split artifact tables",
+                details=(
+                    "When `work/test-design/<scope>/` contains canonical table artifacts, the canonical test-case "
+                    "file should keep only links and summaries. Keeping full table copies in both places creates "
+                    "two sources of truth."
+                ),
+                path=display_path,
+                evidence=duplicated_split_sections[:20],
+                recommended_action=(
+                    "Remove the duplicated table sections from the test-case file and keep the canonical tables in "
+                    "`work/test-design/<scope>/`."
+                ),
+            )
+        )
+
+    gap_inventory_findings, gap_inventory_checks = validate_coverage_gap_inventory(content, path, root)
+    findings.extend(gap_inventory_findings)
+    checks.extend(gap_inventory_checks)
+
+    matrix_findings, matrix_checks = validate_test_design_applicability_matrix(
+        content,
+        path,
+        root,
+        structural_severity=structural_severity,
+        known_test_case_ids=known_test_case_ids,
+    )
+    findings.extend(matrix_findings)
+    checks.extend(matrix_checks)
+
+    dependency_findings, dependency_checks = validate_dependency_matrix_support(
+        content,
+        path,
+        root,
+        structural_severity=structural_severity,
+        known_test_case_ids=known_test_case_ids,
+    )
+    findings.extend(dependency_findings)
+    checks.extend(dependency_checks)
+
+    pairwise_findings, pairwise_checks = validate_pairwise_supporting_table(content, path, root)
+    findings.extend(pairwise_findings)
+    checks.extend(pairwise_checks)
+
+    blocks = extract_test_case_blocks(content)
+    if not blocks:
+        findings.append(
+            Finding(
+                id="test-case-file-no-structured-cases",
+                severity=structural_severity,
+                category="test-case-format",
+                title="Test-case file has no structured TC-* cases",
+                details="Canonical test-case files should contain one ## TC-* section per test case.",
+                path=display_path,
+                evidence=[],
+                recommended_action="When this artifact is next updated, rewrite test cases as canonical ## TC-* sections.",
+            )
+        )
+        checks.append(
+            Check(
+                "test-case-format",
+                "warn" if structural_severity == "warning" else "pass",
+                "No structured test cases found." if structural_severity == "info" else "Test-case format contract has issues.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    if test_case_policy == "strict":
+        template_findings, template_checks = validate_required_test_case_template_sections(
+            blocks,
+            path,
+            root,
+            structural_severity=structural_severity,
+        )
+        findings.extend(template_findings)
+        checks.extend(template_checks)
+
+    calculation_findings, calculation_checks = validate_calculation_oracles(content, path, root, blocks)
+    findings.extend(calculation_findings)
+    checks.extend(calculation_checks)
+
+    risk_findings, risk_checks = validate_risk_priority_map(content, path, root, blocks)
+    findings.extend(risk_findings)
+    checks.extend(risk_checks)
+
+    normalization_findings, normalization_checks = validate_source_table_normalization(content, path, root)
+    findings.extend(normalization_findings)
+    checks.extend(normalization_checks)
+
+    inventory_findings, inventory_checks = validate_source_row_inventory(content, path, root)
+    findings.extend(inventory_findings)
+    checks.extend(inventory_checks)
+
+    decision_findings, decision_checks = validate_test_design_decision_table(
+        content,
+        path,
+        root,
+        known_test_case_ids=known_test_case_ids,
+    )
+    findings.extend(decision_findings)
+    checks.extend(decision_checks)
+
+    obligation_findings, obligation_checks = validate_coverage_obligation_table(
+        content,
+        path,
+        root,
+        known_test_case_ids=known_test_case_ids,
+    )
+    findings.extend(obligation_findings)
+    checks.extend(obligation_checks)
+
+    ledger_findings, ledger_checks = validate_atomic_ledger_structure(
+        content,
+        path,
+        root,
+        structural_severity=structural_severity,
+        blocks=blocks,
+        known_test_case_ids=known_test_case_ids,
+    )
+    findings.extend(ledger_findings)
+    checks.extend(ledger_checks)
+
+    package_findings, package_checks = validate_test_case_package_ids(
+        content,
+        path,
+        root,
+        structural_severity=structural_severity,
+        blocks=blocks,
+    )
+    findings.extend(package_findings)
+    checks.extend(package_checks)
+
+    design_plan_findings, design_plan_checks = validate_package_test_design_plan(
+        content,
+        path,
+        root,
+        structural_severity=structural_severity,
+        known_test_case_ids=known_test_case_ids,
+    )
+    findings.extend(design_plan_findings)
+    checks.extend(design_plan_checks)
+
+    design_review_findings, design_review_checks = validate_test_design_review(content, path, root)
+    findings.extend(design_review_findings)
+    checks.extend(design_review_checks)
+
+    writer_gate_findings, writer_gate_checks = validate_writer_quality_gate(content, path, root)
+    findings.extend(writer_gate_findings)
+    checks.extend(writer_gate_checks)
+
+    write_strategy_findings, write_strategy_checks = validate_artifact_write_strategy(
+        content,
+        path,
+        root,
+        blocks=blocks,
+        structural_severity=structural_severity,
+    )
+    findings.extend(write_strategy_findings)
+    checks.extend(write_strategy_checks)
+
+    smell_findings, smell_checks = validate_test_case_quality_smells(
+        content,
+        path,
+        root,
+        blocks=blocks,
+    )
+    findings.extend(smell_findings)
+    checks.extend(smell_checks)
+
+    test_case_ids = [test_case_id for test_case_id, _ in blocks]
+    duplicate_ids = [
+        test_case_id
+        for test_case_id, count in Counter(test_case_ids).items()
+        if count > 1
+    ]
+    if duplicate_ids:
+        findings.append(
+            Finding(
+                id="test-case-duplicate-id",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case file contains duplicate TC ids",
+                details="Each test case id should identify one manual test case.",
+                path=display_path,
+                evidence=duplicate_ids[:20],
+                recommended_action="Rename duplicate test cases and update traceability references.",
+            )
+        )
+
+    numbering_issues = test_case_numbering_issues(test_case_ids)
+    if numbering_issues:
+        findings.append(
+            Finding(
+                id="test-case-nonsequential-id-numbering",
+                severity=structural_severity,
+                category="test-case-format",
+                title="Test-case file does not use continuous TC numbering",
+                details=(
+                    "TC numeric suffixes should be continuous in file order; numbering must not restart "
+                    "inside functional groups."
+                ),
+                path=display_path,
+                evidence=numbering_issues[:20],
+                recommended_action=(
+                    "Renumber TC-* sections sequentially across the canonical file and update traceability, "
+                    "coverage-map, matrix, and writer-response references."
+                ),
+            )
+        )
+
+    sparse_fields: list[str] = []
+    missing_steps: list[str] = []
+    missing_traceability: list[str] = []
+    for test_case_id, block in blocks:
+        field_count = len(re.findall(r"^\*\*[^*\n:]+:\*\*", block, flags=re.MULTILINE))
+        if field_count < MIN_TEST_CASE_FIELD_COUNT:
+            sparse_fields.append(f"{test_case_id}:fields={field_count}")
+        if not re.search(r"(?m)^\d+\.\s+\S", block):
+            missing_steps.append(test_case_id)
+        if not re.search(r"\b(ATOM-\d{3,}|GSR\s+\d+|REQ[-\s]?\d+)\b|PDF", block):
+            missing_traceability.append(test_case_id)
+
+    if sparse_fields:
+        findings.append(
+            Finding(
+                id="test-case-sparse-required-fields",
+                severity=structural_severity,
+                category="test-case-format",
+                title="Some test cases have too few structured fields",
+                details="Canonical test cases should expose the main fields from test-case-format.md.",
+                path=display_path,
+                evidence=sparse_fields[:20],
+                recommended_action="Add the missing canonical fields such as title, priority, type, goal, steps, expected result, and source references.",
+            )
+        )
+    if missing_steps:
+        findings.append(
+            Finding(
+                id="test-case-missing-numbered-steps",
+                severity=structural_severity,
+                category="test-case-format",
+                title="Some test cases have no numbered steps",
+                details="Manual test cases need reproducible numbered steps.",
+                path=display_path,
+                evidence=missing_steps[:20],
+                recommended_action="Add deterministic numbered steps to each test case.",
+            )
+        )
+    if missing_traceability:
+        findings.append(
+            Finding(
+                id="test-case-missing-traceability-token",
+                severity=structural_severity,
+                category="test-case-format",
+                title="Some test cases lack an obvious requirement traceability token",
+                details="Each test case should reference an ATOM-*, GSR, REQ, PDF page, or another explicit source locator.",
+                path=display_path,
+                evidence=missing_traceability[:20],
+                recommended_action="Add concrete FT/source references to the affected test cases.",
+            )
+        )
+
+    has_warning = any(finding.severity == "warning" for finding in findings)
+    checks.append(
+        Check(
+            "test-case-format",
+            "warn" if has_warning else "pass",
+            "Test-case format contract has issues." if has_warning else "Test-case format contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def simple_markdown_scalar_field(content: str, field: str) -> str:
+    match = re.search(
+        rf"(?im)^\s*(?:[-*]\s*)?{re.escape(field)}\s*:\s*`?([^`\n]+?)`?\s*$",
+        content,
+    )
+    if not match:
+        return ""
+    return match.group(1).strip().strip("`").strip().lower()
+
+
+def writer_process_diagnostic_status(path: Path) -> dict[str, Any]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return {
+            "readable": False,
+            "fields": {},
+            "is_failed": True,
+            "is_contaminated": True,
+            "validator_gap_suspected": False,
+            "blocking": True,
+        }
+
+    fields = {
+        field: simple_markdown_scalar_field(content, field)
+        for field in WRITER_PROCESS_DIAGNOSTIC_REQUIRED_FIELDS
+    }
+    active_raw = fields.get("active_for_current_workflow", "")
+    is_active = active_raw not in WRITER_PROCESS_DIAGNOSTIC_NO_VALUES
+    active_known = active_raw in WRITER_PROCESS_DIAGNOSTIC_YES_VALUES | WRITER_PROCESS_DIAGNOSTIC_NO_VALUES
+    is_failed = fields.get("verdict", "") in WRITER_PROCESS_DIAGNOSTIC_FAIL_VALUES
+    is_contaminated = fields.get("process_readiness", "") in WRITER_PROCESS_DIAGNOSTIC_CONTAMINATED_VALUES
+    validator_gap_suspected = fields.get("validator_gap_suspected", "") in WRITER_PROCESS_DIAGNOSTIC_YES_VALUES
+    return {
+        "readable": True,
+        "fields": fields,
+        "is_active": is_active,
+        "active_known": active_known,
+        "is_failed": is_failed,
+        "is_contaminated": is_contaminated,
+        "validator_gap_suspected": validator_gap_suspected,
+        "blocking": is_active and (is_failed or is_contaminated or validator_gap_suspected),
+    }
+
+
+def validate_writer_process_diagnostic(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="writer-process-diagnostic-not-utf8",
+                severity="error",
+                category="session-log",
+                title="Writer process diagnostic is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save writer-process-diagnostic.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("writer-process-diagnostic", "fail", "Writer process diagnostic is not UTF-8.", display_path))
+        return findings, checks
+
+    fields = {
+        field: simple_markdown_scalar_field(content, field)
+        for field in WRITER_PROCESS_DIAGNOSTIC_REQUIRED_FIELDS
+    }
+    missing_fields = sorted(field for field, value in fields.items() if not value)
+    if missing_fields:
+        findings.append(
+            Finding(
+                id="writer-process-diagnostic-missing-required-fields",
+                severity="warning",
+                category="session-log",
+                title="Writer process diagnostic misses required fields",
+                details=(
+                    "A writer-process-diagnostic.md artifact must expose verdict, process_readiness and "
+                    "validator_gap_suspected plus diagnostic_scope, diagnostic_target and "
+                    "active_for_current_workflow so workflow-state validation can distinguish active clean-rerun "
+                    "diagnostics from historical failed evidence."
+                ),
+                path=display_path,
+                evidence=missing_fields,
+                recommended_action=(
+                    "Add top-level fields `diagnostic_scope`, `diagnostic_target`, `active_for_current_workflow`, "
+                    "`verdict`, `process_readiness` and `validator_gap_suspected` with canonical values."
+                ),
+            )
+        )
+        checks.append(Check("writer-process-diagnostic", "warn", "Writer process diagnostic fields are incomplete.", display_path))
+        return findings, checks
+
+    invalid_values: list[str] = []
+    if fields["verdict"] not in {"pass", "fail", "failed"}:
+        invalid_values.append(f"verdict={fields['verdict']}")
+    if fields["process_readiness"] not in {"clean", "contaminated", "technical-contaminated", "not-clean", "dirty"}:
+        invalid_values.append(f"process_readiness={fields['process_readiness']}")
+    if fields["validator_gap_suspected"] not in {"yes", "no", "true", "false"}:
+        invalid_values.append(f"validator_gap_suspected={fields['validator_gap_suspected']}")
+    if fields["active_for_current_workflow"] not in {"yes", "no", "true", "false"}:
+        invalid_values.append(f"active_for_current_workflow={fields['active_for_current_workflow']}")
+    if invalid_values:
+        findings.append(
+            Finding(
+                id="writer-process-diagnostic-invalid-field-values",
+                severity="warning",
+                category="session-log",
+                title="Writer process diagnostic has invalid field values",
+                details="Use canonical values so the validator can reason about writer process readiness.",
+                path=display_path,
+                evidence=invalid_values,
+                recommended_action=(
+                    "Use `verdict: pass|fail`, `process_readiness: clean|contaminated`, and "
+                    "`validator_gap_suspected: yes|no`."
+                ),
+            )
+        )
+        checks.append(Check("writer-process-diagnostic", "warn", "Writer process diagnostic has invalid fields.", display_path))
+        return findings, checks
+
+    checks.append(
+        Check(
+            "writer-process-diagnostic",
+            "pass",
+            "Writer process diagnostic format passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def resolve_workflow_writer_process_diagnostics(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    paths: list[Path] = []
+    for value in [
+        *flatten_string_values(state.get("required_inputs")),
+        *flatten_string_values(state.get("latest_artifacts")),
+    ]:
+        candidate_name = Path(strip_quotes(value)).name
+        if not (candidate_name.startswith("writer-process-diagnostic") and candidate_name.endswith(".md")):
+            continue
+        resolved = resolve_artifact_path(value, workflow_path, root, ft_root)
+        if resolved is not None:
+            paths.append(resolved)
+
+    paths.extend(sorted(workflow_path.parent.glob("writer-process-diagnostic*.md")))
+
+    return dedupe_paths(paths)
+
+
+def diagnostic_target_matches_test_case_artifacts(
+    target: str,
+    *,
+    test_case_artifacts: list[Path],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> bool:
+    normalized_target = strip_quotes(target).strip("`").replace("\\", "/")
+    if not normalized_target:
+        return False
+
+    target_path = resolve_artifact_path(normalized_target, workflow_path, root, ft_root)
+    if target_path is not None:
+        try:
+            resolved_target = target_path.resolve()
+            return any(test_case_artifact.resolve() == resolved_target for test_case_artifact in test_case_artifacts)
+        except OSError:
+            return any(test_case_artifact == target_path for test_case_artifact in test_case_artifacts)
+
+    for test_case_artifact in test_case_artifacts:
+        artifact_candidates = {
+            test_case_artifact.name,
+            test_case_artifact.as_posix(),
+        }
+        try:
+            artifact_candidates.add(test_case_artifact.relative_to(ft_root).as_posix())
+        except ValueError:
+            pass
+        try:
+            artifact_candidates.add(test_case_artifact.relative_to(root.parent if root.is_file() else root).as_posix())
+        except ValueError:
+            pass
+        if normalized_target in artifact_candidates:
+            return True
+    return False
+
+
+def validate_dictionary_inventory(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    content = path.read_text(encoding="utf-8")
+    section = extract_markdown_section(content, "Dictionary Inventory") or content
+    rows = markdown_table_rows_from_text(section)
+
+    if not rows:
+        findings.append(
+            Finding(
+                id="dictionary-inventory-no-table",
+                severity="warning",
+                category="test-design",
+                title="Dictionary Inventory has no Markdown table",
+                details="dictionary-inventory.md must expose referenced dictionaries in a canonical Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the canonical table from dictionary-inventory-format.md.",
+            )
+        )
+        checks.append(Check("dictionary-inventory", "warn", "Dictionary Inventory table is missing.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(rows[0])
+    missing_columns = sorted(DICTIONARY_INVENTORY_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="dictionary-inventory-missing-columns",
+                severity="warning",
+                category="test-design",
+                title="Dictionary Inventory misses required columns",
+                details="Dictionary Inventory must include source locator, extraction status, active/archived values and source-property links.",
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_columns)}", f"columns={', '.join(header[:12])}"],
+                recommended_action="Rewrite the table with the canonical columns from dictionary-inventory-format.md.",
+            )
+        )
+
+    invalid_rows: list[str] = []
+    extracted_without_values: list[str] = []
+    incomplete_without_gap: list[str] = []
+    missing_source_property_links: list[str] = []
+
+    for index, raw_row in enumerate(rows[1:], start=2):
+        row = {
+            column_name: raw_row[column_index].strip().strip("`") if column_index < len(raw_row) else ""
+            for column_index, column_name in enumerate(header)
+        }
+        dictionary_id = row.get("dictionary_id", "").strip()
+        status = normalize_markdown_field_value(row.get("extraction_status", "")).lower()
+        active_values = normalize_markdown_field_value(row.get("active_values", ""))
+        used_by = normalize_markdown_field_value(row.get("used_by_source_properties", ""))
+        gap_id = row.get("gap_id", "").strip()
+
+        if not re.fullmatch(r"DICT-\d{3,}", dictionary_id):
+            invalid_rows.append(f"row {index}:dictionary_id={dictionary_id or '-'}")
+        if status not in DICTIONARY_INVENTORY_ALLOWED_STATUSES:
+            invalid_rows.append(f"row {index}:extraction_status={status or '-'}")
+        if status in DICTIONARY_INVENTORY_EXTRACTED_STATUSES and active_values in {"", "-"}:
+            extracted_without_values.append(f"{dictionary_id or f'row {index}'}:active_values={active_values or '-'}")
+        if status in DICTIONARY_INVENTORY_INCOMPLETE_STATUSES and not real_gap_ids(gap_id):
+            incomplete_without_gap.append(f"{dictionary_id or f'row {index}'}:status={status};gap_id={gap_id or '-'}")
+        if used_by in {"", "-"}:
+            missing_source_property_links.append(f"{dictionary_id or f'row {index}'}:used_by_source_properties={used_by or '-'}")
+
+    if invalid_rows:
+        findings.append(
+            Finding(
+                id="dictionary-inventory-invalid-row",
+                severity="warning",
+                category="test-design",
+                title="Dictionary Inventory has invalid ids or statuses",
+                details="dictionary_id must be DICT-* and extraction_status must use canonical values.",
+                path=display_path,
+                evidence=invalid_rows[:20],
+                recommended_action="Use DICT-001-style ids and extraction_status = extracted | partial | missing | ambiguous | not-needed.",
+            )
+        )
+    if extracted_without_values:
+        findings.append(
+            Finding(
+                id="dictionary-inventory-extracted-without-active-values",
+                severity="warning",
+                category="test-design",
+                title="Extracted dictionaries have no active values",
+                details="When extraction_status = extracted, active_values must list the extracted active values or point to a DICT-* values section.",
+                path=display_path,
+                evidence=extracted_without_values[:20],
+                recommended_action="Fill active_values from the source/support dictionary, or change status and add a GAP-* if extraction is blocked.",
+            )
+        )
+    if incomplete_without_gap:
+        findings.append(
+            Finding(
+                id="dictionary-inventory-incomplete-without-gap",
+                severity="warning",
+                category="test-design",
+                title="Incomplete dictionary extraction has no GAP link",
+                details="Partial, missing or ambiguous dictionary extraction must be traceable to a GAP-*.",
+                path=display_path,
+                evidence=incomplete_without_gap[:20],
+                recommended_action="Add a narrow GAP-* for the blocked dictionary extraction or complete the inventory.",
+            )
+        )
+    if missing_source_property_links:
+        findings.append(
+            Finding(
+                id="dictionary-inventory-missing-source-property-link",
+                severity="warning",
+                category="traceability",
+                title="Dictionary Inventory rows are not linked to source_property_id",
+                details="Every dictionary row must show which normalized source properties use it.",
+                path=display_path,
+                evidence=missing_source_property_links[:20],
+                recommended_action="Fill used_by_source_properties with source_property_id values from Source Table Normalization.",
+            )
+        )
+
+    has_findings = any(finding.id.startswith("dictionary-inventory") for finding in findings)
+    checks.append(
+        Check(
+            "dictionary-inventory",
+            "warn" if has_findings else "pass",
+            "Dictionary Inventory has issues." if has_findings else "Dictionary Inventory contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_mockup_visual_inventory(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="mockup-visual-inventory-not-utf8",
+                severity="error",
+                category="mockup",
+                title="Mockup visual inventory is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save mockup-visual-inventory.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("mockup-visual-inventory", "fail", "Mockup visual inventory is not UTF-8.", display_path))
+        return findings, checks
+
+    normalized = content.lower()
+    missing_terms = sorted(
+        term
+        for term in MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS
+        if term.lower() not in normalized
+    )
+    if missing_terms:
+        findings.append(
+            Finding(
+                id="mockup-visual-inventory-missing-required-items",
+                severity="warning",
+                category="mockup",
+                title="Mockup visual inventory misses required items",
+                details=(
+                    "UI-scope mockup inventory must prove that the mockup was opened and record visible blocks, "
+                    "fields, actions, interaction hints, mockup-only items, FT conflicts and usage decisions."
+                ),
+                path=display_path,
+                evidence=missing_terms[:20],
+                recommended_action="Rewrite the inventory using references/agent/mockup-visual-inventory-format.md.",
+            )
+        )
+
+    opened_no = re.search(
+        r"(?im)^\|\s*opened\s*\|\s*`?(?:no|false|blocked|not[-\s]?opened)",
+        content,
+    )
+    if opened_no:
+        findings.append(
+            Finding(
+                id="mockup-visual-inventory-not-opened",
+                severity="warning",
+                category="mockup",
+                title="Mockup visual inventory says the mockup was not opened",
+                details=(
+                    "For UI scopes with a mockup, the inventory must be based on an opened/viewed image. "
+                    "If the mockup cannot be opened, keep the workflow blocked instead of producing UI steps."
+                ),
+                path=display_path,
+                evidence=[opened_no.group(0).strip()],
+                recommended_action="Open the mockup visually and update the inventory, or set workflow-state to blocked-input.",
+            )
+        )
+
+    no_requirement_guard = re.search(
+        r"(?im)^\|\s*not_used_as_requirement_source\s*\|\s*`?(?:no|false)",
+        content,
+    ) or re.search(
+        (
+            r"(?im)^\|\s*used_for_steps\s*\|\s*not_used_as_requirement_source\s*\|[^\n]*\n"
+            r"^\|[-:\s|]+\|\s*\n"
+            r"^\|\s*`?[^|`]+`?\s*\|\s*`?(?:no|false)"
+        ),
+        content,
+    )
+    if no_requirement_guard:
+        findings.append(
+            Finding(
+                id="mockup-visual-inventory-missing-requirement-source-guard",
+                severity="warning",
+                category="mockup",
+                title="Mockup inventory does not guard against mockup-derived requirements",
+                details=(
+                    "The mockup may refine UI interaction steps, but it must not replace FT text as the source "
+                    "for business rules, validations, allowed values or expected results."
+                ),
+                path=display_path,
+                evidence=[no_requirement_guard.group(0).strip()],
+                recommended_action="Set not_used_as_requirement_source to yes and document mockup-only items as gaps/conflicts.",
+            )
+        )
+
+    has_findings = any(finding.id.startswith("mockup-visual-inventory") for finding in findings)
+    checks.append(
+        Check(
+            "mockup-visual-inventory",
+            "warn" if has_findings else "pass",
+            "Mockup visual inventory has issues." if has_findings else "Mockup visual inventory contract passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def ready_for_review_blocking_test_case_findings(
+    path: Path,
+    root: Path,
+) -> list[Finding]:
+    findings, _ = validate_test_case_file(path, root, test_case_policy="strict")
+    return [
+        finding
+        for finding in findings
+        if finding.id in READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS
+    ]
+
+
+def validate_session_log(
+    path: Path,
+    root: Path,
+    *,
+    session_log_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    strict_like = session_log_policy in {"strict", "audit"}
+    severity = "warning" if strict_like else "info"
+    warn_status = "warn" if strict_like else "pass"
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="session-log-not-utf8",
+                severity="error",
+                category="session-log",
+                title="Session log is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save the session log as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("session-log-format", "fail", "Session log is not UTF-8.", display_path))
+        return findings, checks
+
+    required_sections = set(SESSION_LOG_REQUIRED_SECTIONS)
+    if session_log_policy == "audit":
+        required_sections.update(SESSION_LOG_AUDIT_SECTIONS)
+
+    missing_sections = sorted(
+        section
+        for section in required_sections
+        if extract_markdown_section(content, section) is None
+    )
+    if missing_sections:
+        findings.append(
+            Finding(
+                id="session-log-missing-required-sections",
+                severity=severity,
+                category="session-log",
+                title="Session log misses required audit sections",
+                details=(
+                    "A stage session log should capture inputs read, inputs intentionally not used, key decisions, "
+                    "risks/fallbacks, validation and contamination check."
+                ),
+                path=display_path,
+                evidence=missing_sections,
+                recommended_action="Rewrite the session log using references/agent/session-log-format.md.",
+            )
+        )
+        checks.append(Check("session-log-format", warn_status, "Session log misses required sections.", display_path))
+        return findings, checks
+
+    weak_sections: list[str] = []
+    for section in required_sections - {"Session Metadata"}:
+        section_body = extract_markdown_section(content, section) or ""
+        meaningful_lines = [
+            line.strip()
+            for line in section_body.splitlines()
+            if line.strip() and not re.fullmatch(r"[-|:`\s]+", line.strip())
+        ]
+        if not meaningful_lines:
+            weak_sections.append(section)
+    if weak_sections:
+        findings.append(
+            Finding(
+                id="session-log-empty-required-sections",
+                severity=severity,
+                category="session-log",
+                title="Session log has empty required audit sections",
+                details="Required sections should contain explicit audit entries, not only headings.",
+                path=display_path,
+                evidence=weak_sections,
+                recommended_action="Add concise entries or `none` with rationale for each empty section.",
+            )
+        )
+        checks.append(Check("session-log-format", warn_status, "Session log has empty required sections.", display_path))
+    else:
+        checks.append(Check("session-log-format", "pass", "Session log format passed.", display_path))
+
+    if session_log_policy == "audit":
+        strategy_hint_sources = "\n".join(
+            extract_markdown_section(content, section) or ""
+            for section in (
+                "Event Timeline",
+                "Key Decisions",
+                "Risks And Fallbacks",
+                "Quality Checkpoints",
+                "Validation",
+                "Handoff Notes For Next Session",
+            )
+        )
+        strategy_hints = sorted(
+            {
+                match.group(0).strip()
+                for match in SESSION_LOG_ARTIFACT_WRITE_STRATEGY_HINT_RE.finditer(strategy_hint_sources)
+            }
+        )
+        strategy_section = extract_markdown_section(content, "Artifact Write Strategy") or ""
+        if strategy_hints and not strategy_section:
+            findings.append(
+                Finding(
+                    id="session-log-artifact-write-strategy-missing",
+                    severity=severity,
+                    category="session-log",
+                    title="Session log does not declare Artifact Write Strategy before generated artifact writes",
+                    details=(
+                        "Audit logs that create large/table-heavy/generated artifacts must declare the write strategy "
+                        "before the first write. This prevents an initial one-shot PowerShell/here-string attempt from "
+                        "becoming a hidden technical fallback."
+                    ),
+                    path=display_path,
+                    evidence=strategy_hints[:10],
+                    recommended_action=(
+                        "Add `## Artifact Write Strategy` with artifact_path, artifact_size_class, write_strategy, "
+                        "declared_before_first_write, helper and forbidden_methods_checked. For large artifacts use "
+                        "`scripts/write_artifact_sections.py` from the start."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "session-log-artifact-write-strategy",
+                    warn_status,
+                    "Artifact Write Strategy is missing from audit session log.",
+                    display_path,
+                )
+            )
+        elif strategy_section:
+            strategy_rows = markdown_table_rows_from_text(strategy_section)
+            strategy_has_valid_shape = False
+            non_preflight_rows: list[str] = []
+            missing_helper_rows: list[str] = []
+            unsafe_strategy_rows: list[str] = []
+            if strategy_rows:
+                header = normalize_table_header(strategy_rows[0])
+                missing_columns = sorted(SESSION_LOG_ARTIFACT_WRITE_STRATEGY_REQUIRED_COLUMNS - set(header))
+                if not missing_columns:
+                    strategy_has_valid_shape = True
+                    for row in strategy_rows[1:]:
+                        row_map = {header[index]: row[index].strip() for index in range(min(len(header), len(row)))}
+                        artifact_path = row_map.get("artifact_path", "<missing>").strip()
+                        row_values = [value.strip().strip("`").lower() for value in row_map.values()]
+                        declares_none = all(value in SESSION_LOG_NONE_VALUES for value in row_values)
+                        if declares_none:
+                            continue
+                        artifact_size = row_map.get("artifact_size_class", "")
+                        write_strategy = row_map.get("write_strategy", "")
+                        declared_before = row_map.get("declared_before_first_write", "").strip().strip("`")
+                        helper = row_map.get("helper", "")
+                        forbidden_checked = row_map.get("forbidden_methods_checked", "").strip().strip("`").lower()
+                        inspected = " ".join(row_map.values())
+                        if SESSION_LOG_LARGE_ARTIFACT_SIZE_RE.search(artifact_size):
+                            if not SESSION_LOG_DECLARED_BEFORE_WRITE_RE.fullmatch(declared_before):
+                                non_preflight_rows.append(f"{artifact_path}: declared_before_first_write={declared_before or '-'}")
+                            if not SESSION_LOG_ARTIFACT_WRITER_HELPER_RE.search(f"{write_strategy} {helper}"):
+                                missing_helper_rows.append(f"{artifact_path}: helper={helper or '-'}; write_strategy={write_strategy or '-'}")
+                        if SESSION_LOG_FORBIDDEN_INITIAL_WRITE_RE.search(inspected) or forbidden_checked not in {
+                            "yes",
+                            "true",
+                            "pass",
+                            "passed",
+                        }:
+                            unsafe_strategy_rows.append(f"{artifact_path}: {inspected[:220]}")
+                else:
+                    findings.append(
+                        Finding(
+                            id="session-log-artifact-write-strategy-invalid-table",
+                            severity=severity,
+                            category="session-log",
+                            title="Artifact Write Strategy table misses required columns",
+                            details=(
+                                "`Artifact Write Strategy` must be a table with artifact_path, artifact_size_class, "
+                                "write_strategy, declared_before_first_write, helper and forbidden_methods_checked."
+                            ),
+                            path=display_path,
+                            evidence=missing_columns,
+                            recommended_action="Rewrite the section using references/agent/session-log-format.md.",
+                        )
+                    )
+            else:
+                findings.append(
+                    Finding(
+                        id="session-log-artifact-write-strategy-invalid-table",
+                        severity=severity,
+                        category="session-log",
+                        title="Artifact Write Strategy section is not structured",
+                        details="`Artifact Write Strategy` must contain a Markdown table.",
+                        path=display_path,
+                        evidence=["no artifact write strategy table rows"],
+                        recommended_action="Add structured rows for each generated artifact written by the stage.",
+                    )
+                )
+
+            if non_preflight_rows:
+                findings.append(
+                    Finding(
+                        id="session-log-artifact-write-strategy-not-preflight",
+                        severity=severity,
+                        category="session-log",
+                        title="Artifact Write Strategy was not declared before the first write",
+                        details=(
+                            "For large generated artifacts, the safe file-based/chunked strategy must be selected "
+                            "before any write attempt. A later fallback is not a clean run."
+                        ),
+                        path=display_path,
+                        evidence=non_preflight_rows[:10],
+                        recommended_action=(
+                            "Restart the stage or mark it blocked-technical; do not continue as ready-for-review/"
+                            "ready-for-next-stage from a contaminated write path."
+                        ),
+                    )
+                )
+            if missing_helper_rows:
+                findings.append(
+                    Finding(
+                        id="session-log-artifact-writer-helper-missing",
+                        severity=severity,
+                        category="session-log",
+                        title="Large artifact write strategy does not use the canonical artifact writer helper",
+                        details=(
+                            "Large/table-heavy/package-based artifacts must be written with "
+                            "`scripts/write_artifact_sections.py` so large Markdown travels through files, not shell "
+                            "arguments or ad-hoc generators."
+                        ),
+                        path=display_path,
+                        evidence=missing_helper_rows[:10],
+                        recommended_action="Use `scripts/write_artifact_sections.py --manifest <manifest.json>`.",
+                    )
+                )
+            if unsafe_strategy_rows:
+                findings.append(
+                    Finding(
+                        id="session-log-artifact-write-strategy-unsafe",
+                        severity=severity,
+                        category="session-log",
+                        title="Artifact Write Strategy includes unsafe or unchecked write methods",
+                        details=(
+                            "The declared strategy must explicitly exclude one-shot PowerShell, here-string, inline "
+                            "giant commands and command-line transport for large generated artifacts."
+                        ),
+                        path=display_path,
+                        evidence=unsafe_strategy_rows[:10],
+                        recommended_action="Set forbidden_methods_checked to `yes` only after selecting the helper path.",
+                    )
+                )
+
+            strategy_has_findings = any(
+                finding.id.startswith("session-log-artifact-write-strategy")
+                or finding.id == "session-log-artifact-writer-helper-missing"
+                for finding in findings
+            )
+            if strategy_has_valid_shape and not strategy_has_findings:
+                checks.append(
+                    Check(
+                        "session-log-artifact-write-strategy",
+                        "pass",
+                        "Artifact Write Strategy disclosure passed.",
+                        display_path,
+                    )
+                )
+            elif strategy_section:
+                checks.append(
+                    Check(
+                        "session-log-artifact-write-strategy",
+                        warn_status,
+                        "Artifact Write Strategy disclosure has issues.",
+                        display_path,
+                    )
+                )
+
+        technical_section = extract_markdown_section(content, "Technical Fallbacks") or ""
+        technical_rows = markdown_table_rows_from_text(technical_section)
+        technical_fallback_rows: list[dict[str, str]] = []
+        technical_section_has_valid_shape = False
+
+        if technical_rows:
+            header = normalize_table_header(technical_rows[0])
+            missing_columns = sorted(SESSION_LOG_TECHNICAL_FALLBACK_REQUIRED_COLUMNS - set(header))
+            if not missing_columns:
+                technical_section_has_valid_shape = True
+                for row in technical_rows[1:]:
+                    row_map = {header[index]: row[index].strip() for index in range(min(len(header), len(row)))}
+                    fallback_id = row_map.get("fallback_id", "").strip().strip("`").lower()
+                    row_values = [value.strip().strip("`").lower() for value in row_map.values()]
+                    declares_none = fallback_id in SESSION_LOG_NONE_VALUES or all(
+                        value in SESSION_LOG_NONE_VALUES for value in row_values
+                    )
+                    if not declares_none:
+                        technical_fallback_rows.append(row_map)
+            else:
+                findings.append(
+                    Finding(
+                        id="session-log-technical-fallbacks-invalid-table",
+                        severity=severity,
+                        category="session-log",
+                        title="Technical Fallbacks table misses required columns",
+                        details=(
+                            "`Technical Fallbacks` must be a table with fallback_id, trigger, failed_method, "
+                            "fallback_method, helper_artifact_path, retained, quality_risk and follow_up."
+                        ),
+                        path=display_path,
+                        evidence=missing_columns,
+                        recommended_action="Rewrite `Technical Fallbacks` using references/agent/session-log-format.md.",
+                    )
+                )
+                checks.append(
+                    Check("session-log-technical-fallbacks", warn_status, "Technical Fallbacks table is invalid.", display_path)
+                )
+        else:
+            findings.append(
+                Finding(
+                    id="session-log-technical-fallbacks-invalid-table",
+                    severity=severity,
+                    category="session-log",
+                    title="Technical Fallbacks section is not structured",
+                    details="`Technical Fallbacks` must contain a Markdown table, even when no fallback occurred.",
+                    path=display_path,
+                    evidence=["no technical fallback table rows"],
+                    recommended_action="Add a one-row `none` table or structured `TF-*` rows.",
+                )
+            )
+            checks.append(
+                Check("session-log-technical-fallbacks", warn_status, "Technical Fallbacks table is missing.", display_path)
+            )
+
+        fallback_hint_sources = "\n".join(
+            extract_markdown_section(content, section) or ""
+            for section in ("Event Timeline", "Risks And Fallbacks", "Key Decisions", "Quality Checkpoints")
+        )
+        fallback_hints = sorted(
+            {
+                match.group(0).strip()
+                for match in SESSION_LOG_TECHNICAL_FALLBACK_HINT_RE.finditer(fallback_hint_sources)
+            }
+        )
+        if fallback_hints and not technical_fallback_rows:
+            findings.append(
+                Finding(
+                    id="session-log-technical-fallback-undisclosed",
+                    severity=severity,
+                    category="session-log",
+                    title="Technical fallback hints are not disclosed structurally",
+                    details=(
+                        "The session log mentions command/patch/chunked/helper fallback symptoms outside "
+                        "`Technical Fallbacks`, but `Technical Fallbacks` has no `TF-*` row."
+                    ),
+                    path=display_path,
+                    evidence=fallback_hints[:10],
+                    recommended_action=(
+                        "Add a structured `TF-*` row with trigger, failed method, fallback method, helper artifact "
+                        "path, retention status, quality risk and follow-up."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "session-log-technical-fallbacks",
+                    warn_status,
+                    "Technical fallback hints are not structurally disclosed.",
+                    display_path,
+                )
+            )
+
+        incomplete_rows: list[str] = []
+        helper_path_rows: list[str] = []
+        forbidden_initial_write_rows: list[str] = []
+        encoding_source_fidelity_rows: list[str] = []
+        for row_map in technical_fallback_rows:
+            fallback_id = row_map.get("fallback_id", "<missing>").strip()
+            required_text_fields = ["trigger", "failed_method", "fallback_method", "quality_risk", "follow_up"]
+            missing_text_fields = [
+                field
+                for field in required_text_fields
+                if row_map.get(field, "").strip().strip("`").lower() in SESSION_LOG_NONE_VALUES
+            ]
+            retained = row_map.get("retained", "").strip().strip("`").lower()
+            if retained not in {"yes", "no", "n/a", "not-applicable", "not applicable"}:
+                missing_text_fields.append("retained")
+            fallback_method = row_map.get("fallback_method", "").lower()
+            helper_path = row_map.get("helper_artifact_path", "").strip().strip("`").lower()
+            if re.search(r"helper|script|generator|generate_|temp|temporary", fallback_method) and helper_path in SESSION_LOG_NONE_VALUES:
+                helper_path_rows.append(fallback_id)
+            if missing_text_fields:
+                incomplete_rows.append(f"{fallback_id}: {', '.join(missing_text_fields)}")
+            trigger = row_map.get("trigger", "")
+            failed_method = row_map.get("failed_method", "")
+            if SESSION_LOG_FORBIDDEN_INITIAL_WRITE_RE.search(f"{trigger} {failed_method}"):
+                forbidden_initial_write_rows.append(
+                    f"{fallback_id}: trigger={trigger.strip() or '-'}; failed_method={failed_method.strip() or '-'}"
+                )
+            quality_risk = row_map.get("quality_risk", "")
+            follow_up = row_map.get("follow_up", "")
+            encoding_context = f"{trigger} {failed_method} {fallback_method} {quality_risk} {follow_up}"
+            if SESSION_LOG_ENCODING_FALLBACK_RE.search(encoding_context):
+                missing_encoding_proofs: list[str] = []
+                if not SESSION_LOG_ENCODING_UTF8_REREAD_RE.search(encoding_context):
+                    missing_encoding_proofs.append("explicit UTF-8 reread")
+                if not SESSION_LOG_ENCODING_STDOUT_NOT_USED_RE.search(encoding_context):
+                    missing_encoding_proofs.append("distorted stdout not used as evidence")
+                if missing_encoding_proofs:
+                    encoding_source_fidelity_rows.append(
+                        f"{fallback_id}: missing {', '.join(missing_encoding_proofs)}"
+                    )
+
+        if forbidden_initial_write_rows:
+            findings.append(
+                Finding(
+                    id="session-log-forbidden-initial-one-shot-write",
+                    severity=severity,
+                    category="session-log",
+                    title="Session log records a forbidden initial one-shot write attempt",
+                    details=(
+                        "For large/package-based writer artifacts, hitting a Windows command-line or here-string "
+                        "limit and then switching to chunked writing is not a clean fallback. The writer must choose "
+                        "file-based/chunked writing during Artifact Write Strategy preflight before the first write."
+                    ),
+                    path=display_path,
+                    evidence=forbidden_initial_write_rows[:10],
+                    recommended_action=(
+                        "Treat this run as technically contaminated for clean eval purposes. Update the writer "
+                        "instructions/run to start with `scripts/update_markdown_section.py --content-file` / `--stdin` "
+                        "or a committed helper, not one-shot PowerShell/here-string."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "session-log-forbidden-initial-write",
+                    warn_status,
+                    "Forbidden initial one-shot write fallback was recorded.",
+                    display_path,
+                )
+            )
+
+        if encoding_source_fidelity_rows:
+            findings.append(
+                Finding(
+                    id="session-log-encoding-fallback-source-fidelity-missing",
+                    severity=severity,
+                    category="session-log",
+                    title="Encoding fallback does not prove source fidelity",
+                    details=(
+                        "When PowerShell/console output corrupts Cyrillic or another UTF-8 source, the session log "
+                        "must state that the source was re-read through an explicit UTF-8 file/script path and that "
+                        "the distorted stdout was not used as evidence for analysis or traceability."
+                    ),
+                    path=display_path,
+                    evidence=encoding_source_fidelity_rows[:10],
+                    recommended_action=(
+                        "Complete the `TF-*` row: name the UTF-8 reread method and explicitly state that mojibake/"
+                        "distorted console output was discarded or not used as evidence."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "session-log-encoding-fallback",
+                    warn_status,
+                    "Encoding fallback source fidelity disclosure is incomplete.",
+                    display_path,
+                )
+            )
+
+        if incomplete_rows or helper_path_rows:
+            evidence = []
+            if incomplete_rows:
+                evidence.extend(incomplete_rows[:10])
+            if helper_path_rows:
+                evidence.extend([f"{fallback_id}: helper_artifact_path required" for fallback_id in helper_path_rows[:10]])
+            findings.append(
+                Finding(
+                    id="session-log-technical-fallbacks-incomplete",
+                    severity=severity,
+                    category="session-log",
+                    title="Technical fallback rows are incomplete",
+                    details=(
+                        "Each real technical fallback row must describe the trigger, failed method, fallback method, "
+                        "retention status, quality risk and follow-up. Helper/script/temp fallbacks must include a "
+                        "helper artifact path or explain retention."
+                    ),
+                    path=display_path,
+                    evidence=evidence,
+                    recommended_action="Complete the `Technical Fallbacks` row before ending the stage.",
+                )
+            )
+            checks.append(
+                Check("session-log-technical-fallbacks", warn_status, "Technical fallback rows are incomplete.", display_path)
+            )
+        elif technical_section_has_valid_shape and not fallback_hints:
+            checks.append(
+                Check("session-log-technical-fallbacks", "pass", "Technical fallback disclosure passed.", display_path)
+            )
+
+        metadata_section = extract_markdown_section(content, "Session Metadata") or ""
+        skill_match = re.search(r"\|\s*skill\s*\|\s*`?([^`|\s]+)`?\s*\|", metadata_section)
+        log_skill = skill_match.group(1).strip() if skill_match else ""
+        is_source_locator_log = path.name.lower() == "source-locator-session-log.md" or log_skill == "ft-source-locator"
+        if is_source_locator_log:
+            ft_slug_match = re.search(r"\|\s*ft_slug\s*\|\s*`?([^`|\s]+)`?\s*\|", metadata_section)
+            ft_slug = ft_slug_match.group(1).strip() if ft_slug_match else ""
+            clean_boundary_sections = "\n".join(
+                extract_markdown_section(content, section) or ""
+                for section in ("Inputs Not Used", "Contamination Check")
+            )
+            clean_boundary_lower = clean_boundary_sections.lower()
+            has_ft_package_ref = bool(ft_slug and ft_slug in clean_boundary_sections)
+            has_neighbor_ref = any(
+                token in clean_boundary_lower
+                for token in (
+                    "fts/",
+                    "fts\\",
+                    "sibling",
+                    "neighbor",
+                    "baseline",
+                    "old version",
+                    "стар",
+                    "сосед",
+                )
+            )
+            has_exclusion_ref = any(
+                token in clean_boundary_lower
+                for token in (
+                    "not used",
+                    "not opened",
+                    "excluded",
+                    "forbidden",
+                    "не использ",
+                    "не откры",
+                    "запрещ",
+                    "исключ",
+                )
+            )
+            if not (has_ft_package_ref and has_neighbor_ref and has_exclusion_ref):
+                evidence = []
+                if ft_slug and not has_ft_package_ref:
+                    evidence.append(f"ft_slug `{ft_slug}` is not referenced in Inputs Not Used / Contamination Check")
+                if not has_neighbor_ref:
+                    evidence.append("neighbor/baseline package exclusion is not explicit")
+                if not has_exclusion_ref:
+                    evidence.append("exclusion/not-used wording is not explicit")
+                findings.append(
+                    Finding(
+                        id="session-log-source-locator-clean-boundary-missing",
+                        severity=severity,
+                        category="session-log",
+                        title="Source locator session log does not prove clean package boundary",
+                        details=(
+                            "A source-locator audit log must explicitly name the selected FT package boundary and "
+                            "neighbor/baseline inputs that were not opened or used."
+                        ),
+                        path=display_path,
+                        evidence=evidence or ["Inputs Not Used / Contamination Check are too generic"],
+                        recommended_action=(
+                            "Update `Inputs Not Used` and `Contamination Check` with the selected `fts/<ft-slug>` "
+                            "and the excluded sibling/baseline package pattern."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "session-log-source-locator-clean-boundary",
+                        warn_status,
+                        "Source locator clean package boundary is not explicit.",
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        "session-log-source-locator-clean-boundary",
+                        "pass",
+                        "Source locator clean package boundary is explicit.",
+                        display_path,
+                    )
+                )
+
+    return findings, checks
+
+
+def validate_decision_log(
+    path: Path,
+    root: Path,
+    *,
+    decision_log_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    severity = "warning" if decision_log_policy == "strict" else "info"
+    warn_status = "warn" if decision_log_policy == "strict" else "pass"
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="decision-log-not-utf8",
+                severity="error",
+                category="decision-log",
+                title="Decision log is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save agent-decision-log.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("decision-log-format", "fail", "Decision log is not UTF-8.", display_path))
+        return findings, checks
+
+    section = extract_markdown_section(content, "Decision Log")
+    if section is None:
+        findings.append(
+            Finding(
+                id="decision-log-missing-required-section",
+                severity=severity,
+                category="decision-log",
+                title="Decision log misses Decision Log section",
+                details=(
+                    "agent-decision-log.md must contain a `## Decision Log` table with observable "
+                    "intermediate decisions, not hidden chain-of-thought."
+                ),
+                path=display_path,
+                evidence=["Decision Log"],
+                recommended_action="Rewrite the artifact using references/agent/agent-decision-log-format.md.",
+            )
+        )
+        checks.append(Check("decision-log-format", warn_status, "Decision log misses required section.", display_path))
+        return findings, checks
+
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        findings.append(
+            Finding(
+                id="decision-log-missing-table",
+                severity=severity,
+                category="decision-log",
+                title="Decision log has no Markdown table",
+                details="The Decision Log section must be a parseable Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the canonical decision table from references/agent/agent-decision-log-format.md.",
+            )
+        )
+        checks.append(Check("decision-log-format", warn_status, "Decision log table is missing.", display_path))
+        return findings, checks
+
+    header = normalize_table_header(rows[0])
+    missing_columns = sorted(DECISION_LOG_REQUIRED_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="decision-log-missing-required-columns",
+                severity=severity,
+                category="decision-log",
+                title="Decision log misses required columns",
+                details="The decision table must expose the decision, source/input, rationale, output artifact and risk.",
+                path=display_path,
+                evidence=missing_columns,
+                recommended_action="Use the canonical columns from references/agent/agent-decision-log-format.md.",
+            )
+        )
+        checks.append(Check("decision-log-format", warn_status, "Decision log columns are incomplete.", display_path))
+        return findings, checks
+
+    parsed_rows: list[dict[str, str]] = []
+    for raw_row in rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: raw_row[index].strip().strip("`") if index < len(raw_row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+
+    meaningful_rows = [
+        row
+        for row in parsed_rows
+        if any((row.get(column) or "").strip().lower() not in SESSION_LOG_NONE_VALUES for column in header)
+    ]
+    if not meaningful_rows:
+        findings.append(
+            Finding(
+                id="decision-log-empty",
+                severity=severity,
+                category="decision-log",
+                title="Decision log has no decision rows",
+                details="A stage decision log must contain at least one observable decision row.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Record the source/scope/write/review decisions that shaped the output.",
+            )
+        )
+        checks.append(Check("decision-log-format", warn_status, "Decision log has no rows.", display_path))
+        return findings, checks
+
+    incomplete_rows: list[str] = []
+    invalid_ids: list[str] = []
+    for row_index, row in enumerate(meaningful_rows, start=1):
+        decision_id = (row.get("decision_id") or "").strip()
+        if not DECISION_LOG_ID_RE.fullmatch(decision_id):
+            invalid_ids.append(decision_id or f"row {row_index}")
+        missing_in_row = [
+            column
+            for column in sorted(DECISION_LOG_REQUIRED_COLUMNS)
+            if (row.get(column) or "").strip().lower() in SESSION_LOG_NONE_VALUES
+        ]
+        if missing_in_row:
+            incomplete_rows.append(f"{decision_id or f'row {row_index}'}: {', '.join(missing_in_row)}")
+
+    if invalid_ids:
+        findings.append(
+            Finding(
+                id="decision-log-invalid-decision-id",
+                severity=severity,
+                category="decision-log",
+                title="Decision log has invalid decision ids",
+                details="Decision ids must be stable IDs such as `DEC-001` so later artifacts can reference them.",
+                path=display_path,
+                evidence=invalid_ids[:20],
+                recommended_action="Rename decision ids to `DEC-001`, `DEC-002`, ... or `DL-001`, `DL-002`, ... .",
+            )
+        )
+
+    if incomplete_rows:
+        findings.append(
+            Finding(
+                id="decision-log-incomplete-rows",
+                severity=severity,
+                category="decision-log",
+                title="Decision log rows are incomplete",
+                details="Each decision row must explain what changed, why, which input triggered it and where it landed.",
+                path=display_path,
+                evidence=incomplete_rows[:20],
+                recommended_action="Fill every required column; do not use `none` for real decisions.",
+            )
+        )
+
+    hidden_reasoning_match = re.search(
+        r"chain[-\s]?of[-\s]?thought|hidden\s+reasoning|скрыт\w*\s+рассужд|внутренн\w*\s+рассужд",
+        content,
+        flags=re.IGNORECASE,
+    )
+    if hidden_reasoning_match:
+        findings.append(
+            Finding(
+                id="decision-log-hidden-reasoning-smell",
+                severity=severity,
+                category="decision-log",
+                title="Decision log appears to reference hidden reasoning",
+                details=(
+                    "Decision logs must capture observable actions, inputs, decisions and rationale, "
+                    "not private chain-of-thought."
+                ),
+                path=display_path,
+                evidence=[hidden_reasoning_match.group(0)],
+                recommended_action="Rewrite the row as an observable decision with source/input, rationale and risk.",
+            )
+        )
+
+    has_decision_log_findings = any(finding.category == "decision-log" for finding in findings)
+    checks.append(
+        Check(
+            "decision-log-format",
+            warn_status if has_decision_log_findings else "pass",
+            "Decision log has issues." if has_decision_log_findings else "Decision log format passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_ui_evidence_index(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    content = path.read_text(encoding="utf-8")
+    content_lower = content.lower()
+    rows = markdown_table_rows(path)
+    local_output_policy = (
+        "evidence_export_policy" in content_lower
+        and "local-output-index-only" in content_lower
+    )
+    dom_seeded_policy = (
+        "dom_seeded_policy" in content_lower
+        and "non-canonical-observation" in content_lower
+    )
+    trace_not_collected_policy = (
+        "trace_policy" in content_lower
+        and "not-collected" in content_lower
+    )
+
+    output_paths: list[str] = []
+    missing_paths: list[str] = []
+    dom_seeded_entries: list[str] = []
+
+    for row in rows[1:]:
+        if len(row) < 4:
+            continue
+        test_case_id, artifact_type, artifact_path, note = row[:4]
+        if artifact_path.startswith("output/"):
+            output_paths.append(artifact_path)
+        if "dom-seeded" in artifact_type.lower() or "dom-seeded" in note.lower():
+            dom_seeded_entries.append(test_case_id)
+        if artifact_path and not artifact_path.startswith(("http://", "https://")):
+            candidate = root / artifact_path
+            if not candidate.exists():
+                missing_paths.append(artifact_path)
+
+    if output_paths and local_output_policy:
+        findings.append(
+            Finding(
+                id="ui-evidence-output-paths-declared-local",
+                severity="info",
+                category="ui-evidence",
+                title="UI evidence explicitly declares local output paths",
+                details="Evidence under output/ is intentionally treated as local-only and non-portable.",
+                path=display_path,
+                evidence=output_paths[:10],
+                recommended_action="Export durable artifacts when this evidence must be independently reproducible.",
+            )
+        )
+    elif output_paths:
+        findings.append(
+            Finding(
+                id="ui-evidence-output-paths-are-local",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence points to ignored local output paths",
+                details="Evidence under output/ is usually ignored and may not be available in another checkout.",
+                path=display_path,
+                evidence=output_paths[:10],
+                recommended_action="Add an artifact export policy or mark these paths as local/ignored explicitly.",
+            )
+        )
+    unqualified_missing_paths = [
+        artifact_path
+        for artifact_path in missing_paths
+        if not (local_output_policy and artifact_path.startswith("output/"))
+    ]
+    if unqualified_missing_paths:
+        findings.append(
+            Finding(
+                id="ui-evidence-artifacts-missing",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence artifact paths are missing",
+                details="The evidence index references files that are not present in the current checkout.",
+                path=display_path,
+                evidence=unqualified_missing_paths[:10],
+                recommended_action="Restore the artifacts, export them, or mark them as external/local-only.",
+            )
+        )
+    if dom_seeded_entries and dom_seeded_policy:
+        findings.append(
+            Finding(
+                id="ui-evidence-dom-seeded-observations-declared",
+                severity="info",
+                category="ui-evidence",
+                title="UI evidence explicitly separates DOM-seeded observations",
+                details="DOM-seeded observations are documented as non-canonical and should not count as normal confirmed UI paths.",
+                path=display_path,
+                evidence=dom_seeded_entries[:10],
+                recommended_action="Keep corresponding UI validation statuses blocked or limited unless a normal UI path is reproduced.",
+            )
+        )
+    elif dom_seeded_entries:
+        findings.append(
+            Finding(
+                id="ui-evidence-dom-seeded-observations",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence includes DOM-seeded observations",
+                details="DOM seeding is not equivalent to a normal user-confirmed UI path.",
+                path=display_path,
+                evidence=dom_seeded_entries[:10],
+                recommended_action="Keep DOM-seeded observations separate from canonical confirmed UI checks.",
+            )
+        )
+    traces_not_saved = bool(
+        re.search(r"traces?\s+не\s+сохран", content, flags=re.IGNORECASE)
+    )
+    if traces_not_saved and trace_not_collected_policy:
+        findings.append(
+            Finding(
+                id="ui-evidence-traces-not-collected-declared",
+                severity="info",
+                category="ui-evidence",
+                title="UI evidence explicitly declares traces were not collected",
+                details="The run records trace absence as an intentional limitation instead of implying replayable evidence.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Collect traces for future confirmed or mismatch UI checks when reproducibility is required.",
+            )
+        )
+    elif traces_not_saved:
+        findings.append(
+            Finding(
+                id="ui-evidence-traces-not-saved",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence says Playwright traces were not saved",
+                details="Confirmed or mismatch cases are harder to reproduce without traces.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Save traces for confirmed/mismatch cases or record a deliberate limitation.",
+            )
+        )
+
+    has_warning_or_error = any(finding.severity in {"error", "warning"} for finding in findings)
+    status = "warn" if has_warning_or_error else "pass"
+    details = (
+        "UI evidence policy findings present."
+        if has_warning_or_error
+        else "UI evidence policy checks passed with documented limitations."
+        if findings
+        else "UI evidence policy checks passed."
+    )
+    checks.append(
+        Check(
+            "ui-evidence-policy",
+            status,
+            details,
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_ui_validation_report(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    rows = markdown_table_rows(path)
+    noncanonical: list[str] = []
+
+    for row in rows[1:]:
+        if len(row) < 2:
+            continue
+        test_case_id, status = row[0], row[1]
+        if not test_case_id.startswith("TC-"):
+            continue
+        if status and status not in ALLOWED_UI_STATUSES:
+            noncanonical.append(f"{test_case_id}: {status}")
+
+    if noncanonical:
+        findings.append(
+            Finding(
+                id="ui-validation-report-noncanonical-statuses",
+                severity="warning",
+                category="ui-evidence",
+                title="UI validation report contains noncanonical statuses",
+                details="UI verification statuses should use the canonical enum or document an explicit extension.",
+                path=display_path,
+                evidence=noncanonical[:10],
+                recommended_action="Map these statuses to the canonical enum or extend the enum in references first.",
+            )
+        )
+
+    checks.append(
+        Check(
+            "ui-validation-status-enum",
+            "warn" if findings else "pass",
+            "Noncanonical UI statuses found." if findings else "UI statuses are canonical.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def get_int(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and re.fullmatch(r"-?\d+", value.strip()):
+        return int(value)
+    return None
+
+
+def residual_risk_value_is_meaningful(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip().strip("`").strip().lower()
+    return bool(normalized and normalized not in {"none", "-", "n/a", "na", "null", "0"})
+
+
+def collect_residual_risk_source_refs(source_paths: list[Path]) -> dict[str, Any]:
+    refs: dict[str, Any] = {
+        "finding_ids": set(),
+        "gap_ids": set(),
+        "atom_ids": set(),
+        "finding_records": {},
+        "gap_records": {},
+        "atom_records": {},
+        "finding_sources": [],
+        "gap_sources": [],
+        "atom_sources": [],
+    }
+
+    for source_path in dedupe_paths(source_paths):
+        try:
+            content = source_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        name = source_path.name
+        is_findings = bool(re.fullmatch(r"round-\d+-findings\.md", name) or name.endswith("findings.md"))
+        is_traceability = name.endswith("traceability-matrix.md")
+        is_gap_artifact = name == "scope-coverage-gaps.md"
+
+        finding_ids = set(extract_finding_ids_from_text(content))
+        gap_ids = set(extract_gap_ids_from_text(content))
+        atom_ids = set(extract_atom_ids_from_text(content))
+
+        if is_findings:
+            refs["finding_sources"].append(source_path)
+            refs["finding_ids"].update(finding_ids)
+            refs["gap_ids"].update(gap_ids)
+            for finding_id, block in extract_finding_blocks(content):
+                refs["finding_records"].setdefault(finding_id, []).append(
+                    {
+                        "path": source_path,
+                        "fields": parse_markdown_fields(block),
+                    }
+                )
+            if gap_ids:
+                refs["gap_sources"].append(source_path)
+        if is_traceability:
+            refs["atom_sources"].append(source_path)
+            refs["atom_ids"].update(atom_ids)
+            refs["gap_ids"].update(gap_ids)
+            rows = markdown_table_rows_from_text(content)
+            if rows:
+                header = normalize_table_header(rows[0])
+                atom_index = header.index("atom_id") if "atom_id" in header else None
+                coverage_index = header.index("coverage_status") if "coverage_status" in header else None
+                if atom_index is not None:
+                    for row in rows[1:]:
+                        if atom_index >= len(row):
+                            continue
+                        atom_id = row[atom_index].strip().strip("`")
+                        if not re.fullmatch(r"ATOM-\d{3,}", atom_id):
+                            continue
+                        fields: dict[str, str] = {}
+                        if coverage_index is not None and coverage_index < len(row):
+                            fields["coverage_status"] = normalize_markdown_field_value(row[coverage_index]).lower()
+                        refs["atom_records"].setdefault(atom_id, []).append(
+                            {
+                                "path": source_path,
+                                "fields": fields,
+                            }
+                        )
+            if gap_ids:
+                refs["gap_sources"].append(source_path)
+        if is_gap_artifact:
+            refs["gap_sources"].append(source_path)
+            refs["gap_ids"].update(gap_ids)
+            for gap_match in re.finditer(r"^###\s+(GAP-\d{3,})\s*$", content, flags=re.MULTILINE):
+                next_heading = re.search(r"^###\s+", content[gap_match.end():], flags=re.MULTILINE)
+                block_end = gap_match.end() + next_heading.start() if next_heading else len(content)
+                refs["gap_records"].setdefault(gap_match.group(1), []).append(
+                    {
+                        "path": source_path,
+                        "fields": parse_markdown_fields(content[gap_match.end():block_end]),
+                    }
+                )
+
+    return refs
+
+
+def residual_finding_record_is_open_blocking(record: dict[str, Any]) -> bool:
+    fields = record.get("fields")
+    if not isinstance(fields, dict):
+        return False
+    return fields.get("severity") in {"error", "warning"} and fields.get("status") == "open"
+
+
+def residual_gap_record_has_canonical_semantics(record: dict[str, Any]) -> bool:
+    fields = record.get("fields")
+    if not isinstance(fields, dict):
+        return False
+
+    impact = fields.get("impact")
+    blocks_ready = fields.get("blocks_ready_for_review")
+    if impact not in {"blocking", "non-blocking"} or blocks_ready not in {"yes", "no"}:
+        return False
+    return (impact == "blocking" and blocks_ready == "yes") or (
+        impact == "non-blocking" and blocks_ready == "no"
+    )
+
+
+def residual_atom_record_has_expected_status(record: dict[str, Any], expected_status: str) -> bool:
+    fields = record.get("fields")
+    if not isinstance(fields, dict):
+        return False
+    return fields.get("coverage_status") == expected_status
+
+
+def residual_record_summary(record: dict[str, Any], field_names: tuple[str, ...]) -> str:
+    fields = record.get("fields") if isinstance(record, dict) else None
+    if not isinstance(fields, dict):
+        return "<unparseable>"
+    return ", ".join(f"{field_name}={fields.get(field_name) or '<missing>'}" for field_name in field_names)
+
+
+def residual_risk_unknown_refs(fields: dict[str, str], source_paths: list[Path]) -> list[str]:
+    source_refs = collect_residual_risk_source_refs(source_paths)
+    issues: list[str] = []
+
+    remaining_blocking = fields.get("remaining_blocking_findings", "")
+    finding_refs = set(extract_finding_ids_from_text(remaining_blocking))
+    finding_sources = source_refs["finding_sources"]
+    if finding_refs and not finding_sources:
+        issues.append(
+            "remaining_blocking_findings cannot be verified: no linked final/round findings artifact"
+        )
+    elif finding_refs:
+        missing = sorted(finding_refs - source_refs["finding_ids"])
+        issues.extend(f"remaining_blocking_findings:{finding_id} not found in linked findings artifacts" for finding_id in missing)
+
+    gap_field_names = (
+        "remaining_traceability_gaps",
+        "remaining_coverage_gaps",
+        "remaining_unclear_items",
+    )
+    gap_sources = source_refs["gap_sources"]
+    for field_name in gap_field_names:
+        gap_refs = set(extract_gap_ids_from_text(fields.get(field_name, "")))
+        if gap_refs and not gap_sources:
+            issues.append(f"{field_name} cannot be verified: no linked coverage/traceability gap artifact")
+            continue
+        missing = sorted(gap_refs - source_refs["gap_ids"])
+        issues.extend(f"{field_name}:{gap_id} not found in linked gap artifacts" for gap_id in missing)
+
+    atom_field_names = ("remaining_traceability_gaps", "remaining_unclear_items")
+    atom_sources = source_refs["atom_sources"]
+    for field_name in atom_field_names:
+        atom_refs = set(extract_atom_ids_from_text(fields.get(field_name, "")))
+        if atom_refs and not atom_sources:
+            issues.append(f"{field_name} cannot be verified: no linked final traceability matrix")
+            continue
+        missing = sorted(atom_refs - source_refs["atom_ids"])
+        issues.extend(f"{field_name}:{atom_id} not found in linked traceability matrix" for atom_id in missing)
+
+    return issues[:20]
+
+
+def residual_risk_semantic_issues(fields: dict[str, str], source_paths: list[Path]) -> list[str]:
+    source_refs = collect_residual_risk_source_refs(source_paths)
+    issues: list[str] = []
+
+    finding_records: dict[str, list[dict[str, Any]]] = source_refs["finding_records"]
+    for finding_id in extract_finding_ids_from_text(fields.get("remaining_blocking_findings", "")):
+        records = finding_records.get(finding_id, [])
+        if not records:
+            continue
+        if any(residual_finding_record_is_open_blocking(record) for record in records):
+            continue
+        summaries = "; ".join(
+            residual_record_summary(record, ("severity", "status"))
+            for record in records[:3]
+        )
+        issues.append(
+            f"remaining_blocking_findings:{finding_id} is not an open blocking finding ({summaries})"
+        )
+
+    remaining_coverage_gaps = fields.get("remaining_coverage_gaps", "")
+    coverage_gap_placeholders = [
+        gap_id
+        for gap_id in extract_gap_ids_from_text(remaining_coverage_gaps)
+        if gap_id.startswith("coverage_gap:")
+    ]
+    issues.extend(
+        f"remaining_coverage_gaps:{gap_id} is a placeholder; use a GAP-* from scope-coverage-gaps.md"
+        for gap_id in coverage_gap_placeholders
+    )
+
+    gap_records: dict[str, list[dict[str, Any]]] = source_refs["gap_records"]
+    for gap_id in extract_gap_ids_from_text(remaining_coverage_gaps):
+        if not gap_id.startswith("GAP-"):
+            continue
+        records = gap_records.get(gap_id, [])
+        if not records:
+            issues.append(
+                f"remaining_coverage_gaps:{gap_id} has no scope-coverage-gaps block with Impact/Blocks Ready For Review"
+            )
+            continue
+        if any(residual_gap_record_has_canonical_semantics(record) for record in records):
+            continue
+        summaries = "; ".join(
+            residual_record_summary(record, ("impact", "blocks_ready_for_review"))
+            for record in records[:3]
+        )
+        issues.append(f"remaining_coverage_gaps:{gap_id} has inconsistent gap semantics ({summaries})")
+
+    atom_records: dict[str, list[dict[str, Any]]] = source_refs["atom_records"]
+    for field_name, expected_status in (
+        ("remaining_traceability_gaps", "gap"),
+        ("remaining_unclear_items", "unclear"),
+    ):
+        for atom_id in extract_atom_ids_from_text(fields.get(field_name, "")):
+            records = atom_records.get(atom_id, [])
+            if not records:
+                issues.append(
+                    f"{field_name}:{atom_id} has no parseable traceability matrix row with coverage_status"
+                )
+                continue
+            if any(residual_atom_record_has_expected_status(record, expected_status) for record in records):
+                continue
+            summaries = "; ".join(
+                residual_record_summary(record, ("coverage_status",))
+                for record in records[:3]
+            )
+            issues.append(
+                f"{field_name}:{atom_id} has coverage_status mismatch ({summaries}; expected={expected_status})"
+            )
+
+    return issues[:20]
+
+
+def residual_risk_source_artifacts(
+    latest_artifacts: Any,
+    latest_artifact_values: list[str],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> list[Path]:
+    source_values: list[str] = []
+    if isinstance(latest_artifacts, dict):
+        for key in (
+            "final_findings",
+            "findings",
+            "review_findings",
+            "final_traceability_matrix",
+            "traceability_matrix",
+            "scope_coverage_gaps",
+        ):
+            value = latest_artifacts.get(key)
+            if isinstance(value, str):
+                source_values.append(value)
+
+    for value in latest_artifact_values:
+        name = Path(strip_quotes(value)).name
+        if (
+            re.fullmatch(r"round-\d+-findings\.md", name)
+            or name.endswith("traceability-matrix.md")
+            or name == "scope-coverage-gaps.md"
+        ):
+            source_values.append(value)
+
+    resolved_paths = [
+        resolved
+        for value in source_values
+        for resolved in [resolve_artifact_path(value, workflow_path, root, ft_root)]
+        if resolved is not None
+    ]
+    return dedupe_paths(resolved_paths)
+
+
+def validate_loop_summary_residual_risk(
+    loop_path: Path,
+    root: Path,
+    metrics: dict[str, Any],
+    source_paths: list[Path] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(loop_path, root)
+
+    if metrics.get("final_status") != "round-cap-reached":
+        return findings, checks
+
+    fields = metrics.get("residual_risk_fields")
+    if not isinstance(fields, dict):
+        findings.append(
+            Finding(
+                id="loop-summary-round-cap-missing-residual-risk",
+                severity="warning",
+                category="status-model",
+                title="round-cap loop summary has no Final Residual Risk block",
+                details=(
+                    "`round-cap-reached` means unresolved work remains, so loop-summary.md "
+                    "must list residual blocking findings, gaps, unclear items, rationale and next action."
+                ),
+                path=display_path,
+                evidence=[],
+                recommended_action=(
+                    "Add ## Final Residual Risk with remaining_blocking_findings, "
+                    "remaining_traceability_gaps, remaining_coverage_gaps, remaining_unclear_items, "
+                    "decision_rationale and next_action."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "loop-summary-final-residual-risk",
+                "warn",
+                "Final Residual Risk block is missing.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    missing_fields = sorted(REQUIRED_RESIDUAL_RISK_FIELDS - set(fields))
+    if missing_fields:
+        findings.append(
+            Finding(
+                id="loop-summary-round-cap-residual-risk-missing-fields",
+                severity="warning",
+                category="status-model",
+                title="Final Residual Risk misses required fields",
+                details="A round-cap loop summary must expose all residual-risk fields in a machine-checkable format.",
+                path=display_path,
+                evidence=missing_fields,
+                recommended_action="Add the missing fields from references/agent/iteration-lifecycle-format.md.",
+            )
+        )
+
+    inconsistencies: list[str] = []
+    blocking_findings = (get_int(metrics.get("findings_error")) or 0) + (
+        get_int(metrics.get("findings_warning")) or 0
+    )
+    if blocking_findings > 0 and not residual_risk_value_is_meaningful(
+        fields.get("remaining_blocking_findings")
+    ):
+        inconsistencies.append(
+            f"remaining_blocking_findings=none while findings error/warning={blocking_findings}"
+        )
+
+    traceability_gaps = get_int(metrics.get("traceability_gap")) or 0
+    if traceability_gaps > 0 and not residual_risk_value_is_meaningful(
+        fields.get("remaining_traceability_gaps")
+    ):
+        inconsistencies.append(f"remaining_traceability_gaps=none while traceability gap={traceability_gaps}")
+
+    traceability_unclear = get_int(metrics.get("traceability_unclear")) or 0
+    if traceability_unclear > 0 and not residual_risk_value_is_meaningful(
+        fields.get("remaining_unclear_items")
+    ):
+        inconsistencies.append(
+            f"remaining_unclear_items=none while traceability unclear={traceability_unclear}"
+        )
+
+    gap_mentions = get_int(metrics.get("gap_mentions")) or 0
+    if gap_mentions > 0 and not residual_risk_value_is_meaningful(fields.get("remaining_coverage_gaps")):
+        inconsistencies.append("remaining_coverage_gaps=none while GAP-* references are mentioned")
+
+    if not residual_risk_value_is_meaningful(fields.get("decision_rationale")):
+        inconsistencies.append("decision_rationale missing/empty")
+    if not residual_risk_value_is_meaningful(fields.get("next_action")):
+        inconsistencies.append("next_action missing/empty")
+
+    if inconsistencies:
+        findings.append(
+            Finding(
+                id="loop-summary-round-cap-residual-risk-inconsistent",
+                severity="warning",
+                category="status-model",
+                title="Final Residual Risk contradicts loop-summary metrics",
+                details="The residual-risk block must not claim `none` for categories that still have open metrics.",
+                path=display_path,
+                evidence=inconsistencies[:10],
+                recommended_action="List the remaining blocker/gap IDs or change the loop metrics/status.",
+            )
+        )
+
+    unknown_refs = residual_risk_unknown_refs(fields, source_paths or [])
+    if unknown_refs:
+        findings.append(
+            Finding(
+                id="loop-summary-round-cap-residual-risk-unknown-refs",
+                severity="warning",
+                category="status-model",
+                title="Final Residual Risk references are not backed by linked artifacts",
+                details=(
+                    "Residual-risk IDs must resolve to the final/round findings, traceability matrix, "
+                    "or scope coverage gaps linked from workflow-state.yaml."
+                ),
+                path=display_path,
+                evidence=unknown_refs,
+                recommended_action=(
+                    "Fix the IDs in Final Residual Risk or add the missing final_* / scope coverage artifacts "
+                    "to latest_artifacts."
+                ),
+            )
+        )
+
+    semantic_issues = residual_risk_semantic_issues(fields, source_paths or [])
+    if semantic_issues:
+        findings.append(
+            Finding(
+                id="loop-summary-round-cap-residual-risk-semantic-mismatch",
+                severity="warning",
+                category="status-model",
+                title="Final Residual Risk references do not match residual-risk semantics",
+                details=(
+                    "Residual-risk references must point to unresolved blocking findings or canonical coverage "
+                    "gap records, not merely to any existing ID."
+                ),
+                path=display_path,
+                evidence=semantic_issues,
+                recommended_action=(
+                    "Point remaining_blocking_findings to open error/warning findings and keep remaining_coverage_gaps "
+                    "aligned with scope-coverage-gaps Impact / Blocks Ready For Review fields."
+                ),
+            )
+        )
+
+    has_issues = bool(missing_fields or inconsistencies or unknown_refs or semantic_issues)
+    checks.append(
+        Check(
+            "loop-summary-final-residual-risk",
+            "warn" if has_issues else "pass",
+            "Final Residual Risk block has issues." if has_issues else "Final Residual Risk block is consistent.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def accepted_risk_gap_ids(state: dict[str, Any]) -> set[str]:
+    accepted_risks = state.get("accepted_risks")
+    if not isinstance(accepted_risks, list):
+        return set()
+    accepted_text = "\n".join(str(item) for item in accepted_risks)
+    return set(extract_gap_ids_from_text(accepted_text))
+
+
+def accepted_risk_entries_are_qualified(state: dict[str, Any]) -> bool:
+    accepted_risks = state.get("accepted_risks")
+    if not isinstance(accepted_risks, list) or not accepted_risks:
+        return False
+    for item in accepted_risks:
+        raw_text = str(item)
+        text = raw_text.lower()
+        if not extract_gap_ids_from_text(raw_text):
+            return False
+        if "accepted-risk" not in text and "accepted risk" not in text:
+            return False
+        if "owner:" not in text or "rationale:" not in text or "revisit:" not in text:
+            return False
+    return True
+
+
+def workflow_final_status(state: dict[str, Any]) -> str | None:
+    iteration_result = state.get("iteration_result")
+    if isinstance(iteration_result, dict) and isinstance(iteration_result.get("final_status"), str):
+        return iteration_result["final_status"]
+
+    review_loop = state.get("review_loop")
+    if isinstance(review_loop, dict) and isinstance(review_loop.get("final_status"), str):
+        return review_loop["final_status"]
+
+    if isinstance(state.get("review_loop_status"), str):
+        return state["review_loop_status"]
+
+    if state.get("stage_status") in {"signed-off", "round-cap-reached"}:
+        return state["stage_status"]
+
+    return None
+
+
+def expected_transition_prompt(state: dict[str, Any]) -> str | None:
+    stage_status = state.get("stage_status")
+    next_skill = state.get("next_skill")
+    current_stage = state.get("current_stage")
+    current_round = get_int(state.get("current_round")) or 1
+
+    if next_skill == "ft-ui-automation-prep":
+        return "prompt.reviewer-to-ui-prep.md"
+    if (
+        current_stage == "ft-test-case-reviewer"
+        and stage_status == "ready-for-next-stage"
+        and next_skill == "ft-test-case-writer"
+    ):
+        return "prompt.scope-to-writer.md"
+    if (
+        current_stage == "ft-scope-analyzer"
+        and stage_status == "ready-for-gap-review"
+        and next_skill == "ft-test-case-reviewer"
+    ):
+        return "prompt.scope-gaps-to-reviewer.md"
+    if stage_status == "ready-for-review" or next_skill == "ft-test-case-reviewer":
+        return f"prompt.writer-to-reviewer.round-{current_round}.md"
+    if stage_status == "ready-for-writer-revision":
+        return f"prompt.reviewer-to-writer.round-{max(current_round - 1, 1)}.md"
+    if next_skill == "ft-test-case-writer" and current_stage in {"ft-source-locator", "ft-scope-analyzer"}:
+        return "prompt.scope-to-writer.md"
+    if next_skill == "ft-test-case-iteration":
+        return "prompt.scope-to-iteration.md"
+
+    return None
+
+
+def transition_prompt_kind(prompt_name: str | None) -> str | None:
+    if not prompt_name:
+        return None
+    name = Path(strip_quotes(prompt_name)).name.lower()
+    if name.startswith("prompt.writer-to-reviewer."):
+        return "writer-to-reviewer"
+    if name.startswith("prompt.reviewer-to-writer."):
+        return "reviewer-to-writer"
+    if name == "prompt.reviewer-to-ui-prep.md":
+        return "reviewer-to-ui-prep"
+    if name == "prompt.scope-gaps-to-reviewer.md":
+        return "scope-gaps-to-reviewer"
+    if name == "prompt.scope-to-writer.md":
+        return "scope-to-writer"
+    if name == "prompt.scope-to-iteration.md":
+        return "scope-to-iteration"
+    return None
+
+
+def explicit_active_transition_prompt_value(state: dict[str, Any]) -> str | None:
+    latest_artifacts = state.get("latest_artifacts")
+    if not isinstance(latest_artifacts, dict):
+        return None
+    value = latest_artifacts.get("active_transition_prompt")
+    if isinstance(value, str) and value.strip():
+        return value
+    return None
+
+
+def artifact_values_contain_resolving_name(
+    expected_name: str,
+    values: list[str],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+) -> bool:
+    return any(
+        Path(value).name == expected_name and artifact_exists(value, workflow_path, root, ft_root)
+        for value in values
+    )
+
+
+def is_signed_off_state(state: dict[str, Any]) -> bool:
+    if state.get("stage_status") == "signed-off":
+        return True
+    if state.get("review_loop_status") == "signed-off":
+        return True
+
+    return workflow_final_status(state) == "signed-off"
+
+
+def is_ready_for_review_state(state: dict[str, Any]) -> bool:
+    return state.get("stage_status") == "ready-for-review" or (
+        state.get("next_skill") == "ft-test-case-reviewer"
+        and not (
+            state.get("current_stage") == "ft-scope-analyzer"
+            and state.get("stage_status") == "ready-for-gap-review"
+        )
+    )
+
+
+def validate_reviewer_signoff_self_check(
+    *,
+    source_paths: list[Path],
+    workflow_path: Path,
+    root: Path,
+    reviewer_signoff_policy: str,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    severity = "warning" if reviewer_signoff_policy == "strict" else "info"
+    check_status = "warn" if reviewer_signoff_policy == "strict" else "pass"
+    readable_sources: list[tuple[Path, str]] = []
+
+    for source_path in dedupe_paths(source_paths):
+        try:
+            readable_sources.append((source_path, source_path.read_text(encoding="utf-8")))
+        except UnicodeDecodeError as exc:
+            findings.append(
+                Finding(
+                    id="reviewer-signoff-self-check-unreadable",
+                    severity="warning",
+                    category="stage-transition",
+                    title="Reviewer sign-off source is not UTF-8",
+                    details=str(exc),
+                    path=rel(source_path, root),
+                    evidence=[],
+                    recommended_action="Save the reviewer sign-off source as UTF-8 Markdown.",
+                )
+            )
+
+    for source_path, content in readable_sources:
+        fields = extract_reviewer_signoff_fields(content)
+        if fields is None:
+            continue
+
+        issues = reviewer_signoff_field_issues(fields)
+        if issues:
+            findings.append(
+                Finding(
+                    id="reviewer-signoff-self-check-invalid",
+                    severity=severity,
+                    category="stage-transition",
+                    title="Reviewer Sign-off Self-check is incomplete or invalid",
+                    details=(
+                        "The UI-prep handoff has a Reviewer Sign-off Self-check block, "
+                        "but the block does not satisfy the reviewer-output-format.md contract."
+                    ),
+                    path=rel(source_path, root),
+                    evidence=issues[:20],
+                    recommended_action=(
+                        "Fill all required self-check fields with canonical values before creating "
+                        "prompt.reviewer-to-ui-prep.md."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "reviewer-signoff-self-check",
+                    check_status,
+                    "Reviewer Sign-off Self-check has field issues.",
+                    rel(source_path, root),
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "reviewer-signoff-self-check",
+                    "pass",
+                    "Reviewer Sign-off Self-check is present and structurally valid.",
+                    rel(source_path, root),
+                )
+            )
+        return findings, checks
+
+    findings.append(
+        Finding(
+            id="reviewer-signoff-self-check-missing",
+            severity=severity,
+            category="stage-transition",
+            title="UI-prep handoff has no Reviewer Sign-off Self-check",
+            details=(
+                "A reviewer-to-UI-prep handoff must show that traceability, structure, grouping, "
+                "test-case numbering, test-design, blocking findings, and traceability gaps were explicitly checked."
+            ),
+            path=rel(workflow_path, root),
+            evidence=[rel(source_path, root) for source_path, _ in readable_sources] or ["<no sign-off sources resolved>"],
+            recommended_action=(
+                "Add `## Reviewer Sign-off Self-check` to loop-summary.md or the final findings artifact "
+                "before treating the handoff as UI-prep ready."
+            ),
+        )
+    )
+    checks.append(
+        Check(
+            "reviewer-signoff-self-check",
+            check_status,
+            "Reviewer Sign-off Self-check is missing.",
+            rel(workflow_path, root),
+        )
+    )
+    return findings, checks
+
+
+def validate_workflow_state(
+    path: Path,
+    root: Path,
+    *,
+    reviewer_signoff_policy: str = "compatible",
+    final_alias_policy: str = "compatible",
+    session_log_policy: str = "compatible",
+    decision_log_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        state = parse_workflow_state(path)
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="workflow-state-unreadable",
+                severity="error",
+                category="workflow-state",
+                title="workflow-state.yaml is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save workflow-state.yaml as UTF-8.",
+            )
+        )
+        checks.append(Check("workflow-state-readable", "fail", "File is not UTF-8.", display_path))
+        return findings, checks
+
+    missing_fields = sorted(REQUIRED_WORKFLOW_FIELDS - set(state))
+    if missing_fields:
+        findings.append(
+            Finding(
+                id="workflow-state-missing-required-fields",
+                severity="error",
+                category="workflow-state",
+                title="workflow-state.yaml misses required fields",
+                details="The handoff state is incomplete.",
+                path=display_path,
+                evidence=missing_fields,
+                recommended_action="Add the missing fields from references/agent/workflow-state-format.md.",
+            )
+        )
+        checks.append(Check("workflow-state-required-fields", "fail", "Missing required fields.", display_path))
+    else:
+        checks.append(Check("workflow-state-required-fields", "pass", "Required fields present.", display_path))
+
+    ft_root = find_ft_root(path, root, state)
+    authoritative_cycle_state = find_authoritative_session_cycle_state(state, path, root, ft_root)
+    workflow_superseded_by_session_cycle = authoritative_cycle_state is not None
+    if authoritative_cycle_state is not None:
+        cycle_path, cycle_state = authoritative_cycle_state
+        findings.append(
+            Finding(
+                id="workflow-state-superseded-by-session-cycle",
+                severity="info",
+                category="workflow-state",
+                title="workflow-state.yaml is superseded by session-based cycle-state.yaml",
+                details=(
+                    "A matching session-based review cycle state is newer than this workflow-state. "
+                    "The validator keeps basic handoff/link checks for this file, but active routing and "
+                    "ready-for-review writer gates are evaluated from cycle-state.yaml instead."
+                ),
+                path=display_path,
+                evidence=[
+                    f"cycle_state={rel(cycle_path, root)}",
+                    f"cycle_stage={cycle_state.get('current_stage')}",
+                    f"cycle_status={cycle_state.get('stage_status')}",
+                ],
+                recommended_action=(
+                    "Use the matching `work/review-cycles/<scope>/cycle-state.yaml` as the process-status "
+                    "source of truth for this scope."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "workflow-state-session-cycle-superseded",
+                "pass",
+                "Matching session-based cycle-state is authoritative for active routing.",
+                display_path,
+            )
+        )
+    latest_artifacts = state.get("latest_artifacts")
+    latest_artifact_values = flatten_string_values(latest_artifacts)
+    required_inputs = state.get("required_inputs")
+    required_input_values = flatten_string_values(required_inputs)
+    scope_metrics: dict[str, int | str | None] | None = None
+    loop_summary_metrics: dict[str, Any] | None = None
+    loop_summary_path: Path | None = None
+
+    if isinstance(required_inputs, list):
+        missing_required_inputs = [
+            item
+            for item in required_inputs
+            if isinstance(item, str)
+            and not artifact_exists(item, path, root, ft_root)
+            and item not in {Path(value).name for value in latest_artifact_values}
+        ]
+        if missing_required_inputs:
+            findings.append(
+                Finding(
+                    id="workflow-state-missing-required-input-artifacts",
+                    severity="error",
+                    category="artifact-links",
+                    title="Required input artifacts are missing",
+                    details="A next stage should not start while required inputs cannot be resolved.",
+                    path=display_path,
+                    evidence=missing_required_inputs,
+                    recommended_action="Create the missing artifacts or update required_inputs/latest_artifacts.",
+                )
+            )
+            checks.append(Check("workflow-state-required-input-artifacts", "fail", "Missing required input artifacts.", display_path))
+        else:
+            checks.append(Check("workflow-state-required-input-artifacts", "pass", "Required input artifacts resolve.", display_path))
+
+    if isinstance(latest_artifacts, dict):
+        missing_latest_artifacts = [
+            item
+            for item in latest_artifact_values
+            if not artifact_exists(item, path, root, ft_root)
+        ]
+        if missing_latest_artifacts:
+            findings.append(
+                Finding(
+                    id="workflow-state-missing-latest-artifacts",
+                    severity="warning",
+                    category="artifact-links",
+                    title="Latest artifact links do not resolve",
+                    details="Some latest_artifacts paths are not present in the current checkout.",
+                    path=display_path,
+                    evidence=missing_latest_artifacts[:10],
+                    recommended_action="Fix stale latest_artifacts paths or mark external/local artifacts explicitly.",
+                )
+            )
+            checks.append(Check("workflow-state-latest-artifact-links", "warn", "Some latest artifact links are missing.", display_path))
+        else:
+            checks.append(Check("workflow-state-latest-artifact-links", "pass", "Latest artifact links resolve.", display_path))
+
+        scope_requires_mockup_inventory = workflow_requires_mockup_visual_inventory(state, path, root, ft_root)
+        if scope_requires_mockup_inventory and state.get("current_stage") in {"ft-scope-analyzer", "ft-test-case-writer"}:
+            inventory_paths = workflow_mockup_visual_inventory_paths(state, path, root, ft_root)
+            if not inventory_paths:
+                ready_for_review = is_ready_for_review_state(state)
+                findings.append(
+                    Finding(
+                        id=(
+                            "workflow-state-ready-for-review-missing-mockup-visual-inventory"
+                            if ready_for_review
+                            else "workflow-state-ui-scope-missing-mockup-visual-inventory"
+                        ),
+                        severity="error" if ready_for_review else "warning",
+                        category="mockup",
+                        title="UI scope with mockup has no mockup visual inventory",
+                        details=(
+                            "When a confirmed UI scope includes a mockup source, downstream writer work must have a "
+                            "mockup-visual-inventory.md proving that the image was opened and used only for UI interaction steps."
+                        ),
+                        path=display_path,
+                        evidence=[*required_input_values[:10], *latest_artifact_values[:10]],
+                        recommended_action=(
+                            "Create and link mockup-visual-inventory.md before writer TC generation or keep the workflow blocked."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "workflow-state-mockup-visual-inventory",
+                        "fail" if ready_for_review else "warn",
+                        "Mockup visual inventory is missing.",
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        "workflow-state-mockup-visual-inventory",
+                        "pass",
+                        "Mockup visual inventory resolves.",
+                        display_path,
+                    )
+                )
+
+        final_status = workflow_final_status(state) or state.get("stage_status")
+        if final_status in {"signed-off", "round-cap-reached"}:
+            required_final_aliases = set(REQUIRED_FINAL_ARTIFACT_ALIASES)
+            if final_status == "signed-off":
+                required_final_aliases.add("signed_off_snapshot")
+            if final_status == "round-cap-reached":
+                required_final_aliases.add("round_cap_snapshot")
+            current_round_value = get_int(state.get("current_round"))
+            if current_round_value is not None and current_round_value > 1:
+                required_final_aliases.add("final_writer_response")
+
+            missing_final_aliases = sorted(required_final_aliases - set(latest_artifacts))
+            if missing_final_aliases:
+                final_alias_severity = "warning" if final_alias_policy == "strict" else "info"
+                final_alias_check_status = "warn" if final_alias_policy == "strict" else "pass"
+                findings.append(
+                    Finding(
+                        id="workflow-state-missing-final-artifact-aliases",
+                        severity=final_alias_severity,
+                        category="traceability",
+                        title="Completed reviewer-loop state has no canonical final artifact aliases",
+                        details=(
+                            "The state resolves round-specific artifacts, but new runtime handoffs should "
+                            "also expose final_* aliases for traceability closure."
+                        ),
+                        path=display_path,
+                        evidence=missing_final_aliases,
+                        recommended_action=(
+                            "Add final_findings, final_traceability_matrix, final_traceability_matrix_xlsx, "
+                            "loop_summary, and final_writer_response when applicable."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "workflow-state-final-artifact-aliases",
+                        final_alias_check_status,
+                        (
+                            "Completed reviewer-loop state is missing canonical final aliases."
+                            if final_alias_policy == "strict"
+                            else "Legacy state missing final aliases recorded as info."
+                        ),
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(Check("workflow-state-final-artifact-aliases", "pass", "Final artifact aliases are present.", display_path))
+
+    current_stage = state.get("current_stage")
+    if current_stage not in ALLOWED_CURRENT_STAGES:
+        findings.append(
+            Finding(
+                id="workflow-state-invalid-current-stage",
+                severity="error",
+                category="workflow-state",
+                title="Invalid current_stage",
+                details=f"Unsupported current_stage: {current_stage!r}",
+                path=display_path,
+                evidence=[str(current_stage)],
+                recommended_action="Use one of the canonical current_stage values.",
+            )
+        )
+
+    stage_status = state.get("stage_status")
+    if stage_status not in ALLOWED_STAGE_STATUSES:
+        findings.append(
+            Finding(
+                id="workflow-state-invalid-stage-status",
+                severity="error",
+                category="workflow-state",
+                title="Invalid stage_status",
+                details=f"Unsupported stage_status: {stage_status!r}",
+                path=display_path,
+                evidence=[str(stage_status)],
+                recommended_action=(
+                    "Use one of the canonical stage_status values. For a not-signed-off reviewer verdict, "
+                    "use `ready-for-writer-revision`; use `round-cap-reached` only after the review round cap, "
+                    "or `blocked-input` when external input is required."
+                ),
+            )
+        )
+
+    next_skill = state.get("next_skill")
+    if next_skill not in ALLOWED_NEXT_SKILLS:
+        findings.append(
+            Finding(
+                id="workflow-state-invalid-next-skill",
+                severity="error",
+                category="workflow-state",
+                title="Invalid next_skill",
+                details=f"Unsupported next_skill: {next_skill!r}",
+                path=display_path,
+                evidence=[str(next_skill)],
+                recommended_action="Use a canonical skill name, `none`, or `null`.",
+            )
+        )
+
+    linked_source_selection_paths = dedupe_paths(
+        [
+            resolved
+            for value in [*required_input_values, *latest_artifact_values]
+            if Path(strip_quotes(value)).name == "source-selection.md"
+            for resolved in [resolve_artifact_path(value, path, root, ft_root)]
+            if resolved is not None
+        ]
+    )
+    for source_selection_path in linked_source_selection_paths:
+        source_selection_findings, source_selection_checks = validate_source_selection_artifact(
+            source_selection_path,
+            root,
+            state,
+            path,
+        )
+        findings.extend(source_selection_findings)
+        checks.extend(source_selection_checks)
+
+    linked_source_row_inventory_paths = dedupe_paths(
+        [
+            resolved
+            for value in [*required_input_values, *latest_artifact_values]
+            if Path(strip_quotes(value)).name == "source-row-inventory.md"
+            for resolved in [resolve_artifact_path(value, path, root, ft_root)]
+            if resolved is not None
+        ]
+    )
+    for source_row_inventory_path in linked_source_row_inventory_paths:
+        try:
+            source_row_inventory_content = source_row_inventory_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            findings.append(
+                Finding(
+                    id="source-row-inventory-unreadable",
+                    severity="warning",
+                    category="traceability",
+                    title="source-row-inventory.md is not readable as UTF-8",
+                    details=str(exc),
+                    path=rel(source_row_inventory_path, root),
+                    evidence=[],
+                    recommended_action="Save source-row-inventory.md as UTF-8.",
+                )
+            )
+            checks.append(Check("source-row-inventory-handoff", "warn", "source-row-inventory.md is not UTF-8.", rel(source_row_inventory_path, root)))
+            continue
+        normalized_inventory_content = source_row_inventory_content
+        if re.search(r"^#\s+Source Row Inventory\s*$", normalized_inventory_content, flags=re.MULTILINE):
+            normalized_inventory_content = re.sub(
+                r"^#\s+Source Row Inventory\s*$",
+                "## Source Row Inventory",
+                normalized_inventory_content,
+                count=1,
+                flags=re.MULTILINE,
+            )
+        elif extract_markdown_section(normalized_inventory_content, "Source Row Inventory") is None:
+            normalized_inventory_content = "## Source Row Inventory\n\n" + normalized_inventory_content
+
+        inventory_findings, inventory_checks = validate_source_row_inventory(
+            normalized_inventory_content,
+            source_row_inventory_path,
+            root,
+        )
+        findings.extend(inventory_findings)
+        checks.extend(inventory_checks)
+
+    if current_stage == "ft-source-locator":
+        if not linked_source_selection_paths:
+            findings.append(
+                Finding(
+                    id="workflow-state-source-locator-missing-source-selection",
+                    severity="error",
+                    category="artifact-links",
+                    title="Source locator workflow does not link source-selection.md",
+                    details=(
+                        "`ft-source-locator` must produce and link `source-selection.md`; otherwise the package/source "
+                        "choice is not reproducible for `ft-scope-analyzer`."
+                    ),
+                    path=display_path,
+                    evidence=[*required_input_values[:10], *latest_artifact_values[:10]],
+                    recommended_action=(
+                        "Create `source-selection.md` in the current handoff folder and link it from "
+                        "`latest_artifacts.source_selection` and/or `required_inputs`."
+                    ),
+                )
+            )
+            checks.append(Check("workflow-state-source-selection", "fail", "source-selection.md is not linked.", display_path))
+        else:
+            checks.append(Check("workflow-state-source-selection", "pass", "source-selection.md resolves.", display_path))
+
+        premature_names = {"scope-contract.md", "prompt.scope-to-writer.md", "prompt.scope-to-iteration.md"}
+        premature_paths: list[str] = []
+        for value in [*required_input_values, *latest_artifact_values]:
+            name = Path(strip_quotes(value)).name
+            if name not in premature_names:
+                continue
+            resolved = resolve_artifact_path(value, path, root, ft_root)
+            premature_paths.append(rel(resolved, root) if resolved is not None else value)
+        for name in sorted(premature_names):
+            candidate = path.parent / name
+            if candidate.exists():
+                premature_paths.append(rel(candidate, root))
+        premature_paths = sorted(set(premature_paths))
+        if premature_paths:
+            findings.append(
+                Finding(
+                    id="workflow-state-source-locator-premature-scope-artifacts",
+                    severity="error",
+                    category="skill-boundary",
+                    title="Source locator handoff contains scope-stage artifacts",
+                    details=(
+                        "`ft-source-locator` selects sources only. `scope-contract.md` and scope-to-writer/iteration "
+                        "prompts belong to `ft-scope-analyzer` after scope selection."
+                    ),
+                    path=display_path,
+                    evidence=premature_paths[:10],
+                    recommended_action=(
+                        "Remove premature scope artifacts from the source-locator handoff or move the workflow to the "
+                        "appropriate `ft-scope-analyzer` stage."
+                    ),
+                )
+            )
+            checks.append(Check("workflow-state-source-locator-boundary", "fail", "Premature scope artifacts found.", display_path))
+        else:
+            checks.append(Check("workflow-state-source-locator-boundary", "pass", "No premature scope artifacts found.", display_path))
+
+    if (
+        current_stage == "ft-scope-analyzer"
+        and stage_status == "ready-for-gap-review"
+        and next_skill == "ft-test-case-reviewer"
+    ):
+        scope_handoff_values = [*required_input_values, *latest_artifact_values]
+        required_scope_gap_review_names = {
+            "source-selection.md",
+            "scope-contract.md",
+            "scope-coverage-gaps.md",
+            "scope-clarification-requests.md",
+            "prompt.scope-gaps-to-reviewer.md",
+        }
+        missing_scope_gap_review_names = [
+            name
+            for name in sorted(required_scope_gap_review_names)
+            if resolving_artifact_by_name(name, scope_handoff_values, path, root, ft_root) is None
+        ]
+        if missing_scope_gap_review_names:
+            findings.append(
+                Finding(
+                    id="workflow-state-scope-gap-review-missing-handoff-artifacts",
+                    severity="error",
+                    category="artifact-links",
+                    title="Scope gap review handoff misses required artifacts",
+                    details=(
+                        "`ready-for-gap-review` cannot route to reviewer without resolving scope, gap, "
+                        "clarification and scope-gaps-to-reviewer prompt artifacts."
+                    ),
+                    path=display_path,
+                    evidence=missing_scope_gap_review_names,
+                    recommended_action=(
+                        "Create/link the missing artifacts or keep the workflow blocked until scope gaps are ready "
+                        "for independent review."
+                    ),
+                )
+            )
+            checks.append(Check("workflow-state-scope-gap-review-handoff-artifacts", "fail", "Required scope gap review artifacts are missing.", display_path))
+        else:
+            checks.append(Check("workflow-state-scope-gap-review-handoff-artifacts", "pass", "Required scope gap review artifacts resolve.", display_path))
+
+        scope_gaps_path = resolving_artifact_by_name(
+            "scope-coverage-gaps.md",
+            scope_handoff_values,
+            path,
+            root,
+            ft_root,
+        )
+        if scope_gaps_path is not None:
+            try:
+                scope_gap_total = get_int(extract_scope_coverage_metrics(scope_gaps_path).get("total")) or 0
+            except UnicodeDecodeError:
+                scope_gap_total = 0
+            if scope_gap_total <= 0:
+                findings.append(
+                    Finding(
+                        id="workflow-state-ready-for-gap-review-without-gaps",
+                        severity="error",
+                        category="stage-transition",
+                        title="ready-for-gap-review has no GAP-* items",
+                        details=(
+                            "`ready-for-gap-review` is only valid when `scope-coverage-gaps.md` contains at least "
+                            "one concrete `GAP-*` item."
+                        ),
+                        path=display_path,
+                        evidence=[f"scope_gaps={rel(scope_gaps_path, root)}", f"gap_count={scope_gap_total}"],
+                        recommended_action=(
+                            "Route directly to writer with `ready-for-next-stage`, or add the missing concrete "
+                            "gap entries if the scope really has unresolved coverage gaps."
+                        ),
+                    )
+                )
+                checks.append(Check("workflow-state-scope-gap-review-gap-count", "fail", "No concrete GAP-* entries found.", display_path))
+            else:
+                checks.append(Check("workflow-state-scope-gap-review-gap-count", "pass", "Concrete GAP-* entries found.", display_path))
+
+        source_parity_path = resolving_artifact_by_name(
+            "source-parity-check.md",
+            scope_handoff_values,
+            path,
+            root,
+            ft_root,
+        )
+        if (
+            source_parity_path is not None
+            and source_parity_requires_source_row_inventory(source_parity_path)
+            and resolving_artifact_by_name("source-row-inventory.md", scope_handoff_values, path, root, ft_root) is None
+        ):
+            findings.append(
+                Finding(
+                    id="workflow-state-scope-gap-review-missing-source-row-inventory",
+                    severity="error",
+                    category="artifact-links",
+                    title="Scope gap review lacks required source row inventory",
+                    details=(
+                        "`source-parity-check.md` contains `Table / Row Parity`, so the gap reviewer needs "
+                        "`source-row-inventory.md` before checking row-level gap completeness."
+                    ),
+                    path=display_path,
+                    evidence=[rel(source_parity_path, root)],
+                    recommended_action="Create and link `source-row-inventory.md`, or keep the workflow blocked.",
+                )
+            )
+            checks.append(Check("workflow-state-scope-gap-review-source-row-inventory", "fail", "Row-level source inventory handoff is missing.", display_path))
+        else:
+            checks.append(Check("workflow-state-scope-gap-review-source-row-inventory", "pass", "Row-level source inventory handoff is present or not required.", display_path))
+
+    if (
+        current_stage == "ft-scope-analyzer"
+        and stage_status == "ready-for-next-stage"
+        and next_skill in {"ft-test-case-writer", "ft-test-case-iteration"}
+    ):
+        scope_handoff_values = [*required_input_values, *latest_artifact_values]
+        required_scope_handoff_names = {
+            "source-selection.md",
+            "scope-contract.md",
+            "scope-coverage-gaps.md",
+        }
+        required_scope_handoff_names.add(
+            "prompt.scope-to-writer.md"
+            if next_skill == "ft-test-case-writer"
+            else "prompt.scope-to-iteration.md"
+        )
+
+        missing_scope_handoff_names = [
+            name
+            for name in sorted(required_scope_handoff_names)
+            if resolving_artifact_by_name(name, scope_handoff_values, path, root, ft_root) is None
+        ]
+        if missing_scope_handoff_names:
+            findings.append(
+                Finding(
+                    id="workflow-state-scope-analyzer-missing-handoff-artifacts",
+                    severity="error",
+                    category="artifact-links",
+                    title="Scope analyzer ready handoff misses required artifacts",
+                    details=(
+                        "`ft-scope-analyzer` cannot route to writer/iteration without a resolving scope contract, "
+                        "coverage-gaps artifact, and the matching scope-to-* prompt."
+                    ),
+                    path=display_path,
+                    evidence=missing_scope_handoff_names,
+                    recommended_action=(
+                        "Create and link the missing scope handoff artifacts from required_inputs/latest_artifacts, "
+                        "or keep the workflow blocked."
+                    ),
+                )
+            )
+            checks.append(Check("workflow-state-scope-analyzer-handoff-artifacts", "fail", "Required scope handoff artifacts are missing.", display_path))
+        else:
+            checks.append(Check("workflow-state-scope-analyzer-handoff-artifacts", "pass", "Required scope handoff artifacts resolve.", display_path))
+
+        scope_gaps_path = resolving_artifact_by_name(
+            "scope-coverage-gaps.md",
+            scope_handoff_values,
+            path,
+            root,
+            ft_root,
+        )
+        if scope_gaps_path is not None:
+            try:
+                scope_gap_total = get_int(extract_scope_coverage_metrics(scope_gaps_path).get("total")) or 0
+            except UnicodeDecodeError:
+                scope_gap_total = 0
+            if scope_gap_total > 0 and resolving_artifact_by_name(
+                "scope-clarification-requests.md",
+                scope_handoff_values,
+                path,
+                root,
+                ft_root,
+            ) is None:
+                findings.append(
+                    Finding(
+                        id="workflow-state-scope-analyzer-missing-clarification-requests",
+                        severity="error",
+                        category="artifact-links",
+                        title="Scope gaps have no clarification request artifact",
+                        details=(
+                            "`scope-coverage-gaps.md` lists GAP-* items, so the scope handoff must include "
+                            "`scope-clarification-requests.md` before downstream writer/iteration work."
+                        ),
+                        path=display_path,
+                        evidence=[f"scope_gaps={rel(scope_gaps_path, root)}", f"gap_count={scope_gap_total}"],
+                        recommended_action=(
+                            "Create/link scope-clarification-requests.md or keep the workflow blocked until gap handling is explicit."
+                        ),
+                    )
+                )
+                checks.append(Check("workflow-state-scope-clarification-requests", "fail", "Scope gaps lack clarification requests.", display_path))
+            else:
+                checks.append(Check("workflow-state-scope-clarification-requests", "pass", "Scope gap clarification handoff is explicit or not needed.", display_path))
+
+        source_parity_path = resolving_artifact_by_name(
+            "source-parity-check.md",
+            scope_handoff_values,
+            path,
+            root,
+            ft_root,
+        )
+        if (
+            source_parity_path is not None
+            and source_parity_requires_source_row_inventory(source_parity_path)
+            and resolving_artifact_by_name("source-row-inventory.md", scope_handoff_values, path, root, ft_root) is None
+        ):
+            findings.append(
+                Finding(
+                    id="workflow-state-scope-analyzer-missing-source-row-inventory",
+                    severity="error",
+                    category="artifact-links",
+                    title="Row-level source parity has no source row inventory handoff",
+                    details=(
+                        "`source-parity-check.md` contains `Table / Row Parity`, so writer needs an independent "
+                        "`source-row-inventory.md` from scope-analyzer before normalization and ledger creation."
+                    ),
+                    path=display_path,
+                    evidence=[rel(source_parity_path, root)],
+                    recommended_action=(
+                        "Create and link `source-row-inventory.md`, or keep the workflow blocked until source rows "
+                        "are inventoried independently of writer output."
+                    ),
+                )
+            )
+            checks.append(Check("workflow-state-scope-source-row-inventory", "fail", "Row-level source inventory handoff is missing.", display_path))
+        else:
+            checks.append(Check("workflow-state-scope-source-row-inventory", "pass", "Row-level source inventory handoff is present or not required.", display_path))
+
+    coverage_gaps = state.get("coverage_gaps")
+    blocking_gaps = None
+    if isinstance(coverage_gaps, dict):
+        blocking_gaps = get_int(coverage_gaps.get("blocking"))
+    accepted_gap_ids = accepted_risk_gap_ids(state)
+    accepted_risks_qualified = accepted_risk_entries_are_qualified(state)
+
+    scope_coverage_values = [
+        value
+        for value in latest_artifact_values
+        if Path(value).name == "scope-coverage-gaps.md" and artifact_exists(value, path, root, ft_root)
+    ]
+    for scope_coverage_value in scope_coverage_values[:1]:
+        scope_path = next(
+            candidate
+            for candidate in candidate_artifact_paths(scope_coverage_value, path, root, ft_root)
+            if candidate.exists()
+        )
+        scope_metrics = extract_scope_coverage_metrics(scope_path)
+        scope_blocking_gap_ids = scope_metrics.get("blocking_gap_ids")
+        if is_signed_off_state(state) and scope_metrics["blocking_gaps"] == "yes":
+            scope_blocking_count = get_int(scope_metrics.get("impact_blocking")) or get_int(scope_metrics.get("total")) or 1
+            findings.append(
+                Finding(
+                    id="workflow-state-signed-off-with-scope-blocking-gaps",
+                    severity="error",
+                    category="status-model",
+                    title="signed-off conflicts with scope blocking gaps",
+                    details=(
+                        "`scope-coverage-gaps.md` declares blocking gaps, so the handoff "
+                        "must not be treated as a signed-off downstream baseline."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"scope-coverage-gaps blocking=yes",
+                        f"blocking impacts={scope_blocking_count}",
+                    ],
+                    recommended_action=(
+                        "Downgrade the handoff to `round-cap-reached` or resolve the "
+                        "blocking scope gaps before downstream use."
+                    ),
+                )
+            )
+        if (
+            is_ready_for_review_state(state)
+            and not workflow_superseded_by_session_cycle
+            and scope_metrics["blocking_gaps"] == "yes"
+        ):
+            scope_blocking_count = get_int(scope_metrics.get("impact_blocking")) or get_int(scope_metrics.get("total")) or 1
+            missing_scope_accepted_risks: list[str] = []
+            if isinstance(scope_blocking_gap_ids, list) and scope_blocking_gap_ids:
+                missing_scope_accepted_risks = sorted(set(scope_blocking_gap_ids) - accepted_gap_ids)
+            elif len(accepted_gap_ids) < scope_blocking_count:
+                missing_scope_accepted_risks = [f"blocking_count={scope_blocking_count}; accepted_risks={len(accepted_gap_ids)}"]
+            if missing_scope_accepted_risks or not accepted_risks_qualified:
+                findings.append(
+                    Finding(
+                        id="workflow-state-ready-for-review-with-scope-blocking-gaps",
+                        severity="error",
+                        category="status-model",
+                        title="ready-for-review conflicts with scope blocking gaps",
+                        details=(
+                            "`scope-coverage-gaps.md` declares blocking gaps. A writer handoff cannot be ready for review "
+                            "unless each blocking GAP-* is resolved, moved to blocked-input, or explicitly accepted as risk."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            "scope-coverage-gaps blocking=yes",
+                            *missing_scope_accepted_risks[:10],
+                        ],
+                        recommended_action=(
+                            "Set `stage_status: blocked-input`, resolve the blocking gaps, or add qualified `accepted_risks` "
+                            "entries with GAP id, owner, rationale and revisit condition."
+                        ),
+                    )
+                )
+
+    if is_signed_off_state(state) and blocking_gaps and blocking_gaps > 0:
+        findings.append(
+            Finding(
+                id="workflow-state-signed-off-with-blocking-gaps",
+                severity="error",
+                category="status-model",
+                title="signed-off conflicts with blocking coverage gaps",
+                details=(
+                    "`signed-off` must not be treated as fully ready while "
+                    "`coverage_gaps.blocking` is greater than zero."
+                ),
+                path=display_path,
+                evidence=[f"coverage_gaps.blocking={blocking_gaps}"],
+                recommended_action=(
+                    "Downgrade the handoff state or add an explicit qualified status "
+                    "before downstream use."
+                ),
+            )
+        )
+        checks.append(Check("workflow-state-signed-off-gate", "fail", "signed-off has blocking gaps.", display_path))
+    else:
+        checks.append(Check("workflow-state-signed-off-gate", "pass", "No signed-off blocking-gap conflict.", display_path))
+
+    if (
+        is_ready_for_review_state(state)
+        and not workflow_superseded_by_session_cycle
+        and blocking_gaps
+        and blocking_gaps > 0
+    ):
+        if len(accepted_gap_ids) < blocking_gaps or not accepted_risks_qualified:
+            findings.append(
+                Finding(
+                    id="workflow-state-ready-for-review-with-blocking-gaps",
+                    severity="error",
+                    category="status-model",
+                    title="ready-for-review conflicts with blocking coverage gaps",
+                    details=(
+                        "`ready-for-review` must not be used while `coverage_gaps.blocking` is greater than zero "
+                        "unless the blocking gaps are explicitly accepted as residual risk."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"coverage_gaps.blocking={blocking_gaps}",
+                        f"accepted_risks={len(accepted_gap_ids)}",
+                    ],
+                    recommended_action=(
+                        "Set `stage_status: blocked-input`, resolve blocking gaps, or add qualified `accepted_risks` "
+                        "entries with GAP id, owner, rationale and revisit condition."
+                    ),
+                )
+            )
+            checks.append(Check("workflow-state-ready-for-review-gap-gate", "fail", "ready-for-review has unaccepted blocking gaps.", display_path))
+        else:
+            checks.append(Check("workflow-state-ready-for-review-gap-gate", "pass", "Blocking gaps are explicitly accepted as residual risk.", display_path))
+
+    if (
+        current_stage == "ft-test-case-writer"
+        and is_ready_for_review_state(state)
+        and not workflow_superseded_by_session_cycle
+    ):
+        test_case_artifacts = resolve_workflow_test_case_artifacts(state, path, root, ft_root)
+        writer_process_diagnostics = resolve_workflow_writer_process_diagnostics(state, path, root, ft_root)
+        writer_process_statuses = [
+            (diagnostic_path, writer_process_diagnostic_status(diagnostic_path))
+            for diagnostic_path in writer_process_diagnostics
+        ]
+        active_writer_process_statuses = [
+            (diagnostic_path, diagnostic_status)
+            for diagnostic_path, diagnostic_status in writer_process_statuses
+            if diagnostic_status.get("is_active")
+        ]
+        writer_process_errors: list[str] = []
+        if writer_process_statuses and not active_writer_process_statuses:
+            writer_process_errors.append("no active writer-process diagnostic for current workflow")
+        if len(active_writer_process_statuses) > 1:
+            writer_process_errors.extend(
+                f"multiple active diagnostics: {rel(diagnostic_path, root)}"
+                for diagnostic_path, _ in active_writer_process_statuses[:10]
+            )
+        for diagnostic_path, diagnostic_status in active_writer_process_statuses:
+            fields = diagnostic_status.get("fields", {})
+            if not diagnostic_status.get("active_known"):
+                writer_process_errors.append(
+                    f"{rel(diagnostic_path, root)}:active_for_current_workflow={fields.get('active_for_current_workflow', '-')}"
+                )
+            if diagnostic_status.get("blocking"):
+                writer_process_errors.append(
+                    (
+                        f"{rel(diagnostic_path, root)}:"
+                        f"verdict={fields.get('verdict', '-')};"
+                        f"process_readiness={fields.get('process_readiness', '-')};"
+                        f"validator_gap_suspected={fields.get('validator_gap_suspected', '-')}"
+                    )
+                )
+            if test_case_artifacts and not diagnostic_target_matches_test_case_artifacts(
+                str(fields.get("diagnostic_target", "")),
+                test_case_artifacts=test_case_artifacts,
+                workflow_path=path,
+                root=root,
+                ft_root=ft_root,
+            ):
+                writer_process_errors.append(
+                    (
+                        f"{rel(diagnostic_path, root)}:diagnostic_target="
+                        f"{fields.get('diagnostic_target', '-')};active_test_cases="
+                        f"{', '.join(rel(test_case_artifact, root) for test_case_artifact in test_case_artifacts[:5])}"
+                    )
+                )
+        if writer_process_errors:
+            findings.append(
+                Finding(
+                    id="workflow-state-ready-for-review-with-contaminated-writer-process",
+                    severity="error",
+                    category="status-model",
+                    title="ready-for-review conflicts with writer process diagnostic",
+                    details=(
+                        "A writer handoff cannot be routed to reviewer unless exactly one active "
+                        "writer-process-diagnostic*.md applies to the active canonical test-case file and reports a "
+                        "clean/pass process without a suspected validator gap. Historical diagnostics must be marked "
+                        "`active_for_current_workflow: no` and must not be used as active evidence."
+                    ),
+                    path=display_path,
+                    evidence=writer_process_errors[:15],
+                    recommended_action=(
+                        "Set `stage_status: blocked-input`, rerun the writer from a clean file-based strategy, "
+                        "or link exactly one passing active writer-process diagnostic whose diagnostic_target matches "
+                        "the active canonical test-case file."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "workflow-state-ready-for-review-writer-process",
+                    "fail",
+                    "Writer process diagnostic blocks ready-for-review.",
+                    display_path,
+                )
+            )
+        elif writer_process_statuses:
+            checks.append(
+                Check(
+                    "workflow-state-ready-for-review-writer-process",
+                    "pass",
+                    "Exactly one active writer process diagnostic matches the ready-for-review artifact.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "workflow-state-ready-for-review-writer-process",
+                    "pass",
+                    "No writer process diagnostics found for this legacy ready-for-review handoff.",
+                    display_path,
+                )
+            )
+
+        if not test_case_artifacts:
+            findings.append(
+                Finding(
+                    id="workflow-state-ready-for-review-missing-test-case-artifact",
+                    severity="error",
+                    category="status-model",
+                    title="ready-for-review has no resolving canonical test-case artifact",
+                    details="Writer handoff must expose the canonical test-case file that reviewer is expected to review.",
+                    path=display_path,
+                    evidence=[*required_input_values[:10], *latest_artifact_values[:10]],
+                    recommended_action="Add the canonical test-case markdown file to required_inputs/latest_artifacts before setting ready-for-review.",
+                )
+            )
+            checks.append(Check("workflow-state-ready-for-review-writer-quality-gate", "fail", "No test-case artifact resolves.", display_path))
+        else:
+            handoff_source_row_ids: set[str] = set()
+            handoff_read_errors: list[str] = []
+            for source_row_inventory_path in linked_source_row_inventory_paths:
+                try:
+                    handoff_source_row_ids.update(
+                        source_row_inventory_required_source_ids(
+                            source_row_inventory_path.read_text(encoding="utf-8")
+                        )
+                    )
+                except UnicodeDecodeError:
+                    handoff_read_errors.append(f"{rel(source_row_inventory_path, root)}:not-utf8")
+
+            if handoff_source_row_ids:
+                writer_source_row_ids: set[str] = set()
+                writer_read_errors: list[str] = []
+                for test_case_artifact in test_case_artifacts:
+                    try:
+                        writer_source_row_ids.update(
+                            source_row_inventory_all_source_ids(
+                                test_case_validation_content(test_case_artifact, root)
+                            )
+                        )
+                    except UnicodeDecodeError:
+                        writer_read_errors.append(f"{rel(test_case_artifact, root)}:not-utf8")
+                missing_handoff_rows = sorted(handoff_source_row_ids - writer_source_row_ids)
+                if missing_handoff_rows or handoff_read_errors or writer_read_errors:
+                    findings.append(
+                        Finding(
+                            id="workflow-state-ready-for-review-missing-handoff-source-rows",
+                            severity="error",
+                            category="traceability",
+                            title="Writer output lost source rows from handoff inventory",
+                            details=(
+                                "`source-row-inventory.md` is an independent handoff from scope analysis. "
+                                "Writer cannot be ready for review if its canonical Source Row Inventory drops "
+                                "in-scope or unclear rows from that handoff."
+                            ),
+                            path=display_path,
+                            evidence=[
+                                *[f"missing={source_row_id}" for source_row_id in missing_handoff_rows[:20]],
+                                *handoff_read_errors[:5],
+                                *writer_read_errors[:5],
+                            ],
+                            recommended_action=(
+                                "Copy every in-scope/unclear source_row_id from handoff `source-row-inventory.md` "
+                                "into the canonical Source Row Inventory and map it to ATOM-* or GAP-* before "
+                                "setting ready-for-review."
+                            ),
+                        )
+                    )
+                    checks.append(
+                        Check(
+                            "workflow-state-ready-for-review-source-row-inventory-carryover",
+                            "fail",
+                            "Writer output dropped source rows from handoff inventory.",
+                            display_path,
+                        )
+                    )
+                else:
+                    checks.append(
+                        Check(
+                            "workflow-state-ready-for-review-source-row-inventory-carryover",
+                            "pass",
+                            "Writer output preserves handoff source-row inventory ids.",
+                            display_path,
+                        )
+                    )
+
+            gate_errors: list[str] = []
+            blocking_quality_errors: list[str] = []
+            for test_case_artifact in test_case_artifacts:
+                try:
+                    test_case_content = test_case_validation_content(test_case_artifact, root)
+                except UnicodeDecodeError:
+                    gate_errors.append(f"{rel(test_case_artifact, root)}:not-utf8")
+                    continue
+                gate_summary = writer_quality_gate_summary(test_case_content)
+                artifact_label = rel(test_case_artifact, root)
+                blocking_findings = ready_for_review_blocking_test_case_findings(test_case_artifact, root)
+                for blocking_finding in blocking_findings:
+                    evidence = "; ".join(blocking_finding.evidence[:2]) if blocking_finding.evidence else "-"
+                    blocking_quality_errors.append(f"{artifact_label}:{blocking_finding.id}:{evidence[:180]}")
+                if not gate_summary["present"]:
+                    gate_errors.append(f"{artifact_label}:missing Writer Quality Gate")
+                    continue
+                if not gate_summary["parseable"]:
+                    gate_errors.append(f"{artifact_label}:Writer Quality Gate has no parseable table")
+                if gate_summary["missing_columns"]:
+                    gate_errors.append(
+                        f"{artifact_label}:missing columns {', '.join(gate_summary['missing_columns'][:8])}"
+                    )
+                if gate_summary["missing_items"]:
+                    gate_errors.append(
+                        f"{artifact_label}:missing items {', '.join(gate_summary['missing_items'][:8])}"
+                    )
+                if gate_summary["invalid_status_rows"]:
+                    gate_errors.append(f"{artifact_label}:invalid status values")
+                if gate_summary["invalid_blocks_rows"]:
+                    gate_errors.append(f"{artifact_label}:invalid blocks_ready_for_review values")
+                if gate_summary["failed_rows"]:
+                    gate_errors.append(f"{artifact_label}:failed gate rows {', '.join(gate_summary['failed_rows'][:5])}")
+                if gate_summary["known_risk_not_blocking"]:
+                    gate_errors.append(f"{artifact_label}:known merged-check risk is not blocking")
+
+            if gate_errors:
+                findings.append(
+                    Finding(
+                        id="workflow-state-ready-for-review-without-passing-writer-quality-gate",
+                        severity="error",
+                        category="status-model",
+                        title="ready-for-review conflicts with Writer Quality Gate",
+                        details=(
+                            "Writer handoff cannot be ready for reviewer unless each canonical test-case file has "
+                            "a complete passing Writer Quality Gate."
+                        ),
+                        path=display_path,
+                        evidence=gate_errors[:20],
+                        recommended_action=(
+                            "Rewrite affected packages, complete the Writer Quality Gate, or set stage_status to "
+                            "blocked-input instead of ready-for-review."
+                        ),
+                    )
+                )
+                checks.append(Check("workflow-state-ready-for-review-writer-quality-gate", "fail", "Writer Quality Gate failed.", display_path))
+            else:
+                checks.append(Check("workflow-state-ready-for-review-writer-quality-gate", "pass", "Writer Quality Gate passed for ready-for-review.", display_path))
+
+            if blocking_quality_errors:
+                findings.append(
+                    Finding(
+                        id="workflow-state-ready-for-review-with-blocking-test-case-smells",
+                        severity="error",
+                        category="test-design",
+                        title="ready-for-review conflicts with blocking test-case quality smells",
+                        details=(
+                            "Writer handoff cannot be routed to reviewer while canonical test-case artifacts still "
+                            "contain known blocking smells such as generic executable steps, merged checks, "
+                            "compressed atoms, source-row loss, unobservable actions or contradictory TC type/oracle."
+                        ),
+                        path=display_path,
+                        evidence=blocking_quality_errors[:20],
+                        recommended_action=(
+                            "Rewrite the affected package(s) from source inventory/normalization through ledger, "
+                            "Package Test Design Plan and TC, or set stage_status to blocked-input instead of "
+                            "ready-for-review."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "workflow-state-ready-for-review-test-case-quality",
+                        "fail",
+                        "Blocking test-case quality smells found in ready-for-review artifact.",
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        "workflow-state-ready-for-review-test-case-quality",
+                        "pass",
+                        "No blocking test-case quality smells found for ready-for-review.",
+                        display_path,
+                    )
+                )
+
+    if state.get("stage_status") == "blocked-input":
+        blocking_reasons = state.get("blocking_reasons")
+        if not isinstance(blocking_reasons, list) or not blocking_reasons:
+            findings.append(
+                Finding(
+                    id="workflow-state-blocked-without-reasons",
+                    severity="error",
+                    category="workflow-state",
+                    title="blocked-input state has no blocking reasons",
+                    details="Blocked handoffs must explain why the pipeline cannot proceed.",
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Populate blocking_reasons with concrete blockers.",
+                )
+            )
+
+    if current_stage in SESSION_LOG_REQUIRED_STAGES:
+        session_log_paths = resolve_workflow_session_logs(state, path, root, ft_root)
+        session_log_severity = "warning" if session_log_policy == "strict" else "info"
+        session_log_check_status = "warn" if session_log_policy == "strict" else "pass"
+        if not session_log_paths:
+            findings.append(
+                Finding(
+                    id="workflow-state-missing-session-log",
+                    severity=session_log_severity,
+                    category="session-log",
+                    title="Workflow state does not link a stage session log",
+                    details=(
+                        "Source locator, scope analyzer, writer, reviewer and iteration stages should persist a decision/audit "
+                        "session log so later analysis does not depend on chat history."
+                    ),
+                    path=display_path,
+                    evidence=[f"current_stage={current_stage}", f"stage_status={stage_status}"],
+                    recommended_action=(
+                        "Create `<stage>-session-log.md` in the current handoff folder and link it from "
+                        "`latest_artifacts` as `session_log` or `<stage>_session_log`."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "workflow-state-session-log",
+                    session_log_check_status,
+                    "Stage session log is not linked.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(Check("workflow-state-session-log", "pass", "Stage session log resolves.", display_path))
+            if not any(session_log_matches_stage(session_log_path, str(current_stage)) for session_log_path in session_log_paths):
+                expected_hints = ", ".join(SESSION_LOG_STAGE_FILE_HINTS.get(str(current_stage), ()))
+                finding_id = (
+                    "workflow-state-source-locator-wrong-session-log"
+                    if current_stage == "ft-source-locator"
+                    else "workflow-state-wrong-stage-session-log"
+                )
+                findings.append(
+                    Finding(
+                        id=finding_id,
+                        severity=session_log_severity,
+                        category="session-log",
+                        title="Workflow state links a session log from another stage",
+                        details=(
+                            "`current_stage` must link a session log for the same stage, either by expected file "
+                            "name or by `Session Metadata` / `skill`."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            f"current_stage={current_stage}",
+                            f"expected={expected_hints or current_stage}",
+                            *[rel(session_log_path, root) for session_log_path in session_log_paths],
+                        ],
+                        recommended_action=(
+                            "Create/link the session log for the current stage instead of reusing another stage's "
+                            "session log."
+                        ),
+                    )
+                )
+                checks.append(
+                    Check(
+                        "workflow-state-session-log-kind",
+                        session_log_check_status,
+                        "Workflow state does not link a same-stage session log.",
+                        display_path,
+                    )
+                )
+            else:
+                checks.append(
+                    Check(
+                        "workflow-state-session-log-kind",
+                        "pass",
+                        "Workflow state links a same-stage session log.",
+                        display_path,
+                    )
+                )
+
+    if current_stage in DECISION_LOG_REQUIRED_STAGES:
+        decision_log_paths = resolve_workflow_decision_logs(state, path, root, ft_root)
+        decision_log_severity = "warning" if decision_log_policy == "strict" else "info"
+        decision_log_check_status = "warn" if decision_log_policy == "strict" else "pass"
+        if not decision_log_paths:
+            findings.append(
+                Finding(
+                    id="workflow-state-missing-decision-log",
+                    severity=decision_log_severity,
+                    category="decision-log",
+                    title="Workflow state does not link an intermediate decision log",
+                    details=(
+                        "Stages that make source, scope, writing, review or routing decisions should persist "
+                        "agent-decision-log.md so later review does not depend on chat history."
+                    ),
+                    path=display_path,
+                    evidence=[f"current_stage={current_stage}", f"stage_status={stage_status}"],
+                    recommended_action=(
+                        "Create `agent-decision-log.md` in the current handoff folder and link it from "
+                        "`required_inputs` and `latest_artifacts.decision_log`."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "workflow-state-decision-log",
+                    decision_log_check_status,
+                    "Stage decision log is not linked.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(Check("workflow-state-decision-log", "pass", "Stage decision log resolves.", display_path))
+
+    loop_summary_values = [
+        value
+        for value in latest_artifact_values
+        if Path(value).name == "loop-summary.md" and artifact_exists(value, path, root, ft_root)
+    ]
+    for loop_summary_value in loop_summary_values[:1]:
+        loop_path = next(
+            candidate
+            for candidate in candidate_artifact_paths(loop_summary_value, path, root, ft_root)
+            if candidate.exists()
+        )
+        loop_summary_path = loop_path
+        metrics = extract_loop_summary_metrics(loop_path)
+        loop_summary_metrics = metrics
+        final_status = workflow_final_status(state)
+        if final_status and metrics["final_status"] and final_status != metrics["final_status"]:
+            findings.append(
+                Finding(
+                    id="workflow-state-loop-summary-status-mismatch",
+                    severity="error",
+                    category="status-model",
+                    title="workflow-state and loop-summary final statuses differ",
+                    details="The workflow handoff and loop summary must not disagree about final status.",
+                    path=display_path,
+                    evidence=[
+                        f"workflow-state={final_status}",
+                        f"loop-summary={metrics['final_status']}",
+                    ],
+                    recommended_action="Update workflow-state.yaml or loop-summary.md so both status fields match.",
+                )
+            )
+        residual_findings, residual_checks = validate_loop_summary_residual_risk(
+            loop_path,
+            root,
+            metrics,
+            residual_risk_source_artifacts(
+                latest_artifacts,
+                latest_artifact_values,
+                path,
+                root,
+                ft_root,
+            ),
+        )
+        findings.extend(residual_findings)
+        checks.extend(residual_checks)
+        if (
+            is_signed_off_state(state)
+            and metrics["gap_mentions"]
+            and (scope_metrics is None or scope_metrics["blocking_gaps"] is None)
+        ):
+            findings.append(
+                Finding(
+                    id="workflow-state-signed-off-with-loop-summary-gaps",
+                    severity="warning",
+                    category="status-model",
+                    title="signed-off loop summary still lists clarification gaps",
+                    details=(
+                        "Open GAP-* items can be valid, but the signed-off handoff needs an explicit "
+                    "qualified meaning so downstream users do not read it as complete coverage."
+                ),
+                    path=display_path,
+                    evidence=[f"loop-summary gap mentions={metrics['gap_mentions']}"],
+                    recommended_action="Keep the gaps explicit and prefer a qualified signed-off status.",
+                )
+            )
+
+    all_artifact_values = [*required_input_values, *latest_artifact_values]
+    expected_prompt = None if workflow_superseded_by_session_cycle else expected_transition_prompt(state)
+    if expected_prompt == "prompt.reviewer-to-ui-prep.md":
+        signoff_source_paths: list[Path] = []
+        if loop_summary_path is not None:
+            signoff_source_paths.append(loop_summary_path)
+        if isinstance(latest_artifacts, dict):
+            for key in ("final_findings", "findings", "review_findings"):
+                value = latest_artifacts.get(key)
+                if isinstance(value, str):
+                    resolved = resolve_artifact_path(value, path, root, ft_root)
+                    if resolved is not None:
+                        signoff_source_paths.append(resolved)
+        for value in latest_artifact_values:
+            if re.fullmatch(r"round-\d+-findings\.md", Path(strip_quotes(value)).name):
+                resolved = resolve_artifact_path(value, path, root, ft_root)
+                if resolved is not None:
+                    signoff_source_paths.append(resolved)
+
+        signoff_findings, signoff_checks = validate_reviewer_signoff_self_check(
+            source_paths=signoff_source_paths,
+            workflow_path=path,
+            root=root,
+            reviewer_signoff_policy=reviewer_signoff_policy,
+        )
+        findings.extend(signoff_findings)
+        checks.extend(signoff_checks)
+
+    if expected_prompt:
+        expected_prompt_kind = transition_prompt_kind(expected_prompt)
+        explicit_prompt_value = explicit_active_transition_prompt_value(state)
+        active_prompt_path: Path | None = None
+        if explicit_prompt_value:
+            active_prompt_path = resolve_artifact_path(explicit_prompt_value, path, root, ft_root)
+            explicit_prompt_kind = transition_prompt_kind(explicit_prompt_value)
+            if active_prompt_path is None:
+                findings.append(
+                    Finding(
+                        id="workflow-state-active-transition-prompt-unresolved",
+                        severity="error",
+                        category="stage-transition",
+                        title="Explicit active transition prompt does not resolve",
+                        details=(
+                            "`latest_artifacts.active_transition_prompt` is present, so it is the active handoff "
+                            "prompt. The referenced file must exist before the next stage can start."
+                        ),
+                        path=display_path,
+                        evidence=[f"active_transition_prompt={explicit_prompt_value}"],
+                        recommended_action="Fix `latest_artifacts.active_transition_prompt` or create the referenced handoff prompt.",
+                    )
+                )
+            elif expected_prompt_kind and explicit_prompt_kind != expected_prompt_kind:
+                findings.append(
+                    Finding(
+                        id="workflow-state-active-transition-prompt-kind-mismatch",
+                        severity="error",
+                        category="stage-transition",
+                        title="Explicit active transition prompt routes to the wrong stage kind",
+                        details=(
+                            "`latest_artifacts.active_transition_prompt` resolves, but its filename kind does not "
+                            "match the current stage/status/next_skill transition."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            f"expected_kind={expected_prompt_kind}",
+                            f"active_kind={explicit_prompt_kind or 'unknown'}",
+                            f"active_transition_prompt={explicit_prompt_value}",
+                            f"next_skill={state.get('next_skill')}",
+                            f"stage_status={state.get('stage_status')}",
+                        ],
+                        recommended_action="Point `active_transition_prompt` to the prompt for the actual next skill.",
+                    )
+                )
+            else:
+                conventional_prompt_path = resolving_artifact_by_name(
+                    expected_prompt,
+                    all_artifact_values,
+                    path,
+                    root,
+                    ft_root,
+                )
+                if conventional_prompt_path is not None and conventional_prompt_path != active_prompt_path:
+                    findings.append(
+                        Finding(
+                            id="workflow-state-stale-transition-prompt-alias",
+                            severity="warning",
+                            category="stage-transition",
+                            title="Workflow keeps a stale same-kind transition prompt next to the active prompt",
+                            details=(
+                                "`latest_artifacts.active_transition_prompt` overrides the conventional round prompt, "
+                                "but the conventional same-kind prompt still resolves from required_inputs/latest_artifacts. "
+                                "This can route a later session to stale handoff instructions."
+                            ),
+                            path=display_path,
+                            evidence=[
+                                f"active_transition_prompt={rel(active_prompt_path, root)}",
+                                f"stale_conventional_prompt={rel(conventional_prompt_path, root)}",
+                                f"conventional_name={expected_prompt}",
+                            ],
+                            recommended_action=(
+                                "Update the conventional prompt alias to the active content or remove the stale "
+                                "same-kind prompt reference from required_inputs/latest_artifacts."
+                            ),
+                        )
+                    )
+        else:
+            active_prompt_path = resolving_artifact_by_name(
+                expected_prompt,
+                all_artifact_values,
+                path,
+                root,
+                ft_root,
+            )
+        if active_prompt_path is None and not explicit_prompt_value:
+            findings.append(
+                Finding(
+                    id="workflow-state-missing-active-transition-prompt",
+                    severity="error",
+                    category="stage-transition",
+                    title="Active next stage has no resolving handoff prompt reference",
+                    details=(
+                        f"The current stage/status requires {expected_prompt!r}, but required_inputs/latest_artifacts "
+                        "do not contain a resolving reference to it."
+                    ),
+                    path=display_path,
+                    evidence=[f"next_skill={state.get('next_skill')}", f"stage_status={state.get('stage_status')}", f"expected_prompt={expected_prompt}"],
+                    recommended_action="Add the prompt to required_inputs or latest_artifacts, or fix next_skill/stage_status.",
+                )
+            )
+        else:
+            checks.append(Check("workflow-state-active-transition-prompt", "pass", "Active transition prompt resolves.", display_path))
+            prompt_findings, prompt_checks = validate_active_transition_prompt(
+                active_prompt_path,
+                path,
+                root,
+                ft_root,
+            )
+            findings.extend(prompt_findings)
+            checks.extend(prompt_checks)
+
+    stage_status = state.get("stage_status")
+    next_skill = state.get("next_skill")
+    if (
+        stage_status == "ready-for-next-stage"
+        and next_skill in {None, "none"}
+        and not workflow_superseded_by_session_cycle
+    ):
+        findings.append(
+            Finding(
+                id="workflow-state-ready-without-next-skill",
+                severity="error",
+                category="stage-transition",
+                title="ready-for-next-stage has no next_skill",
+                details="A handoff marked ready for the next stage must name the next skill.",
+                path=display_path,
+                evidence=[f"stage_status={stage_status}", f"next_skill={next_skill}"],
+                recommended_action="Set next_skill to the intended downstream skill or downgrade the stage_status.",
+            )
+        )
+    if stage_status == "round-cap-reached" and next_skill not in {None, "none"}:
+        findings.append(
+            Finding(
+                id="workflow-state-round-cap-with-next-skill",
+                severity="error",
+                category="stage-transition",
+                title="round-cap-reached must not route to another skill",
+                details="A round-cap handoff contains unresolved work and should not automatically advance downstream.",
+                path=display_path,
+                evidence=[f"stage_status={stage_status}", f"next_skill={next_skill}"],
+                recommended_action="Set next_skill to null/none or resolve blockers before routing to the next stage.",
+            )
+        )
+    if next_skill == "ft-ui-automation-prep" and not workflow_superseded_by_session_cycle:
+        loop_final_status = loop_summary_metrics.get("final_status") if loop_summary_metrics else None
+        if not (is_signed_off_state(state) or loop_final_status == "signed-off"):
+            findings.append(
+                Finding(
+                    id="workflow-state-ui-prep-without-signed-off",
+                    severity="error",
+                    category="stage-transition",
+                    title="ft-ui-automation-prep handoff is not signed off",
+                    details="UI automation prep must start only from a signed-off reviewer-loop baseline.",
+                    path=display_path,
+                    evidence=[f"stage_status={stage_status}", f"workflow_final_status={workflow_final_status(state)}", f"loop_summary_final_status={loop_final_status}"],
+                    recommended_action="Downgrade the handoff or complete reviewer-loop sign-off before routing to ft-ui-automation-prep.",
+                )
+            )
+    transition_errors = any(finding.category == "stage-transition" and finding.severity == "error" for finding in findings)
+    if not expected_prompt and not transition_errors:
+        checks.append(Check("workflow-state-stage-transition", "pass", "Stage transition contract has no active prompt requirement.", display_path))
+    else:
+        checks.append(
+            Check(
+                "workflow-state-stage-transition",
+                "fail" if transition_errors else "pass",
+                "Stage transition contract failed." if transition_errors else "Stage transition contract passed.",
+                display_path,
+            )
+        )
+
+    return findings, checks
+
+
+def validate(
+    root: Path,
+    *,
+    source_quality_policy: str = "compatible",
+    findings_policy: str = "compatible",
+    writer_response_policy: str = "compatible",
+    test_case_policy: str = "compatible",
+    reviewer_signoff_policy: str = "compatible",
+    final_alias_policy: str = "compatible",
+    session_log_policy: str = "compatible",
+    decision_log_policy: str = "compatible",
+) -> dict[str, Any]:
+    root_is_standalone_source_normalization_diagnostic = root.is_file() and root.name == "source-normalization-diagnostic.md"
+    root_is_standalone_source_table_normalization = root.is_file() and root.name == "source-table-normalization.md"
+    root_is_standalone_dictionary_inventory = root.is_file() and root.name == DICTIONARY_INVENTORY_NAME
+    root_is_standalone_test_case_file = (
+        root.is_file()
+        and root.suffix == ".md"
+        and root.parent.name == "test-cases"
+        and root.name != "README.md"
+    )
+    workflow_states = iter_workflow_states(root)
+    artifact_manifests = iter_artifact_manifests(root)
+    traceability_matrices = iter_traceability_matrices(root)
+    review_findings = iter_review_findings(root)
+    writer_responses = iter_writer_responses(root)
+    test_case_files = iter_test_case_files(root)
+    source_normalization_diagnostics = iter_source_normalization_diagnostics(root)
+    writer_process_diagnostics = iter_writer_process_diagnostics(root)
+    session_logs = iter_session_logs(root)
+    decision_logs = iter_decision_logs(root)
+    source_table_normalizations = iter_source_table_normalizations(root)
+    dictionary_inventories = iter_dictionary_inventories(root)
+    mockup_visual_inventories = iter_mockup_visual_inventories(root)
+    if root_is_standalone_source_normalization_diagnostic:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = [root]
+        writer_process_diagnostics = []
+        session_logs = []
+        decision_logs = []
+        source_table_normalizations = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+    if root_is_standalone_source_table_normalization:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        writer_process_diagnostics = []
+        session_logs = []
+        decision_logs = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+    if root_is_standalone_dictionary_inventory:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        source_table_normalizations = []
+        writer_process_diagnostics = []
+        session_logs = []
+        decision_logs = []
+        mockup_visual_inventories = []
+    test_case_id_index = build_test_case_id_index(test_case_files, root)
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    declared_artifact_paths: set[str] = set()
+    active_source_documents: set[Path] = set()
+
+    standalone_artifact = (
+        root_is_standalone_source_normalization_diagnostic
+        or root_is_standalone_source_table_normalization
+        or root_is_standalone_dictionary_inventory
+    )
+
+    if not standalone_artifact:
+        path_findings, path_checks = validate_ft_package_handoff_layout(root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    if (
+        not workflow_states
+        and not standalone_artifact
+        and not root_is_standalone_test_case_file
+    ):
+        findings.append(
+            Finding(
+                id="workflow-state-not-found",
+                severity="warning",
+                category="workflow-state",
+                title="No workflow-state.yaml files found",
+                details="The validator did not find any handoff state files.",
+                path=rel(root, root),
+                evidence=[],
+                recommended_action="Run the validator against a repository or fixture containing workflow-state.yaml.",
+            )
+        )
+        checks.append(Check("workflow-state-discovery", "warn", "No workflow-state.yaml files found.", rel(root, root)))
+
+    for path in workflow_states:
+        path_findings, path_checks = validate_workflow_state(
+            path,
+            root,
+            reviewer_signoff_policy=reviewer_signoff_policy,
+            final_alias_policy=final_alias_policy,
+            session_log_policy=session_log_policy,
+            decision_log_policy=decision_log_policy,
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+        try:
+            active_source_documents.update(collect_active_source_documents(path, root))
+        except UnicodeDecodeError:
+            pass
+
+    for path in sorted(active_source_documents):
+        path_findings, path_checks = validate_active_source_document(
+            path,
+            root,
+            source_quality_policy=source_quality_policy,
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in artifact_manifests:
+        path_findings, path_checks, path_declared_paths = validate_artifact_manifest(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+        declared_artifact_paths.update(path_declared_paths)
+
+    if not standalone_artifact:
+        path_findings, path_checks = validate_source_support_duplicates(root, declared_artifact_paths)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in traceability_matrices:
+        path_findings, path_checks = validate_traceability_matrix(
+            path,
+            root,
+            known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in review_findings:
+        path_findings, path_checks = validate_review_findings(
+            path,
+            root,
+            findings_policy=findings_policy,
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in writer_responses:
+        path_findings, path_checks = validate_writer_response(
+            path,
+            root,
+            writer_response_policy=writer_response_policy,
+            known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in test_case_files:
+        path_findings, path_checks = validate_test_case_file(
+            path,
+            root,
+            test_case_policy=test_case_policy,
+            known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in source_normalization_diagnostics:
+        path_findings, path_checks = validate_source_normalization_diagnostic(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in source_table_normalizations:
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            findings.append(
+                Finding(
+                    id="source-table-normalization-not-utf8",
+                    severity="warning",
+                    category="source-quality",
+                    title="Source Table Normalization is not valid UTF-8",
+                    details=str(exc),
+                    path=rel(path, root),
+                    evidence=[],
+                    recommended_action="Save source-table-normalization.md as UTF-8 Markdown.",
+                )
+            )
+            checks.append(Check("source-table-normalization", "warn", "Source Table Normalization is not UTF-8.", rel(path, root)))
+            continue
+        path_findings, path_checks = validate_source_table_normalization(content, path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in dictionary_inventories:
+        path_findings, path_checks = validate_dictionary_inventory(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in writer_process_diagnostics:
+        path_findings, path_checks = validate_writer_process_diagnostic(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in session_logs:
+        path_findings, path_checks = validate_session_log(
+            path,
+            root,
+            session_log_policy=session_log_policy,
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in decision_logs:
+        path_findings, path_checks = validate_decision_log(
+            path,
+            root,
+            decision_log_policy=decision_log_policy,
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in mockup_visual_inventories:
+        path_findings, path_checks = validate_mockup_visual_inventory(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in iter_named_markdown(root, "ui-evidence-index.md"):
+        path_findings, path_checks = validate_ui_evidence_index(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in iter_named_markdown(root, "ui-validation-report.md"):
+        path_findings, path_checks = validate_ui_validation_report(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    counts = Counter(finding.severity for finding in findings)
+    return {
+        "summary": {
+            "workflow_states_checked": len(workflow_states),
+            "source_documents_checked": len(active_source_documents),
+            "artifact_manifests_checked": len(artifact_manifests),
+            "traceability_matrices_checked": len(traceability_matrices),
+            "review_findings_checked": len(review_findings),
+            "writer_responses_checked": len(writer_responses),
+            "test_case_files_checked": len(test_case_files),
+            "source_normalization_diagnostics_checked": len(source_normalization_diagnostics),
+            "source_table_normalizations_checked": len(source_table_normalizations),
+            "dictionary_inventories_checked": len(dictionary_inventories),
+            "writer_process_diagnostics_checked": len(writer_process_diagnostics),
+            "session_logs_checked": len(session_logs),
+            "decision_logs_checked": len(decision_logs),
+            "mockup_visual_inventories_checked": len(mockup_visual_inventories),
+            "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
+            "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
+            "findings_count": len(findings),
+            "errors_count": counts["error"],
+            "warnings_count": counts["warning"],
+            "info_count": counts["info"],
+            "checks_count": len(checks),
+        },
+        "findings": [
+            asdict(finding)
+            for finding in sorted(findings, key=lambda item: (SEVERITY_ORDER[item.severity], item.id, item.path))
+        ],
+        "checks": [asdict(check) for check in checks],
+    }
+
+
+def text_report(report: dict[str, Any]) -> str:
+    summary = report["summary"]
+    lines = [
+        "Agent artifact validation summary",
+        f"- workflow states: {summary['workflow_states_checked']}",
+        f"- source documents: {summary['source_documents_checked']}",
+        f"- artifact manifests: {summary['artifact_manifests_checked']}",
+        f"- traceability matrices: {summary['traceability_matrices_checked']}",
+        f"- review findings: {summary['review_findings_checked']}",
+        f"- writer responses: {summary['writer_responses_checked']}",
+        f"- test-case files: {summary['test_case_files_checked']}",
+        f"- source normalization diagnostics: {summary['source_normalization_diagnostics_checked']}",
+        f"- source table normalizations: {summary['source_table_normalizations_checked']}",
+        f"- dictionary inventories: {summary['dictionary_inventories_checked']}",
+        f"- writer process diagnostics: {summary['writer_process_diagnostics_checked']}",
+        f"- session logs: {summary['session_logs_checked']}",
+        f"- decision logs: {summary['decision_logs_checked']}",
+        f"- mockup visual inventories: {summary['mockup_visual_inventories_checked']}",
+        f"- UI evidence indexes: {summary['ui_evidence_indexes_checked']}",
+        f"- UI validation reports: {summary['ui_validation_reports_checked']}",
+        (
+            f"- findings: {summary['findings_count']} "
+            f"(errors: {summary['errors_count']}, "
+            f"warnings: {summary['warnings_count']}, info: {summary['info_count']})"
+        ),
+        f"- checks: {summary['checks_count']}",
+    ]
+    if report["findings"]:
+        lines.append("- top findings:")
+        for finding in report["findings"][:5]:
+            lines.append(
+                f"  - [{finding['severity']}] {finding['id']}: "
+                f"{finding['title']} ({finding['path']})"
+            )
+    else:
+        lines.append("- top findings: none")
+    return "\n".join(lines)
+
+
+def should_fail(report: dict[str, Any], fail_on: str | None) -> bool:
+    summary = report["summary"]
+    if fail_on == "error":
+        return summary["errors_count"] > 0
+    if fail_on == "warning":
+        return summary["errors_count"] > 0 or summary["warnings_count"] > 0
+    return False
+
+
+def write_stdout(text: str = "") -> None:
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        sys.stdout.buffer.write((text + "\n").encode("utf-8", errors="replace"))
+
+
+def main() -> int:
+    args = parse_args()
+    root = args.root.resolve()
+    report = validate(
+        root,
+        source_quality_policy=args.source_quality_policy,
+        findings_policy=args.findings_policy,
+        writer_response_policy=args.writer_response_policy,
+        test_case_policy=args.test_case_policy,
+        reviewer_signoff_policy=args.reviewer_signoff_policy,
+        final_alias_policy=args.final_alias_policy,
+        session_log_policy=args.session_log_policy,
+        decision_log_policy=args.decision_log_policy,
+    )
+    json_report = json.dumps(report, ensure_ascii=False, indent=2)
+    plain_report = text_report(report)
+
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(json_report + "\n", encoding="utf-8")
+
+    emit_json = args.json_only or (not args.json_only and not args.text_only)
+    emit_text = args.text_only or (not args.json_only and not args.text_only)
+
+    if emit_text:
+        write_stdout(plain_report)
+    if emit_text and emit_json:
+        write_stdout()
+    if emit_json:
+        write_stdout(json_report)
+
+    return 1 if should_fail(report, args.fail_on) else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

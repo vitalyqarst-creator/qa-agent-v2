@@ -1,0 +1,48 @@
+.venv/
+node_modules/
+.codex-temp/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+
+build/
+dist/
+
+output/
+tmp/
+
+.DS_Store
+Thumbs.db
+
+# Local/generated artifacts
+.playwright-cli/
+wheelhouse/
+*.bundle
+.tmp-*
+.tmp_*
+work/
+evals/runs/
+evals/candidates/
+
+# FT packages and generated/manual test-case artifacts are intentionally out of
+# the agent repository. Keep reusable agent rules in skills/ and references/.
+fts/
+
+# Generated archives
+*.zip
+
+# Binary/generated document artifacts
+*.pdf
+*.docx
+*.xlsx
+*.xls
+*.png
+*.jpg
+*.jpeg
+
+# Office temporary lock files
+~$*

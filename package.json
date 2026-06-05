@@ -1,0 +1,22 @@
+{
+  "name": "qa-agent-v2",
+  "version": "1.0.0",
+  "description": "Легкий Python-пакет для agent-first разбора функциональных требований из `.docx` и `.pdf`.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@gitlab.fisgroup.ru:fis-qa/qa-agent-v2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@openai/codex-sdk": "^0.136.0"
+  }
+}

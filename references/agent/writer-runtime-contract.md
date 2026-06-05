@@ -1,0 +1,96 @@
+# Writer Runtime Contract
+
+Этот reference задает короткий runtime contract для `ft-test-case-writer`. Он используется resolver-ом как default writer context. Полные форматы и deep rules остаются в связанных references и подгружаются условно.
+
+## Когда использовать
+
+Используй этот contract для:
+
+- `writer.initial_draft.simple`;
+- `writer.initial_draft.ui`, если scope не table-heavy;
+- `writer.revision_from_findings`;
+- предварительной проверки, можно ли запускать writer без возврата на locator/scope.
+
+Если scope содержит таблицы полей/действий, row-level parity, package-heavy decomposition или validator finding по design artifacts, дополнительно читай `writer-output-format.md` и table/deep references из manifest.
+
+## Required Inputs
+
+Writer может стартовать только если уже определены:
+
+- FT-пакет;
+- подтвержденный scope и его границы;
+- основной источник ФТ;
+- `scope-contract.md`;
+- `scope-coverage-gaps.md`;
+- `workflow-state.yaml` или эквивалентный handoff с `next_skill = ft-test-case-writer`;
+- package-specific `AGENT-NOTES.md`, если он есть в корне FT-пакета.
+
+Conditional inputs:
+
+- `source-parity-check.md` обязателен, если основной ФТ доступен в DOCX и PDF;
+- `source-row-inventory.md` обязателен для row-level/table parity;
+- `mockup-visual-inventory.md` обязателен для UI scope с mockup/screen image;
+- structured findings и traceability matrix обязательны для `revision_from_findings`, если они были переданы reviewer-ом.
+
+## Hard Stops
+
+Не ставь `stage_status: ready-for-review`, если:
+
+- FT-пакет или scope не выбран;
+- отсутствует обязательный input из handoff;
+- есть blocking `coverage gaps` без accepted-risk решения;
+- expected behavior нельзя вывести из ФТ или разрешенных материалов;
+- writer обнаружил новый gap, который блокирует исполнимый результат;
+- simple runtime context оказался недостаточным: нужен table/UI/revision/validator deep context из manifest;
+- технический fallback привел к compact draft, потере детализации, one-shot giant write или непроверенному mojibake output.
+
+В этих случаях используй `stage_status: blocked-input`, заполни `blocking_reasons` и маршрутизируй задачу в нужный skill или пользователю через handoff prompt.
+
+## Runtime Workflow
+
+1. Объяви выбранный writer scenario и resolved instruction context.
+2. Прочитай required inputs и зафиксируй missing inputs до генерации `TC-*`.
+3. Подтверди границы scope; не расширяй scope самостоятельно.
+4. Разложи требования на coverage obligations, atomic statements или explicit gaps.
+5. Построй coverage plan и metrics по `coverage-runtime-checklist.md`; для mandatory classes используй `Coverage Obligation Table`.
+6. Напиши `TC-*` по `test-case-runtime-format.md`.
+7. Проверь traceability: каждый `TC-*` связан с `ATOM-*` / requirement code / source reference.
+8. Выполни writer self-check и применимые quality gates.
+9. Обнови `workflow-state.yaml` и создай `prompt.writer-to-reviewer.round-N.md`, если draft готов к review.
+
+## Output Contract
+
+Default writer output:
+
+- canonical test-case file в `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
+- краткий coverage summary;
+- explicit `Coverage Gaps`, если есть `GAP-*`;
+- writer self-check;
+- updated `workflow-state.yaml`;
+- next-step prompt для reviewer.
+
+Для table-heavy/package-based scope используй full output contract из `writer-output-format.md`: split artifacts, Source Row Inventory, normalization, TDDT, Coverage Obligation Table, Package Test Design Plan, coverage metrics, Fixture Catalog при применимости, Risk / Priority Map, Test Design Review, Writer Quality Gate и coverage maps.
+
+## Logging
+
+Для writer-pass сохраняй session log и decision log по каноническим форматам. Runtime contract не заменяет:
+
+- `workflow-state-format.md`;
+- `session-log-format.md`;
+- `agent-decision-log-format.md`;
+- `next-step-prompt-format.md`.
+
+Эти references подгружаются как deep/process context, если нужно создавать или проверять соответствующие artifacts подробно.
+
+## Deep References
+
+- Full writer output: `writer-output-format.md`
+- Writer Quality Gate details: `writer-quality-gate-format.md`
+- Coverage obligations: `references/agent/coverage-obligation-table-format.md`
+- Coverage metrics: `references/agent/test-design-coverage-metrics-format.md`
+- Fixture catalog: `references/agent/fixture-catalog-format.md`
+- Risk / Priority Map: `references/agent/risk-priority-map-format.md`
+- Test-case full format: `references/qa/test-case-format.md`
+- Coverage deep checklist: `references/qa/coverage-checklist.md`
+- Review findings/writer response: `references/qa/review-findings-format.md`
+- Traceability matrix: `references/qa/traceability-matrix-format.md`

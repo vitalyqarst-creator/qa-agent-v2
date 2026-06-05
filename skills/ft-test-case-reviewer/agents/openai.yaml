@@ -1,0 +1,4 @@
+interface:
+  display_name: "FT Test Reviewer"
+  short_description: "Reviews FT test cases in full, traceability, structure, or test-design mode"
+  default_prompt: "Use $ft-test-case-reviewer to review existing FT test cases within confirmed scope. Default to full mode: traceability -> structure -> test-design; return structured findings and do not edit cases."

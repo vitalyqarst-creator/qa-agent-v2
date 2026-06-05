@@ -1,0 +1,32 @@
+ft_slug: ft-canonical
+scope_slug: canonical-round-cap
+current_stage: ft-test-case-iteration
+stage_status: round-cap-reached
+review_loop_status: round-cap-reached
+current_round: 2
+next_skill: none
+required_inputs:
+  - test-cases/canonical-round-cap.md
+  - work/review-loops/canonical-round-cap/loop-summary.md
+  - work/review-loops/canonical-round-cap/round-2-findings.md
+  - work/review-loops/canonical-round-cap/round-2-traceability-matrix.md
+latest_artifacts:
+  test_cases: test-cases/canonical-round-cap.md
+  loop_summary: work/review-loops/canonical-round-cap/loop-summary.md
+  final_findings: work/review-loops/canonical-round-cap/round-2-findings.md
+  final_traceability_matrix: work/review-loops/canonical-round-cap/round-2-traceability-matrix.md
+  final_traceability_matrix_xlsx: work/review-loops/canonical-round-cap/round-2-traceability-matrix.xlsx
+  final_writer_response: work/review-loops/canonical-round-cap/round-2-writer-response.md
+  round_cap_snapshot: work/review-loops/canonical-round-cap/snapshots/canonical-round-cap.round-cap-reached.md
+coverage_gaps:
+  total: 1
+  blocking: 1
+iteration_result:
+  final_status: round-cap-reached
+  review_rounds_completed: 2
+  traceability_gap: 1
+  traceability_unclear: 0
+open_questions:
+  - ATOM-002 remains uncovered after the final allowed review round.
+blocking_reasons:
+  - FINDING-001 remains open after round 2.

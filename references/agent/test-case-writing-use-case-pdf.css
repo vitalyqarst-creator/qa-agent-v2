@@ -1,0 +1,98 @@
+@page {
+  size: A4 landscape;
+  margin: 14mm 12mm;
+}
+
+html {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-size: 10.5pt;
+  color: #222;
+}
+
+body {
+  line-height: 1.35;
+}
+
+h1 {
+  font-size: 22pt;
+  margin: 0 0 12pt;
+}
+
+h2 {
+  font-size: 15pt;
+  margin: 18pt 0 8pt;
+  page-break-after: avoid;
+}
+
+h3 {
+  font-size: 12pt;
+  margin: 14pt 0 6pt;
+  page-break-after: avoid;
+}
+
+p {
+  margin: 0 0 7pt;
+}
+
+code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 9.5pt;
+  background: #f3f4f6;
+  padding: 1px 3px;
+  border-radius: 3px;
+}
+
+pre {
+  background: #f6f8fa;
+  border: 1px solid #d8dee4;
+  border-radius: 4px;
+  padding: 8px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  margin: 8pt 0 12pt;
+  page-break-inside: auto;
+}
+
+thead {
+  display: table-header-group;
+}
+
+tr {
+  page-break-inside: avoid;
+}
+
+th,
+td {
+  border: 1px solid #c9d1d9;
+  padding: 5px 6px;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+th {
+  background: #eef2f7;
+  font-weight: 600;
+}
+
+td:first-child,
+th:first-child {
+  width: 32px;
+  text-align: right;
+}
+
+ul {
+  margin-top: 2pt;
+}
+
