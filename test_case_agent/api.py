@@ -41,6 +41,16 @@ from test_case_agent.requirements_diff import (
     match_requirement_entries,
     write_requirements_diff,
 )
+from test_case_agent.impact_analysis import (
+    ImpactEntry,
+    ImpactReport,
+    TestCaseLink,
+    build_impact_report,
+    link_diff_to_test_cases,
+    load_impact_report,
+    parse_test_cases,
+    write_impact_report,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -118,6 +128,8 @@ def inspect_source_quality(
 __all__ = [
     "DEFAULT_MAX_CHARS",
     "InvalidSourceError",
+    "ImpactEntry",
+    "ImpactReport",
     "NoMatchingSectionsError",
     "OoxmlCoverageAudit",
     "OoxmlSource",
@@ -132,16 +144,19 @@ __all__ = [
     "SourceManifest",
     "SourceNode",
     "SourceQualityIssue",
+    "TestCaseLink",
     "extract_ooxml_source_nodes",
     "inspect_ooxml_coverage",
     "inspect_source_quality",
     "build_source_manifest",
     "build_requirements_registry",
     "build_requirements_diff",
+    "build_impact_report",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
     "load_requirements_diff",
+    "load_impact_report",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -149,9 +164,12 @@ __all__ = [
     "load_sections",
     "make_req_uid",
     "match_requirement_entries",
+    "link_diff_to_test_cases",
+    "parse_test_cases",
     "preview_chunks",
     "resolve_sections",
     "write_requirements_diff",
+    "write_impact_report",
     "write_requirements_registry",
     "write_source_manifest",
 ]
