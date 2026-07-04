@@ -58,6 +58,13 @@ from test_case_agent.test_case_update_plan import (
     load_test_case_update_plan,
     write_test_case_update_plan,
 )
+from test_case_agent.test_case_update_apply import (
+    ApplyReport,
+    ApplyResultItem,
+    apply_test_case_update_plan,
+    load_test_case_update_apply_report,
+    write_test_case_update_apply_report,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -134,6 +141,8 @@ def inspect_source_quality(
 
 __all__ = [
     "DEFAULT_MAX_CHARS",
+    "ApplyReport",
+    "ApplyResultItem",
     "InvalidSourceError",
     "ImpactEntry",
     "ImpactReport",
@@ -184,4 +193,7 @@ __all__ = [
     "write_test_case_update_plan",
     "write_requirements_registry",
     "write_source_manifest",
+    "apply_test_case_update_plan",
+    "load_test_case_update_apply_report",
+    "write_test_case_update_apply_report",
 ]

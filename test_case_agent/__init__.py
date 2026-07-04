@@ -1,6 +1,8 @@
 """Public library API for the FT Test Case Agent."""
 
 from test_case_agent.api import (
+    ApplyReport,
+    ApplyResultItem,
     DEFAULT_MAX_CHARS,
     InvalidSourceError,
     NoMatchingSectionsError,
@@ -18,6 +20,7 @@ from test_case_agent.api import (
     SourceAnchor,
     TestCaseLink,
     UpdatePlanItem,
+    apply_test_case_update_plan,
     build_impact_report,
     build_requirements_diff,
     build_requirements_registry,
@@ -34,6 +37,7 @@ from test_case_agent.api import (
     load_requirements_diff,
     load_requirements_registry,
     load_requirements_registry_jsonl,
+    load_test_case_update_apply_report,
     load_test_case_update_plan,
     load_source_manifest,
     load_ooxml_source,
@@ -47,6 +51,7 @@ from test_case_agent.api import (
     write_requirements_diff,
     write_impact_report,
     write_requirements_registry,
+    write_test_case_update_apply_report,
     write_test_case_update_plan,
     write_source_manifest,
 )
@@ -58,6 +63,8 @@ from test_case_agent.source_quality import (
 )
 
 __all__ = [
+    "ApplyReport",
+    "ApplyResultItem",
     "DEFAULT_MAX_CHARS",
     "InvalidSourceError",
     "ImpactEntry",
@@ -80,6 +87,7 @@ __all__ = [
     "TestCaseUpdatePlan",
     "UpdatePlanItem",
     "analyze_sections",
+    "apply_test_case_update_plan",
     "build_impact_report",
     "build_requirements_diff",
     "build_requirements_registry",
@@ -97,6 +105,7 @@ __all__ = [
     "load_requirements_diff",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
+    "load_test_case_update_apply_report",
     "load_test_case_update_plan",
     "load_source_manifest",
     "load_ooxml_source",
@@ -109,6 +118,7 @@ __all__ = [
     "write_requirements_diff",
     "write_impact_report",
     "write_requirements_registry",
+    "write_test_case_update_apply_report",
     "write_test_case_update_plan",
     "write_source_manifest",
 ]
