@@ -51,6 +51,13 @@ from test_case_agent.impact_analysis import (
     parse_test_cases,
     write_impact_report,
 )
+from test_case_agent.test_case_update_plan import (
+    TestCaseUpdatePlan,
+    UpdatePlanItem,
+    build_test_case_update_plan,
+    load_test_case_update_plan,
+    write_test_case_update_plan,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -145,6 +152,8 @@ __all__ = [
     "SourceNode",
     "SourceQualityIssue",
     "TestCaseLink",
+    "TestCaseUpdatePlan",
+    "UpdatePlanItem",
     "extract_ooxml_source_nodes",
     "inspect_ooxml_coverage",
     "inspect_source_quality",
@@ -152,11 +161,13 @@ __all__ = [
     "build_requirements_registry",
     "build_requirements_diff",
     "build_impact_report",
+    "build_test_case_update_plan",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
     "load_requirements_diff",
     "load_impact_report",
+    "load_test_case_update_plan",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -170,6 +181,7 @@ __all__ = [
     "resolve_sections",
     "write_requirements_diff",
     "write_impact_report",
+    "write_test_case_update_plan",
     "write_requirements_registry",
     "write_source_manifest",
 ]
