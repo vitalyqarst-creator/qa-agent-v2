@@ -5,6 +5,14 @@ from pathlib import Path
 from test_case_agent.chunking import split_section
 from test_case_agent.document_loader import load_sections as load_sections_from_source
 from test_case_agent.models import Section, SectionChunk
+from test_case_agent.ooxml_loader import (
+    OoxmlCoverageAudit,
+    OoxmlSource,
+    SourceNode,
+    extract_ooxml_source_nodes,
+    inspect_ooxml_coverage,
+    load_ooxml_source,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -77,3 +85,23 @@ def inspect_source_quality(
 ) -> list[SourceQualityIssue]:
     sections = load_sections(source)
     return analyze_sections(sections, max_chars=max_chars)
+
+
+__all__ = [
+    "DEFAULT_MAX_CHARS",
+    "InvalidSourceError",
+    "NoMatchingSectionsError",
+    "OoxmlCoverageAudit",
+    "OoxmlSource",
+    "Section",
+    "SectionChunk",
+    "SourceNode",
+    "SourceQualityIssue",
+    "extract_ooxml_source_nodes",
+    "inspect_ooxml_coverage",
+    "inspect_source_quality",
+    "load_ooxml_source",
+    "load_sections",
+    "preview_chunks",
+    "resolve_sections",
+]

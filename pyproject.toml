@@ -5,6 +5,7 @@ description = "Agent-first toolkit for reading functional requirements documents
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "lxml>=5.0.0",
     "openai-codex>=0.1.0b2",
     "openpyxl>=3.1",
     "pydantic>=2.0.0",

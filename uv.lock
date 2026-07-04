@@ -25,6 +25,7 @@ name = "ft-test-case-agent"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "lxml" },
     { name = "openai-codex" },
     { name = "openpyxl" },
     { name = "pydantic" },
@@ -34,6 +35,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "lxml", specifier = ">=5.0.0" },
     { name = "openai-codex", specifier = ">=0.1.0b2" },
     { name = "openpyxl", specifier = ">=3.1" },
     { name = "pydantic", specifier = ">=2.0.0" },
