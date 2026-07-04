@@ -13,6 +13,14 @@ from test_case_agent.ooxml_loader import (
     inspect_ooxml_coverage,
     load_ooxml_source,
 )
+from test_case_agent.source_manifest import (
+    SourceFileEntry,
+    SourceManifest,
+    build_source_manifest,
+    compute_file_sha256,
+    load_source_manifest,
+    write_source_manifest,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -95,13 +103,19 @@ __all__ = [
     "OoxmlSource",
     "Section",
     "SectionChunk",
+    "SourceFileEntry",
+    "SourceManifest",
     "SourceNode",
     "SourceQualityIssue",
     "extract_ooxml_source_nodes",
     "inspect_ooxml_coverage",
     "inspect_source_quality",
+    "build_source_manifest",
+    "compute_file_sha256",
+    "load_source_manifest",
     "load_ooxml_source",
     "load_sections",
     "preview_chunks",
     "resolve_sections",
+    "write_source_manifest",
 ]
