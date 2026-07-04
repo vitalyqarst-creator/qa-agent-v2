@@ -23,6 +23,12 @@ class QaRulesTests(unittest.TestCase):
         self.assertIn("Числовой суффикс `TC-*` должен быть сквозным", content)
         self.assertIn("не выполняй тихую перенумерацию", content)
 
+    def test_test_case_heading_level_contract_is_documented(self) -> None:
+        runtime = (ROOT_DIR / "references" / "qa" / "test-case-runtime-format.md").read_text(encoding="utf-8")
+
+        for token in ("`## TC-*`", "`### TC-*`"):
+            self.assertIn(token, runtime)
+
     def test_coverage_checklist_contains_field_level_order_rule(self) -> None:
         content = (ROOT_DIR / "references" / "qa" / "coverage-checklist.md").read_text(encoding="utf-8")
         self.assertIn("Порядок проверок для конкретного поля", content)
@@ -149,10 +155,19 @@ class QaRulesTests(unittest.TestCase):
             "placeholder `-`",
             "Активировать элемент",
             "Изменить значение на тестовое значение",
+            "альтернативные negative oracles",
+            "символ отклонен или значение осталось пустым/предыдущим",
             "все и только активные значения",
             "Test-design-derived checks",
             "v2 obligation",
             "Постусловия",
+            "`Трассировка` является обязательным source-link полем",
+            "Если `TC-*` использует `DICT-*`",
+            "action-created block",
+            "branch choices",
+            "Negative input TC не должен объединять",
+            "не заменяй один unsupported oracle другим",
+            "`Следующий шаг заблокирован`",
         ):
             self.assertIn(token, runtime)
 
@@ -162,14 +177,23 @@ class QaRulesTests(unittest.TestCase):
             "placeholder `-`",
             "по правилу из источника",
             "все и только активные значения DICT-*",
+            "Не дублируй один и тот же набор source tokens",
         ):
             self.assertIn(token, full)
 
         for token in (
             "`tc-regression-smells`",
+            "`scoped-validator-findings`",
+            "`placeholder-sentinel-normalization`",
+            "`not_applicable:covered`",
+            "`not_covered:<GAP-ID>`",
             "source-rule oracle",
             "generic editability steps",
             "derived-obligation",
+            "current-scope validator `warning`/`error`",
+            "gap-only / fixture-context source row",
+            "named full-valid fixture",
+            "writer заменяет один unsupported numeric/input oracle другим unsupported oracle",
         ):
             self.assertIn(token, gate)
 
@@ -178,23 +202,132 @@ class QaRulesTests(unittest.TestCase):
             "`source-rule-oracle`",
             "`generic-editability`",
             "`derived-obligation-contamination`",
+            "`nondeterministic-alternative-oracle`",
+            "`executable-over-unresolved-mechanism`",
+            "`ambiguous-ui-alias-step`",
+            "`derived-setup-behavior-as-source`",
             "`template-postcondition-noise`",
         ):
             self.assertIn(defect_class, taxonomy)
+
+    def test_writer_contract_contains_artifact_shape_preflight_guards(self) -> None:
+        writer_output = (ROOT_DIR / "references" / "agent" / "writer-output-format.md").read_text(encoding="utf-8")
+        gate = (ROOT_DIR / "references" / "agent" / "writer-quality-gate-format.md").read_text(encoding="utf-8")
+        skill = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        runner = (ROOT_DIR / "scripts" / "codex_review_cycle_runner.py").read_text(encoding="utf-8")
+
+        for token in (
+            "artifact-shape-preflight",
+            "placeholder-sentinel-normalization",
+            "not_applicable:covered",
+            "not_covered:<GAP-ID>",
+            "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
+            "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+            "| source_row_id | source_requirement_codes | normalized_property_ids | linked_atoms | gap_ids | coverage_decision |",
+            "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+            "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | observable_oracle | testable_part | blocked_part | gap_admissibility | review_risk |",
+            "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+            "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+            "| review_item | status | severity | affected_package | evidence | required_action | blocks_ready_for_review |",
+            "`in_scope` accepts only `yes`, `no`, `unclear`, `out-of-scope`",
+            "canonical TC file must not duplicate split artifact tables",
+            "alias columns",
+        ):
+            self.assertIn(token, writer_output)
+            self.assertIn(token, gate)
+
+        for token in (
+            "artifact-shape-preflight",
+            "placeholder-sentinel-normalization",
+            "canonical TC file must not duplicate split artifact tables",
+            "gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review",
+        ):
+            self.assertIn(token, skill)
+
+        for finding_id in (
+            "source-row-inventory-no-table",
+            "coverage-obligation-table-no-table",
+            "test-design-review-no-table",
+            "test-case-split-artifact-duplicated-sections",
+            "source-table-normalization-missing-columns",
+            "test-design-decision-table-missing-columns",
+            "test-case-package-design-plan-missing-columns",
+            "source-row-completeness-matrix-missing",
+            "source-row-inventory-invalid-in-scope",
+            "test-case-missing-package-id",
+            "writer-quality-gate-missing-columns",
+            "writer-quality-gate-missing-required-items",
+        ):
+            self.assertIn(finding_id, runner)
+
+    def test_writer_contract_requires_parseable_bold_tc_metadata(self) -> None:
+        runtime = (ROOT_DIR / "references" / "qa" / "test-case-runtime-format.md").read_text(encoding="utf-8")
+        full = (ROOT_DIR / "references" / "qa" / "test-case-format.md").read_text(encoding="utf-8")
+        skill = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        gate = (ROOT_DIR / "references" / "agent" / "writer-quality-gate-format.md").read_text(encoding="utf-8")
+
+        for token in (
+            "parser-supported bold metadata fields",
+            "`**Название:**`",
+            "`**Тип:**`",
+            "`**Приоритет:**`",
+            "`**package_id:**`",
+            "`**Трассировка:**`",
+            "table-only metadata",
+            "`| Поле | Значение |`",
+            "`| package_id | WP-01 |`",
+        ):
+            self.assertIn(token, runtime)
+            self.assertIn(token, skill)
+
+        for token in (
+            "table-only metadata",
+            "validator parsing treats that as missing required fields",
+            "canonical form is bold fields only",
+        ):
+            self.assertIn(token, full)
+
+        self.assertIn("table-only TC metadata", gate)
+
+    def test_writer_contract_requires_actual_post_write_validator_run(self) -> None:
+        writer_output = (ROOT_DIR / "references" / "agent" / "writer-output-format.md").read_text(encoding="utf-8")
+        gate = (ROOT_DIR / "references" / "agent" / "writer-quality-gate-format.md").read_text(encoding="utf-8")
+        runner = (ROOT_DIR / "scripts" / "codex_review_cycle_runner.py").read_text(encoding="utf-8")
+        validator = (ROOT_DIR / "scripts" / "validate_agent_artifacts.py").read_text(encoding="utf-8")
+
+        for token in (
+            "post-write scoped validator must actually be executed",
+            "`Validator not run` is not a valid terminal blocker",
+            "attempted command",
+            "stderr/exception",
+        ):
+            self.assertIn(token, writer_output)
+
+        for token in (
+            "отсутствие запуска scoped validator после финальной записи",
+            "procedural failure writer-а",
+            "attempted command",
+        ):
+            self.assertIn(token, gate)
+
+        self.assertIn("writer blocked-input cannot be caused by missing post-write validator run", runner)
+        self.assertIn("workflow-state-blocked-input-validator-not-run", validator)
 
     def test_test_case_format_contains_field_level_input_restriction_rule(self) -> None:
         content = (ROOT_DIR / "references" / "qa" / "test-case-format.md").read_text(encoding="utf-8")
         for token in (
             "Если ФТ задает ограничение ввода или формата для конкретного поля",
-            "enforcement на уровне самого поля",
+            "не выбирает UI-механизм enforcement",
             "`только N цифр`",
             "`максимальная длина`",
             "`точная длина`",
-            "недопустимый символ не добавляется",
-            "символ сверх максимальной или точной длины не добавляется",
-            "Не проверяй field-level input restrictions через `Сохранить`, `Следующий шаг`",
-            "`1234567`",
-            "седьмая цифра `7` не добавляется",
+            "один подтвержденный observable oracle",
+            "`field-state`",
+            "`transition-state`",
+            "при полном valid fixture остальных обязательных полей",
+            "без полного воспроизводимого valid fixture",
+            "символ отклонен или значение осталось пустым/предыдущим",
+            "`GAP-*` / `unclear`",
         ):
             self.assertIn(token, content)
 
@@ -227,13 +360,38 @@ class QaRulesTests(unittest.TestCase):
         self.assertIn("`structure`", reviewer)
         self.assertIn("`test-design`", reviewer)
         self.assertIn("`traceability` или `full`", reviewer)
-        self.assertIn("порядок `позитивные -> негативные`", reviewer)
+        self.assertIn("порядок позитивных и негативных кейсов", reviewer)
         self.assertIn("сквозную нумерацию `TC-*`", reviewer)
         self.assertIn("Package Test Design Plan", reviewer)
         self.assertIn("test-case-forbidden-formulation-smell", writer)
         self.assertIn("test-case-abstract-oracle-smell", writer)
         self.assertIn("test-case-input-restriction-transition-oracle-smell", writer)
         self.assertIn("test-case-mechanical-field-step-smell", writer)
+        self.assertIn("test-case-unsupported-numeric-validation-feedback-smell", writer)
+        self.assertIn("не может быть простой заменой одного неподтвержденного UI-механизма другим", writer)
+        self.assertIn("optional source fields допустимы только если добавляют недублирующую", writer)
+        self.assertIn("source fields дублируют друг друга", reviewer)
+        self.assertNotIn("Ссылка на ФТ`, `Источник требования`, `Источник / цитата требования` обязательны", writer)
+
+    def test_agent_references_do_not_use_removed_semantic_review_scenario(self) -> None:
+        checked_paths = [
+            ROOT_DIR / "scripts" / "codex_review_cycle_runner.py",
+            ROOT_DIR / "references" / "agent" / "instruction-loading-manifest.md",
+            ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md",
+            ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md",
+        ]
+        for path in checked_paths:
+            self.assertNotIn("reviewer.session_semantic_review", path.read_text(encoding="utf-8"))
+
+    def test_schema_lag_waiver_and_conditional_branch_rules_are_strict(self) -> None:
+        reviewer_output = (ROOT_DIR / "references" / "agent" / "reviewer-output-format.md").read_text(encoding="utf-8")
+        package_plan = (ROOT_DIR / "references" / "agent" / "package-test-design-plan-format.md").read_text(encoding="utf-8")
+
+        self.assertIn("validator-schema-lag", reviewer_output)
+        self.assertIn("expected validator model vs actual artifact model", reviewer_output)
+        self.assertIn("affected `PDP-*`/`PD-*`, `ATOM-*` or `TC-*`", reviewer_output)
+        self.assertIn("optional/no-blocking behavior", package_plan)
+        self.assertIn("не требует искусственной inverse branch", package_plan)
 
     def test_reviewer_describes_canonical_mode_order(self) -> None:
         reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")

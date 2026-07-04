@@ -4,14 +4,14 @@
 
 | dimension | applicable | source_ref | reason | linked_atoms | linked_test_cases | gap_id |
 | --- | --- | --- | --- | --- | --- | --- |
-| scenario-use-case | yes | FT-CANON-1 | Main success flow is in scope. | ATOM-001 | TC-CANON-SO-001 | - |
-| role-permission | no | FT-CANON-1 | No role split is defined in this scope. | - | - | - |
+| scenario-use-case | yes | FT-CANON-1 | Main success flow is in scope. | ATOM-001 | TC-CANON-SO-001 |  |
+| role-permission | no | FT-CANON-1 | No role split is defined in this scope. | - | none_required:out_of_scope |  |
 
 ## Risk / Priority Map
 
 | atom_id | risk_level | risk_factors | source_ref | required_priority | linked_test_cases | gap_id | rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ATOM-001 | medium | main flow | FT-CANON-1 | Medium | TC-CANON-SO-001 | - | Main user-visible behavior. |
+| ATOM-001 | medium | main flow | FT-CANON-1 | Medium | TC-CANON-SO-001 |  | Main user-visible behavior. |
 
 ## TC-CANON-SO-001
 

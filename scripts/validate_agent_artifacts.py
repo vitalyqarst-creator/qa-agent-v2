@@ -147,6 +147,7 @@ REQUIRED_REVIEWER_SIGNOFF_FIELDS = {
     "test_case_numbering_checked",
     "test_design_checked",
     "applicability_dimensions_checked",
+    "validator_checked",
     "blocking_findings_absent",
     "traceability_gaps_absent",
     "known_unclear_items",
@@ -166,6 +167,7 @@ REVIEWER_SIGNOFF_YES_FIELDS = {
     "test_case_numbering_checked",
     "test_design_checked",
     "applicability_dimensions_checked",
+    "validator_checked",
     "blocking_findings_absent",
 }
 REVIEWER_SIGNOFF_YES_OR_NA_FIELDS = {
@@ -180,11 +182,25 @@ REQUIRED_WRITER_RESPONSE_FIELDS = {
     "affected_test_case_ids",
 }
 MIN_TEST_CASE_FIELD_COUNT = 8
+RUNTIME_METADATA_FIELD_ALIASES = (
+    ("Название", "Title"),
+    ("Тип", "Type"),
+    ("Приоритет", "Priority"),
+    ("package_id",),
+    ("Трассировка", "Traceability"),
+)
+RUNTIME_SECTION_FIELD_ALIASES = (
+    ("Предусловия", "Preconditions"),
+    ("Тестовые данные", "Test Data", "Test data"),
+    ("Итоговый ожидаемый результат", "Ожидаемый результат", "Expected Result"),
+    ("Постусловия", "Postconditions"),
+)
 TEST_CASE_ID_RE = re.compile(r"\bTC-[A-Za-z0-9_-]+\b")
 ATOM_ID_RE = re.compile(r"\bATOM-\d{3,}\b")
 SCOPED_ATOM_ID_RE = re.compile(r"[A-Z0-9-]+-ATOM-\d{3,}")
 ANY_ATOM_ID_RE = re.compile(r"\b(?:[A-Z0-9-]+-)?ATOM-\d{3,}\b")
 GAP_ID_RE = re.compile(r"\b(?:GAP-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b")
+DICT_ID_RE = re.compile(r"\bDICT-\d{3,}\b")
 FINDING_ID_RE = re.compile(r"\b(?:USER-)?FINDING(?:-[A-Z]+)?-\d{3,}\b")
 REQUIREMENT_CODE_RANGE_RE = re.compile(
     r"\b([A-ZА-Я]{2,10})\s*[-:]?\s*(\d+)\b\s*`?\s*(?:-|–|—)\s*`?\s*(?:\1\s*[-:]?\s*)?(\d+)\b",
@@ -401,6 +417,68 @@ ALLOWED_TEST_DESIGN_DECISIONS = {
     "scenario_only",
     "out_of_scope",
 }
+ARTIFICIAL_NUMERIC_PROPERTY_TYPES = {
+    "non-digit-rejection",
+    "numeric-format-invalid",
+    "numeric-negative",
+}
+DASH_PLACEHOLDER_VALUES = {"-", "—", "n/a", "na", "not applicable", "not-applicable"}
+TRACEABILITY_PLACEHOLDER_COLUMNS_BY_SECTION = {
+    "Atomic Requirements Ledger": {
+        "req_id",
+        "covered_by_tc",
+        "gap_id",
+        "gap_note",
+    },
+    "Test Design Decision Table": {
+        "planned_tc_or_gap",
+        "blocked_part",
+        "gap_admissibility",
+    },
+    "Coverage Obligation Table": {
+        "planned_tc_or_gap",
+        "review_notes",
+    },
+    "Package Test Design Plan": {
+        "planned_tc_or_gap",
+        "oracle_source",
+    },
+    "Test-design Applicability Matrix": {
+        "linked_test_cases",
+        "gap_id",
+    },
+    "Dependency Matrix": {
+        "tc_gap",
+        "gap_id",
+    },
+    "Source Row Inventory": {
+        "requirement_codes",
+        "mapped_atom_or_gap",
+    },
+    "Source Row Completeness Matrix": {
+        "gap_ids",
+    },
+    "Source Table Normalization": {
+        "requirement_code",
+        "gap_id",
+        "linked_atoms",
+    },
+    "Risk / Priority Map": {
+        "linked_test_cases",
+        "gap_id",
+    },
+    "Writer Quality Gate": {
+        "required_action",
+    },
+    "Test Design Review": {
+        "required_action",
+    },
+}
+TRACEABILITY_MATRIX_PLACEHOLDER_COLUMNS = {
+    "req_id",
+    "covered_by_tc",
+    "gap_note",
+}
 SPLIT_TEST_DESIGN_SECTION_FILES = {
     "Artifact Write Strategy": "artifact-write-strategy.md",
     "Mockup Usage": "mockup-usage.md",
@@ -409,6 +487,7 @@ SPLIT_TEST_DESIGN_SECTION_FILES = {
     "Source Table Normalization": "source-table-normalization.md",
     "Test Design Decision Table": "test-design-decision-table.md",
     "Coverage Obligation Table": "coverage-obligation-table.md",
+    "Dictionary Inventory": "dictionary-inventory.md",
     "Atomic Requirements Ledger": "atomic-requirements-ledger.md",
     "Internal Work Package Coverage": "internal-work-package-coverage.md",
     "Package Ledger Self-Check": "package-ledger-self-check.md",
@@ -426,15 +505,7 @@ SPLIT_TEST_DESIGN_SECTION_FILES = {
 }
 SPLIT_TEST_DESIGN_SECTIONS = frozenset(SPLIT_TEST_DESIGN_SECTION_FILES)
 REQUIRED_TEST_CASE_TEMPLATE_FIELDS = {
-    "Цель": ["Goal", "Цель"],
-    "Ссылка на ФТ": ["FT Reference", "Ссылка на ФТ"],
-    "Источник требования": ["Requirement Source", "Источник требования"],
-    "Источник / цитата требования": [
-        "Requirement Quote",
-        "Requirement Source Quote",
-        "Source Requirement Quote",
-        "Источник / цитата требования",
-    ],
+    "source link": ["Traceability", "Трассировка", "FT Reference", "Ссылка на ФТ"],
 }
 TRACEABILITY_REMAP_TEST_CASE_TYPES = {"traceability-remap"}
 TRACEABILITY_REMAP_TEXT_RE = re.compile(
@@ -922,6 +993,10 @@ def iter_writer_process_diagnostics(root: Path) -> list[Path]:
     return sorted(validation_scope(root).rglob("writer-process-diagnostic*.md"))
 
 
+def iter_writer_self_checks(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "writer-self-check.md")
+
+
 def iter_session_logs(root: Path) -> list[Path]:
     if root.is_file() and root.suffix == ".md" and "session-log" in root.name.lower():
         return [root]
@@ -929,6 +1004,37 @@ def iter_session_logs(root: Path) -> list[Path]:
         path
         for path in validation_scope(root).rglob("*session-log*.md")
         if path.is_file()
+    )
+
+
+def is_historical_or_scratch_artifact(path: Path) -> bool:
+    return "versions" in path.parts or "_artifact_write" in path.parts
+
+
+def is_active_text_artifact(path: Path, root: Path) -> bool:
+    if path.suffix.lower() != ".md" or is_historical_or_scratch_artifact(path):
+        return False
+
+    relative_parts = rel(path, root).split("/")
+    relative_text = "/".join(relative_parts)
+    if "/work/review-cycles/" in f"/{relative_text}" and "/outputs/" in f"/{relative_text}/":
+        return True
+    if "/work/test-design/" in f"/{relative_text}/":
+        return True
+    if "/test-cases/" in f"/{relative_text}/" and path.parent.name == "test-cases":
+        return path.name != "README.md"
+    if "session-log" in path.name.lower():
+        return True
+    return False
+
+
+def iter_active_text_artifacts(root: Path) -> list[Path]:
+    if root.is_file():
+        return [root] if is_active_text_artifact(root, root.parent) else []
+    return sorted(
+        path
+        for path in validation_scope(root).rglob("*.md")
+        if path.is_file() and is_active_text_artifact(path, root)
     )
 
 
@@ -940,6 +1046,90 @@ def iter_decision_logs(root: Path) -> list[Path]:
         for path in validation_scope(root).rglob("*decision-log*.md")
         if path.is_file()
     )
+
+
+ENCODING_DAMAGE_QUESTION_MARK_RE = re.compile(r"\?{4,}")
+ENCODING_DAMAGE_DIAGNOSTIC_TERMS = {
+    "encoding",
+    "utf-8",
+    "utf8",
+    "mojibake",
+    "question-mark",
+    "question mark",
+    "replacement character",
+    "replacement-character",
+    "кодиров",
+}
+
+
+def is_encoding_diagnostic_line(line: str) -> bool:
+    lowered = line.lower()
+    return any(term in lowered for term in ENCODING_DAMAGE_DIAGNOSTIC_TERMS)
+
+
+def encoding_damage_markers(line: str) -> list[str]:
+    markers: list[str] = []
+    if "\ufffd" in line:
+        markers.append("unicode-replacement-character")
+    if ENCODING_DAMAGE_QUESTION_MARK_RE.search(line):
+        markers.append("question-mark-run")
+    return markers
+
+
+def validate_text_encoding_damage(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    display_path = rel(path, root)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        return (
+            [
+                Finding(
+                    id="active-text-artifact-not-utf8",
+                    severity="warning",
+                    category="source-quality",
+                    title="Active text artifact is not valid UTF-8",
+                    details=str(exc),
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Rewrite the active artifact as UTF-8 Markdown before continuing the review cycle.",
+                )
+            ],
+            [Check("active-text-encoding-damage", "warn", "Active text artifact is not valid UTF-8.", display_path)],
+        )
+
+    evidence: list[str] = []
+    for line_number, line in enumerate(lines, start=1):
+        markers = encoding_damage_markers(line)
+        if not markers or is_encoding_diagnostic_line(line):
+            continue
+        evidence.append(f"line {line_number}: {', '.join(markers)}: {line[:160]}")
+        if len(evidence) >= 5:
+            break
+
+    if evidence:
+        return (
+            [
+                Finding(
+                    id="active-text-artifact-encoding-damage",
+                    severity="warning",
+                    category="source-quality",
+                    title="Active text artifact contains encoding damage markers",
+                    details=(
+                        "The active artifact contains replacement characters or long question-mark runs, "
+                        "which usually means Russian source text was lost during stdout/file encoding."
+                    ),
+                    path=display_path,
+                    evidence=evidence,
+                    recommended_action=(
+                        "Regenerate or repair the artifact from the original UTF-8/source document; do not use "
+                        "the damaged text as requirement evidence, traceability, expected results or sign-off basis."
+                    ),
+                )
+            ],
+            [Check("active-text-encoding-damage", "warn", "Active text artifact contains encoding damage markers.", display_path)],
+        )
+
+    return [], [Check("active-text-encoding-damage", "pass", "Active text artifact has no encoding damage markers.", display_path)]
 
 
 def iter_mockup_visual_inventories(root: Path) -> list[Path]:
@@ -1189,7 +1379,107 @@ def split_test_design_artifact_paths(path: Path) -> dict[str, Path]:
     return paths
 
 
+def collapse_redundant_section_heading(content: str, section_title: str) -> str:
+    pattern = re.compile(
+        rf"(^|\n)#\s+{re.escape(section_title)}\s*\n(?:[ \t]*\n)*"
+        rf"##\s+{re.escape(section_title)}\s*(?=\n)",
+        flags=re.IGNORECASE,
+    )
+    return pattern.sub(lambda match: f"{match.group(1)}## {section_title}", content)
+
+
+def has_redundant_section_heading(content: str, section_title: str) -> bool:
+    pattern = re.compile(
+        rf"(^|\n)#\s+{re.escape(section_title)}\s*\n(?:[ \t]*\n)*"
+        rf"##\s+{re.escape(section_title)}\s*(?=\n)",
+        flags=re.IGNORECASE,
+    )
+    return pattern.search(content) is not None
+
+
+def has_canonical_split_artifact_heading(content: str, section_title: str) -> bool:
+    pattern = re.compile(
+        rf"(?im)^#{{1,2}}\s+{re.escape(section_title)}\s*$",
+    )
+    return pattern.search(content) is not None
+
+
+def validate_split_artifact_heading_shape(
+    section_title: str,
+    artifact_path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    display_path = rel(artifact_path, root)
+    try:
+        content = artifact_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return (
+            [
+                Finding(
+                    id="split-artifact-not-utf8",
+                    severity="warning",
+                    category="test-case-format",
+                    title="Split artifact is not valid UTF-8",
+                    details=str(exc),
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Save the split artifact as UTF-8 Markdown.",
+                )
+            ],
+            [Check("split-artifact-heading-shape", "warn", "Split artifact is not UTF-8.", display_path)],
+        )
+
+    if has_redundant_section_heading(content, section_title):
+        return (
+            [
+                Finding(
+                    id="split-artifact-redundant-section-heading",
+                    severity="warning",
+                    category="test-case-format",
+                    title="Split artifact has redundant duplicate section headings",
+                    details=(
+                        "A split artifact must expose exactly one canonical section heading. Adjacent `# Section` and "
+                        "`## Section` wrappers create ambiguous section extraction and should be normalized at write time."
+                    ),
+                    path=display_path,
+                    evidence=[f"# {section_title} + ## {section_title}"],
+                    recommended_action=(
+                        f"Keep only one canonical heading, `# {section_title}` or `## {section_title}`, "
+                        "before the table/body."
+                    ),
+                )
+            ],
+            [Check("split-artifact-heading-shape", "warn", "Split artifact has redundant headings.", display_path)],
+        )
+
+    if has_canonical_split_artifact_heading(content, section_title):
+        return (
+            [],
+            [Check("split-artifact-heading-shape", "pass", "Split artifact heading shape passed.", display_path)],
+        )
+
+    return (
+        [
+            Finding(
+                id="split-artifact-canonical-heading-missing",
+                severity="warning",
+                category="test-case-format",
+                title="Split artifact misses canonical section heading",
+                details=(
+                    "A split artifact must expose exactly one canonical section heading using `# Section` or "
+                    "`## Section`. Other heading text or a bare table makes split artifact shape ambiguous."
+                ),
+                path=display_path,
+                evidence=[f"expected `# {section_title}` or `## {section_title}`"],
+                recommended_action=f"Add one canonical heading, `# {section_title}` or `## {section_title}`, before the table/body.",
+            )
+        ],
+        [Check("split-artifact-heading-shape", "warn", "Split artifact misses canonical heading.", display_path)],
+    )
+
+
 def normalize_split_test_design_section(section_title: str, content: str) -> str:
+    content = collapse_redundant_section_heading(content, section_title)
     if extract_markdown_section(content, section_title) is not None:
         return content.strip()
 
@@ -1825,6 +2115,46 @@ def resolve_workflow_test_case_artifacts(
         if resolved.parent.name == "test-cases" or "test-cases" in resolved.parts:
             resolved_paths.append(resolved)
     return dedupe_paths(resolved_paths)
+
+
+def blocked_writer_gate_failure_reasons_present(blocking_reasons: Any) -> bool:
+    if not isinstance(blocking_reasons, list):
+        return False
+    reason_text = " ".join(str(reason).lower() for reason in blocking_reasons)
+    return any(
+        marker in reason_text
+        for marker in (
+            "writer quality gate",
+            "quality gate",
+            "test design review",
+            "test-design-review",
+            "blocking gate",
+            "blocking row",
+            "validator finding",
+            "validator blocker",
+        )
+    )
+
+
+def blocked_writer_gate_suppression_test_case_paths(
+    workflow_states: list[Path],
+    root: Path,
+) -> set[Path]:
+    suppress_paths: set[Path] = set()
+    for workflow_path in workflow_states:
+        try:
+            state = parse_workflow_state(workflow_path)
+        except UnicodeDecodeError:
+            continue
+        if state.get("current_stage") != "ft-test-case-writer":
+            continue
+        if state.get("stage_status") != "blocked-input":
+            continue
+        if not blocked_writer_gate_failure_reasons_present(state.get("blocking_reasons")):
+            continue
+        ft_root = find_ft_root(workflow_path, root, state)
+        suppress_paths.update(resolve_workflow_test_case_artifacts(state, workflow_path, root, ft_root))
+    return {path.resolve() for path in suppress_paths}
 
 
 def resolve_workflow_artifacts_by_name(
@@ -2631,7 +2961,7 @@ def extract_coverage_gaps_section(content: str) -> str | None:
     if not match:
         return None
 
-    next_heading = re.search(r"^#{1,6}\s+", content[match.end():], flags=re.MULTILINE)
+    next_heading = re.search(r"^#{1,2}\s+", content[match.end():], flags=re.MULTILINE)
     section_end = match.end() + next_heading.start() if next_heading else len(content)
     return content[match.end():section_end]
 
@@ -2679,6 +3009,55 @@ def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tup
             "coverage-gap-inventory",
             "warn" if findings else "pass",
             "Coverage gap inventory has missing declarations." if findings else "Coverage gap inventory passed.",
+            display_path,
+        )
+    ]
+    return findings, checks
+
+
+def markdown_section_is_empty(section: str) -> bool:
+    meaningful_lines = [
+        line.strip()
+        for line in section.splitlines()
+        if line.strip() and not re.fullmatch(r"[-|:`\s]+", line.strip())
+    ]
+    return not meaningful_lines
+
+
+def validate_writer_self_check_sections(content: str, path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(path, root)
+    empty_sections: list[str] = []
+    for heading in ("Writer Self-Check", "Artifact Write Evidence"):
+        section = extract_markdown_section(content, heading)
+        if section is not None and markdown_section_is_empty(section):
+            empty_sections.append(heading)
+
+    if empty_sections:
+        findings.append(
+            Finding(
+                id="writer-self-check-empty-section",
+                severity="warning",
+                category="test-case-format",
+                title="Writer self-check has empty evidence sections",
+                details=(
+                    "Writer self-check sections must contain explicit evidence, a table, a link to the session log, "
+                    "or a concrete not-applicable rationale. Empty headings create false assurance."
+                ),
+                path=display_path,
+                evidence=empty_sections,
+                recommended_action=(
+                    "Fill each self-check section with evidence or remove the heading. For artifact write evidence, "
+                    "link the session log `Artifact Write Strategy` table or the split `artifact-write-strategy.md`."
+                ),
+            )
+        )
+
+    checks = [
+        Check(
+            "writer-self-check-sections",
+            "warn" if findings else "pass",
+            "Writer self-check has empty sections." if findings else "Writer self-check sections passed.",
             display_path,
         )
     ]
@@ -2838,6 +3217,120 @@ def normalize_table_header(cells: list[str]) -> list[str]:
     return [normalize_markdown_field_name(cell.strip().strip("`")) for cell in cells]
 
 
+def is_dash_placeholder(value: str) -> bool:
+    normalized = value.strip().strip("`").strip().lower()
+    return normalized in DASH_PLACEHOLDER_VALUES
+
+
+def placeholder_sentinel_evidence_for_rows(
+    rows: list[list[str]],
+    section_title: str,
+    prohibited_columns: set[str],
+) -> list[str]:
+    if not rows:
+        return []
+    header = normalize_table_header(rows[0])
+    column_indexes = [
+        (column_name, index)
+        for index, column_name in enumerate(header)
+        if column_name in prohibited_columns
+    ]
+    if not column_indexes:
+        return []
+
+    evidence: list[str] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        row_label = ""
+        for preferred_column in (
+            "atom_id",
+            "decision_id",
+            "obligation_id",
+            "design_item_id",
+            "dependency_id",
+            "review_item",
+            "source_row_id",
+        ):
+            if preferred_column in header:
+                preferred_index = header.index(preferred_column)
+                if preferred_index < len(row):
+                    row_label = row[preferred_index].strip().strip("`")
+                break
+        if not row_label:
+            row_label = f"row-{row_number}"
+        for column_name, index in column_indexes:
+            if index < len(row) and is_dash_placeholder(row[index]):
+                evidence.append(f"{section_title}:{row_label}:{column_name}={row[index].strip() or '<empty>'}")
+    return evidence
+
+
+def validate_traceability_placeholder_sentinels(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    evidence: list[str] = []
+
+    if path.name.endswith("traceability-matrix.md"):
+        evidence.extend(
+            placeholder_sentinel_evidence_for_rows(
+                markdown_table_rows_from_text(content),
+                "Traceability Matrix",
+                TRACEABILITY_MATRIX_PLACEHOLDER_COLUMNS,
+            )
+        )
+
+    for section_title, prohibited_columns in TRACEABILITY_PLACEHOLDER_COLUMNS_BY_SECTION.items():
+        section = extract_markdown_section(content, section_title)
+        if section is None:
+            continue
+        evidence.extend(
+            placeholder_sentinel_evidence_for_rows(
+                markdown_table_rows_from_text(section),
+                section_title,
+                prohibited_columns,
+            )
+        )
+
+    if evidence:
+        findings.append(
+            Finding(
+                id="traceability-placeholder-sentinel",
+                severity="warning",
+                category="traceability",
+                title="Traceability artifacts use placeholder sentinels in link/source columns",
+                details=(
+                    "Literal `-` / `N/A` in traceability-bearing table columns hides whether data is absent, "
+                    "not applicable, not covered, or intentionally routed to GAP/unclear. Use explicit sentinels "
+                    "such as `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, "
+                    "`no_requirement_code:<source_ref>` or `none_required:<reason>`."
+                ),
+                path=display_path,
+                evidence=evidence[:30],
+                recommended_action=(
+                    "Replace placeholder cells in traceability/link columns with explicit semantic sentinel values "
+                    "or concrete TC/GAP/ATOM/source references."
+                ),
+            )
+        )
+
+    checks.append(
+        Check(
+            "traceability-placeholder-sentinel",
+            "warn" if evidence else "pass",
+            (
+                "Traceability-bearing tables use placeholder sentinels."
+                if evidence
+                else "Traceability-bearing placeholder sentinel check passed."
+            ),
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def atomic_requirement_ledger_atom_ids(content: str) -> set[str]:
     section = extract_markdown_section(content, "Atomic Requirements Ledger")
     if section is None:
@@ -2879,6 +3372,19 @@ def parsed_atomic_requirement_ledger_rows(content: str) -> tuple[list[str], list
             parsed_row[column_name] = row[index].strip().strip("`") if index < len(row) else ""
         parsed_rows.append(parsed_row)
     return header, parsed_rows
+
+
+def ledger_rows_with_real_gap_ids(content: str) -> list[dict[str, str]]:
+    _, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
+    gap_rows: list[dict[str, str]] = []
+    for row in ledger_rows:
+        coverage_status = row.get("coverage_status", "").strip().strip("`").lower()
+        if coverage_status not in {"gap", "unclear"}:
+            continue
+        if not real_gap_ids(" | ".join(row.values())):
+            continue
+        gap_rows.append(row)
+    return gap_rows
 
 
 def is_valid_atom_id_value(atom_id: str) -> bool:
@@ -3743,7 +4249,8 @@ def validate_traceability_matrix(
     display_path = rel(path, root)
 
     try:
-        rows = markdown_table_rows(path)
+        content = path.read_text(encoding="utf-8")
+        rows = markdown_table_rows_from_text(content)
     except UnicodeDecodeError:
         findings.append(
             Finding(
@@ -3775,6 +4282,10 @@ def validate_traceability_matrix(
         )
         checks.append(Check("traceability-matrix-format", "warn", "Traceability matrix table is missing.", display_path))
         return findings, checks
+
+    placeholder_findings, placeholder_checks = validate_traceability_placeholder_sentinels(content, path, root)
+    findings.extend(placeholder_findings)
+    checks.extend(placeholder_checks)
 
     header = [cell.strip().strip("`").lower() for cell in rows[0]]
     if "atom_id" not in header:
@@ -4593,12 +5104,22 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "internal-observability",
     "action-observability",
     "semantic-req-id-parity",
+    "scoped-validator-findings",
     "package-ready",
 }
 
-WRITER_QUALITY_GATE_FAIL_STATUSES = {"fail", "failed", "blocked", "needs-rewrite", "no"}
-WRITER_QUALITY_GATE_PASS_STATUSES = {"pass", "passed", "ok", "yes"}
+WRITER_QUALITY_GATE_FAIL_STATUSES = {"fail", "blocked", "needs-rewrite"}
+WRITER_QUALITY_GATE_PASS_STATUSES = {"pass"}
 WRITER_QUALITY_GATE_BLOCK_VALUES = {"yes", "no"}
+SCOPED_VALIDATOR_PROFILE_REQUIRED_KEYS = {
+    "command",
+    "generated_by",
+    "scope_slug",
+    "canonical_test_cases",
+    "test_design_dir",
+    "current_scope_findings",
+    "unresolved_warning_error_count",
+}
 
 TEST_DESIGN_REVIEW_REQUIRED_COLUMNS = {
     "review_item",
@@ -4627,10 +5148,29 @@ TEST_DESIGN_REVIEW_REQUIRED_ITEMS = {
     "tc-mapping-atomicity",
     "ready-for-tc-writing",
 }
-TEST_DESIGN_REVIEW_FAIL_STATUSES = {"fail", "failed", "blocked", "needs-rewrite", "no"}
-TEST_DESIGN_REVIEW_PASS_STATUSES = {"pass", "passed", "ok", "yes"}
+TEST_DESIGN_REVIEW_FAIL_STATUSES = {"fail", "blocked", "needs-rewrite"}
+TEST_DESIGN_REVIEW_PASS_STATUSES = {"pass"}
 TEST_DESIGN_REVIEW_SEVERITIES = {"error", "warning", "info"}
 TEST_DESIGN_REVIEW_BLOCK_VALUES = {"yes", "no"}
+SCOPED_VALIDATOR_PROFILE_PLACEHOLDER_COMMANDS = {
+    "",
+    "-",
+    "n/a",
+    "na",
+    "none",
+    "tbd",
+    "todo",
+    "pending",
+    "<pending>",
+    "<todo>",
+    "<...>",
+}
+WRITER_GATE_FORBIDDEN_SCOPED_PROFILE_STAGE_RE = re.compile(
+    r"scoped-validator-profile\."
+    r"(?:structure-preflight|semantic-review|format-review|semantic-regression|reviewer)"
+    r"[^/\\]*\.json$",
+    flags=re.IGNORECASE,
+)
 
 READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "source-row-inventory-missing",
@@ -4653,6 +5193,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "source-row-completeness-matrix-missing",
     "source-row-gsr-count-mismatch",
     "source-normalization-unmapped-property",
+    "source-table-normalization-missing-ledger-gap-atom",
     "source-table-normalization-unknown-atom-id",
     "test-design-decision-table-missing",
     "test-design-decision-table-no-table",
@@ -4663,6 +5204,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-design-decision-table-metadata-links-tc",
     "test-design-decision-table-metadata-cross-section-conflict",
     "test-design-decision-table-gap-without-gap-id",
+    "test-design-decision-table-missing-ledger-gap-decision",
     "test-design-decision-table-gap-cross-section-conflict",
     "test-design-decision-table-gap-executable-behavior-smell",
     "test-design-decision-table-overbroad-gap-smell",
@@ -4675,6 +5217,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-design-decision-table-executable-cross-section-conflict",
     "test-design-decision-table-out-of-scope-without-reason",
     "test-design-decision-table-value-type-standalone-smell",
+    "test-design-decision-table-merged-numeric-class-decision",
     "test-design-decision-table-unknown-test-case-id",
     "coverage-obligation-table-missing",
     "coverage-obligation-table-no-table",
@@ -4690,6 +5233,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-design-review-no-table",
     "test-design-review-missing-columns",
     "test-design-review-missing-required-items",
+    "test-design-review-unknown-items",
     "test-design-review-invalid-status",
     "test-design-review-invalid-severity",
     "test-design-review-invalid-blocks-value",
@@ -4712,6 +5256,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-package-design-plan-missing-exact-length-boundary",
     "test-case-package-design-plan-missing-repeated-digits-check",
     "test-case-package-design-plan-merged-check-smell",
+    "test-case-package-design-plan-merged-numeric-class-row",
     "design-plan-combined-class-smell",
     "test-case-package-design-plan-missing-conditional-branch",
     "test-case-package-design-plan-negative-without-positive-acceptance",
@@ -4741,6 +5286,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-numeric-class-label-raw-literal-smell",
     "test-case-unsupported-input-filtering-oracle-smell",
     "test-case-input-restriction-transition-oracle-smell",
+    "test-case-unsupported-numeric-validation-feedback-smell",
     "test-case-mechanical-field-step-smell",
     "test-case-negative-transition-without-valid-fixture-smell",
     "test-case-forbidden-formulation-smell",
@@ -4762,12 +5308,19 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "source-normalization-dictionary-misclassified-smell",
     "test-case-file-no-structured-cases",
     "test-case-file-not-utf8",
+    "test-case-noncanonical-heading-level",
+    "split-artifact-not-utf8",
+    "split-artifact-canonical-heading-missing",
+    "split-artifact-redundant-section-heading",
     "test-case-duplicate-id",
+    "test-case-mixed-schema-duplicate-fields",
+    "test-case-runtime-field-duplicated",
     "test-case-missing-required-template-sections",
     "test-case-missing-package-id",
     "test-case-sparse-required-fields",
     "test-case-missing-numbered-steps",
     "test-case-missing-traceability-token",
+    "writer-quality-gate-scoped-validator-profile-invalid",
 }
 
 ARTIFACT_WRITE_STRATEGY_MIN_TC_COUNT = 20
@@ -4785,7 +5338,8 @@ ARTIFACT_WRITE_STRATEGY_SAFE_METHOD_RE = re.compile(
 )
 
 ARTIFACT_WRITE_STRATEGY_PREFLIGHT_RE = re.compile(
-    r"preflight|write\s+strategy|artifact\s+write|tc\s+count|atom\s+count|packages?|WP-\d{2}",
+    r"preflight|write\s+strategy|artifact\s+write|tc\s+count|atom\s+count|packages?|WP-\d{2}|"
+    r"declared_before_first_write|forbidden_methods_checked|artifact_size_class",
     re.IGNORECASE,
 )
 
@@ -4953,6 +5507,129 @@ def writer_quality_gate_summary(content: str) -> dict[str, Any]:
     }
 
 
+def extract_json_artifact_paths(text: str) -> list[str]:
+    paths: list[str] = []
+    for match in re.finditer(r"`?([^`|\s]+\.json)`?", text):
+        raw_path = match.group(1).strip().strip("`").rstrip(".,;")
+        if raw_path and raw_path not in paths:
+            paths.append(raw_path)
+    return paths
+
+
+def validate_scoped_validator_profile(
+    profile_path: Path,
+    *,
+    display_source_path: str,
+) -> tuple[list[str], list[str]]:
+    issues: list[str] = []
+    evidence: list[str] = []
+    try:
+        payload = json.loads(profile_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [f"{display_source_path}:profile-not-readable:{profile_path.name}:{type(exc).__name__}"], evidence
+
+    if not isinstance(payload, dict):
+        return [f"{display_source_path}:profile-not-object:{profile_path.name}"], evidence
+
+    missing_keys = sorted(SCOPED_VALIDATOR_PROFILE_REQUIRED_KEYS - set(payload))
+    if missing_keys:
+        issues.append(f"{display_source_path}:profile-missing-keys:{profile_path.name}:{', '.join(missing_keys)}")
+
+    generated_by = str(payload.get("generated_by") or "").strip()
+    if generated_by != "codex_review_cycle_runner":
+        issues.append(
+            f"{display_source_path}:profile-not-runner-generated:{profile_path.name}:generated_by={generated_by or '-'}"
+        )
+
+    findings = payload.get("current_scope_findings")
+    if not isinstance(findings, list):
+        issues.append(f"{display_source_path}:current_scope_findings-not-list:{profile_path.name}")
+    else:
+        unresolved_from_rows = []
+        for index, finding in enumerate(findings, start=1):
+            if not isinstance(finding, dict):
+                continue
+            severity = str(finding.get("severity") or "").strip().lower()
+            status = str(finding.get("status") or "").strip().lower()
+            if severity in {"warning", "error"} and status not in {"fixed", "waived", "false-positive", "accepted-nonblocking"}:
+                unresolved_from_rows.append(
+                    f"row-{index}:{finding.get('id', '<missing-id>')}:{severity}:status={status or '-'}"
+                )
+        if unresolved_from_rows:
+            issues.append(
+                f"{display_source_path}:profile-has-unresolved-current-scope-findings:{'; '.join(unresolved_from_rows[:8])}"
+            )
+
+    unresolved_count_raw = payload.get("unresolved_warning_error_count")
+    try:
+        unresolved_count = int(unresolved_count_raw)
+    except (TypeError, ValueError):
+        issues.append(f"{display_source_path}:unresolved_warning_error_count-not-integer:{unresolved_count_raw!r}")
+        unresolved_count = 0
+    if unresolved_count > 0:
+        issues.append(f"{display_source_path}:unresolved_warning_error_count={unresolved_count}")
+
+    command = str(payload.get("command") or "").strip()
+    normalized_command = command.strip("`").lower()
+    if (
+        normalized_command in SCOPED_VALIDATOR_PROFILE_PLACEHOLDER_COMMANDS
+        or (normalized_command.startswith("<") and normalized_command.endswith(">"))
+    ):
+        issues.append(f"{display_source_path}:profile-command-placeholder:{profile_path.name}:{command or '-'}")
+    evidence.append(f"{profile_path.as_posix()}:command={command or '-'}")
+    evidence.append(f"{profile_path.as_posix()}:unresolved_warning_error_count={unresolved_count_raw!r}")
+    return issues, evidence
+
+
+def validate_writer_quality_gate_scoped_validator_profile(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[str], list[str]]:
+    display_path = rel(path, root)
+    _, rows = parsed_writer_quality_gate_rows(content)
+    issues: list[str] = []
+    evidence: list[str] = []
+    validation_root = root.parent if root.is_file() else root
+    for index, row in enumerate(rows, start=2):
+        gate_item = row.get("gate_item", "").strip().strip("`")
+        status = row.get("status", "").strip().strip("`").lower()
+        if gate_item != "scoped-validator-findings" or status != "pass":
+            continue
+        profile_refs = extract_json_artifact_paths(row.get("evidence", ""))
+        if not profile_refs:
+            issues.append(f"{display_path}:row-{index}:missing scoped validator JSON profile path")
+            continue
+        forbidden_stage_refs = [
+            profile_ref
+            for profile_ref in profile_refs
+            if WRITER_GATE_FORBIDDEN_SCOPED_PROFILE_STAGE_RE.search(Path(profile_ref).name)
+        ]
+        if forbidden_stage_refs:
+            issues.append(
+                f"{display_path}:row-{index}:writer gate references reviewer/future scoped validator profile: "
+                f"{', '.join(forbidden_stage_refs[:4])}"
+            )
+        resolved_profiles: list[Path] = []
+        for profile_ref in profile_refs:
+            resolved = resolve_artifact_path(profile_ref, path, root, validation_root)
+            if resolved is not None:
+                resolved_profiles.append(resolved)
+        if not resolved_profiles:
+            issues.append(
+                f"{display_path}:row-{index}:profile path not found: {', '.join(profile_refs[:4])}"
+            )
+            continue
+        for profile_path in resolved_profiles:
+            profile_issues, profile_evidence = validate_scoped_validator_profile(
+                profile_path,
+                display_source_path=f"{display_path}:row-{index}",
+            )
+            issues.extend(profile_issues)
+            evidence.extend(profile_evidence)
+    return issues, evidence
+
+
 def should_require_test_design_review(content: str) -> bool:
     return extract_markdown_section(content, "Package Test Design Plan") is not None
 
@@ -4988,6 +5665,7 @@ def test_design_review_summary(content: str) -> dict[str, Any]:
         if row.get("review_item", "").strip()
     }
     missing_items = sorted(TEST_DESIGN_REVIEW_REQUIRED_ITEMS - present_items)
+    unknown_items = sorted(present_items - TEST_DESIGN_REVIEW_REQUIRED_ITEMS)
 
     invalid_status_rows: list[str] = []
     invalid_severity_rows: list[str] = []
@@ -5017,6 +5695,7 @@ def test_design_review_summary(content: str) -> dict[str, Any]:
         "parseable": bool(header and rows),
         "missing_columns": missing_columns,
         "missing_items": missing_items,
+        "unknown_items": unknown_items,
         "invalid_status_rows": invalid_status_rows,
         "invalid_severity_rows": invalid_severity_rows,
         "invalid_blocks_rows": invalid_blocks_rows,
@@ -5164,6 +5843,9 @@ def validate_test_design_decision_table(
     gap_overbroad_smells: list[str] = []
     metadata_behavior_smells: list[str] = []
     date_window_gap_smells: list[str] = []
+    merged_numeric_class_decisions: list[str] = []
+    artificial_numeric_type_decisions: list[str] = []
+    missing_ledger_gap_decisions: list[str] = []
 
     _, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
     ledger_rows_by_atom: dict[str, list[dict[str, str]]] = defaultdict(list)
@@ -5197,11 +5879,20 @@ def validate_test_design_decision_table(
         for atom_id in extract_any_atom_ids_from_text(block):
             test_case_blocks_by_atom[atom_id].append((test_case_id, block))
 
+    executable_tddt_test_case_ids_by_atom: dict[str, set[str]] = defaultdict(set)
+    for row in rows:
+        decision = row.get("decision", "").strip().strip("`").lower()
+        if decision not in {"standalone_tc", "covered_by_existing_tc"}:
+            continue
+        test_case_ids = extract_test_case_ids_from_text(row.get("planned_tc_or_gap", ""))
+        for atom_id in extract_any_atom_ids_from_text(row.get("linked_atom_id", "")):
+            executable_tddt_test_case_ids_by_atom[atom_id].update(test_case_ids)
+
     for index, row in enumerate(rows, start=2):
         source_property_id = row.get("source_property_id", "").strip()
         decision_id = row.get("decision_id", "").strip() or f"row {index}"
         decision = row.get("decision", "").strip().strip("`").lower()
-        property_type = row.get("property_type", "").strip().lower()
+        property_type = row.get("property_type", "").strip().strip("`").lower()
         decision_reason = row.get("decision_reason", "").strip()
         planned = row.get("planned_tc_or_gap", "").strip()
         oracle_source = row.get("oracle_source", "").strip()
@@ -5209,6 +5900,8 @@ def validate_test_design_decision_table(
 
         if source_property_id and source_property_id != "-":
             decision_source_ids.append(source_property_id)
+        if property_type in ARTIFICIAL_NUMERIC_PROPERTY_TYPES:
+            artificial_numeric_type_decisions.append(f"{row_label}:property_type={property_type}")
 
         test_case_ids = extract_test_case_ids_from_text(planned)
         gap_ids = extract_gap_ids_from_text(planned)
@@ -5221,6 +5914,35 @@ def validate_test_design_decision_table(
         if decision not in ALLOWED_TEST_DESIGN_DECISIONS:
             invalid_decisions.append(f"{row_label}:decision={decision or '<missing>'}")
             continue
+
+        if (
+            decision in {"standalone_tc", "covered_by_existing_tc"}
+            and row_has_numeric_format_context(
+                row,
+                (
+                    "property_type",
+                    "decision_reason",
+                    "oracle_source",
+                    "observable_oracle",
+                    "testable_part",
+                ),
+            )
+            and row_has_merged_numeric_invalid_classes(
+                row,
+                (
+                    "property_type",
+                    "decision_reason",
+                    "oracle_source",
+                    "observable_oracle",
+                    "testable_part",
+                    "planned_tc_or_gap",
+                ),
+            )
+        ):
+            merged_numeric_class_decisions.append(
+                f"{row_label}:planned_tc_or_gap={planned or '-'};"
+                f"testable_part={row.get('testable_part', '-') or row.get('decision_reason', '-') or '-'}"
+            )
 
         normalization_row = normalization_rows_by_property_id.get(source_property_id, {})
         normalization_context = " | ".join(
@@ -5400,9 +6122,12 @@ def validate_test_design_decision_table(
                         executable_cross_section_conflicts.append(
                             f"{row_label}:{atom_id}:planned_tc_or_gap has TC not in ledger covered_by_tc: {', '.join(extra_test_case_ids)}"
                         )
-                    if missing_test_case_ids:
+                    group_missing_test_case_ids = sorted(
+                        ledger_test_case_ids - executable_tddt_test_case_ids_by_atom.get(atom_id, set())
+                    )
+                    if group_missing_test_case_ids:
                         executable_cross_section_conflicts.append(
-                            f"{row_label}:{atom_id}:ledger covered_by_tc missing from TDDT planned_tc_or_gap: {', '.join(missing_test_case_ids)}"
+                            f"{row_label}:{atom_id}:ledger covered_by_tc missing from executable TDDT rows: {', '.join(group_missing_test_case_ids)}"
                         )
 
                 plan_test_case_ids: set[str] = set()
@@ -5415,9 +6140,12 @@ def validate_test_design_decision_table(
                         executable_cross_section_conflicts.append(
                             f"{row_label}:{atom_id}:planned_tc_or_gap has TC not in Package Test Design Plan: {', '.join(extra_test_case_ids)}"
                         )
-                    if missing_test_case_ids:
+                    group_missing_test_case_ids = sorted(
+                        plan_test_case_ids - executable_tddt_test_case_ids_by_atom.get(atom_id, set())
+                    )
+                    if group_missing_test_case_ids:
                         executable_cross_section_conflicts.append(
-                            f"{row_label}:{atom_id}:Package Test Design Plan TC missing from TDDT planned_tc_or_gap: {', '.join(missing_test_case_ids)}"
+                            f"{row_label}:{atom_id}:Package Test Design Plan TC missing from executable TDDT rows: {', '.join(group_missing_test_case_ids)}"
                         )
 
                 block_test_case_ids = {test_case_id for test_case_id, _ in test_case_blocks_by_atom.get(atom_id, [])}
@@ -5428,9 +6156,12 @@ def validate_test_design_decision_table(
                         executable_cross_section_conflicts.append(
                             f"{row_label}:{atom_id}:planned_tc_or_gap references TC without this atom: {', '.join(extra_test_case_ids)}"
                         )
-                    if missing_test_case_ids:
+                    group_missing_test_case_ids = sorted(
+                        block_test_case_ids - executable_tddt_test_case_ids_by_atom.get(atom_id, set())
+                    )
+                    if group_missing_test_case_ids:
                         executable_cross_section_conflicts.append(
-                            f"{row_label}:{atom_id}:TC sections with atom missing from TDDT planned_tc_or_gap: {', '.join(missing_test_case_ids)}"
+                            f"{row_label}:{atom_id}:TC sections with atom missing from executable TDDT rows: {', '.join(group_missing_test_case_ids)}"
                         )
         if decision == "out_of_scope" and not (meaningful_matrix_value(decision_reason) or meaningful_matrix_value(oracle_source)):
             out_of_scope_without_reason.append(f"{row_label}:decision_reason={decision_reason or '-'}")
@@ -5452,6 +6183,32 @@ def validate_test_design_decision_table(
                 flags=re.IGNORECASE,
             ):
                 value_type_standalone.append(f"{row_label}:property_type={property_type or '-'};oracle_source={oracle_source or '-'}")
+
+    for ledger_row in ledger_rows_with_real_gap_ids(content):
+        atom_id = ledger_row.get("atom_id", "").strip().strip("`")
+        source_property_id = ledger_row.get("source_property_id", "").strip().strip("`")
+        ledger_gap_ids = set(real_gap_ids(" | ".join(ledger_row.values())))
+        represented = False
+        for row in rows:
+            decision = row.get("decision", "").strip().strip("`").lower()
+            row_source_property_id = row.get("source_property_id", "").strip().strip("`")
+            linked_atom_ids = set(extract_any_atom_ids_from_text(row.get("linked_atom_id", "")))
+            row_gap_ids = set(real_gap_ids(" | ".join(row.values())))
+            matches_atom = bool(atom_id and atom_id in linked_atom_ids)
+            matches_gap = bool(ledger_gap_ids and ledger_gap_ids.intersection(row_gap_ids))
+            matches_source_property = (
+                not source_property_id
+                or not row_source_property_id
+                or row_source_property_id == source_property_id
+            )
+            if (matches_atom and decision == "gap_unclear") or (matches_gap and matches_source_property):
+                represented = True
+                break
+        if not represented:
+            missing_ledger_gap_decisions.append(
+                f"{atom_id or '<missing atom>'}:source_property_id={source_property_id or '-'};"
+                f"gap_id={', '.join(sorted(ledger_gap_ids)) or '-'}"
+            )
 
     source_id_counts = Counter(decision_source_ids)
     duplicate_source_ids = [source_id for source_id, count in source_id_counts.items() if count > 1]
@@ -5540,6 +6297,27 @@ def validate_test_design_decision_table(
                 path=display_path,
                 evidence=gap_without_gap[:20],
                 recommended_action="Declare and link GAP-* for every gap_unclear row.",
+            )
+        )
+    if missing_ledger_gap_decisions:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-missing-ledger-gap-decision",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table misses ledger GAP/unclear decisions",
+                details=(
+                    "Every Atomic Requirements Ledger row with coverage_status = gap/unclear and a real GAP-* "
+                    "must be represented in TDDT by a matching gap_unclear row or by the same GAP-* on the matching "
+                    "source_property_id. Keeping the gap only in ledger leaves the test-design rationale and "
+                    "admissibility unaudited."
+                ),
+                path=display_path,
+                evidence=missing_ledger_gap_decisions[:20],
+                recommended_action=(
+                    "Add a gap_unclear TDDT row linked to the same ATOM-* and GAP-*, or carry the same GAP-* in "
+                    "the blocked/gap-admissibility fields for the matching source_property_id."
+                ),
             )
         )
     if gap_cross_section_conflicts:
@@ -5743,6 +6521,46 @@ def validate_test_design_decision_table(
                 recommended_action="Use metadata_only, gap_unclear, or covered_by_existing_tc through concrete format/input/widget checks.",
             )
         )
+    if merged_numeric_class_decisions:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-merged-numeric-class-decision",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table merges numeric invalid classes in one decision",
+                details=(
+                    "A numeric-format decision should not compress independent invalid classes such as letters, "
+                    "decimal separators, signs, spaces and special characters into one decision row with multiple "
+                    "TC-* links. That makes the decision table inconsistent with class-level coverage obligations."
+                ),
+                path=display_path,
+                evidence=merged_numeric_class_decisions[:20],
+                recommended_action=(
+                    "Split the decision into class-level numeric-format rows or align each decision to one "
+                    "Coverage Obligation Table class and one primary TC-* or GAP-*."
+                ),
+            )
+        )
+    if artificial_numeric_type_decisions:
+        findings.append(
+            Finding(
+                id="test-design-decision-table-artificial-numeric-property-type",
+                severity="warning",
+                category="test-design",
+                title="Test Design Decision Table uses artificial numeric property types",
+                details=(
+                    "TDDT property_type must preserve the normalized source property type. Invalid numeric classes "
+                    "are class-level obligations under `numeric-format`, not property types such as "
+                    "`numeric-format-invalid`, `numeric-negative` or `non-digit-rejection`."
+                ),
+                path=display_path,
+                evidence=artificial_numeric_type_decisions[:20],
+                recommended_action=(
+                    "Use `numeric-format` as property_type and point each class-level decision to one "
+                    "Coverage Obligation Table class, TC-* or GAP-*."
+                ),
+            )
+        )
     if unknown_test_case_ids:
         findings.append(
             Finding(
@@ -5896,17 +6714,21 @@ def validate_coverage_obligation_table(
     invalid_status_rows: list[str] = []
     unknown_test_case_ids: list[str] = []
     mask_obligations_without_mask_oracle: list[str] = []
+    artificial_numeric_obligation_rows: list[str] = []
     seen_keys: set[tuple[str, str]] = set()
     test_case_blocks_by_id = {test_case_id: block for test_case_id, block in extract_test_case_blocks(content)}
 
     for index, row in enumerate(rows, start=2):
         obligation_id = row.get("obligation_id", "").strip() or f"row {index}"
         source_property_id = row.get("source_property_id", "").strip()
+        property_type = row.get("property_type", "").strip().strip("`").lower()
         obligation_class = row.get("obligation_class", "").strip().strip("`").lower()
         status = row.get("status", "").strip().strip("`").lower()
         planned_tc_or_gap = row.get("planned_tc_or_gap", "").strip()
         row_label = f"{obligation_id}:{source_property_id or '<missing source_property_id>'}:{obligation_class or '<missing class>'}"
 
+        if property_type in ARTIFICIAL_NUMERIC_PROPERTY_TYPES:
+            artificial_numeric_obligation_rows.append(f"{row_label}:property_type={property_type}")
         if source_property_id and source_property_id not in relevant_by_source_property:
             unknown_source_properties.append(row_label)
 
@@ -5991,6 +6813,27 @@ def validate_coverage_obligation_table(
                 path=display_path,
                 evidence=unknown_source_properties[:20],
                 recommended_action="Use the exact source_property_id from Source Table Normalization or remove the row if it is not an obligation-bearing property.",
+            )
+        )
+    if artificial_numeric_obligation_rows:
+        findings.append(
+            Finding(
+                id="coverage-obligation-table-artificial-numeric-property-type",
+                severity="warning",
+                category="test-design",
+                title="Coverage Obligation Table uses artificial numeric property types",
+                details=(
+                    "Coverage obligations must keep `property_type = numeric-format` and express invalid inputs "
+                    "through `obligation_class`, for example `reject-letters`, `reject-spaces`, "
+                    "`reject-special-chars`, `reject-decimal-separator` and `reject-sign`."
+                ),
+                path=display_path,
+                evidence=artificial_numeric_obligation_rows[:20],
+                recommended_action=(
+                    "Move artificial property types such as `numeric-format-invalid`, `numeric-negative` or "
+                    "`non-digit-rejection` into class-level obligation rows under the original numeric-format "
+                    "source_property_id."
+                ),
             )
         )
     if duplicate_keys:
@@ -6081,6 +6924,8 @@ def validate_writer_quality_gate(
     content: str,
     path: Path,
     root: Path,
+    *,
+    suppress_blocked_input_failures: bool = False,
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -6174,7 +7019,7 @@ def validate_writer_quality_gate(
                 recommended_action="Set `blocks_ready_for_review` to `yes` only for blocking failed gate rows, otherwise `no`.",
             )
         )
-    if summary["failed_rows"]:
+    if summary["failed_rows"] and not suppress_blocked_input_failures:
         findings.append(
             Finding(
                 id="writer-quality-gate-failed",
@@ -6216,6 +7061,30 @@ def validate_writer_quality_gate(
                 path=display_path,
                 evidence=["possible merged checks / semantic compression marked as known risk"],
                 recommended_action="Add a failed blocking Writer Quality Gate row and rewrite the affected package before review.",
+            )
+        )
+    scoped_profile_issues, scoped_profile_evidence = validate_writer_quality_gate_scoped_validator_profile(
+        content,
+        path,
+        root,
+    )
+    if scoped_profile_issues:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-scoped-validator-profile-invalid",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate claims clean scoped validator without a valid profile",
+                details=(
+                    "`scoped-validator-findings = pass` must be backed by a persisted scoped validator JSON profile "
+                    "with command, scope, canonical/test-design paths, current-scope findings and unresolved warning/error count."
+                ),
+                path=display_path,
+                evidence=[*scoped_profile_issues[:20], *scoped_profile_evidence[:8]],
+                recommended_action=(
+                    "Write `outputs/scoped-validator-profile.<stage>.json` after the final validator run and set "
+                    "`unresolved_warning_error_count` to 0 only when every current-scope warning/error is fixed or validly waived."
+                ),
             )
         )
 
@@ -6535,7 +7404,9 @@ def validate_source_table_normalization(
     duplicate_property_ids: list[str] = []
     multiple_gsr_rows: list[str] = []
     unmapped_property_rows: list[str] = []
+    missing_ledger_gap_atoms: list[str] = []
     unknown_atoms: list[str] = []
+    artificial_numeric_property_rows: list[str] = []
     property_ids_seen: set[str] = set()
     normalization_rows_by_source: dict[str, list[dict[str, str]]] = {}
     ledger_atom_ids = atomic_requirement_ledger_atom_ids(content)
@@ -6577,6 +7448,10 @@ def validate_source_table_normalization(
                 f"{row_id}:{property_ref}:classes={', '.join(property_classes)}:{inspected_text[:160]}"
             )
         property_type = row.get("property", "").strip().strip("`")
+        normalized_property_type = property_type.lower()
+        if normalized_property_type in ARTIFICIAL_NUMERIC_PROPERTY_TYPES:
+            property_ref = source_property_id or "-"
+            artificial_numeric_property_rows.append(f"{row_id}:{property_ref}:property={property_type}")
         if (
             "dictionary-source" in property_classes
             or DICTIONARY_PROPERTY_TYPE_RE.search(property_type)
@@ -6603,6 +7478,28 @@ def validate_source_table_normalization(
             for atom_id in extract_any_atom_ids_from_text(linked_atoms_value):
                 if atom_id not in ledger_atom_ids:
                     unknown_atoms.append(f"{row_id}:{atom_id}")
+
+    for ledger_row in ledger_rows_with_real_gap_ids(content):
+        atom_id = ledger_row.get("atom_id", "").strip().strip("`")
+        source_property_id = ledger_row.get("source_property_id", "").strip().strip("`")
+        ledger_gap_ids = set(real_gap_ids(" | ".join(ledger_row.values())))
+        represented = False
+        for row in parsed_rows:
+            row_source_property_id = row.get("source_property_id", "").strip().strip("`")
+            linked_atom_ids = set(extract_any_atom_ids_from_text(row.get("linked_atoms", "")))
+            row_gap_ids = set(real_gap_ids(row.get("gap_id", "")))
+            if atom_id and atom_id in linked_atom_ids:
+                represented = True
+                break
+            if ledger_gap_ids and ledger_gap_ids.intersection(row_gap_ids):
+                if not source_property_id or not row_source_property_id or row_source_property_id == source_property_id:
+                    represented = True
+                    break
+        if not represented:
+            missing_ledger_gap_atoms.append(
+                f"{atom_id or '<missing atom>'}:source_property_id={source_property_id or '-'};"
+                f"gap_id={', '.join(sorted(ledger_gap_ids)) or '-'}"
+            )
 
     inventory_rows = parsed_source_row_inventory_rows(content)
     source_rows_with_many_codes: list[str] = []
@@ -6765,6 +7662,47 @@ def validate_source_table_normalization(
                 path=display_path,
                 evidence=unmapped_property_rows[:20],
                 recommended_action="Fill linked_atoms or gap_id for every normalized property row.",
+            )
+        )
+    if missing_ledger_gap_atoms:
+        findings.append(
+            Finding(
+                id="source-table-normalization-missing-ledger-gap-atom",
+                severity="warning",
+                category="traceability",
+                title="Source Table Normalization misses ledger GAP/unclear atoms",
+                details=(
+                    "Every Atomic Requirements Ledger row with coverage_status = gap/unclear and a real GAP-* "
+                    "must be traceable back to Source Table Normalization through linked_atoms or the same gap_id. "
+                    "Otherwise the gap can disappear from source decomposition while remaining in the ledger."
+                ),
+                path=display_path,
+                evidence=missing_ledger_gap_atoms[:20],
+                recommended_action=(
+                    "Add the missing normalized source row, link the atom in linked_atoms, or carry the same GAP-* "
+                    "on the matching source_property_id."
+                ),
+            )
+        )
+    if artificial_numeric_property_rows:
+        findings.append(
+            Finding(
+                id="source-normalization-artificial-numeric-property-type",
+                severity="warning",
+                category="test-design",
+                title="Source Table Normalization uses artificial numeric property types",
+                details=(
+                    "Invalid numeric classes are not separate source property types. The source property must remain "
+                    "`numeric-format`; invalid classes such as letters, spaces, special characters, decimal separators "
+                    "and signs belong in Coverage Obligation Table rows mapped to TC-* or GAP-*."
+                ),
+                path=display_path,
+                evidence=artificial_numeric_property_rows[:20],
+                recommended_action=(
+                    "Replace artificial properties such as `numeric-format-invalid`, `numeric-negative` or "
+                    "`non-digit-rejection` with the original `numeric-format` source_property_id and expand "
+                    "class-level obligations downstream."
+                ),
             )
         )
 
@@ -7285,7 +8223,7 @@ def source_row_inventory_required(content: str) -> bool:
 
 
 def parsed_source_row_inventory_rows(content: str) -> list[dict[str, str]]:
-    normalized_content = content
+    normalized_content = collapse_redundant_section_heading(content, "Source Row Inventory")
     if re.search(r"^#\s+Source Row Inventory\s*$", normalized_content, flags=re.MULTILINE):
         normalized_content = re.sub(
             r"^#\s+Source Row Inventory\s*$",
@@ -7826,6 +8764,14 @@ INVERSE_OR_GAP_BRANCH_PLAN_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+OPTIONAL_NO_BLOCKING_PLAN_RE = re.compile(
+    r"may\s+remain\s+empty|may\s+remain\s+unset|optional|not\s+block|no[-\s]?blocking|"
+    r"\u043c\u043e\u0436\u0435\u0442\s+\u043e\u0441\u0442\u0430\u0432\u0430\u0442\u044c\u0441\u044f\s+\u0431\u0435\u0437\s+\u043e\u0442\u0434\u0435\u043b\u044c\u043d\u043e\u0433\u043e\s+\u0432\u044b\u0431\u043e\u0440\u0430|"
+    r"\u043c\u043e\u0436\u0435\u0442\s+\u043e\u0441\u0442\u0430\u0432\u0430\u0442\u044c\u0441\u044f\s+\u043f\u0443\u0441\u0442|"
+    r"\u043d\u0435\s+\u0431\u043b\u043e\u043a\u0438\u0440\u0443\w+",
+    flags=re.IGNORECASE,
+)
+
 PLAN_NEGATIVE_OR_REJECTION_RE = re.compile(
     r"\bnegative\b|\binvalid\b|not\s+accepted|rejected?|forbidden|"
     r"не\s+принима\w*|отклон\w*|невалидн\w*|недопустим\w*|нечислов\w*|"
@@ -7840,6 +8786,14 @@ PLAN_POSITIVE_ACCEPTANCE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+NUMERIC_INVALID_CLASS_PATTERNS = {
+    "letters": re.compile(r"\bletters?\b|\balpha(?:betic)?\b|Р±СѓРєРІ", flags=re.IGNORECASE),
+    "spaces": re.compile(r"\bspaces?\b|\bwhitespace\b|РїСЂРѕР±РµР»", flags=re.IGNORECASE),
+    "special-chars": re.compile(r"\bspecial[-\s]?(?:chars?|characters?|symbols?)\b|СЃРїРµС†", flags=re.IGNORECASE),
+    "decimal-separator": re.compile(r"\bdecimal[-\s]?(?:separator|point|comma)\b|РґРµСЃСЏС‚РёС‡|Р·Р°РїСЏС‚", flags=re.IGNORECASE),
+    "sign": re.compile(r"\bsign\b|\bplus\b|\bminus\b|[+-]\s*\d|Р·РЅР°Рє", flags=re.IGNORECASE),
+}
+
 PLAN_DIMENSIONS_REQUIRING_POSITIVE_ACCEPTANCE = {
     "boundary",
     "date-time",
@@ -7851,6 +8805,45 @@ PLAN_DIMENSIONS_REQUIRING_POSITIVE_ACCEPTANCE = {
     "validation",
     "conditional-visibility",
 }
+
+
+def numeric_invalid_classes_in_text(value: str) -> set[str]:
+    return {
+        class_name
+        for class_name, pattern in NUMERIC_INVALID_CLASS_PATTERNS.items()
+        if pattern.search(value)
+    }
+
+
+def row_has_numeric_format_context(row: dict[str, str], fields: tuple[str, ...]) -> bool:
+    text = " | ".join(row.get(field, "") for field in fields)
+    return bool(
+        re.search(
+            r"numeric[-_\s]?format|\bnumeric\b|digits?|С‡РёСЃР»|С†РёС„СЂ",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def row_has_merged_numeric_invalid_classes(row: dict[str, str], fields: tuple[str, ...]) -> bool:
+    text = " | ".join(row.get(field, "") for field in fields)
+    invalid_classes = numeric_invalid_classes_in_text(text)
+    if len(invalid_classes) < 2:
+        return False
+    test_case_count = len(extract_test_case_ids_from_text(row.get("planned_tc_or_gap", "")))
+    class_fields = " | ".join(
+        row.get(field, "")
+        for field in ("coverage_class", "input_class", "testable_part", "planned_tc_or_gap")
+    )
+    has_list_separator = bool(
+        re.search(
+            r";|,\s*(?:decimal|sign|spaces?|special|letters?)\b",
+            class_fields,
+            flags=re.IGNORECASE,
+        )
+    )
+    return test_case_count > 1 or has_list_separator
 
 
 def plan_row_allows_multi_row_tc(row: dict[str, str]) -> bool:
@@ -7879,6 +8872,20 @@ def plan_row_semantic_text(row: dict[str, str]) -> str:
     )
 
 
+def plan_row_backtick_terms(row: dict[str, str]) -> set[str]:
+    terms: set[str] = set()
+    for value in (
+        row.get("planned_check", ""),
+        row.get("input_class", ""),
+        row.get("single_expected_behavior", ""),
+    ):
+        for term in re.findall(r"`([^`=]{2,80})(?:\s*=\s*[^`]*)?`", value):
+            normalized = re.sub(r"\s+", " ", term.strip()).casefold()
+            if normalized:
+                terms.add(normalized)
+    return terms
+
+
 def plan_rows_share_branch_context(row: dict[str, str], other: dict[str, str]) -> bool:
     if row is other:
         return False
@@ -7892,7 +8899,21 @@ def plan_rows_share_branch_context(row: dict[str, str], other: dict[str, str]) -
 
     source_ref = row.get("source_ref", "").strip().strip("`")
     other_source_ref = other.get("source_ref", "").strip().strip("`")
-    return meaningful_matrix_value(source_ref) and source_ref == other_source_ref
+    if meaningful_matrix_value(source_ref) and source_ref == other_source_ref:
+        return True
+
+    row_terms = plan_row_backtick_terms(row)
+    other_terms = plan_row_backtick_terms(other)
+    return bool(row_terms and other_terms and row_terms.intersection(other_terms))
+
+
+def plan_row_requires_inverse_branch(row: dict[str, str]) -> bool:
+    text = plan_row_semantic_text(row)
+    return bool(
+        text
+        and CONDITIONAL_BRANCH_PLAN_RE.search(text)
+        and not OPTIONAL_NO_BLOCKING_PLAN_RE.search(text)
+    )
 
 
 def plan_row_is_inverse_or_gap_branch(row: dict[str, str]) -> bool:
@@ -7996,10 +9017,10 @@ def validate_package_test_design_plan(
     display_path = rel(path, root)
     package_ids = package_ids_from_test_case_file(content)
     package_contract_active = bool(package_ids) or "Internal Work Package Coverage" in content
-    if not package_contract_active:
+    plan_section = extract_markdown_section(content, "Package Test Design Plan")
+    if not package_contract_active and not plan_section:
         return findings, checks
 
-    plan_section = extract_markdown_section(content, "Package Test Design Plan")
     plan_severity = "warning" if structural_severity == "info" else structural_severity
     if not plan_section:
         findings.append(
@@ -8090,6 +9111,7 @@ def validate_package_test_design_plan(
     generic_plan_rows: list[str] = []
     generic_gap_rows: list[str] = []
     merged_plan_rows: list[str] = []
+    merged_numeric_plan_rows: list[str] = []
     combined_plan_rows: list[str] = []
     broad_scenario_plan_rows: list[str] = []
     missing_conditional_branch_rows: list[str] = []
@@ -8157,11 +9179,39 @@ def validate_package_test_design_plan(
                 exact_digit_boundary_candidates.append((design_item_id, atom_id, exact_digit_count))
         if check_type and MERGED_PLAN_CHECK_TYPE_RE.search(check_type):
             merged_plan_rows.append(f"{design_item_id}:check_type={check_type}; planned_check={planned_check[:120]}")
+        if (
+            row_has_numeric_format_context(
+                row,
+                (
+                    "design_dimension",
+                    "planned_check",
+                    "check_type",
+                    "coverage_class",
+                    "input_class",
+                    "single_expected_behavior",
+                ),
+            )
+            and row_has_merged_numeric_invalid_classes(
+                row,
+                (
+                    "planned_check",
+                    "check_type",
+                    "coverage_class",
+                    "input_class",
+                    "single_expected_behavior",
+                    "planned_tc_or_gap",
+                ),
+            )
+        ):
+            merged_numeric_plan_rows.append(
+                f"{design_item_id}:coverage_class={row.get('coverage_class', '-') or '-'};"
+                f"input_class={row.get('input_class', '-') or '-'};"
+                f"planned_tc_or_gap={planned_tc_or_gap or '-'}"
+            )
         if semantic_plan_text and has_combined_behavior_smell(semantic_plan_text):
             combined_plan_rows.append(f"{design_item_id}:{semantic_plan_text[:180]}")
         if (
-            full_semantic_plan_text
-            and CONDITIONAL_BRANCH_PLAN_RE.search(full_semantic_plan_text)
+            plan_row_requires_inverse_branch(row)
             and not plan_row_is_inverse_or_gap_branch(row)
             and not any(
                 plan_rows_share_branch_context(row, other) and plan_row_is_inverse_or_gap_branch(other)
@@ -8339,6 +9389,26 @@ def validate_package_test_design_plan(
                 recommended_action="Split merged design-plan rows so each row has one check_type and one planned check or GAP.",
             )
         )
+    if merged_numeric_plan_rows:
+        findings.append(
+            Finding(
+                id="test-case-package-design-plan-merged-numeric-class-row",
+                severity="warning",
+                category="test-design",
+                title="Package Test Design Plan merges numeric invalid classes in one row",
+                details=(
+                    "For numeric-format coverage, each executable PDP row must represent one class-level check. "
+                    "Rows that combine letters, decimal separators, signs, spaces and special characters hide "
+                    "multiple independent negative-input checks behind one design_item_id."
+                ),
+                path=display_path,
+                evidence=merged_numeric_plan_rows[:20],
+                recommended_action=(
+                    "Split the row into class-level PDP rows aligned with Coverage Obligation Table: one invalid "
+                    "class, one single_expected_behavior and one primary TC-* or GAP-* per row."
+                ),
+            )
+        )
     if combined_plan_rows:
         findings.append(
             Finding(
@@ -8465,6 +9535,8 @@ def validate_test_design_review(
     content: str,
     path: Path,
     root: Path,
+    *,
+    suppress_blocked_input_failures: bool = False,
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -8550,6 +9622,25 @@ def validate_test_design_review(
                 recommended_action="Add one row for each required review item before moving the writer artifact to review.",
             )
         )
+    if summary["unknown_items"]:
+        findings.append(
+            Finding(
+                id="test-design-review-unknown-items",
+                severity="warning",
+                category="test-design",
+                title="Test Design Review uses noncanonical review items",
+                details=(
+                    "Extra review_item values are not part of the canonical Test Design Review contract. "
+                    "They may be useful as evidence, but they do not replace the required canonical items."
+                ),
+                path=display_path,
+                evidence=summary["unknown_items"][:20],
+                recommended_action=(
+                    "Move extra checks into evidence or use only canonical review_item identifiers from "
+                    "test-design-review-format.md."
+                ),
+            )
+        )
     if summary["invalid_status_rows"]:
         findings.append(
             Finding(
@@ -8589,7 +9680,7 @@ def validate_test_design_review(
                 recommended_action="Set `blocks_ready_for_review` to `yes` only for failed blocking rows, otherwise `no`.",
             )
         )
-    if summary["failed_rows"]:
+    if summary["failed_rows"] and not suppress_blocked_input_failures:
         findings.append(
             Finding(
                 id="test-design-review-failed",
@@ -8628,6 +9719,8 @@ GENERIC_ATOM_SMELL_PATTERNS = [
     re.compile(r"без\s+проверяемого\s+expected\s+behavior", flags=re.IGNORECASE),
 ]
 
+GENERIC_TC_NOT_REQUIRED_RE = re.compile(r"\u043d\u0435\s+\u0442\u0440\u0435\u0431\u0443\u044e\u0442\u0441\u044f", flags=re.IGNORECASE)
+
 GENERIC_TC_SMELL_PATTERNS = [
     re.compile(r"\u043f\u0440\u0438\u0432\u0435\u0441\u0442\u0438\s+\u0434\u0430\u043d\u043d\u044b\u0435\s+\u043a\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u044e", flags=re.IGNORECASE),
     re.compile(r"\u0432\u0432\u0435\u0441\u0442\u0438\s+\u0438\u043b\u0438\s+\u0432\u044b\u0431\u0440\u0430\u0442\u044c", flags=re.IGNORECASE),
@@ -8637,7 +9730,7 @@ GENERIC_TC_SMELL_PATTERNS = [
     re.compile(r"\u0441\u0440\u0430\u0432\u043d\u0438\u0442\u044c\s+\u043d\u0430\u0431\u043b\u044e\u0434\u0430\u0435\u043c\w*\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\w*", flags=re.IGNORECASE),
     re.compile(r"\u0437\u0430\u0444\u0438\u043a\u0441\u0438\u0440\u043e\u0432\u0430\w*\s+\u0432\u0438\u0434\u0438\u043c\w*\s+\u0441\u043e\u0441\u0442\u043e\u044f\u043d\u0438\w*[\s\S]{0,120}\u043f\u043e\u0441\u043b\u0435\s+\u0432\u044b\u043f\u043e\u043b\u043d\u0435\u043d\w*\s+\u0434\u0435\u0439\u0441\u0442\u0432\w*", flags=re.IGNORECASE),
     re.compile(r"\u0441\u043e\u0433\u043b\u0430\u0441\u043d\u043e\s+\u0447\u0435\u043a-?\u043b\u0438\u0441\u0442", flags=re.IGNORECASE),
-    re.compile(r"\u043d\u0435\s+\u0442\u0440\u0435\u0431\u0443\u044e\u0442\u0441\u044f", flags=re.IGNORECASE),
+    GENERIC_TC_NOT_REQUIRED_RE,
     re.compile(r"\u0435\u0441\u043b\u0438\s+\u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430\s+\u0442\u0440\u0435\u0431\u0443\u0435\u0442", flags=re.IGNORECASE),
     re.compile(r"подготовить\s+состояние(?:\s+раздела)?", flags=re.IGNORECASE),
     re.compile(r"установить\s+условие", flags=re.IGNORECASE),
@@ -8807,9 +9900,11 @@ NEGATIVE_OR_REJECTION_EXPECTED_RE = re.compile(
 )
 
 NONDETERMINISTIC_ALTERNATIVE_ORACLE_RE = re.compile(
-    r"(?:значени[ея]\s+)?(?:очищ\w+|не\s+сохран\w+|не\s+принима\w+|отклон\w+|подсвеч\w+|ошибк\w+)"
+    r"(?:значени[ея]\s+)?(?:очищ\w+|не\s+сохран\w+|не\s+принима\w+|отклон\w+|подсвеч\w+|ошибк\w+|"
+    r"оста[её]тся\s+(?:незаполн\w+|предыдущ\w+|неизмен\w+|пуст\w+))"
     r"[\s\S]{0,140}\bили\b[\s\S]{0,140}"
-    r"(?:значени[ея]\s+)?(?:очищ\w+|не\s+сохран\w+|не\s+принима\w+|отклон\w+|подсвеч\w+|ошибк\w+)",
+    r"(?:значени[ея]\s+)?(?:очищ\w+|не\s+сохран\w+|не\s+принима\w+|отклон\w+|подсвеч\w+|ошибк\w+|"
+    r"оста[её]тся\s+(?:незаполн\w+|предыдущ\w+|неизмен\w+|пуст\w+))",
     flags=re.IGNORECASE,
 )
 
@@ -8908,6 +10003,26 @@ TRANSITION_VALIDATION_ORACLE_RE = re.compile(
     r"transition\s+(?:blocked|rejected)|does\s+not\s+proceed",
     flags=re.IGNORECASE,
 )
+NUMERIC_INVALID_INPUT_CONTEXT_RE = re.compile(
+    r"numeric[-\s]?only|digits?\s+only|only\s+(?:numeric|digits?)|non[-\s]?digit|letters?|spaces?|"
+    r"special\s+characters?|decimal[-\s]?separator|sign|comma|minus|below\s+(?:min|minimum)|under\s+(?:min|minimum)|"
+    r"\u0442\u043e\u043b\u044c\u043a\u043e\s+(?:\u0447\u0438\u0441\u043b|\u0446\u0438\u0444\u0440)|"
+    r"\u043d\u0435\u0447\u0438\u0441\u043b\u043e\u0432|\u0431\u0443\u043a\u0432|\u043f\u0440\u043e\u0431\u0435\u043b|"
+    r"\u0441\u043f\u0435\u0446\w*\s*\u0441\u0438\u043c\u0432\u043e\u043b|\u0441\u043f\u0435\u0446\u0441\u0438\u043c\u0432\u043e\u043b|"
+    r"\u0434\u0435\u0441\u044f\u0442\u0438\u0447\w*\s+\u0440\u0430\u0437\u0434\u0435\u043b|\u0437\u0430\u043f\u044f\u0442|"
+    r"\u0437\u043d\u0430\u043a\s+[`'\"]?-|\u043c\u0438\u043d\u0443\u0441|\u043d\u0438\u0436\u0435\s+\d+|\u043d\u0438\u0436\u0435\s+(?:min|\u043c\u0438\u043d\u0438\u043c)|"
+    r"\u043c\u0435\u043d\u044c\u0448\u0435\s+(?:\d+|\u043c\u0438\u043d\u0438\u043c)",
+    flags=re.IGNORECASE,
+)
+NUMERIC_VALIDATION_FEEDBACK_ORACLE_RE = re.compile(
+    r"red[-\s]?highlight|highlighted\s+red|field\s+[^.\n;]{0,120}highlighted|"
+    r"(?:section|screen|form)\s+[^.\n;]{0,120}does\s+not\s+open|"
+    r"transition\s+(?:blocked|rejected)|does\s+not\s+proceed|"
+    r"\u043f\u043e\u0434\u0441\u0432\u0435\u0447\w*\s+\u043a\u0440\u0430\u0441\u043d|"
+    r"\u043a\u0440\u0430\u0441\u043d\w*\s+[^.\n;]{0,80}\u043f\u043e\u0434\u0441\u0432\u0435\u0447|"
+    r"\u0440\u0430\u0437\u0434\u0435\u043b\s+[^.\n;]{0,120}\u043d\u0435\s+\u043e\u0442\u043a\u0440\u044b",
+    flags=re.IGNORECASE,
+)
 POSITIVE_TRANSITION_ORACLE_RE = re.compile(
     r"(?:раздел\w*|экран\w*|форм\w*)\s+[^.\n;]{0,160}(?:открыт|открыва|доступн|сформирован)|"
     r"(?:открыт|открыва|доступн|сформирован)\w*\s+[^.\n;]{0,120}(?:раздел|экран|форм)|"
@@ -8995,7 +10110,8 @@ ACTION_CONTROL_CONTEXT_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ACTION_CONTROL_AS_FIELD_RE = re.compile(
-    r"(?:Следующий\s+шаг|Назад|Редактировать|Проверить|Отправить\s+повторно|button|action)"
+    r"(?:Следующий\s+шаг|Назад|Редактировать|Отправить\s+повторно|button|action|"
+    r"кнопк[^\n.;]{0,40}Проверить|`Проверить`)"
     r"[\s\S]{0,140}(?:как\s+обязател\w+\s+пол|обрабатыва\w+[\s\S]{0,80}как\s+обязател\w+\s+пол|пуст|empty|required\s+field)",
     flags=re.IGNORECASE,
 )
@@ -9106,28 +10222,68 @@ def atom_compression_marker_names(text: str) -> list[str]:
     ]
 
 
+def extract_test_case_table_field(block: str, field_names: list[str]) -> str:
+    normalized_names = {
+        re.sub(r"\s+", " ", name.strip().strip("`*_")).casefold()
+        for name in field_names
+    }
+    for line in block.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|") or set(stripped.replace("|", "").strip()) <= {"-", ":", " "}:
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) < 2:
+            continue
+        field_label = re.sub(r"\s+", " ", cells[0].strip().strip("`*_")).casefold()
+        if field_label in normalized_names:
+            return cells[1].strip()
+    return ""
+
+
 def extract_test_case_field_block(block: str, field_names: list[str]) -> str:
-    names_pattern = "|".join(re.escape(name) for name in field_names)
+    aliases_by_casefold_name = {
+        "title": ["\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435"],
+        "goal": ["\u0426\u0435\u043b\u044c"],
+        "preconditions": ["\u041f\u0440\u0435\u0434\u0443\u0441\u043b\u043e\u0432\u0438\u044f"],
+        "test data": ["\u0422\u0435\u0441\u0442\u043e\u0432\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435"],
+        "test_data": ["\u0422\u0435\u0441\u0442\u043e\u0432\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435"],
+        "steps": ["\u0428\u0430\u0433\u0438"],
+        "postconditions": ["\u041f\u043e\u0441\u0442\u0443\u0441\u043b\u043e\u0432\u0438\u044f"],
+        "traceability": ["\u0422\u0440\u0430\u0441\u0441\u0438\u0440\u043e\u0432\u043a\u0430"],
+        "ft reference": ["\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0430 \u0424\u0422"],
+        "ft_reference": ["\u0421\u0441\u044b\u043b\u043a\u0430 \u043d\u0430 \u0424\u0422"],
+        "requirement source": ["\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f"],
+        "requirement_source": ["\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f"],
+        "requirement quote": ["\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a / \u0446\u0438\u0442\u0430\u0442\u0430 \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f"],
+        "requirement source quote": ["\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a / \u0446\u0438\u0442\u0430\u0442\u0430 \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f"],
+        "source requirement quote": ["\u0418\u0441\u0442\u043e\u0447\u043d\u0438\u043a / \u0446\u0438\u0442\u0430\u0442\u0430 \u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f"],
+        "status": ["\u0421\u0442\u0430\u0442\u0443\u0441"],
+    }
+    expanded_field_names = list(field_names)
+    for name in field_names:
+        normalized_name = re.sub(r"\s+", " ", name.strip().strip("`*_")).casefold()
+        for alias in aliases_by_casefold_name.get(normalized_name, []):
+            if alias not in expanded_field_names:
+                expanded_field_names.append(alias)
+    names_pattern = "|".join(re.escape(name) for name in expanded_field_names)
     match = re.search(
         rf"^\*\*(?:{names_pattern}):\*\*\s*(.*)$",
         block,
         flags=re.IGNORECASE | re.MULTILINE,
     )
-    if not match and any(name.lower() == "steps" or name == "Шаги" for name in field_names):
+    if not match and any(name.lower() == "steps" or name == "Шаги" for name in expanded_field_names):
         match = re.search(
             rf"^(?:{names_pattern}):\s*$",
             block,
             flags=re.IGNORECASE | re.MULTILINE,
         )
         if not match:
-            return ""
+            return extract_test_case_table_field(block, expanded_field_names)
         start = match.end()
     else:
         if not match:
-            return ""
+            return extract_test_case_table_field(block, expanded_field_names)
         start = match.start(1)
-    if not match:
-        return ""
     next_field = re.search(
         r"^(?:\*\*[^*\n]+:\*\*|(?:Steps|steps|Шаги):\s*$)",
         block[match.end() :],
@@ -9135,6 +10291,149 @@ def extract_test_case_field_block(block: str, field_names: list[str]) -> str:
     )
     end = match.end() + next_field.start() if next_field else len(block)
     return block[start:end].strip()
+
+
+def generic_test_case_smell_matches(test_case_id: str, field_values: list[tuple[str, str]]) -> list[str]:
+    matches: list[str] = []
+    for field_name, value in field_values:
+        if not value:
+            continue
+        inspected_value = value
+        if field_name == "steps":
+            inspected_value = re.split(
+                (
+                    r"(?im)^\s*(?:"
+                    r"Expected Result|expected_result|expected result|"
+                    r"\u0418\u0442\u043e\u0433\u043e\u0432\u044b\u0439\s+\u043e\u0436\u0438\u0434\u0430\u0435\u043c\u044b\u0439\s+\u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442|"
+                    r"\u041e\u0436\u0438\u0434\u0430\u0435\u043c\u044b\u0439\s+\u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442|"
+                    r"Postconditions|postconditions|\u041f\u043e\u0441\u0442\u0443\u0441\u043b\u043e\u0432\u0438\u044f"
+                    r"):\s*"
+                ),
+                value,
+                maxsplit=1,
+            )[0]
+        for pattern in GENERIC_TC_SMELL_PATTERNS:
+            if pattern is GENERIC_TC_NOT_REQUIRED_RE and field_name != "steps":
+                continue
+            match = pattern.search(inspected_value)
+            if not match:
+                continue
+            snippet = re.sub(r"\s+", " ", match.group(0).strip())
+            matches.append(f"{test_case_id}:field={field_name}; match={snippet[:140]}")
+    return matches
+
+
+TEST_CASE_PLAIN_FIELD_BOUNDARY_RE = re.compile(
+    (
+        r"(?im)^\s*(?:"
+        r"Expected Result|expected_result|expected result|"
+        r"\u0418\u0442\u043e\u0433\u043e\u0432\u044b\u0439\s+\u043e\u0436\u0438\u0434\u0430\u0435\u043c\u044b\u0439\s+\u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442|"
+        r"\u041e\u0436\u0438\u0434\u0430\u0435\u043c\u044b\u0439\s+\u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442|"
+        r"Postconditions|postconditions|\u041f\u043e\u0441\u0442\u0443\u0441\u043b\u043e\u0432\u0438\u044f"
+        r"):\s*"
+    )
+)
+
+
+def trim_test_case_plain_field_boundary(value: str) -> str:
+    return TEST_CASE_PLAIN_FIELD_BOUNDARY_RE.split(value, maxsplit=1)[0].strip()
+
+
+def normalize_test_case_ref_tokens(value: str) -> list[str]:
+    normalized = value.replace("`", "")
+    return [
+        re.sub(r"\s+", " ", part.strip()).casefold()
+        for part in normalized.split(";")
+        if part.strip()
+    ]
+
+
+def normalized_text_for_comparison(value: str) -> str:
+    return re.sub(r"\s+", " ", value.replace("`", "").strip()).casefold()
+
+
+ACTION_CREATED_BLOCK_RE = re.compile(
+    r"\b(?:click|press)\s+(?:the\s+)?`?(?:add|create)\b|"
+    r"\u043d\u0430\u0436\u0430\u0442\u044c\s+(?:\u043a\u043d\u043e\u043f\u043a\u0443\s+)?`?\u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c\b|"
+    r"\u0434\u043e\u0431\u0430\u0432\u0438\u0442\u044c\s+(?:\u0431\u043b\u043e\u043a|"
+    r"\u0434\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b|\u0440\u0430\u0431\u043e\u0442)",
+    flags=re.IGNORECASE,
+)
+
+INPUT_FILTERING_ORACLE_SUPPLEMENTAL_RE = re.compile(
+    r"field\s+[^.\n;]{0,80}clear(?:ed|s)|(?:does\s+not|not)\s+display|(?:does\s+not|not)\s+show|"
+    r"entered\s+value\s+[^.\n;]{0,80}(?:does\s+not|not)\s+(?:display|show|appear)|"
+    r"\u043f\u043e\u043b\u0435\s+[^.\n;]{0,80}\u043e\u0447\u0438\u0449\w+|"
+    r"\u0432\u0432\u0435\u0434\w+\s+\u0437\u043d\u0430\u0447\u0435\u043d\w+\s+[^.\n;]{0,100}\u043d\u0435\s+\u043e\u0442\u043e\u0431\u0440\u0430\u0436\w+|"
+    r"\u0437\u043d\u0430\u0447\u0435\u043d\w+\s+[^.\n;]{0,100}\u043d\u0435\s+\u043e\u0442\u043e\u0431\u0440\u0430\u0436\w+|"
+    r"\u043d\u0435\s+\u043e\u0442\u043e\u0431\u0440\u0430\u0436\w+[^.\n;]{0,100}(?:\u0432\u0432\u0435\u0434\w+\s+)?\u0437\u043d\u0430\u0447\u0435\u043d",
+    flags=re.IGNORECASE,
+)
+
+ACTION_CREATED_BLOCK_CLEANUP_RE = re.compile(
+    r"\bdelete\b|\bremove\b|\btrash\b|\bdiscard\b|without\s+sav|"
+    r"\u0443\u0434\u0430\u043b\u0438\w+|\u043a\u043e\u0440\u0437\u0438\u043d|"
+    r"\u0437\u0430\u043a\u0440\u044b\w+[^\n]{0,80}\u0431\u0435\u0437\s+\u0441\u043e\u0445\u0440\u0430\u043d|"
+    r"\u0431\u0435\u0437\s+\u0441\u043e\u0445\u0440\u0430\u043d",
+    flags=re.IGNORECASE,
+)
+
+NO_POSTCONDITIONS_RE = re.compile(
+    r"^\s*(?:not\s+required|none|n/a|"
+    r"\u043d\u0435\s+\u0442\u0440\u0435\u0431\u0443\u044e\u0442\u0441\u044f|"
+    r"\u043d\u0435\s+\u0442\u0440\u0435\u0431\u0443\u0435\u0442\u0441\u044f)"
+    r"\.?\s*$",
+    flags=re.IGNORECASE,
+)
+
+BRANCH_CHOICE_RE = re.compile(
+    r"`?(yes|no|confirm|cancel|save|discard|да|нет)`?",
+    flags=re.IGNORECASE,
+)
+
+SYNTHETIC_QUOTE_RE = re.compile(
+    r"\bDICT-\d{3,}\b|\bGAP-\d{3,}\b|"
+    r"derived|normalized|точн\w*\s+UI-\w*|"
+    r"использу\w+\s+все\s+и\s+только\s+активн\w+\s+значен",
+    flags=re.IGNORECASE,
+)
+
+MULTI_INVALID_CLASS_RE = re.compile(
+    r"\bfor\s+each\b|\beach\s+value\b|"
+    r"\u043a\u0430\u0436\u0434\w+\s+(?:\u043d\u0435\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\w+\s+)?(?:\u0437\u043d\u0430\u0447\u0435\u043d|\u0432\u0432\u043e\u0434)|"
+    r"\u0434\u043b\u044f\s+\u043a\u0430\u0436\u0434\w+\s+"
+    r"(?:\u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u043c\w+\s+)?"
+    r"(?:\u0437\u043d\u0430\u0447\u0435\u043d|\u0432\u0432\u043e\u0434)|"
+    r"\u043f\u043e\s+\u043e\u0447\u0435\u0440\u0435\u0434\u0438",
+    flags=re.IGNORECASE,
+)
+
+
+def branch_choices_in_text(value: str) -> set[str]:
+    return {match.group(1).casefold() for match in BRANCH_CHOICE_RE.finditer(value or "")}
+
+
+def normalized_branch_title(value: str) -> str:
+    normalized = normalized_text_for_comparison(value)
+    return BRANCH_CHOICE_RE.sub("<branch>", normalized)
+
+
+def action_required_field_smell_matches(
+    test_case_id: str,
+    *,
+    action_requiredness_fields: list[tuple[str, str]],
+    action_step_fields: list[tuple[str, str]],
+) -> list[str]:
+    matches: list[str] = []
+    for field_name, value in action_requiredness_fields:
+        if match := ACTION_CONTROL_AS_FIELD_RE.search(value or ""):
+            snippet = re.sub(r"\s+", " ", match.group(0).strip())
+            matches.append(f"{test_case_id}:field={field_name}; kind=action-as-required-field; match={snippet[:140]}")
+    for field_name, value in action_step_fields:
+        if match := ACTION_EMPTY_CONTROL_MISUSE_RE.search(value or ""):
+            snippet = re.sub(r"\s+", " ", match.group(0).strip())
+            matches.append(f"{test_case_id}:field={field_name}; kind=empty-action-control; match={snippet[:140]}")
+    return matches
 
 
 def validate_required_test_case_template_sections(
@@ -9170,18 +10469,19 @@ def validate_required_test_case_template_sections(
             id="test-case-missing-required-template-sections",
             severity=structural_severity,
             category="test-case-format",
-            title="Some test cases miss required source/goal template sections",
+            title="Some test cases miss required source-link field",
             details=(
-                "Each TC-* must keep the canonical sections `Цель`, `Ссылка на ФТ`, "
-                "`Источник требования`, and `Источник / цитата требования`. A compact "
-                "`Трассировка` field is not a substitute because it hides the check goal, "
-                "navigation reference, source hierarchy, and short requirement quote."
+                "Each TC-* must keep a source-link field, preferably `Трассировка`, with real "
+                "`ATOM-*`, requirement, `SRC-*`, `DICT-*`, section/table/page or source-locator "
+                "tokens. Legacy `Ссылка на ФТ` is accepted as a source-link field for backward "
+                "compatibility. Separate `Ссылка на ФТ`, `Источник требования`, and quote fields "
+                "are allowed only when they add non-duplicative navigation or source evidence."
             ),
             path=display_path,
             evidence=missing_by_case[:20],
             recommended_action=(
-                "Add the missing canonical sections to every affected TC-* before moving "
-                "the writer stage to ready-for-review."
+                "Add the missing `Трассировка` or legacy source-link field and avoid duplicating "
+                "the same source tokens across optional source fields."
             ),
         )
     ], [
@@ -9347,6 +10647,7 @@ def validate_test_case_quality_smells(
     numeric_class_label_raw_literal_mismatch: list[str] = []
     unsupported_input_filtering_oracles: list[str] = []
     input_restriction_transition_oracles: list[str] = []
+    unsupported_numeric_validation_feedback: list[str] = []
     mechanical_field_steps: list[str] = []
     negative_transition_without_valid_fixture: list[str] = []
     forbidden_formulations: list[str] = []
@@ -9374,10 +10675,14 @@ def validate_test_case_quality_smells(
     boundary_rejection_without_acceptance: list[str] = []
     gap_placeholder_sections: list[str] = []
     nondeterministic_alternative_oracles: list[str] = []
+    duplicated_source_reference_fields: list[str] = []
+    dictionary_body_missing_traceability: list[str] = []
+    synthetic_requirement_quotes: list[str] = []
+    action_created_block_without_cleanup: list[str] = []
+    bundled_negative_input_classes: list[str] = []
+    branch_oracle_records: list[dict[str, str]] = []
     boundary_groups: dict[str, dict[str, Any]] = {}
     for test_case_id, block in blocks:
-        if any(pattern.search(block) for pattern in GENERIC_TC_SMELL_PATTERNS):
-            generic_test_cases.append(test_case_id)
         expected_result = extract_test_case_expected_result(block)
         test_case_type = extract_test_case_type(block)
         title = extract_test_case_field_block(block, ["Title", "title", "Название"])
@@ -9387,7 +10692,85 @@ def validate_test_case_quality_smells(
         )
         test_data = extract_test_case_field_block(block, ["Test Data", "test_data", "test data", "Тестовые данные"])
         steps = extract_test_case_field_block(block, ["Steps", "steps", "Шаги"])
+        steps = trim_test_case_plain_field_boundary(steps)
+        postconditions = extract_test_case_field_block(block, ["Postconditions", "postconditions", "Постусловия"])
+        traceability = extract_test_case_field_block(block, ["Traceability", "traceability", "Трассировка"])
+        ft_reference = extract_test_case_field_block(block, ["FT Reference", "ft_reference", "Ссылка на ФТ"])
+        requirement_source = extract_test_case_field_block(block, ["Requirement Source", "requirement_source", "Источник требования"])
+        requirement_quote = extract_test_case_field_block(
+            block,
+            [
+                "Requirement Quote",
+                "Requirement Source Quote",
+                "Source Requirement Quote",
+                "Источник / цитата требования",
+            ],
+        )
         status = extract_test_case_field_block(block, ["Status", "status", "Статус"]).lower()
+        traceability_tokens = normalize_test_case_ref_tokens(traceability)
+        ft_reference_tokens = normalize_test_case_ref_tokens(ft_reference)
+        requirement_source_tokens = normalize_test_case_ref_tokens(requirement_source)
+        if ft_reference_tokens and traceability_tokens and ft_reference_tokens == traceability_tokens:
+            duplicated_source_reference_fields.append(
+                f"{test_case_id}:FT Reference duplicates Traceability={traceability[:160]}"
+            )
+        elif (
+            requirement_source_tokens
+            and traceability_tokens
+            and set(requirement_source_tokens).issubset(set(traceability_tokens))
+            and not set(requirement_source_tokens) - set(ft_reference_tokens)
+        ):
+            duplicated_source_reference_fields.append(
+                f"{test_case_id}:Requirement Source duplicates source/trace refs={requirement_source[:160]}"
+            )
+        dict_ids_in_body = sorted(set(DICT_ID_RE.findall(block)))
+        if dict_ids_in_body:
+            missing_dict_refs = [dict_id for dict_id in dict_ids_in_body if dict_id not in set(DICT_ID_RE.findall(traceability))]
+            if missing_dict_refs:
+                dictionary_body_missing_traceability.append(
+                    f"{test_case_id}:missing={', '.join(missing_dict_refs)}; traceability={traceability[:160] or '-'}"
+                )
+        if requirement_quote and SYNTHETIC_QUOTE_RE.search(requirement_quote):
+            synthetic_requirement_quotes.append(f"{test_case_id}:{requirement_quote[:180]}")
+        if (
+            ACTION_CREATED_BLOCK_RE.search(steps)
+            and NO_POSTCONDITIONS_RE.search(postconditions or "")
+            and not ACTION_CREATED_BLOCK_CLEANUP_RE.search(steps)
+        ):
+            action_created_block_without_cleanup.append(
+                f"{test_case_id}:steps={steps[:160]}; postconditions={postconditions or '-'}"
+            )
+        invalid_class_context = " ".join([test_data, steps, expected_result])
+        if (
+            is_negative_test_case_type(test_case_type)
+            and MULTI_INVALID_CLASS_RE.search(invalid_class_context)
+            and len(re.findall(r"`[^`]+`", invalid_class_context)) >= 3
+        ):
+            bundled_negative_input_classes.append(
+                f"{test_case_id}:test_data={test_data[:160]}; expected={expected_result[:120]}"
+            )
+        branch_choices = branch_choices_in_text(" ".join([title, test_data, steps]))
+        if branch_choices and expected_result:
+            branch_oracle_records.append(
+                {
+                    "test_case_id": test_case_id,
+                    "branch_key": normalized_branch_title(title),
+                    "choices": ",".join(sorted(branch_choices)),
+                    "expected": normalized_text_for_comparison(expected_result),
+                    "evidence": f"{test_case_id}:title={title[:90]}; expected={expected_result[:120]}",
+                }
+            )
+        generic_test_cases.extend(
+            generic_test_case_smell_matches(
+                test_case_id,
+                [
+                    ("preconditions", preconditions),
+                    ("test_data", test_data),
+                    ("steps", steps),
+                    ("expected_result", expected_result),
+                ],
+            )
+        )
         atom_ids_in_block = extract_any_atom_ids_from_text(block)
         for formulation_label, formulation_pattern in FORBIDDEN_TEST_CASE_FORMULATION_PATTERNS:
             if match := formulation_pattern.search(block):
@@ -9532,7 +10915,6 @@ def validate_test_case_quality_smells(
                 f"{test_case_id}:type={test_case_type or '-'}; status={status or '-'}; expected={expected_result[:160]}"
             )
         action_identity_context = " ".join([title, goal])
-        action_requiredness_context = " ".join([title, goal, test_data, expected_result])
         action_step_context = " ".join([test_data, steps, expected_result])
         is_positive_action_transition_check = bool(
             action_identity_context
@@ -9549,8 +10931,22 @@ def validate_test_case_quality_smells(
             and not is_positive_action_transition_check
         ):
             requiredness_without_empty_or_marker.append(f"{test_case_id}:{requiredness_context[:150]}")
-        if ACTION_CONTROL_AS_FIELD_RE.search(action_requiredness_context) or ACTION_EMPTY_CONTROL_MISUSE_RE.search(action_step_context):
-            action_treated_as_required_field.append(f"{test_case_id}:{requiredness_context[:180]}")
+        action_treated_as_required_field.extend(
+            action_required_field_smell_matches(
+                test_case_id,
+                action_requiredness_fields=[
+                    ("title", title),
+                    ("goal", goal),
+                    ("test_data", test_data),
+                    ("expected_result", expected_result),
+                ],
+                action_step_fields=[
+                    ("test_data", test_data),
+                    ("steps", steps),
+                    ("expected_result", expected_result),
+                ],
+            )
+        )
         if test_data and NUMERIC_ONLY_CONTEXT_RE.search(boundary_context):
             invalid_valid_values = numeric_only_valid_values_that_look_invalid(test_data)
             if invalid_valid_values:
@@ -9570,6 +10966,36 @@ def validate_test_case_quality_smells(
         ):
             input_restriction_transition_oracles.append(
                 f"{test_case_id}:steps={steps[:100]}; expected={expected_result[:160]}"
+            )
+        source_backed_feedback_context = " ".join([requirement_quote, linked_atom_text])
+        numeric_invalid_context = " ".join([title, goal, test_data, steps, block])
+        source_backed_filtering_context = " ".join([requirement_quote, linked_atom_text])
+        expected_assumes_input_filtering = bool(
+            INPUT_FILTERING_ORACLE_RE.search(expected_result or "")
+            or INPUT_FILTERING_ORACLE_SUPPLEMENTAL_RE.search(expected_result or "")
+        )
+        source_defines_input_filtering = bool(
+            INPUT_FILTERING_ORACLE_RE.search(source_backed_filtering_context)
+            or INPUT_FILTERING_ORACLE_SUPPLEMENTAL_RE.search(source_backed_filtering_context)
+        )
+        if (
+            is_negative_test_case_type(test_case_type)
+            and expected_assumes_input_filtering
+            and NUMERIC_INVALID_INPUT_CONTEXT_RE.search(numeric_invalid_context)
+            and not source_defines_input_filtering
+        ):
+            unsupported_input_filtering_oracles.append(
+                f"{test_case_id}:expected={expected_result[:160]}; source={source_backed_filtering_context[:120] or '-'}"
+            )
+        if (
+            is_negative_test_case_type(test_case_type)
+            and expected_result
+            and NUMERIC_VALIDATION_FEEDBACK_ORACLE_RE.search(expected_result)
+            and NUMERIC_INVALID_INPUT_CONTEXT_RE.search(numeric_invalid_context)
+            and not NUMERIC_VALIDATION_FEEDBACK_ORACLE_RE.search(source_backed_feedback_context)
+        ):
+            unsupported_numeric_validation_feedback.append(
+                f"{test_case_id}:expected={expected_result[:160]}; source={source_backed_feedback_context[:120] or '-'}"
             )
         transition_context = " ".join([title, goal, preconditions, test_data, steps, expected_result])
         if (
@@ -9645,6 +11071,143 @@ def validate_test_case_quality_smells(
             boundary_rejection_without_acceptance.append(
                 f"{group}: below-min rejection without exact min acceptance; examples={','.join(below_min_rejection[:5])}"
             )
+
+    branch_oracles_without_distinction: list[str] = []
+    for index, record in enumerate(branch_oracle_records):
+        for other in branch_oracle_records[index + 1 :]:
+            if record["test_case_id"] == other["test_case_id"]:
+                continue
+            if record["branch_key"] != other["branch_key"]:
+                continue
+            if record["expected"] != other["expected"]:
+                continue
+            if set(record["choices"].split(",")) == set(other["choices"].split(",")):
+                continue
+            branch_oracles_without_distinction.append(
+                f"{record['test_case_id']} vs {other['test_case_id']}: same expected result; "
+                f"{record['evidence']} | {other['evidence']}"
+            )
+
+    if duplicated_source_reference_fields:
+        findings.append(
+            Finding(
+                id="test-case-duplicated-source-reference-fields",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases duplicate the same source references across metadata fields",
+                details=(
+                    "`FT Reference`, `Traceability` and `Requirement Source` must have distinct responsibilities. "
+                    "Repeating the same ATOM/SRC/DOCX/PDF tuple in multiple fields creates noisy TC metadata and "
+                    "makes traceability drift harder to detect."
+                ),
+                path=display_path,
+                evidence=duplicated_source_reference_fields[:30],
+                recommended_action=(
+                    "Keep machine coverage ids in `Traceability`, keep DOCX/PDF/table/page locator in one source "
+                    "reference field, and remove/deprecate redundant `Requirement Source` copies."
+                ),
+            )
+        )
+
+    if dictionary_body_missing_traceability:
+        findings.append(
+            Finding(
+                id="test-case-dictionary-reference-missing-from-traceability",
+                severity="warning",
+                category="traceability",
+                title="Test cases use DICT-* values without DICT-* traceability",
+                details=(
+                    "When a TC's test data, steps or oracle depend on a dictionary inventory, the same DICT-* id "
+                    "must be present in the TC traceability field. Otherwise dictionary coverage is not machine-checkable."
+                ),
+                path=display_path,
+                evidence=dictionary_body_missing_traceability[:30],
+                recommended_action="Add every referenced DICT-* id to the affected TC traceability field.",
+            )
+        )
+
+    if synthetic_requirement_quotes:
+        findings.append(
+            Finding(
+                id="test-case-synthetic-requirement-quote-smell",
+                severity="warning",
+                category="traceability",
+                title="Requirement quote field contains normalized or derived behavior",
+                details=(
+                    "The requirement quote field should hold a short source quote or explicitly say that the row is "
+                    "normalized/derived. Synthetic statements such as `all and only DICT-* values` or GAP-based "
+                    "mechanism notes are not source quotes."
+                ),
+                path=display_path,
+                evidence=synthetic_requirement_quotes[:30],
+                recommended_action=(
+                    "Replace synthetic quote text with the actual source quote, or label it as normalized/derived "
+                    "and keep DICT/GAP rationale in traceability or coverage notes."
+                ),
+            )
+        )
+
+    if action_created_block_without_cleanup:
+        findings.append(
+            Finding(
+                id="test-case-action-created-block-without-cleanup",
+                severity="warning",
+                category="test-design",
+                title="Action-created block tests have no cleanup postcondition",
+                details=(
+                    "A TC that clicks an add/create action usually mutates the form state. `Postconditions: Not "
+                    "required` is valid only when the steps themselves delete/discard the created block or the TC "
+                    "states that no persistent state is created."
+                ),
+                path=display_path,
+                evidence=action_created_block_without_cleanup[:30],
+                recommended_action=(
+                    "Add a concrete cleanup postcondition such as deleting the created block or closing without "
+                    "saving; keep `Not required` only for self-deleting delete-flow cases."
+                ),
+            )
+        )
+
+    if branch_oracles_without_distinction:
+        findings.append(
+            Finding(
+                id="test-case-branch-oracle-not-distinct",
+                severity="warning",
+                category="expected-result",
+                title="Branch choices have indistinguishable expected results",
+                details=(
+                    "Separate branch TC for Yes/No, confirm/cancel or save/discard must prove the branch-specific "
+                    "effect. If both cases only assert the same destination screen, the TC does not verify the "
+                    "semantic difference between the choices."
+                ),
+                path=display_path,
+                evidence=branch_oracles_without_distinction[:20],
+                recommended_action=(
+                    "Add a branch-specific oracle such as saved/not-saved data, modal remaining/closing, blocked "
+                    "navigation or a GAP if the source does not define the difference."
+                ),
+            )
+        )
+
+    if bundled_negative_input_classes:
+        findings.append(
+            Finding(
+                id="test-case-bundled-negative-input-classes",
+                severity="warning",
+                category="test-design",
+                title="Negative input TC bundles multiple invalid classes under one oracle",
+                details=(
+                    "Several invalid input classes can share one TC only when the TC is explicitly parameterized "
+                    "with a value-to-oracle table. A prose list of values checked 'one by one' hides which class failed."
+                ),
+                path=display_path,
+                evidence=bundled_negative_input_classes[:30],
+                recommended_action=(
+                    "Split materially different invalid classes into separate TC or add a parameter table with "
+                    "`value`, `class` and exact observable expected result for each row."
+                ),
+            )
+        )
 
     if generic_atoms:
         findings.append(
@@ -10190,6 +11753,27 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if unsupported_numeric_validation_feedback:
+        findings.append(
+            Finding(
+                id="test-case-unsupported-numeric-validation-feedback-smell",
+                severity="warning",
+                category="expected-result",
+                title="Numeric rejection test assumes unsupported UI validation feedback",
+                details=(
+                    "A numeric/input-restriction rule such as `only digits`, `non-digit values are not accepted` or "
+                    "`below minimum is not accepted` does not by itself prove red highlighting or blocked navigation. "
+                    "Those are separate UI feedback mechanisms and need direct source evidence."
+                ),
+                path=display_path,
+                evidence=unsupported_numeric_validation_feedback[:30],
+                recommended_action=(
+                    "Replace red-highlight/blocked-transition expected results with a source-backed field-state "
+                    "oracle, or add explicit source evidence for the validation marker/navigation behavior."
+                ),
+            )
+        )
+
     if mechanical_field_steps:
         findings.append(
             Finding(
@@ -10481,6 +12065,7 @@ def validate_test_case_quality_smells(
         or numeric_class_label_raw_literal_mismatch
         or unsupported_input_filtering_oracles
         or input_restriction_transition_oracles
+        or unsupported_numeric_validation_feedback
         or mechanical_field_steps
         or negative_transition_without_valid_fixture
         or forbidden_formulations
@@ -10491,6 +12076,12 @@ def validate_test_case_quality_smells(
         or action_without_observable_artifact
         or gap_placeholder_sections
         or nondeterministic_alternative_oracles
+        or duplicated_source_reference_fields
+        or dictionary_body_missing_traceability
+        or synthetic_requirement_quotes
+        or action_created_block_without_cleanup
+        or branch_oracles_without_distinction
+        or bundled_negative_input_classes
         or broad_scenario_test_cases
         or excessive_atom_fan_in
     )
@@ -10508,20 +12099,74 @@ def validate_test_case_quality_smells(
 def extract_test_case_blocks(content: str) -> list[tuple[str, str]]:
     matches = list(
         re.finditer(
-            r"^##\s+(TC-[A-Za-z0-9_-]+)\s*$",
+            r"^(#{2,6})[^\S\r\n]+(TC-[A-Za-z0-9_-]+)(?:[^\S\r\n]+(?:[-—:][^\S\r\n]*)?.*)?$",
             content,
             flags=re.MULTILINE,
         )
     )
     blocks: list[tuple[str, str]] = []
     for index, match in enumerate(matches):
+        heading_level = len(match.group(1))
         body_start = match.end()
         body_end = matches[index + 1].start() if index + 1 < len(matches) else len(content)
-        next_section_match = re.search(r"^##\s+(?!TC-[A-Za-z0-9_-]+\s*$).+", content[body_start:], flags=re.MULTILINE)
+        next_section_match = re.search(
+            rf"^#{{2,{heading_level}}}[^\S\r\n]+(?!TC-[A-Za-z0-9_-]+(?:[^\S\r\n]+(?:[-—:][^\S\r\n]*)?.*)?$).+",
+            content[body_start:],
+            flags=re.MULTILINE,
+        )
         if next_section_match:
             body_end = min(body_end, body_start + next_section_match.start())
-        blocks.append((match.group(1), content[body_start:body_end]))
+        blocks.append((match.group(2), content[body_start:body_end]))
     return blocks
+
+
+def noncanonical_test_case_heading_evidence(content: str) -> list[str]:
+    evidence: list[str] = []
+    for match in re.finditer(
+        r"^(#{3,6})[^\S\r\n]+(TC-[A-Za-z0-9_-]+)(?:[^\S\r\n]+.*)?$",
+        content,
+        flags=re.MULTILINE,
+    ):
+        evidence.append(f"{match.group(2)}: heading_level={len(match.group(1))}, expected=2")
+    return evidence
+
+
+def has_test_case_bold_metadata_field(block: str, aliases: tuple[str, ...]) -> bool:
+    names_pattern = "|".join(re.escape(alias) for alias in aliases)
+    return re.search(rf"(?im)^\*\*(?:{names_pattern}):\*\*\s*\S", block) is not None
+
+
+def has_test_case_runtime_section_or_field(block: str, aliases: tuple[str, ...]) -> bool:
+    names_pattern = "|".join(re.escape(alias) for alias in aliases)
+    pattern = re.compile(
+        rf"(?im)^(?:###\s+(?:{names_pattern})\s*|\*\*(?:{names_pattern}):\*\*)\s*(.*)$"
+    )
+    for match in pattern.finditer(block):
+        inline_value = match.group(1).strip()
+        if inline_value:
+            return True
+        following = block[match.end() :]
+        boundary = re.search(
+            r"(?m)^(?:#{2,6}\s+|\*\*[^*\n:]+:\*\*|###\s+\S)",
+            following,
+        )
+        section_body = following[: boundary.start()] if boundary else following
+        if section_body.strip():
+            return True
+    return False
+
+
+def is_runtime_complete_test_case(block: str) -> bool:
+    metadata_complete = all(
+        has_test_case_bold_metadata_field(block, aliases)
+        for aliases in RUNTIME_METADATA_FIELD_ALIASES
+    )
+    sections_complete = all(
+        has_test_case_runtime_section_or_field(block, aliases)
+        for aliases in RUNTIME_SECTION_FIELD_ALIASES
+    )
+    has_numbered_step = re.search(r"(?m)^\d+\.\s+\S", block) is not None
+    return metadata_complete and sections_complete and has_numbered_step
 
 
 def test_case_numbering_issues(test_case_ids: list[str]) -> list[str]:
@@ -10570,12 +12215,108 @@ def test_case_numbering_issues(test_case_ids: list[str]) -> list[str]:
     return issues
 
 
+def validate_test_case_mixed_schema_duplicates(
+    blocks: list[tuple[str, str]],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    metadata_duplicate_evidence: list[str] = []
+    runtime_duplicate_evidence: list[str] = []
+    metadata_fields = ("Название", "Тип", "Приоритет", "Трассировка", "package_id")
+    runtime_fields = ("Тестовые данные", "Шаги", "Итоговый ожидаемый результат")
+
+    for test_case_id, block in blocks:
+        has_metadata_table = re.search(
+            r"(?im)^\|\s*(?:Поле|field)\s*\|\s*(?:Значение|value)\s*\|",
+            block,
+        ) is not None or re.search(
+            r"(?im)^\|\s*(?:Название|Title|Тип|Type|Приоритет|Priority|Трассировка|Traceability|package_id)\s*\|",
+            block,
+        ) is not None
+        if has_metadata_table:
+            duplicated_fields = [
+                field
+                for field in metadata_fields
+                if re.search(rf"(?im)^\*\*{re.escape(field)}:\*\*", block)
+            ]
+            if duplicated_fields:
+                metadata_duplicate_evidence.append(
+                    f"{test_case_id}:metadata table + bold fields={', '.join(duplicated_fields)}"
+                )
+
+        duplicated_runtime_fields = [
+            field
+            for field in runtime_fields
+            if re.search(rf"(?im)^###\s+{re.escape(field)}\s*$", block)
+            and re.search(rf"(?im)^\*\*{re.escape(field)}:\*\*", block)
+        ]
+        if duplicated_runtime_fields:
+            runtime_duplicate_evidence.append(
+                f"{test_case_id}:section + bold fields={', '.join(duplicated_runtime_fields)}"
+            )
+
+    if metadata_duplicate_evidence:
+        findings.append(
+            Finding(
+                id="test-case-mixed-schema-duplicate-fields",
+                severity="warning",
+                category="test-case-format",
+                title="Test case mixes metadata table and bold metadata fields",
+                details=(
+                    "A TC-* block must use one canonical field representation. Metadata table rows and "
+                    "duplicated `**field:**` lines make the manual case noisy and create two values to maintain."
+                ),
+                path=display_path,
+                evidence=metadata_duplicate_evidence[:20],
+                recommended_action=(
+                    "Keep one format for TC metadata. Prefer the canonical `**Название:**`, `**Тип:**`, "
+                    "`**Приоритет:**`, `**Трассировка:**`, `**package_id:**` fields and remove the duplicate table."
+                ),
+            )
+        )
+    if runtime_duplicate_evidence:
+        findings.append(
+            Finding(
+                id="test-case-runtime-field-duplicated",
+                severity="warning",
+                category="test-case-format",
+                title="Test case duplicates runtime sections as bold inline fields",
+                details=(
+                    "A TC-* block must not contain both a runtime section heading and a duplicated inline field "
+                    "for the same data, steps or expected result."
+                ),
+                path=display_path,
+                evidence=runtime_duplicate_evidence[:20],
+                recommended_action=(
+                    "Keep `### Тестовые данные`, `### Шаги`, and `### Итоговый ожидаемый результат` sections "
+                    "or the inline field style, but not both in the same TC-*."
+                ),
+            )
+        )
+
+    has_duplicates = bool(metadata_duplicate_evidence or runtime_duplicate_evidence)
+    checks.append(
+        Check(
+            "test-case-mixed-schema",
+            "warn" if has_duplicates else "pass",
+            "Test cases duplicate runtime/metadata fields." if has_duplicates else "No mixed TC schema duplicates found.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def validate_test_case_file(
     path: Path,
     root: Path,
     *,
     test_case_policy: str = "compatible",
     known_test_case_ids: set[str] | None = None,
+    suppress_blocked_input_gate_failures: bool = False,
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -10601,6 +12342,15 @@ def validate_test_case_file(
         checks.append(Check("test-case-format", "fail", "Test-case file is not UTF-8.", display_path))
         return findings, checks
 
+    for section_title, artifact_path in split_test_design_artifact_paths(path).items():
+        artifact_findings, artifact_checks = validate_split_artifact_heading_shape(
+            section_title,
+            artifact_path,
+            root,
+        )
+        findings.extend(artifact_findings)
+        checks.extend(artifact_checks)
+
     duplicated_split_sections = duplicate_split_sections_in_test_case(raw_content, path)
     if duplicated_split_sections:
         findings.append(
@@ -10622,6 +12372,10 @@ def validate_test_case_file(
                 ),
             )
         )
+
+    placeholder_findings, placeholder_checks = validate_traceability_placeholder_sentinels(content, path, root)
+    findings.extend(placeholder_findings)
+    checks.extend(placeholder_checks)
 
     gap_inventory_findings, gap_inventory_checks = validate_coverage_gap_inventory(content, path, root)
     findings.extend(gap_inventory_findings)
@@ -10675,6 +12429,21 @@ def validate_test_case_file(
         )
         return findings, checks
 
+    noncanonical_heading_evidence = noncanonical_test_case_heading_evidence(content)
+    if noncanonical_heading_evidence:
+        findings.append(
+            Finding(
+                id="test-case-noncanonical-heading-level",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case sections use noncanonical heading levels",
+                details="Canonical test-case files must use one top-level `## TC-*` section per test case.",
+                path=display_path,
+                evidence=noncanonical_heading_evidence[:20],
+                recommended_action="Promote each `TC-*` heading to `## TC-*`; keep runtime fields under the TC as bold fields or allowed subsections.",
+            )
+        )
+
     if test_case_policy == "strict":
         template_findings, template_checks = validate_required_test_case_template_sections(
             blocks,
@@ -10684,6 +12453,14 @@ def validate_test_case_file(
         )
         findings.extend(template_findings)
         checks.extend(template_checks)
+
+    mixed_schema_findings, mixed_schema_checks = validate_test_case_mixed_schema_duplicates(
+        blocks,
+        path,
+        root,
+    )
+    findings.extend(mixed_schema_findings)
+    checks.extend(mixed_schema_checks)
 
     calculation_findings, calculation_checks = validate_calculation_oracles(content, path, root, blocks)
     findings.extend(calculation_findings)
@@ -10750,13 +12527,27 @@ def validate_test_case_file(
     findings.extend(design_plan_findings)
     checks.extend(design_plan_checks)
 
-    design_review_findings, design_review_checks = validate_test_design_review(content, path, root)
+    design_review_findings, design_review_checks = validate_test_design_review(
+        content,
+        path,
+        root,
+        suppress_blocked_input_failures=suppress_blocked_input_gate_failures,
+    )
     findings.extend(design_review_findings)
     checks.extend(design_review_checks)
 
-    writer_gate_findings, writer_gate_checks = validate_writer_quality_gate(content, path, root)
+    writer_gate_findings, writer_gate_checks = validate_writer_quality_gate(
+        content,
+        path,
+        root,
+        suppress_blocked_input_failures=suppress_blocked_input_gate_failures,
+    )
     findings.extend(writer_gate_findings)
     checks.extend(writer_gate_checks)
+
+    self_check_findings, self_check_checks = validate_writer_self_check_sections(content, path, root)
+    findings.extend(self_check_findings)
+    checks.extend(self_check_checks)
 
     write_strategy_findings, write_strategy_checks = validate_artifact_write_strategy(
         content,
@@ -10823,7 +12614,7 @@ def validate_test_case_file(
     missing_traceability: list[str] = []
     for test_case_id, block in blocks:
         field_count = len(re.findall(r"^\*\*[^*\n:]+:\*\*", block, flags=re.MULTILINE))
-        if field_count < MIN_TEST_CASE_FIELD_COUNT:
+        if field_count < MIN_TEST_CASE_FIELD_COUNT and not is_runtime_complete_test_case(block):
             sparse_fields.append(f"{test_case_id}:fields={field_count}")
         if not re.search(r"(?m)^\d+\.\s+\S", block):
             missing_steps.append(test_case_id)
@@ -14056,6 +15847,41 @@ def validate_workflow_state(
                     recommended_action="Populate blocking_reasons with concrete blockers.",
                 )
             )
+        elif "writer" in str(current_stage or ""):
+            validator_not_run_reasons = [
+                str(reason)
+                for reason in blocking_reasons
+                if any(
+                    pattern in str(reason).lower().replace("-", " ")
+                    for pattern in (
+                        "validator not run",
+                        "validator has not been run",
+                        "validator not executed",
+                        "validator was not run",
+                        "scoped validator not run",
+                        "scoped validator has not been run",
+                    )
+                )
+            ]
+            if validator_not_run_reasons:
+                findings.append(
+                    Finding(
+                        id="workflow-state-blocked-input-validator-not-run",
+                        severity="error",
+                        category="workflow-state",
+                        title="writer blocked-input skips required post-write validator",
+                        details=(
+                            "A writer terminal blocked-input state may contain unresolved validator findings, "
+                            "but it must not use blocked-input merely because the scoped validator was not run."
+                        ),
+                        path=display_path,
+                        evidence=validator_not_run_reasons[:5],
+                        recommended_action=(
+                            "Run the scoped validator after final artifact write and record the command/evidence, "
+                            "or record a concrete validator execution failure with attempted command and stderr."
+                        ),
+                    )
+                )
 
     if current_stage in SESSION_LOG_REQUIRED_STAGES:
         session_log_paths = resolve_workflow_session_logs(state, path, root, ft_root)
@@ -14469,8 +16295,10 @@ def validate(
     test_case_files = iter_test_case_files(root)
     source_normalization_diagnostics = iter_source_normalization_diagnostics(root)
     writer_process_diagnostics = iter_writer_process_diagnostics(root)
+    writer_self_checks = iter_writer_self_checks(root)
     session_logs = iter_session_logs(root)
     decision_logs = iter_decision_logs(root)
+    active_text_artifacts = iter_active_text_artifacts(root)
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
@@ -14483,8 +16311,10 @@ def validate(
         test_case_files = []
         source_normalization_diagnostics = [root]
         writer_process_diagnostics = []
+        writer_self_checks = []
         session_logs = []
         decision_logs = []
+        active_text_artifacts = []
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
@@ -14497,8 +16327,10 @@ def validate(
         test_case_files = []
         source_normalization_diagnostics = []
         writer_process_diagnostics = []
+        writer_self_checks = []
         session_logs = []
         decision_logs = []
+        active_text_artifacts = []
         dictionary_inventories = []
         mockup_visual_inventories = []
     if root_is_standalone_dictionary_inventory:
@@ -14511,8 +16343,10 @@ def validate(
         source_normalization_diagnostics = []
         source_table_normalizations = []
         writer_process_diagnostics = []
+        writer_self_checks = []
         session_logs = []
         decision_logs = []
+        active_text_artifacts = []
         mockup_visual_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
     findings: list[Finding] = []
@@ -14586,6 +16420,11 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    blocked_writer_gate_suppression_paths = blocked_writer_gate_suppression_test_case_paths(
+        workflow_states,
+        root,
+    )
+
     for path in traceability_matrices:
         path_findings, path_checks = validate_traceability_matrix(
             path,
@@ -14620,6 +16459,7 @@ def validate(
             root,
             test_case_policy=test_case_policy,
             known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
+            suppress_blocked_input_gate_failures=path.resolve() in blocked_writer_gate_suppression_paths,
         )
         findings.extend(path_findings)
         checks.extend(path_checks)
@@ -14661,6 +16501,28 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in writer_self_checks:
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            findings.append(
+                Finding(
+                    id="writer-self-check-not-utf8",
+                    severity="error",
+                    category="test-case-format",
+                    title="Writer self-check is not UTF-8",
+                    details=str(exc),
+                    path=rel(path, root),
+                    evidence=[],
+                    recommended_action="Save writer-self-check.md as UTF-8 Markdown.",
+                )
+            )
+            checks.append(Check("writer-self-check-sections", "fail", "Writer self-check is not UTF-8.", rel(path, root)))
+            continue
+        path_findings, path_checks = validate_writer_self_check_sections(content, path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in session_logs:
         path_findings, path_checks = validate_session_log(
             path,
@@ -14681,6 +16543,11 @@ def validate(
 
     for path in mockup_visual_inventories:
         path_findings, path_checks = validate_mockup_visual_inventory(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in active_text_artifacts:
+        path_findings, path_checks = validate_text_encoding_damage(path, root)
         findings.extend(path_findings)
         checks.extend(path_checks)
 
@@ -14708,8 +16575,10 @@ def validate(
             "source_table_normalizations_checked": len(source_table_normalizations),
             "dictionary_inventories_checked": len(dictionary_inventories),
             "writer_process_diagnostics_checked": len(writer_process_diagnostics),
+            "writer_self_checks_checked": len(writer_self_checks),
             "session_logs_checked": len(session_logs),
             "decision_logs_checked": len(decision_logs),
+            "active_text_artifacts_checked": len(active_text_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
@@ -14742,8 +16611,10 @@ def text_report(report: dict[str, Any]) -> str:
         f"- source table normalizations: {summary['source_table_normalizations_checked']}",
         f"- dictionary inventories: {summary['dictionary_inventories_checked']}",
         f"- writer process diagnostics: {summary['writer_process_diagnostics_checked']}",
+        f"- writer self-checks: {summary['writer_self_checks_checked']}",
         f"- session logs: {summary['session_logs_checked']}",
         f"- decision logs: {summary['decision_logs_checked']}",
+        f"- active text artifacts: {summary['active_text_artifacts_checked']}",
         f"- mockup visual inventories: {summary['mockup_visual_inventories_checked']}",
         f"- UI evidence indexes: {summary['ui_evidence_indexes_checked']}",
         f"- UI validation reports: {summary['ui_validation_reports_checked']}",

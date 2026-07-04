@@ -42,7 +42,7 @@ Review нельзя делать только по `package-test-design-plan.md`
 
 | review_item | status | severity | affected_package | evidence | required_action | blocks_ready_for_review |
 | --- | --- | --- | --- | --- | --- | --- |
-| `decision-table-classification` | `pass` | `info` | `all` | Решения TDDT согласованы со ссылками ledger/plan/TC. | - | `no` |
+| `decision-table-classification` | `pass` | `info` | `all` | Решения TDDT согласованы со ссылками ledger/plan/TC. | none_required:pass | `no` |
 | `numeric-length-boundaries` | `fail` | `warning` | `WP-01` | `PD-014` покрывает точные 4 цифры и буквы, но не покрывает длины N-1/N+1 только из цифр. | Добавить короткий/длинный digit-only классы или связанный `GAP-*`. | `yes` |
 | `unsupported-ui-mechanism` | `fail` | `error` | `WP-01` | `TC-...` ожидает, что буква не появится в поле, но ФТ задает только допустимый класс символов. | Заменить expected result на подтвержденное принятие/отклонение класса символов или оформить `GAP-*`. | `yes` |
 ```
@@ -50,12 +50,14 @@ Review нельзя делать только по `package-test-design-plan.md`
 ## Колонки
 
 - `review_item`: канонический пункт из обязательного списка ниже.
-- `status`: `pass | fail | blocked | needs-rewrite`.
+- `status`: закрытый enum `pass | fail | blocked | needs-rewrite`.
 - `severity`: `error | warning | info`.
 - `affected_package`: `WP-*` или `all`.
 - `evidence`: конкретное evidence по строкам/id артефактов, например `TDD-026`, `ATOM-049`, `PD-014`, `GAP-005`, `TC-...`.
-- `required_action`: точное действие по переписыванию, добавлению класса/ветки или явное действие с `GAP-*`. Используй `-` только для `status = pass`.
+- `required_action`: точное действие по переписыванию, добавлению класса/ветки или явное действие с `GAP-*`. Для `status = pass` используй явный sentinel `none_required:pass`, а не placeholder `-`.
 - `blocks_ready_for_review`: `yes | no`.
+
+Не используй `pass-with-gap`, `pass-with-gaps`, `ok`, `yes`, `passed`, `failed`, `no` или локальные варианты в `status`. Если есть допустимый residual `GAP-*`, строка остается `pass` только при доказанном отсутствии blocking defect; сам gap фиксируется в `evidence` / `required_action` и downstream artifacts. Если gap скрывает source-backed observable behavior, строка должна быть `fail | blocked | needs-rewrite` и `blocks_ready_for_review = yes`.
 
 ## Обязательные Пункты Review
 

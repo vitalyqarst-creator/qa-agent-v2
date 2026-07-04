@@ -1,0 +1,1 @@
+Diagnostic only. Do not edit files. Do not write artifacts. Run python scripts/resolve_instruction_context.py --scenario reviewer.structure_preflight --json --fail-on-budget. Read every required file listed in the JSON files array, but do not inspect FT artifacts. Reply with count of files read and total approximate size only.

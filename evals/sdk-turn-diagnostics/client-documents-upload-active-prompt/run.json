@@ -1,0 +1,20 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782362888,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "elapsed_ms": 180030,
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\client-documents-upload-active-prompt",
+  "prompt_bytes": 2238,
+  "prompt_chars": 2238,
+  "prompt_sha256": "27463abd554e6ea830ce2fd60417eac539227b509b4e4ca81b7147316a9367d7",
+  "prompt_source": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\ft-2-OF_17\\work\\review-cycles\\client-documents-upload-and-actuality\\prompts\\prompt.structure-preflight-r1.md",
+  "python": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\.venv\\Scripts\\python.exe",
+  "sandbox_policy": "workspace_write",
+  "started_at_epoch": 1782362708,
+  "status": "timeout",
+  "thread_id": "019efd18-a175-74c3-b88b-f75ccdb96e59",
+  "timeout_phase": "sdk-turn-timeout-after-turn-started",
+  "timeout_seconds": 180,
+  "version": 1
+}

@@ -4,6 +4,14 @@
 
 Цель секции — отделить восстановление требований из источника от test-design. Writer сначала должен превратить строку источника в чистое проверяемое утверждение, и только потом создавать `ATOM-*`.
 
+## Source Legend And Abbreviation Check
+
+Перед нормализацией табличного источника проверь сокращенные заголовки, условные обозначения, локальные коды и аббревиатуры, влияющие на test design.
+
+- Не выводи смысл сокращения только по паттернам значений в строках.
+- Если смысл влияет на test design и не подтвержден source/support/`AGENT-NOTES.md`, создай `GAP-*` типа `missing-source-definition`.
+- Зависящие от неподтвержденной расшифровки normalization rows должны иметь `confidence = unclear` или `gap_id`; они не могут напрямую становиться `covered` atoms.
+
 ## Формат
 
 Минимальная таблица:
@@ -25,6 +33,7 @@
 - Одна строка normalization table = одно очищенное свойство поля, действие, условие или ожидаемое поведение.
 - `source_property_id` — обязательная стабильная ссылка на одно нормализованное свойство внутри source row. Формат: `<source_row_id>.P##`, например `SRC-003.P01`.
 - Нельзя переносить в `expected_behavior` заголовки таблиц, номера страниц, соседние поля, колонки `Название / Видимость / О / Р / Тип ввода поля / Тип значения / Примечание`.
+- Перед использованием заголовков вроде `О` / `Р` выполни `Source Legend And Abbreviation Check`; без подтверждения это `GAP-*`, а не atom.
 - Если extraction содержит соседнее поле или обрывок следующей строки, writer должен либо восстановить чистую строку по источнику, либо поставить `confidence = low` и связать строку с `GAP-*`.
 - `confidence = high` допустим только когда `field_or_block`, `property`, `condition`, `expected_behavior`, `requirement_code` и `source_ref` восстановлены без противоречий.
 - `confidence = medium` допустим для частично восстановленной строки, если pass/fail behavior все еще выводим из источника без домысливания.
@@ -32,6 +41,7 @@
 - `Atomic Requirements Ledger` должен ссылаться только на нормализованные строки с `confidence = high | medium` либо на `GAP-*`; строка normalization с `confidence = low | unclear` не может напрямую стать `covered` atom.
 - Если source row содержит несколько независимых свойств, например visibility, requiredness, editability, default, format, boundary и integration behavior, writer обязан разделить ее на несколько normalization rows.
 - Разделение требуется не только по разным `GSR`/`REQ`, но и по semantic property class. Нельзя оставлять в одной normalization row разные классы вроде `dictionary-source`, `min-boundary`, `max-boundary`, `numeric-format`, `exact-length`, `visibility`, `requiredness`, `editability`, `default-value`, `integration-prefill`, `action-created-optional-block`, `repeatable-block-lifecycle`, `checkbox-list`, `print-form-output`, даже если они записаны под одним requirement code или все ведут в `GAP-*`.
+- Не дроби один source-backed `numeric-format` на искусственные property types для valid/invalid веток. `valid-digits`, `reject-letters`, `reject-spaces`, `reject-special-chars`, `reject-decimal-separator` и `reject-sign` являются `Coverage Obligation Table` classes одного `source_property_id`, а не отдельными normalization rows.
 - Если один код или одна строка ФТ одновременно говорит “значение берется из справочника”, “минимум берется из каталога” и “максимум берется из каталога”, создай минимум три строки: dictionary source, min boundary source, max boundary source.
 - Если source row содержит несколько `GSR`/`REQ`/локальных кодов, каждый код должен быть представлен отдельным `source_property_id`, кроме редкого случая, когда коды буквально описывают одно и то же проверяемое утверждение с одним condition и одним expected behavior. Такой случай нужно явно обосновать в `Source Row Completeness Matrix`.
 - Если один requirement code содержит несколько самостоятельных утверждений, один и тот же `requirement_code` может повторяться в нескольких normalization rows с разными `source_property_id`.
@@ -73,6 +83,7 @@ Writer не должен ставить `stage_status: ready-for-review`, есл
 - split test-design artifacts содержат `Source Table Normalization`, но нет `source-row-inventory.md`;
 - normalization row ссылается на `source_row_id`, которого нет в `Source Row Inventory`;
 - source row содержит несколько `GSR`/`REQ`, но нет `Source Row Completeness Matrix`;
+- есть сокращения source, влияющие на test design, но нет `Source Legend And Abbreviation Check` или `GAP-*`;
 - normalization row не содержит `source_property_id`;
 - normalization row содержит несколько `GSR`/`REQ`, которые могут проверяться независимо;
 - normalization row смешивает разные semantic property classes, например dictionary source + min boundary + max boundary, visibility + requiredness или format + boundary;

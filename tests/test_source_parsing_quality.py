@@ -13,7 +13,9 @@ from test_case_agent.chunking import split_section
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
-SOURCE_DOC = next((ROOT_DIR / "fts").glob("*/source/*.docx"))
+SOURCE_DOC = next(
+    path for path in (ROOT_DIR / "fts").glob("*/source/*.docx") if not path.name.startswith("~$")
+)
 
 
 class SourceParsingQualityTests(unittest.TestCase):

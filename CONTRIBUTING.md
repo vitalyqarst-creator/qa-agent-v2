@@ -13,7 +13,7 @@ uv sync
 После изменений запускай тесты через каноническую точку входа:
 
 ```powershell
-python scripts/run_tests.py
+.\.venv\Scripts\python.exe scripts/run_tests.py
 ```
 
 ## Запуск тестов
@@ -21,20 +21,28 @@ python scripts/run_tests.py
 Основная команда:
 
 ```powershell
-python scripts/run_tests.py
+.\.venv\Scripts\python.exe scripts/run_tests.py
 ```
 
-Raw-эквивалент для полного suite:
+Raw `unittest discover` не является каноническим full-run режимом: он запускает тяжелый artifact-validator suite монолитно. Helper script делает controlled discovery для быстрых test modules и отдельно запускает artifact-validator через sharded wrapper.
 
 ```powershell
-python -m unittest discover -s tests
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
-Почему не `python -m unittest`:
+Для быстрого agent-layer прогона без тяжелого validator-а используй:
 
-- в этом репозитории обычный вызов может показать `Ran 0 tests`;
-- `discover -s tests` гарантирует реальный прогон suite;
-- helper script делает этот запуск каноническим и не заставляет помнить детали руками.
+```powershell
+.\.venv\Scripts\python.exe scripts/run_tests.py --suite agent-layer-fast
+```
+
+Для тяжелого artifact-validator suite используй канонический sharded-режим:
+
+```powershell
+.\.venv\Scripts\python.exe scripts/run_tests.py --suite artifact-validator-sharded
+```
+
+Он запускает полное покрытие через 7 shard-ов и заменяет монолитный запуск `.\.venv\Scripts\python.exe -m unittest tests.test_agent_artifact_validator`. Для CI fan-out запускай отдельные shard index: `.\.venv\Scripts\python.exe scripts/run_tests.py --suite artifact-validator --shard-count 7 --shard-index 1`.
 
 ## Поддержка test-layer
 

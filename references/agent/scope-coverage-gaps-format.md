@@ -28,6 +28,7 @@
 - `Writer Rule` и `Reviewer Rule` обязательны, чтобы downstream этапы одинаково трактовали gap.
 - Cross-FT зависимости без явной опоры фиксируй как gap, а не как расширение scope.
 - Каждый `GAP-*` обязан содержать точную привязку к ФТ: раздел/подраздел, `GSR` или другой код требования при наличии, таблицу/строку, поле/условие, страницу PDF, цитату или краткое исходное утверждение.
+- Нерасшифрованные source-сокращения/заголовки, влияющие на expected result, фиксируй как `GAP-*` типа `missing-source-definition`.
 - Если gap обнаружен после атомизации требований или review, указывай связанные `ATOM-*`, строки traceability matrix или явно пиши `not-yet-assigned`, если атом еще не создан.
 - Не создавай gap без FT anchor. Если точный anchor не удается восстановить, это отдельный blocking gap о недостаточной трассировке источника.
 - Если требование в целом покрыто, но gap ограничивает тест-дизайн для конкретной границы, округления, обязательности, видимости или редактируемости, все равно указывай affected FT statement и помечай `Coverage Impact` как `design-constraint-on-covered-atom`.
@@ -125,6 +126,7 @@ Rules:
 - `missing-rule`
 - `cross-ft-dependency`
 - `missing-constraint`
+- `missing-source-definition`
 - `unconfirmed-shared-behavior`
 
 ## Что не включать

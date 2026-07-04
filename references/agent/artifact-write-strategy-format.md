@@ -72,6 +72,8 @@ Rules:
 - `forbidden_methods_checked` must be `yes`;
 - do not mark command-line limit fallback as recovered cleanly.
 
+The same table shape is also acceptable in split `artifact-write-strategy.md` artifacts when the split artifact is the writer-side evidence source. The validator treats `artifact_path | artifact_size_class | write_strategy | declared_before_first_write | helper | forbidden_methods_checked` as concrete preflight evidence; legacy narrative evidence must still prove the same facts.
+
 ## Validator Expectations
 
 Validator warnings:

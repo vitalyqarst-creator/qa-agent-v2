@@ -572,12 +572,20 @@ Writer не должен закрывать gaps предположениями.
 
 ## Writer Quality Gate
 
+Split artifact heading policy: each split artifact must contain exactly one canonical section heading matching its section title. Accepted levels are `# Section` or `## Section`; missing/wrong headings and adjacent duplicates such as `# Section` plus `## Section` block writer-ready handoff.
+
 Для `initial_draft` перед `Writer Self-Check` обязателен split artifact `writer-quality-gate.md` с секцией `Writer Quality Gate` по [writer-quality-gate-format.md](writer-quality-gate-format.md).
+
 
 Gate является admission control перед review. Writer не должен ставить `stage_status: ready-for-review`, если gate содержит `status = fail` и `blocks_ready_for_review = yes`.
 
+Перед финальным `Writer Quality Gate` writer обязан выполнить `artifact-shape-preflight`: split artifacts use exact canonical headings/tables, each split artifact has exactly one canonical section heading and must not contain adjacent wrapper headings like `# Source Row Inventory` followed by `## Source Row Inventory`, alias columns are invalid, and canonical TC file must not duplicate split artifact tables. Required table shapes: `| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |`; `| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |`; `| source_row_id | source_requirement_codes | normalized_property_ids | linked_atoms | gap_ids | coverage_decision |`; `| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |`; `| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | observable_oracle | testable_part | blocked_part | gap_admissibility | review_risk |`; `| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |`; `| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |`; `| review_item | status | severity | affected_package | evidence | required_action | blocks_ready_for_review |`. `source-row-inventory.md` column `in_scope` accepts only `yes`, `no`, `unclear`, `out-of-scope`; fixture/residual context belongs in notes, `GAP-*`, or `mapped_atom_or_gap`, not in the enum. Details live in [writer-quality-gate-format.md](writer-quality-gate-format.md).
+
+Перед handoff writer также выполняет `placeholder-sentinel-normalization`: в traceability-bearing колонках split artifacts и reviewer matrices нельзя оставлять placeholder `-` / `N/A`. Если значение неприменимо или покрытия нет, укажи явный sentinel с причиной: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>`, `none_required:<reason>`. Это правило относится к колонкам связей и трассировки (`req_id`, `requirement_code(s)`, `covered_by_tc`, `linked_test_cases`, `planned_tc_or_gap`, `gap_id(s)`, `mapped_atom_or_gap`, `blocked_part`, `gap_admissibility`, `review_notes`, `gap_note`), а не к свободному тексту, где дефис является обычной пунктуацией.
+
 Минимальные gate rows:
 
+- `artifact-shape-preflight`;
 - `artifact-write-strategy`;
 - `mockup-visual-inventory`;
 - `source-row-inventory`;
@@ -639,13 +647,21 @@ Semantic compression является blocker-ом, если writer видит:
 - internal work package coverage;
 - merged checks across packages;
 - packages that require split or unresolved package gaps;
+- scoped validator command/equivalent runner gate used after final artifact write;
+- scoped validator findings summary with each current-scope `warning`/`error` listed as `fixed`, `false-positive`/waived with evidence, or `blocking`;
+- current-scope filtering excludes historical `work/review-cycles/<scope>/versions/` snapshots and `_artifact_write/` scratch files even when the full validator report still lists warnings there; count only active canonical TC, active split test-design artifacts and current cycle outputs;
+- post-write scoped validator must actually be executed before writer marks `ready-for-review`, `writer-draft-ready`, `semantic-review-ready` or terminal `blocked-input`; `Validator not run` is not a valid terminal blocker. If the validator cannot execute, record the attempted command, stderr/exception and concrete recovery action;
 - assumptions;
 - unclear items.
 - high-risk atoms without `High` priority test case or blocking `coverage gap`;
 - missing or incomplete `Risk / Priority Map` when high-risk dimensions are applicable;
 - applicable `pairwise` / `calculation` dimensions without required supporting table or oracle.
 
-Self-check не должен скрывать проблемы. Если self-check содержит blocking uncertainty, не ставь `stage_status: ready-for-review`.
+Self-check не должен скрывать проблемы. Если self-check содержит blocking uncertainty или unresolved current-scope validator `warning`/`error`, не ставь `stage_status: ready-for-review` / `writer-draft-ready` / `semantic-review-ready`. Writer self-check не может писать `pass` по validator-sensitive gate item только на основании ручного просмотра; он должен ссылаться на scoped validator evidence или runner validator gate evidence.
+
+Writer self-check не должен содержать пустые headings. Каждая секция, включая `Writer Self-Check` и `Artifact Write Evidence`, должна содержать хотя бы одно проверяемое утверждение, таблицу, список evidence, ссылку на `writer-session-log.md` / `artifact-write-strategy.md` или явное `not-applicable` с причиной. Пустая секция считается `writer-self-check-empty-section` и блокирует writer-ready handoff.
+
+Статусы в writer-side review/gate artifacts должны использовать только закрытые enum-ы соответствующего format reference. Не заменяй `pass` на `ok`, `yes`, `passed`, `pass-with-gap` или `pass-with-gaps`; не используй `planned` как итоговый coverage status.
 
 ## Revision Output
 

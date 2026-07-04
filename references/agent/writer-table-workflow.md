@@ -54,6 +54,8 @@ Do not combine independently checkable classes such as dictionary source, min/ma
 
 Rows with `confidence = low` or unresolved source meaning must link to `GAP-*` or remain diagnostic; they cannot become covered atoms.
 
+Do not split one source-backed `numeric-format` row into artificial valid/invalid property types. Keep one `source_property_id` in `Source Table Normalization`; model `valid-digits`, `reject-letters`, `reject-spaces`, `reject-special-chars`, `reject-decimal-separator` and `reject-sign` as `Coverage Obligation Table` rows, with narrow `GAP-*` links for classes that lack a source-backed oracle or executable fixture.
+
 For `dictionary-source` / reference-list rows, extract the referenced source/support dictionary into `dictionary-inventory.md` before TDDT. Use `DICT-*` in downstream artifacts; two branch-driver examples from FT do not replace the full active-value inventory.
 
 ## Test Design Decision Table

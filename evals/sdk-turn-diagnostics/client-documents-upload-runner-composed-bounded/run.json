@@ -1,0 +1,20 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782367526,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "elapsed_ms": 180000,
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\client-documents-upload-runner-composed-bounded",
+  "prompt_bytes": 7703,
+  "prompt_chars": 7649,
+  "prompt_sha256": "504efb2a430c28093fb940a7e181dfa44496f95aff280e2670380cc9ccc7a007",
+  "prompt_source": "runner-composed",
+  "python": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\.venv\\Scripts\\python.exe",
+  "sandbox_policy": "workspace_write",
+  "started_at_epoch": 1782367346,
+  "status": "timeout",
+  "thread_id": "019efd5f-6a5a-7573-9144-fba3db96ab22",
+  "timeout_phase": "sdk-turn-timeout-after-turn-started",
+  "timeout_seconds": 180,
+  "version": 1
+}

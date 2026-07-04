@@ -1,0 +1,20 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782378682,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "elapsed_ms": 180015,
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\semantic-active-readonly-live",
+  "prompt_bytes": 1002,
+  "prompt_chars": 984,
+  "prompt_sha256": "18c3e020acc591a5fe306d04abb755bbfeb879a00a688ae85791530aaa1a9352",
+  "prompt_source": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\ft-2-OF_17\\work\\review-cycles\\client-documents-upload-and-actuality\\prompts\\prompt.semantic-review-r1.md",
+  "python": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\.venv\\Scripts\\python.exe",
+  "sandbox_policy": "read_only",
+  "started_at_epoch": 1782378502,
+  "status": "timeout",
+  "thread_id": "019efe09-a019-7b01-ad09-e0269d20fb37",
+  "timeout_phase": "sdk-turn-timeout-after-turn-started",
+  "timeout_seconds": 180,
+  "version": 1
+}

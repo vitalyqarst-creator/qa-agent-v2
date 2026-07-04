@@ -153,10 +153,15 @@ next_skill: ft-test-case-writer
 **test_case_numbering_checked:** yes
 **test_design_checked:** yes
 **applicability_dimensions_checked:** yes
+**validator_checked:** yes
 **blocking_findings_absent:** yes
 **traceability_gaps_absent:** yes|not-applicable
 **known_unclear_items:** none | <список допустимых unclear>
 **sign_off_rationale:** <краткое объяснение, почему набор можно передать дальше>
+
+Optional waiver heading: `## Validator Warning Waivers`; table columns: `finding_id | path | waiver_status | waiver_class | rationale | evidence`.
+
+Allowed `waiver_class`: `false-positive`, `validator-schema-lag`, `accepted-source-gap`, `accepted-nonblocking-risk`. `accepted-source-gap` cites existing `GAP-*`; process-only status/history is invalid. `validator-schema-lag` is valid only when `rationale` explains the expected validator model vs actual artifact model, and `evidence` cites affected `PDP-*`/`PD-*`, `ATOM-*` or `TC-*` plus counter-evidence such as covered traceability, linked design rows or no open findings.
 ```
 
 Правила заполнения:
@@ -167,7 +172,10 @@ next_skill: ft-test-case-writer
 - `test_case_grouping_checked` должно быть `yes` только если canonical file логически сгруппирован по функциональности/блоку/элементу/операции или reviewer явно проверил, что для узкого scope отдельная группировка не нужна.
 - `test_case_numbering_checked` должно быть `yes` только если `TC-*` ids в canonical file имеют сквозную нумерацию без дублей, пропусков и перезапуска внутри групп, а ссылки на измененные ids обновлены.
 - `applicability_dimensions_checked` должно быть `yes` только если reviewer проверил каждую строку `Test-design applicability matrix`: все `applicable = yes` rows имеют реальное покрытие проверяемыми `TC-*` или явный `GAP-*`.
-- `blocking_findings_absent` может быть `yes` только если нет findings с `severity = error` или `severity = warning`.
+- `validator_checked` должно быть `yes` только если reviewer перед sign-off выполнил `python scripts\validate_agent_artifacts.py --root <ft-package> --json` или эквивалентный runner validator gate и отфильтровал findings текущего scope, включая canonical test-case file и split test-design artifacts.
+- Reviewer must treat the full validator report as raw input, not as the scoped verdict. Current-scope validator filtering excludes historical `work/review-cycles/<scope>/versions/` snapshots, `_artifact_write/` scratch files and unrelated scopes; findings there may remain in the full report but must not block `blocking_findings_absent` unless the same finding exists in the active canonical TC file, active split test-design directory or current cycle outputs.
+- `blocking_findings_absent` может быть `yes` только если нет findings с `severity = error` или `severity = warning`, включая validator warnings/errors по canonical test-case file и split test-design artifacts текущего scope. Non-blocking validator warning/error требует `Validator Warning Waivers` с `finding_id`, `path`, `waiver_status`, `waiver_class`, `rationale`, `evidence`; молчаливый `signed-off` недопустим.
+- Waiver не должен быть мягче finding: `validator-schema-lag` без описания schema/model mismatch, affected refs и counter-evidence считается invalid; для semantic TC defects вроде duplicated source fields, missing `DICT-*` traceability, synthetic quote, missing cleanup, indistinct branch oracle, bundled negative input classes, missing full-valid fixture for negative transition, requiredness without empty/marker check, metadata behavior smell или metadata cross-section conflict reviewer должен требовать исправление, а не schema-lag waiver.
 - `traceability_gaps_absent` может быть `yes` только если traceability matrix не содержит `coverage_status = gap`.
 - `known_unclear_items` должен перечислять оставшиеся допустимые `unclear`, если они есть; `none` допустимо только при их отсутствии.
 - `sign_off_rationale` должен объяснять решение reviewer-а, а не повторять слово `signed-off`.
@@ -188,7 +196,7 @@ prompt.reviewer-to-ui-prep.md
 - нет findings с `severity = warning`;
 - traceability matrix не содержит `coverage_status = gap`;
 - оставшиеся `unclear`, если есть, явно допустимы и не блокируют выполнение ручного набора;
-- `Reviewer Sign-off Self-check` заполнен и подтверждает проверку traceability, structure, grouping, сквозной нумерации, test-design и отсутствие blocking findings;
+- `Reviewer Sign-off Self-check` заполнен и подтверждает проверку traceability, structure, grouping, сквозной нумерации, test-design, validator gate и отсутствие blocking findings;
 - если DOCX+PDF доступны, `Reviewer Sign-off Self-check` подтверждает `source_parity_checked: yes`;
 - `cycle-state.yaml` или связанный `workflow-state.yaml` фиксирует `signed-off`.
 
@@ -264,6 +272,7 @@ Reviewer или iteration должен копировать один из шаб
 **test_case_numbering_checked:** yes
 **test_design_checked:** yes
 **applicability_dimensions_checked:** yes
+**validator_checked:** yes
 **blocking_findings_absent:** yes
 **traceability_gaps_absent:** yes
 **known_unclear_items:** none | <ATOM-* / GAP-* explicitly accepted as non-blocking>

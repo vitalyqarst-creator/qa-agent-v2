@@ -97,16 +97,20 @@ The runner should fail before session start if `active_transition_prompt` is mis
 The canonical runner entrypoint is:
 
 ```powershell
-python scripts/codex_review_cycle_runner.py validate --state <cycle-state.yaml>
-python scripts/codex_review_cycle_runner.py snapshot --state <cycle-state.yaml> --snapshot-id <id>
-python scripts/codex_review_cycle_runner.py doctor --state <cycle-state.yaml>
-python scripts/codex_review_cycle_runner.py start --state <cycle-state.yaml> --dry-run
-python scripts/codex_review_cycle_runner.py continue --state <cycle-state.yaml> --dry-run
-python scripts/codex_review_cycle_runner.py start --state <cycle-state.yaml>
-python scripts/codex_review_cycle_runner.py run-until-terminal --state <cycle-state.yaml>
-python scripts/codex_review_cycle_runner.py resume --state <cycle-state.yaml> --dry-run
-python scripts/codex_review_cycle_runner.py resume --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 validate --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 snapshot --state <cycle-state.yaml> --snapshot-id <id>
+.\scripts\run_cycle.ps1 doctor --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 start --state <cycle-state.yaml> --dry-run
+.\scripts\run_cycle.ps1 continue --state <cycle-state.yaml> --dry-run
+.\scripts\run_cycle.ps1 start --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 run-until-terminal --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 resume --state <cycle-state.yaml> --dry-run
+.\scripts\run_cycle.ps1 resume --state <cycle-state.yaml>
 ```
+
+On Windows, use `scripts/run_cycle.ps1` for runner commands. It always invokes
+the repository venv Python at `.venv\Scripts\python.exe`; bare `python` may
+resolve to the system interpreter and miss the `openai-codex` SDK dependency.
 
 `--dry-run` must verify transition inputs and write no Codex session. It may report the next stage, prompt, sandbox and scenario.
 
@@ -116,9 +120,29 @@ Without `--dry-run`, `start` / `continue` starts a new Codex thread, runs the ac
 
 `run-until-terminal` starts the next Codex thread, waits for it to finish, reloads `cycle-state.yaml`, validates the next transition, and repeats until `signed-off`, `round-cap-reached`, `blocked-input` or another non-runnable status is reached. It must stop with an error if a completed session does not advance `current_stage`, `stage_status`, `semantic_round` or `active_transition_prompt`, because continuing would risk repeating the same stage. Use `--max-sessions` as a loop safety limit; the default is 12.
 
+`--session-timeout-seconds <N>` enables process-supervised SDK execution for mutating commands. `-1` means stage default timeout, `0` disables timeout recovery, and any positive value is an explicit per-session override. The default timeout profile is:
+
+| scenario group | timeout |
+| --- | ---: |
+| writer initial/revision/format/remediation sessions | `3600s` |
+| reviewer, scope-gap, format and regression sessions | `1800s` |
+
+On timeout the parent runner starts from evidence, not from the transport error alone:
+
+| condition | decision |
+| --- | --- |
+| child payload exists and validates | accept payload and continue |
+| `cycle-state.yaml` already advanced to a valid next state | record `completed-with-progress`, write `outputs/<stage>-timeout-after-progress.md`, snapshot and continue |
+| writer state did not advance, but writer response, clean scoped validator profile and next review prompt exist | recover to the next review stage, record `completed-with-progress`, write `outputs/<stage>-timeout-after-artifacts.md`, snapshot and continue |
+| no valid progress evidence, dirty scoped validator profile, missing writer response, missing next prompt or ambiguous artifacts | write controlled timeout recovery: `stage_status: blocked-input`, `outputs/<stage>-timeout-recovery.md` with artifact recovery diagnostics, `outputs/<stage>-completion.yaml`, session-map record, runner events and an after-snapshot |
+
+Timeout recovery is transport recovery, not semantic sign-off. The next reviewer stage remains responsible for checking the writer artifacts.
+
 `resume` is a safe wrapper for continuing a chain after diagnostics. `resume --dry-run` prints the same diagnostic payload as `doctor`. A stale lock may be recovered by `resume --recover-stale-lock` only when the lock heartbeat is stale and the recorded PID is confirmed dead. If the PID is alive or cannot be checked, the runner must refuse recovery.
 
 If the SDK returns `turn_status = interrupted` after the stage has already written artifacts and advanced a valid `cycle-state.yaml`, the runner may record the session as `status: completed-with-progress` and continue the chain. This is not a semantic decision by the runner: the only accepted evidence is a changed progress marker plus a valid next state. If the state did not advance, if the next state does not validate, or if the raw turn status is a real failure rather than `interrupted`, the runner must stop.
+
+For writer timeout artifact recovery, session-based outputs should prefer stage-specific names such as `outputs/writer-session-log.writer-r2.md` and `outputs/agent-decision-log.writer-r2.md`. The runner may also accept legacy `outputs/writer-session-log.md` / `outputs/agent-decision-log.md` as supporting evidence when the canonical writer response, clean scoped validator profile and next review prompt are present.
 
 `run-until-terminal --dry-run` validates only the first runnable stage. It must not pretend to know the full future chain, because later routing depends on the stage-owned updates to `cycle-state.yaml`.
 
@@ -136,7 +160,7 @@ While blocked inside the Codex SDK, the runner must keep updating `last_heartbea
 
 Lock diagnostics must include the recorded PID and whether that PID is alive, dead or unknown. Stale-lock recovery must not proceed when the recorded PID is alive or cannot be checked.
 
-Do not solve timeout ambiguity by launching a second runner in parallel. Increase the external shell timeout, inspect `runner.lock.yaml`, or recover a stale lock deliberately.
+Do not solve timeout ambiguity by launching a second runner in parallel. Prefer `--session-timeout-seconds` for controlled SDK-session recovery; otherwise increase the external shell timeout, inspect `runner.lock.yaml`, or recover a stale lock deliberately.
 
 ## Runner Event Log
 
@@ -168,6 +192,7 @@ A completed stage requires:
 - `status: started` session record written before blocking on the SDK run, so interrupted runner processes still leave the `thread_id`;
 - append-only entries in `runner-events.ndjson`;
 - `<stage>-completion.yaml` in `outputs/`;
+- for `turn_status: timeout`, `status: failed` is allowed only when the runner itself advanced `cycle-state.yaml` to terminal `blocked-input` and wrote the timeout recovery output;
 - for `turn_status: interrupted`, `status: completed-with-progress` is allowed only when `cycle-state.yaml` advanced and validates;
 - no active `runner.lock.yaml` remains after normal completion;
 - output snapshot with `snapshot-manifest.yaml`;

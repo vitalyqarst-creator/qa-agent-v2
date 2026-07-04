@@ -1,10 +1,25 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+
+
+def load_validator_module():
+    spec = importlib.util.spec_from_file_location(
+        "validate_agent_artifacts",
+        ROOT_DIR / "scripts" / "validate_agent_artifacts.py",
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 class ReviewerContractTests(unittest.TestCase):
@@ -29,6 +44,56 @@ class ReviewerContractTests(unittest.TestCase):
             "round-cap-reached",
         ):
             self.assertIn(token, reviewer)
+
+    def test_reviewer_signoff_requires_validator_gate(self) -> None:
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+        output_format = (ROOT_DIR / "references" / "agent" / "reviewer-output-format.md").read_text(encoding="utf-8")
+        validator = (ROOT_DIR / "scripts" / "validate_agent_artifacts.py").read_text(encoding="utf-8")
+
+        for token in (
+            "validate_agent_artifacts.py --root <ft-package> --json",
+            "split test-design artifacts",
+        ):
+            self.assertIn(token, reviewer)
+            self.assertIn(token, output_format)
+
+        self.assertIn("validator_checked: yes", reviewer)
+        self.assertIn("**validator_checked:** yes", output_format)
+        for token in (
+            "missing full-valid fixture for negative transition",
+            "requiredness without empty/marker check",
+            "metadata behavior smell",
+            "metadata cross-section conflict",
+        ):
+            self.assertIn(token, output_format)
+        self.assertIn('"validator_checked"', validator)
+        self.assertIn("REVIEWER_SIGNOFF_YES_FIELDS", validator)
+
+    def test_reviewer_signoff_field_validation_requires_validator_checked(self) -> None:
+        validator = load_validator_module()
+        valid_fields = {
+            "traceability_checked": "yes",
+            "structure_checked": "yes",
+            "test_case_grouping_checked": "yes",
+            "test_case_numbering_checked": "yes",
+            "test_design_checked": "yes",
+            "applicability_dimensions_checked": "yes",
+            "validator_checked": "yes",
+            "blocking_findings_absent": "yes",
+            "traceability_gaps_absent": "yes",
+            "known_unclear_items": "none",
+            "sign_off_rationale": "Final reviewer pass checked the current scope artifacts.",
+        }
+
+        self.assertEqual([], validator.reviewer_signoff_field_issues(valid_fields))
+
+        missing_validator = dict(valid_fields)
+        del missing_validator["validator_checked"]
+        self.assertIn("missing:validator_checked", validator.reviewer_signoff_field_issues(missing_validator))
+
+        failed_validator = dict(valid_fields)
+        failed_validator["validator_checked"] = "no"
+        self.assertIn("validator_checked=no", validator.reviewer_signoff_field_issues(failed_validator))
 
     def test_reviewer_skill_returns_findings_and_traceability_matrix(self) -> None:
         reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
@@ -153,6 +218,11 @@ class ReviewerContractTests(unittest.TestCase):
             "Editability TC does not name concrete old/new values",
             "Closed dictionary/list TC checks active values but does not verify absence of extra values",
             "Test-design-derived check",
+            "nondeterministic-alternative-oracle",
+            "executable-over-unresolved-mechanism",
+            "ambiguous-ui-alias-step",
+            "derived-setup-behavior-as-source",
+            "символ отклонен или значение остается незаполненным/предыдущим",
             "`traceability-placeholder`",
             "`source-rule-oracle`",
             "`generic-editability`",

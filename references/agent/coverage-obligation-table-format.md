@@ -34,6 +34,12 @@
 | OBL-011 | WP-01 | SRC-020.P01 | ATOM-037 | date-passport-validity | passport-before-14-rejected | Для даты выдачи до 14-летия отображается подсказка `Выдача паспорта предусмотрена с 14 лет`. | GSR 32; PDF p.49 | TC-UI-MAIN-182 | covered | - |
 | OBL-012 | WP-02 | SRC-035.P02 | ATOM-067 | address-required-components | missing-apartment-or-private-house-hint | При отсутствии квартиры поле подсвечивается красным и отображается подсказка о квартире или частном доме. | GSR 60; PDF p.52 | TC-UI-MAIN-183 | covered | - |
 
+## Статусы
+
+`status` - закрытый enum: `covered | gap | unclear | blocked | not-applicable | n/a`.
+
+Не используй `planned`, `pass`, `pass-with-gap`, `ok`, `yes` или локальные варианты. `Coverage Obligation Table` фиксирует итоговый routing obligation row после design decision: строка либо покрыта `TC-*`, либо указывает конкретный `GAP-*`, либо явно не применима. Намерение написать TC позже хранится в `planned_tc_or_gap`, но не в `status`.
+
 ## Обязательные Классы
 
 Для `property_type = numeric-format`:
@@ -46,6 +52,8 @@
 - `reject-sign` - знаки `+` / `-` не принимаются.
 
 `numeric-format` не задает UI-механику сам по себе. Если ФТ говорит только “только числовые символы”, expected result не должен утверждать, что буква не появилась, была удалена, поле очистилось или значение автоформатировалось. Такие механики допустимы только при прямом source evidence; иначе фиксируй `GAP-*` / `unclear`.
+
+Не создавай отдельный property type вроде `numeric-format-invalid`, `numeric-negative` или `non-digit-rejection` для обхода обязательных classes. Один source-backed `numeric-format` остается одним `source_property_id`; все required classes идут отдельными obligation rows. Если оракул или fixture для конкретного invalid class недоступен, эта obligation row все равно создается и ссылается на узкий `GAP-*`, а не на новый property type.
 
 Для `property_type = amount-tags`:
 

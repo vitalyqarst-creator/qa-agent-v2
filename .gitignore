@@ -26,7 +26,8 @@ wheelhouse/
 .tmp_*
 work/
 evals/runs/
-evals/candidates/
+evals/candidates/*
+!evals/candidates/README.md
 
 # FT packages and generated/manual test-case artifacts are intentionally out of
 # the agent repository. Keep reusable agent rules in skills/ and references/.
@@ -46,3 +47,11 @@ fts/
 
 # Office temporary lock files
 ~$*
+
+# Publish only the AutoFin FT package from fts/.
+!fts/
+fts/*
+!fts/AutoFin/
+!fts/AutoFin/**
+fts/AutoFin/work/
+fts/AutoFin/**/~$*

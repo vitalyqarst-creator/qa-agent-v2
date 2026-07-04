@@ -10,7 +10,7 @@ Required properties:
 
 - `workflow-state.yaml` has `stage_status: signed-off` and `next_skill: ft-ui-automation-prep`;
 - `latest_artifacts` includes `final_findings`, `final_traceability_matrix`, `final_traceability_matrix_xlsx`, `loop_summary`, and `signed_off_snapshot`;
-- `loop-summary.md` has `Reviewer Sign-off Self-check` with `applicability_dimensions_checked: yes`, `test_case_grouping_checked: yes`, `test_case_numbering_checked: yes`, and `source_parity_checked: yes | not-applicable`;
+- `loop-summary.md` has `Reviewer Sign-off Self-check` with `applicability_dimensions_checked: yes`, `test_case_grouping_checked: yes`, `test_case_numbering_checked: yes`, `validator_checked: yes`, and `source_parity_checked: yes | not-applicable`;
 - `prompt.reviewer-to-ui-prep.md` exists and points only to the signed-off baseline.
 
 Validation:

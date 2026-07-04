@@ -48,6 +48,7 @@
 - `single_expected_behavior` не должен содержать пару независимых результатов вроде `не принимает X и принимает Y`.
 - Для правил вида `только если`, `допустимы только`, `не допускается`, `обязателен при`, `отображается при` план должен содержать позитивную ветку и негативную/обратную ветку либо `GAP-*`.
 - Validator ловит отсутствие обратной ветки для conditional/dependency rows как `test-case-package-design-plan-missing-conditional-branch`.
+- Исключение: dependency row, которая явно описывает optional/no-blocking behavior (`может оставаться пустым`, `может оставаться без отдельного выбора`, `не блокирует переход/сохранение`), не требует искусственной inverse branch, если в этой же package/field context есть traceability evidence и row не заявляет visibility/requiredness transition.
 - Validator ловит invalid/rejection row без positive acceptance sibling как `test-case-package-design-plan-negative-without-positive-acceptance`.
 - Для length/mask/numeric/date rules план должен перечислять конкретные classes: valid class, invalid class, boundary class. Не используй общий класс `невалидное значение`, если можно выделить буквы, спецсимволы, пробелы, `N-1/N/N+1`, `min/max`, `start > end` и т.д.
 - Для `numeric-format` plan должен строиться из `Coverage Obligation Table` и содержать отдельные rows для valid digits, letters, spaces, special chars, decimal separator и sign либо узкие `GAP-*`.

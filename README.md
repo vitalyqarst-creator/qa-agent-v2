@@ -81,13 +81,13 @@ all_sections = load_sections(source)
 Канонический способ запуска тестов в репозитории:
 
 ```powershell
-python scripts/run_tests.py
+.\.venv\Scripts\python.exe scripts/run_tests.py
 ```
 
-Скрипт использует корректный `unittest discover` workflow. Если нужен raw-вариант без helper script, используй:
+Скрипт запускает обычные test modules через controlled discovery, исключает монолитный `tests.test_agent_artifact_validator` и затем запускает его через sharded wrapper. Raw `unittest discover` не является каноническим full-run режимом, потому что он запускает artifact-validator монолитно:
 
 ```powershell
-python -m unittest discover -s tests
+.\.venv\Scripts\python.exe -m unittest discover -s tests
 ```
 
 Обычный `python -m unittest` в этом репозитории может не подхватить suite полностью.
@@ -95,11 +95,17 @@ python -m unittest discover -s tests
 Для быстрых проверок отдельных слоев:
 
 ```powershell
-python scripts/run_tests.py --suite agent-layer
-python scripts/run_tests.py --suite architecture
+.\.venv\Scripts\python.exe scripts/run_tests.py --suite agent-layer
+.\.venv\Scripts\python.exe scripts/run_tests.py --suite agent-layer-fast
+.\.venv\Scripts\python.exe scripts/run_tests.py --suite architecture
+.\.venv\Scripts\python.exe scripts/run_tests.py --suite artifact-validator-sharded
 ```
 
 `architecture` запускает governance-аудит `skills/`, `references/`, `AGENTS.md` и scripts через `agent-architecture-auditor` и падает на warning. Используй его перед изменениями агентных инструкций и после них.
+
+`agent-layer-fast` запускает agent-layer тесты без тяжелого artifact-validator. `agent-layer` запускает fast agent-layer и затем `artifact-validator-sharded`.
+
+`artifact-validator-sharded` запускает тяжелый `tests.test_agent_artifact_validator` полным покрытием через 7 shard-ов и является каноническим локальным режимом вместо длинного монолитного процесса. Для CI fan-out можно запускать отдельный shard: `.\.venv\Scripts\python.exe scripts/run_tests.py --suite artifact-validator --shard-count 7 --shard-index 1`.
 
 ## Публичный API
 

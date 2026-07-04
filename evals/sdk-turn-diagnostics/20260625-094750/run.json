@@ -1,0 +1,17 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782380870,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\20260625-094750",
+  "prompt_bytes": 2436,
+  "prompt_chars": 2418,
+  "prompt_sha256": "edeb2475890a7d25584cf63239316ed538f86998c4afc6d0537139e242be4e0e",
+  "prompt_source": "bounded-semantic",
+  "python": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\.venv\\Scripts\\python.exe",
+  "sandbox_policy": "read_only",
+  "started_at_epoch": 1782380870,
+  "status": "rendered-prompt",
+  "timeout_seconds": 60,
+  "version": 1
+}

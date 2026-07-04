@@ -74,14 +74,14 @@ For a new cycle, ensure these locations exist or are created by the runner:
 6. Run dry-run validation before starting or continuing:
 
 ```powershell
-python scripts/codex_review_cycle_runner.py validate --state <cycle-state.yaml>
-python scripts/codex_review_cycle_runner.py start --state <cycle-state.yaml> --dry-run
+.\scripts\run_cycle.ps1 validate --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 start --state <cycle-state.yaml> --dry-run
 ```
 
 7. Start or continue the chain through the SDK runner:
 
 ```powershell
-python scripts/codex_review_cycle_runner.py run-until-terminal --state <cycle-state.yaml>
+.\scripts\run_cycle.ps1 run-until-terminal --state <cycle-state.yaml>
 ```
 
 8. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.

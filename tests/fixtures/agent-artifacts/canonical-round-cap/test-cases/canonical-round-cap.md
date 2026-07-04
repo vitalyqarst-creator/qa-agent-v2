@@ -4,15 +4,15 @@
 
 | dimension | applicable | source_ref | reason | linked_atoms | linked_test_cases | gap_id |
 | --- | --- | --- | --- | --- | --- | --- |
-| scenario-use-case | yes | FT-CANON-1 | Main success flow is in scope. | ATOM-001 | TC-CANON-RC-001 | - |
-| traceability | yes | FT-CANON-2 | Secondary required behavior is not covered. | ATOM-002 | - | coverage_gap:missing-secondary-behavior |
+| scenario-use-case | yes | FT-CANON-1 | Main success flow is in scope. | ATOM-001 | TC-CANON-RC-001 |  |
+| traceability | yes | FT-CANON-2 | Secondary required behavior is not covered. | ATOM-002 | not_covered:coverage_gap:missing-secondary-behavior | coverage_gap:missing-secondary-behavior |
 
 ## Risk / Priority Map
 
 | atom_id | risk_level | risk_factors | source_ref | required_priority | linked_test_cases | gap_id | rationale |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ATOM-001 | medium | main flow | FT-CANON-1 | Medium | TC-CANON-RC-001 | - | Main user-visible behavior. |
-| ATOM-002 | high | missing required behavior | FT-CANON-2 | High | - | coverage_gap:missing-secondary-behavior | Required behavior remains uncovered. |
+| ATOM-001 | medium | main flow | FT-CANON-1 | Medium | TC-CANON-RC-001 |  | Main user-visible behavior. |
+| ATOM-002 | high | missing required behavior | FT-CANON-2 | High | not_covered:coverage_gap:missing-secondary-behavior | coverage_gap:missing-secondary-behavior | Required behavior remains uncovered. |
 
 ## TC-CANON-RC-001
 

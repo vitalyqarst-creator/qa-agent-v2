@@ -1,0 +1,17 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782362625,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\client-documents-upload-runner-composed-dry-run",
+  "prompt_bytes": 5829,
+  "prompt_chars": 5775,
+  "prompt_sha256": "eb2d0dff9033fc0ae63320781f066dec623d2cba7dabaa307509b0cddbccd161",
+  "prompt_source": "runner-composed",
+  "python": "C:\\Program Files\\Python311\\python.exe",
+  "sandbox_policy": "workspace_write",
+  "started_at_epoch": 1782362625,
+  "status": "rendered-prompt",
+  "timeout_seconds": 60,
+  "version": 1
+}

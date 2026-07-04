@@ -27,7 +27,7 @@ These files support diagnosis and recovery only. They do not contain reviewer ve
 
 The default stage order is:
 
-Compact chain: `scope-gap-review -> writer-r1 -> structure-preflight-r1 -> writer-structure-r1 if blocked -> structure-preflight-r1 -> semantic-review-r1 -> writer-r2 -> semantic-review-r2 -> format-review-final -> writer-format-final -> semantic-regression-final -> signed-off|round-cap-reached`.
+Default chain: `scope-gap-review -> writer-r1 -> structure-preflight-r1 -> writer-structure-r1 if blocked -> structure-preflight-r1 -> semantic-review-r1 -> writer-r2 -> semantic-review-r2 -> format-review-final -> writer-format-final -> semantic-regression-final -> signed-off|round-cap-reached`.
 
 0. `scope-gap-review`: optional reviewer session after scope analysis, required when `scope-coverage-gaps.md` contains any `GAP-*`.
 1. `writer-r1`: initial draft in a writer session.
@@ -70,13 +70,16 @@ test_design_dir: work/test-design/<section-id>-<scope-slug>
 active_snapshot: work/review-cycles/<scope-slug>/versions/<snapshot-id>
 active_transition_prompt: work/review-cycles/<scope-slug>/prompts/<prompt-file>.md
 sessions: []
-latest_artifacts: {}
+latest_artifacts: []
 blocking_reasons: []
+blocking_findings: []
 open_questions: []
 accepted_risks: []
 ```
 
 Before `writer-r1`, `canonical_test_cases` is the intended canonical path and may not exist yet. The runner must still reject snapshot paths under `work/review-cycles/.../versions/`, but it must not require the file to exist for `scope-ready-for-gap-review`, `scope-gap-review-passed` or `scope-ready-for-writer`.
+
+`cycle-state.yaml` must stay in runner simple-YAML form: top-level scalar fields plus top-level string lists only. Do not write nested maps under `latest_artifacts`, `blocking_reasons`, `blocking_findings`, `open_questions`, `accepted_risks` or `sessions`; put rich details in sidecar artifacts and list those artifact paths. The runner may tolerate and normalize simple accidental nested map leaves for recovery, but that is not the canonical format.
 
 Allowed `stage_status` values:
 
@@ -94,6 +97,22 @@ Allowed `stage_status` values:
 - `signed-off`
 - `round-cap-reached`
 - `blocked-input`
+
+## Post-Session Transition Matrix
+
+The runner and reviewer/writer prompts must stay aligned with this matrix. A session may also produce a terminal status: `signed-off`, `round-cap-reached` or `blocked-input`.
+
+| scenario | allowed non-terminal post-session `stage_status` |
+| --- | --- |
+| `scope.session_gap_review` | `scope-gap-review-passed`; `scope-ready-for-writer` |
+| `writer.session_initial_draft` | `writer-draft-ready` |
+| `writer.remediation.structure_preflight` | `writer-draft-ready` |
+| `writer.session_semantic_revision` | `semantic-review-ready` |
+| `writer.session_format_revision` | `final-regression-ready` |
+| `reviewer.structure_preflight` | `semantic-review-ready`; `structure-preflight-blocked` |
+| `reviewer.semantic_traceability_test_design` | `format-review-ready`; `semantic-review-passed`; `semantic-revision-needed` |
+| `reviewer.semantic_regression` | |
+| `reviewer.structure_format_final` | `final-regression-ready`; `format-revision-needed` |
 
 ## Reviewer Passes
 
@@ -156,6 +175,12 @@ Snapshot candidates:
 - `codex-session-map.yaml`;
 - `runner-events.ndjson`;
 - `outputs/<stage>-completion.yaml` files.
+
+Snapshot exclusions:
+
+- never copy `work/test-design/<scope-slug>/_artifact_write/` scratch directories into `versions/<snapshot-id>/`;
+- never re-snapshot existing `work/review-cycles/<scope-slug>/versions/` contents into a new snapshot;
+- snapshot manifests should list only canonical/current artifacts, prompts, outputs and runner evidence needed for diagnosis/replay.
 
 If the canonical test-case file does not exist yet in pre-writer statuses, snapshots include state, prompts and scope/test-design artifacts only.
 

@@ -1,0 +1,4 @@
+{"cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2", "event": "thread_start", "ts_epoch": 1782362708}
+{"event": "thread_started", "thread_id": "019efd18-a175-74c3-b88b-f75ccdb96e59", "ts_epoch": 1782362721}
+{"event": "turn_started", "thread_id": "019efd18-a175-74c3-b88b-f75ccdb96e59", "ts_epoch": 1782362721}
+{"elapsed_ms": 180030, "event": "turn_timeout", "stderr_tail": "", "stdout_tail": "", "thread_id": "019efd18-a175-74c3-b88b-f75ccdb96e59", "thread_started_epoch": 1782362721, "timeout_phase": "sdk-turn-timeout-after-turn-started", "timeout_seconds": 180, "ts_epoch": 1782362888, "turn_started_epoch": 1782362721}

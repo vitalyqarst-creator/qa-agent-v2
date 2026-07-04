@@ -1,0 +1,21 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782378763,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "elapsed_ms": 40155,
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\semantic-reduced-readonly-live",
+  "prompt_bytes": 927,
+  "prompt_chars": 927,
+  "prompt_sha256": "56eb4e5d1e3bc424fede9bb69b2c129ac36fb427ecfe2d640a6b6c4025c1c69a",
+  "prompt_source": "evals\\sdk-turn-diagnostics\\semantic-reduced-readonly-prompt.md",
+  "python": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\.venv\\Scripts\\python.exe",
+  "sandbox_policy": "read_only",
+  "started_at_epoch": 1782378723,
+  "status": "completed",
+  "thread_id": "019efe0c-fd89-73f2-90b5-6ae487073b73",
+  "timeout_seconds": 180,
+  "turn_id": "019efe0d-273c-7d52-885b-30fa198497d7",
+  "turn_status": "completed",
+  "version": 1
+}

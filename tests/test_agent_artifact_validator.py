@@ -52,6 +52,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     "**Expected Result:** Result.",
                     "**Postconditions:**",
                     "- Not required.",
+                    "**Traceability:** `ATOM-001`; `GSR 1`",
                     "**FT Reference:** `GSR 1`",
                     "**Requirement Source:**",
                     "- `Section 1`",
@@ -230,6 +231,23 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         )
 
     def append_passing_writer_quality_gate(self, path: Path) -> None:
+        profile_path = path.parent / "scoped-validator-profile.writer-r1.json"
+        profile_path.write_text(
+            json.dumps(
+                {
+                    "command": "python scripts/validate_agent_artifacts.py fts/demo-ft --json",
+                    "generated_by": "codex_review_cycle_runner",
+                    "scope_slug": "section-scope",
+                    "canonical_test_cases": path.name,
+                    "test_design_dir": "work/test-design/section-scope",
+                    "current_scope_findings": [],
+                    "unresolved_warning_error_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         path.write_text(
             path.read_text(encoding="utf-8")
             + "\n\n"
@@ -239,27 +257,37 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     "",
                     "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
                     "| --- | --- | --- | --- | --- | --- |",
-                    "| `artifact-write-strategy` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `mockup-visual-inventory` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `source-row-inventory` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `source-normalization-atomic` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `test-design-decision-table` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `test-design-review` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `gap-admissibility` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `ledger-atomicity` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `gsr-range-compression` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `design-plan-atomicity` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `scenario-does-not-replace-atomic` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `tc-atomicity` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `test-data-specificity` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `internal-observability` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `action-observability` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `semantic-req-id-parity` | `pass` | Проверено | `WP-01` | - | `no` |",
-                    "| `package-ready` | `pass` | Проверено | `WP-01` | - | `no` |",
+                    "| `artifact-write-strategy` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `mockup-visual-inventory` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `source-row-inventory` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `source-normalization-atomic` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `test-design-decision-table` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `test-design-review` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `gap-admissibility` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `ledger-atomicity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `gsr-range-compression` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `design-plan-atomicity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `scenario-does-not-replace-atomic` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `tc-atomicity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `test-data-specificity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `internal-observability` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `action-observability` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `semantic-req-id-parity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `package-ready` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
                 ]
             ),
             encoding="utf-8",
         )
+        marker = "| `package-ready` | `pass` |"
+        content = path.read_text(encoding="utf-8")
+        scoped_row = (
+            "| `scoped-validator-findings` | `pass` | "
+            "`scoped-validator-profile.writer-r1.json`: unresolved_warning_error_count=0 | "
+            "`WP-01` | none_required:pass | `no` |"
+        )
+        if marker in content:
+            content = content.replace(marker, f"{scoped_row}\n{marker}", 1)
+            path.write_text(content, encoding="utf-8")
 
     def append_passing_test_design_review(self, path: Path) -> None:
         path.write_text(
@@ -271,22 +299,92 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     "",
                     "| review_item | status | severity | affected_package | evidence | required_action | blocks_ready_for_review |",
                     "| --- | --- | --- | --- | --- | --- | --- |",
-                    "| `decision-table-classification` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `ledger-plan-alignment` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `coverage-class-completeness` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `numeric-length-boundaries` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `unsupported-ui-mechanism` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `mask-format-coverage` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `dictionary-closed-set` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `conditional-branches` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `negative-fixture-isolation` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `applicability-linked-tc-semantics` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `gap-specificity` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `gap-admissibility` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `internal-observability` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `metadata-only-exclusion` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `tc-mapping-atomicity` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
-                    "| `ready-for-tc-writing` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `decision-table-classification` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `ledger-plan-alignment` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `coverage-class-completeness` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `numeric-length-boundaries` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `unsupported-ui-mechanism` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `mask-format-coverage` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `dictionary-closed-set` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `conditional-branches` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `negative-fixture-isolation` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `applicability-linked-tc-semantics` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `gap-specificity` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `gap-admissibility` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `internal-observability` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `metadata-only-exclusion` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `tc-mapping-atomicity` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `ready-for-tc-writing` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def append_minimal_package_test_design_plan(self, path: Path) -> None:
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "\n\n"
+            + "\n".join(
+                [
+                    "## Package Test Design Plan",
+                    "",
+                    "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                    "| PD-001 | WP-01 | visibility | GSR 1 | ATOM-001 | Open the form | positive | visible-state | standard | The documented form is open. | GSR 1 | TC-SAMPLE-001 | covered |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def write_test_case_file_with_blocking_writer_gates(self, path: Path) -> None:
+        self.write_minimal_test_case_file(path)
+        self.append_safe_artifact_write_strategy(path)
+        self.append_minimal_package_test_design_plan(path)
+        self.append_passing_test_design_review(path)
+        self.append_passing_writer_quality_gate(path)
+        updated_lines: list[str] = []
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if line.startswith("| `ready-for-tc-writing` |"):
+                updated_lines.append(
+                    "| `ready-for-tc-writing` | `fail` | `warning` | `WP-01` | "
+                    "Reviewer-facing package is blocked by an unresolved design issue. | "
+                    "Rewrite affected package. | `yes` |"
+                )
+            elif line.startswith("| `test-design-review` |"):
+                updated_lines.append(
+                    "| `test-design-review` | `fail` | Test Design Review has blocking rows. | "
+                    "`WP-01` | Rewrite affected package. | `yes` |"
+                )
+            else:
+                updated_lines.append(line)
+        content = "\n".join(updated_lines) + "\n"
+        path.write_text(content, encoding="utf-8")
+
+    def write_writer_workflow_state(
+        self,
+        path: Path,
+        *,
+        stage_status: str,
+        test_case_ref: str = "test-cases/package.md",
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        next_skill = "none" if stage_status == "blocked-input" else "ft-test-case-reviewer"
+        path.write_text(
+            "\n".join(
+                [
+                    "ft_slug: sample-ft",
+                    "scope_slug: package",
+                    "current_stage: ft-test-case-writer",
+                    f"stage_status: {stage_status}",
+                    "current_round: 1",
+                    f"next_skill: {next_skill}",
+                    "required_inputs:",
+                    f"  - {test_case_ref}",
+                    "latest_artifacts:",
+                    f"  test_cases: {test_case_ref}",
+                    "open_questions: []",
+                    "blocking_reasons:",
+                    "  - Writer Quality Gate and Test Design Review contain blocking rows for WP-01 after scoped validator execution.",
                 ]
             ),
             encoding="utf-8",
@@ -722,13 +820,19 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         *,
         coverage_status: str = "gap",
     ) -> None:
+        if coverage_status == "covered":
+            covered_by_tc = "TC-TRACE-001"
+        elif coverage_status == "unclear":
+            covered_by_tc = "unclear:GAP-001"
+        else:
+            covered_by_tc = "not_covered:GAP-001"
         matrix_path = fixture_root / "work" / "review-loops" / "valid-scope" / "round-1-traceability-matrix.md"
         matrix_path.write_text(
             "\n".join(
                 [
                     "| atom_id | source_ref | coverage_status | covered_by_tc |",
                     "| --- | --- | --- | --- |",
-                    f"| {atom_id} | Fixture source | {coverage_status} | - |",
+                    f"| {atom_id} | Fixture source | {coverage_status} | {covered_by_tc} |",
                 ]
             ),
             encoding="utf-8",
@@ -756,7 +860,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                 [
                     "| atom_id | source_ref | coverage_status | covered_by_tc |",
                     "| --- | --- | --- | --- |",
-                    "| ATOM-001 | Fixture source | covered | - |",
+                    "| ATOM-001 | Fixture source | covered | TC-VALID-001 |",
                 ]
             ),
             encoding="utf-8",
@@ -779,6 +883,56 @@ class AgentArtifactValidatorTests(unittest.TestCase):
 
     def test_script_exists(self) -> None:
         self.assertTrue(SCRIPT_PATH.exists())
+
+    def test_traceability_placeholder_sentinel_warns_for_split_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir) / "ft-placeholder"
+            test_case_path = fixture_root / "test-cases" / "1-placeholder.md"
+            self.write_minimal_test_case_file(test_case_path)
+            ledger_path = fixture_root / "work" / "test-design" / test_case_path.stem / "atomic-requirements-ledger.md"
+            ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            ledger_path.write_text(
+                "\n".join(
+                    [
+                        "| atom_id | req_id | traceability_ref | source_statement | normalized_requirement | field_or_object | condition | expected_behavior | covered_by_tc | coverage_status | gap_note | gap_id |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | - | SRC-001 | Field is visible | Field is visible | Field A | always | Visible | - | gap | N/A | - |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("traceability-placeholder-sentinel", finding_ids)
+
+    def test_traceability_placeholder_sentinel_accepts_explicit_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir) / "ft-placeholder"
+            test_case_path = fixture_root / "test-cases" / "1-placeholder.md"
+            self.write_minimal_test_case_file(test_case_path)
+            ledger_path = fixture_root / "work" / "test-design" / test_case_path.stem / "atomic-requirements-ledger.md"
+            ledger_path.parent.mkdir(parents=True, exist_ok=True)
+            ledger_path.write_text(
+                "\n".join(
+                    [
+                        "| atom_id | req_id | traceability_ref | source_statement | normalized_requirement | field_or_object | condition | expected_behavior | covered_by_tc | coverage_status | gap_note | gap_id |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | no_requirement_code:SRC-001 | SRC-001 | Field is visible | Field is visible | Field A | always | Visible | not_covered:GAP-001 | gap | source does not define observable oracle | GAP-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("traceability-placeholder-sentinel", finding_ids)
 
     def test_valid_signed_off_fixture_passes(self) -> None:
         result = self.run_validator(
@@ -1215,6 +1369,128 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("workflow-state-missing-session-log", finding_ids)
         self.assertIn("workflow-state-wrong-stage-session-log", finding_ids)
+
+    def test_writer_blocked_input_validator_not_run_is_error(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_session_log(fixture_root / "writer-session-log.md", skill="ft-test-case-writer")
+            (fixture_root / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "ft_slug: ft-sample",
+                        "scope_slug: ui-main-info",
+                        "current_stage: ft-test-case-writer",
+                        "stage_status: blocked-input",
+                        "current_round: 1",
+                        "next_skill: none",
+                        "required_inputs: []",
+                        "latest_artifacts:",
+                        "  session_log: writer-session-log.md",
+                        "open_questions: []",
+                        "blocking_reasons:",
+                        "  - Validator has not been run after initial artifact generation.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+                "--session-log-policy",
+                "strict",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-blocked-input-validator-not-run", finding_ids)
+
+    def test_writer_blocked_input_suppresses_self_blocking_gate_warnings_for_linked_tc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "sample-ft"
+            test_case_path = ft_root / "test-cases" / "package.md"
+            self.write_test_case_file_with_blocking_writer_gates(test_case_path)
+            self.write_writer_workflow_state(
+                ft_root / "workflow-state.yaml",
+                stage_status="blocked-input",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("writer-quality-gate-failed", finding_ids)
+        self.assertNotIn("test-design-review-failed", finding_ids)
+        self.assertNotIn("workflow-state-blocked-without-reasons", finding_ids)
+
+    def test_writer_ready_for_review_keeps_blocking_gate_failures_for_linked_tc(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "sample-ft"
+            test_case_path = ft_root / "test-cases" / "package.md"
+            self.write_test_case_file_with_blocking_writer_gates(test_case_path)
+            self.write_writer_workflow_state(
+                ft_root / "workflow-state.yaml",
+                stage_status="ready-for-review",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-failed", finding_ids)
+        self.assertIn("test-design-review-failed", finding_ids)
+        self.assertIn("workflow-state-ready-for-review-without-passing-writer-quality-gate", finding_ids)
+
+    def test_writer_blocked_input_with_unrelated_reason_keeps_gate_failure_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "sample-ft"
+            test_case_path = ft_root / "test-cases" / "package.md"
+            workflow_path = ft_root / "workflow-state.yaml"
+            self.write_test_case_file_with_blocking_writer_gates(test_case_path)
+            self.write_writer_workflow_state(
+                workflow_path,
+                stage_status="blocked-input",
+            )
+            workflow_path.write_text(
+                workflow_path.read_text(encoding="utf-8").replace(
+                    "Writer Quality Gate and Test Design Review contain blocking rows for WP-01 after scoped validator execution.",
+                    "Product catalog fixture is missing for WP-01.",
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-failed", finding_ids)
+        self.assertIn("test-design-review-failed", finding_ids)
 
     def test_writer_workflow_accepts_same_stage_session_log_by_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -3257,6 +3533,101 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertNotIn("artifact-write-strategy-ad-hoc-tmp-generator", finding_ids)
         self.assertNotIn("artifact-write-strategy-helper-missing", finding_ids)
 
+    def test_large_test_case_file_with_preflight_table_artifact_strategy_passes_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_large_test_case_file(
+                fixture_root / "test-cases" / "large.md",
+                strategy="\n".join(
+                    [
+                        "| artifact_path | artifact_size_class | write_strategy | declared_before_first_write | helper | forbidden_methods_checked |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        "| `test-cases/large.md` | `large/package-based` | `file-based manifest sections` | `yes` | `scripts/write_artifact_sections.py --manifest artifact-sections.json` | `yes` |",
+                    ]
+                ),
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("artifact-write-strategy-missing", finding_ids)
+        self.assertNotIn("artifact-write-strategy-unsafe-or-vague", finding_ids)
+        self.assertNotIn("artifact-write-strategy-helper-missing", finding_ids)
+
+    def test_writer_self_check_empty_section_warns_as_standalone_artifact(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self_check = fixture_root / "work" / "review-cycles" / "sample-scope" / "outputs" / "writer-self-check.md"
+            self_check.parent.mkdir(parents=True)
+            self_check.write_text(
+                "\n".join(
+                    [
+                        "# Writer Self-Check",
+                        "",
+                        "## Checks",
+                        "",
+                        "- Writer checked the generated artifacts.",
+                        "",
+                        "## Artifact Write Evidence",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-self-check-empty-section", finding_ids)
+        self.assertEqual(payload["summary"]["writer_self_checks_checked"], 1)
+
+    def test_writer_self_check_with_linked_artifact_evidence_passes_section_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self_check = fixture_root / "work" / "review-cycles" / "sample-scope" / "outputs" / "writer-self-check.md"
+            self_check.parent.mkdir(parents=True)
+            self_check.write_text(
+                "\n".join(
+                    [
+                        "# Writer Self-Check",
+                        "",
+                        "## Checks",
+                        "",
+                        "- Writer checked the generated artifacts.",
+                        "",
+                        "## Artifact Write Evidence",
+                        "",
+                        "- Evidence: `work/test-design/sample-scope/artifact-write-strategy.md`.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("writer-self-check-empty-section", finding_ids)
+        self.assertEqual(payload["summary"]["writer_self_checks_checked"], 1)
+
     def test_artifact_write_strategy_warns_on_ad_hoc_tmp_generator(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -4447,7 +4818,6 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "**Expected Result:** Value `123` remains visible in Field.",
                         "**Postconditions:**",
                         "- Clear the field.",
-                        "**Трассировка:** `GSR 1`; `SRC-001.P01`.",
                     ]
                 ),
                 encoding="utf-8",
@@ -4471,7 +4841,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             findings["test-case-missing-required-template-sections"]["severity"],
         )
         self.assertIn("TC-SAMPLE-001", findings["test-case-missing-required-template-sections"]["evidence"][0])
-        self.assertIn("Цель", findings["test-case-missing-required-template-sections"]["evidence"][0])
+        self.assertIn("source link", findings["test-case-missing-required-template-sections"]["evidence"][0])
 
     def test_package_file_without_writer_quality_gate_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -4537,6 +4907,33 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("writer-quality-gate-missing", finding_ids)
 
+    def test_writer_quality_gate_rejects_noncanonical_status_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "test-cases" / "status-alias.md"
+            self.write_minimal_test_case_file(test_case_path)
+            self.append_passing_writer_quality_gate(test_case_path)
+            test_case_path.write_text(
+                test_case_path.read_text(encoding="utf-8").replace(
+                    "| `artifact-write-strategy` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
+                    "| `artifact-write-strategy` | `yes` | Проверено | `WP-01` | none_required:pass | `no` |",
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_path),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-invalid-status", finding_ids)
+
     def test_package_file_without_test_design_review_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -4568,23 +4965,23 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
                         "| --- | --- | --- | --- | --- | --- |",
-                        "| artifact-write-strategy | pass | Проверено | WP-01 | - | no |",
-                        "| mockup-visual-inventory | pass | Не применимо | WP-01 | - | no |",
-                        "| source-row-inventory | pass | Не применимо | WP-01 | - | no |",
-                        "| source-normalization-atomic | pass | Не применимо | WP-01 | - | no |",
-                        "| test-design-decision-table | pass | Не применимо | WP-01 | - | no |",
-                        "| test-design-review | pass | Отсутствующий review все равно должен быть найден валидатором | WP-01 | - | no |",
-                        "| gap-admissibility | pass | Не применимо | WP-01 | - | no |",
-                        "| ledger-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| gsr-range-compression | pass | Проверено | WP-01 | - | no |",
-                        "| design-plan-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| scenario-does-not-replace-atomic | pass | Проверено | WP-01 | - | no |",
-                        "| tc-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| test-data-specificity | pass | Проверено | WP-01 | - | no |",
-                        "| internal-observability | pass | Проверено | WP-01 | - | no |",
-                        "| action-observability | pass | Проверено | WP-01 | - | no |",
-                        "| semantic-req-id-parity | pass | Проверено | WP-01 | - | no |",
-                        "| package-ready | pass | Проверено | WP-01 | - | no |",
+                        "| artifact-write-strategy | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| mockup-visual-inventory | pass | Не применимо | WP-01 | none_required:pass | no |",
+                        "| source-row-inventory | pass | Не применимо | WP-01 | none_required:pass | no |",
+                        "| source-normalization-atomic | pass | Не применимо | WP-01 | none_required:pass | no |",
+                        "| test-design-decision-table | pass | Не применимо | WP-01 | none_required:pass | no |",
+                        "| test-design-review | pass | Отсутствующий review все равно должен быть найден валидатором | WP-01 | none_required:pass | no |",
+                        "| gap-admissibility | pass | Не применимо | WP-01 | none_required:pass | no |",
+                        "| ledger-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| gsr-range-compression | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| design-plan-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| scenario-does-not-replace-atomic | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| tc-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| test-data-specificity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| internal-observability | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| action-observability | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| semantic-req-id-parity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| package-ready | pass | Проверено | WP-01 | none_required:pass | no |",
                         "",
                         "## TC-SAMPLE-001",
                         "**package_id:** `WP-01`",
@@ -4636,23 +5033,23 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
                         "| --- | --- | --- | --- | --- | --- |",
-                        "| artifact-write-strategy | pass | Проверено | WP-01 | - | no |",
-                        "| mockup-visual-inventory | pass | Проверено | WP-01 | - | no |",
-                        "| source-row-inventory | pass | Проверено | WP-01 | - | no |",
-                        "| source-normalization-atomic | pass | Проверено | WP-01 | - | no |",
-                        "| test-design-decision-table | pass | Проверено | WP-01 | - | no |",
+                        "| artifact-write-strategy | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| mockup-visual-inventory | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| source-row-inventory | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| source-normalization-atomic | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| test-design-decision-table | pass | Проверено | WP-01 | none_required:pass | no |",
                         "| test-design-review | fail | Review still has blocking rows. | WP-01 | Fix review findings. | yes |",
-                        "| gap-admissibility | pass | Проверено | WP-01 | - | no |",
-                        "| ledger-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| gsr-range-compression | pass | Проверено | WP-01 | - | no |",
-                        "| design-plan-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| scenario-does-not-replace-atomic | pass | Проверено | WP-01 | - | no |",
-                        "| tc-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| test-data-specificity | pass | Проверено | WP-01 | - | no |",
-                        "| internal-observability | pass | Проверено | WP-01 | - | no |",
-                        "| action-observability | pass | Проверено | WP-01 | - | no |",
-                        "| semantic-req-id-parity | pass | Проверено | WP-01 | - | no |",
-                        "| package-ready | pass | Packages are ready. | WP-01 | - | no |",
+                        "| gap-admissibility | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| ledger-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| gsr-range-compression | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| design-plan-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| scenario-does-not-replace-atomic | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| tc-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| test-data-specificity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| internal-observability | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| action-observability | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| semantic-req-id-parity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| package-ready | pass | Packages are ready. | WP-01 | none_required:pass | no |",
                         "",
                         "## TC-SAMPLE-001",
                         "**package_id:** `WP-01`",
@@ -4712,7 +5109,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             )
             self.append_passing_test_design_review(test_case_path)
             content = test_case_path.read_text(encoding="utf-8").replace(
-                "| `numeric-length-boundaries` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                "| `numeric-length-boundaries` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
                 "| `numeric-length-boundaries` | `fail` | `warning` | `WP-01` | В `PD-001` нет digit classes N-1/N+1. | Добавить короткий и длинный digit classes. | `yes` |",
             )
             content += "\n\n" + "\n".join(
@@ -5484,7 +5881,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             test_case_path = fixture_root / "test-cases" / "sample.md"
             test_case_path.write_text(
                 test_case_path.read_text(encoding="utf-8").replace(
-                    "| `tc-atomicity` | `pass` | Проверено | `WP-01` | - | `no` |",
+                    "| `tc-atomicity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |",
                     "| `tc-atomicity` | `fail` | Объединены valid и invalid checks. | `WP-01` | Переписать package. | `yes` |",
                 ),
                 encoding="utf-8",
@@ -6070,9 +6467,9 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             test_case_path = fixture_root / "test-cases" / "sample.md"
             content = test_case_path.read_text(encoding="utf-8")
             for row in (
-                "| `test-data-specificity` | `pass` | Проверено | `WP-01` | - | `no` |\n",
-                "| `action-observability` | `pass` | Проверено | `WP-01` | - | `no` |\n",
-                "| `semantic-req-id-parity` | `pass` | Проверено | `WP-01` | - | `no` |\n",
+                "| `test-data-specificity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |\n",
+                "| `action-observability` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |\n",
+                "| `semantic-req-id-parity` | `pass` | Проверено | `WP-01` | none_required:pass | `no` |\n",
             ):
                 content = content.replace(row, "")
             test_case_path.write_text(content, encoding="utf-8")
@@ -7502,6 +7899,56 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-generic-executable-smell", finding_ids)
+        generic_finding = next(
+            finding
+            for finding in payload["findings"]
+            if finding["id"] == "test-case-generic-executable-smell"
+        )
+        self.assertTrue(
+            any(
+                evidence.startswith("TC-SAMPLE-001:field=steps; match=")
+                for evidence in generic_finding["evidence"]
+            )
+        )
+
+    def test_not_required_test_data_and_postconditions_do_not_trigger_generic_executable_smell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "fts" / "sample-ft" / "test-cases" / "sample.md"
+            test_case_path.parent.mkdir(parents=True)
+            test_case_path.write_text(
+                "\n".join(
+                    [
+                        "# Sample",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**Title:** Field visibility",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Goal:** Verify field visibility.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** Не требуются.",
+                        "**Steps:**",
+                        "1. Open section `Employment`.",
+                        "2. Find field `Employment type`.",
+                        "**Expected Result:** Field `Employment type` is displayed.",
+                        "**Postconditions:** Не требуются.",
+                        "**FT Reference:** `GSR 1`",
+                        "**Requirement Source:** `Section 1`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_path),
+                "--json",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-generic-executable-smell", finding_ids)
 
     def test_warns_excessive_atom_fan_in_without_scenario_rationale(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -7606,6 +8053,81 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-duplicate-id", finding_ids)
+
+    def test_mixed_test_case_schema_duplicates_warn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "fts" / "sample-ft" / "test-cases" / "sample.md"
+            test_case_path.parent.mkdir(parents=True)
+            test_case_path.write_text(
+                "\n".join(
+                    [
+                        "## TC-SAMPLE-001",
+                        "",
+                        "| Поле | Значение |",
+                        "| --- | --- |",
+                        "| Название | Проверить поле |",
+                        "| Тип | Positive |",
+                        "| Приоритет | High |",
+                        "| Трассировка | ATOM-001; SRC-001 |",
+                        "",
+                        "**Название:** Проверить поле",
+                        "**Тип:** Positive",
+                        "**Приоритет:** High",
+                        "**Трассировка:** ATOM-001; SRC-001",
+                        "**package_id:** WP-01",
+                        "",
+                        "### Цель",
+                        "",
+                        "Проверить поле.",
+                        "",
+                        "### Предусловия",
+                        "",
+                        "Форма открыта.",
+                        "",
+                        "### Тестовые данные",
+                        "",
+                        "Не требуются.",
+                        "",
+                        "**Тестовые данные:** Не требуются.",
+                        "",
+                        "### Шаги",
+                        "",
+                        "1. Выполнить действие.",
+                        "",
+                        "**Шаги:** 1. Выполнить действие.",
+                        "",
+                        "### Итоговый ожидаемый результат",
+                        "",
+                        "Поле отображается.",
+                        "",
+                        "**Итоговый ожидаемый результат:** Поле отображается.",
+                        "",
+                        "### Постусловия",
+                        "",
+                        "Не требуются.",
+                        "",
+                        "### Ссылка на ФТ",
+                        "",
+                        "SRC-001",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-mixed-schema-duplicate-fields", finding_ids)
+        self.assertIn("test-case-runtime-field-duplicated", finding_ids)
 
     def test_nonsequential_test_case_ids_warn_in_strict_policy(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -8962,6 +9484,47 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("coverage-obligation-table-missing", finding_ids)
 
+    def test_test_design_review_rejects_pass_with_gap_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "test-cases" / "review-status.md"
+            self.write_minimal_test_case_file(test_case_path)
+            test_case_path.write_text(
+                test_case_path.read_text(encoding="utf-8")
+                + "\n\n"
+                + "\n".join(
+                    [
+                        "## Package Test Design Plan",
+                        "",
+                        "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| PD-001 | WP-01 | format | GSR 1 | ATOM-001 | Field accepts numeric value 123 | positive | valid numeric | valid numeric | Value `123` is displayed in Field | FT 1 | TC-SAMPLE-001 | planned |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            self.append_passing_test_design_review(test_case_path)
+            test_case_path.write_text(
+                test_case_path.read_text(encoding="utf-8").replace(
+                    "| `decision-table-classification` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `decision-table-classification` | `pass-with-gap` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_path),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-design-review-invalid-status", finding_ids)
+
     def test_coverage_obligation_table_requires_numeric_obligation_classes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -9049,6 +9612,628 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("coverage-obligation-table-missing-required-class", finding_ids)
+
+    def test_artificial_numeric_property_types_are_rejected_across_design_tables(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "artificial-numeric-property-types.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Artificial numeric property types",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "| gap_id | source_ref | requirement_ref | statement | impact | owner | status | resolution_needed |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| GAP-001 | PDF p.1 row 1 | GSR 1 | Source does not define observable behavior for letters. | medium | product | open | Clarify UI oracle. |",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | field is visible | Amount accepts only numeric symbols | GSR 1 | PDF p.1 row 1 | high | - | ATOM-001 |",
+                        "| SRC-001 | SRC-001.P01-invalid | WP-01 | Amount | numeric-format-invalid | letter value entered | Letter input is rejected | GSR 1 | PDF p.1 row 1 | high | GAP-001 | - |",
+                        "",
+                        "## Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| TDD-001 | WP-01 | SRC-001.P01-invalid | ATOM-001 | numeric-format-invalid | gap_unclear | Letter rejection oracle is not observable from source | GAP-001 | GSR 1; PDF p.1 row 1 | no | artificial property type |",
+                        "",
+                        "## Coverage Obligation Table",
+                        "",
+                        "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| OBL-001 | WP-01 | SRC-001.P01-invalid | ATOM-001 | numeric-format-invalid | reject-letters | Letter rejection oracle is unclear | GSR 1; PDF p.1 row 1 | GAP-001 | gap | artificial property type |",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**Title:** Amount accepts digit-only input",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**package_id:** WP-01",
+                        "**Goal:** Verify `ATOM-001` valid numeric input.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- `123`.",
+                        "**Steps:**",
+                        "1. Enter `123` into Amount.",
+                        "**Expected Result:** Amount contains `123`.",
+                        "**Postconditions:**",
+                        "- Clear the field.",
+                        "**FT Reference:** `GSR 1`",
+                        "**Requirement Source:** `SRC-001.P01`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("source-normalization-artificial-numeric-property-type", finding_ids)
+        self.assertIn("test-design-decision-table-artificial-numeric-property-type", finding_ids)
+        self.assertIn("coverage-obligation-table-artificial-numeric-property-type", finding_ids)
+
+    def test_coverage_obligation_table_accepts_numeric_required_classes_mapped_to_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "numeric-classes-with-gaps.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Numeric classes with gaps",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "| gap_id | source_ref | requirement_ref | statement | impact | owner | status | resolution_needed |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| GAP-001 | PDF p.1 row 1 | GSR 1 | Source does not define observable behavior for spaces. | medium | product | open | Clarify UI oracle. |",
+                        "| GAP-002 | PDF p.1 row 1 | GSR 1 | Source does not define observable behavior for special characters. | medium | product | open | Clarify UI oracle. |",
+                        "| GAP-003 | PDF p.1 row 1 | GSR 1 | Source does not define observable behavior for decimal separator. | medium | product | open | Clarify UI oracle. |",
+                        "| GAP-004 | PDF p.1 row 1 | GSR 1 | Source does not define observable behavior for sign. | medium | product | open | Clarify UI oracle. |",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | field is visible | Amount accepts only numeric symbols | GSR 1 | PDF p.1 row 1 | high | - | ATOM-001 |",
+                        "",
+                        "## Coverage Obligation Table",
+                        "",
+                        "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| OBL-001 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | valid-digits | Amount accepts digit-only input | GSR 1; PDF p.1 row 1 | TC-SAMPLE-001 | covered | - |",
+                        "| OBL-002 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | reject-letters | Amount rejects letters | GSR 1; PDF p.1 row 1 | TC-SAMPLE-002 | covered | - |",
+                        "| OBL-003 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | reject-spaces | Space rejection oracle is not defined | GSR 1; PDF p.1 row 1 | GAP-001 | gap | source lacks UI mechanism |",
+                        "| OBL-004 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | reject-special-chars | Special character rejection oracle is not defined | GSR 1; PDF p.1 row 1 | GAP-002 | gap | source lacks UI mechanism |",
+                        "| OBL-005 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | reject-decimal-separator | Decimal separator rejection oracle is not defined | GSR 1; PDF p.1 row 1 | GAP-003 | gap | source lacks UI mechanism |",
+                        "| OBL-006 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | reject-sign | Sign rejection oracle is not defined | GSR 1; PDF p.1 row 1 | GAP-004 | gap | source lacks UI mechanism |",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**Title:** Amount accepts digit-only input",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**package_id:** WP-01",
+                        "**Goal:** Verify `ATOM-001` valid numeric input.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- `123`.",
+                        "**Steps:**",
+                        "1. Enter `123` into Amount.",
+                        "**Expected Result:** Amount contains `123`.",
+                        "**Postconditions:**",
+                        "- Clear the field.",
+                        "**FT Reference:** `GSR 1`",
+                        "**Requirement Source:** `SRC-001.P01`",
+                        "",
+                        "## TC-SAMPLE-002",
+                        "**Title:** Amount rejects letters",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**package_id:** WP-01",
+                        "**Goal:** Verify `ATOM-001` letter rejection.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- `ABC`.",
+                        "**Steps:**",
+                        "1. Enter `ABC` into Amount.",
+                        "**Expected Result:** Letter input is not accepted by the numeric-only field.",
+                        "**Postconditions:**",
+                        "- Clear the field.",
+                        "**FT Reference:** `GSR 1`",
+                        "**Requirement Source:** `SRC-001.P01`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("coverage-obligation-table-missing-required-class", finding_ids)
+        self.assertNotIn("coverage-obligation-table-unknown-source-property", finding_ids)
+        self.assertNotIn("source-normalization-artificial-numeric-property-type", finding_ids)
+        self.assertNotIn("coverage-obligation-table-artificial-numeric-property-type", finding_ids)
+
+    def test_v25_numeric_taxonomy_clean_companion_regression(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            scope = "2-v25-numeric-taxonomy-clean"
+            test_case_file = fixture_root / "test-cases" / f"{scope}.md"
+            split_dir = fixture_root / "work" / "test-design" / scope
+            output_dir = split_dir / "outputs"
+            test_case_file.parent.mkdir(parents=True)
+            output_dir.mkdir(parents=True)
+
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# V25 numeric taxonomy clean companion",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "- `GAP-001`: Source states numeric-only input but does not define observable UI reaction for invalid classes.",
+                        "",
+                        "## Test-design Summary",
+                        "",
+                        "Design evidence is stored in the split test-design artifacts for this scope.",
+                        "",
+                        "## TC-V25-001",
+                        "**Title:** Amount accepts a digit-only representative value",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**package_id:** WP-01",
+                        "**Traceability:** `ATOM-001`; `SRC-001.P01`; `GSR 1`",
+                        "**Goal:** Verify the positive numeric representative for Amount.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Amount: `123`.",
+                        "**Steps:**",
+                        "1. Enter `123` into Amount.",
+                        "**Expected Result:** Amount contains `123`.",
+                        "**Postconditions:**",
+                        "- Clear Amount.",
+                        "**FT Reference:** `GSR 1`; PDF p.1 row 1.",
+                        "**Requirement Source:** `SRC-001.P01`.",
+                        "**Requirement Source Quote:** Amount accepts numeric symbols.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "artifact-write-strategy.md").write_text(
+                "\n".join(
+                    [
+                        "# Artifact Write Strategy",
+                        "",
+                        "| item | value | status |",
+                        "| --- | --- | --- |",
+                        "| `artifact_size_class` | Package-based split design artifacts. | `pass` |",
+                        "| `preflight_decision` | Use file-based chunked writing. | `pass` |",
+                        "| `selected_method` | `scripts/write_artifact_sections.py --manifest artifact-sections.json` | `pass` |",
+                        "| `helper` | `scripts/write_artifact_sections.py` | `pass` |",
+                        "| `forbidden_methods_checked` | One-shot shell payloads and ad-hoc tmp generators are disallowed. | `pass` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "source-row-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `WP-01` | Amount | PDF p.1 row 1 | `GSR 1` | `yes` | `ATOM-001; ATOM-002; GAP-001` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "source-table-normalization.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| `SRC-001` | `SRC-001.P01` | `WP-01` | Amount | `numeric-format` | field visible | Digits-only representative value is accepted. | `GSR 1` | PDF p.1 row 1 | `high` | `not_applicable:covered` | `ATOM-001; ATOM-002` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "atomic-requirements-ledger.md").write_text(
+                "\n".join(
+                    [
+                        "# Atomic Requirements Ledger",
+                        "",
+                        "| atom_id | package_id | source_property_id | source_ref | statement | coverage_status | covered_by_tc |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `ATOM-001` | `WP-01` | `SRC-001.P01` | PDF p.1 row 1 | Amount accepts a digit-only representative value. | `covered` | `TC-V25-001` |",
+                        "| `ATOM-002` | `WP-01` | `SRC-001.P01` | PDF p.1 row 1 | Amount rejects invalid numeric classes. | `gap` | `GAP-001` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "coverage-obligation-table.md").write_text(
+                "\n".join(
+                    [
+                        "# Coverage Obligation Table",
+                        "",
+                        "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `numeric-format` | `valid-digits` | Amount accepts digit-only input. | PDF p.1 row 1 | `TC-V25-001` | `covered` | positive representative |",
+                        "| `OBL-002` | `WP-01` | `SRC-001.P01` | `ATOM-002` | `numeric-format` | `reject-letters` | Letter rejection oracle is unspecified. | PDF p.1 row 1 | `GAP-001` | `gap` | source lacks UI reaction |",
+                        "| `OBL-003` | `WP-01` | `SRC-001.P01` | `ATOM-002` | `numeric-format` | `reject-spaces` | Space rejection oracle is unspecified. | PDF p.1 row 1 | `GAP-001` | `gap` | source lacks UI reaction |",
+                        "| `OBL-004` | `WP-01` | `SRC-001.P01` | `ATOM-002` | `numeric-format` | `reject-special-chars` | Special character rejection oracle is unspecified. | PDF p.1 row 1 | `GAP-001` | `gap` | source lacks UI reaction |",
+                        "| `OBL-005` | `WP-01` | `SRC-001.P01` | `ATOM-002` | `numeric-format` | `reject-decimal-separator` | Decimal separator rejection oracle is unspecified. | PDF p.1 row 1 | `GAP-001` | `gap` | source lacks UI reaction |",
+                        "| `OBL-006` | `WP-01` | `SRC-001.P01` | `ATOM-002` | `numeric-format` | `reject-sign` | Sign rejection oracle is unspecified. | PDF p.1 row 1 | `GAP-001` | `gap` | source lacks UI reaction |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "test-design-decision-table.md").write_text(
+                "\n".join(
+                    [
+                        "# Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | observable_oracle | testable_part | blocked_part | gap_admissibility | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| `DEC-V25-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `numeric-format` | `standalone_tc` | Positive digit-only representative is executable. | `TC-V25-001` | PDF p.1 row 1 | `yes` | `field-state` | Value `123` remains visible. | invalid-class UI reaction | `GAP-001 covers unresolved negative enforcement` | `medium` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "package-test-design-plan.md").write_text(
+                "\n".join(
+                    [
+                        "# Package Test Design Plan",
+                        "",
+                        "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| `PLAN-V25-001` | `WP-01` | numeric positive | PDF p.1 row 1 | `ATOM-001` | Enter `123`. | positive-input | `valid-digits` | `123` | Amount contains `123`. | PDF p.1 row 1 | `TC-V25-001` | `covered` |",
+                        "| `PLAN-V25-002A` | `WP-01` | numeric invalid class | PDF p.1 row 1 | `ATOM-002` | Defer letter rejection. | gap | `reject-letters` | `ABC` | none_required:blocked | PDF p.1 row 1 | `GAP-001` | `gap` |",
+                        "| `PLAN-V25-002B` | `WP-01` | numeric invalid class | PDF p.1 row 1 | `ATOM-002` | Defer space rejection. | gap | `reject-spaces` | `1 23` | none_required:blocked | PDF p.1 row 1 | `GAP-001` | `gap` |",
+                        "| `PLAN-V25-002C` | `WP-01` | numeric invalid class | PDF p.1 row 1 | `ATOM-002` | Defer special character rejection. | gap | `reject-special-chars` | `123!` | none_required:blocked | PDF p.1 row 1 | `GAP-001` | `gap` |",
+                        "| `PLAN-V25-002D` | `WP-01` | numeric invalid class | PDF p.1 row 1 | `ATOM-002` | Defer decimal separator rejection. | gap | `reject-decimal-separator` | `12.3` | none_required:blocked | PDF p.1 row 1 | `GAP-001` | `gap` |",
+                        "| `PLAN-V25-002E` | `WP-01` | numeric invalid class | PDF p.1 row 1 | `ATOM-002` | Defer sign rejection. | gap | `reject-sign` | `-123` | none_required:blocked | PDF p.1 row 1 | `GAP-001` | `gap` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "test-design-review.md").write_text(
+                "\n".join(
+                    [
+                        "# Test Design Review",
+                        "",
+                        "| review_item | status | severity | affected_package | evidence | required_action | blocks_ready_for_review |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| `decision-table-classification` | `pass` | `info` | `WP-01` | numeric property has one executable decision and class-level gaps. | none_required:pass | `no` |",
+                        "| `ledger-plan-alignment` | `pass` | `info` | `WP-01` | ledger and plan use `ATOM-001` and `ATOM-002`. | none_required:pass | `no` |",
+                        "| `coverage-class-completeness` | `pass` | `info` | `WP-01` | numeric required classes are present in Coverage Obligation Table. | none_required:pass | `no` |",
+                        "| `numeric-length-boundaries` | `pass` | `info` | `WP-01` | no length boundary is in source. | none_required:not_applicable | `no` |",
+                        "| `unsupported-ui-mechanism` | `pass` | `warning` | `WP-01` | invalid numeric reaction is routed to `GAP-001`. | none_required:pass | `no` |",
+                        "| `mask-format-coverage` | `pass` | `info` | `WP-01` | no mask property is in source. | none_required:not_applicable | `no` |",
+                        "| `dictionary-closed-set` | `pass` | `info` | `WP-01` | no dictionary property is in source. | none_required:not_applicable | `no` |",
+                        "| `conditional-branches` | `pass` | `info` | `WP-01` | no conditional branch is in source. | none_required:not_applicable | `no` |",
+                        "| `negative-fixture-isolation` | `pass` | `warning` | `WP-01` | negative fixtures are deferred until UI oracle exists. | none_required:pass | `no` |",
+                        "| `applicability-linked-tc-semantics` | `pass` | `info` | `WP-01` | canonical omits matrix; split design artifacts carry evidence. | none_required:pass | `no` |",
+                        "| `gap-specificity` | `pass` | `warning` | `WP-01` | `GAP-001` points to exact source property. | none_required:pass | `no` |",
+                        "| `gap-admissibility` | `pass` | `warning` | `WP-01` | gap covers only unresolved invalid-class reaction. | none_required:pass | `no` |",
+                        "| `internal-observability` | `pass` | `info` | `WP-01` | no internal effect is in source. | none_required:not_applicable | `no` |",
+                        "| `metadata-only-exclusion` | `pass` | `info` | `WP-01` | no metadata-only row is used as coverage. | none_required:pass | `no` |",
+                        "| `tc-mapping-atomicity` | `pass` | `info` | `WP-01` | executable TC has one expected result. | none_required:pass | `no` |",
+                        "| `ready-for-tc-writing` | `pass` | `info` | `WP-01` | writer canary is internally consistent. | none_required:pass | `no` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (output_dir / "scoped-validator-profile.v25.json").write_text(
+                json.dumps(
+                    {
+                        "command": "python scripts/validate_agent_artifacts.py --root test-cases/2-v25-numeric-taxonomy-clean.md --json",
+                        "generated_by": "codex_review_cycle_runner",
+                        "scope_slug": scope,
+                        "canonical_test_cases": f"test-cases/{scope}.md",
+                        "test_design_dir": f"work/test-design/{scope}",
+                        "current_scope_findings": [
+                            {
+                                "id": "test-design-applicability-matrix-missing",
+                                "severity": "info",
+                                "status": "accepted-nonblocking",
+                            }
+                        ],
+                        "unresolved_warning_error_count": 0,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "writer-quality-gate.md").write_text(
+                "\n".join(
+                    [
+                        "# Writer Quality Gate",
+                        "",
+                        "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                    ]
+                    + [
+                        f"| `{item}` | `pass` | v25 regression evidence. | `WP-01` | none_required:pass | `no` |"
+                        for item in [
+                            "artifact-write-strategy",
+                            "mockup-visual-inventory",
+                            "source-row-inventory",
+                            "source-normalization-atomic",
+                            "test-design-decision-table",
+                            "test-design-review",
+                            "gap-admissibility",
+                            "ledger-atomicity",
+                            "gsr-range-compression",
+                            "design-plan-atomicity",
+                            "scenario-does-not-replace-atomic",
+                            "tc-atomicity",
+                            "test-data-specificity",
+                            "internal-observability",
+                            "action-observability",
+                            "semantic-req-id-parity",
+                        ]
+                    ]
+                    + [
+                        f"| `scoped-validator-findings` | `pass` | `../work/test-design/{scope}/outputs/scoped-validator-profile.v25.json`: unresolved_warning_error_count=0 | `WP-01` | none_required:pass | `no` |",
+                        "| `package-ready` | `pass` | writer canary is validator-clean; product gap remains explicit. | `WP-01` | none_required:pass | `no` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            all_text = "\n".join(
+                path.read_text(encoding="utf-8")
+                for path in [test_case_file, *sorted(split_dir.rglob("*"))]
+                if path.is_file()
+            )
+            result = self.run_validator("--root", str(test_case_file), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotIn("numeric-format-invalid", all_text)
+        self.assertNotIn("numeric-negative", all_text)
+        self.assertNotIn("non-digit-rejection", all_text)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["summary"]["errors_count"], 0)
+        self.assertEqual(payload["summary"]["warnings_count"], 0)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertLessEqual(finding_ids, {"test-design-applicability-matrix-missing"})
+        self.assertNotIn("coverage-obligation-table-unknown-source-property", finding_ids)
+        self.assertNotIn("source-normalization-artificial-numeric-property-type", finding_ids)
+        self.assertNotIn("test-design-decision-table-artificial-numeric-property-type", finding_ids)
+        self.assertNotIn("coverage-obligation-table-artificial-numeric-property-type", finding_ids)
+        self.assertNotIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_numeric_format_plan_and_tddt_reject_merged_invalid_class_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "merged-numeric-classes.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Merged numeric classes",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | field visible | Amount accepts only digits | GSR 1 | PDF p.1 | high | - | ATOM-001 |",
+                        "",
+                        "## Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| TDD-001 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | standalone_tc | Letters, decimal separator, sign, spaces and special characters are not accepted. | TC-SAMPLE-001; TC-SAMPLE-002; TC-SAMPLE-003; TC-SAMPLE-004; TC-SAMPLE-005 | GSR 1; PDF p.1 | yes | merged class row |",
+                        "",
+                        "## Package Test Design Plan",
+                        "",
+                        "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| PD-001 | WP-01 | numeric-format | GSR 1; PDF p.1 | ATOM-001 | Amount rejects non-digit classes. | negative-input | letters; decimal-separator; sign; spaces; special-chars | `abc`; `12,3`; `-12`; `1 2`; `12#` | Attempted invalid value is not accepted. | GSR 1; PDF p.1 | TC-SAMPLE-001; TC-SAMPLE-002; TC-SAMPLE-003; TC-SAMPLE-004; TC-SAMPLE-005 | covered |",
+                        "",
+                    ]
+                    + [
+                        "\n".join(
+                            [
+                                f"## TC-SAMPLE-00{index}",
+                                "**Title:** Amount rejects invalid class",
+                                "**Priority:** High",
+                                "**Type:** Negative",
+                                "**package_id:** WP-01",
+                                "**Goal:** Verify `ATOM-001`.",
+                                "**Preconditions:** Form is open.",
+                                "**Test Data:** Invalid value.",
+                                "**Steps:**",
+                                "1. Enter invalid value into Amount.",
+                                "**Expected Result:** The invalid value is not accepted.",
+                                "**Postconditions:** Not required.",
+                                "**Traceability:** `ATOM-001`; `GSR 1`",
+                                "**FT Reference:** `GSR 1`",
+                                "**Requirement Source:** `SRC-001.P01`",
+                            ]
+                        )
+                        for index in range(1, 6)
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-package-design-plan-merged-numeric-class-row", finding_ids)
+        self.assertIn("test-design-decision-table-merged-numeric-class-decision", finding_ids)
+
+    def test_numeric_format_plan_and_tddt_allow_split_invalid_class_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "split-numeric-classes.md"
+            test_case_file.parent.mkdir(parents=True)
+            class_rows = [
+                ("001", "letters", "`abc`", "Letters are not accepted."),
+                ("002", "decimal-separator", "`12,3`", "Decimal separator is not accepted."),
+                ("003", "sign", "`-12`", "Sign is not accepted."),
+                ("004", "spaces", "`1 2`", "Spaces are not accepted."),
+                ("005", "special-chars", "`12#`", "Special characters are not accepted."),
+            ]
+            tddt_rows = [
+                f"| TDD-{tc_suffix} | WP-01 | SRC-001.P01-{tc_suffix} | ATOM-001 | numeric-format | standalone_tc | {behavior} | TC-SAMPLE-{tc_suffix} | GSR 1; PDF p.1 | yes | split class row |"
+                for tc_suffix, _, _, behavior in class_rows
+            ]
+            pd_rows = [
+                f"| PD-{tc_suffix} | WP-01 | numeric-format | GSR 1; PDF p.1 | ATOM-001 | Amount rejects {coverage_class}. | negative-input | {coverage_class} | {input_class} | {behavior} | GSR 1; PDF p.1 | TC-SAMPLE-{tc_suffix} | covered |"
+                for tc_suffix, coverage_class, input_class, behavior in class_rows
+            ]
+            tc_sections = [
+                "\n".join(
+                    [
+                        f"## TC-SAMPLE-{tc_suffix}",
+                        f"**Title:** Amount rejects {coverage_class}",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**package_id:** WP-01",
+                        "**Goal:** Verify `ATOM-001`.",
+                        "**Preconditions:** Form is open.",
+                        f"**Test Data:** {input_class}.",
+                        "**Steps:**",
+                        "1. Enter invalid value into Amount.",
+                        f"**Expected Result:** {behavior}",
+                        "**Postconditions:** Not required.",
+                        "**Traceability:** `ATOM-001`; `GSR 1`",
+                        "**FT Reference:** `GSR 1`",
+                        "**Requirement Source:** `SRC-001.P01`",
+                    ]
+                )
+                for tc_suffix, coverage_class, input_class, behavior in class_rows
+            ]
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Split numeric classes",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | field visible | Amount accepts only digits | GSR 1 | PDF p.1 | high | - | ATOM-001 |",
+                        "",
+                        "## Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        *tddt_rows,
+                        "",
+                        "## Package Test Design Plan",
+                        "",
+                        "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        *pd_rows,
+                        "",
+                        *tc_sections,
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-package-design-plan-merged-numeric-class-row", finding_ids)
+        self.assertNotIn("test-design-decision-table-merged-numeric-class-decision", finding_ids)
+        self.assertNotIn("test-design-decision-table-executable-cross-section-conflict", finding_ids)
+
+    def test_coverage_obligation_table_rejects_planned_status(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "planned-obligation-status.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Planned obligation status",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | field is visible | Amount accepts only numeric symbols | GSR 1 | PDF p.1 row 1 | high | - | ATOM-001 |",
+                        "",
+                        "## Coverage Obligation Table",
+                        "",
+                        "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| OBL-001 | WP-01 | SRC-001.P01 | ATOM-001 | numeric-format | valid-digits | Amount accepts digit-only input. | GSR 1; PDF p.1 row 1 | TC-SAMPLE-001 | planned | draft intent is not a final routing status |",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**Title:** Amount accepts numeric input",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**package_id:** WP-01",
+                        "**Goal:** Verify `ATOM-001`.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Numeric value: `123`.",
+                        "**Steps:**",
+                        "1. Enter `123` into Amount.",
+                        "**Expected Result:** Value `123` is accepted by Amount.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                        "**FT Reference:** `GSR 1`",
+                        "**Requirement Source:** `SRC-001.P01`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("coverage-obligation-table-invalid-status", finding_ids)
 
     def test_split_test_design_artifacts_are_used_as_canonical_context(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9149,7 +10334,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | - | Numeric symbols are accepted by Amount | GSR 1 | PDF p.1 row 1 | high | - | ATOM-001 |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | numeric-format | - | Numeric symbols are accepted by Amount | GSR 1 | PDF p.1 row 1 | high | not_applicable:covered | ATOM-001 |",
                     ]
                 ),
                 encoding="utf-8",
@@ -9190,7 +10375,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| atom_id | package_id | source_property_id | req_id | field_or_action | property | condition | expected_behavior | coverage_status | covered_by_tc | gap_id | source_ref |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-                        "| ATOM-001 | WP-01 | SRC-001.P01 | GSR 1 | Amount | numeric-format | - | Numeric symbols are accepted by Amount | covered | TC-SAMPLE-001 | - | PDF p.1 row 1 |",
+                        "| ATOM-001 | WP-01 | SRC-001.P01 | GSR 1 | Amount | numeric-format | - | Numeric symbols are accepted by Amount | covered | TC-SAMPLE-001 | not_applicable:covered | PDF p.1 row 1 |",
                     ]
                 ),
                 encoding="utf-8",
@@ -9214,22 +10399,22 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| review_item | status | severity | affected_package | evidence | required_action | blocks_ready_for_review |",
                         "| --- | --- | --- | --- | --- | --- | --- |",
-                        "| decision-table-classification | pass | info | WP-01 | Проверено | - | no |",
-                        "| ledger-plan-alignment | pass | info | WP-01 | Проверено | - | no |",
-                        "| coverage-class-completeness | pass | info | WP-01 | Проверено | - | no |",
-                        "| numeric-length-boundaries | pass | info | WP-01 | Проверено | - | no |",
-                        "| unsupported-ui-mechanism | pass | info | WP-01 | Проверено | - | no |",
-                        "| mask-format-coverage | pass | info | WP-01 | Проверено | - | no |",
-                        "| dictionary-closed-set | pass | info | WP-01 | Проверено | - | no |",
-                        "| conditional-branches | pass | info | WP-01 | Проверено | - | no |",
-                        "| negative-fixture-isolation | pass | info | WP-01 | Проверено | - | no |",
-                        "| applicability-linked-tc-semantics | pass | info | WP-01 | Проверено | - | no |",
-                        "| gap-specificity | pass | info | WP-01 | Проверено | - | no |",
-                        "| gap-admissibility | pass | info | WP-01 | Проверено | - | no |",
-                        "| internal-observability | pass | info | WP-01 | Проверено | - | no |",
-                        "| metadata-only-exclusion | pass | info | WP-01 | Проверено | - | no |",
-                        "| tc-mapping-atomicity | pass | info | WP-01 | Проверено | - | no |",
-                        "| ready-for-tc-writing | pass | info | WP-01 | Проверено | - | no |",
+                        "| decision-table-classification | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| ledger-plan-alignment | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| coverage-class-completeness | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| numeric-length-boundaries | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| unsupported-ui-mechanism | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| mask-format-coverage | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| dictionary-closed-set | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| conditional-branches | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| negative-fixture-isolation | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| applicability-linked-tc-semantics | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| gap-specificity | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| gap-admissibility | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| internal-observability | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| metadata-only-exclusion | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| tc-mapping-atomicity | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| ready-for-tc-writing | pass | info | WP-01 | Проверено | none_required:pass | no |",
                     ]
                 ),
                 encoding="utf-8",
@@ -9241,8 +10426,8 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| dimension | applicable | source_ref | reason | linked_atoms | linked_test_cases | gap_id |",
                         "| --- | --- | --- | --- | --- | --- | --- |",
-                        "| numeric | yes | GSR 1 | Amount numeric input is in scope | ATOM-001 | TC-SAMPLE-001 | - |",
-                        "| security | no | scope-contract | No security behavior in confirmed scope | - | - | - |",
+                        "| numeric | yes | GSR 1 | Amount numeric input is in scope | ATOM-001 | TC-SAMPLE-001 |  |",
+                        "| security | no | scope-contract | No security behavior in confirmed scope | - | none_required:out_of_scope |  |",
                     ]
                 ),
                 encoding="utf-8",
@@ -9254,8 +10439,24 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| atom_id | risk_level | risk_factors | source_ref | required_priority | linked_test_cases | gap_id | rationale |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- |",
-                        "| ATOM-001 | high | validation | GSR 1 | High | TC-SAMPLE-001 | - | Numeric validation affects entered data integrity. |",
+                        "| ATOM-001 | high | validation | GSR 1 | High | TC-SAMPLE-001 |  | Numeric validation affects entered data integrity. |",
                     ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "scoped-validator-profile.writer-r1.json").write_text(
+                json.dumps(
+                    {
+                        "command": "python scripts/validate_agent_artifacts.py --root test-cases/2-split-sample.md --json",
+                        "generated_by": "codex_review_cycle_runner",
+                        "scope_slug": "mapped-split-sample",
+                        "canonical_test_cases": "test-cases/2-split-sample.md",
+                        "test_design_dir": "work/test-design/mapped-split-sample",
+                        "current_scope_findings": [],
+                        "unresolved_warning_error_count": 0,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
                 ),
                 encoding="utf-8",
             )
@@ -9266,23 +10467,24 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
                         "| --- | --- | --- | --- | --- | --- |",
-                        "| artifact-write-strategy | pass | Проверено | WP-01 | - | no |",
-                        "| mockup-visual-inventory | pass | Not applicable | WP-01 | - | no |",
-                        "| source-row-inventory | pass | Проверено | WP-01 | - | no |",
-                        "| source-normalization-atomic | pass | Проверено | WP-01 | - | no |",
-                        "| test-design-decision-table | pass | Проверено | WP-01 | - | no |",
-                        "| test-design-review | pass | Проверено | WP-01 | - | no |",
-                        "| gap-admissibility | pass | Проверено | WP-01 | - | no |",
-                        "| ledger-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| gsr-range-compression | pass | Проверено | WP-01 | - | no |",
-                        "| design-plan-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| scenario-does-not-replace-atomic | pass | Проверено | WP-01 | - | no |",
-                        "| tc-atomicity | pass | Проверено | WP-01 | - | no |",
-                        "| test-data-specificity | pass | Проверено | WP-01 | - | no |",
-                        "| internal-observability | pass | Проверено | WP-01 | - | no |",
-                        "| action-observability | pass | Проверено | WP-01 | - | no |",
-                        "| semantic-req-id-parity | pass | Проверено | WP-01 | - | no |",
-                        "| package-ready | pass | Проверено | WP-01 | - | no |",
+                        "| artifact-write-strategy | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| mockup-visual-inventory | pass | Not applicable | WP-01 | none_required:pass | no |",
+                        "| source-row-inventory | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| source-normalization-atomic | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| test-design-decision-table | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| test-design-review | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| gap-admissibility | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| ledger-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| gsr-range-compression | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| design-plan-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| scenario-does-not-replace-atomic | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| tc-atomicity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| test-data-specificity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| internal-observability | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| action-observability | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| semantic-req-id-parity | pass | Проверено | WP-01 | none_required:pass | no |",
+                        "| scoped-validator-findings | pass | `../work/test-design/mapped-split-sample/scoped-validator-profile.writer-r1.json`: unresolved_warning_error_count=0 | WP-01 | none_required:pass | no |",
+                        "| package-ready | pass | Проверено | WP-01 | none_required:pass | no |",
                     ]
                 ),
                 encoding="utf-8",
@@ -9305,6 +10507,204 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertFalse(unexpected_ids, result.stdout + result.stderr)
         self.assertNotIn("test-design-decision-table-missing", finding_ids)
         self.assertNotIn("test-case-split-artifact-duplicated-sections", finding_ids)
+        self.assertNotIn("source-row-inventory-misses-normalized-source-row", finding_ids)
+
+    def test_split_artifact_redundant_section_heading_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "redundant-heading.md"
+            split_dir = fixture_root / "work" / "test-design" / "redundant-heading"
+            split_dir.mkdir(parents=True)
+            self.write_minimal_test_case_file(test_case_file)
+            (split_dir / "source-row-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Row Inventory",
+                        "",
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | WP-01 | Amount | PDF p.1 row 1 | GSR 1 | yes | ATOM-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("split-artifact-redundant-section-heading", finding_ids)
+
+    def test_split_artifact_h2_canonical_heading_is_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "h2-heading.md"
+            split_dir = fixture_root / "work" / "test-design" / "h2-heading"
+            split_dir.mkdir(parents=True)
+            self.write_minimal_test_case_file(test_case_file)
+            (split_dir / "source-row-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | WP-01 | Amount | PDF p.1 row 1 | GSR 1 | yes | ATOM-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("split-artifact-redundant-section-heading", finding_ids)
+        self.assertNotIn("split-artifact-canonical-heading-missing", finding_ids)
+
+    def test_split_artifact_missing_canonical_heading_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "missing-heading.md"
+            split_dir = fixture_root / "work" / "test-design" / "missing-heading"
+            split_dir.mkdir(parents=True)
+            self.write_minimal_test_case_file(test_case_file)
+            (split_dir / "source-row-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | WP-01 | Amount | PDF p.1 row 1 | GSR 1 | yes | ATOM-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("split-artifact-canonical-heading-missing", finding_ids)
+
+    def test_split_design_warns_when_ledger_gap_atom_missing_from_source_normalization_and_tddt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "gap-sync.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-GAP-SYNC-001")
+            split_dir = fixture_root / "work" / "test-design" / "gap-sync"
+            split_dir.mkdir(parents=True)
+            (split_dir / "source-table-normalization.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | visible-result | action completed | Success message is shown. | GSR 1 | PDF p.1 | high | not_applicable:covered | ATOM-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "test-design-decision-table.md").write_text(
+                "\n".join(
+                    [
+                        "# Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| TDD-001 | WP-01 | SRC-001.P01 | ATOM-001 | visible-result | standalone_tc | Success message is observable. | TC-GAP-SYNC-001 | PDF p.1 | yes | low |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "atomic-requirements-ledger.md").write_text(
+                "\n".join(
+                    [
+                        "# Atomic Requirements Ledger",
+                        "",
+                        "| atom_id | package_id | source_property_id | req_id | field_or_action | property | condition | expected_behavior | coverage_status | covered_by_tc | gap_id | source_ref |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | WP-01 | SRC-001.P01 | GSR 1 | Amount | visible-result | action completed | Success message is shown. | covered | TC-GAP-SYNC-001 | not_applicable:covered | PDF p.1 |",
+                        "| ATOM-002 | WP-01 | SRC-002.P01 | GSR 2 | Amount | edit-lock | terminal status | Edit lock behavior is not defined. | unclear | - | GAP-001 | PDF p.2 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("source-table-normalization-missing-ledger-gap-atom", finding_ids)
+        self.assertIn("test-design-decision-table-missing-ledger-gap-decision", finding_ids)
+
+    def test_split_design_allows_ledger_gap_atom_represented_in_source_normalization_and_tddt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "gap-sync-ok.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-GAP-SYNC-001")
+            split_dir = fixture_root / "work" / "test-design" / "gap-sync-ok"
+            split_dir.mkdir(parents=True)
+            (split_dir / "source-table-normalization.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Amount | visible-result | action completed | Success message is shown. | GSR 1 | PDF p.1 | high | not_applicable:covered | ATOM-001 |",
+                        "| SRC-002 | SRC-002.P01 | WP-01 | Amount | edit-lock | terminal status | Edit lock behavior is not defined. | GSR 2 | PDF p.2 | unclear | GAP-001 | ATOM-002 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "test-design-decision-table.md").write_text(
+                "\n".join(
+                    [
+                        "# Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| TDD-001 | WP-01 | SRC-001.P01 | ATOM-001 | visible-result | standalone_tc | Success message is observable. | TC-GAP-SYNC-001 | PDF p.1 | yes | low |",
+                        "| TDD-002 | WP-01 | SRC-002.P01 | ATOM-002 | edit-lock | gap_unclear | Source does not define terminal-status edit locking. | GAP-001 | PDF p.2 | no | medium |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "atomic-requirements-ledger.md").write_text(
+                "\n".join(
+                    [
+                        "# Atomic Requirements Ledger",
+                        "",
+                        "| atom_id | package_id | source_property_id | req_id | field_or_action | property | condition | expected_behavior | coverage_status | covered_by_tc | gap_id | source_ref |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | WP-01 | SRC-001.P01 | GSR 1 | Amount | visible-result | action completed | Success message is shown. | covered | TC-GAP-SYNC-001 | not_applicable:covered | PDF p.1 |",
+                        "| ATOM-002 | WP-01 | SRC-002.P01 | GSR 2 | Amount | edit-lock | terminal status | Edit lock behavior is not defined. | unclear | - | GAP-001 | PDF p.2 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("source-table-normalization-missing-ledger-gap-atom", finding_ids)
+        self.assertNotIn("test-design-decision-table-missing-ledger-gap-decision", finding_ids)
 
     def test_test_design_decision_table_blocks_metadata_rows_linked_to_tc(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -9389,7 +10789,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | review_risk |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-                        "| TDD-001 | WP-01 | SRC-001.P05 | ATOM-001 | value-type | metadata_only | Value type has no standalone observable behavior | GAP-009 | - | no | none |",
+                        "| TDD-001 | WP-01 | SRC-001.P05 | ATOM-001 | value-type | metadata_only | Value type has no standalone observable behavior | GAP-009 | none_required:pass | no | none |",
                         "",
                         "## Atomic Requirements Ledger",
                         "",
@@ -10330,6 +11730,91 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertNotIn("test-case-negative-type-without-negative-oracle", finding_ids)
         self.assertNotIn("test-case-requiredness-without-empty-or-marker-check", finding_ids)
 
+    def test_table_first_next_step_requiredness_trigger_is_not_action_requiredness_smell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "table-first-next-step-requiredness.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Table First Next Step Requiredness",
+                        "",
+                        "### TC-NEXT-TABLE-001 — Required field marker after Next Step",
+                        "",
+                        "| Поле | Значение |",
+                        "| --- | --- |",
+                        "| Тип | Negative |",
+                        "| Цель | Проверить, что пустое обязательное поле `Тип занятости` подсвечивается красным при проверке обязательных полей. |",
+                        "| Тестовые данные | Не требуются. |",
+                        "",
+                        "Шаги:",
+                        "",
+                        "1. Не выбирать значение в поле `Тип занятости`.",
+                        "2. Нажать кнопку `Следующий шаг`.",
+                        "",
+                        "Итоговый ожидаемый результат: поле `Тип занятости` подсвечено красным как незаполненное обязательное поле.",
+                        "",
+                        "Постусловия: Не требуются.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-action-treated-as-required-field-smell", finding_ids)
+
+    def test_action_requiredness_smell_reports_field_and_match(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "action-as-required-field.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Action As Required Field",
+                        "",
+                        "## TC-ACTION-001",
+                        "**title:** Next Step action is misused as a required input",
+                        "**type:** Negative",
+                        "**test_data:** Not required.",
+                        "**steps:**",
+                        "1. Leave `Следующий шаг` empty.",
+                        "**expected_result:** `Следующий шаг` is treated as a required field.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        action_finding = next(
+            finding
+            for finding in payload["findings"]
+            if finding["id"] == "test-case-action-treated-as-required-field-smell"
+        )
+        self.assertTrue(
+            any(
+                evidence.startswith("TC-ACTION-001:field=") and "match=" in evidence
+                for evidence in action_finding["evidence"]
+            )
+        )
+
     def test_applicability_matrix_no_integration_warns_when_gap_evidence_exists(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -10572,6 +12057,59 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertIn("test-case-gap-reference-missing-from-coverage-gaps", finding_ids)
         self.assertIn("test-case-gap-placeholder-section-smell", finding_ids)
 
+    def test_gap_declared_as_coverage_gap_subsection_satisfies_gap_reference(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "gap-subsection.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Gap Subsection",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "### GAP-001",
+                        "",
+                        "- source_ref: `SRC-001`",
+                        "- issue: source does not define the rejected invalid-input UI marker.",
+                        "- handling: negative transition oracle remains blocked until the source defines the marker/message.",
+                        "",
+                        "## TC-GAP-001",
+                        "**Title:** Invalid input unsupported marker remains a gap",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**Goal:** Record the unsupported invalid-input marker from `GAP-001`.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Value: `ABC`.",
+                        "**Steps:**",
+                        "1. Try to enter `ABC` in the field.",
+                        "**Expected Result:** `GAP-001` records that the exact rejected-value marker is not defined by source artifacts.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                        "**Traceability:** `ATOM-001`; `SRC-001`; `GAP-001`",
+                        "**FT Reference:** `SRC-001`",
+                        "**Requirement Source:**",
+                        "- `SRC-001`",
+                        "**Requirement Source Quote:** Source defines the numeric-only class but not the invalid-input marker.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-gap-reference-missing-from-coverage-gaps", finding_ids)
+
     def test_round6_numeric_applicability_and_alternative_oracle_smells_warn(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -10600,6 +12138,32 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "**steps:**",
                         "1. Ввести `ABC` в поле `Сумма на руки`.",
                         "**expected_result:** Поле `Сумма на руки` не принимает значение `ABC` как валидное: значение очищено, не сохранено или поле подсвечено ошибкой после проверки формата.",
+                        "",
+                        "## TC-R6-002",
+                        "**title:** Сумма на руки: формат при буквенном символе",
+                        "**package_id:** `WP-01`",
+                        "**type:** `negative`",
+                        "**priority:** `High`",
+                        "**status:** `ready-for-review`",
+                        "**linked_atoms:** `ATOM-001`",
+                        "**goal:** Проверить правило: только числовые символы.",
+                        "**test_data:** Недопустимое значение: `12A00`; группа эквивалентности: mixed digit-letter value.",
+                        "**steps:**",
+                        "1. Ввести `12A00` в поле `Сумма на руки`.",
+                        "**expected_result:** Поле `Сумма на руки` не отображает значение `12A00` как принятое значение: буква `A` отклонена или значение остается незаполненным/предыдущим.",
+                        "",
+                        "### TC-R6-003 — Основной доход не принимает знак числа",
+                        "**Название:** Основной доход не принимает знак числа",
+                        "**package_id:** `WP-01`",
+                        "**Тип:** Negative",
+                        "**Приоритет:** High",
+                        "**status:** `ready-for-review`",
+                        "**Трассировка:** `ATOM-001`",
+                        "**Цель:** Проверить правило: только числовые символы.",
+                        "**Тестовые данные:** Попытка ввода: `-2000`.",
+                        "**Шаги:**",
+                        "1. Ввести `-2000` в поле основного дохода.",
+                        "**Итоговый ожидаемый результат:** Поле основного дохода не отображает значение `-2000` как принятое значение; знак числа `-` отклонен или значение остается незаполненным/предыдущим.",
                     ]
                 ),
                 encoding="utf-8",
@@ -10618,6 +12182,13 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-design-applicability-matrix-hidden-numeric-gap", finding_ids)
         self.assertIn("test-case-nondeterministic-alternative-oracle-smell", finding_ids)
+        self.assertTrue(
+            any(
+                finding["id"] == "test-case-nondeterministic-alternative-oracle-smell"
+                and "TC-R6-003" in str(finding.get("evidence", ""))
+                for finding in payload["findings"]
+            )
+        )
 
     def test_format_mask_requires_obligation_class_and_mask_oracle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -10764,6 +12335,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "**expected_result:** Буква `A` не появляется в поле; отображаются только цифровые символы `12`; значение `12A` не принимается как отображаемое значение поля.",
                         "**linked_atoms:** `ATOM-001`",
                         "**FT Reference:** `GSR 1`",
+                        "**Requirement Source Quote:** Letter characters do not appear in the field; the field displays only digits.",
                     ]
                 ),
                 encoding="utf-8",
@@ -10823,6 +12395,88 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-input-restriction-transition-oracle-smell", finding_ids)
+
+    def test_unsupported_numeric_validation_feedback_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "unsupported-numeric-feedback.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Unsupported Numeric Feedback",
+                        "",
+                        "## TC-NUM-FEEDBACK-001",
+                        "**title:** Main income rejects letters",
+                        "**priority:** High",
+                        "**type:** Negative",
+                        "**goal:** Verify numeric-only rule for `ATOM-001`.",
+                        "**preconditions:** Form is open and all unrelated required fields are valid.",
+                        "**test_data:** Invalid value: `abc`; class: letters.",
+                        "**steps:**",
+                        "1. Enter `abc` in `Main income`.",
+                        "2. Click `Next step`.",
+                        "**expected_result:** Field `Main income` is highlighted red; section `Client form` does not open.",
+                        "**linked_atoms:** `ATOM-001`",
+                        "**FT Reference:** `SRC-001`",
+                        "**Requirement Source Quote:** Source says the field accepts only numeric characters.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-unsupported-numeric-validation-feedback-smell", finding_ids)
+
+    def test_unsupported_numeric_filtering_oracle_and_bundled_classes_warn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "unsupported-numeric-filtering.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Unsupported Numeric Filtering",
+                        "",
+                        "## TC-NUM-FILTER-001",
+                        "**\u041d\u0430\u0437\u0432\u0430\u043d\u0438\u0435:** Amount rejects letters, spaces, decimals and negative values.",
+                        "**\u0422\u0438\u043f:** Negative",
+                        "**\u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442:** High",
+                        "**\u0422\u0440\u0430\u0441\u0441\u0438\u0440\u043e\u0432\u043a\u0430:** ATOM-001; SRC-001",
+                        "**\u0422\u0435\u0441\u0442\u043e\u0432\u044b\u0435 \u0434\u0430\u043d\u043d\u044b\u0435:** Invalid values: `abc`, `1 000`, `1000.50`, `-1000`.",
+                        "**\u0428\u0430\u0433\u0438:**",
+                        "1. For each value, enter it in `Amount`.",
+                        "2. Move focus out of the field.",
+                        "**\u0418\u0442\u043e\u0433\u043e\u0432\u044b\u0439 \u043e\u0436\u0438\u0434\u0430\u0435\u043c\u044b\u0439 \u0440\u0435\u0437\u0443\u043b\u044c\u0442\u0430\u0442:** \u041f\u043e\u043b\u0435 `Amount` \u043e\u0447\u0438\u0449\u0435\u043d\u043e; \u0432\u0432\u0435\u0434\u0435\u043d\u043d\u043e\u0435 \u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 \u043d\u0435 \u043e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0435\u0442\u0441\u044f.",
+                        "**Requirement Source Quote:** Amount accepts only numeric characters.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-unsupported-input-filtering-oracle-smell", finding_ids)
+        self.assertIn("test-case-bundled-negative-input-classes", finding_ids)
 
     def test_mechanical_field_step_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -11188,6 +12842,53 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("dictionary-inventory-missing-for-source-normalization", finding_ids)
 
+    def test_split_dictionary_inventory_satisfies_source_normalization_dictionary_requirement(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            canonical_file = fixture_root / "test-cases" / "scope.md"
+            self.write_minimal_test_case_file(canonical_file, test_case_id="TC-DICT-001")
+            split_dir = fixture_root / "work" / "test-design" / "scope"
+            split_dir.mkdir(parents=True)
+            (split_dir / "source-table-normalization.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Table Normalization",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Тип занятости | dictionary-source | - | Значение выбирается из справочника `Типы занятости`. | GSR 1 | support workbook | high | - | ATOM-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (split_dir / "dictionary-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "# Dictionary Inventory",
+                        "",
+                        "## Dictionary Inventory",
+                        "",
+                        "| dictionary_id | dictionary_name | source_file | source_location | extraction_status | active_values | archived_values | used_by_source_properties | gap_id | notes |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| DICT-001 | Типы занятости | support/Наполнение справочников_v1.xlsx | sheet: Типы занятости | extracted | Работа по найму; Безработный | - | SRC-001.P01 | - | Архивный = Нет |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("dictionary-inventory-missing-for-source-normalization", finding_ids)
+
     def test_valid_dictionary_inventory_passes_as_standalone_artifact(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -11217,6 +12918,603 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(payload["summary"]["dictionary_inventories_checked"], 1)
         self.assertEqual(payload["summary"]["warnings_count"], 0)
+
+    def test_v8_quality_regression_smells_warn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "v8-smells.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# V8 Smells",
+                        "",
+                        "## TC-SMELL-001",
+                        "**Title:** Income type list contains DICT-004 values",
+                        "**Type:** Positive",
+                        "**Priority:** High",
+                        "**Traceability:** ATOM-001; SRC-001; DOCX table 1 row 1; PDF p.1",
+                        "**Goal:** Verify all and only active values from `DICT-004`.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `DICT-004`: `Pension`; `Rent`.",
+                        "**Steps:**",
+                        "1. Click `Add additional income`.",
+                        "2. Open `Income type`.",
+                        "**Expected Result:** The list shows all and only active values from `DICT-004`: `Pension`; `Rent`.",
+                        "**Postconditions:** Not required.",
+                        "**FT Reference:** `ATOM-001`; `SRC-001`; DOCX table 1 row 1; PDF p.1",
+                        "**Requirement Source:** `SRC-001`; DOCX table 1 row 1; PDF p.1",
+                        "**Requirement Source Quote:** `Income type` uses all and only active values from `DICT-004`.",
+                        "",
+                        "## TC-SMELL-002",
+                        "**Title:** Back with Yes opens previous section",
+                        "**Type:** Positive",
+                        "**Priority:** Medium",
+                        "**Traceability:** ATOM-002; SRC-002",
+                        "**Goal:** Verify Yes branch.",
+                        "**Preconditions:** Form has unsaved changes.",
+                        "**Test Data:** Answer `Yes`.",
+                        "**Steps:**",
+                        "1. Click `Back`.",
+                        "2. In the confirmation choose `Yes`.",
+                        "**Expected Result:** Previous section opens.",
+                        "**Postconditions:** Not required.",
+                        "**Requirement Source Quote:** Back action has Yes and No choices.",
+                        "",
+                        "## TC-SMELL-003",
+                        "**Title:** Back with No opens previous section",
+                        "**Type:** Positive",
+                        "**Priority:** Medium",
+                        "**Traceability:** ATOM-003; SRC-002",
+                        "**Goal:** Verify No branch.",
+                        "**Preconditions:** Form has unsaved changes.",
+                        "**Test Data:** Answer `No`.",
+                        "**Steps:**",
+                        "1. Click `Back`.",
+                        "2. In the confirmation choose `No`.",
+                        "**Expected Result:** Previous section opens.",
+                        "**Postconditions:** Not required.",
+                        "**Requirement Source Quote:** Back action has Yes and No choices.",
+                        "",
+                        "## TC-SMELL-004",
+                        "**Title:** Amount rejects invalid classes",
+                        "**Type:** Negative",
+                        "**Priority:** High",
+                        "**Traceability:** ATOM-004; SRC-003",
+                        "**Goal:** Verify invalid amount classes.",
+                        "**Preconditions:** Full valid fixture is prepared.",
+                        "**Test Data:** Values: `abc`, `2000!`, `-2000`.",
+                        "**Steps:**",
+                        "1. For each value, enter it in `Amount`.",
+                        "2. Click `Next`.",
+                        "**Expected Result:** For each value, transition is blocked.",
+                        "**Postconditions:** Not required.",
+                        "**Requirement Source Quote:** Amount allows numeric characters.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-duplicated-source-reference-fields", finding_ids)
+        self.assertIn("test-case-dictionary-reference-missing-from-traceability", finding_ids)
+        self.assertIn("test-case-synthetic-requirement-quote-smell", finding_ids)
+        self.assertIn("test-case-action-created-block-without-cleanup", finding_ids)
+        self.assertIn("test-case-branch-oracle-not-distinct", finding_ids)
+        self.assertIn("test-case-bundled-negative-input-classes", finding_ids)
+
+    def test_traceability_only_runtime_source_fields_are_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "traceability-only.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Traceability Only",
+                        "",
+                        "## TC-SOURCE-001",
+                        "**Title:** Employment type list contains active values",
+                        "**Type:** Positive",
+                        "**Priority:** High",
+                        "**Traceability:** ATOM-001; SRC-001; DICT-001; DOCX table 1 row 1; PDF p.1",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `DICT-001`: `Employed`; `Self-employed`.",
+                        "**Steps:**",
+                        "1. Open `Employment type`.",
+                        "**Expected Result:** The list shows all and only active values from `DICT-001`: `Employed`; `Self-employed`.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-missing-required-template-sections", finding_ids)
+        self.assertNotIn("test-case-duplicated-source-reference-fields", finding_ids)
+
+    def test_slim_runtime_complete_test_case_does_not_warn_sparse_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "slim-runtime.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Slim Runtime",
+                        "",
+                        "## TC-RUNTIME-001",
+                        "**Название:** Открытие окна отказа",
+                        "**Тип:** Positive",
+                        "**Приоритет:** High",
+                        "**package_id:** `WP-01`",
+                        "**Трассировка:** `ATOM-001`; `SRC-001`; `section-38`",
+                        "",
+                        "### Предусловия",
+                        "",
+                        "Открыта карточка УЗ.",
+                        "",
+                        "### Тестовые данные",
+                        "",
+                        "`FX-001`: карточка УЗ с доступным действием.",
+                        "",
+                        "### Шаги",
+                        "",
+                        "1. Выбрать действие `Отменить заявку`.",
+                        "",
+                        "### Итоговый ожидаемый результат",
+                        "",
+                        "Открыто окно выбора причины отказа.",
+                        "",
+                        "### Постусловия",
+                        "",
+                        "Закрыть окно без подтверждения.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-sparse-required-fields", finding_ids)
+
+    def test_slim_runtime_incomplete_test_case_still_warns_sparse_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "slim-runtime-incomplete.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Slim Runtime Incomplete",
+                        "",
+                        "## TC-RUNTIME-001",
+                        "**Название:** Открытие окна отказа",
+                        "**Тип:** Positive",
+                        "**Приоритет:** High",
+                        "**package_id:** `WP-01`",
+                        "**Трассировка:** `ATOM-001`; `SRC-001`; `section-38`",
+                        "",
+                        "### Предусловия",
+                        "",
+                        "Открыта карточка УЗ.",
+                        "",
+                        "### Тестовые данные",
+                        "",
+                        "`FX-001`: карточка УЗ с доступным действием.",
+                        "",
+                        "### Шаги",
+                        "",
+                        "1. Выбрать действие `Отменить заявку`.",
+                        "",
+                        "### Итоговый ожидаемый результат",
+                        "",
+                        "Открыто окно выбора причины отказа.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-sparse-required-fields", finding_ids)
+
+    def test_action_created_delete_flow_does_not_require_postcondition_cleanup(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "delete-flow.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Delete Flow",
+                        "",
+                        "## TC-DELETE-001",
+                        "**Title:** Additional income can be removed",
+                        "**Type:** Positive",
+                        "**Priority:** Medium",
+                        "**Traceability:** ATOM-001; SRC-001",
+                        "**Goal:** Verify the remove action.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** Not required.",
+                        "**Steps:**",
+                        "1. Click `Add additional income`.",
+                        "2. Click the `Trash` icon in the added block.",
+                        "**Expected Result:** The added additional income block is not displayed.",
+                        "**Postconditions:** Not required.",
+                        "**Requirement Source Quote:** Additional income can be removed.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-action-created-block-without-cleanup", finding_ids)
+
+    def test_optional_no_blocking_dependency_plan_does_not_require_inverse_branch(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "fts" / "sample-ft" / "test-cases" / "sample.md"
+            test_case_path.parent.mkdir(parents=True)
+            test_case_path.write_text(
+                "\n".join(
+                    [
+                        "## Internal Work Package Coverage",
+                        "",
+                        "| package_id | focus | ledger_gate | design_plan_gate | tc_gate | atoms | covered | gap | unclear | TC count | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| WP-01 | Main flow | pass | pass | pass | 1 | 1 | 0 | 0 | 1 | ready-for-review |",
+                        "",
+                        "## Package Test Design Plan",
+                        "",
+                        "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| PDP-001 | WP-01 | field-property | SRC-001 | ATOM-001 | Field `Honest client` may remain unset when `Visual information = Yes`. | dependency | source-backed | single | Transition is not blocked when `Honest client` remains unset and `Visual information = Yes`. | FT | TC-SAMPLE-001 | planned |",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**Title:** Honest client is optional for visual branch",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**Traceability:** ATOM-001; SRC-001",
+                        "**Goal:** Verify optional dependency.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `Visual information = Yes`; `Honest client = <unset>`.",
+                        "**Steps:**",
+                        "1. Set `Visual information = Yes`.",
+                        "2. Leave `Honest client` unset.",
+                        "3. Click `Next`.",
+                        "**Expected Result:** Transition is not blocked because `Honest client` is unset.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_path), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-package-design-plan-missing-conditional-branch", finding_ids)
+
+    def test_writer_quality_gate_requires_scoped_validator_profile_when_passed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+            (test_case_file.parent / "scoped-validator-profile.writer-r1.json").unlink()
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_writer_quality_gate_rejects_profile_with_unresolved_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+            (test_case_file.parent / "scoped-validator-profile.writer-r1.json").write_text(
+                json.dumps(
+                    {
+                        "command": "python scripts/validate_agent_artifacts.py fts/demo-ft --json",
+                        "generated_by": "codex_review_cycle_runner",
+                        "scope_slug": "section-scope",
+                        "canonical_test_cases": "test-cases/writer-gate.md",
+                        "test_design_dir": "work/test-design/section-scope",
+                        "current_scope_findings": [
+                            {
+                                "id": "test-case-generic-expected-result-smell",
+                                "severity": "warning",
+                                "path": "test-cases/writer-gate.md",
+                                "status": "open",
+                            }
+                        ],
+                        "unresolved_warning_error_count": 1,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_writer_quality_gate_rejects_self_reported_scoped_validator_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+            profile_path = test_case_file.parent / "scoped-validator-profile.writer-r1.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile.pop("generated_by", None)
+            profile_path.write_text(
+                json.dumps(profile, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_writer_quality_gate_rejects_placeholder_scoped_validator_command(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+            profile_path = test_case_file.parent / "scoped-validator-profile.writer-r1.json"
+            profile = json.loads(profile_path.read_text(encoding="utf-8"))
+            profile["command"] = "<pending>"
+            profile_path.write_text(
+                json.dumps(profile, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_writer_quality_gate_rejects_future_stage_scoped_validator_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+            future_profile_path = test_case_file.parent / "scoped-validator-profile.structure-preflight-r1.json"
+            future_profile_path.write_text(
+                json.dumps(
+                    {
+                        "command": "python scripts/validate_agent_artifacts.py fts/demo-ft --json",
+                        "generated_by": "codex_review_cycle_runner",
+                        "scope_slug": "section-scope",
+                        "canonical_test_cases": "test-cases/writer-gate.md",
+                        "test_design_dir": "work/test-design/section-scope",
+                        "current_stage": "structure-preflight-r1",
+                        "current_scope_findings": [],
+                        "unresolved_warning_error_count": 0,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            test_case_file.write_text(
+                test_case_file.read_text(encoding="utf-8").replace(
+                    "scoped-validator-profile.writer-r1.json",
+                    "scoped-validator-profile.structure-preflight-r1.json",
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+        evidence = "\n".join(
+            "\n".join(finding.get("evidence", []))
+            for finding in payload["findings"]
+            if finding["id"] == "writer-quality-gate-scoped-validator-profile-invalid"
+        )
+        self.assertIn("reviewer/future scoped validator profile", evidence)
+
+    def test_writer_quality_gate_accepts_clean_scoped_validator_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_noncanonical_test_case_heading_level_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "heading-level.md"
+            self.write_minimal_test_case_file(test_case_file)
+            test_case_file.write_text(
+                test_case_file.read_text(encoding="utf-8").replace(
+                    "## TC-SAMPLE-001",
+                    "### TC-SAMPLE-001",
+                    1,
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-noncanonical-heading-level", finding_ids)
+
+    def test_test_design_review_unknown_item_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "package.md"
+            self.write_minimal_test_case_file(test_case_file)
+            test_case_file.write_text(
+                test_case_file.read_text(encoding="utf-8")
+                + "\n\n"
+                + "\n".join(
+                    [
+                        "## Package Test Design Plan",
+                        "",
+                        "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| PD-001 | WP-01 | dictionary | SRC-001 | ATOM-001 | Check closed list | positive | valid class | active values | List contains only active values | SRC-001 | TC-SAMPLE-001 | planned |",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            self.append_passing_test_design_review(test_case_file)
+            content = test_case_file.read_text(encoding="utf-8")
+            content += "\n| `coverage-metrics-completeness` | `pass` | `info` | `WP-01` | Extra self-check. | none_required:pass | `no` |"
+            test_case_file.write_text(content, encoding="utf-8")
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-design-review-unknown-items", finding_ids)
+
+    def test_active_review_cycle_output_with_question_mark_damage_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            output = (
+                fixture_root
+                / "fts"
+                / "sample-ft"
+                / "work"
+                / "review-cycles"
+                / "sample-scope"
+                / "outputs"
+                / "semantic-review-r1-findings.md"
+            )
+            output.parent.mkdir(parents=True)
+            output.write_text(
+                "# Findings\n\n- Source quote: ?????? ????? ???????.\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("active-text-artifact-encoding-damage", finding_ids)
+
+    def test_historical_review_cycle_version_with_question_mark_damage_is_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            output = (
+                fixture_root
+                / "fts"
+                / "sample-ft"
+                / "work"
+                / "review-cycles"
+                / "sample-scope"
+                / "versions"
+                / "r1"
+                / "outputs"
+                / "semantic-review-r1-findings.md"
+            )
+            output.parent.mkdir(parents=True)
+            output.write_text(
+                "# Historical Findings\n\n- Source quote: ?????? ????? ???????.\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("active-text-artifact-encoding-damage", finding_ids)
+
+    def test_encoding_diagnostic_line_with_question_marks_is_not_damage(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            output = (
+                fixture_root
+                / "fts"
+                / "sample-ft"
+                / "work"
+                / "review-cycles"
+                / "sample-scope"
+                / "outputs"
+                / "reviewer-session-log.semantic-review-r1.md"
+            )
+            output.parent.mkdir(parents=True)
+            output.write_text(
+                "# Session Log\n\n- Manual encoding scan: no ????? markers detected in active artifacts.\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("active-text-artifact-encoding-damage", finding_ids)
+
+    def test_active_review_cycle_output_with_replacement_character_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            output = (
+                fixture_root
+                / "fts"
+                / "sample-ft"
+                / "work"
+                / "review-cycles"
+                / "sample-scope"
+                / "outputs"
+                / "semantic-review-r1-traceability-matrix.md"
+            )
+            output.parent.mkdir(parents=True)
+            output.write_text(
+                "# Traceability\n\n| atom | source |\n| --- | --- |\n| ATOM-001 | � |\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("active-text-artifact-encoding-damage", finding_ids)
 
 
 if __name__ == "__main__":

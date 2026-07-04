@@ -1,10 +1,47 @@
 from __future__ import annotations
 
+import importlib.util
+import re
+import sys
 import unittest
 from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
+RUNNER = ROOT_DIR / "scripts" / "codex_review_cycle_runner.py"
+
+
+def load_runner_module():
+    spec = importlib.util.spec_from_file_location("codex_review_cycle_runner_under_test", RUNNER)
+    assert spec is not None
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def parse_transition_matrix(content: str) -> dict[str, set[str]]:
+    matrix: dict[str, set[str]] = {}
+    in_section = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("## "):
+            in_section = stripped == "## Post-Session Transition Matrix"
+            continue
+        if not in_section or not stripped.startswith("|"):
+            continue
+        cells = [cell.strip() for cell in stripped.strip("|").split("|")]
+        if len(cells) != 2 or cells[0] in {"---", "scenario"}:
+            continue
+        scenario = cells[0].strip("`")
+        statuses = {
+            item.strip().strip("`")
+            for item in cells[1].split(";")
+            if item.strip()
+        }
+        matrix[scenario] = statuses
+    return matrix
 
 
 class SessionBasedReviewCycleContractTests(unittest.TestCase):
@@ -56,6 +93,17 @@ class SessionBasedReviewCycleContractTests(unittest.TestCase):
         self.assertIn("format review must not run before semantic review passes", content)
         self.assertIn("UI automation prep can start only after `signed-off`", content)
 
+    def test_runner_post_session_transition_matrix_matches_reference(self) -> None:
+        content = (
+            ROOT_DIR / "references" / "agent" / "session-based-review-cycle-format.md"
+        ).read_text(encoding="utf-8")
+        runner = load_runner_module()
+
+        self.assertEqual(
+            runner.POST_SESSION_ALLOWED_STAGE_STATUSES,
+            parse_transition_matrix(content),
+        )
+
     def test_codex_sdk_reference_keeps_runner_out_of_domain_decisions(self) -> None:
         content = (
             ROOT_DIR / "references" / "agent" / "codex-sdk-orchestration-format.md"
@@ -72,11 +120,11 @@ class SessionBasedReviewCycleContractTests(unittest.TestCase):
             "runner.lock.yaml",
             "`--recover-stale-lock`",
             "A second runner on the same state must fail fast",
-            "python scripts/codex_review_cycle_runner.py validate",
-            "python scripts/codex_review_cycle_runner.py snapshot",
-            "python scripts/codex_review_cycle_runner.py start --state <cycle-state.yaml> --dry-run",
-            "python scripts/codex_review_cycle_runner.py start --state <cycle-state.yaml>",
-            "python scripts/codex_review_cycle_runner.py run-until-terminal --state <cycle-state.yaml>",
+            ".\\scripts\\run_cycle.ps1 validate",
+            ".\\scripts\\run_cycle.ps1 snapshot",
+            ".\\scripts\\run_cycle.ps1 start --state <cycle-state.yaml> --dry-run",
+            ".\\scripts\\run_cycle.ps1 start --state <cycle-state.yaml>",
+            ".\\scripts\\run_cycle.ps1 run-until-terminal --state <cycle-state.yaml>",
             "`run-until-terminal` starts the next Codex thread",
             "Use `--max-sessions` as a loop safety limit",
             "Without `--dry-run`, `start` / `continue` starts a new Codex thread",
@@ -101,12 +149,13 @@ class SessionBasedReviewCycleContractTests(unittest.TestCase):
         self.assertIn("legacy-only historical evidence", iteration_skill)
 
     def test_canary_v3_preflight_defines_acceptance_and_runner_protocol(self) -> None:
-        content = (
-            ROOT_DIR / "work" / "quality-improvement-canary-v3-preflight.md"
-        ).read_text(encoding="utf-8")
+        preflight_path = ROOT_DIR / "work" / "quality-improvement-canary-v3-preflight.md"
+        if not preflight_path.exists():
+            self.skipTest("local canary v3 preflight artifact is not present")
+
+        content = preflight_path.read_text(encoding="utf-8")
 
         for token in (
-            "Recommended compact scope",
             "Mandatory Acceptance Criteria",
             "zero placeholder elements",
             "zero source-rule oracle phrases",
@@ -120,6 +169,13 @@ class SessionBasedReviewCycleContractTests(unittest.TestCase):
             "Do not accept `signed-off` as sufficient evidence by itself",
         ):
             self.assertIn(token, content)
+
+        for forbidden_pattern in (
+            re.compile(r"Recommended\s+compact\s+scope", re.IGNORECASE),
+            re.compile(r"target size:\s*about\s*\d+\s*-\s*\d+\s*executable TC", re.IGNORECASE),
+            re.compile(r"within requested about\s*\d+\s*-\s*\d+\s*range", re.IGNORECASE),
+        ):
+            self.assertIsNone(forbidden_pattern.search(content))
 
 
 if __name__ == "__main__":

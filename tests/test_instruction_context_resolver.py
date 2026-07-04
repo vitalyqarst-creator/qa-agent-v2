@@ -200,7 +200,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/agent/writer-output-format.md", paths)
         self.assertIn("references/agent/writer-quality-gate-format.md", paths)
         self.assertIn("references/qa/test-case-format.md", paths)
-        self.assertIn("references/qa/coverage-checklist.md", paths)
+        self.assertIn("references/qa/coverage-runtime-checklist.md", paths)
+        self.assertNotIn("references/qa/coverage-checklist.md", paths)
 
     def test_source_locator_discovery_context_loads_locator_core(self) -> None:
         payload = self.resolve_json("--scenario", "source_locator.discovery")

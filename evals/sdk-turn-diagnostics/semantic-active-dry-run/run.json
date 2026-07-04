@@ -1,0 +1,17 @@
+{
+  "approval_mode": "auto_review",
+  "completed_at_epoch": 1782378385,
+  "cwd": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+  "model": "",
+  "output_dir": "evals\\sdk-turn-diagnostics\\semantic-active-dry-run",
+  "prompt_bytes": 996,
+  "prompt_chars": 978,
+  "prompt_sha256": "05e8e285378bc526d92dc6301053b3f9e4eb26c49d13b60ac94f4304269969a3",
+  "prompt_source": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\ft-2-OF_17\\work\\review-cycles\\client-documents-upload-and-actuality\\prompts\\prompt.semantic-review-r1.md",
+  "python": "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\.venv\\Scripts\\python.exe",
+  "sandbox_policy": "workspace_write",
+  "started_at_epoch": 1782378385,
+  "status": "rendered-prompt",
+  "timeout_seconds": 60,
+  "version": 1
+}

@@ -89,6 +89,23 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
         )
 
     def append_passing_writer_quality_gate(self, path: Path) -> None:
+        profile_path = path.parent / "scoped-validator-profile.writer-r1.json"
+        profile_path.write_text(
+            json.dumps(
+                {
+                    "command": "python scripts/validate_agent_artifacts.py --root test-cases/sample.md --json",
+                    "generated_by": "codex_review_cycle_runner",
+                    "scope_slug": "ui-main-info",
+                    "canonical_test_cases": path.name,
+                    "test_design_dir": "test-cases",
+                    "current_scope_findings": [],
+                    "unresolved_warning_error_count": 0,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         path.write_text(
             path.read_text(encoding="utf-8")
             + "\n\n"
@@ -114,9 +131,15 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
                     "| `internal-observability` | `pass` | Проверено | `WP-01` | - | `no` |",
                     "| `action-observability` | `pass` | Проверено | `WP-01` | - | `no` |",
                     "| `semantic-req-id-parity` | `pass` | Проверено | `WP-01` | - | `no` |",
+                    "| `scoped-validator-findings` | `pass` | `scoped-validator-profile.writer-r1.json`: unresolved_warning_error_count=0 | `WP-01` | none_required:pass | `no` |",
                     "| `package-ready` | `pass` | Проверено | `WP-01` | - | `no` |",
                 ]
             ),
+            encoding="utf-8",
+        )
+        content = path.read_text(encoding="utf-8")
+        path.write_text(
+            content.replace(" | - | `no` |", " | none_required:pass | `no` |"),
             encoding="utf-8",
         )
 
@@ -150,6 +173,11 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        content = path.read_text(encoding="utf-8")
+        path.write_text(
+            content.replace(" | - | `no` |", " | none_required:pass | `no` |"),
+            encoding="utf-8",
+        )
 
     def write_writer_pass_artifacts(self, fixture_root: Path, *, ft_slug: str = "ft-2-OF_11") -> None:
         handoff_dir = fixture_root / "work" / "stage-handoffs" / "01-ui-main-info"
@@ -170,7 +198,7 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
                     "",
                     "| atom_id | package_id | requirement | coverage_status | covered_by_tc | gap_note |",
                     "| --- | --- | --- | --- | --- | --- |",
-                    "| ATOM-001 | WP-01 | Numeric value is accepted. | covered | TC-SAMPLE-001 | - |",
+                    "| ATOM-001 | WP-01 | Numeric value is accepted. | covered | TC-SAMPLE-001 | not_applicable:covered |",
                     "",
                     "## Package Test Design Plan",
                     "",

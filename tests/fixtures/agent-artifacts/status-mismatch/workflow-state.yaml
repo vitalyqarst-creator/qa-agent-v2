@@ -8,10 +8,12 @@ next_skill: ft-ui-automation-prep
 required_inputs:
   - test-cases/mismatch-scope.md
   - work/review-loops/mismatch-scope/loop-summary.md
+  - prompt.reviewer-to-ui-prep.md
 latest_artifacts:
   test_cases: test-cases/mismatch-scope.md
   loop_summary: work/review-loops/mismatch-scope/loop-summary.md
   signed_off_snapshot: work/review-loops/mismatch-scope/snapshots/mismatch-scope.signed-off.md
+  prompt_reviewer_to_ui_prep: prompt.reviewer-to-ui-prep.md
 coverage_gaps:
   total: 0
   blocking: 0
