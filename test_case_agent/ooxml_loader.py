@@ -43,6 +43,9 @@ class SourceNode:
     target_part: str | None = None
     target_url: str | None = None
     flags: tuple[str, ...] = ()
+    aggregate_kind: str | None = None
+    aggregate_confidence: str | None = None
+    aggregate_warning: str | None = None
 
     @property
     def text(self) -> str:
@@ -63,6 +66,9 @@ class SourceNode:
             "target_part": self.target_part,
             "target_url": self.target_url,
             "flags": list(self.flags),
+            "aggregate_kind": self.aggregate_kind,
+            "aggregate_confidence": self.aggregate_confidence,
+            "aggregate_warning": self.aggregate_warning,
         }
 
 
@@ -275,6 +281,9 @@ def _extract_source_nodes(
         target_part: str | None = None,
         target_url: str | None = None,
         flags: set[str] | None = None,
+        aggregate_kind: str | None = None,
+        aggregate_confidence: str | None = None,
+        aggregate_warning: str | None = None,
     ) -> None:
         normalized = _normalize_text(value)
         if not normalized:
@@ -294,6 +303,9 @@ def _extract_source_nodes(
                 target_part=target_part,
                 target_url=target_url,
                 flags=tuple(sorted(flags or set())),
+                aggregate_kind=aggregate_kind,
+                aggregate_confidence=aggregate_confidence,
+                aggregate_warning=aggregate_warning,
             )
         )
 
@@ -393,6 +405,12 @@ def _extract_source_nodes(
                     target_part=aggregate_target_part,
                     target_url=aggregate_target_url,
                     flags=aggregate_flags,
+                    aggregate_kind=aggregate_kind,
+                    aggregate_confidence="derived",
+                    aggregate_warning=(
+                        "Derived aggregate text may join distinct runs or tracked-change text; "
+                        "prefer direct text and attribute nodes when possible."
+                    ),
                 )
 
     return nodes
@@ -440,8 +458,8 @@ def _build_coverage_audit(
         hyperlinks_count=_count_elements(parsed_parts, lambda _part, element: _is_w(element, "hyperlink")),
         images_count=_count_elements(parsed_parts, lambda _part, element: _local_name(element.tag) == "docPr"),
         hidden_text_count=_count_flag(source_nodes, "hidden_text"),
-        tracked_insert_count=_count_flag(source_nodes, "tracked_insert"),
-        tracked_delete_count=_count_flag(source_nodes, "tracked_delete"),
+        tracked_insert_count=_count_elements(parsed_parts, lambda _part, element: _is_w(element, "ins")),
+        tracked_delete_count=_count_elements(parsed_parts, lambda _part, element: _is_w(element, "del")),
         textboxes_count=_count_elements(parsed_parts, lambda _part, element: _is_w(element, "txbxContent")),
         custom_xml_parts_count=sum(1 for part in xml_parts_extracted if part.startswith("customXml/")),
         parser_mode=parser_mode,

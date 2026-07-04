@@ -42,6 +42,28 @@ Coverage audit не является трассировкой требовани
 }
 ```
 
+CLI JSON должен дополнительно содержать `clean_run_audit`:
+
+```json
+{
+  "clean_run_audit": {
+    "files_read": ["fts/package/source/file.docx"],
+    "forbidden_name_patterns": [
+      "expected",
+      "private",
+      "golden",
+      "answer",
+      "solution",
+      "bundle"
+    ],
+    "forbidden_files_detected_nearby": [],
+    "forbidden_files_read": [],
+    "clean_run_claim": true,
+    "clean_run_status": "clean"
+  }
+}
+```
+
 ## Rules
 
 - `zip_entries_seen` должен включать все entries из ZIP, включая `word/media/*`, embedded objects и `docProps/thumbnail.*`.
@@ -52,6 +74,10 @@ Coverage audit не является трассировкой требовани
   `Binary part seen but not content-extracted: <path>`.
 - `parser_mode="strict"` означает `resolve_entities=False`, `no_network=True`, `recover=False`.
 - `parser_mode="tolerant"` допустим только явно и должен добавлять warning.
+- `tracked_insert_count` считает элементы `w:ins`, а не количество производных `SourceNode`.
+- `tracked_delete_count` считает элементы `w:del`, а не количество производных `SourceNode`.
+- CLI не должен читать файлы, чьи имена содержат `expected`, `private`, `golden`, `answer`, `solution` или `bundle`.
+- CLI может проверять имена соседних файлов. Если такие файлы найдены рядом с DOCX, они указываются в `forbidden_files_detected_nearby`, `forbidden_files_read` остается пустым, а `clean_run_claim` должен быть `false` или `clean_run_status` должен быть `contaminated-risk`.
 
 ## SourceNode Minimum
 
@@ -67,9 +93,19 @@ Coverage audit не является трассировкой требовани
 - `attribute_name`, если применимо;
 - `relationship_id`, если применимо;
 - `target_part` или `target_url`, если применимо;
-- `flags`: `hidden_text`, `tracked_insert`, `tracked_delete`, `comment`, `footnote`, `endnote`, `header`, `footer`, `table`, `list`, `hyperlink`, `image_alt_or_title`, `textbox`, `docprop`, `custom_xml`.
+- `flags`: `hidden_text`, `tracked_insert`, `tracked_delete`, `comment`, `footnote`, `endnote`, `header`, `footer`, `table`, `list`, `hyperlink`, `image_alt_or_title`, `textbox`, `docprop`, `custom_xml`;
+- `aggregate_kind`: `paragraph`, `table_cell`, `textbox`, `hyperlink` или `null`;
+- `aggregate_confidence`: `derived` для aggregate nodes или `null`;
+- `aggregate_warning`: предупреждение для aggregate nodes или `null`.
+
+## Aggregate Nodes
+
+Aggregate nodes are derived convenience nodes. Они нужны для случаев, где полезный текст разбит между несколькими `w:r`/`w:t`, например split-run маркеры или визуально единый абзац.
+
+Downstream requirements extraction should prefer direct `text`, `tail` and `attribute` nodes when possible. Aggregate nodes may join distinct runs, field fragments, hidden text and tracked insertion/deletion text. Их нельзя считать более точным source-of-truth, чем direct OOXML nodes.
 
 ## Interpretation
 
 Audit с binary warnings может быть корректным: это честная фиксация того, что binary content не извлекался.
 Такой warning нельзя автоматически считать дефектом loader-а. Дефектом является ситуация, когда binary part есть в ZIP, но отсутствует в `binary_parts_seen` или warning скрыт.
+Downstream должен учитывать, что OCR/content extraction для binary parts не выполнялся.

@@ -18,6 +18,15 @@ from test_case_agent.ooxml_loader import (  # noqa: E402
     load_ooxml_source,
 )
 
+FORBIDDEN_NAME_PATTERNS = [
+    "expected",
+    "private",
+    "golden",
+    "answer",
+    "solution",
+    "bundle",
+]
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Inspect DOCX OOXML source coverage.")
@@ -39,12 +48,14 @@ def main() -> int:
 
     parser_mode = PARSER_MODE_TOLERANT if args.tolerant else PARSER_MODE_STRICT
     source = load_ooxml_source(args.source, parser_mode=parser_mode)
+    clean_run_audit = build_clean_run_audit(args.source)
     markers = find_markers(source.nodes, args.marker_regex) if args.find_markers else []
     payload = {
         "coverage_audit": source.coverage.to_dict(),
         "summary_counts": summary_counts(source.nodes, source.coverage.to_dict()),
+        "clean_run_audit": clean_run_audit,
         "markers": markers,
-        "files_read": [str(args.source)],
+        "files_read": clean_run_audit["files_read"],
     }
 
     if args.json:
@@ -63,10 +74,50 @@ def main() -> int:
         if not markers:
             print("- none")
 
-    print("Files read:")
-    for file_read in payload["files_read"]:
+    print("Clean run audit:")
+    print(f"- clean_run_claim: {clean_run_audit['clean_run_claim']}")
+    print(f"- clean_run_status: {clean_run_audit['clean_run_status']}")
+    print("- files_read:")
+    for file_read in clean_run_audit["files_read"]:
         print(f"- {file_read}")
+    if clean_run_audit["forbidden_files_detected_nearby"]:
+        print("- forbidden_files_detected_nearby:")
+        for detected in clean_run_audit["forbidden_files_detected_nearby"]:
+            print(f"- {detected}")
     return 0
+
+
+def build_clean_run_audit(source: Path) -> dict[str, Any]:
+    files_read = [str(source)]
+    forbidden_files_detected_nearby = detect_forbidden_files_nearby(source)
+    clean_run_claim = not forbidden_files_detected_nearby
+    return {
+        "files_read": files_read,
+        "forbidden_name_patterns": FORBIDDEN_NAME_PATTERNS,
+        "forbidden_files_detected_nearby": forbidden_files_detected_nearby,
+        "forbidden_files_read": [],
+        "clean_run_claim": clean_run_claim,
+        "clean_run_status": "clean" if clean_run_claim else "contaminated-risk",
+    }
+
+
+def detect_forbidden_files_nearby(source: Path) -> list[str]:
+    source = Path(source)
+    parent = source.parent
+    if not parent.exists():
+        return []
+
+    source_name = source.name.lower()
+    detected: list[str] = []
+    for candidate in parent.iterdir():
+        if not candidate.is_file():
+            continue
+        if candidate.name.lower() == source_name:
+            continue
+        candidate_name = candidate.name.lower()
+        if any(pattern in candidate_name for pattern in FORBIDDEN_NAME_PATTERNS):
+            detected.append(str(candidate))
+    return sorted(detected)
 
 
 def find_markers(nodes: list[SourceNode], marker_regex: str) -> list[dict[str, Any]]:
@@ -89,6 +140,9 @@ def find_markers(nodes: list[SourceNode], marker_regex: str) -> list[dict[str, A
                     "flags": list(node.flags),
                     "target_part": node.target_part,
                     "target_url": node.target_url,
+                    "aggregate_kind": node.aggregate_kind,
+                    "aggregate_confidence": node.aggregate_confidence,
+                    "aggregate_warning": node.aggregate_warning,
                 }
             )
     return markers
