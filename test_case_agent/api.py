@@ -32,6 +32,15 @@ from test_case_agent.requirements_registry import (
     make_req_uid,
     write_requirements_registry,
 )
+from test_case_agent.requirements_diff import (
+    RequirementsDiff,
+    RequirementsDiffEntry,
+    build_requirements_diff,
+    compute_text_similarity,
+    load_requirements_diff,
+    match_requirement_entries,
+    write_requirements_diff,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -114,6 +123,8 @@ __all__ = [
     "OoxmlSource",
     "RequirementRegistry",
     "RequirementRegistryEntry",
+    "RequirementsDiff",
+    "RequirementsDiffEntry",
     "Section",
     "SectionChunk",
     "SourceAnchor",
@@ -126,16 +137,21 @@ __all__ = [
     "inspect_source_quality",
     "build_source_manifest",
     "build_requirements_registry",
+    "build_requirements_diff",
     "compute_file_sha256",
     "compute_requirement_text_hash",
+    "compute_text_similarity",
+    "load_requirements_diff",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
     "load_ooxml_source",
     "load_sections",
     "make_req_uid",
+    "match_requirement_entries",
     "preview_chunks",
     "resolve_sections",
+    "write_requirements_diff",
     "write_requirements_registry",
     "write_source_manifest",
 ]
