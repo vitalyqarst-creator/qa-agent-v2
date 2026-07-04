@@ -48,6 +48,23 @@ Parser rules:
   - `BSR <number>`, `GSR <number>`, `REQ[- ]?<number>`, `ID <number>`
 - Missing traceability adds warning and must not silently make a TC unaffected.
 
+Aggregate or assembly files should not be parsed as TC source by default. A Markdown file is treated as aggregate/assembly when the first approximately 80 lines contain one of:
+
+- `assembled_from`
+- `test_case_count`
+- `aggregate`
+- `Порядок Сборки`
+- `source files assembled`
+
+When auto-skip is enabled, aggregate files are skipped before TC parsing and before duplicate TC ID detection. Duplicate protection remains enabled for every parsed, non-skipped file.
+
+Files can also be skipped explicitly:
+
+- exact filename or relative path via `exclude_files` / `--exclude-file`;
+- glob pattern against filename or relative path via `exclude_patterns` / `--exclude-pattern`.
+
+Every skipped file must be visible in the summary and Markdown report.
+
 ## Impact Entry
 
 ```json
@@ -136,6 +153,13 @@ If multiple TC match, include all matching TC links.
   "impact_entries_total": 5,
   "test_cases_scanned": 12,
   "test_case_files_scanned": 3,
+  "skipped_test_case_files_count": 1,
+  "skipped_test_case_files": [
+    {
+      "file_path": "fts/AutoFin/test-cases/14-application-card.md",
+      "reason": "auto-skipped aggregate test-case assembly file"
+    }
+  ],
   "affected_test_cases_count": 4,
   "actions": {
     "no_action": 1,
@@ -168,7 +192,7 @@ Block when:
 - diff summary has `diff_status=blocked`;
 - test-cases directory is missing;
 - test-case parser cannot read files;
-- duplicate TC IDs are detected;
+- duplicate TC IDs are detected in parsed, non-skipped files;
 - no test cases are parsed, unless `--allow-empty-test-cases` is passed.
 
 ## Markdown Report
@@ -182,6 +206,7 @@ Markdown output must contain:
 - `Deprecated Candidates`
 - `Manual Review Required`
 - `Unlinked Changes`
+- `Skipped Test Case Files`
 - `Parser Warnings`
 
 ## CLI
@@ -197,6 +222,9 @@ Optional inputs:
 
 ```bash
 --requirements-diff-summary fts/AutoFin/requirements/requirements-diff-summary.autofin-prefinal-v1-to-autofin-final-v1.json
+--exclude-file 14-application-card.md
+--exclude-pattern "*aggregate*.md"
+--no-auto-skip-aggregate-files
 --allow-empty-test-cases
 ```
 

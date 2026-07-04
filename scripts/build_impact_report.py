@@ -24,6 +24,23 @@ def main() -> int:
     parser.add_argument("--out-dir", required=True, type=Path, help="Output directory for impact artifacts.")
     parser.add_argument("--requirements-diff-summary", type=Path, help="Optional requirements-diff-summary JSON path.")
     parser.add_argument(
+        "--exclude-file",
+        action="append",
+        default=[],
+        help="Exact test-case filename or relative path to skip. Repeatable.",
+    )
+    parser.add_argument(
+        "--exclude-pattern",
+        action="append",
+        default=[],
+        help="Glob pattern matched against filename or relative path. Repeatable.",
+    )
+    parser.add_argument(
+        "--no-auto-skip-aggregate-files",
+        action="store_true",
+        help="Disable default auto-skip for aggregate/assembly test-case files.",
+    )
+    parser.add_argument(
         "--allow-empty-test-cases",
         action="store_true",
         help="Allow building a source-only report when no TC blocks are parsed.",
@@ -35,6 +52,9 @@ def main() -> int:
         requirements_diff_summary_path=args.requirements_diff_summary,
         test_cases_dir=args.test_cases_dir,
         allow_empty_test_cases=args.allow_empty_test_cases,
+        exclude_files=args.exclude_file,
+        exclude_patterns=args.exclude_pattern,
+        auto_skip_aggregate_files=not args.no_auto_skip_aggregate_files,
         created_by_tool="scripts/build_impact_report.py",
     )
     report_path, summary_path, markdown_path = write_impact_report(report, args.out_dir)

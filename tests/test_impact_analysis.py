@@ -162,6 +162,91 @@ class ImpactAnalysisTests(unittest.TestCase):
             self.assertEqual("blocked", report.summary["impact_status"])
             self.assertTrue(any("duplicate TC ids" in reason for reason in report.blocking_reasons))
 
+    def test_aggregate_and_split_duplicate_blocks_when_auto_skip_disabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir = setup_root(temp_dir)
+            write_tc(tc_dir / "14-application-card.md", aggregate_tc_content("TC-001", "BSR 1"))
+            write_tc(tc_dir / "14-application-card-client-addresses.md", "## TC-001\n**Трассировка:** BSR 1\n")
+            diff_path = write_diff(root, [make_diff_entry("CHG-000001", "unchanged", old_source_req_id="BSR 1")])
+
+            report = build_impact_report(
+                requirements_diff_path=diff_path,
+                test_cases_dir=tc_dir,
+                auto_skip_aggregate_files=False,
+            )
+
+            self.assertEqual("blocked", report.summary["impact_status"])
+            self.assertTrue(any("duplicate TC ids" in reason for reason in report.blocking_reasons))
+
+    def test_aggregate_and_split_duplicate_does_not_block_with_auto_skip_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir = setup_root(temp_dir)
+            aggregate_path = tc_dir / "14-application-card.md"
+            write_tc(aggregate_path, aggregate_tc_content("TC-001", "BSR 1"))
+            write_tc(tc_dir / "14-application-card-client-addresses.md", "## TC-001\n**Трассировка:** BSR 1\n")
+            diff_path = write_diff(root, [make_diff_entry("CHG-000001", "unchanged", old_source_req_id="BSR 1")])
+
+            report = build_impact_report(requirements_diff_path=diff_path, test_cases_dir=tc_dir)
+
+            self.assertNotEqual("blocked", report.summary["impact_status"])
+            self.assertEqual(1, report.summary["skipped_test_case_files_count"])
+            self.assertEqual(str(aggregate_path), report.summary["skipped_test_case_files"][0]["file_path"])
+
+    def test_exclude_file_skips_exact_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir = setup_root(temp_dir)
+            excluded = tc_dir / "aggregate.md"
+            write_tc(excluded, "## TC-001\n**Трассировка:** BSR 1\n")
+            write_tc(tc_dir / "split.md", "## TC-001\n**Трассировка:** BSR 1\n")
+            diff_path = write_diff(root, [make_diff_entry("CHG-000001", "unchanged", old_source_req_id="BSR 1")])
+
+            report = build_impact_report(
+                requirements_diff_path=diff_path,
+                test_cases_dir=tc_dir,
+                exclude_files=["aggregate.md"],
+                auto_skip_aggregate_files=False,
+            )
+
+            self.assertNotEqual("blocked", report.summary["impact_status"])
+            self.assertEqual(1, report.summary["skipped_test_case_files_count"])
+            self.assertIn("excluded by file", report.summary["skipped_test_case_files"][0]["reason"])
+
+    def test_exclude_pattern_skips_matching_file(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir = setup_root(temp_dir)
+            write_tc(tc_dir / "14-application-card.md", "## TC-001\n**Трассировка:** BSR 1\n")
+            write_tc(tc_dir / "14-application-card-client-addresses.md", "## TC-001\n**Трассировка:** BSR 1\n")
+            diff_path = write_diff(root, [make_diff_entry("CHG-000001", "unchanged", old_source_req_id="BSR 1")])
+
+            report = build_impact_report(
+                requirements_diff_path=diff_path,
+                test_cases_dir=tc_dir,
+                exclude_patterns=["14-application-card.md"],
+                auto_skip_aggregate_files=False,
+            )
+
+            self.assertNotEqual("blocked", report.summary["impact_status"])
+            self.assertEqual(1, report.summary["skipped_test_case_files_count"])
+            self.assertIn("excluded by pattern", report.summary["skipped_test_case_files"][0]["reason"])
+
+    def test_skipped_files_appear_in_summary_and_markdown(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir = setup_root(temp_dir)
+            aggregate_path = tc_dir / "14-application-card.md"
+            write_tc(aggregate_path, aggregate_tc_content("TC-001", "BSR 1"))
+            write_tc(tc_dir / "split.md", "## TC-001\n**Трассировка:** BSR 1\n")
+            diff_path = write_diff(root, [make_diff_entry("CHG-000001", "unchanged", old_source_req_id="BSR 1")])
+            report = build_impact_report(requirements_diff_path=diff_path, test_cases_dir=tc_dir)
+
+            _report_path, summary_path, markdown_path = write_impact_report(report, root)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            markdown = markdown_path.read_text(encoding="utf-8")
+
+            self.assertEqual(1, summary["skipped_test_case_files_count"])
+            self.assertEqual(str(aggregate_path), summary["skipped_test_case_files"][0]["file_path"])
+            self.assertIn("## Skipped Test Case Files", markdown)
+            self.assertIn("14-application-card.md", markdown)
+
     def test_missing_test_cases_dir_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -224,6 +309,18 @@ def setup_root(temp_dir: str) -> tuple[Path, Path]:
 
 def write_tc(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8", newline="\n")
+
+
+def aggregate_tc_content(test_case_id: str, traceability: str) -> str:
+    return (
+        "---\n"
+        "assembled_from:\n"
+        "  - split.md\n"
+        "test_case_count: 1\n"
+        "---\n"
+        f"## {test_case_id}\n"
+        f"**Трассировка:** {traceability}\n"
+    )
 
 
 def make_diff_entry(

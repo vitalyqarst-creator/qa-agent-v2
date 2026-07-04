@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from fnmatch import fnmatch
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -40,6 +41,13 @@ SOURCE_REQ_ID_RE = re.compile(
     r"\b(?:BSR\s+\d+|GSR\s+\d+|REQ[- ]?\d+|ID\s+\d+)\b",
     re.IGNORECASE,
 )
+AGGREGATE_FILE_MARKERS = [
+    "assembled_from",
+    "test_case_count",
+    "aggregate",
+    "порядок сборки",
+    "source files assembled",
+]
 
 
 @dataclass(frozen=True)
@@ -187,6 +195,7 @@ class ImpactReport:
 class ParsedTestCases:
     test_cases: list[TestCaseLink]
     files_scanned: int
+    skipped_files: list[dict[str, str]]
     warnings: list[str]
     blocking_reasons: list[str]
 
@@ -197,6 +206,9 @@ def build_impact_report(
     test_cases_dir: Path,
     requirements_diff_summary_path: Path | None = None,
     allow_empty_test_cases: bool = False,
+    exclude_files: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    auto_skip_aggregate_files: bool = True,
     created_by_tool: str = CREATED_BY_TOOL,
 ) -> ImpactReport:
     requirements_diff_path = Path(requirements_diff_path)
@@ -225,7 +237,12 @@ def build_impact_report(
     if diff is not None and _diff_status(diff.summary) == "blocked":
         blocking_reasons.append("requirements diff object summary is blocked.")
 
-    parsed = parse_test_cases(test_cases_dir)
+    parsed = parse_test_cases(
+        test_cases_dir,
+        exclude_files=exclude_files,
+        exclude_patterns=exclude_patterns,
+        auto_skip_aggregate_files=auto_skip_aggregate_files,
+    )
     warnings.extend(parsed.warnings)
     blocking_reasons.extend(parsed.blocking_reasons)
     if not parsed.test_cases and not allow_empty_test_cases:
@@ -245,6 +262,7 @@ def build_impact_report(
             impact_entries=[],
             test_case_links=parsed.test_cases,
             test_case_files_scanned=parsed.files_scanned,
+            skipped_files=parsed.skipped_files,
             diff_entries_total=len(diff.entries) if diff else 0,
             warnings=warnings,
             blocking_reasons=blocking_reasons,
@@ -262,6 +280,7 @@ def build_impact_report(
         impact_entries=impact_entries,
         test_case_links=parsed.test_cases,
         test_case_files_scanned=parsed.files_scanned,
+        skipped_files=parsed.skipped_files,
         diff_entries_total=len(diff.entries),
         warnings=warnings,
         blocking_reasons=[],
@@ -301,10 +320,19 @@ def load_impact_report(path: Path) -> ImpactReport:
     return ImpactReport.from_dict(payload)
 
 
-def parse_test_cases(test_cases_dir: Path) -> ParsedTestCases:
+def parse_test_cases(
+    test_cases_dir: Path,
+    *,
+    exclude_files: list[str] | None = None,
+    exclude_patterns: list[str] | None = None,
+    auto_skip_aggregate_files: bool = True,
+) -> ParsedTestCases:
     test_cases_dir = Path(test_cases_dir)
+    exclude_files = exclude_files or []
+    exclude_patterns = exclude_patterns or []
     warnings: list[str] = []
     blocking_reasons: list[str] = []
+    skipped_files: list[dict[str, str]] = []
     test_cases: list[TestCaseLink] = []
     files_scanned = 0
 
@@ -312,16 +340,31 @@ def parse_test_cases(test_cases_dir: Path) -> ParsedTestCases:
         return ParsedTestCases(
             test_cases=[],
             files_scanned=0,
+            skipped_files=[],
             warnings=[],
             blocking_reasons=[f"test-cases dir is missing: {test_cases_dir}"],
         )
 
     for file_path in sorted(test_cases_dir.glob("*.md")):
         files_scanned += 1
+        skip_reason = _configured_skip_reason(
+            file_path,
+            test_cases_dir,
+            exclude_files=exclude_files,
+            exclude_patterns=exclude_patterns,
+        )
+        if skip_reason:
+            skipped_files.append({"file_path": str(file_path), "reason": skip_reason})
+            continue
         try:
             content = file_path.read_text(encoding="utf-8")
         except Exception as exc:  # noqa: BLE001 - parser must report unreadable files.
             blocking_reasons.append(f"test-case file cannot be read: {file_path}: {exc}")
+            continue
+        if auto_skip_aggregate_files and _is_aggregate_file_content(content):
+            skipped_files.append(
+                {"file_path": str(file_path), "reason": "auto-skipped aggregate test-case assembly file"}
+            )
             continue
         file_cases = _parse_test_case_file(file_path, content)
         test_cases.extend(file_cases)
@@ -335,6 +378,7 @@ def parse_test_cases(test_cases_dir: Path) -> ParsedTestCases:
     return ParsedTestCases(
         test_cases=test_cases,
         files_scanned=files_scanned,
+        skipped_files=skipped_files,
         warnings=sorted(set(warnings)),
         blocking_reasons=blocking_reasons,
     )
@@ -400,6 +444,12 @@ def render_impact_report_markdown(report: ImpactReport) -> str:
     _append_entry_lines(lines, [entry for entry in report.impact_entries if entry.requires_manual_review], include_cases=True)
     lines.extend(["", "## Unlinked Changes", ""])
     _append_entry_lines(lines, [entry for entry in report.impact_entries if not entry.affected_test_cases])
+    lines.extend(["", "## Skipped Test Case Files", ""])
+    if report.summary["skipped_test_case_files"]:
+        for item in report.summary["skipped_test_case_files"]:
+            lines.append(f"- `{item['file_path']}`: {item['reason']}")
+    else:
+        lines.append("- none")
     lines.extend(["", "## Parser Warnings", ""])
     if report.summary["warnings"]:
         for warning in report.summary["warnings"]:
@@ -407,6 +457,37 @@ def render_impact_report_markdown(report: ImpactReport) -> str:
     else:
         lines.append("- none")
     return "\n".join(lines) + "\n"
+
+
+def _configured_skip_reason(
+    file_path: Path,
+    test_cases_dir: Path,
+    *,
+    exclude_files: list[str],
+    exclude_patterns: list[str],
+) -> str | None:
+    relative_path = _relative_posix(file_path, test_cases_dir)
+    for excluded in exclude_files:
+        normalized = excluded.replace("\\", "/")
+        if file_path.name == excluded or relative_path == normalized:
+            return f"excluded by file: {excluded}"
+    for pattern in exclude_patterns:
+        normalized_pattern = pattern.replace("\\", "/")
+        if fnmatch(file_path.name, pattern) or fnmatch(relative_path, normalized_pattern):
+            return f"excluded by pattern: {pattern}"
+    return None
+
+
+def _is_aggregate_file_content(content: str) -> bool:
+    head = "\n".join(content.splitlines()[:80]).casefold()
+    return any(marker in head for marker in AGGREGATE_FILE_MARKERS)
+
+
+def _relative_posix(file_path: Path, root: Path) -> str:
+    try:
+        return file_path.relative_to(root).as_posix()
+    except ValueError:
+        return file_path.as_posix()
 
 
 def _parse_test_case_file(file_path: Path, content: str) -> list[TestCaseLink]:
@@ -571,6 +652,7 @@ def _make_report(
     impact_entries: list[ImpactEntry],
     test_case_links: list[TestCaseLink],
     test_case_files_scanned: int,
+    skipped_files: list[dict[str, str]],
     diff_entries_total: int,
     warnings: list[str],
     blocking_reasons: list[str],
@@ -582,6 +664,7 @@ def _make_report(
         impact_entries=impact_entries,
         test_case_links=test_case_links,
         test_case_files_scanned=test_case_files_scanned,
+        skipped_files=skipped_files,
         warnings=warnings,
         blocking_reasons=blocking_reasons,
     )
@@ -606,6 +689,7 @@ def _summary(
     impact_entries: list[ImpactEntry],
     test_case_links: list[TestCaseLink],
     test_case_files_scanned: int,
+    skipped_files: list[dict[str, str]],
     warnings: list[str],
     blocking_reasons: list[str],
 ) -> dict[str, Any]:
@@ -638,6 +722,8 @@ def _summary(
         "impact_entries_total": len(impact_entries),
         "test_cases_scanned": len(test_case_links),
         "test_case_files_scanned": test_case_files_scanned,
+        "skipped_test_case_files_count": len(skipped_files),
+        "skipped_test_case_files": skipped_files,
         "affected_test_cases_count": len(affected_ids),
         "actions": {key: actions.get(key, 0) for key in action_keys},
         "requires_manual_review_count": sum(1 for entry in impact_entries if entry.requires_manual_review),
