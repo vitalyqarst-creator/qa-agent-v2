@@ -21,6 +21,17 @@ from test_case_agent.source_manifest import (
     load_source_manifest,
     write_source_manifest,
 )
+from test_case_agent.requirements_registry import (
+    RequirementRegistry,
+    RequirementRegistryEntry,
+    SourceAnchor,
+    build_requirements_registry,
+    compute_requirement_text_hash,
+    load_requirements_registry,
+    load_requirements_registry_jsonl,
+    make_req_uid,
+    write_requirements_registry,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -101,8 +112,11 @@ __all__ = [
     "NoMatchingSectionsError",
     "OoxmlCoverageAudit",
     "OoxmlSource",
+    "RequirementRegistry",
+    "RequirementRegistryEntry",
     "Section",
     "SectionChunk",
+    "SourceAnchor",
     "SourceFileEntry",
     "SourceManifest",
     "SourceNode",
@@ -111,11 +125,17 @@ __all__ = [
     "inspect_ooxml_coverage",
     "inspect_source_quality",
     "build_source_manifest",
+    "build_requirements_registry",
     "compute_file_sha256",
+    "compute_requirement_text_hash",
+    "load_requirements_registry",
+    "load_requirements_registry_jsonl",
     "load_source_manifest",
     "load_ooxml_source",
     "load_sections",
+    "make_req_uid",
     "preview_chunks",
     "resolve_sections",
+    "write_requirements_registry",
     "write_source_manifest",
 ]
