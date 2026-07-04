@@ -103,9 +103,11 @@ Stage 3 conservative extraction usually produces `medium` for direct active text
 
 Stage 3 uses rule-based classification:
 
-- `requiredness`: contains `обязател`, `required`, or standalone `О`.
+- `requiredness`: contains `обязател` or `required`.
+- Single-letter `О` / `O` is treated as `requiredness` only when the whole normalized text is that marker, or when a future extractor provides explicit table marker context. Ordinary phrases with the Russian preposition `о`, for example `Сведения о клиенте`, must not become `requiredness`.
 - `visibility`: contains `отображ`, `видим`, `скрыт`, or `показыв`.
-- `editability`: contains `редакт`, `доступно для редактирования`, or standalone `Р`.
+- `editability`: contains `редакт` or `доступно для редактирования`.
+- Single-letter `Р` / `P` is treated as `editability` only when the whole normalized text is that marker, or when a future extractor provides explicit table marker context. Ordinary phrases with the letter `р` must not become `editability`.
 - `validation`: contains `не принимает`, `недопуст`, `только`, `формат`, `маска`, or `длина`.
 - `dictionary`: contains `справочник`, `значения`, `перечень`, or `DICT`.
 - `navigation/action`: contains `кнопка`, `переход`, `нажать`, or `действие`.
@@ -114,6 +116,12 @@ Stage 3 uses rule-based classification:
 - `metadata/source_only`: source text does not look like a checkable requirement.
 
 These rules are intentionally conservative and are not a replacement for writer/reviewer semantic decomposition.
+
+Single-letter table markers must not become active requirements without row/header context. If the extractor emits `О`, `O`, `Р`, or `P` as a marker without sufficient row/header context:
+
+- keep `status` as `source_only` or `unclear`;
+- set `confidence` to `low`;
+- add warning: `Single-letter table marker requires row/header context before promotion to active requirement.`
 
 ## Risky OOXML Zones
 
@@ -172,6 +180,8 @@ Footnotes, endnotes, custom XML, headers, footers, and document properties may b
   "by_part": {
     "word/document.xml": 10
   },
+  "duplicate_req_uid_count": 0,
+  "duplicate_req_uids": [],
   "source_nodes_seen": 42,
   "warnings": [],
   "blocking_reasons": []
@@ -197,6 +207,24 @@ The builder must write a blocked summary and no active entries when:
 - source manifest `clean_run_audit.clean_run_status` is not `clean`.
 
 For Stage 3, contamination is handled strictly: `contaminated-risk` and `contaminated` both block registry extraction. This prevents the registry builder from reading expected/private/golden/answer/solution/bundle inputs or proceeding from a contaminated source manifest.
+
+## Duplicate UID Visibility
+
+Stage 3 keeps the deterministic `req_uid` algorithm stable and does not radically re-key entries before requirements diff work starts.
+
+If multiple entries have the same `req_uid`, the summary must make that visible:
+
+```json
+{
+  "duplicate_req_uid_count": 1,
+  "duplicate_req_uids": ["REQ-AUTOFIN-F3A07500C93E"],
+  "warnings": [
+    "Duplicate req_uid values detected; review source anchors before using registry for diff."
+  ]
+}
+```
+
+`duplicate_req_uid_count` counts duplicate UID values, not total duplicate rows. Duplicate entries remain in the JSONL so their separate `source_anchors` are inspectable.
 
 ## CLI
 

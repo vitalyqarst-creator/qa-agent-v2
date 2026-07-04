@@ -258,11 +258,105 @@ class RequirementsRegistryTests(unittest.TestCase):
             self.assertEqual("BSR 115", entry.source_req_id)
             self.assertEqual(entry.normalized_text, entry.expected_behavior)
 
+    def test_russian_preposition_o_does_not_become_requiredness_active(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            build_docx_fixture_with_text(source_docx, "Сведения о клиенте")
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="preposition-o-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entry = _entry_containing(registry.entries, "Сведения о клиенте")
+
+            self.assertNotEqual("requiredness", entry.requirement_type)
+            self.assertFalse(entry.requirement_type == "requiredness" and entry.status == "active")
+
+    def test_russian_phrase_with_o_does_not_become_requiredness_active(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            build_docx_fixture_with_text(source_docx, "Информация о заявке")
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="info-o-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entry = _entry_containing(registry.entries, "Информация о заявке")
+
+            self.assertNotEqual("requiredness", entry.requirement_type)
+            self.assertFalse(entry.requirement_type == "requiredness" and entry.status == "active")
+
+    def test_single_o_marker_is_requiredness_but_not_active_without_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            build_docx_fixture_with_text(source_docx, "О")
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="single-o-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entry = _entry_containing(registry.entries, "О")
+
+            self.assertEqual("requiredness", entry.requirement_type)
+            self.assertNotEqual("active", entry.status)
+            self.assertEqual("low", entry.confidence)
+            self.assertIn(
+                "Single-letter table marker requires row/header context before promotion to active requirement.",
+                entry.warnings,
+            )
+
+    def test_single_r_marker_is_editability_but_not_active_without_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            build_docx_fixture_with_text(source_docx, "Р")
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="single-r-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entry = _entry_containing(registry.entries, "Р")
+
+            self.assertEqual("editability", entry.requirement_type)
+            self.assertNotEqual("active", entry.status)
+            self.assertEqual("low", entry.confidence)
+            self.assertIn(
+                "Single-letter table marker requires row/header context before promotion to active requirement.",
+                entry.warnings,
+            )
+
+    def test_duplicate_req_uids_are_visible_in_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            duplicated_text = "BSR 115 Адрес регистрации обязателен."
+            build_docx_fixture_with_text(source_docx, [duplicated_text, duplicated_text])
+            out_dir = root / "requirements"
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="dupes-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            _registry_path, summary_path = write_requirements_registry(registry, out_dir)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            self.assertGreater(summary["duplicate_req_uid_count"], 0)
+            self.assertEqual(summary["duplicate_req_uid_count"], len(summary["duplicate_req_uids"]))
+            self.assertIn(registry.entries[0].req_uid, summary["duplicate_req_uids"])
+            self.assertIn(
+                "Duplicate req_uid values detected; review source anchors before using registry for diff.",
+                summary["warnings"],
+            )
+
 
 def _write_manifest(root: Path, *, source_version: str) -> Path:
     source_docx = root / "sample.docx"
+    return _write_manifest_for_docx(root, source_docx, source_version=source_version, build_default=True)
+
+
+def _write_manifest_for_docx(
+    root: Path,
+    source_docx: Path,
+    *,
+    source_version: str,
+    build_default: bool = False,
+) -> Path:
     out_dir = root / "requirements"
-    build_docx_fixture(source_docx)
+    if build_default:
+        build_docx_fixture(source_docx)
     manifest = build_source_manifest(
         ft_slug="demo-ft",
         source_version=source_version,
@@ -283,8 +377,14 @@ def _entry_containing(entries: list[object], text: str, required_flag: str | Non
     raise AssertionError(f"entry containing {text!r} not found")
 
 
-def build_docx_fixture_with_text(path: Path, text: str) -> None:
+def build_docx_fixture_with_text(path: Path, text: str | list[str]) -> None:
     import zipfile
+
+    texts = [text] if isinstance(text, str) else text
+    paragraphs = "".join(
+        f"<w:p><w:r><w:t>{value}</w:t></w:r></w:p>"
+        for value in texts
+    )
 
     entries = {
         "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
@@ -299,7 +399,7 @@ def build_docx_fixture_with_text(path: Path, text: str) -> None:
 </Relationships>""",
         "word/document.xml": f"""<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body>
+  <w:body>{paragraphs}</w:body>
 </w:document>""",
     }
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:

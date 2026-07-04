@@ -16,6 +16,12 @@ REGISTRY_VERSION = "1.0"
 CREATED_BY_TOOL = "test_case_agent.requirements_registry"
 REQUIREMENTS_PREFIX = "requirements"
 REQUIREMENTS_SUMMARY_PREFIX = "requirements-summary"
+SINGLE_LETTER_TABLE_MARKER_WARNING = (
+    "Single-letter table marker requires row/header context before promotion to active requirement."
+)
+DUPLICATE_REQ_UID_WARNING = (
+    "Duplicate req_uid values detected; review source anchors before using registry for diff."
+)
 
 RequirementStatus = Literal["active", "gap", "unclear", "source_only"]
 RequirementConfidence = Literal["high", "medium", "low"]
@@ -411,8 +417,8 @@ def _extract_entries(
         seen.add(dedupe_key)
 
         source_req_id = _detect_source_req_id(normalized_text)
-        requirement_type = _detect_requirement_type(normalized_text)
-        warnings = _node_warnings(node)
+        requirement_type = _detect_requirement_type(normalized_text, node.flags)
+        warnings = _node_warnings(node, normalized_text)
         status = _entry_status(node, requirement_type, normalized_text)
         confidence = _entry_confidence(node, requirement_type, status)
         expected_behavior = normalized_text if status == "active" else None
@@ -485,7 +491,7 @@ def _is_registry_candidate(
         return False
     if node.value_type == "attribute" and _is_technical_attribute(node):
         return False
-    if _is_service_value(value) and _detect_requirement_type(value) == "metadata/source_only":
+    if _is_service_value(value) and _detect_requirement_type(value, node.flags) == "metadata/source_only":
         return False
     return True
 
@@ -506,7 +512,7 @@ def _is_service_value(value: str) -> bool:
     return False
 
 
-def _node_warnings(node: SourceNode) -> list[str]:
+def _node_warnings(node: SourceNode, normalized_text: str) -> list[str]:
     warnings: list[str] = []
     if node.value_type == "aggregate":
         warnings.append(
@@ -526,6 +532,8 @@ def _node_warnings(node: SourceNode) -> list[str]:
         warnings.append("Endnote source node; verify traceability before using as requirement.")
     if "docprop" in node.flags:
         warnings.append("Document property source node; treated as metadata unless manually promoted.")
+    if _is_single_letter_table_marker(normalized_text) and not _has_row_header_context(node.flags):
+        warnings.append(SINGLE_LETTER_TABLE_MARKER_WARNING)
     if node.aggregate_warning and node.aggregate_warning not in warnings:
         warnings.append(node.aggregate_warning)
     return warnings
@@ -545,6 +553,8 @@ def _entry_status(
         if _looks_like_unclear_requirement(normalized_text):
             return "unclear"
         return "source_only"
+    if _is_single_letter_table_marker(normalized_text) and not _has_row_header_context(node.flags):
+        return "unclear"
     if not _has_expected_behavior_signal(normalized_text, requirement_type):
         return "unclear"
     return "active"
@@ -566,13 +576,17 @@ def _entry_confidence(
     return "medium"
 
 
-def _detect_requirement_type(text: str) -> str:
+def _detect_requirement_type(text: str, flags: tuple[str, ...] | list[str] = ()) -> str:
     folded = text.casefold()
-    if "обязател" in folded or "required" in folded or re.search(r"\b[оo]\b", folded, re.IGNORECASE):
+    if "обязател" in folded or "required" in folded:
+        return "requiredness"
+    if _is_requiredness_marker(text, flags):
         return "requiredness"
     if any(token in folded for token in ["отображ", "видим", "скрыт", "показыв"]):
         return "visibility"
-    if "редакт" in folded or "доступно для редактирования" in folded or re.search(r"\b[рp]\b", folded, re.IGNORECASE):
+    if "редакт" in folded or "доступно для редактирования" in folded:
+        return "editability"
+    if _is_editability_marker(text, flags):
         return "editability"
     if any(token in folded for token in ["не принимает", "недопуст", "только", "формат", "маска", "длина"]):
         return "validation"
@@ -609,6 +623,30 @@ def _has_expected_behavior_signal(text: str, requirement_type: str) -> bool:
     if len(text) < 4:
         return False
     return True
+
+
+def _is_requiredness_marker(text: str, flags: tuple[str, ...] | list[str]) -> bool:
+    return _is_marker_text(text, "ОO") or (_has_table_context(flags) and _is_marker_text(text, "ОO"))
+
+
+def _is_editability_marker(text: str, flags: tuple[str, ...] | list[str]) -> bool:
+    return _is_marker_text(text, "РP") or (_has_table_context(flags) and _is_marker_text(text, "РP"))
+
+
+def _is_single_letter_table_marker(text: str) -> bool:
+    return bool(re.fullmatch(r"[ОOРP]", _normalize_text(text)))
+
+
+def _is_marker_text(text: str, letters: str) -> bool:
+    return bool(re.fullmatch(f"[{letters}]", _normalize_text(text), re.IGNORECASE))
+
+
+def _has_table_context(flags: tuple[str, ...] | list[str]) -> bool:
+    return "table" in set(flags)
+
+
+def _has_row_header_context(flags: tuple[str, ...] | list[str]) -> bool:
+    return bool(set(flags) & {"table_header", "header_row", "row_header", "table_row_header"})
 
 
 def _looks_like_unclear_requirement(text: str) -> bool:
@@ -682,6 +720,8 @@ def _registry_warnings(
         warnings.append("Source manifest ingestion_status=pass-with-warnings; review registry warnings before use.")
     for entry in entries:
         warnings.extend(entry.warnings)
+    if _duplicate_req_uids(entries):
+        warnings.append(DUPLICATE_REQ_UID_WARNING)
     return sorted(set(warnings))
 
 
@@ -744,6 +784,10 @@ def _extraction_summary(
 ) -> dict[str, Any]:
     status_counts = Counter(entry.status for entry in entries)
     by_requirement_type = Counter(entry.requirement_type for entry in entries)
+    duplicate_req_uids = _duplicate_req_uids(entries)
+    summary_warnings = list(warnings)
+    if duplicate_req_uids and DUPLICATE_REQ_UID_WARNING not in summary_warnings:
+        summary_warnings.append(DUPLICATE_REQ_UID_WARNING)
     by_part = Counter(
         anchor.part
         for entry in entries
@@ -752,7 +796,7 @@ def _extraction_summary(
     registry_status: RegistryStatus
     if blocking_reasons:
         registry_status = "blocked"
-    elif warnings:
+    elif summary_warnings:
         registry_status = "pass-with-warnings"
     else:
         registry_status = "pass"
@@ -778,10 +822,17 @@ def _extraction_summary(
         "source_only": status_counts.get("source_only", 0),
         "by_requirement_type": dict(sorted(by_requirement_type.items())),
         "by_part": dict(sorted(by_part.items())),
+        "duplicate_req_uid_count": len(duplicate_req_uids),
+        "duplicate_req_uids": duplicate_req_uids,
         "source_nodes_seen": candidates_seen,
-        "warnings": warnings,
+        "warnings": summary_warnings,
         "blocking_reasons": blocking_reasons,
     }
+
+
+def _duplicate_req_uids(entries: list[RequirementRegistryEntry]) -> list[str]:
+    counts = Counter(entry.req_uid for entry in entries)
+    return sorted(req_uid for req_uid, count in counts.items() if count > 1)
 
 
 def _registry_path(out_dir: Path, source_version: str) -> Path:
