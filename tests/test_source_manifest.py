@@ -57,6 +57,15 @@ class SourceManifestTests(unittest.TestCase):
             self.assertEqual("native_ooxml_zip_lxml", manifest.extraction_method)
             self.assertEqual("strict", manifest.parser_mode)
             self.assertIn("word/document.xml", manifest.ooxml_coverage_audit.xml_parts_extracted)
+            self.assertEqual(
+                sorted([str(source_docx), str(source_pdf), str(source_xhtml), str(support)]),
+                manifest.clean_run_audit["files_read"],
+            )
+            self.assertEqual([], manifest.clean_run_audit["forbidden_files_detected_nearby"])
+            self.assertEqual([], manifest.clean_run_audit["forbidden_files_in_inputs"])
+            self.assertEqual([], manifest.clean_run_audit["forbidden_files_read"])
+            self.assertTrue(manifest.clean_run_audit["clean_run_claim"])
+            self.assertEqual("clean", manifest.clean_run_audit["clean_run_status"])
 
     def test_compute_file_sha256_is_stable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -82,6 +91,7 @@ class SourceManifestTests(unittest.TestCase):
             self.assertEqual("blocked", manifest.ingestion_status)
             self.assertTrue(any("primary_docx is missing" in reason for reason in manifest.blocking_reasons))
             self.assertIsNone(manifest.ooxml_coverage_audit)
+            self.assertFalse(manifest.coverage_audit_created)
             docx_entry = next(entry for entry in manifest.source_files if entry.role == "main_docx")
             self.assertFalse(docx_entry.exists)
             self.assertIsNone(docx_entry.sha256)
@@ -126,6 +136,7 @@ class SourceManifestTests(unittest.TestCase):
             manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             coverage_payload = json.loads(coverage_path.read_text(encoding="utf-8"))
             self.assertEqual(str(coverage_path), manifest_payload["ooxml_coverage_audit_path"])
+            self.assertTrue(manifest_payload["coverage_audit_created"])
             self.assertEqual("native_ooxml_zip_lxml", coverage_payload["extraction_method"])
 
     def test_load_source_manifest_reads_created_manifest(self) -> None:
@@ -195,9 +206,13 @@ class SourceManifestTests(unittest.TestCase):
             self.assertTrue(coverage_path.exists())
             manifest_payload = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(str(coverage_path), manifest_payload["ooxml_coverage_audit_path"])
+            self.assertEqual(
+                sorted([str(source_docx), str(source_pdf), str(source_xhtml)]),
+                manifest_payload["clean_run_audit"]["files_read"],
+            )
             self.assertIn(str(source_docx), payload["source_file_hashes"])
 
-    def test_manifest_records_clean_run_audit(self) -> None:
+    def test_manifest_records_nearby_forbidden_file_as_contaminated_risk(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             source_docx = root / "sample.docx"
@@ -214,8 +229,36 @@ class SourceManifestTests(unittest.TestCase):
 
             self.assertEqual([str(source_docx)], manifest.clean_run_audit["files_read"])
             self.assertEqual([], manifest.clean_run_audit["forbidden_files_read"])
+            self.assertEqual([], manifest.clean_run_audit["forbidden_files_in_inputs"])
             self.assertEqual([str(forbidden_file)], manifest.clean_run_audit["forbidden_files_detected_nearby"])
             self.assertFalse(manifest.clean_run_audit["clean_run_claim"])
+            self.assertEqual("contaminated-risk", manifest.clean_run_audit["clean_run_status"])
+
+    def test_manifest_records_forbidden_input_as_contaminated(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "sample.docx"
+            forbidden_support = root / "expected_answer.txt"
+            build_docx_fixture(source_docx)
+            forbidden_support.write_text("read for sha256", encoding="utf-8")
+
+            manifest = build_source_manifest(
+                ft_slug="demo-ft",
+                source_version="contaminated-v1",
+                docx=source_docx,
+                support_files=[forbidden_support],
+                out_dir=root / "requirements",
+            )
+
+            self.assertEqual(
+                sorted([str(source_docx), str(forbidden_support)]),
+                manifest.clean_run_audit["files_read"],
+            )
+            self.assertEqual([str(forbidden_support)], manifest.clean_run_audit["forbidden_files_in_inputs"])
+            self.assertEqual([str(forbidden_support)], manifest.clean_run_audit["forbidden_files_read"])
+            self.assertEqual([str(forbidden_support)], manifest.clean_run_audit["forbidden_files_detected_nearby"])
+            self.assertFalse(manifest.clean_run_audit["clean_run_claim"])
+            self.assertEqual("contaminated", manifest.clean_run_audit["clean_run_status"])
 
 
 if __name__ == "__main__":

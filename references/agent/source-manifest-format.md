@@ -39,6 +39,7 @@ The coverage audit file must use `references/agent/ooxml-source-coverage-audit-f
   "primary_pdf": "fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.pdf",
   "primary_xhtml": "fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.xhtml",
   "ooxml_coverage_audit_path": "fts/AutoFin/requirements/source-coverage-audit.autofin-final-v1.json",
+  "coverage_audit_created": true,
   "ooxml_summary": {
     "zip_entries_seen": 24,
     "xml_parts_extracted": 19,
@@ -61,9 +62,14 @@ The coverage audit file must use `references/agent/ooxml-source-coverage-audit-f
     "Binary part seen but not content-extracted: word/media/image1.png"
   ],
   "clean_run_audit": {
-    "files_read": ["fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.docx"],
+    "files_read": [
+      "fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.docx",
+      "fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.pdf",
+      "fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.xhtml"
+    ],
     "forbidden_name_patterns": ["expected", "private", "golden", "answer", "solution", "bundle"],
     "forbidden_files_detected_nearby": [],
+    "forbidden_files_in_inputs": [],
     "forbidden_files_read": [],
     "clean_run_claim": true,
     "clean_run_status": "clean"
@@ -110,6 +116,35 @@ Every passed source file must have a `SourceFileEntry`, even when it is missing.
 - no warnings are present.
 
 Binary warnings must not make ingestion `blocked`. They document that OCR/content extraction was not performed.
+
+If ingestion is blocked before OOXML coverage can be created, `coverage_audit_created` must be `false`. `ooxml_coverage_audit_path` may still show the intended output path, but downstream tooling must use `coverage_audit_created=false` as the authoritative signal that no coverage audit file was produced.
+
+## Clean Run Audit
+
+`clean_run_audit.files_read` lists every existing source input that was actually read for hash/metadata calculation:
+
+- primary DOCX;
+- primary PDF;
+- primary XHTML;
+- support files;
+- mockups;
+- other explicitly passed source files.
+
+Missing source inputs are not included in `files_read` because no hash was computed for them.
+
+`forbidden_files_detected_nearby` lists forbidden-name files near the primary DOCX. These files may not have been read.
+
+`forbidden_files_in_inputs` lists forbidden-name files explicitly passed as DOCX/PDF/XHTML/support/mockup/other inputs.
+
+`forbidden_files_read` lists forbidden-name inputs that existed and were read for SHA-256.
+
+Clean-run status values:
+
+- `clean`: no forbidden-name files are nearby or read as inputs;
+- `contaminated-risk`: forbidden-name files are present near the DOCX but were not read as inputs;
+- `contaminated`: a forbidden-name input existed and was read.
+
+`clean_run_claim` is `true` only when `clean_run_status` is `clean`.
 
 ## Downstream Rules
 

@@ -87,6 +87,7 @@ class SourceManifest:
     primary_pdf: str | None
     primary_xhtml: str | None
     ooxml_coverage_audit_path: str | None
+    coverage_audit_created: bool
     ooxml_summary: dict[str, Any]
     ingestion_status: IngestionStatus
     blocking_reasons: list[str]
@@ -108,6 +109,7 @@ class SourceManifest:
             "primary_pdf": self.primary_pdf,
             "primary_xhtml": self.primary_xhtml,
             "ooxml_coverage_audit_path": self.ooxml_coverage_audit_path,
+            "coverage_audit_created": self.coverage_audit_created,
             "ooxml_summary": self.ooxml_summary,
             "ingestion_status": self.ingestion_status,
             "blocking_reasons": self.blocking_reasons,
@@ -133,6 +135,7 @@ class SourceManifest:
             primary_pdf=data.get("primary_pdf"),
             primary_xhtml=data.get("primary_xhtml"),
             ooxml_coverage_audit_path=data.get("ooxml_coverage_audit_path"),
+            coverage_audit_created=bool(data.get("coverage_audit_created")),
             ooxml_summary=dict(data.get("ooxml_summary") or {}),
             ingestion_status=data["ingestion_status"],
             blocking_reasons=list(data.get("blocking_reasons") or []),
@@ -217,11 +220,12 @@ def build_source_manifest(
         primary_pdf=str(pdf) if pdf is not None else None,
         primary_xhtml=str(xhtml) if xhtml is not None else None,
         ooxml_coverage_audit_path=str(coverage_path) if coverage_path else None,
+        coverage_audit_created=coverage_audit is not None,
         ooxml_summary=_ooxml_summary(coverage_audit),
         ingestion_status=ingestion_status,
         blocking_reasons=blocking_reasons,
         warnings=warnings,
-        clean_run_audit=_build_clean_run_audit(docx),
+        clean_run_audit=_build_clean_run_audit(docx, source_files),
         extraction_method=coverage_audit.extraction_method if coverage_audit else None,
         parser_mode=coverage_audit.parser_mode if coverage_audit else parser_mode,
         ooxml_coverage_audit=coverage_audit,
@@ -244,10 +248,12 @@ def write_source_manifest(
             encoding="utf-8",
             newline="\n",
         )
+        manifest.coverage_audit_created = True
     else:
         if "coverage audit was not created." not in manifest.blocking_reasons:
             manifest.blocking_reasons.append("coverage audit was not created.")
         manifest.ingestion_status = "blocked"
+        manifest.coverage_audit_created = False
 
     manifest_path.write_text(
         json.dumps(manifest.to_dict(), ensure_ascii=False, indent=2) + "\n",
@@ -384,17 +390,34 @@ def _ooxml_summary(coverage: OoxmlCoverageAudit | None) -> dict[str, Any]:
     }
 
 
-def _build_clean_run_audit(docx: Path | None) -> dict[str, Any]:
-    files_read = [str(docx)] if docx is not None else []
+def _build_clean_run_audit(
+    docx: Path | None,
+    source_files: list[SourceFileEntry],
+) -> dict[str, Any]:
+    files_read = sorted(entry.path for entry in source_files if entry.exists and entry.sha256)
     forbidden_files_detected_nearby = _detect_forbidden_files_nearby(docx)
-    clean_run_claim = bool(files_read) and not forbidden_files_detected_nearby
+    forbidden_files_in_inputs = sorted(
+        entry.path for entry in source_files if _is_forbidden_name(Path(entry.path))
+    )
+    forbidden_files_read = sorted(
+        entry.path
+        for entry in source_files
+        if entry.exists and entry.sha256 and _is_forbidden_name(Path(entry.path))
+    )
+    if forbidden_files_read:
+        clean_run_status = "contaminated"
+    elif forbidden_files_detected_nearby:
+        clean_run_status = "contaminated-risk"
+    else:
+        clean_run_status = "clean"
     return {
         "files_read": files_read,
         "forbidden_name_patterns": FORBIDDEN_NAME_PATTERNS,
         "forbidden_files_detected_nearby": forbidden_files_detected_nearby,
-        "forbidden_files_read": [],
-        "clean_run_claim": clean_run_claim,
-        "clean_run_status": "clean" if clean_run_claim else "contaminated-risk",
+        "forbidden_files_in_inputs": forbidden_files_in_inputs,
+        "forbidden_files_read": forbidden_files_read,
+        "clean_run_claim": clean_run_status == "clean",
+        "clean_run_status": clean_run_status,
     }
 
 
@@ -411,9 +434,13 @@ def _detect_forbidden_files_nearby(docx: Path | None) -> list[str]:
             continue
         if candidate.name.lower() == source_name:
             continue
-        if any(pattern in candidate.name.lower() for pattern in FORBIDDEN_NAME_PATTERNS):
+        if _is_forbidden_name(candidate):
             detected.append(str(candidate))
     return sorted(detected)
+
+
+def _is_forbidden_name(path: Path) -> bool:
+    return any(pattern in path.name.lower() for pattern in FORBIDDEN_NAME_PATTERNS)
 
 
 def _ingestion_status(
