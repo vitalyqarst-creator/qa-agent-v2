@@ -135,6 +135,13 @@ from test_case_agent.writer_traceability_update_apply import (
     load_writer_traceability_update_apply_report,
     write_writer_traceability_update_apply_report,
 )
+from test_case_agent.writer_traceability_post_apply_validation import (
+    WriterTraceabilityPostApplyValidationCheck,
+    WriterTraceabilityPostApplyValidationReport,
+    build_writer_traceability_post_apply_validation,
+    load_writer_traceability_post_apply_validation,
+    write_writer_traceability_post_apply_validation,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -248,6 +255,8 @@ __all__ = [
     "WriterProposalReviewReport",
     "WriterTraceabilityUpdateApplyChange",
     "WriterTraceabilityUpdateApplyReport",
+    "WriterTraceabilityPostApplyValidationCheck",
+    "WriterTraceabilityPostApplyValidationReport",
     "WriterPackageTask",
     "WriterPackageTasksReport",
     "WriterDryRunProposal",
@@ -269,6 +278,7 @@ __all__ = [
     "build_writer_dry_run_proposal",
     "build_writer_proposal_review",
     "apply_writer_traceability_update_proposal",
+    "build_writer_traceability_post_apply_validation",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -285,6 +295,7 @@ __all__ = [
     "load_writer_dry_run_proposal",
     "load_writer_proposal_review",
     "load_writer_traceability_update_apply_report",
+    "load_writer_traceability_post_apply_validation",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -310,6 +321,7 @@ __all__ = [
     "write_writer_dry_run_proposal",
     "write_writer_proposal_review",
     "write_writer_traceability_update_apply_report",
+    "write_writer_traceability_post_apply_validation",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
