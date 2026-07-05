@@ -86,6 +86,13 @@ from test_case_agent.writer_dry_run_proposals import (
     load_writer_dry_run_proposal,
     write_writer_dry_run_proposal,
 )
+from test_case_agent.traceability_mismatch_diagnostics import (
+    TraceabilityMismatch,
+    TraceabilityMismatchDiagnosticsReport,
+    build_traceability_mismatch_diagnostics,
+    load_traceability_mismatch_diagnostics,
+    write_traceability_mismatch_diagnostics,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -185,6 +192,8 @@ __all__ = [
     "SourceQualityIssue",
     "TestCaseLink",
     "TestCaseUpdatePlan",
+    "TraceabilityMismatch",
+    "TraceabilityMismatchDiagnosticsReport",
     "WriterPackageTask",
     "WriterPackageTasksReport",
     "WriterDryRunProposal",
@@ -197,6 +206,7 @@ __all__ = [
     "build_requirements_diff",
     "build_impact_report",
     "build_test_case_update_plan",
+    "build_traceability_mismatch_diagnostics",
     "build_manual_update_packages",
     "build_writer_package_tasks",
     "build_writer_dry_run_proposal",
@@ -206,6 +216,7 @@ __all__ = [
     "load_requirements_diff",
     "load_impact_report",
     "load_test_case_update_plan",
+    "load_traceability_mismatch_diagnostics",
     "load_manual_update_packages",
     "load_writer_package_tasks",
     "load_writer_dry_run_proposal",
@@ -224,6 +235,7 @@ __all__ = [
     "write_requirements_diff",
     "write_impact_report",
     "write_test_case_update_plan",
+    "write_traceability_mismatch_diagnostics",
     "write_manual_update_packages",
     "write_writer_package_tasks",
     "write_writer_dry_run_proposal",
