@@ -52,6 +52,24 @@ class WriterTraceabilityPostApplyValidationTests(unittest.TestCase):
             self.assertEqual("nothing_to_commit", report.commit_action)
             self.assertEqual([], report.failed_checks)
 
+    def test_multi_tc_update_uses_per_tc_legacy_refs_and_expected_change_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ctx = setup_context(temp_dir)
+            ctx.tc_path.write_text(multi_tc_backup_file_text(), encoding="utf-8", newline="\n")
+            run_git(ctx.root, ["add", str(ctx.tc_path.relative_to(ctx.root)).replace("\\", "/")])
+            run_git(ctx.root, ["commit", "-m", "multi-baseline"])
+            ctx.backup_path.write_text(multi_tc_backup_file_text(), encoding="utf-8", newline="\n")
+            ctx.tc_path.write_text(multi_tc_current_file_text(), encoding="utf-8", newline="\n")
+            write_json(ctx.apply_report_path, multi_tc_apply_report_payload(ctx.tc_path, ctx.backup_path))
+            write_json(ctx.proposal_path, multi_tc_proposal_payload(ctx.tc_path))
+
+            report = build_validation(ctx)
+
+            self.assertEqual("pass", report.validation_status)
+            self.assertTrue(report.final_state_valid)
+            self.assertEqual("uncommitted_expected_change", report.git_change_state)
+            self.assertEqual([], report.failed_checks)
+
     def test_missing_expected_final_state_fails_when_clean(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             ctx = setup_context(temp_dir)
@@ -305,6 +323,34 @@ def current_file_text() -> str:
     return backup_file_text().replace(f"{OLD_REQ_1}, {OLD_REQ_2}", f"{NEW_REQ_1}, {NEW_REQ_2}")
 
 
+def multi_tc_backup_file_text() -> str:
+    return (
+        "## TC-001\n"
+        "\n"
+        f"**Traceability:** BSR 1; ATOM-1; {OLD_REQ_1}, {OLD_REQ_2}\n"
+        "\n"
+        "### Steps\n"
+        "\n"
+        "1. Do one thing.\n"
+        "\n"
+        "## TC-002\n"
+        "\n"
+        f"**Traceability:** BSR 2; ATOM-2; {OLD_REQ_1}, {OLD_REQ_2}\n"
+        "\n"
+        "### Steps\n"
+        "\n"
+        "1. Do another thing.\n"
+        "\n"
+        "## TC-OTHER\n"
+        "\n"
+        "**Traceability:** BSR 999\n"
+    )
+
+
+def multi_tc_current_file_text() -> str:
+    return multi_tc_backup_file_text().replace(f"{OLD_REQ_1}, {OLD_REQ_2}", f"{NEW_REQ_1}, {NEW_REQ_2}")
+
+
 def original_tc_block() -> str:
     return backup_file_text().split("## TC-OTHER", 1)[0]
 
@@ -352,6 +398,32 @@ def apply_change(plan_item_id: str, old_ref: str, new_ref: str) -> dict:
     }
 
 
+def multi_tc_apply_report_payload(tc_path: Path, backup_path: Path) -> dict:
+    data = apply_report_payload(tc_path, backup_path)
+    data["affected_test_case_ids"] = ["TC-001", "TC-002"]
+    data["applied_changes"] = [
+        multi_tc_apply_change("PLAN-000001", "TC-001", "BSR 1; ATOM-1", OLD_REQ_1, NEW_REQ_1),
+        multi_tc_apply_change("PLAN-000002", "TC-002", "BSR 2; ATOM-2", OLD_REQ_1, NEW_REQ_1),
+        multi_tc_apply_change("PLAN-000003", "TC-001", "BSR 1; ATOM-1", OLD_REQ_2, NEW_REQ_2),
+        multi_tc_apply_change("PLAN-000004", "TC-002", "BSR 2; ATOM-2", OLD_REQ_2, NEW_REQ_2),
+    ]
+    return data
+
+
+def multi_tc_apply_change(plan_item_id: str, tc_id: str, legacy: str, old_ref: str, new_ref: str) -> dict:
+    return {
+        "plan_item_id": plan_item_id,
+        "impact_id": plan_item_id.replace("PLAN", "IMP"),
+        "change_id": plan_item_id.replace("PLAN", "CHG"),
+        "test_case_id": tc_id,
+        "old_ref": old_ref,
+        "new_ref": new_ref,
+        "old_traceability_line": f"**Traceability:** {legacy}; {OLD_REQ_1}, {OLD_REQ_2}",
+        "new_traceability_line": f"**Traceability:** {legacy}; {NEW_REQ_1}, {NEW_REQ_2}",
+        "status": "applied",
+    }
+
+
 def proposal_payload(tc_path: Path) -> dict:
     return {
         "package_id": "WPKG-000003",
@@ -382,6 +454,29 @@ def proposal_payload(tc_path: Path) -> dict:
     }
 
 
+def multi_tc_proposal_payload(tc_path: Path) -> dict:
+    data = proposal_payload(tc_path)
+    data["affected_test_case_ids"] = ["TC-001", "TC-002"]
+    data["source_plan_item_ids"] = ["PLAN-000001", "PLAN-000002", "PLAN-000003", "PLAN-000004"]
+    data["source_impact_ids"] = ["IMP-000001", "IMP-000002", "IMP-000003", "IMP-000004"]
+    data["source_change_ids"] = ["CHG-000001", "CHG-000002", "CHG-000003", "CHG-000004"]
+    data["proposed_changes"] = [
+        proposed_change_for_tc("PLAN-000001", "TC-001", OLD_REQ_1, NEW_REQ_1),
+        proposed_change_for_tc("PLAN-000002", "TC-002", OLD_REQ_1, NEW_REQ_1),
+        proposed_change_for_tc("PLAN-000003", "TC-001", OLD_REQ_2, NEW_REQ_2),
+        proposed_change_for_tc("PLAN-000004", "TC-002", OLD_REQ_2, NEW_REQ_2),
+    ]
+    data["original_tc_blocks"] = {
+        "TC-001": multi_tc_backup_file_text().split("## TC-002", 1)[0],
+        "TC-002": "## TC-002" + multi_tc_backup_file_text().split("## TC-002", 1)[1].split("## TC-OTHER", 1)[0],
+    }
+    data["proposed_tc_blocks"] = {
+        "TC-001": multi_tc_current_file_text().split("## TC-002", 1)[0],
+        "TC-002": "## TC-002" + multi_tc_current_file_text().split("## TC-002", 1)[1].split("## TC-OTHER", 1)[0],
+    }
+    return data
+
+
 def proposed_change(plan_item_id: str, old_ref: str, new_ref: str) -> dict:
     return {
         "plan_item_id": plan_item_id,
@@ -393,6 +488,12 @@ def proposed_change(plan_item_id: str, old_ref: str, new_ref: str) -> dict:
         "new_ref": new_ref,
         "status": "proposed",
     }
+
+
+def proposed_change_for_tc(plan_item_id: str, tc_id: str, old_ref: str, new_ref: str) -> dict:
+    data = proposed_change(plan_item_id, old_ref, new_ref)
+    data["test_case_id"] = tc_id
+    return data
 
 
 def review_payload() -> dict:

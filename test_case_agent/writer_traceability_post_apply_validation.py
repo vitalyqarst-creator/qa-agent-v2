@@ -258,11 +258,13 @@ def build_writer_traceability_post_apply_validation(
     expected_tc_ids = proposal.affected_test_case_ids
     old_refs = _proposal_old_refs(proposal)
     new_refs = _proposal_new_refs(proposal)
-    legacy_refs = _legacy_refs(_first_old_traceability_line(apply_report))
-    if not legacy_refs:
-        legacy_refs = _legacy_refs(_single_traceability_line(next(iter(proposal.original_tc_blocks.values()), "")))
+    legacy_refs_by_tc = _legacy_refs_by_tc(apply_report, proposal)
 
-    apply_checks = _apply_report_checks(apply_report, package_id)
+    apply_checks = _apply_report_checks(
+        apply_report,
+        package_id,
+        expected_applied_changes_count=len(proposal.proposed_changes),
+    )
     scope_checks = _scope_checks(
         apply_report=apply_report,
         expected_file_path=expected_file_path,
@@ -271,7 +273,7 @@ def build_writer_traceability_post_apply_validation(
     traceability_checks = _traceability_content_checks(
         current_text=current_text,
         affected_tc_ids=affected_test_case_ids,
-        legacy_refs=legacy_refs,
+        legacy_refs_by_tc=legacy_refs_by_tc,
         old_refs=old_refs,
         new_refs=new_refs,
     )
@@ -421,13 +423,20 @@ def render_writer_traceability_post_apply_validation_markdown(
 def _apply_report_checks(
     apply_report: WriterTraceabilityUpdateApplyReport,
     package_id: str,
+    *,
+    expected_applied_changes_count: int,
 ) -> list[WriterTraceabilityPostApplyValidationCheck]:
     return [
         _check("apply_report_package_matches", apply_report.package_id == package_id, f"apply report package_id is {apply_report.package_id}."),
         _check("apply_status_applied", apply_report.apply_status == "applied", f"apply_status is {apply_report.apply_status}."),
         _check("apply_dry_run_false", apply_report.dry_run is False, f"dry_run is {apply_report.dry_run}."),
         _check("apply_blocking_reasons_empty", not apply_report.blocking_reasons, f"apply blocking reasons count is {len(apply_report.blocking_reasons)}."),
-        _check("applied_changes_count_expected", len(apply_report.applied_changes) == 2, f"applied changes count is {len(apply_report.applied_changes)}.", {"expected": 2}),
+        _check(
+            "applied_changes_count_expected",
+            len(apply_report.applied_changes) == expected_applied_changes_count,
+            f"applied changes count is {len(apply_report.applied_changes)}.",
+            {"expected": expected_applied_changes_count},
+        ),
         _check("files_changed_count_expected", apply_report.files_changed_count == 1, f"files_changed_count is {apply_report.files_changed_count}.", {"expected": 1}),
         _check("backup_path_present", bool(apply_report.backup_path), f"backup_path is {apply_report.backup_path or 'n/a'}."),
     ]
@@ -474,7 +483,7 @@ def _git_state_checks(
     return [
         _check(
             "only_expected_test_case_file_changed",
-            changed_files == [expected_changed_file],
+            clean_valid or changed_files == [expected_changed_file],
             "only expected test-case file has unstaged changes." if not clean_valid else clean_message,
             {"changed_test_case_files": changed_files, "git_change_state": git_change_state},
             warning=clean_valid,
@@ -487,21 +496,21 @@ def _git_state_checks(
         ),
         _check(
             "git_diff_has_one_hunk",
-            int(git_state.get("target_diff_hunk_count") or 0) == 1,
-            "target git diff contains exactly one changed hunk." if not clean_valid else clean_message,
+            clean_valid or int(git_state.get("target_diff_hunk_count") or 0) >= 1,
+            "target git diff contains changed hunks for the expected traceability update." if not clean_valid else clean_message,
             {"hunk_count": git_state.get("target_diff_hunk_count"), "git_change_state": git_change_state},
             warning=clean_valid,
         ),
         _check(
             "git_diff_changed_tc_expected",
-            sorted(changed_tcs) == sorted(affected_tc_ids),
+            clean_valid or sorted(changed_tcs) == sorted(affected_tc_ids),
             "changed git diff lines are inside expected TC IDs." if not clean_valid else clean_message,
             {"changed_tc_ids": changed_tcs, "affected_test_case_ids": affected_tc_ids, "git_change_state": git_change_state},
             warning=clean_valid,
         ),
         _check(
             "git_diff_changes_only_traceability_line",
-            bool(changed_lines) and not non_trace_changes,
+            clean_valid or (bool(changed_lines) and not non_trace_changes),
             "git diff changes only traceability lines." if not clean_valid else clean_message,
             {"changed_lines": changed_lines, "non_trace_changes": non_trace_changes, "git_change_state": git_change_state},
             warning=clean_valid,
@@ -519,7 +528,7 @@ def _traceability_content_checks(
     *,
     current_text: str,
     affected_tc_ids: list[str],
-    legacy_refs: list[str],
+    legacy_refs_by_tc: dict[str, list[str]],
     old_refs: list[str],
     new_refs: list[str],
 ) -> list[WriterTraceabilityPostApplyValidationCheck]:
@@ -530,7 +539,7 @@ def _traceability_content_checks(
     duplicates: list[dict[str, Any]] = []
     for tc_id in affected_tc_ids:
         line = current_lines.get(tc_id, "")
-        for ref in legacy_refs:
+        for ref in legacy_refs_by_tc.get(tc_id, []):
             if not _contains_ref(line, ref):
                 missing_legacy.append({"test_case_id": tc_id, "ref": ref})
         for ref in new_refs:
@@ -628,7 +637,7 @@ def _classify_git_change_state(
     expected_uncommitted = (
         cached_clean
         and changed_files == [target_file]
-        and int(git_state.get("target_diff_hunk_count") or 0) == 1
+        and int(git_state.get("target_diff_hunk_count") or 0) >= 1
         and bool(changed_lines)
         and sorted(changed_tcs) == sorted(affected_tc_ids)
         and not non_trace_changes
@@ -933,6 +942,23 @@ def _first_old_traceability_line(apply_report: WriterTraceabilityUpdateApplyRepo
     if apply_report.applied_changes:
         return apply_report.applied_changes[0].old_traceability_line
     return ""
+
+
+def _legacy_refs_by_tc(
+    apply_report: WriterTraceabilityUpdateApplyReport,
+    proposal: WriterDryRunProposal,
+) -> dict[str, list[str]]:
+    result: dict[str, list[str]] = {}
+    for change in apply_report.applied_changes:
+        refs = _legacy_refs(change.old_traceability_line)
+        if refs:
+            result.setdefault(change.test_case_id, refs)
+    for tc_id, block in proposal.original_tc_blocks.items():
+        if tc_id not in result:
+            refs = _legacy_refs(_single_traceability_line(block))
+            if refs:
+                result[tc_id] = refs
+    return result
 
 
 def _proposal_old_refs(proposal: WriterDryRunProposal) -> list[str]:
