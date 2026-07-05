@@ -10,7 +10,7 @@
 | `ft_section` | `4.4 Требования к формированию печатных форм документов` |
 | `source_ft` | `FT4AutoFinFinal.xhtml`; `FT4AutoFinFinal.docx`; `FT4AutoFinFinal.pdf` |
 | `canonical_test_design_dir` | `fts/AutoFin/work/test-design/section-16-print-form-generation` |
-| `terminal_status` | `ready-for-review` |
+| `terminal_status` | `blocked-validator-profile` |
 
 ## Scope Boundaries
 
@@ -20,7 +20,7 @@
 
 ## Source Notes
 
-- В разделе `4.4` нет BSR-кодов. Трассировка ведется через `ATOM-PFG-*`, строку таблицы и источник.
+- В разделе `4.4` нет BSR-кодов. Трассировка ведется через `ATOM-*`, строку таблицы и источник.
 - Приоритетный источник требований: `FT4AutoFinFinal.xhtml`.
 - Значение шаблона `Анкета клиента 04.02.2026.pdf` подтверждено `FT4AutoFinFinal.pdf`, page 36; в XHTML соответствующая ячейка пустая.
 - Точное написание тегов сверено по `FT4AutoFinFinal.docx`, table 9, column `Тег`, потому что XHTML/PDF содержат визуальные переносы тегов.
@@ -28,27 +28,39 @@
 - Проверка расчета `<job_start>` не является executable TC без раскрытого справочника `Стаж работы`; см. `GAP-004`.
 - Writer-side split artifacts для source inventory, package plan, quality gate, self-check и review находятся в `fts/AutoFin/work/test-design/section-16-print-form-generation/`.
 
+## Coverage Gaps
+
+Подробное описание gaps хранится в `work/test-design/section-16-print-form-generation/coverage-gaps.md`.
+
+- `GAP-001`: XHTML has an empty template cell; PDF page 36 is used as the template oracle.
+- `GAP-002`: XHTML/PDF visual extraction distorts some tag names; DOCX table is used for exact tag spelling.
+- `GAP-003`: UI/API entrypoint for generation is not described; test stand entrypoint is a precondition.
+- `GAP-004`: `<job_start>` calculation is not executable until dictionary/calculation oracle for `Стаж работы` is available.
+- `GAP-005`: Preparing source data belongs to other sections; this scope uses ready fixtures.
+- `GAP-006`: Template binding configuration artifact is not named; no executable config TC is created.
+
 ## Coverage Summary
 
 | package_id | atom_id | source_ref | test_case_id | coverage_status |
 | --- | --- | --- | --- | --- |
-| `WP-01` | `ATOM-PFG-001` | `4.4 paragraph; PDF p.36` | `TC-AF-PFG-001` | `covered` |
-| `WP-01` | `ATOM-PFG-002` | `4.4 document table; PDF p.36` | `TC-AF-PFG-001` | `covered` |
-| `WP-01` | `ATOM-PFG-003` | `4.4 paragraph before tag table` | `GAP-006` | `gap` |
-| `WP-01` | `ATOM-PFG-004` | `4.4 paragraph before tag table` | `TC-AF-PFG-002` | `covered` |
-| `WP-02` | `ATOM-PFG-005` | `4.4 tag rows 1-4` | `TC-AF-PFG-003` | `covered` |
-| `WP-02` | `ATOM-PFG-006` | `4.4 tag rows 5-19` | `TC-AF-PFG-004` | `covered` |
-| `WP-02` | `ATOM-PFG-007` | `4.4 tag row 18` | `TC-AF-PFG-005` | `covered` |
-| `WP-02` | `ATOM-PFG-008` | `4.4 tag row 20` | `TC-AF-PFG-006` | `covered` |
-| `WP-02` | `ATOM-PFG-009` | `4.4 tag rows 21-29` | `TC-AF-PFG-007` | `covered` |
-| `WP-02` | `ATOM-PFG-010` | `4.4 tag rows 30-33` | `TC-AF-PFG-008` | `covered` |
-| `WP-02` | `ATOM-PFG-011` | `4.4 tag rows 34-39` | `TC-AF-PFG-009` | `covered` |
-| `WP-03` | `ATOM-PFG-012` | `4.4 tag rows 40-43` | `TC-AF-PFG-010` | `covered` |
-| `WP-03` | `ATOM-PFG-013` | `4.4 tag rows 44-51` | `TC-AF-PFG-011` | `covered` |
-| `WP-03` | `ATOM-PFG-014A` | `4.4 tag rows 52-54, 56` | `TC-AF-PFG-012` | `covered` |
-| `WP-03` | `ATOM-PFG-014B` | `4.4 tag row 55` | `GAP-004` | `gap` |
-| `WP-03` | `ATOM-PFG-015` | `4.4 tag rows 57-60` | `TC-AF-PFG-013` | `covered` |
-| `WP-04` | `ATOM-PFG-016` | `4.4 tag rows 61-87` | `TC-AF-PFG-014`; `TC-AF-PFG-015` | `covered` |
+| `WP-01` | `ATOM-001` | `4.4 paragraph; PDF p.36` | `TC-AF-PFG-001` | `covered` |
+| `WP-01` | `ATOM-002` | `4.4 document table; PDF p.36` | `TC-AF-PFG-001` | `covered` |
+| `WP-01` | `ATOM-003` | `4.4 paragraph before tag table` | `GAP-006` | `gap` |
+| `WP-01` | `ATOM-004` | `4.4 paragraph before tag table` | `TC-AF-PFG-002` | `covered` |
+| `WP-02` | `ATOM-005` | `4.4 tag rows 1-4` | `TC-AF-PFG-003` | `covered` |
+| `WP-02` | `ATOM-006` | `4.4 tag rows 5-19` | `TC-AF-PFG-004` | `covered` |
+| `WP-02` | `ATOM-007` | `4.4 tag row 18` | `TC-AF-PFG-005` | `covered` |
+| `WP-02` | `ATOM-008` | `4.4 tag row 20` | `TC-AF-PFG-006` | `covered` |
+| `WP-02` | `ATOM-009` | `4.4 tag rows 21-29` | `TC-AF-PFG-007`; `TC-AF-PFG-008` | `covered` |
+| `WP-02` | `ATOM-010` | `4.4 tag rows 30-31, 33` | `TC-AF-PFG-009` | `covered` |
+| `WP-02` | `ATOM-018` | `4.4 tag row 32` | `TC-AF-PFG-010`; `TC-AF-PFG-011` | `covered` |
+| `WP-02` | `ATOM-011` | `4.4 tag rows 34-39` | `TC-AF-PFG-012` | `covered` |
+| `WP-03` | `ATOM-012` | `4.4 tag rows 40-43` | `TC-AF-PFG-013` | `covered` |
+| `WP-03` | `ATOM-013` | `4.4 tag rows 44-51` | `TC-AF-PFG-014` | `covered` |
+| `WP-03` | `ATOM-014` | `4.4 tag rows 52-54, 56` | `TC-AF-PFG-015` | `covered` |
+| `WP-03` | `ATOM-015` | `4.4 tag row 55` | `GAP-004` | `gap` |
+| `WP-03` | `ATOM-016` | `4.4 tag rows 57-60` | `TC-AF-PFG-016` | `covered` |
+| `WP-04` | `ATOM-017` | `4.4 tag rows 61-87` | `TC-AF-PFG-017`; `TC-AF-PFG-018` | `covered` |
 
 ## Test Cases
 
@@ -62,7 +74,7 @@
 
 **package_id:** WP-01
 
-**Трассировка:** `ATOM-PFG-001`; `ATOM-PFG-002`; `4.4 Требования к формированию печатных форм документов`; PDF page 36
+**Трассировка:** `ATOM-001`; `ATOM-002`; `4.4 Требования к формированию печатных форм документов`; PDF page 36
 
 ### Предусловия
 
@@ -99,7 +111,7 @@
 
 **package_id:** WP-01
 
-**Трассировка:** `ATOM-PFG-004`; `DICT-001`; `4.4 paragraph before tag table`
+**Трассировка:** `ATOM-004`; `DICT-001`; `4.4 paragraph before tag table`
 
 ### Предусловия
 
@@ -136,7 +148,7 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-005`; `4.4 tag rows 1-4`
+**Трассировка:** `ATOM-005`; `4.4 tag rows 1-4`
 
 ### Предусловия
 
@@ -171,7 +183,7 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-006`; `4.4 tag rows 5-19`
+**Трассировка:** `ATOM-006`; `4.4 tag rows 5-19`
 
 ### Предусловия
 
@@ -208,7 +220,7 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-007`; `4.4 tag row 18`; `DICT-002`
+**Трассировка:** `ATOM-007`; `4.4 tag row 18`; `DICT-002`
 
 ### Предусловия
 
@@ -245,7 +257,7 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-008`; `4.4 tag row 20`; `DICT-003`
+**Трассировка:** `ATOM-008`; `4.4 tag row 20`; `DICT-003`
 
 ### Предусловия
 
@@ -271,7 +283,7 @@
 
 ## TC-AF-PFG-007
 
-**Название:** Заполнение блока `Адрес фактического проживания`
+**Название:** Заполнение блока `Адрес фактического проживания`, когда адрес совпадает с регистрацией
 
 **Тип:** Positive
 
@@ -279,11 +291,11 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-009`; `4.4 tag rows 21-29`
+**Трассировка:** `ATOM-009`; `4.4 tag rows 21-29`
 
 ### Предусловия
 
-- Подготовлены заявки по фикстурам `FIX-PFG-ADDR-SAME` и `FIX-PFG-ADDR-DIFFERENT`.
+- Подготовлена заявка по фикстуре `FIX-PFG-ADDR-SAME`.
 
 ### Тестовые данные
 
@@ -291,13 +303,13 @@
 
 ### Шаги
 
-1. Для каждой адресной фикстуры сформировать печатную форму заявления-анкеты.
+1. Сформировать печатную форму заявления-анкеты для `FIX-PFG-ADDR-SAME`.
 2. Открыть сформированный PDF.
 3. Проверить блок `Адрес фактического проживания`.
 
 ### Итоговый ожидаемый результат
 
-Теги фактического адреса заполнены значениями фактического адреса из соответствующей фикстуры, а чек-бокс `Совпадает с адресом постоянной регистрации` равен `Да` для `FIX-PFG-ADDR-SAME` и `Нет` для `FIX-PFG-ADDR-DIFFERENT`.
+Теги фактического адреса заполнены значениями фактического адреса из `FIX-PFG-ADDR-SAME`, а чек-бокс `Совпадает с адресом постоянной регистрации` равен `Да`.
 
 ### Постусловия
 
@@ -305,7 +317,41 @@
 
 ## TC-AF-PFG-008
 
-**Название:** Заполнение блока `Контактная информация`
+**Название:** Заполнение блока `Адрес фактического проживания`, когда адрес отличается от регистрации
+
+**Тип:** Positive
+
+**Приоритет:** High
+
+**package_id:** WP-02
+
+**Трассировка:** `ATOM-009`; `4.4 tag rows 21-29`
+
+### Предусловия
+
+- Подготовлена заявка по фикстуре `FIX-PFG-ADDR-DIFFERENT`.
+
+### Тестовые данные
+
+- Теги адреса: `<region_with_type>`, `<city_district>`, `<city>`, `<street>`, `<house>`, `<block>`, `<str>`, `<flat>`.
+
+### Шаги
+
+1. Сформировать печатную форму заявления-анкеты для `FIX-PFG-ADDR-DIFFERENT`.
+2. Открыть сформированный PDF.
+3. Проверить блок `Адрес фактического проживания`.
+
+### Итоговый ожидаемый результат
+
+Теги фактического адреса заполнены значениями фактического адреса из `FIX-PFG-ADDR-DIFFERENT`, а чек-бокс `Совпадает с адресом постоянной регистрации` равен `Нет`.
+
+### Постусловия
+
+Не требуются.
+
+## TC-AF-PFG-009
+
+**Название:** Заполнение мобильного телефона, email и домашнего телефона
 
 **Тип:** Positive
 
@@ -313,31 +359,101 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-010`; `4.4 tag rows 30-33`
+**Трассировка:** `ATOM-010`; `4.4 tag rows 30-31, 33`
 
 ### Предусловия
 
-- Подготовлены заявки по фикстурам `FIX-PFG-WORKING` и `FIX-PFG-NOT-WORKING-PENSIONER`.
+- Подготовлена заявка по фикстуре `FIX-PFG-BASE`.
 
 ### Тестовые данные
 
-- Теги: `<mobile_phone>`, `<email>`, `<work_phone>`, `<home_phone>`.
+- Теги: `<mobile_phone>`, `<email>`, `<home_phone>`.
 
 ### Шаги
 
-1. Для каждой фикстуры сформировать печатную форму заявления-анкеты.
+1. Сформировать печатную форму заявления-анкеты для `FIX-PFG-BASE`.
 2. Открыть сформированный PDF.
 3. Проверить блок `Контактная информация`.
 
 ### Итоговый ожидаемый результат
 
-Мобильный телефон, email и домашний телефон заполнены из соответствующей фикстуры; рабочий телефон заполнен для `FIX-PFG-WORKING` и отсутствует как заполненное значение для `FIX-PFG-NOT-WORKING-PENSIONER`.
+Мобильный телефон, email и домашний телефон в блоке `Контактная информация` заполнены значениями из `FIX-PFG-BASE`.
 
 ### Постусловия
 
 Не требуются.
 
-## TC-AF-PFG-009
+## TC-AF-PFG-010
+
+**Название:** Заполнение рабочего телефона для работающего клиента
+
+**Тип:** Positive
+
+**Приоритет:** Medium
+
+**package_id:** WP-02
+
+**Трассировка:** `ATOM-018`; `4.4 tag row 32`
+
+### Предусловия
+
+- Подготовлена заявка по фикстуре `FIX-PFG-WORKING`.
+
+### Тестовые данные
+
+- Тег: `<work_phone>`.
+- Тип занятости: `Работа по найму`.
+
+### Шаги
+
+1. Сформировать печатную форму заявления-анкеты для `FIX-PFG-WORKING`.
+2. Открыть сформированный PDF.
+3. Проверить тег `<work_phone>` в блоке `Контактная информация`.
+
+### Итоговый ожидаемый результат
+
+`<work_phone>` заполнен рабочим телефоном из `FIX-PFG-WORKING`.
+
+### Постусловия
+
+Не требуются.
+
+## TC-AF-PFG-011
+
+**Название:** Отсутствие заполненного рабочего телефона для неработающего пенсионера
+
+**Тип:** Negative
+
+**Приоритет:** Medium
+
+**package_id:** WP-02
+
+**Трассировка:** `ATOM-018`; `4.4 tag row 32`
+
+### Предусловия
+
+- Подготовлена заявка по фикстуре `FIX-PFG-NOT-WORKING-PENSIONER`.
+
+### Тестовые данные
+
+- Тег: `<work_phone>`.
+- Тип занятости: `Пенсионер (не работает)`.
+
+### Шаги
+
+1. Сформировать печатную форму заявления-анкеты для `FIX-PFG-NOT-WORKING-PENSIONER`.
+2. Открыть сформированный PDF.
+3. Проверить тег `<work_phone>` в блоке `Контактная информация`.
+
+### Итоговый ожидаемый результат
+
+`<work_phone>` отсутствует как заполненное значение для неработающего пенсионера.
+
+### Постусловия
+
+Не требуются.
+
+## TC-AF-PFG-012
 
 **Название:** Заполнение блока `Контактное лицо`
 
@@ -347,7 +463,7 @@
 
 **package_id:** WP-02
 
-**Трассировка:** `ATOM-PFG-011`; `4.4 tag rows 34-39`; `DICT-004`
+**Трассировка:** `ATOM-011`; `4.4 tag rows 34-39`; `DICT-004`
 
 ### Предусловия
 
@@ -372,7 +488,7 @@
 
 Не требуются.
 
-## TC-AF-PFG-010
+## TC-AF-PFG-013
 
 **Название:** Заполнение блока `Информация о работодателе`
 
@@ -382,7 +498,7 @@
 
 **package_id:** WP-03
 
-**Трассировка:** `ATOM-PFG-012`; `4.4 tag rows 40-43`; `DICT-005`
+**Трассировка:** `ATOM-012`; `4.4 tag rows 40-43`; `DICT-005`
 
 ### Предусловия
 
@@ -407,7 +523,7 @@
 
 Не требуются.
 
-## TC-AF-PFG-011
+## TC-AF-PFG-014
 
 **Название:** Заполнение блока `Адрес местонахождения работодателя`
 
@@ -417,7 +533,7 @@
 
 **package_id:** WP-03
 
-**Трассировка:** `ATOM-PFG-013`; `4.4 tag rows 44-51`
+**Трассировка:** `ATOM-013`; `4.4 tag rows 44-51`
 
 ### Предусловия
 
@@ -441,7 +557,7 @@
 
 Не требуются.
 
-## TC-AF-PFG-012
+## TC-AF-PFG-015
 
 **Название:** Заполнение блока `Сведения о доходе и должности заявителя`
 
@@ -451,7 +567,7 @@
 
 **package_id:** WP-03
 
-**Трассировка:** `ATOM-PFG-014A`; `4.4 tag rows 52-54, 56`
+**Трассировка:** `ATOM-014`; `4.4 tag rows 52-54, 56`
 
 ### Предусловия
 
@@ -476,7 +592,7 @@
 
 Не требуются.
 
-## TC-AF-PFG-013
+## TC-AF-PFG-016
 
 **Название:** Заполнение других регулярных доходов
 
@@ -486,7 +602,7 @@
 
 **package_id:** WP-03
 
-**Трассировка:** `ATOM-PFG-015`; `4.4 tag rows 57-60`; `DICT-006`
+**Трассировка:** `ATOM-016`; `4.4 tag rows 57-60`; `DICT-006`
 
 ### Предусловия
 
@@ -514,7 +630,7 @@
 
 Не требуются.
 
-## TC-AF-PFG-014
+## TC-AF-PFG-017
 
 **Название:** Выбор адреса регистрации в блоке `Согласия на обработку ПДн`
 
@@ -524,7 +640,7 @@
 
 **package_id:** WP-04
 
-**Трассировка:** `ATOM-PFG-016`; `4.4 tag row 61`
+**Трассировка:** `ATOM-017`; `4.4 tag row 61`
 
 ### Предусловия
 
@@ -549,7 +665,7 @@
 
 Не требуются.
 
-## TC-AF-PFG-015
+## TC-AF-PFG-018
 
 **Название:** Заполнение кода подразделения и ранее выданных паспортов
 
@@ -559,7 +675,7 @@
 
 **package_id:** WP-04
 
-**Трассировка:** `ATOM-PFG-016`; `4.4 tag rows 62-87`
+**Трассировка:** `ATOM-017`; `4.4 tag rows 62-87`
 
 ### Предусловия
 
