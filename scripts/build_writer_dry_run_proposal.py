@@ -20,6 +20,10 @@ def main() -> int:
         description="Build one preview-only writer dry-run proposal from a writer package task."
     )
     parser.add_argument("--package-id", required=True, help="Allowed target package id, e.g. WPKG-000003.")
+    parser.add_argument(
+        "--allowed-package-id",
+        help="Optional explicit safety allow-list package id. Defaults to --package-id.",
+    )
     parser.add_argument("--writer-package-task", required=True, type=Path, help="writer-package-task-<id>.md")
     parser.add_argument("--writer-package-tasks", required=True, type=Path, help="writer-package-tasks.<old>-to-<new>.json")
     parser.add_argument("--manual-update-packages", required=True, type=Path, help="manual-update-packages.<old>-to-<new>.json")
@@ -39,6 +43,7 @@ def main() -> int:
         impact_report_path=args.impact_report,
         requirements_diff_path=args.requirements_diff,
         test_cases_dir=args.test_cases_dir,
+        allowed_package_id=args.allowed_package_id or args.package_id,
         created_by_tool="scripts/build_writer_dry_run_proposal.py",
     )
     json_path, markdown_path, patch_path = write_writer_dry_run_proposal(proposal, args.out_dir)

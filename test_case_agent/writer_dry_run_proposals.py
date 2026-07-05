@@ -28,6 +28,13 @@ ProposalStatus = Literal["pass", "pass-with-warnings", "blocked"]
 RiskLevel = Literal["low", "medium", "high"]
 
 TC_HEADING_RE = re.compile(r"^(#{2,6})\s+(TC-[A-Za-z0-9][A-Za-z0-9_-]*)\b")
+TRACEABILITY_LABELS = (
+    "**Трассировка:**",
+    "**РўСЂР°СЃСЃРёСЂРѕРІРєР°:**",
+    "**Р СћРЎР‚Р В°РЎРѓРЎРѓР С‘РЎР‚Р С•Р Р†Р С”Р В°:**",
+    "**Traceability:**",
+)
+REF_BOUNDARY_CHARS = "A-Za-zА-Яа-я0-9_-"
 
 
 @dataclass
@@ -501,16 +508,24 @@ def _propose_traceability_changes(
         return changes, missing
 
     block = proposed_blocks[item.test_case_id]
+    traceability_line_result = _find_single_traceability_line(block, item.test_case_id)
+    if traceability_line_result["missing_information"]:
+        return changes, list(traceability_line_result["missing_information"])
+
+    traceability_line_index = int(traceability_line_result["line_index"])
+    block_lines = list(traceability_line_result["block_lines"])
+    traceability_line = block_lines[traceability_line_index]
     for old_ref, new_ref in zip(item.old_refs, item.new_refs):
         if old_ref == new_ref:
             continue
-        if old_ref not in block:
+        patched_line, replacements = _replace_ref(traceability_line, old_ref, new_ref)
+        if not replacements:
             missing.append(
-                f"plan item {item.plan_item_id}: old ref `{old_ref}` not found in {item.test_case_id}; "
+                f"old ref `{old_ref}` not found in traceability line for {item.test_case_id}; "
                 f"new ref `{new_ref}` was not inserted automatically."
             )
             continue
-        block = block.replace(old_ref, new_ref)
+        traceability_line = patched_line
         changes.append({
             "plan_item_id": item.plan_item_id,
             "impact_id": item.impact_id,
@@ -521,8 +536,52 @@ def _propose_traceability_changes(
             "new_ref": new_ref,
             "status": "proposed",
         })
+    block_lines[traceability_line_index] = traceability_line
+    block = "".join(block_lines)
     proposed_blocks[item.test_case_id] = block
     return changes, missing
+
+
+def _find_single_traceability_line(block: str, test_case_id: str) -> dict[str, Any]:
+    block_lines = block.splitlines(keepends=True)
+    traceability_indexes = [
+        index
+        for index, line in enumerate(block_lines)
+        if _is_traceability_line(line)
+    ]
+    if not traceability_indexes:
+        return {
+            "block_lines": block_lines,
+            "line_index": -1,
+            "missing_information": [f"traceability line not found in {test_case_id}"],
+        }
+    if len(traceability_indexes) > 1:
+        return {
+            "block_lines": block_lines,
+            "line_index": -1,
+            "missing_information": [
+                f"multiple traceability lines found in {test_case_id}; no traceability change was proposed."
+            ],
+        }
+    return {
+        "block_lines": block_lines,
+        "line_index": traceability_indexes[0],
+        "missing_information": [],
+    }
+
+
+def _is_traceability_line(line: str) -> bool:
+    stripped = line.lstrip()
+    return any(stripped.startswith(label) for label in TRACEABILITY_LABELS)
+
+
+def _replace_ref(line: str, old_ref: str, new_ref: str) -> tuple[str, int]:
+    if not old_ref or not new_ref:
+        return line, 0
+    pattern = re.compile(
+        rf"(?<![{REF_BOUNDARY_CHARS}]){re.escape(old_ref)}(?![{REF_BOUNDARY_CHARS}])"
+    )
+    return pattern.subn(new_ref, line)
 
 
 def _replace_listed_blocks(

@@ -78,8 +78,18 @@ Allowed `risk_level` values:
 ## Proposal Rules
 
 - `proposed_changes` may contain only changes for `affected_test_case_ids`.
-- Traceability-only changes are proposed only when the old ref is found inside a listed TC block.
-- If the old ref is not found, the builder must not invent an insertion point; it records
+- Traceability-only changes are proposed only when the old ref is found inside exactly one
+  traceability line in a listed TC block.
+- Supported traceability labels include `**Трассировка:**`, `**Traceability:**`, and known mojibake
+  variants already supported by controlled apply.
+- The builder must replace refs only inside the traceability line. It must not propose changes
+  in steps, expected result, test data, or any other TC block line.
+- Ref replacement must be boundary-aware:
+  `(?<![A-Za-zА-Яа-я0-9_-])old_ref(?![A-Za-zА-Яа-я0-9_-])`.
+- If the traceability line is missing, record `traceability line not found in <TC_ID>` and do not
+  propose a change.
+- If there is more than one traceability line, record missing information and do not propose a change.
+- If the old ref is not found in the traceability line, the builder must not invent an insertion point; it records
   `missing_information` and leaves `proposed_changes` empty for that ref.
 - If data is insufficient for an exact change, use `pass-with-warnings` or `blocked` and explain why.
 - `original_tc_blocks` and `proposed_tc_blocks` must contain only listed TC IDs.

@@ -38,6 +38,7 @@ class WriterDryRunProposalTests(unittest.TestCase):
             self.assertEqual(["TC-001"], proposal.affected_test_case_ids)
             self.assertEqual(1, len(proposal.proposed_changes))
             self.assertIn("REQ-NEW", proposal.proposed_tc_blocks["TC-001"])
+            self.assertIn("REQ-OLD", proposal.original_tc_blocks["TC-001"])
 
     def test_unlinked_task_blocks(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -179,6 +180,115 @@ class WriterDryRunProposalTests(unittest.TestCase):
             self.assertEqual("blocked", proposal.proposal_status)
             self.assertTrue(any("duplicate" in reason for reason in proposal.blocking_reasons))
 
+    def test_old_ref_in_steps_does_not_create_proposal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, tc_path = setup_root(temp_dir)
+            tc_path.write_text(
+                "## TC-001\n"
+                "\n"
+                "**Traceability:** REQ-TRACE\n"
+                "\n"
+                "### Steps\n"
+                "\n"
+                "1. Use REQ-OLD only in a step.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            tasks_path = write_tasks_report(root, make_task(tc_path))
+            plan_path = write_update_plan(root, tc_dir, tc_path)
+
+            proposal = build_writer_dry_run_proposal(
+                package_id="WPKG-000003",
+                writer_package_tasks_path=tasks_path,
+                update_plan_path=plan_path,
+                test_cases_dir=tc_dir,
+                workspace_root=root,
+            )
+
+            self.assertEqual("pass-with-warnings", proposal.proposal_status)
+            self.assertEqual([], proposal.proposed_changes)
+            self.assertIn("REQ-OLD only in a step", proposal.proposed_tc_blocks["TC-001"])
+            self.assertTrue(any("not found in traceability line" in item for item in proposal.missing_information))
+
+    def test_boundary_replacement_does_not_replace_bsr_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, tc_path = setup_root(temp_dir)
+            tc_path.write_text(
+                "## TC-001\n"
+                "\n"
+                "**Traceability:** BSR 115\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            tasks_path = write_tasks_report(root, make_task(tc_path))
+            plan_path = write_update_plan(root, tc_dir, tc_path, old_refs=["BSR 1"], new_refs=["BSR 2"])
+
+            proposal = build_writer_dry_run_proposal(
+                package_id="WPKG-000003",
+                writer_package_tasks_path=tasks_path,
+                update_plan_path=plan_path,
+                test_cases_dir=tc_dir,
+                workspace_root=root,
+            )
+
+            self.assertEqual("pass-with-warnings", proposal.proposal_status)
+            self.assertEqual([], proposal.proposed_changes)
+            self.assertIn("BSR 115", proposal.proposed_tc_blocks["TC-001"])
+            self.assertNotIn("BSR 215", proposal.proposed_tc_blocks["TC-001"])
+
+    def test_no_traceability_line_adds_missing_info(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, tc_path = setup_root(temp_dir)
+            tc_path.write_text(
+                "## TC-001\n"
+                "\n"
+                "### Steps\n"
+                "\n"
+                "1. Use REQ-OLD.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            tasks_path = write_tasks_report(root, make_task(tc_path))
+            plan_path = write_update_plan(root, tc_dir, tc_path)
+
+            proposal = build_writer_dry_run_proposal(
+                package_id="WPKG-000003",
+                writer_package_tasks_path=tasks_path,
+                update_plan_path=plan_path,
+                test_cases_dir=tc_dir,
+                workspace_root=root,
+            )
+
+            self.assertEqual("pass-with-warnings", proposal.proposal_status)
+            self.assertEqual([], proposal.proposed_changes)
+            self.assertIn("traceability line not found in TC-001", proposal.missing_information)
+
+    def test_duplicate_traceability_lines_do_not_create_proposal(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, tc_path = setup_root(temp_dir)
+            tc_path.write_text(
+                "## TC-001\n"
+                "\n"
+                "**Traceability:** REQ-OLD\n"
+                "**Traceability:** REQ-OLD\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            tasks_path = write_tasks_report(root, make_task(tc_path))
+            plan_path = write_update_plan(root, tc_dir, tc_path)
+
+            proposal = build_writer_dry_run_proposal(
+                package_id="WPKG-000003",
+                writer_package_tasks_path=tasks_path,
+                update_plan_path=plan_path,
+                test_cases_dir=tc_dir,
+                workspace_root=root,
+            )
+
+            self.assertEqual("pass-with-warnings", proposal.proposal_status)
+            self.assertEqual([], proposal.proposed_changes)
+            self.assertTrue(any("multiple traceability lines" in item for item in proposal.missing_information))
+
 
 def setup_root(temp_dir: str) -> tuple[Path, Path, Path]:
     root = Path(temp_dir)
@@ -269,6 +379,8 @@ def write_update_plan(
     tc_path: Path,
     *,
     test_case_id: str = "TC-001",
+    old_refs: list[str] | None = None,
+    new_refs: list[str] | None = None,
 ) -> Path:
     path = root / "test-case-update-plan.old-v1-to-new-v1.json"
     item = UpdatePlanItem(
@@ -279,8 +391,8 @@ def write_update_plan(
         file_path=str(tc_path),
         action="traceability_update_only",
         apply_mode="manual_only",
-        old_refs=["REQ-OLD"],
-        new_refs=["REQ-NEW"],
+        old_refs=old_refs if old_refs is not None else ["REQ-OLD"],
+        new_refs=new_refs if new_refs is not None else ["REQ-NEW"],
         required_changes=["update traceability refs only"],
         forbidden_changes=["Do not change steps"],
         rationale=["behavior unchanged; traceability should be reviewed"],
