@@ -128,6 +128,13 @@ from test_case_agent.writer_proposal_review import (
     load_writer_proposal_review,
     write_writer_proposal_review,
 )
+from test_case_agent.writer_traceability_update_apply import (
+    WriterTraceabilityUpdateApplyChange,
+    WriterTraceabilityUpdateApplyReport,
+    apply_writer_traceability_update_proposal,
+    load_writer_traceability_update_apply_report,
+    write_writer_traceability_update_apply_report,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -239,6 +246,8 @@ __all__ = [
     "TraceabilityRepairStrategyReport",
     "WriterProposalReviewCheck",
     "WriterProposalReviewReport",
+    "WriterTraceabilityUpdateApplyChange",
+    "WriterTraceabilityUpdateApplyReport",
     "WriterPackageTask",
     "WriterPackageTasksReport",
     "WriterDryRunProposal",
@@ -259,6 +268,7 @@ __all__ = [
     "build_writer_package_tasks",
     "build_writer_dry_run_proposal",
     "build_writer_proposal_review",
+    "apply_writer_traceability_update_proposal",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -274,6 +284,7 @@ __all__ = [
     "load_writer_package_tasks",
     "load_writer_dry_run_proposal",
     "load_writer_proposal_review",
+    "load_writer_traceability_update_apply_report",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -298,6 +309,7 @@ __all__ = [
     "write_writer_package_tasks",
     "write_writer_dry_run_proposal",
     "write_writer_proposal_review",
+    "write_writer_traceability_update_apply_report",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
