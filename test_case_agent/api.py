@@ -114,6 +114,13 @@ from test_case_agent.traceability_backfill_review import (
     load_traceability_backfill_review,
     write_traceability_backfill_review,
 )
+from test_case_agent.traceability_backfill_apply import (
+    TraceabilityBackfillApplyChange,
+    TraceabilityBackfillApplyReport,
+    apply_traceability_backfill_proposal,
+    load_traceability_backfill_apply_report,
+    write_traceability_backfill_apply_report,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -217,6 +224,8 @@ __all__ = [
     "TraceabilityMismatchDiagnosticsReport",
     "TraceabilityBackfillChange",
     "TraceabilityBackfillProposal",
+    "TraceabilityBackfillApplyChange",
+    "TraceabilityBackfillApplyReport",
     "TraceabilityBackfillReviewCheck",
     "TraceabilityBackfillReviewReport",
     "TraceabilityRepairItem",
@@ -248,6 +257,7 @@ __all__ = [
     "load_test_case_update_plan",
     "load_traceability_mismatch_diagnostics",
     "load_traceability_backfill_proposal",
+    "load_traceability_backfill_apply_report",
     "load_traceability_backfill_review",
     "load_traceability_repair_strategy",
     "load_manual_update_packages",
@@ -270,6 +280,7 @@ __all__ = [
     "write_test_case_update_plan",
     "write_traceability_mismatch_diagnostics",
     "write_traceability_backfill_proposal",
+    "write_traceability_backfill_apply_report",
     "write_traceability_backfill_review",
     "write_traceability_repair_strategy",
     "write_manual_update_packages",
@@ -278,6 +289,7 @@ __all__ = [
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
+    "apply_traceability_backfill_proposal",
     "load_test_case_update_apply_report",
     "write_test_case_update_apply_report",
 ]
