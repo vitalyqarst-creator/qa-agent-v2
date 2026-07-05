@@ -73,6 +73,13 @@ from test_case_agent.manual_update_packages import (
     load_manual_update_packages,
     write_manual_update_packages,
 )
+from test_case_agent.writer_package_tasks import (
+    WriterPackageTask,
+    WriterPackageTasksReport,
+    build_writer_package_tasks,
+    load_writer_package_tasks,
+    write_writer_package_tasks,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -172,6 +179,8 @@ __all__ = [
     "SourceQualityIssue",
     "TestCaseLink",
     "TestCaseUpdatePlan",
+    "WriterPackageTask",
+    "WriterPackageTasksReport",
     "UpdatePlanItem",
     "extract_ooxml_source_nodes",
     "inspect_ooxml_coverage",
@@ -182,6 +191,7 @@ __all__ = [
     "build_impact_report",
     "build_test_case_update_plan",
     "build_manual_update_packages",
+    "build_writer_package_tasks",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -189,6 +199,7 @@ __all__ = [
     "load_impact_report",
     "load_test_case_update_plan",
     "load_manual_update_packages",
+    "load_writer_package_tasks",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -205,6 +216,7 @@ __all__ = [
     "write_impact_report",
     "write_test_case_update_plan",
     "write_manual_update_packages",
+    "write_writer_package_tasks",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
