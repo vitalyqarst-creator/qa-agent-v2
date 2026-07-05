@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -182,6 +182,18 @@ class RequirementsDiff:
         )
 
 
+@dataclass(frozen=True)
+class CanonicalizationReport:
+    input_entries_total: int
+    output_entries_total: int
+    duplicate_groups_total: int
+    canonicalized_groups_total: int
+    unresolved_duplicate_groups_total: int
+    canonicalized_req_uids: list[str]
+    unresolved_req_uids: list[str]
+    warnings: list[str]
+
+
 def build_requirements_diff(
     *,
     old_registry_path: Path,
@@ -237,17 +249,24 @@ def build_requirements_diff(
 
     old_diff_entries = _diff_eligible_entries(old_entries)
     new_diff_entries = _diff_eligible_entries(new_entries)
-    old_duplicate_uids = _duplicate_req_uids(old_diff_entries)
-    new_duplicate_uids = _duplicate_req_uids(new_diff_entries)
-    duplicate_uids = sorted(set(old_duplicate_uids + new_duplicate_uids))
-    if duplicate_uids:
-        duplicate_warning = f"Duplicate req_uid values detected among diff_eligible entries: {', '.join(duplicate_uids)}"
+    old_canonical_entries, old_canonical_report = _canonicalize_diff_entries(old_diff_entries)
+    new_canonical_entries, new_canonical_report = _canonicalize_diff_entries(new_diff_entries)
+    warnings.extend(old_canonical_report.warnings)
+    warnings.extend(new_canonical_report.warnings)
+    unresolved_duplicate_uids = sorted(
+        set(old_canonical_report.unresolved_req_uids + new_canonical_report.unresolved_req_uids)
+    )
+    if unresolved_duplicate_uids:
+        duplicate_warning = (
+            "Unresolved duplicate req_uid values detected among diff_eligible entries: "
+            f"{', '.join(unresolved_duplicate_uids)}"
+        )
         warnings.append(duplicate_warning)
         if not allow_duplicate_req_uid:
-            if old_duplicate_uids:
-                blocking_reasons.append("old registry contains duplicate req_uid among diff_eligible entries")
-            if new_duplicate_uids:
-                blocking_reasons.append("new registry contains duplicate req_uid among diff_eligible entries")
+            if old_canonical_report.unresolved_req_uids:
+                blocking_reasons.append("old registry contains unresolved duplicate req_uid among diff_eligible entries")
+            if new_canonical_report.unresolved_req_uids:
+                blocking_reasons.append("new registry contains unresolved duplicate req_uid among diff_eligible entries")
 
     if blocking_reasons:
         return _make_diff(
@@ -259,15 +278,17 @@ def build_requirements_diff(
             new_entries_total=len(new_entries),
             old_diff_eligible_entries=len(old_diff_entries),
             new_diff_eligible_entries=len(new_diff_entries),
-            old_duplicate_req_uid_diff_eligible_count=len(old_duplicate_uids),
-            new_duplicate_req_uid_diff_eligible_count=len(new_duplicate_uids),
+            old_duplicate_req_uid_diff_eligible_count=old_canonical_report.duplicate_groups_total,
+            new_duplicate_req_uid_diff_eligible_count=new_canonical_report.duplicate_groups_total,
+            old_canonical_report=old_canonical_report,
+            new_canonical_report=new_canonical_report,
             entries=[],
             warnings=warnings,
             blocking_reasons=blocking_reasons,
             created_by_tool=created_by_tool,
         )
 
-    entries = match_requirement_entries(old_diff_entries, new_diff_entries)
+    entries = match_requirement_entries(old_canonical_entries, new_canonical_entries)
     warnings.extend(_entry_warnings(entries))
     return _make_diff(
         old_registry_path=old_registry_path,
@@ -278,8 +299,10 @@ def build_requirements_diff(
         new_entries_total=len(new_entries),
         old_diff_eligible_entries=len(old_diff_entries),
         new_diff_eligible_entries=len(new_diff_entries),
-        old_duplicate_req_uid_diff_eligible_count=len(old_duplicate_uids),
-        new_duplicate_req_uid_diff_eligible_count=len(new_duplicate_uids),
+        old_duplicate_req_uid_diff_eligible_count=old_canonical_report.duplicate_groups_total,
+        new_duplicate_req_uid_diff_eligible_count=new_canonical_report.duplicate_groups_total,
+        old_canonical_report=old_canonical_report,
+        new_canonical_report=new_canonical_report,
         entries=entries,
         warnings=sorted(set(warnings)),
         blocking_reasons=[],
@@ -652,6 +675,8 @@ def _summary(
     new_diff_eligible_entries: int,
     old_duplicate_req_uid_diff_eligible_count: int,
     new_duplicate_req_uid_diff_eligible_count: int,
+    old_canonical_report: CanonicalizationReport,
+    new_canonical_report: CanonicalizationReport,
     entries: list[RequirementsDiffEntry],
     warnings: list[str],
     blocking_reasons: list[str],
@@ -674,10 +699,18 @@ def _summary(
         "new_entries_total": new_entries_total,
         "old_diff_eligible_entries": old_diff_eligible_entries,
         "new_diff_eligible_entries": new_diff_eligible_entries,
+        "old_diff_canonical_entries": old_canonical_report.output_entries_total,
+        "new_diff_canonical_entries": new_canonical_report.output_entries_total,
         "old_diff_excluded_entries": old_entries_total - old_diff_eligible_entries,
         "new_diff_excluded_entries": new_entries_total - new_diff_eligible_entries,
         "old_duplicate_req_uid_diff_eligible_count": old_duplicate_req_uid_diff_eligible_count,
         "new_duplicate_req_uid_diff_eligible_count": new_duplicate_req_uid_diff_eligible_count,
+        "old_canonicalized_duplicate_groups": old_canonical_report.canonicalized_groups_total,
+        "new_canonicalized_duplicate_groups": new_canonical_report.canonicalized_groups_total,
+        "old_unresolved_duplicate_groups": old_canonical_report.unresolved_duplicate_groups_total,
+        "new_unresolved_duplicate_groups": new_canonical_report.unresolved_duplicate_groups_total,
+        "old_unresolved_duplicate_req_uids": old_canonical_report.unresolved_req_uids,
+        "new_unresolved_duplicate_req_uids": new_canonical_report.unresolved_req_uids,
         "entries_total": len(entries),
         "unchanged": counts.get("unchanged", 0),
         "text_changed_no_behavior_change": counts.get("text_changed_no_behavior_change", 0),
@@ -708,6 +741,8 @@ def _make_diff(
     new_diff_eligible_entries: int,
     old_duplicate_req_uid_diff_eligible_count: int,
     new_duplicate_req_uid_diff_eligible_count: int,
+    old_canonical_report: CanonicalizationReport,
+    new_canonical_report: CanonicalizationReport,
     entries: list[RequirementsDiffEntry],
     warnings: list[str],
     blocking_reasons: list[str],
@@ -725,6 +760,8 @@ def _make_diff(
         new_diff_eligible_entries=new_diff_eligible_entries,
         old_duplicate_req_uid_diff_eligible_count=old_duplicate_req_uid_diff_eligible_count,
         new_duplicate_req_uid_diff_eligible_count=new_duplicate_req_uid_diff_eligible_count,
+        old_canonical_report=old_canonical_report,
+        new_canonical_report=new_canonical_report,
         entries=entries,
         warnings=warnings,
         blocking_reasons=blocking_reasons,
@@ -799,6 +836,131 @@ def _entry_warnings(entries: list[RequirementsDiffEntry]) -> list[str]:
     for entry in entries:
         warnings.extend(entry.warnings)
     return sorted(set(warnings))
+
+
+def _canonicalize_diff_entries(
+    entries: list[RequirementRegistryEntry],
+) -> tuple[list[RequirementRegistryEntry], CanonicalizationReport]:
+    groups: dict[str, list[RequirementRegistryEntry]] = defaultdict(list)
+    for entry in entries:
+        groups[entry.req_uid].append(entry)
+
+    output_entries: list[RequirementRegistryEntry] = []
+    canonicalized_req_uids: list[str] = []
+    unresolved_req_uids: list[str] = []
+    warnings: list[str] = []
+
+    for req_uid in sorted(groups):
+        group = sorted(groups[req_uid], key=_canonical_entry_sort_key)
+        if len(group) == 1:
+            output_entries.append(group[0])
+            continue
+        if _is_benign_duplicate_group(group):
+            output_entries.append(_canonical_entry_for_group(group))
+            canonicalized_req_uids.append(req_uid)
+            warnings.append(
+                f"Canonicalized repeated source occurrences for duplicate req_uid: {req_uid}"
+            )
+        else:
+            output_entries.extend(group)
+            unresolved_req_uids.append(req_uid)
+
+    duplicate_groups_total = sum(1 for group in groups.values() if len(group) > 1)
+    return output_entries, CanonicalizationReport(
+        input_entries_total=len(entries),
+        output_entries_total=len(output_entries),
+        duplicate_groups_total=duplicate_groups_total,
+        canonicalized_groups_total=len(canonicalized_req_uids),
+        unresolved_duplicate_groups_total=len(unresolved_req_uids),
+        canonicalized_req_uids=canonicalized_req_uids,
+        unresolved_req_uids=unresolved_req_uids,
+        warnings=sorted(set(warnings)),
+    )
+
+
+def _is_benign_duplicate_group(group: list[RequirementRegistryEntry]) -> bool:
+    if len(group) <= 1:
+        return False
+    fingerprints = {_canonical_duplicate_fingerprint(entry) for entry in group}
+    return len(fingerprints) == 1
+
+
+def _canonical_duplicate_fingerprint(entry: RequirementRegistryEntry) -> tuple[Any, ...]:
+    return (
+        entry.req_uid,
+        entry.normalized_text,
+        entry.requirement_type,
+        entry.status,
+        entry.source_req_id,
+        entry.semantic_fingerprint,
+        getattr(entry, "context_hash", None),
+        getattr(entry, "context_text", None),
+        entry.object,
+        entry.condition,
+        entry.expected_behavior,
+    )
+
+
+def _canonical_entry_for_group(group: list[RequirementRegistryEntry]) -> RequirementRegistryEntry:
+    canonical = min(group, key=_canonical_entry_sort_key)
+    merged_anchors = _merged_source_anchors(group)
+    merged_warnings = sorted(
+        {
+            *canonical.warnings,
+            *(
+                warning
+                for entry in group
+                for warning in entry.warnings
+            ),
+            "Canonicalized repeated source occurrences for duplicate req_uid.",
+        }
+    )
+    merged_context_warnings = sorted(
+        {
+            warning
+            for entry in group
+            for warning in getattr(entry, "context_warnings", [])
+        }
+    )
+    return replace(
+        canonical,
+        source_anchors=merged_anchors,
+        warnings=merged_warnings,
+        context_warnings=merged_context_warnings,
+    )
+
+
+def _merged_source_anchors(group: list[RequirementRegistryEntry]) -> list[SourceAnchor]:
+    anchors_by_signature: dict[tuple[Any, ...], SourceAnchor] = {}
+    for entry in group:
+        for anchor in entry.source_anchors:
+            anchors_by_signature[_source_anchor_signature(anchor)] = anchor
+    return [
+        anchors_by_signature[signature]
+        for signature in sorted(anchors_by_signature)
+    ]
+
+
+def _canonical_entry_sort_key(entry: RequirementRegistryEntry) -> tuple[Any, ...]:
+    return (
+        entry.entry_uid,
+        _anchors_signature(entry.source_anchors),
+        entry.atom_id,
+    )
+
+
+def _source_anchor_signature(anchor: SourceAnchor) -> tuple[Any, ...]:
+    return (
+        anchor.source_doc,
+        anchor.source_version,
+        anchor.part,
+        anchor.xpath,
+        anchor.node_id,
+        anchor.value_type,
+        tuple(anchor.flags),
+        anchor.aggregate_kind,
+        anchor.aggregate_confidence,
+    )
 
 
 def _has_risky_status(entry: RequirementRegistryEntry | None) -> bool:

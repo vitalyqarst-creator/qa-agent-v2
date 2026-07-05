@@ -122,10 +122,18 @@ If a change touches tracked deletion, hidden text, comment source, or aggregate-
   "new_entries_total": 100,
   "old_diff_eligible_entries": 20,
   "new_diff_eligible_entries": 22,
+  "old_diff_canonical_entries": 19,
+  "new_diff_canonical_entries": 22,
   "old_diff_excluded_entries": 80,
   "new_diff_excluded_entries": 78,
   "old_duplicate_req_uid_diff_eligible_count": 0,
   "new_duplicate_req_uid_diff_eligible_count": 0,
+  "old_canonicalized_duplicate_groups": 1,
+  "new_canonicalized_duplicate_groups": 0,
+  "old_unresolved_duplicate_groups": 0,
+  "new_unresolved_duplicate_groups": 0,
+  "old_unresolved_duplicate_req_uids": [],
+  "new_unresolved_duplicate_req_uids": [],
   "entries_total": 5,
   "unchanged": 1,
   "text_changed_no_behavior_change": 1,
@@ -160,15 +168,23 @@ Stage 4 must block when:
 - new summary has `registry_status=blocked`;
 - registry JSONL cannot be parsed;
 - either registry contains duplicate `entry_uid`;
-- either registry contains duplicate `req_uid` among `diff_eligible` entries and the caller did not pass `--allow-duplicate-req-uid`.
+- either registry contains unresolved duplicate `req_uid` among `diff_eligible` entries and the caller did not pass `--allow-duplicate-req-uid`.
 
 Diff uses `diff_eligible=true` registry entries by default. If an older registry entry has no `diff_eligible` field, Stage 4 uses the backward-compatible rule `status != source_only`.
 
-Diff expects Stage 3 registries to provide context-aware `req_uid` for diff-eligible entries. Identical short behavior text in different table-row contexts should normally have different logical identities. Identical text repeated in the same semantic context may remain duplicate and must still block unless explicitly allowed after review.
+Diff expects Stage 3 registries to provide context-aware `req_uid` for diff-eligible entries. Identical short behavior text in different table-row contexts should normally have different logical identities. Identical text repeated in the same semantic context may remain duplicate and can be canonicalized only when the group is otherwise identical.
+
+Before matching, Stage 4 canonicalizes benign duplicate `req_uid` groups in memory. The source registry JSONL is not modified and duplicate entries are not deleted.
+
+A diff-eligible duplicate group is canonicalizable only when every entry has identical `req_uid`, `normalized_text`, `requirement_type`, `status`, `source_req_id`, `semantic_fingerprint`, `context_hash`, `context_text`, `object`, `condition`, and `expected_behavior`. Entries may differ by `entry_uid`, `atom_id`, `source_anchors`, or insignificant `source_text` differences when `normalized_text` is identical.
+
+For a canonicalized group, Stage 4 picks a deterministic canonical entry and combines all source anchors into that in-memory entry. It adds warning `Canonicalized repeated source occurrences for duplicate req_uid.`
+
+If any canonicalization field differs, the group is unresolved and continues to block diff. Blocking reasons must specify whether the unresolved duplicates are in old or new registry.
 
 `source_only` duplicates do not block Requirements Diff because they are excluded from diff by default. They remain available in the registry for audit.
 
-Duplicate `req_uid` among diff-eligible entries can be allowed only through an explicit caller flag after manual review. Allowing duplicates does not make matching semantically safe; it only permits diff artifact creation with warnings.
+Unresolved duplicate `req_uid` among diff-eligible entries can be allowed only through an explicit caller flag after manual review. Allowing duplicates does not make matching semantically safe; it only permits diff artifact creation with warnings.
 
 Duplicate `entry_uid` always blocks because row/source identity is not unique.
 

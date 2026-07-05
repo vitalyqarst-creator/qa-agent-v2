@@ -202,6 +202,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- Object samples: `{', '.join(group.get('object_samples', [])) or 'none'}`")
         lines.append(f"- Context text samples: `{'; '.join(group.get('context_text_samples', [])) or 'none'}`")
         lines.append(f"- Likely cause: `{group.get('likely_cause', 'unknown')}`")
+        lines.append(f"- Duplicate group category: `{group.get('duplicate_group_category', 'unknown')}`")
         lines.append("")
         lines.append("| part | xpath | node_id | value_type | flags | aggregate_kind |")
         lines.append("|---|---|---|---|---|---|")
@@ -323,6 +324,12 @@ def _category_counts(duplicate_groups: dict[str, list[dict[str, Any]]]) -> dict[
         "groups_with_different_source_anchors": 0,
         "normalized_text_length_lte_3_groups": 0,
         "short_marker_text_groups": 0,
+        "canonicalizable_same_context_groups": 0,
+        "unresolved_different_context_groups": 0,
+        "unresolved_different_behavior_groups": 0,
+        "unresolved_different_status_groups": 0,
+        "unresolved_different_type_groups": 0,
+        "unknown_duplicate_groups": 0,
     }
     for group in duplicate_groups.values():
         statuses = set(_entry_values(group, "status"))
@@ -346,6 +353,19 @@ def _category_counts(duplicate_groups: dict[str, list[dict[str, Any]]]) -> dict[
             counts["normalized_text_length_lte_3_groups"] += 1
         if normalized_texts and all(text in SHORT_MARKER_TEXTS for text in normalized_texts):
             counts["short_marker_text_groups"] += 1
+        category = _duplicate_group_category(group)
+        if category == "canonicalizable_same_context":
+            counts["canonicalizable_same_context_groups"] += 1
+        elif category == "unresolved_different_context":
+            counts["unresolved_different_context_groups"] += 1
+        elif category == "unresolved_different_behavior":
+            counts["unresolved_different_behavior_groups"] += 1
+        elif category == "unresolved_different_status":
+            counts["unresolved_different_status_groups"] += 1
+        elif category == "unresolved_different_type":
+            counts["unresolved_different_type_groups"] += 1
+        else:
+            counts["unknown_duplicate_groups"] += 1
     return counts
 
 
@@ -413,6 +433,7 @@ def _group_summary(req_uid: str, group: list[dict[str, Any]]) -> dict[str, Any]:
         "context_sources": _entry_values(group, "context_source", drop_empty=True),
         "object_samples": _short_values(group, "object", limit=5),
         "likely_cause": _likely_cause(group),
+        "duplicate_group_category": _duplicate_group_category(group),
         "first_10_anchors": anchors,
     }
 
@@ -470,6 +491,43 @@ def _likely_cause(group: list[dict[str, Any]]) -> str:
     if len(source_req_ids) == 1 and all(entry.get("source_req_id") for entry in group):
         return "same_source_req_id"
     return "unknown"
+
+
+def _duplicate_group_category(group: list[dict[str, Any]]) -> str:
+    if _same_values(group, CANONICALIZABLE_FIELDS):
+        return "canonicalizable_same_context"
+    if not _same_values(group, ["status"]):
+        return "unresolved_different_status"
+    if not _same_values(group, ["requirement_type"]):
+        return "unresolved_different_type"
+    if not _same_values(group, ["normalized_text", "semantic_fingerprint", "expected_behavior"]):
+        return "unresolved_different_behavior"
+    if not _same_values(group, ["context_hash", "context_text", "object", "condition"]):
+        return "unresolved_different_context"
+    return "unknown"
+
+
+CANONICALIZABLE_FIELDS = [
+    "req_uid",
+    "normalized_text",
+    "requirement_type",
+    "status",
+    "source_req_id",
+    "semantic_fingerprint",
+    "context_hash",
+    "context_text",
+    "object",
+    "condition",
+    "expected_behavior",
+]
+
+
+def _same_values(group: list[dict[str, Any]], keys: list[str]) -> bool:
+    for key in keys:
+        values = {entry.get(key) for entry in group}
+        if len(values) > 1:
+            return False
+    return True
 
 
 def _first_value(group: list[dict[str, Any]], key: str) -> str:

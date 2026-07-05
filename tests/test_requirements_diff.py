@@ -270,7 +270,7 @@ class RequirementsDiffTests(unittest.TestCase):
 
             self.assertEqual("blocked", diff.summary["diff_status"])
             self.assertEqual(1, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
-            self.assertTrue(any("old registry contains duplicate req_uid among diff_eligible entries" in reason for reason in diff.blocking_reasons))
+            self.assertTrue(any("old registry contains unresolved duplicate req_uid among diff_eligible entries" in reason for reason in diff.blocking_reasons))
 
     def test_same_text_with_different_context_req_uids_does_not_block_diff(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -293,25 +293,74 @@ class RequirementsDiffTests(unittest.TestCase):
             self.assertNotEqual("blocked", diff.summary["diff_status"])
             self.assertEqual(0, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
 
-    def test_same_text_with_same_context_still_blocks_diff(self) -> None:
+    def test_same_text_with_same_context_is_canonicalized_and_does_not_block_diff(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             context = "Registration address | required"
+            duplicate_uid = "REQ-DEMO-CANONICAL"
             old_path = write_registry(
                 root,
                 "old-v1",
                 [
-                    make_entry("old-v1", "required", context_text=context),
-                    make_entry("old-v1", "required", context_text=context, xpath="/w:p[2]", node_id="ooxml-node-000002"),
+                    make_entry("old-v1", "required", req_uid=duplicate_uid, context_text=context, atom_id="ATOM-000001"),
+                    make_entry("old-v1", "required", req_uid=duplicate_uid, context_text=context, xpath="/w:p[2]", node_id="ooxml-node-000002", atom_id="ATOM-000002"),
                 ],
             )
-            new_path = write_registry(root, "new-v1", [make_entry("new-v1", "required", context_text=context)])
+            new_path = write_registry(root, "new-v1", [make_entry("new-v1", "required", req_uid=duplicate_uid, context_text=context)])
+
+            diff = build_requirements_diff(old_registry_path=old_path, new_registry_path=new_path)
+
+            self.assertNotEqual("blocked", diff.summary["diff_status"])
+            self.assertEqual(1, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
+            self.assertEqual(1, diff.summary["old_canonicalized_duplicate_groups"])
+            self.assertEqual(0, diff.summary["old_unresolved_duplicate_groups"])
+            self.assertEqual(1, diff.summary["old_diff_canonical_entries"])
+            self.assertEqual(2, len(diff.entries[0].old_source_anchors))
+            self.assertIn(
+                "Canonicalized repeated source occurrences for duplicate req_uid.",
+                diff.entries[0].warnings,
+            )
+
+    def test_same_req_uid_with_different_context_hash_blocks_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            duplicate_uid = "REQ-DEMO-DIFFERENT-CONTEXT"
+            old_path = write_registry(
+                root,
+                "old-v1",
+                [
+                    make_entry("old-v1", "required", req_uid=duplicate_uid, context_text="Registration address | required"),
+                    make_entry("old-v1", "required", req_uid=duplicate_uid, context_text="Residence address | required", xpath="/w:p[2]", node_id="ooxml-node-000002"),
+                ],
+            )
+            new_path = write_registry(root, "new-v1", [make_entry("new-v1", "required")])
 
             diff = build_requirements_diff(old_registry_path=old_path, new_registry_path=new_path)
 
             self.assertEqual("blocked", diff.summary["diff_status"])
-            self.assertEqual(1, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
-            self.assertTrue(any("old registry contains duplicate req_uid among diff_eligible entries" in reason for reason in diff.blocking_reasons))
+            self.assertEqual(0, diff.summary["old_canonicalized_duplicate_groups"])
+            self.assertEqual(1, diff.summary["old_unresolved_duplicate_groups"])
+            self.assertIn(duplicate_uid, diff.summary["old_unresolved_duplicate_req_uids"])
+            self.assertTrue(any("old registry contains unresolved duplicate req_uid among diff_eligible entries" in reason for reason in diff.blocking_reasons))
+
+    def test_same_req_uid_with_different_normalized_text_blocks_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            duplicate_uid = "REQ-DEMO-DIFFERENT-TEXT"
+            old_path = write_registry(
+                root,
+                "old-v1",
+                [
+                    make_entry("old-v1", "required", req_uid=duplicate_uid, context_text="Registration address | required"),
+                    make_entry("old-v1", "visible", req_uid=duplicate_uid, context_text="Registration address | required", xpath="/w:p[2]", node_id="ooxml-node-000002"),
+                ],
+            )
+            new_path = write_registry(root, "new-v1", [make_entry("new-v1", "required")])
+
+            diff = build_requirements_diff(old_registry_path=old_path, new_registry_path=new_path)
+
+            self.assertEqual("blocked", diff.summary["diff_status"])
+            self.assertEqual(1, diff.summary["old_unresolved_duplicate_groups"])
 
     def test_diff_ignores_source_only_entries_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -366,7 +415,7 @@ class RequirementsDiffTests(unittest.TestCase):
 
             self.assertNotEqual("blocked", diff.summary["diff_status"])
             self.assertTrue(diff.entries)
-            self.assertTrue(any("Duplicate req_uid" in warning for warning in diff.warnings))
+            self.assertTrue(any("Unresolved duplicate req_uid" in warning for warning in diff.warnings))
 
     def test_blocked_old_or_new_registry_summary_blocks_diff(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -416,6 +465,7 @@ def make_entry(
     entry_uid: str | None = None,
     context_text: str | None = None,
     context_source: str | None = None,
+    atom_id: str = "ATOM-000001",
 ) -> RequirementRegistryEntry:
     normalized_text = text
     context_hash = (
@@ -448,7 +498,7 @@ def make_entry(
     return RequirementRegistryEntry(
         req_uid=req_uid,
         entry_uid=entry_uid or make_entry_uid("demo-ft", source_version, normalized_text, source_anchors),
-        atom_id="ATOM-000001",
+        atom_id=atom_id,
         source_version=source_version,
         ft_slug="demo-ft",
         source_req_id=source_req_id,
