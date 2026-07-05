@@ -46,6 +46,7 @@ class ManualUpdatePackage:
     impact_ids: list[str]
     change_ids: list[str]
     actions: list[str]
+    plan_items_count: int
     priority: PackagePriority
     requires_manual_review: bool
     writer_allowed_operations: list[str]
@@ -63,6 +64,7 @@ class ManualUpdatePackage:
             "impact_ids": self.impact_ids,
             "change_ids": self.change_ids,
             "actions": self.actions,
+            "plan_items_count": self.plan_items_count,
             "priority": self.priority,
             "requires_manual_review": self.requires_manual_review,
             "writer_allowed_operations": self.writer_allowed_operations,
@@ -82,6 +84,7 @@ class ManualUpdatePackage:
             impact_ids=list(data.get("impact_ids") or []),
             change_ids=list(data.get("change_ids") or []),
             actions=list(data.get("actions") or []),
+            plan_items_count=int(data.get("plan_items_count") or len(data.get("plan_item_ids") or [])),
             priority=data["priority"],
             requires_manual_review=bool(data["requires_manual_review"]),
             writer_allowed_operations=list(data.get("writer_allowed_operations") or []),
@@ -170,6 +173,8 @@ def build_manual_update_packages(
         old_source_version = inferred_old
         new_source_version = inferred_new
 
+    manual_plan_items = _manual_package_items(plan.plan_items) if plan is not None else []
+    manual_plan_items_total = len(manual_plan_items)
     packages: list[ManualUpdatePackage] = []
     if not blocking_reasons and plan is not None:
         packages = _packages_from_plan_items(plan.plan_items)
@@ -179,11 +184,15 @@ def build_manual_update_packages(
         blocking_reasons.extend(_conflicting_package_target_reasons(packages))
         if blocking_reasons:
             packages = []
+        elif manual_plan_items_total - _packaged_plan_item_count(packages) > 0:
+            blocking_reasons.append("manual update plan items were not assigned to work packages.")
+            packages = []
 
     warnings = _unique(warnings)
     blocking_reasons = _unique(blocking_reasons)
     summary = _summary(
         packages=packages,
+        manual_plan_items=manual_plan_items,
         warnings=warnings,
         blocking_reasons=blocking_reasons,
     )
@@ -246,6 +255,10 @@ def render_manual_update_packages_markdown(report: ManualUpdatePackagesReport) -
         f"- Source versions: `{report.old_source_version}` -> `{report.new_source_version}`",
         f"- Package status: `{report.summary['package_status']}`",
         f"- Packages total: `{report.summary['packages_total']}`",
+        f"- Manual plan items total: `{report.summary.get('manual_plan_items_total', 0)}`",
+        f"- Packaged plan items total: `{report.summary.get('packaged_plan_items_total', 0)}`",
+        f"- Unpackaged plan items total: `{report.summary.get('unpackaged_plan_items_total', 0)}`",
+        f"- Largest package size: `{report.summary.get('largest_package_plan_items_count', 0)}`",
         f"- Files affected: `{report.summary['files_affected_count']}`",
         f"- Test cases affected: `{report.summary['test_cases_affected_count']}`",
         "",
@@ -325,6 +338,7 @@ def _make_package(index: int, items: list[UpdatePlanItem]) -> ManualUpdatePackag
         impact_ids=_unique(item.impact_id for item in items),
         change_ids=_unique(item.change_id for item in items),
         actions=actions,
+        plan_items_count=len(items),
         priority=_priority(actions),
         requires_manual_review=any(item.requires_manual_review for item in items),
         writer_allowed_operations=_allowed_operations(actions),
@@ -442,16 +456,31 @@ def _conflicting_package_target_reasons(packages: list[ManualUpdatePackage]) -> 
 def _summary(
     *,
     packages: list[ManualUpdatePackage],
+    manual_plan_items: list[UpdatePlanItem],
     warnings: list[str],
     blocking_reasons: list[str],
 ) -> dict[str, Any]:
     package_types = Counter(package.package_type for package in packages)
+    action_item_counts = Counter(item.action for item in manual_plan_items)
+    manual_plan_items_total = len(manual_plan_items)
     files = {package.file_path for package in packages if package.file_path}
     test_cases = {
         test_case_id
         for package in packages
         for test_case_id in package.test_case_ids
     }
+    package_plan_item_counts = {
+        package.package_id: package.plan_items_count
+        for package in packages
+    }
+    packaged_plan_items_total = sum(package_plan_item_counts.values())
+    unpackaged_plan_items_total = manual_plan_items_total - packaged_plan_items_total
+    largest_package_plan_items_count = max(package_plan_item_counts.values(), default=0)
+    largest_package_ids = [
+        package_id
+        for package_id, count in package_plan_item_counts.items()
+        if count == largest_package_plan_items_count and largest_package_plan_items_count > 0
+    ]
     summary_warnings = _unique([
         *warnings,
         *(
@@ -460,7 +489,11 @@ def _summary(
             for warning in package.warnings
         ),
     ])
-    if blocking_reasons:
+    summary_blocking_reasons = list(blocking_reasons)
+    if unpackaged_plan_items_total > 0 and not summary_blocking_reasons:
+        summary_blocking_reasons.append("manual update plan items were not assigned to work packages.")
+
+    if summary_blocking_reasons:
         package_status: PackageStatus = "blocked"
     elif summary_warnings or any(package.requires_manual_review for package in packages):
         package_status = "pass-with-warnings"
@@ -471,13 +504,26 @@ def _summary(
         "packages_total": len(packages),
         "files_affected_count": len(files),
         "test_cases_affected_count": len(test_cases),
+        "manual_plan_items_total": manual_plan_items_total,
+        "packaged_plan_items_total": packaged_plan_items_total,
+        "unpackaged_plan_items_total": unpackaged_plan_items_total,
+        "package_plan_item_counts": package_plan_item_counts,
+        "largest_package_plan_items_count": largest_package_plan_items_count,
+        "largest_package_ids": largest_package_ids,
+        "package_action_item_counts": {
+            "update_existing": action_item_counts.get("update_existing", 0),
+            "create_new_candidate": action_item_counts.get("create_new_candidate", 0),
+            "mark_deprecated_candidate": action_item_counts.get("mark_deprecated_candidate", 0),
+            "manual_review": action_item_counts.get("manual_review", 0),
+            "traceability_update_only": action_item_counts.get("traceability_update_only", 0),
+        },
         "create_new_candidate_count": package_types.get("create_new_candidate", 0),
         "mark_deprecated_candidate_count": package_types.get("mark_deprecated_candidate", 0),
         "update_existing_count": package_types.get("update_existing", 0),
         "manual_review_count": package_types.get("manual_review", 0),
         "mixed_package_count": package_types.get("mixed", 0),
         "warnings": summary_warnings,
-        "blocking_reasons": blocking_reasons,
+        "blocking_reasons": summary_blocking_reasons,
     }
 
 
@@ -490,7 +536,8 @@ def _append_package_lines(lines: list[str], packages: list[ManualUpdatePackage])
         tests = ", ".join(package.test_case_ids) if package.test_case_ids else "n/a"
         lines.append(
             f"- `{package.package_id}` `{package.package_type}` `{package.priority}` "
-            f"for `{target}`; TC: `{tests}`; actions: `{', '.join(package.actions)}`"
+            f"for `{target}`; plan items: `{package.plan_items_count}`; "
+            f"TC count: `{len(package.test_case_ids)}`; TC: `{tests}`; actions: `{', '.join(package.actions)}`"
         )
         lines.append(f"  - plan items: {', '.join(package.plan_item_ids)}")
         lines.append(f"  - allowed: {', '.join(package.writer_allowed_operations) or 'none'}")
@@ -531,6 +578,18 @@ def _unique(values: Any) -> list[str]:
             result.append(text)
             seen.add(text)
     return result
+
+
+def _manual_package_items(plan_items: list[UpdatePlanItem]) -> list[UpdatePlanItem]:
+    return [
+        item
+        for item in plan_items
+        if item.apply_mode == "manual_only" and item.action != "keep"
+    ]
+
+
+def _packaged_plan_item_count(packages: list[ManualUpdatePackage]) -> int:
+    return sum(package.plan_items_count for package in packages)
 
 
 def _utc_now_iso() -> str:

@@ -24,6 +24,7 @@ For `<old-version>` and `<new-version>`, the builder writes:
   "impact_ids": ["IMP-000001"],
   "change_ids": ["CHG-000001"],
   "actions": ["update_existing"],
+  "plan_items_count": 2,
   "priority": "high",
   "requires_manual_review": true,
   "writer_allowed_operations": [
@@ -75,6 +76,11 @@ Grouping:
 
 Registry, diff, impact, update-plan, and test-case files must not be modified by Stage 7A.
 
+`packages_total` is the number of work packages, not the number of changes or plan items.
+One package may contain many plan items when they target the same file or candidate bucket.
+Package type counters such as `update_existing_count` count packages by package type.
+`package_action_item_counts` counts eligible manual plan items by action.
+
 ## Writer Guardrails
 
 All packages must include these forbidden operations:
@@ -101,6 +107,23 @@ Action-specific allowed operations:
   "packages_total": 3,
   "files_affected_count": 2,
   "test_cases_affected_count": 4,
+  "manual_plan_items_total": 7,
+  "packaged_plan_items_total": 7,
+  "unpackaged_plan_items_total": 0,
+  "package_plan_item_counts": {
+    "WPKG-000001": 4,
+    "WPKG-000002": 2,
+    "WPKG-000003": 1
+  },
+  "largest_package_plan_items_count": 4,
+  "largest_package_ids": ["WPKG-000001"],
+  "package_action_item_counts": {
+    "update_existing": 4,
+    "create_new_candidate": 1,
+    "mark_deprecated_candidate": 0,
+    "manual_review": 2,
+    "traceability_update_only": 0
+  },
   "create_new_candidate_count": 1,
   "mark_deprecated_candidate_count": 0,
   "update_existing_count": 1,
@@ -117,6 +140,16 @@ Allowed `package_status` values:
 - `pass-with-warnings`
 - `blocked`
 
+Plan item coverage fields:
+
+- `manual_plan_items_total`: manual-only non-`keep` plan items that must be represented by work packages.
+- `packaged_plan_items_total`: sum of `plan_items_count` across all packages.
+- `unpackaged_plan_items_total`: `manual_plan_items_total - packaged_plan_items_total`.
+- `package_plan_item_counts`: per-package plan item counts.
+- `largest_package_plan_items_count`: largest package size by plan items.
+- `largest_package_ids`: package ids that have the largest package size.
+- `package_action_item_counts`: manual plan items counted by action, not packages counted by type.
+
 ## Blocking Rules
 
 Block package generation when:
@@ -125,10 +158,13 @@ Block package generation when:
 - update plan cannot be parsed;
 - update plan summary has `plan_status=blocked`;
 - package generation would include no manual items and no candidates;
+- any manual-only non-`keep` plan item is not assigned to a work package;
 - duplicate `package_id` is detected;
 - the same concrete `test_case_id/file_path/action` appears in conflicting packages.
 
 When blocked, artifacts may still be written for diagnostics, but `packages` must be empty.
+Unpackaged manual plan items are treated as `blocked` rather than `pass-with-warnings`,
+because Stage 7A must not hide writer workload before the writer/update stage.
 
 ## Markdown Report
 
@@ -140,6 +176,9 @@ Markdown output must contain:
 - `Deprecated Candidates`
 - `Manual Review Packages`
 - `Do Not Touch Rules`
+
+The summary must show manual, packaged, and unpackaged plan item totals and largest package
+size. Package rows must show `plan_items_count`, TC count, and actions.
 
 ## CLI
 

@@ -29,7 +29,9 @@ class ManualUpdatePackagesTests(unittest.TestCase):
             self.assertEqual("update_existing", package.package_type)
             self.assertEqual(str(tc_path), package.file_path)
             self.assertEqual(["TC-001"], package.test_case_ids)
+            self.assertEqual(1, package.plan_items_count)
             self.assertIn("review steps", package.writer_allowed_operations)
+            self.assertEqual(1, report.summary["package_action_item_counts"]["update_existing"])
 
     def test_multiple_tc_in_same_file_become_one_package(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -46,7 +48,15 @@ class ManualUpdatePackagesTests(unittest.TestCase):
 
             self.assertEqual(1, len(report.packages))
             self.assertEqual(["TC-001", "TC-002"], report.packages[0].test_case_ids)
+            self.assertEqual(2, report.packages[0].plan_items_count)
             self.assertEqual(2, report.summary["test_cases_affected_count"])
+            self.assertEqual(2, report.summary["manual_plan_items_total"])
+            self.assertEqual(2, report.summary["packaged_plan_items_total"])
+            self.assertEqual(0, report.summary["unpackaged_plan_items_total"])
+            self.assertEqual({"WPKG-000001": 2}, report.summary["package_plan_item_counts"])
+            self.assertEqual(2, report.summary["largest_package_plan_items_count"])
+            self.assertEqual(["WPKG-000001"], report.summary["largest_package_ids"])
+            self.assertEqual(2, report.summary["package_action_item_counts"]["update_existing"])
 
     def test_create_new_candidate_without_file_path_becomes_candidate_package(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -96,8 +106,11 @@ class ManualUpdatePackagesTests(unittest.TestCase):
 
             self.assertEqual(1, len(report.packages))
             self.assertEqual("mixed", report.packages[0].package_type)
+            self.assertEqual(2, report.packages[0].plan_items_count)
             self.assertEqual(["mark_deprecated_candidate", "update_existing"], report.packages[0].actions)
             self.assertEqual(1, report.summary["mixed_package_count"])
+            self.assertEqual(1, report.summary["package_action_item_counts"]["update_existing"])
+            self.assertEqual(1, report.summary["package_action_item_counts"]["mark_deprecated_candidate"])
 
     def test_keep_and_safe_auto_items_are_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -114,6 +127,9 @@ class ManualUpdatePackagesTests(unittest.TestCase):
 
             self.assertEqual(1, len(report.packages))
             self.assertEqual(["PLAN-000002"], report.packages[0].plan_item_ids)
+            self.assertEqual(1, report.summary["manual_plan_items_total"])
+            self.assertEqual(1, report.summary["packaged_plan_items_total"])
+            self.assertEqual(0, report.summary["unpackaged_plan_items_total"])
 
     def test_only_keep_items_block_package_generation(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -159,8 +175,14 @@ class ManualUpdatePackagesTests(unittest.TestCase):
 
             self.assertIsInstance(loaded, ManualUpdatePackagesReport)
             self.assertEqual(1, len(loaded.packages))
+            self.assertEqual(1, loaded.packages[0].plan_items_count)
             self.assertEqual(1, summary["packages_total"])
+            self.assertEqual(1, summary["manual_plan_items_total"])
+            self.assertEqual(1, summary["packaged_plan_items_total"])
             self.assertIn("## Summary", markdown)
+            self.assertIn("Manual plan items total", markdown)
+            self.assertIn("Packaged plan items total", markdown)
+            self.assertIn("plan items: `1`", markdown)
             self.assertIn("## Packages by File", markdown)
             self.assertIn("## New TC Candidates", markdown)
             self.assertIn("## Deprecated Candidates", markdown)
