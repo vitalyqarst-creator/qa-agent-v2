@@ -12,6 +12,7 @@ from test_case_agent import (
     compute_requirement_text_hash,
     compute_text_similarity,
     load_requirements_diff,
+    load_requirements_registry_jsonl,
     make_entry_uid,
     make_req_uid,
     write_requirements_diff,
@@ -271,6 +272,47 @@ class RequirementsDiffTests(unittest.TestCase):
             self.assertEqual(1, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
             self.assertTrue(any("old registry contains duplicate req_uid among diff_eligible entries" in reason for reason in diff.blocking_reasons))
 
+    def test_same_text_with_different_context_req_uids_does_not_block_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_path = write_registry(
+                root,
+                "old-v1",
+                [
+                    make_entry("old-v1", "required", context_text="Registration address | required"),
+                    make_entry("old-v1", "required", context_text="Residence address | required", xpath="/w:p[2]", node_id="ooxml-node-000002"),
+                ],
+            )
+            new_path = write_registry(root, "new-v1", [make_entry("new-v1", "required", context_text="Registration address | required")])
+
+            old_entries = load_requirements_registry_jsonl(old_path)
+            self.assertEqual(2, len({entry.req_uid for entry in old_entries}))
+
+            diff = build_requirements_diff(old_registry_path=old_path, new_registry_path=new_path)
+
+            self.assertNotEqual("blocked", diff.summary["diff_status"])
+            self.assertEqual(0, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
+
+    def test_same_text_with_same_context_still_blocks_diff(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            context = "Registration address | required"
+            old_path = write_registry(
+                root,
+                "old-v1",
+                [
+                    make_entry("old-v1", "required", context_text=context),
+                    make_entry("old-v1", "required", context_text=context, xpath="/w:p[2]", node_id="ooxml-node-000002"),
+                ],
+            )
+            new_path = write_registry(root, "new-v1", [make_entry("new-v1", "required", context_text=context)])
+
+            diff = build_requirements_diff(old_registry_path=old_path, new_registry_path=new_path)
+
+            self.assertEqual("blocked", diff.summary["diff_status"])
+            self.assertEqual(1, diff.summary["old_duplicate_req_uid_diff_eligible_count"])
+            self.assertTrue(any("old registry contains duplicate req_uid among diff_eligible entries" in reason for reason in diff.blocking_reasons))
+
     def test_diff_ignores_source_only_entries_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -372,13 +414,22 @@ def make_entry(
     flags: list[str] | None = None,
     warnings: list[str] | None = None,
     entry_uid: str | None = None,
+    context_text: str | None = None,
+    context_source: str | None = None,
 ) -> RequirementRegistryEntry:
     normalized_text = text
+    context_hash = (
+        compute_requirement_text_hash(context_text)
+        if context_text is not None
+        else None
+    )
+    diff_eligible = status != "source_only"
     req_uid = req_uid or make_req_uid(
         "demo-ft",
         normalized_text,
         source_req_id=source_req_id,
         requirement_type=requirement_type,
+        context_hash=context_hash if diff_eligible else None,
     )
     semantic_fingerprint = semantic_fingerprint or f"{requirement_type}|||{normalized_text.casefold()}"
     source_anchors = [
@@ -394,7 +445,6 @@ def make_entry(
             aggregate_confidence=None,
         )
     ]
-    diff_eligible = status != "source_only"
     return RequirementRegistryEntry(
         req_uid=req_uid,
         entry_uid=entry_uid or make_entry_uid("demo-ft", source_version, normalized_text, source_anchors),
@@ -412,12 +462,16 @@ def make_entry(
         expected_behavior=normalized_text if status == "active" else None,
         source_text=text,
         normalized_text=normalized_text,
+        context_text=context_text,
+        context_hash=context_hash,
+        context_source=context_source or ("paragraph_neighbors" if context_text else "none"),
         source_anchors=source_anchors,
         semantic_fingerprint=semantic_fingerprint,
         text_hash=compute_requirement_text_hash(normalized_text),
         status=status,
         diff_eligible=diff_eligible,
         diff_exclusion_reason=None if diff_eligible else "source_only entries are excluded from requirements diff by default",
+        context_warnings=[],
         confidence="medium" if status == "active" else "low",
         warnings=warnings or [],
     )
@@ -460,12 +514,16 @@ def replace_version(
         expected_behavior=entry.expected_behavior,
         source_text=entry.source_text,
         normalized_text=entry.normalized_text,
+        context_text=entry.context_text,
+        context_hash=entry.context_hash,
+        context_source=entry.context_source,
         source_anchors=source_anchors,
         semantic_fingerprint=entry.semantic_fingerprint,
         text_hash=entry.text_hash,
         status=entry.status,
         diff_eligible=entry.diff_eligible,
         diff_exclusion_reason=entry.diff_exclusion_reason,
+        context_warnings=entry.context_warnings,
         confidence=entry.confidence,
         warnings=entry.warnings,
     )

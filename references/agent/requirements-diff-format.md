@@ -73,6 +73,7 @@ Stage 4 does not automatically resolve whether a modified requirement changes do
 Matching is deterministic and conservative:
 
 1. Exact `req_uid` match.
+   - `req_uid` is the Stage 3 logical requirement identity. For diff-eligible entries it includes source-backed semantic context hash when available, but not XPath, node id, or source anchors directly.
    - Same `req_uid` and same `text_hash` -> `unchanged`.
    - Same `req_uid`, same text, changed source anchor -> `source_anchor_changed`.
    - Same `req_uid`, changed text, same type/status/source id, and high similarity -> `text_changed_no_behavior_change`.
@@ -162,6 +163,8 @@ Stage 4 must block when:
 - either registry contains duplicate `req_uid` among `diff_eligible` entries and the caller did not pass `--allow-duplicate-req-uid`.
 
 Diff uses `diff_eligible=true` registry entries by default. If an older registry entry has no `diff_eligible` field, Stage 4 uses the backward-compatible rule `status != source_only`.
+
+Diff expects Stage 3 registries to provide context-aware `req_uid` for diff-eligible entries. Identical short behavior text in different table-row contexts should normally have different logical identities. Identical text repeated in the same semantic context may remain duplicate and must still block unless explicitly allowed after review.
 
 `source_only` duplicates do not block Requirements Diff because they are excluded from diff by default. They remain available in the registry for audit.
 

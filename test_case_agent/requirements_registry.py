@@ -25,6 +25,7 @@ DUPLICATE_REQ_UID_WARNING = (
 SOURCE_ONLY_DIFF_EXCLUSION_REASON = (
     "source_only entries are excluded from requirements diff by default"
 )
+CONTEXT_MISSING_WARNING = "No source-backed semantic context was extracted for diff-eligible entry."
 
 RequirementStatus = Literal["active", "gap", "unclear", "source_only"]
 RequirementConfidence = Literal["high", "medium", "low"]
@@ -107,12 +108,16 @@ class RequirementRegistryEntry:
     expected_behavior: str | None
     source_text: str
     normalized_text: str
+    context_text: str | None
+    context_hash: str | None
+    context_source: str | None
     source_anchors: list[SourceAnchor]
     semantic_fingerprint: str
     text_hash: str
     status: RequirementStatus
     diff_eligible: bool
     diff_exclusion_reason: str | None
+    context_warnings: list[str]
     confidence: RequirementConfidence
     warnings: list[str]
 
@@ -134,12 +139,16 @@ class RequirementRegistryEntry:
             "expected_behavior": self.expected_behavior,
             "source_text": self.source_text,
             "normalized_text": self.normalized_text,
+            "context_text": self.context_text,
+            "context_hash": self.context_hash,
+            "context_source": self.context_source,
             "source_anchors": [anchor.to_dict() for anchor in self.source_anchors],
             "semantic_fingerprint": self.semantic_fingerprint,
             "text_hash": self.text_hash,
             "status": self.status,
             "diff_eligible": self.diff_eligible,
             "diff_exclusion_reason": self.diff_exclusion_reason,
+            "context_warnings": self.context_warnings,
             "confidence": self.confidence,
             "warnings": self.warnings,
         }
@@ -177,15 +186,29 @@ class RequirementRegistryEntry:
             expected_behavior=data.get("expected_behavior"),
             source_text=str(data["source_text"]),
             normalized_text=str(data["normalized_text"]),
+            context_text=data.get("context_text"),
+            context_hash=data.get("context_hash"),
+            context_source=data.get("context_source"),
             source_anchors=source_anchors,
             semantic_fingerprint=str(data["semantic_fingerprint"]),
             text_hash=str(data["text_hash"]),
             status=status,
             diff_eligible=diff_eligible,
             diff_exclusion_reason=diff_exclusion_reason,
+            context_warnings=list(data.get("context_warnings") or []),
             confidence=data["confidence"],
             warnings=list(data.get("warnings") or []),
         )
+
+
+@dataclass(frozen=True)
+class RequirementContext:
+    context_text: str | None
+    context_hash: str | None
+    context_source: str | None
+    object_value: str | None
+    condition: str | None
+    warnings: list[str]
 
 
 @dataclass
@@ -402,15 +425,25 @@ def make_req_uid(
     normalized_text: str,
     source_req_id: str | None = None,
     requirement_type: str | None = None,
+    object_value: str | None = None,
+    condition: str | None = None,
+    context_hash: str | None = None,
 ) -> str:
     slug = _uid_slug(ft_slug)
-    fingerprint = "|".join(
-        [
-            _normalize_text(normalized_text),
-            source_req_id or "",
-            requirement_type or "",
-        ]
-    )
+    values = [
+        _normalize_text(normalized_text),
+        source_req_id or "",
+        requirement_type or "",
+    ]
+    if object_value is not None or condition is not None or context_hash is not None:
+        values.extend(
+            [
+                _normalize_text(object_value),
+                _normalize_text(condition),
+                context_hash or "",
+            ]
+        )
+    fingerprint = "|".join(values)
     short_hash = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:12].upper()
     return f"REQ-{slug}-{short_hash}"
 
@@ -442,6 +475,7 @@ def _extract_entries(
     manifest: SourceManifest,
     nodes: list[SourceNode],
 ) -> list[RequirementRegistryEntry]:
+    context_index = _build_context_index(nodes)
     direct_values = {
         (node.part, _normalize_text(node.value))
         for node in nodes
@@ -467,15 +501,21 @@ def _extract_entries(
         warnings = _node_warnings(node, normalized_text)
         status = _entry_status(node, requirement_type, normalized_text)
         confidence = _entry_confidence(node, requirement_type, status)
-        expected_behavior = normalized_text if status == "active" else None
         diff_eligible = _is_diff_eligible_status(status)
         diff_exclusion_reason = None if diff_eligible else SOURCE_ONLY_DIFF_EXCLUSION_REASON
+        context = _context_for_node(node, normalized_text, context_index) if diff_eligible else _empty_context()
+        context_warnings = list(context.warnings)
+        if diff_eligible and context.context_text is None:
+            context_warnings.append(CONTEXT_MISSING_WARNING)
+        warnings.extend(context_warnings)
+        expected_behavior = normalized_text if status == "active" else None
         semantic_fingerprint = _semantic_fingerprint(
             requirement_type=requirement_type,
-            object_value=None,
-            condition=None,
+            object_value=context.object_value,
+            condition=context.condition,
             expected_behavior=expected_behavior,
             normalized_text=normalized_text,
+            context_text=context.context_text if diff_eligible else None,
         )
         atom_id = f"ATOM-{len(entries) + 1:06d}"
         source_anchors = [
@@ -497,6 +537,9 @@ def _extract_entries(
                 normalized_text,
                 source_req_id=source_req_id,
                 requirement_type=requirement_type,
+                object_value=context.object_value if diff_eligible else None,
+                condition=context.condition if diff_eligible else None,
+                context_hash=context.context_hash if diff_eligible else None,
             ),
             entry_uid=make_entry_uid(
                 manifest.ft_slug,
@@ -513,17 +556,21 @@ def _extract_entries(
             scope_slug=None,
             package_id=None,
             requirement_type=requirement_type,
-            object=None,
-            condition=None,
+            object=context.object_value,
+            condition=context.condition,
             expected_behavior=expected_behavior,
             source_text=node.value,
             normalized_text=normalized_text,
+            context_text=context.context_text,
+            context_hash=context.context_hash,
+            context_source=context.context_source,
             source_anchors=source_anchors,
             semantic_fingerprint=semantic_fingerprint,
             text_hash=compute_requirement_text_hash(normalized_text),
             status=status,
             diff_eligible=diff_eligible,
             diff_exclusion_reason=diff_exclusion_reason,
+            context_warnings=context_warnings,
             confidence=confidence,
             warnings=warnings,
         )
@@ -551,6 +598,209 @@ def _is_registry_candidate(
     if _is_service_value(value) and _detect_requirement_type(value, node.flags) == "metadata/source_only":
         return False
     return True
+
+
+def _empty_context() -> RequirementContext:
+    return RequirementContext(
+        context_text=None,
+        context_hash=None,
+        context_source="none",
+        object_value=None,
+        condition=None,
+        warnings=[],
+    )
+
+
+def _build_context_index(nodes: list[SourceNode]) -> dict[str, Any]:
+    table_rows: dict[tuple[str, str], list[SourceNode]] = {}
+    table_cells: dict[tuple[str, str, int], list[SourceNode]] = {}
+    paragraphs: dict[str, list[SourceNode]] = {}
+
+    for node in nodes:
+        if node.value_type == "tail":
+            continue
+        if not _normalize_text(node.value):
+            continue
+        row_key = _table_row_key(node.xpath)
+        if row_key:
+            table_rows.setdefault((node.part, row_key), []).append(node)
+            cell_key = _table_cell_key(node.xpath)
+            if cell_key:
+                cell_path, cell_index = cell_key
+                table_cells.setdefault((node.part, cell_path, cell_index), []).append(node)
+            continue
+        paragraph_key = _paragraph_key(node.xpath)
+        if paragraph_key and node.value_type == "aggregate" and node.aggregate_kind == "paragraph":
+            paragraphs.setdefault(node.part, []).append(node)
+
+    return {
+        "table_rows": {
+            key: sorted(value, key=lambda item: _xpath_sort_key(item.xpath))
+            for key, value in table_rows.items()
+        },
+        "table_cells": {
+            key: sorted(value, key=lambda item: _xpath_sort_key(item.xpath))
+            for key, value in table_cells.items()
+        },
+        "paragraphs": {
+            part: sorted(value, key=lambda item: _xpath_sort_key(item.xpath))
+            for part, value in paragraphs.items()
+        },
+    }
+
+
+def _context_for_node(
+    node: SourceNode,
+    normalized_text: str,
+    context_index: dict[str, Any],
+) -> RequirementContext:
+    table_context = _table_context_for_node(node, normalized_text, context_index)
+    if table_context.context_text:
+        return table_context
+    paragraph_context = _paragraph_context_for_node(node, context_index)
+    if paragraph_context.context_text:
+        return paragraph_context
+    return _empty_context()
+
+
+def _table_context_for_node(
+    node: SourceNode,
+    normalized_text: str,
+    context_index: dict[str, Any],
+) -> RequirementContext:
+    row_key = _table_row_key(node.xpath)
+    cell_key = _table_cell_key(node.xpath)
+    if not row_key:
+        return _empty_context()
+
+    row_nodes = context_index["table_rows"].get((node.part, row_key), [])
+    row_text = _join_context_values(
+        candidate.value
+        for candidate in row_nodes
+        if candidate.value_type in {"text", "attribute", "aggregate"}
+    )
+    if not row_text:
+        return _empty_context()
+
+    object_value: str | None = None
+    if cell_key:
+        _cell_path, cell_index = cell_key
+        object_value = _object_from_left_cell(
+            node.part,
+            row_key,
+            cell_index,
+            normalized_text,
+            context_index,
+        )
+
+    return RequirementContext(
+        context_text=row_text,
+        context_hash=compute_context_hash(row_text),
+        context_source="table_row",
+        object_value=object_value,
+        condition=None,
+        warnings=[],
+    )
+
+
+def _object_from_left_cell(
+    part: str,
+    row_key: str,
+    cell_index: int,
+    normalized_text: str,
+    context_index: dict[str, Any],
+) -> str | None:
+    for candidate_index in range(cell_index - 1, 0, -1):
+        cell_path = f"{row_key}/w:tc[{candidate_index}]"
+        cell_nodes = context_index["table_cells"].get((part, cell_path, candidate_index), [])
+        cell_text = _join_context_values(
+            node.value
+            for node in cell_nodes
+            if node.value_type in {"text", "attribute", "aggregate"}
+        )
+        if not cell_text:
+            continue
+        if _normalize_text(cell_text).casefold() == normalized_text.casefold():
+            continue
+        if len(_normalize_text(cell_text)) <= 2:
+            continue
+        return cell_text
+    return None
+
+
+def _paragraph_context_for_node(
+    node: SourceNode,
+    context_index: dict[str, Any],
+) -> RequirementContext:
+    paragraph_key = _paragraph_key(node.xpath)
+    if not paragraph_key:
+        return _empty_context()
+    paragraphs = context_index["paragraphs"].get(node.part, [])
+    index = next(
+        (
+            position
+            for position, paragraph in enumerate(paragraphs)
+            if paragraph.xpath.startswith(f"{paragraph_key}/")
+            or paragraph.xpath == f"{paragraph_key}/aggregate::paragraph"
+        ),
+        None,
+    )
+    if index is None:
+        return _empty_context()
+    neighbors = paragraphs[max(0, index - 1) : index + 2]
+    context_text = _join_context_values(paragraph.value for paragraph in neighbors)
+    if not context_text:
+        return _empty_context()
+    return RequirementContext(
+        context_text=context_text,
+        context_hash=compute_context_hash(context_text),
+        context_source="paragraph_neighbors",
+        object_value=None,
+        condition=None,
+        warnings=[],
+    )
+
+
+def compute_context_hash(context_text: str) -> str:
+    digest = hashlib.sha256(_normalize_text(context_text).casefold().encode("utf-8")).hexdigest()
+    return f"sha256:{digest}"
+
+
+def _join_context_values(values: Any) -> str:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in values:
+        normalized = _normalize_text(value)
+        if not normalized:
+            continue
+        key = normalized.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(normalized)
+    return " | ".join(result)
+
+
+def _table_row_key(xpath: str) -> str | None:
+    match = re.match(r"^(.*?/w:tr\[\d+\])(?:/|$)", xpath)
+    return match.group(1) if match else None
+
+
+def _table_cell_key(xpath: str) -> tuple[str, int] | None:
+    match = re.match(r"^(.*?/w:tr\[\d+\]/w:tc\[(\d+)\])(?:/|$)", xpath)
+    if not match:
+        return None
+    return match.group(1), int(match.group(2))
+
+
+def _paragraph_key(xpath: str) -> str | None:
+    match = re.match(r"^(.*?/w:p(?:\[\d+\])?)(?:/|$)", xpath)
+    return match.group(1) if match else None
+
+
+def _xpath_sort_key(xpath: str) -> tuple[int, ...]:
+    numbers = [int(value) for value in re.findall(r"\[(\d+)\]", xpath)]
+    return tuple(numbers)
 
 
 def _is_technical_attribute(node: SourceNode) -> bool:
@@ -718,12 +968,14 @@ def _semantic_fingerprint(
     condition: str | None,
     expected_behavior: str | None,
     normalized_text: str,
+    context_text: str | None = None,
 ) -> str:
     values = [
         requirement_type,
         object_value or "",
         condition or "",
         expected_behavior or normalized_text,
+        context_text or "",
     ]
     return "|".join(_normalize_text(value).casefold() for value in values)
 
@@ -851,6 +1103,18 @@ def _extraction_summary(
     duplicate_entry_uids = _duplicate_entry_uids(entries)
     diff_eligible_entries = sum(1 for entry in entries if entry.diff_eligible)
     diff_excluded_entries = len(entries) - diff_eligible_entries
+    context_filled_count = sum(1 for entry in entries if entry.diff_eligible and entry.context_text)
+    context_missing_entries = [
+        entry for entry in entries if entry.diff_eligible and not entry.context_text
+    ]
+    context_sources = Counter(
+        entry.context_source or "none"
+        for entry in entries
+        if entry.diff_eligible
+    )
+    top_context_missing_requirement_types = Counter(
+        entry.requirement_type for entry in context_missing_entries
+    )
     summary_warnings = list(warnings)
     if duplicate_req_uids and DUPLICATE_REQ_UID_WARNING not in summary_warnings:
         summary_warnings.append(DUPLICATE_REQ_UID_WARNING)
@@ -897,10 +1161,17 @@ def _extraction_summary(
         "duplicate_req_uids": duplicate_req_uids,
         "duplicate_req_uid_diff_eligible_count": len(duplicate_req_uid_diff_eligible),
         "duplicate_req_uid_diff_eligible_uids": duplicate_req_uid_diff_eligible,
+        "duplicate_req_uid_diff_eligible_count_after_context": len(duplicate_req_uid_diff_eligible),
         "duplicate_req_uid_source_only_count": len(duplicate_req_uid_source_only),
         "duplicate_req_uid_source_only_uids": duplicate_req_uid_source_only,
         "duplicate_entry_uid_count": len(duplicate_entry_uids),
         "duplicate_entry_uids": duplicate_entry_uids,
+        "context_filled_count": context_filled_count,
+        "context_missing_count": len(context_missing_entries),
+        "context_sources": dict(sorted(context_sources.items())),
+        "top_context_missing_requirement_types": dict(
+            top_context_missing_requirement_types.most_common(10)
+        ),
         "source_nodes_seen": candidates_seen,
         "warnings": summary_warnings,
         "blocking_reasons": summary_blocking_reasons,

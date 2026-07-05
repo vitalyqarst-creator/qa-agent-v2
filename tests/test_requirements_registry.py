@@ -116,6 +116,9 @@ class RequirementsRegistryTests(unittest.TestCase):
                     entry.normalized_text,
                     source_req_id=entry.source_req_id,
                     requirement_type=entry.requirement_type,
+                    object_value=entry.object,
+                    condition=entry.condition,
+                    context_hash=entry.context_hash,
                 ),
             )
 
@@ -297,6 +300,83 @@ class RequirementsRegistryTests(unittest.TestCase):
                 "source_only entries are excluded from requirements diff by default",
                 entry.diff_exclusion_reason,
             )
+
+    def test_same_text_in_different_table_row_contexts_gets_different_req_uid(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            display_text = "required"
+            build_docx_fixture_with_table_rows(
+                source_docx,
+                [
+                    ["Registration address", display_text],
+                    ["Residence address", display_text],
+                ],
+            )
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="table-context-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entries = [
+                entry for entry in registry.entries
+                if entry.normalized_text == display_text and entry.diff_eligible
+            ]
+
+            self.assertEqual(2, len(entries))
+            self.assertTrue(all(entry.diff_eligible for entry in entries))
+            self.assertEqual(2, len({entry.req_uid for entry in entries}))
+            self.assertEqual(2, len({entry.context_text for entry in entries}))
+            self.assertEqual(2, len({entry.entry_uid for entry in entries}))
+            self.assertEqual({"table_row"}, {entry.context_source for entry in entries})
+            self.assertEqual(
+                {"Registration address", "Residence address"},
+                {entry.object for entry in entries},
+            )
+
+    def test_same_text_in_same_table_context_remains_duplicate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            display_text = "required"
+            build_docx_fixture_with_table_rows(
+                source_docx,
+                [
+                    ["Registration address", display_text],
+                    ["Registration address", display_text],
+                ],
+            )
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="same-table-context-v1")
+            out_dir = root / "requirements-out"
+
+            registry = build_requirements_registry(manifest_path)
+            _registry_path, summary_path = write_requirements_registry(registry, out_dir)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            entries = [
+                entry for entry in registry.entries
+                if entry.normalized_text == display_text and entry.diff_eligible
+            ]
+            self.assertEqual(2, len(entries))
+            self.assertEqual(1, len({entry.req_uid for entry in entries}))
+            self.assertGreater(summary["duplicate_req_uid_diff_eligible_count"], 0)
+            self.assertEqual(0, summary["duplicate_entry_uid_count"])
+
+    def test_object_is_not_invented_for_unclear_paragraph_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source_docx = root / "requirements.docx"
+            build_docx_fixture_with_text(
+                source_docx,
+                "BSR 1 field required.",
+            )
+            manifest_path = _write_manifest_for_docx(root, source_docx, source_version="paragraph-context-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entry = _entry_containing(registry.entries, "field")
+
+            self.assertTrue(entry.diff_eligible)
+            self.assertIsNone(entry.object)
+            self.assertIsNotNone(entry.context_text)
+            self.assertIn(entry.context_source, {"paragraph_neighbors", "none"})
 
     def test_russian_preposition_o_does_not_become_requiredness_active(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -484,23 +564,28 @@ def make_source_only_entry(node_id: str, xpath: str) -> RequirementRegistryEntry
         expected_behavior=None,
         source_text=normalized_text,
         normalized_text=normalized_text,
+        context_text=None,
+        context_hash=None,
+        context_source="none",
         source_anchors=source_anchors,
         semantic_fingerprint=f"metadata/source_only|||{normalized_text}",
         text_hash=compute_requirement_text_hash(normalized_text),
         status="source_only",
         diff_eligible=False,
         diff_exclusion_reason="source_only entries are excluded from requirements diff by default",
+        context_warnings=[],
         confidence="low",
         warnings=[],
     )
 
 
 def build_docx_fixture_with_text(path: Path, text: str | list[str]) -> None:
+    import html
     import zipfile
 
     texts = [text] if isinstance(text, str) else text
     paragraphs = "".join(
-        f"<w:p><w:r><w:t>{value}</w:t></w:r></w:p>"
+        f"<w:p><w:r><w:t>{html.escape(value)}</w:t></w:r></w:p>"
         for value in texts
     )
 
@@ -518,6 +603,40 @@ def build_docx_fixture_with_text(path: Path, text: str | list[str]) -> None:
         "word/document.xml": f"""<?xml version="1.0" encoding="UTF-8"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>{paragraphs}</w:body>
+</w:document>""",
+    }
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, value in entries.items():
+            archive.writestr(name, value)
+
+
+def build_docx_fixture_with_table_rows(path: Path, rows: list[list[str]]) -> None:
+    import html
+    import zipfile
+
+    table_rows = []
+    for row in rows:
+        cells = "".join(
+            f"<w:tc><w:p><w:r><w:t>{html.escape(value)}</w:t></w:r></w:p></w:tc>"
+            for value in row
+        )
+        table_rows.append(f"<w:tr>{cells}</w:tr>")
+    table = f"<w:tbl>{''.join(table_rows)}</w:tbl>"
+
+    entries = {
+        "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>""",
+        "_rels/.rels": """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdOfficeDocument" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>""",
+        "word/document.xml": f"""<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>{table}</w:body>
 </w:document>""",
     }
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:

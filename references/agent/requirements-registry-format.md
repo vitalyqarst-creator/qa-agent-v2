@@ -40,6 +40,9 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
   "expected_behavior": "BSR 115 Адрес регистрации обязателен, если Ввести вручную = Нет.",
   "source_text": "BSR 115 Адрес регистрации обязателен, если Ввести вручную = Нет.",
   "normalized_text": "BSR 115 Адрес регистрации обязателен, если Ввести вручную = Нет.",
+  "context_text": "Registration address | required",
+  "context_hash": "sha256:64 lowercase hex characters",
+  "context_source": "table_row",
   "source_anchors": [
     {
       "source_doc": "fts/AutoFin/source/FT4AutoFinFinal/FT4AutoFinFinal.docx",
@@ -58,6 +61,7 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
   "status": "active",
   "diff_eligible": true,
   "diff_exclusion_reason": null,
+  "context_warnings": [],
   "confidence": "medium",
   "warnings": []
 }
@@ -65,7 +69,7 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
 
 ## Fields
 
-`req_uid` is logical requirement identity. It is deterministic for the same FT slug, normalized text, source requirement id, and requirement type. It intentionally does not include source anchors in this cleanup.
+`req_uid` is logical requirement identity. It is deterministic for the same FT slug, normalized text, source requirement id, requirement type, and, for diff-eligible entries, extracted semantic context. It must not include source anchors, XPath, or node ids directly.
 
 `entry_uid` is row/source identity. It is deterministic for the same registry input and unique for each registry row. It includes FT slug, source version, first source anchor part/xpath/node id/value type, and normalized text hash.
 
@@ -77,9 +81,17 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
 
 `object`, `condition`, and `expected_behavior` must not be invented. Stage 3 may leave `object` and `condition` null. For an active entry, `expected_behavior` may be the normalized source statement when the rule classifier detects a behavior signal but cannot safely split the statement further.
 
+`context_text` is source-backed semantic context extracted from OOXML source nodes, such as a table row, neighboring table cells, paragraph neighbors, section heading, or source requirement id context. If no context can be extracted, it is null.
+
+`context_hash` is `sha256:<hash>` over normalized `context_text`. For diff-eligible entries, `context_hash` participates in `req_uid` generation when present. For `source_only`, the previous non-context UID logic may be used.
+
+`context_source` is one of `table_row`, `table_cell_neighbors`, `paragraph_neighbors`, `section_heading`, `source_req_id`, or `none`.
+
+`context_warnings` records context extraction gaps, for example when no source-backed context is available for a diff-eligible entry.
+
 `source_anchors` must reference OOXML `SourceNode` data: `part`, `xpath`, `node_id`, `value_type`, flags, and aggregate metadata.
 
-`semantic_fingerprint` is a deterministic normalized string used for stable matching inside one version. It is not a cross-version diff key yet.
+`semantic_fingerprint` is a deterministic normalized string used for stable matching inside one version. For diff-eligible entries it includes normalized `context_text`; for `source_only` it may keep the previous text-only fingerprint.
 
 `text_hash` is `sha256:<hash>` over `normalized_text`.
 
@@ -204,10 +216,17 @@ Footnotes, endnotes, custom XML, headers, footers, and document properties may b
   "duplicate_req_uids": [],
   "duplicate_req_uid_diff_eligible_count": 0,
   "duplicate_req_uid_diff_eligible_uids": [],
+  "duplicate_req_uid_diff_eligible_count_after_context": 0,
   "duplicate_req_uid_source_only_count": 0,
   "duplicate_req_uid_source_only_uids": [],
   "duplicate_entry_uid_count": 0,
   "duplicate_entry_uids": [],
+  "context_filled_count": 1,
+  "context_missing_count": 0,
+  "context_sources": {
+    "table_row": 1
+  },
+  "top_context_missing_requirement_types": {},
   "source_nodes_seen": 42,
   "warnings": [],
   "blocking_reasons": []
@@ -255,6 +274,8 @@ If multiple entries have the same `req_uid`, the summary must make that visible:
 `duplicate_req_uid_source_only_count` does not block Requirements Diff by itself because `source_only` entries are not diff-eligible.
 
 `duplicate_req_uid_diff_eligible_count` must block Requirements Diff until the eligible anchors are reviewed or the identity model is improved.
+
+`duplicate_req_uid_diff_eligible_count_after_context` reports the remaining duplicate logical identities after context-aware `req_uid` generation. It is expected to be lower when repeated short behavior text appears in different table rows, but it may remain non-zero when the same logical requirement is repeated in the same semantic context.
 
 `duplicate_entry_uid_count` must be `0`. Duplicate `entry_uid` means row/source identity is not unique and must block downstream use.
 

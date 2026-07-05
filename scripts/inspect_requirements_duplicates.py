@@ -189,7 +189,7 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- `{key}`: `{value}`")
 
     lines.extend(["", "## Top Duplicate Groups", ""])
-    for group in report["top_duplicate_groups"][:10]:
+    for group in report["top_duplicate_groups"]:
         lines.append(f"### {group['req_uid']}")
         lines.append("")
         lines.append(f"- Count: `{group['count']}`")
@@ -198,6 +198,10 @@ def render_markdown(report: dict[str, Any]) -> str:
         lines.append(f"- Source req IDs: `{', '.join(group['source_req_ids']) or 'none'}`")
         lines.append(f"- Normalized text sample: {group['normalized_text_sample']}")
         lines.append(f"- Source text sample: {group['source_text_sample']}")
+        lines.append(f"- Context sources: `{', '.join(group.get('context_sources', [])) or 'none'}`")
+        lines.append(f"- Object samples: `{', '.join(group.get('object_samples', [])) or 'none'}`")
+        lines.append(f"- Context text samples: `{'; '.join(group.get('context_text_samples', [])) or 'none'}`")
+        lines.append(f"- Likely cause: `{group.get('likely_cause', 'unknown')}`")
         lines.append("")
         lines.append("| part | xpath | node_id | value_type | flags | aggregate_kind |")
         lines.append("|---|---|---|---|---|---|")
@@ -405,6 +409,10 @@ def _group_summary(req_uid: str, group: list[dict[str, Any]]) -> dict[str, Any]:
         "source_req_ids": _entry_values(group, "source_req_id", drop_empty=True),
         "normalized_text_sample": _short(_first_value(group, "normalized_text")),
         "source_text_sample": _short(_first_value(group, "source_text")),
+        "context_text_samples": _short_values(group, "context_text", limit=5),
+        "context_sources": _entry_values(group, "context_source", drop_empty=True),
+        "object_samples": _short_values(group, "object", limit=5),
+        "likely_cause": _likely_cause(group),
         "first_10_anchors": anchors,
     }
 
@@ -430,6 +438,38 @@ def _entry_values(group: list[dict[str, Any]], key: str, *, drop_empty: bool = F
         }
     )
     return values
+
+
+def _short_values(group: list[dict[str, Any]], key: str, *, limit: int) -> list[str]:
+    values: list[str] = []
+    seen: set[str] = set()
+    for entry in group:
+        value = entry.get(key)
+        if value is None or not str(value).strip():
+            continue
+        short_value = _short(str(value))
+        if short_value in seen:
+            continue
+        seen.add(short_value)
+        values.append(short_value)
+        if len(values) >= limit:
+            break
+    return values
+
+
+def _likely_cause(group: list[dict[str, Any]]) -> str:
+    normalized_texts = set(_entry_values(group, "normalized_text"))
+    context_texts = set(_entry_values(group, "context_text", drop_empty=True))
+    source_req_ids = set(_entry_values(group, "source_req_id", drop_empty=True))
+    if any(not entry.get("context_text") for entry in group):
+        return "missing_context"
+    if len(context_texts) == 1:
+        return "same_context_repeated"
+    if normalized_texts and all(len(text) <= 3 or text in SHORT_MARKER_TEXTS for text in normalized_texts):
+        return "short_marker"
+    if len(source_req_ids) == 1 and all(entry.get("source_req_id") for entry in group):
+        return "same_source_req_id"
+    return "unknown"
 
 
 def _first_value(group: list[dict[str, Any]], key: str) -> str:
