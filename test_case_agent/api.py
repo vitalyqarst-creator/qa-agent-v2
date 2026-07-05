@@ -80,6 +80,12 @@ from test_case_agent.writer_package_tasks import (
     load_writer_package_tasks,
     write_writer_package_tasks,
 )
+from test_case_agent.writer_dry_run_proposals import (
+    WriterDryRunProposal,
+    build_writer_dry_run_proposal,
+    load_writer_dry_run_proposal,
+    write_writer_dry_run_proposal,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -181,6 +187,7 @@ __all__ = [
     "TestCaseUpdatePlan",
     "WriterPackageTask",
     "WriterPackageTasksReport",
+    "WriterDryRunProposal",
     "UpdatePlanItem",
     "extract_ooxml_source_nodes",
     "inspect_ooxml_coverage",
@@ -192,6 +199,7 @@ __all__ = [
     "build_test_case_update_plan",
     "build_manual_update_packages",
     "build_writer_package_tasks",
+    "build_writer_dry_run_proposal",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -200,6 +208,7 @@ __all__ = [
     "load_test_case_update_plan",
     "load_manual_update_packages",
     "load_writer_package_tasks",
+    "load_writer_dry_run_proposal",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -217,6 +226,7 @@ __all__ = [
     "write_test_case_update_plan",
     "write_manual_update_packages",
     "write_writer_package_tasks",
+    "write_writer_dry_run_proposal",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
