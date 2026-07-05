@@ -35,6 +35,64 @@ class TestCaseUpdatePlanTests(unittest.TestCase):
                 plan.plan_items[0].forbidden_changes,
             )
 
+    def test_unlinked_no_action_entries_are_ignored_without_plan_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, _tc_path = setup_root(temp_dir)
+            impact_path, _summary_path = write_impact(
+                root,
+                tc_dir,
+                [
+                    make_impact_entry("no_action", [], impact_id="IMP-000001"),
+                    make_impact_entry("no_action", [], impact_id="IMP-000002", change_id="CHG-000002"),
+                ],
+            )
+
+            plan = build_test_case_update_plan(impact_report_path=impact_path, test_cases_dir=tc_dir)
+
+            self.assertNotEqual("blocked", plan.summary["plan_status"])
+            self.assertEqual([], plan.plan_items)
+            self.assertEqual(0, plan.summary["plan_items_total"])
+            self.assertEqual(2, plan.summary["ignored_unlinked_no_action_count"])
+            self.assertEqual(
+                ["IMP-000001", "IMP-000002"],
+                plan.summary["ignored_unlinked_no_action_impact_ids"],
+            )
+
+    def test_no_action_with_linked_test_case_still_creates_keep_item(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, tc_path = setup_root(temp_dir)
+            impact_path, _summary_path = write_impact(
+                root,
+                tc_dir,
+                [make_impact_entry("no_action", [make_link(tc_path)], impact_id="IMP-000001")],
+            )
+
+            plan = build_test_case_update_plan(impact_report_path=impact_path, test_cases_dir=tc_dir)
+
+            self.assertEqual(1, len(plan.plan_items))
+            self.assertEqual("keep", plan.plan_items[0].action)
+            self.assertEqual("TC-001", plan.plan_items[0].test_case_id)
+            self.assertEqual(0, plan.summary["ignored_unlinked_no_action_count"])
+
+    def test_multiple_create_new_candidates_without_tc_targets_do_not_block(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, _tc_path = setup_root(temp_dir)
+            impact_path, _summary_path = write_impact(
+                root,
+                tc_dir,
+                [
+                    make_impact_entry("create_new", [], impact_id="IMP-000001", change_id="CHG-000001"),
+                    make_impact_entry("create_new", [], impact_id="IMP-000002", change_id="CHG-000002"),
+                ],
+            )
+
+            plan = build_test_case_update_plan(impact_report_path=impact_path, test_cases_dir=tc_dir)
+
+            self.assertNotEqual("blocked", plan.summary["plan_status"])
+            self.assertEqual(2, plan.summary["plan_items_total"])
+            self.assertTrue(all(item.action == "create_new_candidate" for item in plan.plan_items))
+            self.assertTrue(all(item.test_case_id is None and item.file_path is None for item in plan.plan_items))
+
     def test_traceability_update_without_parse_warnings_is_safe_auto_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, tc_dir, tc_path = setup_root(temp_dir)

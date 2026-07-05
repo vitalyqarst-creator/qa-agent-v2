@@ -189,8 +189,9 @@ def build_test_case_update_plan(
         blocking_reasons.extend(_missing_linked_file_reasons(report.impact_entries, test_cases_dir))
 
     plan_items: list[UpdatePlanItem] = []
+    ignored_unlinked_no_action_impact_ids: list[str] = []
     if not blocking_reasons and report is not None:
-        plan_items = _plan_items_from_impact_entries(report.impact_entries)
+        plan_items, ignored_unlinked_no_action_impact_ids = _plan_items_from_impact_entries(report.impact_entries)
         duplicate_reasons = _inconsistent_duplicate_plan_item_reasons(plan_items)
         if duplicate_reasons:
             blocking_reasons.extend(duplicate_reasons)
@@ -201,6 +202,7 @@ def build_test_case_update_plan(
     summary = _summary(
         impact_entries_total=impact_entries_total,
         plan_items=plan_items,
+        ignored_unlinked_no_action_impact_ids=ignored_unlinked_no_action_impact_ids,
         warnings=warnings,
         blocking_reasons=blocking_reasons,
     )
@@ -261,6 +263,7 @@ def render_test_case_update_plan_markdown(plan: TestCaseUpdatePlan) -> str:
         f"- Source versions: `{plan.old_source_version}` -> `{plan.new_source_version}`",
         f"- Plan status: `{plan.summary['plan_status']}`",
         f"- Plan items: `{plan.summary['plan_items_total']}`",
+        f"- Ignored unlinked no-action impacts: `{plan.summary.get('ignored_unlinked_no_action_count', 0)}`",
         f"- Safe auto candidates: `{plan.summary['safe_auto_candidates_count']}`",
         f"- Manual only: `{plan.summary['manual_only_count']}`",
         f"- Blocked items: `{plan.summary['blocked_items_count']}`",
@@ -295,15 +298,21 @@ def render_test_case_update_plan_markdown(plan: TestCaseUpdatePlan) -> str:
     return "\n".join(lines)
 
 
-def _plan_items_from_impact_entries(impact_entries: list[ImpactEntry]) -> list[UpdatePlanItem]:
+def _plan_items_from_impact_entries(
+    impact_entries: list[ImpactEntry],
+) -> tuple[list[UpdatePlanItem], list[str]]:
     items: list[UpdatePlanItem] = []
+    ignored_unlinked_no_action_impact_ids: list[str] = []
     for entry in impact_entries:
+        if entry.action == "no_action" and not entry.affected_test_cases:
+            ignored_unlinked_no_action_impact_ids.append(entry.impact_id)
+            continue
         linked_cases = entry.affected_test_cases or [None]
         if entry.action == "create_new":
             linked_cases = [None]
         for test_case in linked_cases:
             items.append(_make_plan_item(len(items) + 1, entry, test_case))
-    return items
+    return items, ignored_unlinked_no_action_impact_ids
 
 
 def _make_plan_item(
@@ -446,6 +455,8 @@ def _linked_file_exists(file_path: str, test_cases_dir: Path) -> bool:
 def _inconsistent_duplicate_plan_item_reasons(items: list[UpdatePlanItem]) -> list[str]:
     groups: dict[tuple[str | None, str | None, PlanAction], list[UpdatePlanItem]] = defaultdict(list)
     for item in items:
+        if item.test_case_id is None or item.file_path is None:
+            continue
         groups[(item.test_case_id, item.file_path, item.action)].append(item)
 
     reasons: list[str] = []
@@ -474,6 +485,7 @@ def _summary(
     *,
     impact_entries_total: int,
     plan_items: list[UpdatePlanItem],
+    ignored_unlinked_no_action_impact_ids: list[str],
     warnings: list[str],
     blocking_reasons: list[str],
 ) -> dict[str, Any]:
@@ -505,6 +517,8 @@ def _summary(
         "manual_only_count": apply_modes.get("manual_only", 0),
         "blocked_items_count": apply_modes.get("blocked", 0),
         "requires_manual_review_count": sum(1 for item in plan_items if item.requires_manual_review),
+        "ignored_unlinked_no_action_count": len(ignored_unlinked_no_action_impact_ids),
+        "ignored_unlinked_no_action_impact_ids": ignored_unlinked_no_action_impact_ids,
         "warnings": warnings,
         "blocking_reasons": blocking_reasons,
     }

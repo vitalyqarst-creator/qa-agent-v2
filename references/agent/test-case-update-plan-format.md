@@ -86,6 +86,7 @@ Allowed `apply_mode` values:
   - This is a no-op candidate only: it means an executor can safely do nothing.
   - `required_changes=[]`.
   - `forbidden_changes=["Do not rewrite steps", "Do not rewrite expected result"]`.
+  - If `affected_test_cases` is empty, Stage 6A must not create a `keep` plan item. The impact is recorded only in summary counters because there is no concrete TC operation.
 - Impact `traceability_update_only` -> plan `traceability_update_only`.
   - `apply_mode=safe_auto_candidate` only when linked affected test cases exist, the linked test case has no parse warnings, and the impact entry has `requires_manual_review=false`.
   - Otherwise `apply_mode=manual_only`.
@@ -132,6 +133,8 @@ Allowed `apply_mode` values:
   "manual_only_count": 3,
   "blocked_items_count": 0,
   "requires_manual_review_count": 3,
+  "ignored_unlinked_no_action_count": 0,
+  "ignored_unlinked_no_action_impact_ids": [],
   "warnings": [],
   "blocking_reasons": []
 }
@@ -154,7 +157,11 @@ Block the plan when:
 - impact report has `blocking_reasons`;
 - test-cases directory is missing;
 - a linked affected TC file path does not exist;
-- duplicate plan items for the same `(test_case_id, file_path, action)` have inconsistent operational instructions.
+- duplicate plan items for the same concrete `(test_case_id, file_path, action)` have inconsistent operational instructions.
+
+Duplicate consistency applies only to plan items that target a real test-case file: `test_case_id != null` and `file_path != null`. Items with `test_case_id=null` or `file_path=null`, such as `create_new_candidate`, are candidates or summary-only plan entries and must not conflict through a `(null, null, action)` key.
+
+Unlinked `no_action` impact entries must not create plan items. They are counted through `ignored_unlinked_no_action_count` and listed in `ignored_unlinked_no_action_impact_ids` with reason: `no_action impact without linked test case does not require a plan item.`
 
 When the plan is blocked, generated artifacts may still be written for diagnostics, but `plan_items` must be empty and `blocking_reasons` must explain the blocker.
 
