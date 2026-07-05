@@ -22,7 +22,7 @@ HIGH_SIMILARITY_THRESHOLD = 0.92
 FALLBACK_SIMILARITY_THRESHOLD = 0.75
 SPLIT_MERGE_SIMILARITY_THRESHOLD = 0.60
 DUPLICATE_BLOCKER = (
-    "registry contains duplicate req_uid; rerun with allow_duplicate_req_uid only after reviewing anchors."
+    "registry contains duplicate req_uid among diff_eligible entries; rerun with allow_duplicate_req_uid only after reviewing anchors."
 )
 
 ChangeType = Literal[
@@ -228,12 +228,26 @@ def build_requirements_diff(
     old_source_version = _source_version(old_summary, old_entries, old_registry_path)
     new_source_version = _source_version(new_summary, new_entries, new_registry_path)
 
-    duplicate_uids = sorted(set(_duplicate_req_uids(old_entries) + _duplicate_req_uids(new_entries)))
+    old_duplicate_entry_uids = _duplicate_entry_uids(old_entries)
+    new_duplicate_entry_uids = _duplicate_entry_uids(new_entries)
+    if old_duplicate_entry_uids:
+        blocking_reasons.append("old registry contains duplicate entry_uid values")
+    if new_duplicate_entry_uids:
+        blocking_reasons.append("new registry contains duplicate entry_uid values")
+
+    old_diff_entries = _diff_eligible_entries(old_entries)
+    new_diff_entries = _diff_eligible_entries(new_entries)
+    old_duplicate_uids = _duplicate_req_uids(old_diff_entries)
+    new_duplicate_uids = _duplicate_req_uids(new_diff_entries)
+    duplicate_uids = sorted(set(old_duplicate_uids + new_duplicate_uids))
     if duplicate_uids:
-        duplicate_warning = f"Duplicate req_uid values detected: {', '.join(duplicate_uids)}"
+        duplicate_warning = f"Duplicate req_uid values detected among diff_eligible entries: {', '.join(duplicate_uids)}"
         warnings.append(duplicate_warning)
         if not allow_duplicate_req_uid:
-            blocking_reasons.append(DUPLICATE_BLOCKER)
+            if old_duplicate_uids:
+                blocking_reasons.append("old registry contains duplicate req_uid among diff_eligible entries")
+            if new_duplicate_uids:
+                blocking_reasons.append("new registry contains duplicate req_uid among diff_eligible entries")
 
     if blocking_reasons:
         return _make_diff(
@@ -241,19 +255,31 @@ def build_requirements_diff(
             new_registry_path=new_registry_path,
             old_source_version=old_source_version,
             new_source_version=new_source_version,
+            old_entries_total=len(old_entries),
+            new_entries_total=len(new_entries),
+            old_diff_eligible_entries=len(old_diff_entries),
+            new_diff_eligible_entries=len(new_diff_entries),
+            old_duplicate_req_uid_diff_eligible_count=len(old_duplicate_uids),
+            new_duplicate_req_uid_diff_eligible_count=len(new_duplicate_uids),
             entries=[],
             warnings=warnings,
             blocking_reasons=blocking_reasons,
             created_by_tool=created_by_tool,
         )
 
-    entries = match_requirement_entries(old_entries, new_entries)
+    entries = match_requirement_entries(old_diff_entries, new_diff_entries)
     warnings.extend(_entry_warnings(entries))
     return _make_diff(
         old_registry_path=old_registry_path,
         new_registry_path=new_registry_path,
         old_source_version=old_source_version,
         new_source_version=new_source_version,
+        old_entries_total=len(old_entries),
+        new_entries_total=len(new_entries),
+        old_diff_eligible_entries=len(old_diff_entries),
+        new_diff_eligible_entries=len(new_diff_entries),
+        old_duplicate_req_uid_diff_eligible_count=len(old_duplicate_uids),
+        new_duplicate_req_uid_diff_eligible_count=len(new_duplicate_uids),
         entries=entries,
         warnings=sorted(set(warnings)),
         blocking_reasons=[],
@@ -620,6 +646,12 @@ def _summary(
     new_registry_path: Path,
     old_source_version: str,
     new_source_version: str,
+    old_entries_total: int,
+    new_entries_total: int,
+    old_diff_eligible_entries: int,
+    new_diff_eligible_entries: int,
+    old_duplicate_req_uid_diff_eligible_count: int,
+    new_duplicate_req_uid_diff_eligible_count: int,
     entries: list[RequirementsDiffEntry],
     warnings: list[str],
     blocking_reasons: list[str],
@@ -638,6 +670,14 @@ def _summary(
         "old_source_version": old_source_version,
         "new_source_version": new_source_version,
         "diff_status": diff_status,
+        "old_entries_total": old_entries_total,
+        "new_entries_total": new_entries_total,
+        "old_diff_eligible_entries": old_diff_eligible_entries,
+        "new_diff_eligible_entries": new_diff_eligible_entries,
+        "old_diff_excluded_entries": old_entries_total - old_diff_eligible_entries,
+        "new_diff_excluded_entries": new_entries_total - new_diff_eligible_entries,
+        "old_duplicate_req_uid_diff_eligible_count": old_duplicate_req_uid_diff_eligible_count,
+        "new_duplicate_req_uid_diff_eligible_count": new_duplicate_req_uid_diff_eligible_count,
         "entries_total": len(entries),
         "unchanged": counts.get("unchanged", 0),
         "text_changed_no_behavior_change": counts.get("text_changed_no_behavior_change", 0),
@@ -662,6 +702,12 @@ def _make_diff(
     new_registry_path: Path,
     old_source_version: str,
     new_source_version: str,
+    old_entries_total: int,
+    new_entries_total: int,
+    old_diff_eligible_entries: int,
+    new_diff_eligible_entries: int,
+    old_duplicate_req_uid_diff_eligible_count: int,
+    new_duplicate_req_uid_diff_eligible_count: int,
     entries: list[RequirementsDiffEntry],
     warnings: list[str],
     blocking_reasons: list[str],
@@ -673,6 +719,12 @@ def _make_diff(
         new_registry_path=new_registry_path,
         old_source_version=old_source_version,
         new_source_version=new_source_version,
+        old_entries_total=old_entries_total,
+        new_entries_total=new_entries_total,
+        old_diff_eligible_entries=old_diff_eligible_entries,
+        new_diff_eligible_entries=new_diff_eligible_entries,
+        old_duplicate_req_uid_diff_eligible_count=old_duplicate_req_uid_diff_eligible_count,
+        new_duplicate_req_uid_diff_eligible_count=new_duplicate_req_uid_diff_eligible_count,
         entries=entries,
         warnings=warnings,
         blocking_reasons=blocking_reasons,
@@ -800,6 +852,23 @@ def _cap_confidence(confidence: DiffConfidence, maximum: DiffConfidence) -> Diff
 def _duplicate_req_uids(entries: list[RequirementRegistryEntry]) -> list[str]:
     counts = Counter(entry.req_uid for entry in entries)
     return sorted(req_uid for req_uid, count in counts.items() if count > 1)
+
+
+def _duplicate_entry_uids(entries: list[RequirementRegistryEntry]) -> list[str]:
+    counts = Counter(_entry_uid(entry) for entry in entries)
+    return sorted(entry_uid for entry_uid, count in counts.items() if entry_uid and count > 1)
+
+
+def _diff_eligible_entries(entries: list[RequirementRegistryEntry]) -> list[RequirementRegistryEntry]:
+    return [entry for entry in entries if _is_diff_eligible(entry)]
+
+
+def _is_diff_eligible(entry: RequirementRegistryEntry) -> bool:
+    return bool(getattr(entry, "diff_eligible", entry.status != "source_only"))
+
+
+def _entry_uid(entry: RequirementRegistryEntry) -> str | None:
+    return getattr(entry, "entry_uid", None)
 
 
 def _load_optional_summary(path: Path, warnings: list[str]) -> dict[str, Any]:

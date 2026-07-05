@@ -29,6 +29,7 @@ from test_case_agent.requirements_registry import (
     compute_requirement_text_hash,
     load_requirements_registry,
     load_requirements_registry_jsonl,
+    make_entry_uid,
     make_req_uid,
     write_requirements_registry,
 )
@@ -182,6 +183,7 @@ __all__ = [
     "load_source_manifest",
     "load_ooxml_source",
     "load_sections",
+    "make_entry_uid",
     "make_req_uid",
     "match_requirement_entries",
     "link_diff_to_test_cases",

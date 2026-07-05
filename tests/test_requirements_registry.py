@@ -9,10 +9,14 @@ from pathlib import Path
 from unittest.mock import patch
 
 from test_case_agent import (
+    RequirementRegistryEntry,
+    SourceAnchor,
     build_requirements_registry,
     build_source_manifest,
+    compute_requirement_text_hash,
     load_requirements_registry,
     load_requirements_registry_jsonl,
+    make_entry_uid,
     make_req_uid,
     write_requirements_registry,
     write_source_manifest,
@@ -76,6 +80,26 @@ class RequirementsRegistryTests(unittest.TestCase):
             first_uids = [(entry.normalized_text, entry.req_uid) for entry in first.entries]
             second_uids = [(entry.normalized_text, entry.req_uid) for entry in second.entries]
             self.assertEqual(first_uids, second_uids)
+
+    def test_entry_uid_exists_for_every_entry_and_is_stable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = _write_manifest(root, source_version="entry-stable-v1")
+
+            first = build_requirements_registry(manifest_path)
+            second = build_requirements_registry(manifest_path)
+
+            self.assertTrue(all(entry.entry_uid.startswith("ENTRY-DEMOFT-") for entry in first.entries))
+            first_uids = [
+                (entry.normalized_text, entry.source_anchors[0].node_id, entry.entry_uid)
+                for entry in first.entries
+            ]
+            second_uids = [
+                (entry.normalized_text, entry.source_anchors[0].node_id, entry.entry_uid)
+                for entry in second.entries
+            ]
+            self.assertEqual(first_uids, second_uids)
+            self.assertEqual(len(first.entries), len({entry.entry_uid for entry in first.entries}))
 
     def test_same_manifest_maps_same_normalized_text_to_same_req_uid(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -257,6 +281,22 @@ class RequirementsRegistryTests(unittest.TestCase):
             self.assertEqual("requiredness", entry.requirement_type)
             self.assertEqual("BSR 115", entry.source_req_id)
             self.assertEqual(entry.normalized_text, entry.expected_behavior)
+            self.assertTrue(entry.diff_eligible)
+            self.assertIsNone(entry.diff_exclusion_reason)
+
+    def test_source_only_is_not_diff_eligible(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = _write_manifest(root, source_version="source-only-eligible-v1")
+
+            registry = build_requirements_registry(manifest_path)
+            entry = next(entry for entry in registry.entries if entry.status == "source_only")
+
+            self.assertFalse(entry.diff_eligible)
+            self.assertEqual(
+                "source_only entries are excluded from requirements diff by default",
+                entry.diff_exclusion_reason,
+            )
 
     def test_russian_preposition_o_does_not_become_requiredness_active(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -340,6 +380,36 @@ class RequirementsRegistryTests(unittest.TestCase):
                 "Duplicate req_uid values detected; review source anchors before using registry for diff.",
                 summary["warnings"],
             )
+            self.assertIn("diff_eligible_entries", summary)
+            self.assertIn("diff_excluded_entries", summary)
+            self.assertIn("duplicate_req_uid_diff_eligible_count", summary)
+            self.assertIn("duplicate_req_uid_source_only_count", summary)
+            self.assertEqual(0, summary["duplicate_entry_uid_count"])
+
+    def test_duplicate_source_only_req_uid_rows_have_unique_entry_uid(self) -> None:
+        first = make_source_only_entry("ooxml-node-000001", "/w:p[1]/@w:rsidR")
+        second = make_source_only_entry("ooxml-node-000002", "/w:p[2]/@w:rsidR")
+
+        self.assertEqual(first.req_uid, second.req_uid)
+        self.assertNotEqual(first.entry_uid, second.entry_uid)
+        self.assertFalse(first.diff_eligible)
+        self.assertFalse(second.diff_eligible)
+
+    def test_summary_includes_diff_eligible_and_entry_uid_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            manifest_path = _write_manifest(root, source_version="summary-counts-v1")
+            out_dir = root / "requirements"
+
+            registry = build_requirements_registry(manifest_path)
+            _registry_path, summary_path = write_requirements_registry(registry, out_dir)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            self.assertEqual(
+                summary["entries_total"],
+                summary["diff_eligible_entries"] + summary["diff_excluded_entries"],
+            )
+            self.assertEqual(0, summary["duplicate_entry_uid_count"])
 
 
 def _write_manifest(root: Path, *, source_version: str) -> Path:
@@ -375,6 +445,54 @@ def _entry_containing(entries: list[object], text: str, required_flag: str | Non
                 continue
             return entry
     raise AssertionError(f"entry containing {text!r} not found")
+
+
+def make_source_only_entry(node_id: str, xpath: str) -> RequirementRegistryEntry:
+    normalized_text = "auto"
+    source_anchors = [
+        SourceAnchor(
+            source_doc="source.docx",
+            source_version="source-only-dupes-v1",
+            part="word/document.xml",
+            xpath=xpath,
+            node_id=node_id,
+            value_type="attribute",
+            flags=[],
+            aggregate_kind=None,
+            aggregate_confidence=None,
+        )
+    ]
+    return RequirementRegistryEntry(
+        req_uid=make_req_uid(
+            "AutoFin",
+            normalized_text,
+            source_req_id=None,
+            requirement_type="metadata/source_only",
+        ),
+        entry_uid=make_entry_uid("AutoFin", "source-only-dupes-v1", normalized_text, source_anchors),
+        atom_id=node_id.replace("ooxml-node-", "ATOM-"),
+        source_version="source-only-dupes-v1",
+        ft_slug="AutoFin",
+        source_req_id=None,
+        source_row_id=None,
+        section_id=None,
+        scope_slug=None,
+        package_id=None,
+        requirement_type="metadata/source_only",
+        object=None,
+        condition=None,
+        expected_behavior=None,
+        source_text=normalized_text,
+        normalized_text=normalized_text,
+        source_anchors=source_anchors,
+        semantic_fingerprint=f"metadata/source_only|||{normalized_text}",
+        text_hash=compute_requirement_text_hash(normalized_text),
+        status="source_only",
+        diff_eligible=False,
+        diff_exclusion_reason="source_only entries are excluded from requirements diff by default",
+        confidence="low",
+        warnings=[],
+    )
 
 
 def build_docx_fixture_with_text(path: Path, text: str | list[str]) -> None:

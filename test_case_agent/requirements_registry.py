@@ -22,6 +22,9 @@ SINGLE_LETTER_TABLE_MARKER_WARNING = (
 DUPLICATE_REQ_UID_WARNING = (
     "Duplicate req_uid values detected; review source anchors before using registry for diff."
 )
+SOURCE_ONLY_DIFF_EXCLUSION_REASON = (
+    "source_only entries are excluded from requirements diff by default"
+)
 
 RequirementStatus = Literal["active", "gap", "unclear", "source_only"]
 RequirementConfidence = Literal["high", "medium", "low"]
@@ -89,6 +92,7 @@ class SourceAnchor:
 @dataclass(frozen=True)
 class RequirementRegistryEntry:
     req_uid: str
+    entry_uid: str
     atom_id: str
     source_version: str
     ft_slug: str
@@ -107,12 +111,15 @@ class RequirementRegistryEntry:
     semantic_fingerprint: str
     text_hash: str
     status: RequirementStatus
+    diff_eligible: bool
+    diff_exclusion_reason: str | None
     confidence: RequirementConfidence
     warnings: list[str]
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "req_uid": self.req_uid,
+            "entry_uid": self.entry_uid,
             "atom_id": self.atom_id,
             "source_version": self.source_version,
             "ft_slug": self.ft_slug,
@@ -131,14 +138,31 @@ class RequirementRegistryEntry:
             "semantic_fingerprint": self.semantic_fingerprint,
             "text_hash": self.text_hash,
             "status": self.status,
+            "diff_eligible": self.diff_eligible,
+            "diff_exclusion_reason": self.diff_exclusion_reason,
             "confidence": self.confidence,
             "warnings": self.warnings,
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "RequirementRegistryEntry":
+        source_anchors = [
+            SourceAnchor.from_dict(anchor)
+            for anchor in data.get("source_anchors", [])
+        ]
+        status = data["status"]
+        diff_eligible = bool(data.get("diff_eligible", _is_diff_eligible_status(status)))
+        diff_exclusion_reason = data.get("diff_exclusion_reason")
+        if not diff_eligible and diff_exclusion_reason is None:
+            diff_exclusion_reason = SOURCE_ONLY_DIFF_EXCLUSION_REASON if status == "source_only" else None
         return cls(
             req_uid=str(data["req_uid"]),
+            entry_uid=str(data.get("entry_uid") or make_entry_uid(
+                str(data["ft_slug"]),
+                str(data["source_version"]),
+                str(data["normalized_text"]),
+                source_anchors,
+            )),
             atom_id=str(data["atom_id"]),
             source_version=str(data["source_version"]),
             ft_slug=str(data["ft_slug"]),
@@ -153,13 +177,12 @@ class RequirementRegistryEntry:
             expected_behavior=data.get("expected_behavior"),
             source_text=str(data["source_text"]),
             normalized_text=str(data["normalized_text"]),
-            source_anchors=[
-                SourceAnchor.from_dict(anchor)
-                for anchor in data.get("source_anchors", [])
-            ],
+            source_anchors=source_anchors,
             semantic_fingerprint=str(data["semantic_fingerprint"]),
             text_hash=str(data["text_hash"]),
-            status=data["status"],
+            status=status,
+            diff_eligible=diff_eligible,
+            diff_exclusion_reason=diff_exclusion_reason,
             confidence=data["confidence"],
             warnings=list(data.get("warnings") or []),
         )
@@ -392,6 +415,29 @@ def make_req_uid(
     return f"REQ-{slug}-{short_hash}"
 
 
+def make_entry_uid(
+    ft_slug: str,
+    source_version: str,
+    normalized_text: str,
+    source_anchors: list[SourceAnchor],
+) -> str:
+    slug = _uid_slug(ft_slug)
+    anchor = source_anchors[0] if source_anchors else None
+    fingerprint = "|".join(
+        [
+            slug,
+            source_version,
+            anchor.part if anchor else "",
+            anchor.xpath if anchor else "",
+            anchor.node_id if anchor else "",
+            anchor.value_type if anchor else "",
+            compute_requirement_text_hash(normalized_text),
+        ]
+    )
+    short_hash = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()[:16].upper()
+    return f"ENTRY-{slug}-{short_hash}"
+
+
 def _extract_entries(
     manifest: SourceManifest,
     nodes: list[SourceNode],
@@ -422,6 +468,8 @@ def _extract_entries(
         status = _entry_status(node, requirement_type, normalized_text)
         confidence = _entry_confidence(node, requirement_type, status)
         expected_behavior = normalized_text if status == "active" else None
+        diff_eligible = _is_diff_eligible_status(status)
+        diff_exclusion_reason = None if diff_eligible else SOURCE_ONLY_DIFF_EXCLUSION_REASON
         semantic_fingerprint = _semantic_fingerprint(
             requirement_type=requirement_type,
             object_value=None,
@@ -430,12 +478,31 @@ def _extract_entries(
             normalized_text=normalized_text,
         )
         atom_id = f"ATOM-{len(entries) + 1:06d}"
+        source_anchors = [
+            SourceAnchor(
+                source_doc=node.source_path,
+                source_version=manifest.source_version,
+                part=node.part,
+                xpath=node.xpath,
+                node_id=node.node_id,
+                value_type=node.value_type,
+                flags=list(node.flags),
+                aggregate_kind=node.aggregate_kind,
+                aggregate_confidence=node.aggregate_confidence,
+            )
+        ]
         entry = RequirementRegistryEntry(
             req_uid=make_req_uid(
                 manifest.ft_slug,
                 normalized_text,
                 source_req_id=source_req_id,
                 requirement_type=requirement_type,
+            ),
+            entry_uid=make_entry_uid(
+                manifest.ft_slug,
+                manifest.source_version,
+                normalized_text,
+                source_anchors,
             ),
             atom_id=atom_id,
             source_version=manifest.source_version,
@@ -451,22 +518,12 @@ def _extract_entries(
             expected_behavior=expected_behavior,
             source_text=node.value,
             normalized_text=normalized_text,
-            source_anchors=[
-                SourceAnchor(
-                    source_doc=node.source_path,
-                    source_version=manifest.source_version,
-                    part=node.part,
-                    xpath=node.xpath,
-                    node_id=node.node_id,
-                    value_type=node.value_type,
-                    flags=list(node.flags),
-                    aggregate_kind=node.aggregate_kind,
-                    aggregate_confidence=node.aggregate_confidence,
-                )
-            ],
+            source_anchors=source_anchors,
             semantic_fingerprint=semantic_fingerprint,
             text_hash=compute_requirement_text_hash(normalized_text),
             status=status,
+            diff_eligible=diff_eligible,
+            diff_exclusion_reason=diff_exclusion_reason,
             confidence=confidence,
             warnings=warnings,
         )
@@ -785,6 +842,15 @@ def _extraction_summary(
     status_counts = Counter(entry.status for entry in entries)
     by_requirement_type = Counter(entry.requirement_type for entry in entries)
     duplicate_req_uids = _duplicate_req_uids(entries)
+    duplicate_req_uid_diff_eligible = _duplicate_req_uids(
+        [entry for entry in entries if entry.diff_eligible]
+    )
+    duplicate_req_uid_source_only = _duplicate_req_uids(
+        [entry for entry in entries if not entry.diff_eligible]
+    )
+    duplicate_entry_uids = _duplicate_entry_uids(entries)
+    diff_eligible_entries = sum(1 for entry in entries if entry.diff_eligible)
+    diff_excluded_entries = len(entries) - diff_eligible_entries
     summary_warnings = list(warnings)
     if duplicate_req_uids and DUPLICATE_REQ_UID_WARNING not in summary_warnings:
         summary_warnings.append(DUPLICATE_REQ_UID_WARNING)
@@ -793,8 +859,11 @@ def _extraction_summary(
         for entry in entries
         for anchor in entry.source_anchors
     )
+    summary_blocking_reasons = list(blocking_reasons)
+    if duplicate_entry_uids:
+        summary_blocking_reasons.append("Duplicate entry_uid values detected; registry row identity is not unique.")
     registry_status: RegistryStatus
-    if blocking_reasons:
+    if summary_blocking_reasons:
         registry_status = "blocked"
     elif summary_warnings:
         registry_status = "pass-with-warnings"
@@ -816,6 +885,8 @@ def _extraction_summary(
         "registry_path": str(registry_path) if registry_path else None,
         "registry_status": registry_status,
         "entries_total": len(entries),
+        "diff_eligible_entries": diff_eligible_entries,
+        "diff_excluded_entries": diff_excluded_entries,
         "active": status_counts.get("active", 0),
         "gap": status_counts.get("gap", 0),
         "unclear": status_counts.get("unclear", 0),
@@ -824,15 +895,30 @@ def _extraction_summary(
         "by_part": dict(sorted(by_part.items())),
         "duplicate_req_uid_count": len(duplicate_req_uids),
         "duplicate_req_uids": duplicate_req_uids,
+        "duplicate_req_uid_diff_eligible_count": len(duplicate_req_uid_diff_eligible),
+        "duplicate_req_uid_diff_eligible_uids": duplicate_req_uid_diff_eligible,
+        "duplicate_req_uid_source_only_count": len(duplicate_req_uid_source_only),
+        "duplicate_req_uid_source_only_uids": duplicate_req_uid_source_only,
+        "duplicate_entry_uid_count": len(duplicate_entry_uids),
+        "duplicate_entry_uids": duplicate_entry_uids,
         "source_nodes_seen": candidates_seen,
         "warnings": summary_warnings,
-        "blocking_reasons": blocking_reasons,
+        "blocking_reasons": summary_blocking_reasons,
     }
 
 
 def _duplicate_req_uids(entries: list[RequirementRegistryEntry]) -> list[str]:
     counts = Counter(entry.req_uid for entry in entries)
     return sorted(req_uid for req_uid, count in counts.items() if count > 1)
+
+
+def _duplicate_entry_uids(entries: list[RequirementRegistryEntry]) -> list[str]:
+    counts = Counter(entry.entry_uid for entry in entries)
+    return sorted(entry_uid for entry_uid, count in counts.items() if count > 1)
+
+
+def _is_diff_eligible_status(status: str) -> bool:
+    return status in {"active", "gap", "unclear"}
 
 
 def _registry_path(out_dir: Path, source_version: str) -> Path:

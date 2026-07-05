@@ -25,6 +25,7 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
 ```json
 {
   "req_uid": "REQ-AUTOFIN-7A12D9C41B22",
+  "entry_uid": "ENTRY-AUTOFIN-6C451C5E2DA84211",
   "atom_id": "ATOM-000001",
   "source_version": "autofin-final-v1",
   "ft_slug": "AutoFin",
@@ -55,6 +56,8 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
   "semantic_fingerprint": "requiredness|||bsr 115 адрес регистрации обязателен, если ввести вручную = нет.",
   "text_hash": "sha256:64 lowercase hex characters",
   "status": "active",
+  "diff_eligible": true,
+  "diff_exclusion_reason": null,
   "confidence": "medium",
   "warnings": []
 }
@@ -62,7 +65,9 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
 
 ## Fields
 
-`req_uid` is deterministic for the same FT slug, normalized text, source requirement id, and requirement type. It must not depend only on JSONL row number.
+`req_uid` is logical requirement identity. It is deterministic for the same FT slug, normalized text, source requirement id, and requirement type. It intentionally does not include source anchors in this cleanup.
+
+`entry_uid` is row/source identity. It is deterministic for the same registry input and unique for each registry row. It includes FT slug, source version, first source anchor part/xpath/node id/value type, and normalized text hash.
 
 `atom_id` is a local sequential id inside one generated registry file.
 
@@ -77,6 +82,19 @@ Each JSONL line is one registry entry: an atomic requirement, explicit `gap`, `u
 `semantic_fingerprint` is a deterministic normalized string used for stable matching inside one version. It is not a cross-version diff key yet.
 
 `text_hash` is `sha256:<hash>` over `normalized_text`.
+
+`diff_eligible` controls whether the entry participates in Requirements Diff by default:
+
+- `true` for `active`, `gap`, and `unclear`;
+- `false` for `source_only`.
+
+For `source_only` entries, `diff_exclusion_reason` must be:
+
+```text
+source_only entries are excluded from requirements diff by default
+```
+
+`source_only` entries remain in the registry for audit and traceability, but are excluded from diff by default.
 
 ## Status Values
 
@@ -169,6 +187,8 @@ Footnotes, endnotes, custom XML, headers, footers, and document properties may b
   "registry_path": "fts/AutoFin/requirements/requirements.autofin-final-v1.jsonl",
   "registry_status": "pass-with-warnings",
   "entries_total": 10,
+  "diff_eligible_entries": 1,
+  "diff_excluded_entries": 9,
   "active": 1,
   "gap": 0,
   "unclear": 0,
@@ -182,6 +202,12 @@ Footnotes, endnotes, custom XML, headers, footers, and document properties may b
   },
   "duplicate_req_uid_count": 0,
   "duplicate_req_uids": [],
+  "duplicate_req_uid_diff_eligible_count": 0,
+  "duplicate_req_uid_diff_eligible_uids": [],
+  "duplicate_req_uid_source_only_count": 0,
+  "duplicate_req_uid_source_only_uids": [],
+  "duplicate_entry_uid_count": 0,
+  "duplicate_entry_uids": [],
   "source_nodes_seen": 42,
   "warnings": [],
   "blocking_reasons": []
@@ -225,6 +251,12 @@ If multiple entries have the same `req_uid`, the summary must make that visible:
 ```
 
 `duplicate_req_uid_count` counts duplicate UID values, not total duplicate rows. Duplicate entries remain in the JSONL so their separate `source_anchors` are inspectable.
+
+`duplicate_req_uid_source_only_count` does not block Requirements Diff by itself because `source_only` entries are not diff-eligible.
+
+`duplicate_req_uid_diff_eligible_count` must block Requirements Diff until the eligible anchors are reviewed or the identity model is improved.
+
+`duplicate_entry_uid_count` must be `0`. Duplicate `entry_uid` means row/source identity is not unique and must block downstream use.
 
 ## CLI
 

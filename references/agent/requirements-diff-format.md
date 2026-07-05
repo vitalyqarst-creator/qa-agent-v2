@@ -117,6 +117,14 @@ If a change touches tracked deletion, hidden text, comment source, or aggregate-
   "old_source_version": "autofin-prefinal-v1",
   "new_source_version": "autofin-final-v1",
   "diff_status": "pass-with-warnings",
+  "old_entries_total": 100,
+  "new_entries_total": 100,
+  "old_diff_eligible_entries": 20,
+  "new_diff_eligible_entries": 22,
+  "old_diff_excluded_entries": 80,
+  "new_diff_excluded_entries": 78,
+  "old_duplicate_req_uid_diff_eligible_count": 0,
+  "new_duplicate_req_uid_diff_eligible_count": 0,
   "entries_total": 5,
   "unchanged": 1,
   "text_changed_no_behavior_change": 1,
@@ -150,9 +158,16 @@ Stage 4 must block when:
 - old summary has `registry_status=blocked`;
 - new summary has `registry_status=blocked`;
 - registry JSONL cannot be parsed;
-- either registry contains duplicate `req_uid` and the caller did not pass `--allow-duplicate-req-uid`.
+- either registry contains duplicate `entry_uid`;
+- either registry contains duplicate `req_uid` among `diff_eligible` entries and the caller did not pass `--allow-duplicate-req-uid`.
 
-Duplicate `req_uid` can be allowed only through an explicit caller flag after manual review. Allowing duplicates does not make matching semantically safe; it only permits diff artifact creation with warnings.
+Diff uses `diff_eligible=true` registry entries by default. If an older registry entry has no `diff_eligible` field, Stage 4 uses the backward-compatible rule `status != source_only`.
+
+`source_only` duplicates do not block Requirements Diff because they are excluded from diff by default. They remain available in the registry for audit.
+
+Duplicate `req_uid` among diff-eligible entries can be allowed only through an explicit caller flag after manual review. Allowing duplicates does not make matching semantically safe; it only permits diff artifact creation with warnings.
+
+Duplicate `entry_uid` always blocks because row/source identity is not unique.
 
 ## CLI
 
