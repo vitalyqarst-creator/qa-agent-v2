@@ -643,6 +643,8 @@ def _unsafe_reason(plan_item: UpdatePlanItem) -> str | None:
         return "safe traceability item has warnings"
     if plan_item.test_case_id is None or plan_item.file_path is None:
         return "safe traceability item is missing test_case_id or file_path"
+    if len(plan_item.old_refs) != len(plan_item.new_refs):
+        return "old_refs/new_refs length mismatch"
     if plan_item.required_changes != REQUIRED_TRACEABILITY_CHANGE:
         return "safe traceability item has unexpected required_changes"
     if not TRACEABILITY_FORBIDDEN_CHANGES.issubset(set(plan_item.forbidden_changes)):

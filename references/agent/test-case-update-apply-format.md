@@ -158,6 +158,7 @@ The item must also satisfy all guardrails:
 - `test_case_id` exists;
 - `file_path` exists;
 - item has no warnings;
+- `old_refs` and `new_refs` have equal length;
 - `required_changes` is exactly `["update traceability refs only"]`;
 - `forbidden_changes` includes:
   - `Do not change steps`
@@ -179,6 +180,8 @@ The executor:
 - requires exactly one matching TC block in the file;
 - locates exactly one traceability line in that block;
 - replaces only old refs from `plan_item.old_refs` with corresponding refs from `plan_item.new_refs`;
+- skips the item as `skipped_unsafe` when `old_refs` and `new_refs` lengths do not match;
+- must not apply partial ref replacement;
 - uses boundary-aware replacement, so `BSR 1` does not rewrite `BSR 115`;
 - refuses to append refs when no old refs are found;
 - writes no line outside the traceability field.

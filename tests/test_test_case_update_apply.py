@@ -116,6 +116,36 @@ class TestCaseUpdateApplyTests(unittest.TestCase):
             self.assertIn("no old refs found", report.apply_items[0].skipped_reason or "")
             self.assertEqual(original, tc_path.read_text(encoding="utf-8"))
 
+    def test_old_refs_new_refs_length_mismatch_is_skipped_unsafe(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, tc_dir, tc_path = setup_root(temp_dir, traceability="REQ-DEMO-OLD, BSR 1")
+            original = tc_path.read_text(encoding="utf-8")
+            plan_path, _summary_path = write_plan(
+                root,
+                tc_dir,
+                [
+                    safe_traceability_item(
+                        tc_path,
+                        old_refs=["REQ-DEMO-OLD", "BSR 1"],
+                        new_refs=["REQ-DEMO-NEW"],
+                    )
+                ],
+            )
+
+            report = apply_test_case_update_plan(
+                update_plan_path=plan_path,
+                test_cases_dir=tc_dir,
+                out_dir=root,
+                dry_run=False,
+            )
+
+            self.assertEqual("skipped_unsafe", report.apply_items[0].apply_status)
+            self.assertIn("old_refs/new_refs length mismatch", report.apply_items[0].skipped_reason or "")
+            self.assertEqual(original, tc_path.read_text(encoding="utf-8"))
+            self.assertIsNone(report.apply_items[0].backup_path)
+            self.assertEqual([], report.summary["backups_created"])
+            self.assertFalse((root / "backups").exists())
+
     def test_multiple_tc_blocks_with_same_id_is_skipped_unsafe(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, tc_dir, tc_path = setup_root(temp_dir)
@@ -339,6 +369,7 @@ def safe_traceability_item(
     *,
     plan_item_id: str = "PLAN-000001",
     test_case_id: str = "TC-001",
+    old_refs: list[str] | None = None,
     new_refs: list[str] | None = None,
 ) -> UpdatePlanItem:
     return UpdatePlanItem(
@@ -349,7 +380,7 @@ def safe_traceability_item(
         file_path=str(tc_path),
         action="traceability_update_only",
         apply_mode="safe_auto_candidate",
-        old_refs=["REQ-DEMO-OLD", "BSR 1"],
+        old_refs=old_refs or ["REQ-DEMO-OLD", "BSR 1"],
         new_refs=new_refs or ["REQ-DEMO-NEW", "BSR 2"],
         required_changes=["update traceability refs only"],
         forbidden_changes=["Do not change steps", "Do not change expected result", "Do not change test data"],
