@@ -29,8 +29,41 @@ class WriterTraceabilityPostApplyValidationTests(unittest.TestCase):
             report = build_validation(ctx)
 
             self.assertEqual("pass", report.validation_status)
+            self.assertTrue(report.final_state_valid)
+            self.assertEqual("uncommitted_expected_change", report.git_change_state)
             self.assertTrue(report.safe_to_commit)
+            self.assertTrue(report.safe_for_next_stage)
+            self.assertEqual("commit_current_diff", report.commit_action)
             self.assertEqual([], report.failed_checks)
+
+    def test_final_state_already_baselined_is_pass_with_warnings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ctx = setup_context(temp_dir)
+            run_git(ctx.root, ["add", str(ctx.tc_path.relative_to(ctx.root)).replace("\\", "/")])
+            run_git(ctx.root, ["commit", "-m", "final-state"])
+
+            report = build_validation(ctx)
+
+            self.assertEqual("pass-with-warnings", report.validation_status)
+            self.assertTrue(report.final_state_valid)
+            self.assertEqual("final_state_already_baselined", report.git_change_state)
+            self.assertFalse(report.safe_to_commit)
+            self.assertTrue(report.safe_for_next_stage)
+            self.assertEqual("nothing_to_commit", report.commit_action)
+            self.assertEqual([], report.failed_checks)
+
+    def test_missing_expected_final_state_fails_when_clean(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            ctx = setup_context(temp_dir)
+            ctx.tc_path.write_text(backup_file_text(), encoding="utf-8", newline="\n")
+
+            report = build_validation(ctx)
+
+            self.assertEqual("failed", report.validation_status)
+            self.assertFalse(report.final_state_valid)
+            self.assertEqual("missing_expected_final_state", report.git_change_state)
+            self.assertFalse(report.safe_for_next_stage)
+            self.assertEqual("investigate", report.commit_action)
 
     def test_fails_if_apply_report_not_applied(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -53,6 +86,7 @@ class WriterTraceabilityPostApplyValidationTests(unittest.TestCase):
 
             self.assertEqual("failed", report.validation_status)
             self.assertFalse(report.safe_to_commit)
+            self.assertEqual("unexpected_changes", report.git_change_state)
             self.assertIn("no_staged_changes", report.failed_checks)
 
     def test_fails_if_other_test_case_file_changed(self) -> None:
@@ -65,6 +99,7 @@ class WriterTraceabilityPostApplyValidationTests(unittest.TestCase):
 
             self.assertEqual("failed", report.validation_status)
             self.assertFalse(report.safe_to_commit)
+            self.assertEqual("unexpected_changes", report.git_change_state)
             self.assertIn("only_expected_test_case_file_changed", report.failed_checks)
 
     def test_fails_if_step_changed(self) -> None:
@@ -79,6 +114,7 @@ class WriterTraceabilityPostApplyValidationTests(unittest.TestCase):
             report = build_validation(ctx)
 
             self.assertEqual("failed", report.validation_status)
+            self.assertEqual("unexpected_changes", report.git_change_state)
             self.assertIn("git_diff_changes_only_traceability_line", report.failed_checks)
             self.assertIn("backup_current_diff_only_expected_traceability_line", report.failed_checks)
 
@@ -94,6 +130,7 @@ class WriterTraceabilityPostApplyValidationTests(unittest.TestCase):
             report = build_validation(ctx)
 
             self.assertEqual("failed", report.validation_status)
+            self.assertFalse(report.final_state_valid)
             self.assertIn("current_traceability_legacy_refs_preserved", report.failed_checks)
             self.assertIn("current_traceability_new_req_refs_present", report.failed_checks)
             self.assertIn("current_traceability_old_req_refs_absent", report.failed_checks)

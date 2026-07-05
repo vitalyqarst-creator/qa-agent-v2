@@ -28,6 +28,13 @@ VALIDATION_PREFIX = "writer-traceability-post-apply-validation"
 
 ValidationStatus = Literal["pass", "pass-with-warnings", "failed", "blocked"]
 CheckStatus = Literal["pass", "warning", "failed", "blocked"]
+GitChangeState = Literal[
+    "uncommitted_expected_change",
+    "final_state_already_baselined",
+    "unexpected_changes",
+    "missing_expected_final_state",
+]
+CommitAction = Literal["commit_current_diff", "nothing_to_commit", "investigate"]
 
 
 @dataclass(frozen=True)
@@ -59,7 +66,11 @@ class WriterTraceabilityPostApplyValidationCheck:
 class WriterTraceabilityPostApplyValidationReport:
     package_id: str
     validation_status: ValidationStatus
+    final_state_valid: bool
+    git_change_state: GitChangeState
     safe_to_commit: bool
+    safe_for_next_stage: bool
+    commit_action: CommitAction
     file_path: str | None
     affected_test_case_ids: list[str]
     checks: list[WriterTraceabilityPostApplyValidationCheck]
@@ -75,7 +86,11 @@ class WriterTraceabilityPostApplyValidationReport:
         return {
             "package_id": self.package_id,
             "validation_status": self.validation_status,
+            "final_state_valid": self.final_state_valid,
+            "git_change_state": self.git_change_state,
             "safe_to_commit": self.safe_to_commit,
+            "safe_for_next_stage": self.safe_for_next_stage,
+            "commit_action": self.commit_action,
             "file_path": self.file_path,
             "affected_test_case_ids": self.affected_test_case_ids,
             "checks": [check.to_dict() for check in self.checks],
@@ -93,7 +108,11 @@ class WriterTraceabilityPostApplyValidationReport:
         return cls(
             package_id=str(data["package_id"]),
             validation_status=data["validation_status"],
+            final_state_valid=bool(data.get("final_state_valid", False)),
+            git_change_state=data.get("git_change_state", "unexpected_changes"),
             safe_to_commit=bool(data["safe_to_commit"]),
+            safe_for_next_stage=bool(data.get("safe_for_next_stage", False)),
+            commit_action=data.get("commit_action", "investigate"),
             file_path=data.get("file_path"),
             affected_test_case_ids=list(data.get("affected_test_case_ids") or []),
             checks=[
@@ -231,6 +250,8 @@ def build_writer_traceability_post_apply_validation(
             git_state=git_state,
             input_paths=input_paths,
             created_by_tool=created_by_tool,
+            final_state_valid=False,
+            git_change_state="unexpected_changes",
         )
 
     expected_file_path = proposal.file_path
@@ -241,39 +262,63 @@ def build_writer_traceability_post_apply_validation(
     if not legacy_refs:
         legacy_refs = _legacy_refs(_single_traceability_line(next(iter(proposal.original_tc_blocks.values()), "")))
 
-    checks.extend(_apply_report_checks(apply_report, package_id))
-    checks.extend(_scope_checks(
+    apply_checks = _apply_report_checks(apply_report, package_id)
+    scope_checks = _scope_checks(
         apply_report=apply_report,
         expected_file_path=expected_file_path,
         expected_tc_ids=expected_tc_ids,
-        git_state=git_state,
-    ))
-    checks.extend(_git_diff_checks(
-        git_state=git_state,
-        file_path=file_path or "",
-        current_text=current_text,
-        affected_tc_ids=affected_test_case_ids,
-    ))
-    checks.extend(_traceability_content_checks(
+    )
+    traceability_checks = _traceability_content_checks(
         current_text=current_text,
         affected_tc_ids=affected_test_case_ids,
         legacy_refs=legacy_refs,
         old_refs=old_refs,
         new_refs=new_refs,
-    ))
-    checks.extend(_registry_checks(
+    )
+    registry_checks = _registry_checks(
         old_refs=old_refs,
         new_refs=new_refs,
         old_registry_req_uids=old_registry_req_uids,
         new_registry_req_uids=new_registry_req_uids,
-    ))
-    checks.extend(_backup_checks(
+    )
+    backup_checks = _backup_checks(
         apply_report=apply_report,
         backup_text=backup_text,
         current_text=current_text,
         affected_tc_ids=affected_test_case_ids,
         old_refs=old_refs,
         new_refs=new_refs,
+    )
+    content_check_ids = {
+        "current_traceability_legacy_refs_preserved",
+        "current_traceability_new_req_refs_present",
+        "current_traceability_old_req_refs_absent",
+        "current_traceability_no_duplicate_req_refs",
+        "old_req_refs_exist_in_registry",
+        "new_req_refs_exist_in_registry",
+        "backup_exists",
+        "backup_contains_old_traceability_refs",
+        "backup_current_diff_only_expected_traceability_line",
+    }
+    content_checks = [*traceability_checks, *registry_checks, *backup_checks]
+    final_state_valid = _final_state_valid(content_checks, content_check_ids)
+    git_change_state = _classify_git_change_state(
+        git_state=git_state,
+        current_text=current_text,
+        affected_tc_ids=affected_test_case_ids,
+        final_state_valid=final_state_valid,
+    )
+    checks.extend(apply_checks)
+    checks.extend(scope_checks)
+    checks.extend(traceability_checks)
+    checks.extend(registry_checks)
+    checks.extend(backup_checks)
+    checks.extend(_git_state_checks(
+        git_state=git_state,
+        file_path=file_path or "",
+        current_text=current_text,
+        affected_tc_ids=affected_test_case_ids,
+        git_change_state=git_change_state,
     ))
 
     return _report(
@@ -286,6 +331,8 @@ def build_writer_traceability_post_apply_validation(
         git_state=git_state,
         input_paths=input_paths,
         created_by_tool=created_by_tool,
+        final_state_valid=final_state_valid,
+        git_change_state=git_change_state,
     )
 
 
@@ -329,7 +376,11 @@ def render_writer_traceability_post_apply_validation_markdown(
         "## Summary",
         "",
         f"- Validation status: `{report.validation_status}`",
+        f"- Final state valid: `{str(report.final_state_valid).lower()}`",
+        f"- Git change state: `{report.git_change_state}`",
         f"- Safe to commit: `{str(report.safe_to_commit).lower()}`",
+        f"- Safe for next stage: `{str(report.safe_for_next_stage).lower()}`",
+        f"- Commit action: `{report.commit_action}`",
         f"- File path: `{report.file_path or 'n/a'}`",
         f"- Affected TC IDs: `{', '.join(report.affected_test_case_ids) or 'n/a'}`",
         f"- Failed checks: `{', '.join(report.failed_checks) or 'none'}`",
@@ -338,6 +389,7 @@ def render_writer_traceability_post_apply_validation_markdown(
         "",
         "## Git State",
         "",
+        f"- Git change state: `{report.git_change_state}`",
         f"- Changed test-case files: `{len(report.git_state.get('changed_test_case_files', []))}`",
         f"- Staged changes empty: `{str(report.git_state.get('cached_diff_empty')).lower()}`",
         f"- Target diff hunks: `{report.git_state.get('target_diff_hunk_count', 0)}`",
@@ -386,10 +438,7 @@ def _scope_checks(
     apply_report: WriterTraceabilityUpdateApplyReport,
     expected_file_path: str | None,
     expected_tc_ids: list[str],
-    git_state: dict[str, Any],
 ) -> list[WriterTraceabilityPostApplyValidationCheck]:
-    changed_files = list(git_state.get("changed_test_case_files") or [])
-    expected_changed_file = str(git_state.get("target_file") or apply_report.file_path or "").replace("\\", "/")
     return [
         _check(
             "affected_file_expected",
@@ -403,56 +452,65 @@ def _scope_checks(
             "affected TC IDs match writer proposal.",
             {"expected": expected_tc_ids, "actual": apply_report.affected_test_case_ids},
         ),
-        _check(
-            "only_expected_test_case_file_changed",
-            changed_files == [expected_changed_file],
-            "only expected test-case file has unstaged changes.",
-            {"changed_test_case_files": changed_files},
-        ),
-        _check(
-            "no_staged_changes",
-            bool(git_state) and git_state.get("cached_diff_empty") is True,
-            "no staged changes are present for test-cases.",
-            {"cached_diff": git_state.get("cached_diff", "")},
-        ),
     ]
 
 
-def _git_diff_checks(
+def _git_state_checks(
     *,
     git_state: dict[str, Any],
     file_path: str,
     current_text: str,
     affected_tc_ids: list[str],
+    git_change_state: GitChangeState,
 ) -> list[WriterTraceabilityPostApplyValidationCheck]:
     diff_text = str(git_state.get("target_diff") or "")
     changed_lines = _changed_lines_from_unified_diff(diff_text)
     changed_tcs = _changed_tcs_for_line_numbers(current_text, [line["new_lineno"] for line in changed_lines if line.get("new_lineno")])
     non_trace_changes = [line for line in changed_lines if not _is_traceability_line(str(line.get("text") or ""))]
+    changed_files = list(git_state.get("changed_test_case_files") or [])
+    expected_changed_file = str(git_state.get("target_file") or file_path).replace("\\", "/")
+    clean_valid = git_change_state == "final_state_already_baselined"
+    clean_message = "no current git diff because final state is already baselined / clean."
     return [
+        _check(
+            "only_expected_test_case_file_changed",
+            changed_files == [expected_changed_file],
+            "only expected test-case file has unstaged changes." if not clean_valid else clean_message,
+            {"changed_test_case_files": changed_files, "git_change_state": git_change_state},
+            warning=clean_valid,
+        ),
+        _check(
+            "no_staged_changes",
+            bool(git_state) and git_state.get("cached_diff_empty") is True,
+            "no staged changes are present for test-cases.",
+            {"cached_diff": git_state.get("cached_diff", ""), "git_change_state": git_change_state},
+        ),
         _check(
             "git_diff_has_one_hunk",
             int(git_state.get("target_diff_hunk_count") or 0) == 1,
-            "target git diff contains exactly one changed hunk.",
-            {"hunk_count": git_state.get("target_diff_hunk_count")},
+            "target git diff contains exactly one changed hunk." if not clean_valid else clean_message,
+            {"hunk_count": git_state.get("target_diff_hunk_count"), "git_change_state": git_change_state},
+            warning=clean_valid,
         ),
         _check(
             "git_diff_changed_tc_expected",
             sorted(changed_tcs) == sorted(affected_tc_ids),
-            "changed git diff lines are inside expected TC IDs.",
-            {"changed_tc_ids": changed_tcs, "affected_test_case_ids": affected_tc_ids},
+            "changed git diff lines are inside expected TC IDs." if not clean_valid else clean_message,
+            {"changed_tc_ids": changed_tcs, "affected_test_case_ids": affected_tc_ids, "git_change_state": git_change_state},
+            warning=clean_valid,
         ),
         _check(
             "git_diff_changes_only_traceability_line",
             bool(changed_lines) and not non_trace_changes,
-            "git diff changes only traceability lines.",
-            {"changed_lines": changed_lines, "non_trace_changes": non_trace_changes},
+            "git diff changes only traceability lines." if not clean_valid else clean_message,
+            {"changed_lines": changed_lines, "non_trace_changes": non_trace_changes, "git_change_state": git_change_state},
+            warning=clean_valid,
         ),
         _check(
             "git_diff_no_non_traceability_content_changed",
-            not non_trace_changes,
+            not non_trace_changes or clean_valid,
             "no headings, steps, expected result, test data, or unrelated TC content changed.",
-            {"file_path": file_path, "non_trace_changes": non_trace_changes},
+            {"file_path": file_path, "non_trace_changes": non_trace_changes, "git_change_state": git_change_state},
         ),
     ]
 
@@ -539,6 +597,57 @@ def _backup_checks(
     ]
 
 
+def _final_state_valid(
+    checks: list[WriterTraceabilityPostApplyValidationCheck],
+    required_check_ids: set[str],
+) -> bool:
+    statuses = {check.check_id: check.status for check in checks}
+    return all(statuses.get(check_id) == "pass" for check_id in required_check_ids)
+
+
+def _classify_git_change_state(
+    *,
+    git_state: dict[str, Any],
+    current_text: str,
+    affected_tc_ids: list[str],
+    final_state_valid: bool,
+) -> GitChangeState:
+    changed_files = list(git_state.get("changed_test_case_files") or [])
+    target_file = str(git_state.get("target_file") or "")
+    cached_clean = git_state.get("cached_diff_empty") is True
+    diff_text = str(git_state.get("target_diff") or "")
+    changed_lines = _changed_lines_from_unified_diff(diff_text)
+    changed_tcs = _changed_tcs_for_line_numbers(
+        current_text,
+        [line["new_lineno"] for line in changed_lines if line.get("new_lineno")],
+    )
+    non_trace_changes = [
+        line for line in changed_lines
+        if not _is_traceability_line(str(line.get("text") or ""))
+    ]
+    expected_uncommitted = (
+        cached_clean
+        and changed_files == [target_file]
+        and int(git_state.get("target_diff_hunk_count") or 0) == 1
+        and bool(changed_lines)
+        and sorted(changed_tcs) == sorted(affected_tc_ids)
+        and not non_trace_changes
+    )
+    git_clean = (
+        cached_clean
+        and not changed_files
+        and int(git_state.get("target_diff_hunk_count") or 0) == 0
+        and not diff_text
+    )
+    if expected_uncommitted:
+        return "uncommitted_expected_change"
+    if git_clean and final_state_valid:
+        return "final_state_already_baselined"
+    if git_clean and not final_state_valid:
+        return "missing_expected_final_state"
+    return "unexpected_changes"
+
+
 def _report(
     *,
     package_id: str,
@@ -550,6 +659,8 @@ def _report(
     git_state: dict[str, Any],
     input_paths: dict[str, Any],
     created_by_tool: str,
+    final_state_valid: bool,
+    git_change_state: GitChangeState,
 ) -> WriterTraceabilityPostApplyValidationReport:
     warnings = _unique(warnings)
     blocked_checks = [check.check_id for check in checks if check.status == "blocked"]
@@ -559,10 +670,18 @@ def _report(
         validation_status: ValidationStatus = "blocked"
     elif failed_checks:
         validation_status = "failed"
-    elif warnings or any(check.status == "warning" for check in checks):
+    elif warnings or any(check.status == "warning" for check in checks) or git_change_state == "final_state_already_baselined":
         validation_status = "pass-with-warnings"
     else:
         validation_status = "pass"
+    commit_action = _commit_action(git_change_state)
+    safe_for_next_stage = _safe_for_next_stage(
+        validation_status=validation_status,
+        final_state_valid=final_state_valid,
+        git_change_state=git_change_state,
+        failed_checks=failed_checks,
+        blocking_reasons=blocking_reasons,
+    )
     safe_to_commit = _safe_to_commit(
         validation_status=validation_status,
         failed_checks=failed_checks,
@@ -570,11 +689,16 @@ def _report(
         git_state=git_state,
         file_path=file_path,
         checks=checks,
+        git_change_state=git_change_state,
     )
     return WriterTraceabilityPostApplyValidationReport(
         package_id=package_id,
         validation_status=validation_status,
+        final_state_valid=final_state_valid,
+        git_change_state=git_change_state,
         safe_to_commit=safe_to_commit,
+        safe_for_next_stage=safe_for_next_stage,
+        commit_action=commit_action,
         file_path=file_path,
         affected_test_case_ids=affected_test_case_ids,
         checks=checks,
@@ -596,7 +720,10 @@ def _safe_to_commit(
     git_state: dict[str, Any],
     file_path: str | None,
     checks: list[WriterTraceabilityPostApplyValidationCheck],
+    git_change_state: GitChangeState,
 ) -> bool:
+    if git_change_state != "uncommitted_expected_change":
+        return False
     if validation_status not in {"pass", "pass-with-warnings"} or failed_checks or blocking_reasons:
         return False
     expected = str(file_path or "").replace("\\", "/")
@@ -616,6 +743,31 @@ def _safe_to_commit(
         and git_state.get("cached_diff_empty") is True
         and all(statuses.get(check_id) == "pass" for check_id in required_passes)
     )
+
+
+def _safe_for_next_stage(
+    *,
+    validation_status: ValidationStatus,
+    final_state_valid: bool,
+    git_change_state: GitChangeState,
+    failed_checks: list[str],
+    blocking_reasons: list[str],
+) -> bool:
+    return (
+        final_state_valid
+        and validation_status in {"pass", "pass-with-warnings"}
+        and not failed_checks
+        and not blocking_reasons
+        and git_change_state in {"uncommitted_expected_change", "final_state_already_baselined"}
+    )
+
+
+def _commit_action(git_change_state: GitChangeState) -> CommitAction:
+    if git_change_state == "uncommitted_expected_change":
+        return "commit_current_diff"
+    if git_change_state == "final_state_already_baselined":
+        return "nothing_to_commit"
+    return "investigate"
 
 
 def _collect_git_state(workspace_root: Path, test_cases_dir: Path, target_file: Path) -> dict[str, Any]:
