@@ -265,7 +265,10 @@ def build_manual_decision_answer_pack(
     for template_row in template.reviewer_rows:
         matrix_row = matrix_rows.get(template_row.row_id)
         allowed_ids = [str(option.get("option_id")) for option in template_row.allowed_options]
-        allowed_labels = [str(option.get("label")) for option in template_row.allowed_options]
+        allowed_labels = [
+            _ru_option_label(str(option.get("option_id") or ""), str(option.get("label") or ""))
+            for option in template_row.allowed_options
+        ]
         rows.append(
             ReviewerAnswerPackRow(
                 row_id=template_row.row_id,
@@ -274,13 +277,13 @@ def build_manual_decision_answer_pack(
                 reviewer_role=template_row.reviewer_role,
                 affected_drafts=template_row.affected_drafts,
                 affected_requirements=template_row.affected_requirements,
-                decision_required=template_row.decision_required,
-                evidence_summary=template_row.evidence_summary,
+                decision_required=_ru_decision_required(template_row.decision_required),
+                evidence_summary=_ru_evidence_summary(template_row.evidence_summary),
                 allowed_option_ids=allowed_ids,
                 allowed_option_labels=allowed_labels,
                 requires_source_evidence=template_row.requires_source_evidence,
                 requires_existing_tc_review=template_row.requires_existing_tc_review,
-                required_fields=template_row.required_answer_fields,
+                required_fields=[_ru_required_field(value) for value in template_row.required_answer_fields],
                 selected_option_id="",
                 reviewer_rationale="",
                 source_evidence="",
@@ -609,22 +612,22 @@ def _answer_pack(
         csv_columns=list(CSV_COLUMNS),
         allowed_options_catalog=allowed_options_catalog or {},
         instructions_for_reviewer=[
-            "Fill only editable fields from selected_option_id onward.",
-            "Select at most one allowed option per row.",
-            "Leave selected_option_id empty if the row is not answered yet.",
-            "Use '; ' to separate multiple source evidence or existing TC notes.",
-            "After import, rerun Stage 9D.7 validation before any future Stage 9E.",
+            "Заполняйте только редактируемые поля, начиная с selected_option_id.",
+            "Выберите не более одного allowed option для каждой строки.",
+            "Оставьте selected_option_id пустым, если по строке пока нет решения.",
+            "Используйте '; ' для разделения нескольких ссылок на источник или заметок по существующим TC.",
+            "После импорта обязательно повторно запустите Stage 9D.7 validation перед любым будущим Stage 9E.",
         ],
         safety_rules=[
-            "This artifact does not create or edit canonical test cases.",
-            "Existing TC may be used only as coverage evidence.",
-            "Stage 9E requires separate validation.",
-            "Do not run --apply, git apply, or external patch from this pack.",
+            "Этот artifact не создает и не редактирует canonical test cases.",
+            "Существующие TC можно использовать только как evidence покрытия/сравнения.",
+            "Stage 9E требует отдельной validation.",
+            "Не запускайте --apply, git apply или внешний patch из этого pack.",
         ],
         import_instructions=[
-            f"Save the filled CSV as `{PACK_PREFIX}-{package_id}.filled.csv` in the work directory.",
-            "Run scripts/import_manual_decision_answer_pack.py to convert filled CSV into reviewer answers JSON.",
-            "Run Stage 9D.7 validation after import.",
+            f"Сохраните заполненный CSV как `{PACK_PREFIX}-{package_id}.filled.csv` в work directory.",
+            "Запустите scripts/import_manual_decision_answer_pack.py, чтобы конвертировать filled CSV в reviewer answers JSON.",
+            "После импорта запустите Stage 9D.7 validation.",
         ],
         canonical_write_allowed=False,
         manual_review_required=True,
@@ -680,7 +683,8 @@ def _import_report(
 
 
 def _write_pack_csv(pack: ManualDecisionAnswerPack, path: Path) -> None:
-    with Path(path).open("w", encoding="utf-8", newline="") as handle:
+    # UTF-8 BOM keeps the reviewer-facing CSV readable in Windows Excel.
+    with Path(path).open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=CSV_COLUMNS, lineterminator="\n")
         writer.writeheader()
         for row in pack.reviewer_rows:
@@ -766,6 +770,83 @@ def _schema(pack: ManualDecisionAnswerPack) -> dict[str, Any]:
             ],
         },
     }
+
+
+def _ru_option_label(option_id: str, fallback: str) -> str:
+    labels = {
+        "OPT-SEPARATE": "Создать отдельный новый TC",
+        "OPT-EXTEND": "Расширить существующий TC",
+        "OPT-NO-NEW": "Не создавать новый TC - существующее покрытие достаточно",
+        "OPT-DEFER": "Отложить решение",
+        "OPT-CLARIFY": "Запросить уточнение источника",
+        "OPT-REVISE": "Переработать draft по подтвержденному source fact",
+        "OPT-SPLIT": "Разделить candidate на несколько меньших draft",
+        "OPT-REPLACE": "Переписать rejected draft от источника",
+        "OPT-MANUAL": "Оставить manual-only",
+    }
+    return labels.get(option_id, fallback)
+
+
+def _ru_required_field(value: str) -> str:
+    replacements = {
+        "row_id": "row_id",
+        "cluster_id": "cluster_id",
+        "selected_option_id": "selected_option_id",
+        "reviewer_rationale": "reviewer_rationale - почему выбран этот вариант",
+        "source_evidence": "source_evidence - ссылки на ФТ/REQ/source/clarification",
+        "existing_tc_review_notes": "existing_tc_review_notes - заметки по existing TC только как coverage evidence",
+        "no_new_tc_rationale when selected option is no_new_tc_with_rationale": "no_new_tc_rationale - обязательно при OPT-NO-NEW",
+        "defer_reason when selected option is defer": "defer_reason - обязательно при OPT-DEFER",
+        "split_guidance when selected option is split_candidate": "split_guidance - обязательно при OPT-SPLIT",
+    }
+    return replacements.get(value, value)
+
+
+def _ru_decision_required(value: str) -> str:
+    replacements = {
+        "Is this candidate already covered, an extension of an existing TC, a separate new TC, or deferred?": (
+            "Определите, candidate уже покрыт существующим TC, должен расширить существующий TC, "
+            "требует отдельный новый TC или должен быть отложен."
+        ),
+        "Which source-backed fact or clarification resolves this missing action/oracle/object/condition group?": (
+            "Укажите, какой подтвержденный источником факт или clarification закрывает нехватку "
+            "action/oracle/object/condition."
+        ),
+        "Should the rejected draft be rewritten from source, split, routed to existing TC extension, deferred, or closed as no-new-TC?": (
+            "Решите, rejected draft нужно переписать от источника, разделить, направить в расширение "
+            "существующего TC, отложить или закрыть как no-new-TC."
+        ),
+        "Should this candidate be deferred, closed as no-new-TC, clarified, split, or kept manual-only?": (
+            "Решите, candidate нужно отложить, закрыть как no-new-TC, уточнить, разделить "
+            "или оставить manual-only."
+        ),
+    }
+    return replacements.get(value, value)
+
+
+def _ru_evidence_summary(value: str) -> str:
+    text = value
+    replacements = {
+        "risk=medium": "risk=medium",
+        "risk=high": "risk=high",
+        "cluster_action=differentiate": "cluster_action=differentiate",
+        "cluster_action=defer": "cluster_action=defer",
+        "cluster_action=maybe_extend_existing_tc": "cluster_action=maybe_extend_existing_tc",
+        "Medium duplicate risk: draft is allowed only with clear differentiation and manual review.": (
+            "Средний duplicate risk: draft допустим только при явном отличии и manual review."
+        ),
+        "High duplicate risk: candidate may already be covered.": (
+            "Высокий duplicate risk: candidate может уже быть покрыт."
+        ),
+        "Rejected or weak draft requires replacement strategy": (
+            "Rejected/weak draft требует replacement strategy"
+        ),
+        "Draft decision remains": "Draft decision остается",
+        "and needs explicit reviewer disposition.": "и требует явного решения reviewer.",
+    }
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text
 
 
 def _load_template(path: Path, blocking_reasons: list[str]) -> ManualDecisionAnswerTemplate | None:

@@ -38,6 +38,15 @@ class ManualDecisionAnswerPackTests(unittest.TestCase):
 
             self.assertEqual(CSV_COLUMNS, list(rows[0].keys()))
 
+    def test_exports_csv_with_utf8_bom_for_excel(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, paths = setup_pack_fixture(Path(temp_dir))
+            pack = build_pack(paths)
+
+            _md_path, csv_path, _schema_path = write_manual_decision_answer_pack(pack, root / "work")
+
+            self.assertEqual(b"\xef\xbb\xbf", csv_path.read_bytes()[:3])
+
     def test_csv_has_one_row_per_template_reviewer_row(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, paths = setup_pack_fixture(Path(temp_dir))
@@ -92,7 +101,17 @@ class ManualDecisionAnswerPackTests(unittest.TestCase):
 
             self.assertIn("Safety Rules", markdown)
             self.assertIn("How To Fill Answers", markdown)
-            self.assertIn("Existing TC may be used only as coverage evidence", markdown)
+            self.assertIn("Существующие TC можно использовать только как evidence покрытия", markdown)
+
+    def test_exported_option_labels_are_russian(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, paths = setup_pack_fixture(Path(temp_dir))
+            pack = build_pack(paths)
+
+            _md_path, csv_path, _schema_path = write_manual_decision_answer_pack(pack, root / "work")
+            rows = read_csv(csv_path)
+
+            self.assertIn("Создать отдельный новый TC", rows[0]["allowed_option_labels"])
 
     def test_schema_json_is_written(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
