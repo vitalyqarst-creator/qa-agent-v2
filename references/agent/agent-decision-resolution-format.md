@@ -61,6 +61,7 @@ Required fields:
 - `normalized_effect`
 - `affected_drafts`
 - `affected_requirements`
+- `draft_mapping_evidence`
 - `requires_human_review`
 - `enables_stage_9e_draft_only`
 - `creates_or_edits_canonical_tc`: always `false`
@@ -77,6 +78,20 @@ Required fields:
 - Rows with missing source-backed action or observable expected result must be routed to `needs_human_review`, `deferred`, or `request_source_clarification`.
 - Stage 9E scope, if any, must be subset-based and draft-only.
 - Canonical write remains disabled even when `stage_9e_allowed=true`.
+- Stage 9E candidate rows with missing affected drafts must use only high/medium confidence req-to-draft mappings from real source proposal draft ids.
+- The resolver must not invent draft ids or use low-confidence mappings to enable Stage 9E.
+
+## Draft Mapping Diagnostics
+
+`decision_summary` should expose draft mapping visibility:
+
+- `draft_mapping_diagnostics`
+- `req_to_draft_map_count`
+- `unmapped_req_uids`
+- `rows_with_missing_affected_drafts`
+- `fixed_rows`
+
+`draft_mapping_evidence` records which real draft ids were linked to the decision row and from which source artifact. Existing TC evidence remains coverage/comparison evidence only and must not be used to derive business behavior.
 
 ## Stage 9E Gate
 

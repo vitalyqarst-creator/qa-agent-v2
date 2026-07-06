@@ -102,7 +102,11 @@ def build_agent_driven_create_new_goal_report(
         executed.append({"stage": "Stage 9E", "status": stage_9e.get("proposal_status")})
         artifacts.extend([str(stage_9e_path), str(work_dir / f"new-tc-revised-draft-proposal-{package_id}.md")])
     else:
-        reason = "hardened Stage 9D.9 gate did not allow Stage 9E"
+        reason = (
+            "Stage 9E intentionally not created in this stage; hardened gate allows a future Stage 9E"
+            if hardened_gate.get("stage_9e_allowed")
+            else "hardened Stage 9D.9 gate did not allow Stage 9E"
+        )
         skipped.append({"stage": "Stage 9E", "reason": reason})
 
     if stage_9f:
@@ -248,6 +252,8 @@ def _recommended_next_action(
         return "Improve source grounding or agent decision resolver for rejected rows before Stage 9E."
     if validation and not validation.stage_9e_gate_hardened.get("stage_9e_allowed"):
         return "Do not run Stage 9E. Fix rejected agent decisions/source grounding, especially rejected Stage 9E candidate rows."
+    if validation and validation.stage_9e_gate_hardened.get("stage_9e_allowed") and not stage_9e:
+        return "Next safe step: run Stage 9E draft-only proposal for the hardened validated scope."
     return "Review generated artifacts and decide the next safe stage."
 
 

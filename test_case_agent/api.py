@@ -261,6 +261,11 @@ from test_case_agent.manual_decision_answer_pack import (
     write_manual_decision_answer_pack,
     write_manual_decision_answer_pack_import_report,
 )
+from test_case_agent.draft_mapping import (
+    build_req_to_draft_map,
+    draft_ids_for_req_uids,
+    draft_mapping_entries_for_req_uids,
+)
 from test_case_agent.agent_decision_resolver import (
     AgentDecision,
     AgentDecisionResolution,
@@ -498,9 +503,12 @@ __all__ = [
     "build_manual_decision_matrix",
     "build_manual_decision_answer_template",
     "build_manual_decision_answer_pack",
+    "build_req_to_draft_map",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
+    "draft_ids_for_req_uids",
+    "draft_mapping_entries_for_req_uids",
     "load_requirements_diff",
     "load_impact_report",
     "load_agent_capability_improvement_plan",

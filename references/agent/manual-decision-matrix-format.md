@@ -59,6 +59,22 @@ Raw manual findings from decision pack, residual analysis, draft review and revi
 
 The JSON may retain raw findings as `compressed_manual_questions`. Markdown should prioritize compact reviewer rows and concise evidence summaries.
 
+## Req-To-Draft Mapping
+
+Stage 9D.6 should build a conservative `req_uid -> draft_id` map from real source proposal drafts and supporting Stage 9 artifacts. It must not create synthetic draft ids.
+
+Summary diagnostics should include:
+
+- `draft_mapping_diagnostics`
+- `req_to_draft_map_count`
+- `unmapped_req_uids`
+- `rows_with_missing_affected_drafts`
+- `fixed_rows`
+
+High-confidence mappings require the source draft proposal to directly list the `req_uid` or `candidate_req_uid`. Medium confidence may use a unique `source_req_id` relation. Low-confidence mappings must not be used to make a row Stage 9E eligible.
+
+Reviewer rows should populate `affected_drafts` when affected requirements map to real draft candidates. If no real draft maps, the row remains draftless and the diagnostic warning should explain the gap.
+
 ## Decision Options
 
 Each reviewer row exposes explicit options. Options record reviewer intent only and must have `creates_or_edits_canonical_tc=false`.

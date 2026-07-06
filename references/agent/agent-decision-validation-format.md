@@ -54,6 +54,10 @@ Stage 9D.9 validates `agent_decision_resolution` and independently hardens the S
 - `coverage_checks`
 - `duplicate_risk_checks`
 - `split_candidate_checks`
+- `draft_mapping_checks`
+- `mapped_draft_ids`
+- `draft_mapping_sources`
+- `draft_mapping_confidence`
 - `existing_tc_evidence_checks`
 - `reasoning`
 - `blocking_reasons`
@@ -95,6 +99,9 @@ Reject or block when:
 - a Stage 9E candidate uses existing TC as a business-rule source;
 - a Stage 9E candidate has safety warnings;
 - a Stage 9E candidate implies canonical creation/edit/apply.
+- a Stage 9E candidate lacks real affected draft ids or draft mapping evidence.
+- mapped draft ids do not exist in the source proposal.
+- mapped draft ids are only low confidence.
 
 For `split_candidate`:
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from test_case_agent import (
     ManualDecisionMatrix,
+    build_req_to_draft_map,
     build_manual_decision_matrix,
     load_manual_decision_matrix,
     write_manual_decision_matrix,
@@ -137,6 +138,65 @@ class ManualDecisionMatrixTests(unittest.TestCase):
             matrix = build_matrix(paths, root)
 
             self.assertFalse(matrix.ready_for_revised_draft_proposal_after_matrix)
+
+    def test_builds_req_to_draft_mapping_from_draft_proposal(self) -> None:
+        req_to_draft = build_req_to_draft_map(
+            draft_proposal={
+                "draft_test_cases": [
+                    {
+                        "draft_id": "DRAFT-REQ",
+                        "proposed_tc_id": "TC-REQ",
+                        "source_requirement_uids": ["REQ-DEMO-002"],
+                    }
+                ]
+            }
+        )
+
+        self.assertEqual(["DRAFT-REQ"], [entry["draft_id"] for entry in req_to_draft["REQ-DEMO-002"]])
+        self.assertEqual("high", req_to_draft["REQ-DEMO-002"][0]["confidence"])
+
+    def test_req_to_draft_mapping_does_not_invent_draft_ids(self) -> None:
+        req_to_draft = build_req_to_draft_map(
+            draft_proposal={"draft_test_cases": []},
+            decision_pack={
+                "draft_decisions": [
+                    {"draft_id": "DRAFT-MISSING", "candidate_req_uids": ["REQ-DEMO-002"]}
+                ]
+            },
+        )
+
+        self.assertEqual({}, req_to_draft)
+
+    def test_matrix_rows_receive_affected_drafts_from_req_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, paths = setup_matrix_fixture(Path(temp_dir))
+            decision_pack = decision_pack_payload()
+            decision_pack["source_grounding_resolutions"] = []
+            write_json(paths["decision_pack_path"], decision_pack)
+            write_json(
+                paths["draft_proposal_path"],
+                {
+                    "package_id": "WPKG-000001",
+                    "draft_test_cases": [
+                        {
+                            "draft_id": "DRAFT-002",
+                            "proposed_tc_id": "TC-NEW-002",
+                            "source_requirement_uids": ["REQ-DEMO-002"],
+                        }
+                    ],
+                },
+            )
+
+            matrix = build_matrix(paths, root)
+            source_rows = [
+                row
+                for row in matrix.reviewer_decision_rows
+                if "REQ-DEMO-002" in row.affected_requirements
+            ]
+
+            self.assertTrue(source_rows)
+            self.assertIn("DRAFT-002", source_rows[0].affected_drafts)
+            self.assertIn(source_rows[0].row_id, matrix.summary["fixed_rows"])
 
     def test_does_not_mark_stage_9e_ready_without_reviewer_answers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

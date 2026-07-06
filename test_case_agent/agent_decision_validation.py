@@ -43,6 +43,10 @@ class AgentDecisionValidationResult:
     coverage_checks: list[dict[str, Any]]
     duplicate_risk_checks: list[dict[str, Any]]
     split_candidate_checks: list[dict[str, Any]]
+    draft_mapping_checks: list[dict[str, Any]]
+    mapped_draft_ids: list[str]
+    draft_mapping_sources: list[str]
+    draft_mapping_confidence: str | None
     existing_tc_evidence_checks: list[dict[str, Any]]
     reasoning: str
     blocking_reasons: list[str]
@@ -71,6 +75,10 @@ class AgentDecisionValidationResult:
             coverage_checks=list(data.get("coverage_checks") or []),
             duplicate_risk_checks=list(data.get("duplicate_risk_checks") or []),
             split_candidate_checks=list(data.get("split_candidate_checks") or []),
+            draft_mapping_checks=list(data.get("draft_mapping_checks") or []),
+            mapped_draft_ids=list(data.get("mapped_draft_ids") or []),
+            draft_mapping_sources=list(data.get("draft_mapping_sources") or []),
+            draft_mapping_confidence=data.get("draft_mapping_confidence"),
             existing_tc_evidence_checks=list(data.get("existing_tc_evidence_checks") or []),
             reasoning=str(data.get("reasoning") or ""),
             blocking_reasons=list(data.get("blocking_reasons") or []),
@@ -314,12 +322,12 @@ def render_agent_decision_validation_markdown(report: AgentDecisionValidationRep
         "",
         "## Decision Results",
         "",
-        "| Row | Action | Original status | Validation result | Eligible | Reasoning | Blockers |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
+        "| Row | Action | Original status | Validation result | Eligible | Mapped drafts | Mapping confidence | Reasoning | Blockers |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for result in report.decision_validation_results:
         lines.append(
-            f"| {result.row_id} | `{result.selected_allowed_next_action}` | `{result.original_decision_status}` | `{result.validation_result}` | `{result.stage_9e_eligible}` | {_md(_short(result.reasoning, 180))} | {_md('; '.join(result.blocking_reasons) or '-')} |"
+            f"| {result.row_id} | `{result.selected_allowed_next_action}` | `{result.original_decision_status}` | `{result.validation_result}` | `{result.stage_9e_eligible}` | {_md(', '.join(result.mapped_draft_ids) or '-')} | `{result.draft_mapping_confidence or '-'}` | {_md(_short(result.reasoning, 180))} | {_md('; '.join(result.blocking_reasons) or '-')} |"
         )
     lines.extend(
         [
@@ -377,6 +385,17 @@ def _validate_decision(
         ),
     ]
     split_candidate_checks = _split_candidate_checks(decision, draft_ids)
+    draft_mapping_checks = _draft_mapping_checks(decision, draft_ids)
+    mapped_draft_ids = sorted({str(entry.get("draft_id")) for entry in decision.draft_mapping_evidence if entry.get("draft_id")})
+    draft_mapping_sources = sorted(
+        {
+            str(source)
+            for entry in decision.draft_mapping_evidence
+            for source in (entry.get("sources") or [entry.get("source")])
+            if source
+        }
+    )
+    draft_mapping_confidence = _max_mapping_confidence(decision.draft_mapping_evidence)
     existing_tc_evidence_checks = [
         _check(
             "existing_tc_not_business_source",
@@ -392,6 +411,7 @@ def _validate_decision(
         + coverage_checks
         + duplicate_risk_checks
         + split_candidate_checks
+        + draft_mapping_checks
         + existing_tc_evidence_checks
     )
     blockers = [check["message"] for check in all_checks if check["status"] == "failed"]
@@ -438,6 +458,10 @@ def _validate_decision(
         coverage_checks=coverage_checks,
         duplicate_risk_checks=duplicate_risk_checks,
         split_candidate_checks=split_candidate_checks,
+        draft_mapping_checks=draft_mapping_checks,
+        mapped_draft_ids=mapped_draft_ids,
+        draft_mapping_sources=draft_mapping_sources,
+        draft_mapping_confidence=draft_mapping_confidence,
         existing_tc_evidence_checks=existing_tc_evidence_checks,
         reasoning=reasoning,
         blocking_reasons=blockers,
@@ -476,6 +500,47 @@ def _split_candidate_checks(decision: AgentDecision, draft_ids: set[str]) -> lis
             "split boundaries are not fully source-backed by table context and complete source facts",
         ),
     ]
+
+
+def _draft_mapping_checks(decision: AgentDecision, draft_ids: set[str]) -> list[dict[str, Any]]:
+    if decision.selected_allowed_next_action not in STAGE_9E_ACTIONS:
+        return [_check("draft_mapping_not_required", True, "draft mapping is not required for non-Stage 9E action")]
+    mapped_draft_ids = {str(entry.get("draft_id")) for entry in decision.draft_mapping_evidence if entry.get("draft_id")}
+    has_mapping_evidence = bool(mapped_draft_ids)
+    if decision.affected_drafts and not mapped_draft_ids:
+        has_mapping_evidence = True
+        mapped_draft_ids = set(decision.affected_drafts)
+    return [
+        _check(
+            "draft_mapping_present",
+            has_mapping_evidence,
+            "Stage 9E candidate has draft mapping evidence or matrix-provided affected drafts",
+            "Stage 9E candidate lacks draft mapping evidence",
+        ),
+        _check(
+            "mapped_drafts_exist",
+            bool(mapped_draft_ids) and all(draft_id in draft_ids for draft_id in mapped_draft_ids),
+            "mapped draft ids exist in source proposal",
+            "mapped draft ids are absent from source proposal",
+        ),
+        _check(
+            "draft_mapping_not_low_confidence",
+            _max_mapping_confidence(decision.draft_mapping_evidence) != "low",
+            "draft mapping confidence is not low",
+            "draft mapping confidence is low",
+        ),
+    ]
+
+
+def _max_mapping_confidence(entries: list[dict[str, Any]]) -> str | None:
+    rank = {"low": 0, "medium": 1, "high": 2}
+    best: tuple[int, str | None] = (-1, None)
+    for entry in entries:
+        confidence = str(entry.get("confidence") or "")
+        value = rank.get(confidence, -1)
+        if value > best[0]:
+            best = (value, confidence)
+    return best[1]
 
 
 def _top_level_checks(package_id: str, resolution: AgentDecisionResolution, matrix: Any) -> list[dict[str, Any]]:

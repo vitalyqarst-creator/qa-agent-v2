@@ -8,6 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from test_case_agent.draft_mapping import (
+    build_req_to_draft_map,
+    draft_ids_for_req_uids,
+    draft_mapping_entries_for_req_uids,
+)
 from test_case_agent.manual_decision_matrix import DecisionOption, ManualDecisionMatrix, load_manual_decision_matrix
 
 CREATED_BY_TOOL = "test_case_agent.agent_decision_resolver"
@@ -102,6 +107,7 @@ class AgentDecision:
     normalized_effect: str
     affected_drafts: list[str]
     affected_requirements: list[str]
+    draft_mapping_evidence: list[dict[str, Any]]
     requires_human_review: bool
     enables_stage_9e_draft_only: bool
     creates_or_edits_canonical_tc: bool
@@ -130,6 +136,7 @@ class AgentDecision:
             "normalized_effect": self.normalized_effect,
             "affected_drafts": self.affected_drafts,
             "affected_requirements": self.affected_requirements,
+            "draft_mapping_evidence": self.draft_mapping_evidence,
             "requires_human_review": self.requires_human_review,
             "enables_stage_9e_draft_only": self.enables_stage_9e_draft_only,
             "creates_or_edits_canonical_tc": self.creates_or_edits_canonical_tc,
@@ -162,6 +169,7 @@ class AgentDecision:
             normalized_effect=str(data["normalized_effect"]),
             affected_drafts=list(data.get("affected_drafts") or []),
             affected_requirements=list(data.get("affected_requirements") or []),
+            draft_mapping_evidence=list(data.get("draft_mapping_evidence") or []),
             requires_human_review=bool(data.get("requires_human_review")),
             enables_stage_9e_draft_only=bool(data.get("enables_stage_9e_draft_only")),
             creates_or_edits_canonical_tc=bool(data.get("creates_or_edits_canonical_tc")),
@@ -314,6 +322,13 @@ def build_agent_decision_resolution(
 
     req_context = _requirement_context(context_bundle)
     draft_context = _draft_context(draft_proposal, draft_review, draft_revision_plan, decision_pack)
+    req_to_draft_map = build_req_to_draft_map(
+        draft_proposal=draft_proposal,
+        decision_pack=decision_pack,
+        draft_review=draft_review,
+        draft_revision_plan=draft_revision_plan,
+        context_bundle=context_bundle,
+    )
     residual_context = _residual_context(residual)
     cluster_by_id = {cluster.cluster_id: cluster for cluster in matrix.decision_clusters}
 
@@ -323,12 +338,13 @@ def build_agent_decision_resolution(
             cluster=cluster_by_id.get(row.cluster_id),
             req_context=req_context,
             draft_context=draft_context,
+            req_to_draft_map=req_to_draft_map,
             residual_context=residual_context,
         )
         for row in matrix.reviewer_decision_rows
     ]
 
-    decision_summary = _decision_summary(decisions)
+    decision_summary = _decision_summary(decisions, req_to_draft_map)
     stage_scope = _stage_9e_candidate_scope(decisions)
     deferred_scope = _deferred_or_human_review_scope(decisions)
     evidence_summary = _evidence_quality_summary(decisions)
@@ -398,6 +414,9 @@ def render_agent_decision_resolution_markdown(resolution: AgentDecisionResolutio
         f"| Deferred | `{summary.get('deferred_rows', 0)}` |",
         f"| Unsafe | `{summary.get('unsafe_rows', 0)}` |",
         f"| Stage 9E candidate rows | `{summary.get('stage_9e_candidate_rows', 0)}` |",
+        f"| Req-to-draft mapped req_uids | `{summary.get('req_to_draft_map_count', 0)}` |",
+        f"| Rows fixed by draft mapping | `{', '.join(summary.get('fixed_rows', [])) or '-'}` |",
+        f"| Rows still missing affected drafts | `{', '.join(summary.get('rows_with_missing_affected_drafts', [])) or '-'}` |",
         f"| Stage 9E allowed | `{gate.get('stage_9e_allowed')}` |",
         f"| Canonical write allowed | `{resolution.canonical_write_allowed}` |",
         "",
@@ -484,6 +503,7 @@ def _resolve_row(
     cluster: Any,
     req_context: dict[str, dict[str, Any]],
     draft_context: dict[str, dict[str, Any]],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
     residual_context: dict[str, dict[str, Any]],
 ) -> AgentDecision:
     cluster_type = str(getattr(cluster, "cluster_type", "mixed") if cluster else "mixed")
@@ -491,7 +511,9 @@ def _resolve_row(
     evidence = [row.evidence_summary]
     if cluster:
         evidence.extend(list(cluster.evidence or []))
-    coverage = _source_fact_coverage(row.affected_requirements, row.affected_drafts, req_context, draft_context, residual_context)
+    affected_drafts, draft_mapping_evidence, draft_mapping_warnings = _affected_drafts_for_row(row, req_to_draft_map)
+    evidence.extend(_draft_mapping_evidence_lines(draft_mapping_evidence, draft_mapping_warnings))
+    coverage = _source_fact_coverage(row.affected_requirements, affected_drafts, req_context, draft_context, residual_context)
     duplicate = _duplicate_risk_assessment(row, cluster)
     safety_warnings = _safety_warnings(row, cluster, evidence)
     selected = _select_option(row, cluster_type, coverage, duplicate, options, safety_warnings)
@@ -503,6 +525,18 @@ def _resolve_row(
         safety_warnings=safety_warnings,
         row=row,
     )
+    stage_mapping_blockers = _stage_9e_mapping_blockers(
+        action=selected.allowed_next_action,
+        req_uids=list(row.affected_requirements),
+        affected_drafts=affected_drafts,
+        req_to_draft_map=req_to_draft_map,
+        row_had_affected_drafts=bool(row.affected_drafts),
+    )
+    if stage_mapping_blockers:
+        score = min(score, 0.69)
+        status = "needs_human_review"
+        reasons = _unique([*reasons, *stage_mapping_blockers])
+        rationale = rationale + " Stage 9E draft-only scope is disabled because draft mapping is incomplete."
     confidence = _confidence_label(score)
     if selected.allowed_next_action in STAGE_9E_ACTIONS and score < 0.70:
         status = "needs_human_review"
@@ -536,8 +570,9 @@ def _resolve_row(
         missing_facts=sorted(set(coverage.facts_missing)),
         rationale=rationale,
         normalized_effect=_normalized_effect(selected.allowed_next_action),
-        affected_drafts=list(row.affected_drafts),
+        affected_drafts=affected_drafts,
         affected_requirements=list(row.affected_requirements),
+        draft_mapping_evidence=draft_mapping_evidence,
         requires_human_review=status in {"needs_human_review", "deferred", "unsafe"} or score < 0.85,
         enables_stage_9e_draft_only=enables_stage_9e,
         creates_or_edits_canonical_tc=False,
@@ -583,6 +618,72 @@ def _select_option(
     if cluster_type == "defer_or_no_new_tc":
         return _fallback_option(options, ("keep_manual_only", "defer", "request_source_clarification"))
     return _fallback_option(options, ("defer", "keep_manual_only", "request_source_clarification"))
+
+
+def _affected_drafts_for_row(
+    row: Any,
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
+) -> tuple[list[str], list[dict[str, Any]], list[str]]:
+    row_drafts = _unique(row.affected_drafts)
+    mapping_entries = draft_mapping_entries_for_req_uids(row.affected_requirements, req_to_draft_map, min_confidence="medium")
+    if row_drafts:
+        return row_drafts, mapping_entries, _draft_mapping_warnings(row.affected_requirements, req_to_draft_map)
+    mapped_drafts = draft_ids_for_req_uids(row.affected_requirements, req_to_draft_map, min_confidence="medium")
+    return (
+        mapped_drafts,
+        [{**entry, "used_to_fill_missing_affected_drafts": True} for entry in mapping_entries],
+        _draft_mapping_warnings(row.affected_requirements, req_to_draft_map),
+    )
+
+
+def _draft_mapping_warnings(
+    req_uids: list[str],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
+) -> list[str]:
+    warnings = []
+    for req_uid in req_uids:
+        if not draft_mapping_entries_for_req_uids([req_uid], req_to_draft_map, min_confidence="medium"):
+            warnings.append(f"draft_mapping_missing: {req_uid}")
+    return warnings
+
+
+def _draft_mapping_evidence_lines(mapping_entries: list[dict[str, Any]], warnings: list[str]) -> list[str]:
+    lines = [
+        "draft_mapping: "
+        + str(entry.get("draft_id"))
+        + " from "
+        + str(entry.get("source"))
+        + " confidence="
+        + str(entry.get("confidence"))
+        for entry in mapping_entries
+    ]
+    lines.extend(warnings)
+    return _unique(lines)
+
+
+def _stage_9e_mapping_blockers(
+    *,
+    action: str,
+    req_uids: list[str],
+    affected_drafts: list[str],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
+    row_had_affected_drafts: bool,
+) -> list[str]:
+    if action not in STAGE_9E_ACTIONS:
+        return []
+    if row_had_affected_drafts:
+        return []
+    blockers = []
+    if not affected_drafts:
+        blockers.append("Stage 9E candidate has no high/medium req-to-draft mapping")
+    unmapped = [
+        req_uid
+        for req_uid in req_uids
+        if not draft_mapping_entries_for_req_uids([req_uid], req_to_draft_map, min_confidence="medium")
+    ]
+    if unmapped:
+        blockers.append("Stage 9E candidate has unmapped affected requirements: " + ", ".join(unmapped))
+    return blockers
 
 
 def _decision_status_and_confidence(
@@ -912,6 +1013,8 @@ def _normalize_missing_facts(values: list[str]) -> list[str]:
         lowered = text.casefold()
         if "not executable until" in lowered:
             continue
+        if "populate all required draft review fields" in lowered:
+            continue
         normalized.append(text)
     return sorted(set(normalized))
 
@@ -967,8 +1070,29 @@ def _normalized_effect(action: str) -> str:
     return action
 
 
-def _decision_summary(decisions: list[AgentDecision]) -> dict[str, Any]:
+def _decision_summary(
+    decisions: list[AgentDecision],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
+) -> dict[str, Any]:
     status_counts = Counter(dec.decision_status for dec in decisions)
+    rows_with_missing_affected_drafts = [
+        decision.row_id for decision in decisions if decision.affected_requirements and not decision.affected_drafts
+    ]
+    unmapped_req_uids = sorted(
+        {
+            req_uid
+            for decision in decisions
+            for req_uid in decision.affected_requirements
+            if not draft_mapping_entries_for_req_uids([req_uid], req_to_draft_map, min_confidence="medium")
+        }
+    )
+    fixed_rows = sorted(
+        {
+            decision.row_id
+            for decision in decisions
+            if any(entry.get("used_to_fill_missing_affected_drafts") for entry in decision.draft_mapping_evidence)
+        }
+    )
     return {
         "rows_total": len(decisions),
         "resolved_rows": status_counts.get("resolved", 0),
@@ -979,6 +1103,17 @@ def _decision_summary(decisions: list[AgentDecision]) -> dict[str, Any]:
         "unsafe_rows": status_counts.get("unsafe", 0),
         "stage_9e_candidate_rows": sum(1 for decision in decisions if decision.enables_stage_9e_draft_only),
         "selected_action_counts": dict(Counter(dec.selected_allowed_next_action for dec in decisions)),
+        "draft_mapping_diagnostics": {
+            "req_to_draft_map_count": len(req_to_draft_map),
+            "req_to_draft_entry_count": sum(len(entries) for entries in req_to_draft_map.values()),
+            "unmapped_req_uids": unmapped_req_uids,
+            "rows_with_missing_affected_drafts": rows_with_missing_affected_drafts,
+            "fixed_rows": fixed_rows,
+        },
+        "req_to_draft_map_count": len(req_to_draft_map),
+        "unmapped_req_uids": unmapped_req_uids,
+        "rows_with_missing_affected_drafts": rows_with_missing_affected_drafts,
+        "fixed_rows": fixed_rows,
     }
 
 
@@ -1085,6 +1220,18 @@ def _stage_9e_gate(decisions: list[AgentDecision]) -> dict[str, Any]:
         "requires_agent_decision_traceability": True,
         "requires_no_low_confidence_rows": True,
     }
+
+
+def _unique(values: Any) -> list[str]:
+    result = []
+    seen = set()
+    for value in values or []:
+        text = str(value or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
 
 
 def _warnings(decisions: list[AgentDecision], improvement_plan: dict[str, Any]) -> list[str]:

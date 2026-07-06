@@ -144,6 +144,39 @@ class AgentDecisionResolverTests(unittest.TestCase):
             self.assertEqual(["MDR-SAFE"], resolution.stage_9e_gate["stage_9e_allowed_scope"]["row_ids"])
             self.assertTrue(resolution.stage_9e_gate["requires_draft_only_output"])
 
+    def test_fills_missing_affected_drafts_from_req_to_draft_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _root, paths, matrix_path = setup_resolution_fixture(Path(temp_dir))
+            make_single_safe_row(matrix_path, paths)
+            matrix = load_json(matrix_path)
+            matrix["reviewer_decision_rows"][0]["affected_drafts"] = []
+            matrix["decision_clusters"][0]["affected_draft_ids"] = []
+            write_json(matrix_path, matrix)
+
+            resolution = build_resolution(paths, matrix_path)
+            decision = resolution.agent_decisions[0]
+
+            self.assertEqual(["DRAFT-SAFE"], decision.affected_drafts)
+            self.assertTrue(decision.draft_mapping_evidence)
+            self.assertTrue(resolution.stage_9e_gate["stage_9e_allowed"])
+
+    def test_keeps_stage_9e_disabled_when_draft_mapping_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            _root, paths, matrix_path = setup_resolution_fixture(Path(temp_dir))
+            make_single_safe_row(matrix_path, paths)
+            matrix = load_json(matrix_path)
+            matrix["reviewer_decision_rows"][0]["affected_drafts"] = []
+            matrix["decision_clusters"][0]["affected_draft_ids"] = []
+            write_json(matrix_path, matrix)
+            write_json(paths["draft_proposal_path"], {"package_id": "WPKG-000001", "draft_test_cases": []})
+
+            resolution = build_resolution(paths, matrix_path)
+            decision = resolution.agent_decisions[0]
+
+            self.assertEqual([], decision.affected_drafts)
+            self.assertFalse(resolution.stage_9e_gate["stage_9e_allowed"])
+            self.assertIn("draft mapping is incomplete", decision.rationale)
+
     def test_allows_subset_stage_9e_scope_while_leaving_ambiguous_rows_out(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             _root, paths, matrix_path = setup_resolution_fixture(Path(temp_dir))
@@ -387,6 +420,8 @@ def safe_draft_proposal() -> dict:
         "draft_test_cases": [
             {
                 "draft_id": "DRAFT-SAFE",
+                "proposed_tc_id": "TC-SAFE",
+                "source_requirement_uids": ["REQ-SAFE"],
                 "coverage_intent": "When user clicks Submit, the system shows success message.",
                 "source_grounding_profiles": [],
                 "warnings": [],

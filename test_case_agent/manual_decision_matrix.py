@@ -7,6 +7,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from test_case_agent.draft_mapping import (
+    build_req_to_draft_map,
+    draft_ids_for_req_uids,
+    draft_mapping_diagnostics_for_rows,
+    draft_mapping_entries_for_req_uids,
+)
+
 CREATED_BY_TOOL = "test_case_agent.manual_decision_matrix"
 MATRIX_PREFIX = "manual-decision-matrix"
 DEFAULT_PACKAGE_ID = "WPKG-000001"
@@ -378,6 +385,13 @@ def build_manual_decision_matrix(
     raw_questions = _raw_manual_questions(decision_pack, residual, review, revision_plan)
     draft_by_id = _index_by_key(decision_pack.get("draft_decisions"), "draft_id")
     req_to_source = _req_to_source_id(context_bundle, residual)
+    req_to_draft_map = build_req_to_draft_map(
+        draft_proposal=proposal,
+        decision_pack=decision_pack,
+        draft_review=review,
+        draft_revision_plan=revision_plan,
+        context_bundle=context_bundle,
+    )
     source_artifacts = {
         "decision_pack_status": str(decision_pack.get("decision_pack_status")),
         "residual_analysis_status": str(residual.get("analysis_status")),
@@ -389,13 +403,24 @@ def build_manual_decision_matrix(
         "update_plan_status": str((update_plan or {}).get("plan_status")),
     }
 
-    duplicate_groups, duplicate_clusters = _duplicate_risk_groups(decision_pack, req_to_source)
-    source_groups, source_clusters = _source_grounding_groups(residual, decision_pack, req_to_source)
-    replacement_groups, replacement_clusters = _replacement_groups(decision_pack, draft_by_id)
-    defer_groups, defer_clusters = _defer_groups(decision_pack, draft_by_id)
+    duplicate_groups, duplicate_clusters = _duplicate_risk_groups(decision_pack, req_to_source, req_to_draft_map)
+    source_groups, source_clusters = _source_grounding_groups(residual, decision_pack, req_to_source, req_to_draft_map)
+    replacement_groups, replacement_clusters = _replacement_groups(decision_pack, draft_by_id, req_to_draft_map)
+    defer_groups, defer_clusters = _defer_groups(decision_pack, draft_by_id, req_to_draft_map)
     clusters = [*duplicate_clusters, *source_clusters, *replacement_clusters, *defer_clusters]
     clusters = _dedupe_clusters(clusters)
     rows = [_row_from_cluster(index, cluster) for index, cluster in enumerate(clusters, start=1)]
+    fixed_rows = [
+        row.row_id
+        for row in rows
+        if any(
+            "draft_mapping_added:" in evidence
+            for cluster in clusters
+            if cluster.cluster_id == row.cluster_id
+            for evidence in cluster.evidence
+        )
+    ]
+    draft_mapping_diagnostics = draft_mapping_diagnostics_for_rows(rows, req_to_draft_map, fixed_rows=fixed_rows)
     blocking_rows = [row for row in rows if row.is_blocking_for_revised_draft]
     current_needs_manual = int(
         ((decision_pack.get("revised_draft_readiness") or {}).get("needs_manual_decision_count"))
@@ -437,6 +462,11 @@ def build_manual_decision_matrix(
         "manual_review_required": True,
         "ready_for_revised_draft_proposal_after_matrix": False,
         "can_proceed_to_stage_9e_without_answers": False,
+        "draft_mapping_diagnostics": draft_mapping_diagnostics,
+        "req_to_draft_map_count": draft_mapping_diagnostics["req_to_draft_map_count"],
+        "unmapped_req_uids": draft_mapping_diagnostics["unmapped_req_uids"],
+        "rows_with_missing_affected_drafts": draft_mapping_diagnostics["rows_with_missing_affected_drafts"],
+        "fixed_rows": draft_mapping_diagnostics["fixed_rows"],
     }
     status: MatrixStatus = "pass-with-warnings" if rows or warnings else "pass"
     matrix_warnings = list(warnings)
@@ -498,6 +528,9 @@ def render_manual_decision_matrix_markdown(matrix: ManualDecisionMatrix) -> str:
         f"- Raw manual findings: `{summary.get('raw_manual_findings_count', 0)}`",
         f"- Decision clusters: `{len(matrix.decision_clusters)}`",
         f"- Reviewer decision rows: `{len(matrix.reviewer_decision_rows)}`",
+        f"- Req-to-draft mapped req_uids: `{summary.get('req_to_draft_map_count', 0)}`",
+        f"- Rows fixed by draft mapping: `{', '.join(summary.get('fixed_rows', [])) or '-'}`",
+        f"- Rows still missing affected drafts: `{', '.join(summary.get('rows_with_missing_affected_drafts', [])) or '-'}`",
         f"- Estimated reduction: `{summary.get('estimated_reviewer_questions_reduction', 0)}`",
         f"- Canonical write allowed: `{matrix.canonical_write_allowed}`",
         f"- Manual review required: `{matrix.manual_review_required}`",
@@ -567,6 +600,7 @@ def render_manual_decision_matrix_markdown(matrix: ManualDecisionMatrix) -> str:
 def _duplicate_risk_groups(
     decision_pack: dict[str, Any],
     req_to_source: dict[str, str],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], list[ManualDecisionCluster]]:
     groups: list[dict[str, Any]] = []
     clusters: list[ManualDecisionCluster] = []
@@ -574,6 +608,11 @@ def _duplicate_risk_groups(
         reqs = _unique(item.get("candidate_req_uids") or [])
         similar_refs = _similar_refs(item.get("similar_tc_ids") or [], item.get("similar_file_paths") or [])
         source_ids = _unique(req_to_source.get(req) for req in reqs)
+        affected_drafts, draft_mapping_evidence, draft_mapping_warnings = _enrich_drafts_from_mapping(
+            reqs,
+            _unique(item.get("draft_ids") or []),
+            req_to_draft_map,
+        )
         group_id = str(item.get("cluster_id") or f"DUP-{index:06d}")
         evidence = _unique(
             [
@@ -581,14 +620,17 @@ def _duplicate_risk_groups(
                 f"cluster_action={item.get('cluster_action')}",
                 str(item.get("rationale") or ""),
                 *[f"similar_tc={ref}" for ref in similar_refs[:10]],
+                *draft_mapping_evidence,
+                *draft_mapping_warnings,
             ]
         )
         group = {
             "group_id": group_id,
             "risk": item.get("risk"),
-            "affected_draft_ids": _unique(item.get("draft_ids") or []),
+            "affected_draft_ids": affected_drafts,
             "affected_req_uids": reqs,
             "source_req_ids": source_ids,
+            "draft_mapping_evidence": draft_mapping_evidence,
             "similar_existing_tc_refs": similar_refs,
             "recommended_review": "Decide whether candidate behavior is already covered, should extend an existing TC, needs a separate new TC, or should be deferred.",
         }
@@ -622,6 +664,7 @@ def _source_grounding_groups(
     residual: dict[str, Any],
     decision_pack: dict[str, Any],
     req_to_source: dict[str, str],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], list[ManualDecisionCluster]]:
     grouped: dict[tuple[str, str], dict[str, Any]] = {}
     for item in residual.get("requirement_gap_analyses") or []:
@@ -686,9 +729,13 @@ def _source_grounding_groups(
     clusters: list[ManualDecisionCluster] = []
     for index, ((classification, bucket), group) in enumerate(sorted(grouped.items()), start=1):
         reqs = _unique(group.get("affected_req_uids") or [])
-        drafts = _unique(group.get("affected_draft_ids") or [])
+        drafts, draft_mapping_evidence, draft_mapping_warnings = _enrich_drafts_from_mapping(
+            reqs,
+            _unique(group.get("affected_draft_ids") or []),
+            req_to_draft_map,
+        )
         source_ids = _unique(group.get("source_req_ids") or [])
-        evidence = _unique(group.get("evidence") or [])[:12]
+        evidence = _unique([*(group.get("evidence") or []), *draft_mapping_evidence, *draft_mapping_warnings])[:12]
         context_counter = group.get("available_context") or Counter()
         group_id = f"SRC-{index:06d}"
         group_payload = {
@@ -698,6 +745,8 @@ def _source_grounding_groups(
             "affected_draft_ids": drafts,
             "affected_req_uids": reqs,
             "source_req_ids": source_ids,
+            "draft_mapping_evidence": draft_mapping_evidence,
+            "draft_mapping_warnings": draft_mapping_warnings,
             "available_context_counts": dict(context_counter),
             "evidence_sample": evidence[:5],
             "recommended_review": "Confirm source-backed action/oracle/object or request clarification; do not infer from existing TC.",
@@ -731,6 +780,7 @@ def _source_grounding_groups(
 def _replacement_groups(
     decision_pack: dict[str, Any],
     draft_by_id: dict[str, dict[str, Any]],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], list[ManualDecisionCluster]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in decision_pack.get("replacement_strategies") or []:
@@ -739,9 +789,13 @@ def _replacement_groups(
     groups: list[dict[str, Any]] = []
     clusters: list[ManualDecisionCluster] = []
     for index, (mode, items) in enumerate(sorted(grouped.items()), start=1):
-        drafts = _unique(item.get("draft_id") for item in items)
-        proposed = _unique(item.get("proposed_tc_id") for item in items)
         reqs = _unique(req for item in items for req in item.get("candidate_req_uids") or [])
+        drafts, draft_mapping_evidence, draft_mapping_warnings = _enrich_drafts_from_mapping(
+            reqs,
+            _unique(item.get("draft_id") for item in items),
+            req_to_draft_map,
+        )
+        proposed = _unique(item.get("proposed_tc_id") for item in items)
         evidence = _unique(
             value
             for item in items
@@ -751,6 +805,7 @@ def _replacement_groups(
                 *(item.get("replacement_guidance") or [])[:3],
             ]
         )
+        evidence = _unique([*evidence, *draft_mapping_evidence, *draft_mapping_warnings])
         group_id = f"REP-{index:06d}"
         groups.append(
             {
@@ -759,6 +814,7 @@ def _replacement_groups(
                 "affected_draft_ids": drafts,
                 "affected_proposed_tc_ids": proposed,
                 "affected_req_uids": reqs,
+                "draft_mapping_evidence": draft_mapping_evidence,
                 "recommended_review": "Choose rewrite from source, split, extend existing TC, defer, or no-new-TC.",
             }
         )
@@ -787,6 +843,7 @@ def _replacement_groups(
 def _defer_groups(
     decision_pack: dict[str, Any],
     draft_by_id: dict[str, dict[str, Any]],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
 ) -> tuple[list[dict[str, Any]], list[ManualDecisionCluster]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for item in decision_pack.get("draft_decisions") or []:
@@ -796,11 +853,15 @@ def _defer_groups(
     groups: list[dict[str, Any]] = []
     clusters: list[ManualDecisionCluster] = []
     for index, (decision, items) in enumerate(sorted(grouped.items()), start=1):
-        drafts = _unique(item.get("draft_id") for item in items)
-        proposed = _unique(item.get("proposed_tc_id") for item in items)
         reqs = _unique(req for item in items for req in item.get("candidate_req_uids") or [])
+        drafts, draft_mapping_evidence, draft_mapping_warnings = _enrich_drafts_from_mapping(
+            reqs,
+            _unique(item.get("draft_id") for item in items),
+            req_to_draft_map,
+        )
+        proposed = _unique(item.get("proposed_tc_id") for item in items)
         source_ids = _unique(source for item in items for source in item.get("source_req_ids") or [])
-        evidence = _unique(item.get("decision_reason") for item in items)[:12]
+        evidence = _unique([*[_value for _value in (item.get("decision_reason") for item in items)], *draft_mapping_evidence, *draft_mapping_warnings])[:12]
         group_id = f"DEF-{index:06d}"
         groups.append(
             {
@@ -810,6 +871,7 @@ def _defer_groups(
                 "affected_proposed_tc_ids": proposed,
                 "affected_req_uids": reqs,
                 "source_req_ids": source_ids,
+                "draft_mapping_evidence": draft_mapping_evidence,
                 "recommended_review": "Choose defer, no-new-TC with rationale, request clarification, or keep manual-only.",
             }
         )
@@ -853,6 +915,34 @@ def _row_from_cluster(index: int, cluster: ManualDecisionCluster) -> ReviewerDec
         required_reviewer_role=_reviewer_role(cluster.cluster_type),
         is_blocking_for_revised_draft=cluster.blocked_until_answered,
     )
+
+
+def _enrich_drafts_from_mapping(
+    req_uids: list[str],
+    existing_draft_ids: list[str],
+    req_to_draft_map: dict[str, list[dict[str, Any]]],
+) -> tuple[list[str], list[str], list[str]]:
+    mapped_drafts = draft_ids_for_req_uids(req_uids, req_to_draft_map, min_confidence="medium")
+    drafts = _unique([*existing_draft_ids, *mapped_drafts])
+    evidence = []
+    warnings = []
+    added_drafts = [draft_id for draft_id in mapped_drafts if draft_id not in set(existing_draft_ids)]
+    if added_drafts:
+        evidence.append("draft_mapping_added: " + ", ".join(added_drafts))
+    for req_uid in req_uids:
+        entries = draft_mapping_entries_for_req_uids([req_uid], req_to_draft_map, min_confidence="medium")
+        if entries:
+            evidence.append(
+                "draft_mapping: "
+                + req_uid
+                + " -> "
+                + ", ".join(
+                    f"{entry['draft_id']}({entry.get('confidence')},{entry.get('source')})" for entry in entries
+                )
+            )
+        else:
+            warnings.append(f"draft_mapping_missing: {req_uid}")
+    return drafts, _unique(evidence), _unique(warnings)
 
 
 def _options_for(cluster_type: ClusterType) -> list[DecisionOption]:
