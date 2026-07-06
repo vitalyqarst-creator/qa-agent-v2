@@ -155,6 +155,29 @@ class NewTcDraftProposalTests(unittest.TestCase):
             self.assertNotIn("set up the source-backed condition", text)
             self.assertNotIn("perform the user action needed to observe", text)
 
+    def test_draft_proposal_uses_enriched_source_context_when_present(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
+
+            draft = build_proposal(root, bundle_path).draft_test_cases[0]
+            profile = draft.source_grounding_profiles[0]
+
+            self.assertTrue(profile.source_anchor_contexts)
+            self.assertTrue(profile.table_source_contexts)
+            self.assertIn("table_source_context", profile.available_fact_sources)
+            self.assertEqual("Client card", profile.object)
+
+    def test_table_context_without_action_does_not_make_draft_executable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
+            mutate_first_candidate(bundle_path, condition=None)
+
+            draft = build_proposal(root, bundle_path).draft_test_cases[0]
+
+            self.assertFalse(draft.is_executable_draft)
+            self.assertTrue(draft.source_grounding_profiles[0].table_source_contexts)
+            self.assertIn("source-backed user action", draft.source_grounding_profiles[0].missing_facts)
+
     def test_json_and_markdown_artifacts_are_written(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
@@ -217,6 +240,14 @@ def mutate_bundle(
 def mutate_first_candidate(bundle_path: Path, **updates) -> None:
     payload = json.loads(bundle_path.read_text(encoding="utf-8"))
     payload["candidate_requirements"][0].update(updates)
+    enriched = payload["candidate_requirements"][0].get("enriched_source_facts")
+    if isinstance(enriched, dict):
+        for key, value in updates.items():
+            enriched_key = "observable_expected_behavior" if key == "expected_behavior" else key
+            if enriched_key in enriched:
+                enriched[enriched_key] = value
+        if "condition" in updates:
+            enriched["user_action"] = None
     bundle_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",

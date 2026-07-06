@@ -120,3 +120,16 @@ Revision decisions must use source-grounding profiles from the draft proposal wh
 The decision pack may recommend implementation improvements, but it must not force `ready_for_revised_draft_proposal=true` while grounding or duplicate-risk decisions are unresolved.
 
 Agent capability findings should report source-grounding and draft-quality gaps separately from safety-gate behavior. A working safety gate is expected to keep canonical writes disabled even when the draft pipeline is incomplete.
+
+## Stage 9D.5 Enriched Context Decision Rules
+
+Decision packs should preserve enriched table/anchor evidence in source-grounding resolutions.
+
+Manual decision status must remain unresolved when:
+
+- table context is available but row/header meaning is ambiguous;
+- aggregate source context is the only evidence;
+- duplicate-risk differentiation has not been decided;
+- source-backed user action or observable expected behavior is still missing.
+
+Do not reduce safety gates because a table or anchor exists.

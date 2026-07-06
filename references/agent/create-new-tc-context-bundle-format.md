@@ -147,3 +147,20 @@ The context bundle should preserve source anchors and source text needed for lat
 Existing TC matches in the bundle are duplicate-risk evidence only. They may identify similar coverage, but they do not authorize copying steps, expected results, test data, headings, or traceability into a new draft.
 
 When the bundle lacks a concrete object, condition, user action, or observable expected behavior, downstream draft stages must keep the item manual-review-only or non-executable until a source-backed clarification is available.
+
+## Stage 9D.5 Table And Anchor Source Fact Enrichment
+
+`CandidateRequirement` may include these optional backward-compatible fields:
+
+- `source_anchor_contexts`
+- `table_source_contexts`
+- `enriched_source_facts`
+- `source_fact_confidence`
+- `source_fact_warnings`
+- `manual_questions`
+
+Table cell facts must be interpreted with row/header/anchor context. A table cell or OOXML anchor is evidence, not permission to invent missing object, action, condition, or expected behavior.
+
+Aggregate context must be flagged. Aggregate-derived source context can support diagnostics, but it cannot by itself authorize an executable draft.
+
+Existing TC comparison remains non-authoritative for business behavior. It may identify duplicate risk only.

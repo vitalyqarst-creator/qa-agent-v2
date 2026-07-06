@@ -420,6 +420,13 @@ def build_residual_source_grounding_gap_analysis(
         "executable_drafts_count": sum(1 for item in draft_analyses if item.is_executable_draft),
         "non_executable_drafts_count": sum(1 for item in draft_analyses if not item.is_executable_draft),
         "generic_placeholder_drafts_count": sum(1 for item in draft_analyses if item.contains_generic_placeholders),
+        "table_context_available_count": _table_context_available_count(bundle, proposal),
+        "table_context_used_count": _table_context_used_count(proposal),
+        "anchor_context_available_count": _anchor_context_available_count(bundle, proposal),
+        "anchor_context_used_count": _anchor_context_used_count(proposal),
+        "source_fact_ambiguous_count": classification_counts.get("source_fact_ambiguous", 0),
+        "source_fact_present_not_extracted_count": classification_counts.get("source_fact_present_not_extracted", 0),
+        "source_fact_absent_count": classification_counts.get("source_fact_absent", 0),
         "gap_classification_counts": dict(sorted(classification_counts.items())),
         "source_grounding_unresolved_count": decision_pack.revised_draft_readiness.unresolved_source_grounding_count,
         "needs_manual_decision_count": decision_pack.revised_draft_readiness.needs_manual_decision_count,
@@ -498,6 +505,13 @@ def render_residual_source_grounding_gap_analysis_markdown(analysis: ResidualSou
         f"- Executable drafts: `{summary.get('executable_drafts_count', 0)}`",
         f"- Non-executable drafts: `{summary.get('non_executable_drafts_count', 0)}`",
         f"- Generic placeholder drafts: `{summary.get('generic_placeholder_drafts_count', 0)}`",
+        f"- Table context available: `{summary.get('table_context_available_count', 0)}`",
+        f"- Table context used: `{summary.get('table_context_used_count', 0)}`",
+        f"- Anchor context available: `{summary.get('anchor_context_available_count', 0)}`",
+        f"- Anchor context used: `{summary.get('anchor_context_used_count', 0)}`",
+        f"- Source fact ambiguous: `{summary.get('source_fact_ambiguous_count', 0)}`",
+        f"- Source fact present-not-extracted: `{summary.get('source_fact_present_not_extracted_count', 0)}`",
+        f"- Source fact absent: `{summary.get('source_fact_absent_count', 0)}`",
         f"- Source grounding unresolved count: `{summary.get('source_grounding_unresolved_count', 0)}`",
         f"- Needs manual decision count: `{summary.get('needs_manual_decision_count', 0)}`",
         f"- Ready for revised draft proposal: `{str(summary.get('ready_for_revised_draft_proposal')).lower()}`",
@@ -885,6 +899,50 @@ def _metric_note(proposal: NewTcDraftProposal, decision_pack: NewTcRevisionDecis
             "while duplicate/manual decision status keeps all source grounding resolutions unresolved."
         )
     return "Source-grounding readiness is based on decision-pack unresolved resolution counts."
+
+
+def _table_context_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    reqs = {
+        candidate.req_uid
+        for candidate in bundle.candidate_requirements
+        if candidate.req_uid and getattr(candidate, "table_source_contexts", [])
+    }
+    for draft in proposal.draft_test_cases:
+        for profile in draft.source_grounding_profiles:
+            if profile.req_uid and profile.table_source_contexts:
+                reqs.add(profile.req_uid)
+    return len(reqs)
+
+
+def _table_context_used_count(proposal: NewTcDraftProposal) -> int:
+    return sum(
+        1
+        for draft in proposal.draft_test_cases
+        for profile in draft.source_grounding_profiles
+        if "table_source_context" in profile.available_fact_sources
+    )
+
+
+def _anchor_context_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    reqs = {
+        candidate.req_uid
+        for candidate in bundle.candidate_requirements
+        if candidate.req_uid and getattr(candidate, "source_anchor_contexts", [])
+    }
+    for draft in proposal.draft_test_cases:
+        for profile in draft.source_grounding_profiles:
+            if profile.req_uid and profile.source_anchor_contexts:
+                reqs.add(profile.req_uid)
+    return len(reqs)
+
+
+def _anchor_context_used_count(proposal: NewTcDraftProposal) -> int:
+    return sum(
+        1
+        for draft in proposal.draft_test_cases
+        for profile in draft.source_grounding_profiles
+        if "source_anchor_context" in profile.available_fact_sources
+    )
 
 
 def _analysis(

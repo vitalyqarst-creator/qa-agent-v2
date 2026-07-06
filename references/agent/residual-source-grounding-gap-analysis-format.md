@@ -124,6 +124,27 @@ Fields:
 
 Recommendations must generalize to future FT packages. Do not add AutoFin-specific hacks.
 
+## Stage 9D.5 Table/Anchor Metrics
+
+`summary` should include:
+
+- `table_context_available_count`
+- `table_context_used_count`
+- `anchor_context_available_count`
+- `anchor_context_used_count`
+- `source_fact_ambiguous_count`
+- `source_fact_present_not_extracted_count`
+- `source_fact_absent_count`
+
+Use these metrics to separate:
+
+- table context found and usable;
+- table context found but ambiguous;
+- table context absent;
+- aggregate context only;
+- duplicate-risk blockers;
+- manual business decisions.
+
 ## Markdown Expectations
 
 The Markdown artifact must include:

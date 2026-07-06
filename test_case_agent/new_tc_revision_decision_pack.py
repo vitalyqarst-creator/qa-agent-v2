@@ -1617,21 +1617,34 @@ def _candidate_usable_facts(candidate: CandidateRequirement | None, profile: Any
     if candidate is None:
         return []
     facts: list[str] = []
-    if candidate.object:
-        facts.append(f"object: {candidate.object}")
-    if candidate.condition:
-        facts.append(f"condition: {candidate.condition}")
+    enriched = getattr(candidate, "enriched_source_facts", None)
+    object_value = getattr(enriched, "object", None) or candidate.object
+    condition = getattr(enriched, "condition", None) or candidate.condition
+    expected = getattr(enriched, "observable_expected_behavior", None) or candidate.expected_behavior
+    if object_value:
+        facts.append(f"object: {object_value}")
+    if condition:
+        facts.append(f"condition: {condition}")
     user_action = getattr(profile, "user_action", None) or _derive_user_action(candidate)
     if user_action:
         facts.append(f"user_action: {user_action}")
-    if candidate.expected_behavior:
-        facts.append(f"expected_behavior: {candidate.expected_behavior}")
+    if expected:
+        facts.append(f"expected_behavior: {expected}")
     if candidate.source_text:
         facts.append(f"source_text: {candidate.source_text}")
     if candidate.normalized_text:
         facts.append(f"normalized_text: {candidate.normalized_text}")
     if candidate.source_req_id:
         facts.append(f"source_req_id: {candidate.source_req_id}")
+    for context in getattr(candidate, "table_source_contexts", []) or []:
+        if getattr(context, "table_id", None) or getattr(context, "row_index", None):
+            facts.append(
+                f"table_context: {getattr(context, 'table_id', None)} row={getattr(context, 'row_index', None)} "
+                f"cell={getattr(context, 'column_index', None)}"
+            )
+    for context in getattr(candidate, "source_anchor_contexts", []) or []:
+        if getattr(context, "anchor_type", None):
+            facts.append(f"anchor_context: {context.anchor_type} {getattr(context, 'source_location', '')}")
     return _unique(facts)
 
 
@@ -1639,14 +1652,18 @@ def _candidate_missing_facts(candidate: CandidateRequirement | None, profile: An
     if candidate is None:
         return ["candidate requirement is missing from context bundle"]
     missing: list[str] = []
-    if not candidate.condition:
+    enriched = getattr(candidate, "enriched_source_facts", None)
+    condition = getattr(enriched, "condition", None) or candidate.condition
+    expected = getattr(enriched, "observable_expected_behavior", None) or candidate.expected_behavior
+    object_value = getattr(enriched, "object", None) or candidate.object
+    if not condition:
         missing.append("source-backed navigation/action condition")
-    has_action = bool(getattr(profile, "has_user_action", False) or _derive_user_action(candidate))
+    has_action = bool(getattr(profile, "has_user_action", False) or getattr(enriched, "user_action", None) or _derive_user_action(candidate))
     if not has_action:
         missing.append("source-backed user action")
-    if not candidate.expected_behavior:
+    if not expected:
         missing.append("observable expected behavior")
-    if not candidate.object:
+    if not object_value:
         missing.append("specific object/field/screen")
     return missing
 
@@ -1668,6 +1685,9 @@ def _draft_profile_for_req(draft: DraftTestCaseCandidate | None, req_uid: str) -
 
 
 def _derive_user_action(candidate: CandidateRequirement) -> str | None:
+    enriched = getattr(candidate, "enriched_source_facts", None)
+    if getattr(enriched, "user_action", None):
+        return getattr(enriched, "user_action")
     for value in [candidate.condition, candidate.source_text, candidate.normalized_text]:
         text = str(value or "").strip()
         if not text:

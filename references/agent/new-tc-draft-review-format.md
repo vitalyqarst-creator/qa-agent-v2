@@ -120,3 +120,14 @@ Review findings should distinguish:
 - missing source facts, which require source-grounding work;
 - duplicate-risk uncertainty, which requires manual differentiation or deferral;
 - safety violations, which must keep `safe_for_controlled_create_apply=false`.
+
+## Stage 9D.5 Table/Anchor Review Rules
+
+Review must verify that executable drafts are backed by source facts, not merely by the existence of an anchor.
+
+Reject or require revision when:
+
+- table context exists but lacks row/header clarity;
+- aggregate context is used as final business behavior;
+- action/oracle is inferred from a source anchor without explicit source text;
+- existing TC content is treated as business-rule source.

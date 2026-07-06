@@ -271,6 +271,14 @@ def mutate_first_revision_item(path: Path, **updates) -> None:
 def mutate_first_candidate(path: Path, **updates) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["candidate_requirements"][0].update(updates)
+    enriched = payload["candidate_requirements"][0].get("enriched_source_facts")
+    if isinstance(enriched, dict):
+        for key, value in updates.items():
+            enriched_key = "observable_expected_behavior" if key == "expected_behavior" else key
+            if enriched_key in enriched:
+                enriched[enriched_key] = value
+        if "condition" in updates:
+            enriched["user_action"] = None
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 

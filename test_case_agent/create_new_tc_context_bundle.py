@@ -32,6 +32,174 @@ AGGREGATE_MARKERS = [
 
 
 @dataclass(frozen=True)
+class SourceAnchorContext:
+    source_path: str | None
+    source_version: str | None
+    source_part: str | None
+    anchor_id: str | None
+    anchor_type: str
+    anchor_text: str | None
+    surrounding_text: str | None
+    source_location: str | None
+    confidence: str
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_path": self.source_path,
+            "source_version": self.source_version,
+            "source_part": self.source_part,
+            "anchor_id": self.anchor_id,
+            "anchor_type": self.anchor_type,
+            "anchor_text": self.anchor_text,
+            "surrounding_text": self.surrounding_text,
+            "source_location": self.source_location,
+            "confidence": self.confidence,
+            "warnings": self.warnings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SourceAnchorContext":
+        return cls(
+            source_path=data.get("source_path"),
+            source_version=data.get("source_version"),
+            source_part=data.get("source_part"),
+            anchor_id=data.get("anchor_id"),
+            anchor_type=str(data.get("anchor_type") or "unknown"),
+            anchor_text=data.get("anchor_text"),
+            surrounding_text=data.get("surrounding_text"),
+            source_location=data.get("source_location"),
+            confidence=str(data.get("confidence") or "low"),
+            warnings=list(data.get("warnings") or []),
+        )
+
+
+@dataclass(frozen=True)
+class TableSourceContext:
+    source_path: str | None
+    source_version: str | None
+    table_id: str | None
+    row_index: int | None
+    column_index: int | None
+    header_cells: list[str]
+    row_cells: list[str]
+    cell_text: str | None
+    row_text: str | None
+    neighboring_rows: list[str]
+    normalized_row_facts: list[str]
+    field_name_candidates: list[str]
+    condition_candidates: list[str]
+    expected_behavior_candidates: list[str]
+    action_candidates: list[str]
+    confidence: str
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_path": self.source_path,
+            "source_version": self.source_version,
+            "table_id": self.table_id,
+            "row_index": self.row_index,
+            "column_index": self.column_index,
+            "header_cells": self.header_cells,
+            "row_cells": self.row_cells,
+            "cell_text": self.cell_text,
+            "row_text": self.row_text,
+            "neighboring_rows": self.neighboring_rows,
+            "normalized_row_facts": self.normalized_row_facts,
+            "field_name_candidates": self.field_name_candidates,
+            "condition_candidates": self.condition_candidates,
+            "expected_behavior_candidates": self.expected_behavior_candidates,
+            "action_candidates": self.action_candidates,
+            "confidence": self.confidence,
+            "warnings": self.warnings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TableSourceContext":
+        return cls(
+            source_path=data.get("source_path"),
+            source_version=data.get("source_version"),
+            table_id=data.get("table_id"),
+            row_index=_optional_int(data.get("row_index")),
+            column_index=_optional_int(data.get("column_index")),
+            header_cells=list(data.get("header_cells") or []),
+            row_cells=list(data.get("row_cells") or []),
+            cell_text=data.get("cell_text"),
+            row_text=data.get("row_text"),
+            neighboring_rows=list(data.get("neighboring_rows") or []),
+            normalized_row_facts=list(data.get("normalized_row_facts") or []),
+            field_name_candidates=list(data.get("field_name_candidates") or []),
+            condition_candidates=list(data.get("condition_candidates") or []),
+            expected_behavior_candidates=list(data.get("expected_behavior_candidates") or []),
+            action_candidates=list(data.get("action_candidates") or []),
+            confidence=str(data.get("confidence") or "low"),
+            warnings=list(data.get("warnings") or []),
+        )
+
+
+@dataclass(frozen=True)
+class EnrichedSourceFacts:
+    req_uid: str | None
+    source_req_id: str | None
+    object: str | None
+    condition: str | None
+    user_action: str | None
+    observable_expected_behavior: str | None
+    source_text: str | None
+    normalized_text: str | None
+    source_anchor_contexts: list[SourceAnchorContext]
+    table_source_contexts: list[TableSourceContext]
+    available_fact_sources: list[str]
+    missing_facts: list[str]
+    extraction_confidence: str
+    manual_questions: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "req_uid": self.req_uid,
+            "source_req_id": self.source_req_id,
+            "object": self.object,
+            "condition": self.condition,
+            "user_action": self.user_action,
+            "observable_expected_behavior": self.observable_expected_behavior,
+            "source_text": self.source_text,
+            "normalized_text": self.normalized_text,
+            "source_anchor_contexts": [item.to_dict() for item in self.source_anchor_contexts],
+            "table_source_contexts": [item.to_dict() for item in self.table_source_contexts],
+            "available_fact_sources": self.available_fact_sources,
+            "missing_facts": self.missing_facts,
+            "extraction_confidence": self.extraction_confidence,
+            "manual_questions": self.manual_questions,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "EnrichedSourceFacts":
+        return cls(
+            req_uid=data.get("req_uid"),
+            source_req_id=data.get("source_req_id"),
+            object=data.get("object"),
+            condition=data.get("condition"),
+            user_action=data.get("user_action"),
+            observable_expected_behavior=data.get("observable_expected_behavior"),
+            source_text=data.get("source_text"),
+            normalized_text=data.get("normalized_text"),
+            source_anchor_contexts=[
+                SourceAnchorContext.from_dict(item)
+                for item in data.get("source_anchor_contexts", [])
+            ],
+            table_source_contexts=[
+                TableSourceContext.from_dict(item)
+                for item in data.get("table_source_contexts", [])
+            ],
+            available_fact_sources=list(data.get("available_fact_sources") or []),
+            missing_facts=list(data.get("missing_facts") or []),
+            extraction_confidence=str(data.get("extraction_confidence") or "low"),
+            manual_questions=list(data.get("manual_questions") or []),
+        )
+
+
+@dataclass(frozen=True)
 class CandidateRequirement:
     req_uid: str | None
     source_req_id: str | None
@@ -49,6 +217,12 @@ class CandidateRequirement:
     plan_item_id: str | None
     confidence: str
     warnings: list[str]
+    source_anchor_contexts: list[SourceAnchorContext] = field(default_factory=list)
+    table_source_contexts: list[TableSourceContext] = field(default_factory=list)
+    enriched_source_facts: EnrichedSourceFacts | None = None
+    source_fact_confidence: str = "low"
+    source_fact_warnings: list[str] = field(default_factory=list)
+    manual_questions: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -68,6 +242,12 @@ class CandidateRequirement:
             "plan_item_id": self.plan_item_id,
             "confidence": self.confidence,
             "warnings": self.warnings,
+            "source_anchor_contexts": [item.to_dict() for item in self.source_anchor_contexts],
+            "table_source_contexts": [item.to_dict() for item in self.table_source_contexts],
+            "enriched_source_facts": self.enriched_source_facts.to_dict() if self.enriched_source_facts else None,
+            "source_fact_confidence": self.source_fact_confidence,
+            "source_fact_warnings": self.source_fact_warnings,
+            "manual_questions": self.manual_questions,
         }
 
     @classmethod
@@ -89,6 +269,22 @@ class CandidateRequirement:
             plan_item_id=data.get("plan_item_id"),
             confidence=str(data.get("confidence") or "low"),
             warnings=list(data.get("warnings") or []),
+            source_anchor_contexts=[
+                SourceAnchorContext.from_dict(item)
+                for item in data.get("source_anchor_contexts", [])
+            ],
+            table_source_contexts=[
+                TableSourceContext.from_dict(item)
+                for item in data.get("table_source_contexts", [])
+            ],
+            enriched_source_facts=(
+                EnrichedSourceFacts.from_dict(data["enriched_source_facts"])
+                if isinstance(data.get("enriched_source_facts"), dict)
+                else None
+            ),
+            source_fact_confidence=str(data.get("source_fact_confidence") or data.get("confidence") or "low"),
+            source_fact_warnings=list(data.get("source_fact_warnings") or []),
+            manual_questions=list(data.get("manual_questions") or []),
         )
 
 
@@ -617,6 +813,40 @@ def _candidate_requirement(
         warnings.append("registry entry missing for candidate requirement.")
     if registry_entry is None and old_registry_entry is not None:
         warnings.append("old registry context exists, but new registry entry is missing for create-new candidate.")
+    source_anchors = list((registry_entry or {}).get("source_anchors") or diff_entry.get("new_source_anchors") or [])
+    source_text = (registry_entry or {}).get("source_text") or diff_entry.get("new_normalized_text")
+    normalized_text = (registry_entry or {}).get("normalized_text") or diff_entry.get("new_normalized_text")
+    object_value = (registry_entry or {}).get("object")
+    condition = (registry_entry or {}).get("condition")
+    expected_behavior = (registry_entry or {}).get("expected_behavior")
+    source_anchor_contexts = _source_anchor_contexts(
+        anchors=source_anchors,
+        source_text=source_text,
+        normalized_text=normalized_text,
+    )
+    table_source_contexts = _table_source_contexts(
+        anchors=source_anchors,
+        source_text=source_text,
+        normalized_text=normalized_text,
+        object_value=object_value,
+        condition=condition,
+        expected_behavior=expected_behavior,
+    )
+    enriched = _enriched_source_facts(
+        req_uid=req_uid,
+        source_req_id=source_req_id or (registry_entry.get("source_req_id") if registry_entry else None),
+        object_value=object_value,
+        condition=condition,
+        expected_behavior=expected_behavior,
+        source_text=source_text,
+        normalized_text=normalized_text,
+        source_anchor_contexts=source_anchor_contexts,
+        table_source_contexts=table_source_contexts,
+    )
+    warnings.extend(enriched.manual_questions)
+    warnings.extend(enriched.missing_facts)
+    warnings.extend(warning for context in source_anchor_contexts for warning in context.warnings)
+    warnings.extend(warning for context in table_source_contexts for warning in context.warnings)
 
     return CandidateRequirement(
         req_uid=req_uid,
@@ -624,18 +854,288 @@ def _candidate_requirement(
         source_version=registry_entry.get("source_version") if registry_entry else None,
         change_type=impact.get("change_type") or diff_entry.get("change_type"),
         requirement_type=(registry_entry or {}).get("requirement_type") or diff_entry.get("new_requirement_type"),
-        object=(registry_entry or {}).get("object"),
-        condition=(registry_entry or {}).get("condition"),
-        expected_behavior=(registry_entry or {}).get("expected_behavior"),
-        source_text=(registry_entry or {}).get("source_text") or diff_entry.get("new_normalized_text"),
-        normalized_text=(registry_entry or {}).get("normalized_text") or diff_entry.get("new_normalized_text"),
-        source_anchors=list((registry_entry or {}).get("source_anchors") or diff_entry.get("new_source_anchors") or []),
+        object=object_value,
+        condition=condition,
+        expected_behavior=expected_behavior,
+        source_text=source_text,
+        normalized_text=normalized_text,
+        source_anchors=source_anchors,
         diff_entry_id=diff_entry.get("change_id"),
         impact_id=impact.get("impact_id"),
         plan_item_id=item.get("plan_item_id"),
         confidence=str((registry_entry or {}).get("confidence") or diff_entry.get("confidence") or "low"),
-        warnings=warnings,
+        warnings=_unique(warnings),
+        source_anchor_contexts=source_anchor_contexts,
+        table_source_contexts=table_source_contexts,
+        enriched_source_facts=enriched,
+        source_fact_confidence=enriched.extraction_confidence,
+        source_fact_warnings=_unique([*enriched.missing_facts, *(warning for context in table_source_contexts for warning in context.warnings)]),
+        manual_questions=enriched.manual_questions,
     )
+
+
+def _source_anchor_contexts(
+    *,
+    anchors: list[dict[str, Any]],
+    source_text: str | None,
+    normalized_text: str | None,
+) -> list[SourceAnchorContext]:
+    contexts: list[SourceAnchorContext] = []
+    text = _first_nonempty([source_text, normalized_text])
+    for anchor in anchors:
+        xpath = str(anchor.get("xpath") or "")
+        anchor_type = _anchor_type(anchor)
+        warnings: list[str] = []
+        if anchor.get("aggregate_kind"):
+            warnings.append("aggregate source anchor requires original row/header context before executable drafting.")
+        if anchor_type == "table_cell" and "w:tr" not in xpath:
+            warnings.append("table cell anchor lacks row index.")
+        contexts.append(
+            SourceAnchorContext(
+                source_path=anchor.get("source_doc"),
+                source_version=anchor.get("source_version"),
+                source_part=anchor.get("part"),
+                anchor_id=anchor.get("node_id"),
+                anchor_type=anchor_type,
+                anchor_text=text,
+                surrounding_text=normalized_text or source_text,
+                source_location=xpath or None,
+                confidence="medium" if anchor_type != "unknown" else "low",
+                warnings=warnings,
+            )
+        )
+    return contexts
+
+
+def _table_source_contexts(
+    *,
+    anchors: list[dict[str, Any]],
+    source_text: str | None,
+    normalized_text: str | None,
+    object_value: str | None,
+    condition: str | None,
+    expected_behavior: str | None,
+) -> list[TableSourceContext]:
+    contexts: list[TableSourceContext] = []
+    for anchor in anchors:
+        if "table" not in [str(flag).casefold() for flag in anchor.get("flags") or []] and "w:tbl" not in str(anchor.get("xpath") or ""):
+            continue
+        xpath = str(anchor.get("xpath") or "")
+        table_id = _xpath_index(xpath, "tbl")
+        row_index = _optional_int(_xpath_index(xpath, "tr"))
+        column_index = _optional_int(_xpath_index(xpath, "tc"))
+        cell_text = _first_nonempty([source_text, normalized_text])
+        row_cells = _unique([value for value in [object_value, condition, expected_behavior, cell_text] if value and not _looks_like_ooxml_style_dump(value)])
+        normalized_row_facts = _unique([value for value in [condition, expected_behavior, normalized_text, source_text] if value])
+        field_candidates = _field_name_candidates(object_value, cell_text)
+        condition_candidates = _condition_candidates(condition, cell_text)
+        expected_candidates = _unique(value for value in [expected_behavior, cell_text] if value)
+        action_candidates = _action_candidates(condition, cell_text, normalized_text)
+        warnings: list[str] = []
+        if not row_cells:
+            warnings.append("table row context has no clean business cells; source may contain style/OOXML debris.")
+        if not action_candidates:
+            warnings.append("table context does not contain an explicit user action.")
+        if not expected_candidates:
+            warnings.append("table context does not contain observable expected behavior.")
+        if anchor.get("aggregate_kind"):
+            warnings.append("aggregate table context is evidence only and does not authorize invented behavior.")
+        contexts.append(
+            TableSourceContext(
+                source_path=anchor.get("source_doc"),
+                source_version=anchor.get("source_version"),
+                table_id=f"table-{table_id}" if table_id else None,
+                row_index=row_index,
+                column_index=column_index,
+                header_cells=[],
+                row_cells=row_cells,
+                cell_text=cell_text,
+                row_text=" | ".join(row_cells) if row_cells else cell_text,
+                neighboring_rows=[],
+                normalized_row_facts=normalized_row_facts,
+                field_name_candidates=field_candidates,
+                condition_candidates=condition_candidates,
+                expected_behavior_candidates=expected_candidates,
+                action_candidates=action_candidates,
+                confidence="medium" if row_index is not None and cell_text else "low",
+                warnings=warnings,
+            )
+        )
+    return contexts
+
+
+def _enriched_source_facts(
+    *,
+    req_uid: str | None,
+    source_req_id: str | None,
+    object_value: str | None,
+    condition: str | None,
+    expected_behavior: str | None,
+    source_text: str | None,
+    normalized_text: str | None,
+    source_anchor_contexts: list[SourceAnchorContext],
+    table_source_contexts: list[TableSourceContext],
+) -> EnrichedSourceFacts:
+    clean_object = object_value if object_value and not _looks_like_ooxml_style_dump(object_value) else None
+    object_candidate = clean_object or _first_from_contexts(table_source_contexts, "field_name_candidates")
+    condition_candidate = condition or _first_from_contexts(table_source_contexts, "condition_candidates")
+    expected_candidate = expected_behavior or _first_from_contexts(table_source_contexts, "expected_behavior_candidates")
+    action_candidate = _first_from_contexts(table_source_contexts, "action_candidates")
+    if action_candidate is None:
+        action_candidate = _derive_user_action_from_values([condition, source_text, normalized_text])
+    missing: list[str] = []
+    if not object_candidate:
+        missing.append("specific object/field/screen")
+    if not condition_candidate:
+        missing.append("source-backed condition")
+    if not action_candidate:
+        missing.append("source-backed user action")
+    if not expected_candidate:
+        missing.append("observable expected behavior")
+    available_sources = []
+    if source_anchor_contexts:
+        available_sources.append("source_anchor_context")
+    if table_source_contexts:
+        available_sources.append("table_source_context")
+    if clean_object or condition or expected_behavior:
+        available_sources.append("registry_fields")
+    if source_text or normalized_text:
+        available_sources.append("source_text")
+    if not missing:
+        confidence = "high" if action_candidate and object_candidate and expected_candidate else "medium"
+    elif table_source_contexts or source_anchor_contexts:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    manual_questions = [
+        f"Provide {fact} for {req_uid or source_req_id or 'candidate requirement'}."
+        for fact in missing
+    ]
+    return EnrichedSourceFacts(
+        req_uid=req_uid,
+        source_req_id=source_req_id,
+        object=object_candidate,
+        condition=condition_candidate,
+        user_action=action_candidate,
+        observable_expected_behavior=expected_candidate,
+        source_text=source_text,
+        normalized_text=normalized_text,
+        source_anchor_contexts=source_anchor_contexts,
+        table_source_contexts=table_source_contexts,
+        available_fact_sources=_unique(available_sources),
+        missing_facts=missing,
+        extraction_confidence=confidence,
+        manual_questions=manual_questions,
+    )
+
+
+def _anchor_type(anchor: dict[str, Any]) -> str:
+    xpath = str(anchor.get("xpath") or "")
+    aggregate_kind = str(anchor.get("aggregate_kind") or "")
+    if aggregate_kind == "table_cell" or "w:tc" in xpath:
+        return "table_cell"
+    if "w:tr" in xpath:
+        return "table_row"
+    if aggregate_kind == "paragraph" or "w:p" in xpath:
+        return "paragraph"
+    if "heading" in [str(flag).casefold() for flag in anchor.get("flags") or []]:
+        return "heading"
+    if "list" in [str(flag).casefold() for flag in anchor.get("flags") or []]:
+        return "list_item"
+    return "unknown"
+
+
+def _xpath_index(xpath: str, tag: str) -> str | None:
+    match = re.search(rf"w:{re.escape(tag)}\[(\d+)\]", xpath)
+    return match.group(1) if match else None
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _first_nonempty(values: list[Any]) -> str | None:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return None
+
+
+def _looks_like_ooxml_style_dump(value: str | None) -> bool:
+    text = str(value or "")
+    if not text:
+        return False
+    separators = text.count("|")
+    hex_tokens = len(re.findall(r"\b[0-9A-F]{6,8}\b", text, re.IGNORECASE))
+    style_tokens = len(re.findall(r"\b(?:pct|auto|Times New Roman|FFFFFF|000000)\b", text, re.IGNORECASE))
+    return separators >= 4 and (hex_tokens >= 2 or style_tokens >= 2)
+
+
+def _field_name_candidates(object_value: str | None, cell_text: str | None) -> list[str]:
+    candidates: list[str] = []
+    if object_value and not _looks_like_ooxml_style_dump(object_value):
+        candidates.append(object_value)
+    if cell_text:
+        before_colon = str(cell_text).split(":", 1)[0].strip()
+        if 3 <= len(before_colon) <= 120 and not _looks_like_ooxml_style_dump(before_colon):
+            candidates.append(before_colon)
+    return _unique(candidates)
+
+
+def _condition_candidates(condition: str | None, cell_text: str | None) -> list[str]:
+    values = [condition]
+    text = str(cell_text or "")
+    for marker in ["если", "при ", "when ", "if "]:
+        idx = text.casefold().find(marker)
+        if idx >= 0:
+            values.append(text[idx:idx + 240])
+            break
+    return _unique(value for value in values if value)
+
+
+def _action_candidates(*values: Any) -> list[str]:
+    action = _derive_user_action_from_values(values)
+    return [action] if action else []
+
+
+def _derive_user_action_from_values(values: Any) -> str | None:
+    markers = [
+        "user ",
+        "пользователь",
+        "наж",
+        "выбер",
+        "откр",
+        "перей",
+        "ввод",
+        "заполн",
+        "установ",
+        "click",
+        "select",
+        "open",
+        "enter",
+        "set ",
+    ]
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        lowered = text.casefold()
+        if any(marker in lowered for marker in markers):
+            return text
+    return None
+
+
+def _first_from_contexts(contexts: list[TableSourceContext], attr: str) -> str | None:
+    for context in contexts:
+        for value in getattr(context, attr):
+            text = str(value or "").strip()
+            if text:
+                return text
+    return None
 
 
 def _candidate_groups(candidates: list[CandidateRequirement]) -> list[CandidateGroup]:

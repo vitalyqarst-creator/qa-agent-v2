@@ -42,6 +42,9 @@ class SourceGroundingProfile:
     missing_facts: list[str]
     grounding_confidence: DraftConfidence
     manual_questions: list[str]
+    source_anchor_contexts: list[dict[str, Any]] = field(default_factory=list)
+    table_source_contexts: list[dict[str, Any]] = field(default_factory=list)
+    available_fact_sources: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +57,9 @@ class SourceGroundingProfile:
             "source_text": self.source_text,
             "normalized_text": self.normalized_text,
             "source_anchors": self.source_anchors,
+            "source_anchor_contexts": self.source_anchor_contexts,
+            "table_source_contexts": self.table_source_contexts,
+            "available_fact_sources": self.available_fact_sources,
             "has_concrete_object": self.has_concrete_object,
             "has_concrete_condition": self.has_concrete_condition,
             "has_user_action": self.has_user_action,
@@ -77,6 +83,9 @@ class SourceGroundingProfile:
             source_text=data.get("source_text"),
             normalized_text=data.get("normalized_text"),
             source_anchors=list(data.get("source_anchors") or []),
+            source_anchor_contexts=list(data.get("source_anchor_contexts") or []),
+            table_source_contexts=list(data.get("table_source_contexts") or []),
+            available_fact_sources=list(data.get("available_fact_sources") or []),
             has_concrete_object=bool(data.get("has_concrete_object")),
             has_concrete_condition=bool(data.get("has_concrete_condition")),
             has_user_action=bool(data.get("has_user_action")),
@@ -730,12 +739,23 @@ def _duplicate_risk_decisions(bundle: CreateNewTcContextBundle) -> list[Duplicat
 
 
 def _source_grounding_profile(candidate: Any) -> SourceGroundingProfile:
-    user_action = _derive_user_action(candidate)
+    enriched = getattr(candidate, "enriched_source_facts", None)
+    enriched_object = getattr(enriched, "object", None) if enriched else None
+    enriched_condition = getattr(enriched, "condition", None) if enriched else None
+    enriched_action = getattr(enriched, "user_action", None) if enriched else None
+    enriched_expected = getattr(enriched, "observable_expected_behavior", None) if enriched else None
+    enriched_sources = list(getattr(enriched, "available_fact_sources", []) or []) if enriched else []
+    source_anchor_contexts = _context_dicts(getattr(candidate, "source_anchor_contexts", []) or [])
+    table_source_contexts = _context_dicts(getattr(candidate, "table_source_contexts", []) or [])
+    user_action = enriched_action or _derive_user_action(candidate)
+    object_value = enriched_object or candidate.object
+    condition = enriched_condition or candidate.condition
+    expected_behavior = enriched_expected or candidate.expected_behavior
     missing: list[str] = []
-    has_object = bool(candidate.object)
-    has_condition = bool(candidate.condition)
+    has_object = bool(object_value)
+    has_condition = bool(condition)
     has_action = bool(user_action)
-    has_expected = bool(candidate.expected_behavior)
+    has_expected = bool(expected_behavior)
     if not has_object:
         missing.append("specific object/screen/field")
     if not has_condition:
@@ -759,10 +779,10 @@ def _source_grounding_profile(candidate: Any) -> SourceGroundingProfile:
     return SourceGroundingProfile(
         req_uid=candidate.req_uid,
         source_req_id=candidate.source_req_id,
-        object=candidate.object,
-        condition=candidate.condition,
+        object=object_value,
+        condition=condition,
         user_action=user_action,
-        observable_expected_behavior=candidate.expected_behavior,
+        observable_expected_behavior=expected_behavior,
         source_text=candidate.source_text,
         normalized_text=candidate.normalized_text,
         source_anchors=list(candidate.source_anchors or []),
@@ -775,7 +795,20 @@ def _source_grounding_profile(candidate: Any) -> SourceGroundingProfile:
         missing_facts=missing,
         grounding_confidence=confidence,
         manual_questions=manual_questions,
+        source_anchor_contexts=source_anchor_contexts,
+        table_source_contexts=table_source_contexts,
+        available_fact_sources=_unique([*enriched_sources, *(["source_anchor_context"] if source_anchor_contexts else []), *(["table_source_context"] if table_source_contexts else [])]),
     )
+
+
+def _context_dicts(values: Any) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for value in values or []:
+        if hasattr(value, "to_dict"):
+            result.append(value.to_dict())
+        elif isinstance(value, dict):
+            result.append(dict(value))
+    return result
 
 
 def _derive_user_action(candidate: Any) -> str | None:

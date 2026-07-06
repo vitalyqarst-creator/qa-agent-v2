@@ -7,6 +7,7 @@ from pathlib import Path
 
 from test_case_agent import (
     CreateNewTcContextBundle,
+    TableSourceContext,
     build_create_new_tc_context_bundle,
     load_create_new_tc_context_bundle,
     write_create_new_tc_context_bundle,
@@ -66,6 +67,43 @@ class CreateNewTcContextBundleTests(unittest.TestCase):
             self.assertEqual("editability", candidate.requirement_type)
             self.assertEqual("Client card", candidate.object)
             self.assertEqual("The client card field is editable.", candidate.expected_behavior)
+
+    def test_table_source_context_model_round_trips(self) -> None:
+        context = TableSourceContext(
+            source_path="new.docx",
+            source_version="new",
+            table_id="table-1",
+            row_index=2,
+            column_index=1,
+            header_cells=["Field", "Behavior"],
+            row_cells=["Client card", "Editable"],
+            cell_text="Editable",
+            row_text="Client card | Editable",
+            neighboring_rows=[],
+            normalized_row_facts=["Client card is editable"],
+            field_name_candidates=["Client card"],
+            condition_candidates=["User opens client card"],
+            expected_behavior_candidates=["Client card is editable"],
+            action_candidates=["User opens client card"],
+            confidence="high",
+            warnings=[],
+        )
+
+        loaded = TableSourceContext.from_dict(context.to_dict())
+
+        self.assertEqual(context.to_dict(), loaded.to_dict())
+
+    def test_candidate_requirement_preserves_table_and_anchor_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = setup_fixture(Path(temp_dir))
+
+            candidate = build_bundle(root).candidate_requirements[0]
+
+            self.assertGreaterEqual(len(candidate.source_anchor_contexts), 1)
+            self.assertGreaterEqual(len(candidate.table_source_contexts), 1)
+            self.assertIsNotNone(candidate.enriched_source_facts)
+            self.assertIn("table_source_context", candidate.enriched_source_facts.available_fact_sources)
+            self.assertEqual("high", candidate.source_fact_confidence)
 
     def test_groups_requirements_with_explicit_rationale(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

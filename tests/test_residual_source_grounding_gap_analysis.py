@@ -25,6 +25,9 @@ class ResidualSourceGroundingGapAnalysisTests(unittest.TestCase):
             self.assertEqual("pass-with-warnings", analysis.analysis_status)
             self.assertEqual("WPKG-000001", analysis.package_id)
             self.assertEqual(1, len(analysis.draft_gap_analyses))
+            self.assertGreaterEqual(analysis.summary["table_context_available_count"], 1)
+            self.assertGreaterEqual(analysis.summary["anchor_context_available_count"], 1)
+            self.assertIn("source_fact_absent_count", analysis.summary)
 
     def test_blocks_when_draft_proposal_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

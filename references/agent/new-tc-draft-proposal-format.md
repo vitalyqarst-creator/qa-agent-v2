@@ -146,3 +146,15 @@ If these facts are missing, the draft must remain draft-only and non-executable.
 The proposal builder must not emit generic placeholder steps such as "open the source screen", "set up the source-backed condition", or "perform the action needed to observe the behavior". Missing source facts must be recorded in `missing_facts`, `manual_questions`, warnings, and review focus instead of being converted into invented steps.
 
 Existing similar TC content may be used only as duplicate-risk or comparison evidence. It is not a source of business rules and must not be copied into a new draft unless the source requirements independently support the behavior.
+
+## Stage 9D.5 Enriched Source Facts
+
+Draft grounding must use `enriched_source_facts`, `source_anchor_contexts`, and `table_source_contexts` before falling back to legacy `object`, `condition`, and `expected_behavior` fields.
+
+Rules:
+
+- Source anchors are evidence, not instructions to invent missing behavior.
+- Table row/header/cell context may support object or expected behavior only when the evidence is explicit.
+- User action may be promoted only when source text or table context explicitly describes an action or user interaction.
+- Table context without action or oracle must keep `is_executable_draft=false`.
+- Aggregate-only context must remain manual-review-only.
