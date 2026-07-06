@@ -12,6 +12,7 @@ from test_case_agent import (
     load_create_new_tc_context_bundle,
     write_create_new_tc_context_bundle,
 )
+from tests.test_ooxml_loader import build_table_docx_fixture
 
 
 class CreateNewTcContextBundleTests(unittest.TestCase):
@@ -104,6 +105,27 @@ class CreateNewTcContextBundleTests(unittest.TestCase):
             self.assertIsNotNone(candidate.enriched_source_facts)
             self.assertIn("table_source_context", candidate.enriched_source_facts.available_fact_sources)
             self.assertEqual("high", candidate.source_fact_confidence)
+            self.assertTrue(any("fallback" in warning for context in candidate.table_source_contexts for warning in context.warnings))
+
+    def test_candidate_requirement_includes_real_ooxml_table_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = setup_fixture(Path(temp_dir))
+            source_docx = root / "new.docx"
+            build_table_docx_fixture(source_docx)
+            rewrite_new_registry_anchor(
+                root / "work" / "requirements.new.jsonl",
+                source_doc=str(source_docx),
+                xpath="/w:document/w:body/w:tbl[1]/w:tr[2]/w:tc[2]/w:p[1]/w:r/w:t/text()",
+            )
+
+            candidate = build_bundle(root).candidate_requirements[0]
+            table_context = candidate.table_source_contexts[0]
+
+            self.assertEqual(["Field", "Expected result", "Action"], table_context.header_cells)
+            self.assertEqual(["Client card", "Client card field is editable", "User opens client card"], table_context.row_cells)
+            self.assertEqual(["Phone | Phone is displayed | User opens contacts"], table_context.neighboring_rows)
+            self.assertFalse(any("fallback" in warning for warning in table_context.warnings))
+            self.assertIn("Expected result: Client card field is editable", table_context.expected_behavior_candidates)
 
     def test_groups_requirements_with_explicit_rationale(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -459,6 +481,17 @@ def write_json(path: Path, payload: dict[str, object]) -> None:
 
 
 def write_registry(path: Path, entries: list[dict[str, object]]) -> None:
+    path.write_text(
+        "".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def rewrite_new_registry_anchor(path: Path, *, source_doc: str, xpath: str) -> None:
+    entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    entries[0]["source_anchors"][0]["source_doc"] = source_doc
+    entries[0]["source_anchors"][0]["xpath"] = xpath
     path.write_text(
         "".join(json.dumps(entry, ensure_ascii=False) + "\n" for entry in entries),
         encoding="utf-8",

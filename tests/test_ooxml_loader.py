@@ -9,9 +9,11 @@ import zipfile
 from pathlib import Path
 
 from test_case_agent import (
+    OOXMLTableCellContext,
     extract_ooxml_source_nodes,
     inspect_ooxml_coverage,
     load_ooxml_source,
+    table_context_from_anchor,
 )
 
 
@@ -153,6 +155,45 @@ class OoxmlLoaderTests(unittest.TestCase):
 
             self.assertIn("word/document.xml", coverage.xml_parts_extracted)
             self.assertTrue(nodes)
+
+    def test_table_context_from_anchor_extracts_row_header_and_neighbors(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_docx = Path(temp_dir) / "table.docx"
+            build_table_docx_fixture(source_docx)
+
+            context = table_context_from_anchor(
+                source_path=source_docx,
+                source_version="new",
+                part="word/document.xml",
+                xpath="/w:document/w:body/w:tbl[1]/w:tr[2]/w:tc[2]/w:p[1]/w:r/w:t/text()",
+                node_id="node-table-1",
+            )
+
+            self.assertIsInstance(context, OOXMLTableCellContext)
+            self.assertEqual(1, context.table_index)
+            self.assertEqual(2, context.row_index)
+            self.assertEqual(2, context.column_index)
+            self.assertEqual("Client card field is editable", context.cell_text)
+            self.assertEqual(["Field", "Expected result", "Action"], context.header_cells)
+            self.assertEqual(["Client card", "Client card field is editable", "User opens client card"], context.row_cells)
+            self.assertEqual(["Phone", "Phone is displayed", "User opens contacts"], context.next_row_cells)
+            self.assertEqual("Application card rules", context.table_heading_context)
+            self.assertEqual("high", context.confidence)
+
+    def test_table_context_from_anchor_handles_missing_row_or_column_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_docx = Path(temp_dir) / "table.docx"
+            build_table_docx_fixture(source_docx)
+
+            context = table_context_from_anchor(
+                source_path=source_docx,
+                source_version="new",
+                part="word/document.xml",
+                xpath="/w:document/w:body/w:tbl[1]",
+            )
+
+            self.assertEqual([], context.row_cells)
+            self.assertTrue(any("w:tr" in warning for warning in context.warnings))
 
     def test_cli_outputs_json_markers_and_files_read(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -299,6 +340,47 @@ def build_docx_fixture(path: Path) -> None:
             archive.writestr(name, value)
         archive.writestr("word/media/image1.png", b"\x89PNG\r\n\x1a\n")
         archive.writestr("docProps/thumbnail.jpeg", b"\xff\xd8\xff\xd9")
+
+
+def build_table_docx_fixture(path: Path) -> None:
+    entries = {
+        "[Content_Types].xml": """<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>""",
+        "_rels/.rels": """<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdOfficeDocument" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>""",
+        "word/document.xml": """<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Application card rules</w:t></w:r></w:p>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Field</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Expected result</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Action</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Client card</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Client card field is editable</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>User opens client card</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Phone</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Phone is displayed</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>User opens contacts</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>""",
+    }
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, value in entries.items():
+            archive.writestr(name, value)
 
 
 if __name__ == "__main__":

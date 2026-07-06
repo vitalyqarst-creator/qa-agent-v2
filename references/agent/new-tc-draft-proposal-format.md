@@ -158,3 +158,5 @@ Rules:
 - User action may be promoted only when source text or table context explicitly describes an action or user interaction.
 - Table context without action or oracle must keep `is_executable_draft=false`.
 - Aggregate-only context must remain manual-review-only.
+
+Real OOXML table context should be carried into each `SourceGroundingProfile` through `table_source_contexts`. Draft steps may use that context only when object, user action, and expected behavior are all source-backed.

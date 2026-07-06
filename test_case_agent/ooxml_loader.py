@@ -4,6 +4,7 @@ import posixpath
 import re
 import zipfile
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Literal
 
@@ -157,6 +158,70 @@ class RelationshipTarget:
     target_url: str | None = None
 
 
+@dataclass(frozen=True)
+class OOXMLTableCellContext:
+    source_path: str
+    source_version: str | None
+    part: str
+    table_index: int | None
+    row_index: int | None
+    column_index: int | None
+    cell_text: str | None
+    row_cells: list[str]
+    header_cells: list[str]
+    previous_row_cells: list[str]
+    next_row_cells: list[str]
+    table_caption: str | None
+    table_heading_context: str | None
+    xpath: str
+    node_id: str | None
+    confidence: str
+    warnings: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "source_path": self.source_path,
+            "source_version": self.source_version,
+            "part": self.part,
+            "table_index": self.table_index,
+            "row_index": self.row_index,
+            "column_index": self.column_index,
+            "cell_text": self.cell_text,
+            "row_cells": self.row_cells,
+            "header_cells": self.header_cells,
+            "previous_row_cells": self.previous_row_cells,
+            "next_row_cells": self.next_row_cells,
+            "table_caption": self.table_caption,
+            "table_heading_context": self.table_heading_context,
+            "xpath": self.xpath,
+            "node_id": self.node_id,
+            "confidence": self.confidence,
+            "warnings": self.warnings,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "OOXMLTableCellContext":
+        return cls(
+            source_path=str(data["source_path"]),
+            source_version=data.get("source_version"),
+            part=str(data["part"]),
+            table_index=_optional_int(data.get("table_index")),
+            row_index=_optional_int(data.get("row_index")),
+            column_index=_optional_int(data.get("column_index")),
+            cell_text=data.get("cell_text"),
+            row_cells=list(data.get("row_cells") or []),
+            header_cells=list(data.get("header_cells") or []),
+            previous_row_cells=list(data.get("previous_row_cells") or []),
+            next_row_cells=list(data.get("next_row_cells") or []),
+            table_caption=data.get("table_caption"),
+            table_heading_context=data.get("table_heading_context"),
+            xpath=str(data.get("xpath") or ""),
+            node_id=data.get("node_id"),
+            confidence=str(data.get("confidence") or "low"),
+            warnings=list(data.get("warnings") or []),
+        )
+
+
 def load_ooxml_source(source: Path, *, parser_mode: str = PARSER_MODE_STRICT) -> OoxmlSource:
     source = Path(source)
     if parser_mode not in {PARSER_MODE_STRICT, PARSER_MODE_TOLERANT}:
@@ -225,6 +290,79 @@ def extract_ooxml_source_nodes(source: Path) -> list[SourceNode]:
     return load_ooxml_source(source).source_nodes
 
 
+def table_context_from_anchor(
+    *,
+    source_path: str | Path,
+    part: str,
+    xpath: str,
+    source_version: str | None = None,
+    node_id: str | None = None,
+) -> OOXMLTableCellContext:
+    source = Path(source_path)
+    warnings: list[str] = []
+    table_index = _xpath_index(xpath, "tbl")
+    row_index = _xpath_index(xpath, "tr")
+    column_index = _xpath_index(xpath, "tc")
+    if table_index is None:
+        warnings.append("source anchor xpath does not contain w:tbl[n].")
+    if row_index is None:
+        warnings.append("source anchor xpath does not contain w:tr[n].")
+    if column_index is None:
+        warnings.append("source anchor xpath does not contain w:tc[n].")
+    if not source.exists():
+        warnings.append(f"OOXML source document is missing: {source}")
+        return _empty_table_cell_context(source, part, xpath, source_version, node_id, table_index, row_index, column_index, warnings)
+    try:
+        tables = _table_structures(str(source), part)
+    except Exception as exc:  # noqa: BLE001 - caller needs diagnostic warning, not exception.
+        warnings.append(f"OOXML table context cannot be extracted: {exc}")
+        return _empty_table_cell_context(source, part, xpath, source_version, node_id, table_index, row_index, column_index, warnings)
+    if table_index is None or row_index is None:
+        return _empty_table_cell_context(source, part, xpath, source_version, node_id, table_index, row_index, column_index, warnings)
+    if table_index < 1 or table_index > len(tables):
+        warnings.append(f"table index out of range: {table_index}")
+        return _empty_table_cell_context(source, part, xpath, source_version, node_id, table_index, row_index, column_index, warnings)
+    table = tables[table_index - 1]
+    rows: list[list[str]] = table["rows"]
+    if row_index < 1 or row_index > len(rows):
+        warnings.append(f"row index out of range: {row_index}")
+        return _empty_table_cell_context(source, part, xpath, source_version, node_id, table_index, row_index, column_index, warnings)
+    row_cells = rows[row_index - 1]
+    cell_text = None
+    if column_index is not None:
+        if 1 <= column_index <= len(row_cells):
+            cell_text = row_cells[column_index - 1] or None
+        else:
+            warnings.append(f"column index out of range: {column_index}")
+    header_cells: list[str] = []
+    if row_index > 1 and rows and any(rows[0]) and rows[0] != row_cells:
+        header_cells = rows[0]
+    else:
+        warnings.append("header row not available or not distinguishable from data row.")
+    previous_row_cells = rows[row_index - 2] if row_index > 1 else []
+    next_row_cells = rows[row_index] if row_index < len(rows) else []
+    confidence = "high" if row_cells and header_cells and cell_text else "medium" if row_cells else "low"
+    return OOXMLTableCellContext(
+        source_path=str(source),
+        source_version=source_version,
+        part=part,
+        table_index=table_index,
+        row_index=row_index,
+        column_index=column_index,
+        cell_text=cell_text,
+        row_cells=row_cells,
+        header_cells=header_cells,
+        previous_row_cells=previous_row_cells,
+        next_row_cells=next_row_cells,
+        table_caption=table.get("caption"),
+        table_heading_context=table.get("heading_context"),
+        xpath=xpath,
+        node_id=node_id,
+        confidence=confidence,
+        warnings=warnings,
+    )
+
+
 def _build_relationships(
     parsed_parts: dict[str, etree._Element],
 ) -> dict[str, dict[str, RelationshipTarget]]:
@@ -257,6 +395,97 @@ def _build_relationships(
                 target_url=target_url,
             )
     return relationships_by_part
+
+
+@lru_cache(maxsize=32)
+def _table_structures(source_path: str, part: str) -> tuple[dict[str, Any], ...]:
+    source = Path(source_path)
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, recover=False)
+    with zipfile.ZipFile(source) as archive:
+        root = etree.fromstring(archive.read(part), parser=parser)
+    tables: list[dict[str, Any]] = []
+    preceding_paragraphs: list[str] = []
+    for element in root.iter():
+        if _is_w(element, "p"):
+            text = _aggregate_text(element)
+            if text:
+                preceding_paragraphs.append(text)
+                preceding_paragraphs = preceding_paragraphs[-5:]
+            continue
+        if not _is_w(element, "tbl"):
+            continue
+        rows: list[list[str]] = []
+        for row in element:
+            if not _is_w(row, "tr"):
+                continue
+            cells: list[str] = []
+            for cell in row:
+                if _is_w(cell, "tc"):
+                    cells.append(_aggregate_text(cell))
+            if any(cells):
+                rows.append(cells)
+        heading_context = _last_meaningful(preceding_paragraphs)
+        tables.append(
+            {
+                "rows": rows,
+                "caption": heading_context,
+                "heading_context": heading_context,
+            }
+        )
+    return tuple(tables)
+
+
+def _empty_table_cell_context(
+    source: Path,
+    part: str,
+    xpath: str,
+    source_version: str | None,
+    node_id: str | None,
+    table_index: int | None,
+    row_index: int | None,
+    column_index: int | None,
+    warnings: list[str],
+) -> OOXMLTableCellContext:
+    return OOXMLTableCellContext(
+        source_path=str(source),
+        source_version=source_version,
+        part=part,
+        table_index=table_index,
+        row_index=row_index,
+        column_index=column_index,
+        cell_text=None,
+        row_cells=[],
+        header_cells=[],
+        previous_row_cells=[],
+        next_row_cells=[],
+        table_caption=None,
+        table_heading_context=None,
+        xpath=xpath,
+        node_id=node_id,
+        confidence="low",
+        warnings=warnings,
+    )
+
+
+def _xpath_index(xpath: str, tag: str) -> int | None:
+    match = re.search(rf"w:{re.escape(tag)}\[(\d+)\]", xpath)
+    if not match:
+        return None
+    return int(match.group(1))
+
+
+def _optional_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _last_meaningful(values: list[str]) -> str | None:
+    for value in reversed(values):
+        if value and len(value) > 2:
+            return value
+    return None
 
 
 def _extract_source_nodes(

@@ -8,10 +8,12 @@ from test_case_agent.models import Section, SectionChunk
 from test_case_agent.ooxml_loader import (
     OoxmlCoverageAudit,
     OoxmlSource,
+    OOXMLTableCellContext,
     SourceNode,
     extract_ooxml_source_nodes,
     inspect_ooxml_coverage,
     load_ooxml_source,
+    table_context_from_anchor,
 )
 from test_case_agent.source_manifest import (
     SourceFileEntry,
@@ -315,6 +317,7 @@ __all__ = [
     "NoMatchingSectionsError",
     "OoxmlCoverageAudit",
     "OoxmlSource",
+    "OOXMLTableCellContext",
     "RequirementRegistry",
     "RequirementRegistryEntry",
     "RequirementsDiff",
@@ -438,6 +441,7 @@ __all__ = [
     "load_requirements_registry_jsonl",
     "load_source_manifest",
     "load_ooxml_source",
+    "table_context_from_anchor",
     "load_sections",
     "make_entry_uid",
     "make_req_uid",

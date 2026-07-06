@@ -422,6 +422,14 @@ def build_residual_source_grounding_gap_analysis(
         "generic_placeholder_drafts_count": sum(1 for item in draft_analyses if item.contains_generic_placeholders),
         "table_context_available_count": _table_context_available_count(bundle, proposal),
         "table_context_used_count": _table_context_used_count(proposal),
+        "real_table_context_available_count": _real_table_context_available_count(bundle, proposal),
+        "real_table_context_used_count": _real_table_context_used_count(proposal),
+        "fallback_table_context_count": _fallback_table_context_count(bundle, proposal),
+        "header_cells_available_count": _header_cells_available_count(bundle, proposal),
+        "row_cells_available_count": _row_cells_available_count(bundle, proposal),
+        "neighboring_rows_available_count": _neighboring_rows_available_count(bundle, proposal),
+        "table_context_ambiguous_count": _table_context_ambiguous_count(requirement_analyses),
+        "table_context_missing_count": _table_context_missing_count(requirement_analyses),
         "anchor_context_available_count": _anchor_context_available_count(bundle, proposal),
         "anchor_context_used_count": _anchor_context_used_count(proposal),
         "source_fact_ambiguous_count": classification_counts.get("source_fact_ambiguous", 0),
@@ -507,6 +515,14 @@ def render_residual_source_grounding_gap_analysis_markdown(analysis: ResidualSou
         f"- Generic placeholder drafts: `{summary.get('generic_placeholder_drafts_count', 0)}`",
         f"- Table context available: `{summary.get('table_context_available_count', 0)}`",
         f"- Table context used: `{summary.get('table_context_used_count', 0)}`",
+        f"- Real table context available: `{summary.get('real_table_context_available_count', 0)}`",
+        f"- Real table context used: `{summary.get('real_table_context_used_count', 0)}`",
+        f"- Fallback table context: `{summary.get('fallback_table_context_count', 0)}`",
+        f"- Header cells available: `{summary.get('header_cells_available_count', 0)}`",
+        f"- Row cells available: `{summary.get('row_cells_available_count', 0)}`",
+        f"- Neighboring rows available: `{summary.get('neighboring_rows_available_count', 0)}`",
+        f"- Table context ambiguous: `{summary.get('table_context_ambiguous_count', 0)}`",
+        f"- Table context missing: `{summary.get('table_context_missing_count', 0)}`",
         f"- Anchor context available: `{summary.get('anchor_context_available_count', 0)}`",
         f"- Anchor context used: `{summary.get('anchor_context_used_count', 0)}`",
         f"- Source fact ambiguous: `{summary.get('source_fact_ambiguous_count', 0)}`",
@@ -721,6 +737,8 @@ def _classify_requirement_gap(
 ) -> GapClassification:
     if duplicate_risk in {"medium", "high"}:
         return "duplicate_risk_prevents_decision"
+    if _has_real_table_context(candidate, anchors) and missing:
+        return "source_fact_ambiguous"
     if _has_table_or_anchor_context(candidate, anchors):
         return "table_or_anchor_context_needed"
     if _registry_has_any_missing_fact(registry_entry, missing):
@@ -923,6 +941,78 @@ def _table_context_used_count(proposal: NewTcDraftProposal) -> int:
     )
 
 
+def _real_table_context_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    reqs = {
+        candidate.req_uid
+        for candidate in bundle.candidate_requirements
+        if candidate.req_uid and any(_is_real_table_context(context) for context in getattr(candidate, "table_source_contexts", []) or [])
+    }
+    for draft in proposal.draft_test_cases:
+        for profile in draft.source_grounding_profiles:
+            if profile.req_uid and any(_is_real_table_context_dict(context) for context in profile.table_source_contexts):
+                reqs.add(profile.req_uid)
+    return len(reqs)
+
+
+def _real_table_context_used_count(proposal: NewTcDraftProposal) -> int:
+    return sum(
+        1
+        for draft in proposal.draft_test_cases
+        for profile in draft.source_grounding_profiles
+        if any(_is_real_table_context_dict(context) for context in profile.table_source_contexts)
+    )
+
+
+def _fallback_table_context_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    reqs = {
+        candidate.req_uid
+        for candidate in bundle.candidate_requirements
+        if candidate.req_uid and any(_is_fallback_table_context(context) for context in getattr(candidate, "table_source_contexts", []) or [])
+    }
+    for draft in proposal.draft_test_cases:
+        for profile in draft.source_grounding_profiles:
+            if profile.req_uid and any(_is_fallback_table_context_dict(context) for context in profile.table_source_contexts):
+                reqs.add(profile.req_uid)
+    return len(reqs)
+
+
+def _header_cells_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    return _table_context_field_available_count(bundle, proposal, "header_cells")
+
+
+def _row_cells_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    return _table_context_field_available_count(bundle, proposal, "row_cells")
+
+
+def _neighboring_rows_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
+    return _table_context_field_available_count(bundle, proposal, "neighboring_rows")
+
+
+def _table_context_field_available_count(
+    bundle: CreateNewTcContextBundle,
+    proposal: NewTcDraftProposal,
+    field_name: str,
+) -> int:
+    reqs = {
+        candidate.req_uid
+        for candidate in bundle.candidate_requirements
+        if candidate.req_uid and any(getattr(context, field_name, None) for context in getattr(candidate, "table_source_contexts", []) or [])
+    }
+    for draft in proposal.draft_test_cases:
+        for profile in draft.source_grounding_profiles:
+            if profile.req_uid and any(context.get(field_name) for context in profile.table_source_contexts):
+                reqs.add(profile.req_uid)
+    return len(reqs)
+
+
+def _table_context_ambiguous_count(requirements: list[RequirementGroundingGapAnalysis]) -> int:
+    return sum(1 for item in requirements if item.gap_classification == "source_fact_ambiguous")
+
+
+def _table_context_missing_count(requirements: list[RequirementGroundingGapAnalysis]) -> int:
+    return sum(1 for item in requirements if item.gap_classification == "table_or_anchor_context_needed")
+
+
 def _anchor_context_available_count(bundle: CreateNewTcContextBundle, proposal: NewTcDraftProposal) -> int:
     reqs = {
         candidate.req_uid
@@ -1101,6 +1191,30 @@ def _has_table_or_anchor_context(candidate: CandidateRequirement | None, anchors
     values.extend(json.dumps(anchor, ensure_ascii=False) for anchor in anchors or [])
     text = " ".join(str(value or "").casefold() for value in values)
     return bool(TABLE_WORD_RE.search(text)) or any(marker in text for marker in TABLE_MARKERS)
+
+
+def _has_real_table_context(candidate: CandidateRequirement | None, anchors: list[dict[str, Any]] | None) -> bool:
+    if candidate and any(_is_real_table_context(context) for context in getattr(candidate, "table_source_contexts", []) or []):
+        return True
+    return False
+
+
+def _is_real_table_context(context: Any) -> bool:
+    warnings = [str(value).casefold() for value in getattr(context, "warnings", []) or []]
+    return bool(getattr(context, "row_cells", None)) and not any("fallback" in warning for warning in warnings)
+
+
+def _is_real_table_context_dict(context: dict[str, Any]) -> bool:
+    warnings = [str(value).casefold() for value in context.get("warnings") or []]
+    return bool(context.get("row_cells")) and not any("fallback" in warning for warning in warnings)
+
+
+def _is_fallback_table_context(context: Any) -> bool:
+    return any("fallback" in str(value).casefold() for value in getattr(context, "warnings", []) or [])
+
+
+def _is_fallback_table_context_dict(context: dict[str, Any]) -> bool:
+    return any("fallback" in str(value).casefold() for value in context.get("warnings") or [])
 
 
 def _has_aggregate_context(candidate: CandidateRequirement | None) -> bool:

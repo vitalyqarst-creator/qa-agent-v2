@@ -130,6 +130,14 @@ Recommendations must generalize to future FT packages. Do not add AutoFin-specif
 
 - `table_context_available_count`
 - `table_context_used_count`
+- `real_table_context_available_count`
+- `real_table_context_used_count`
+- `fallback_table_context_count`
+- `header_cells_available_count`
+- `row_cells_available_count`
+- `neighboring_rows_available_count`
+- `table_context_ambiguous_count`
+- `table_context_missing_count`
 - `anchor_context_available_count`
 - `anchor_context_used_count`
 - `source_fact_ambiguous_count`
@@ -139,6 +147,8 @@ Recommendations must generalize to future FT packages. Do not add AutoFin-specif
 Use these metrics to separate:
 
 - table context found and usable;
+- real OOXML row/header context found;
+- fallback table context used because real context is unavailable;
 - table context found but ambiguous;
 - table context absent;
 - aggregate context only;

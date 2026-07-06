@@ -289,6 +289,22 @@ python scripts/build_requirements_registry.py \
 
 The CLI writes JSONL and summary files. A blocked registry is reported through `registry_status=blocked` in the summary and stdout payload.
 
+## Stage 9D.5a OOXML Table Context
+
+Requirement registry entries remain backward-compatible. When table context is available, source anchors must preserve enough evidence to map back to the real OOXML table:
+
+- `source_doc`
+- `source_version`
+- `part`
+- `xpath`
+- `node_id`
+- `flags`
+- `aggregate_kind`
+
+Downstream stages may use these anchors to extract real `header_cells`, `row_cells`, and neighboring row evidence from the DOCX. Registry entries must not invent table row/header context when the raw source cannot be opened or the xpath lacks `w:tbl[n]/w:tr[m]/w:tc[k]`.
+
+Source-only/style rows must not become diff-eligible solely because table context exists.
+
 ## Stage 3 Limits
 
 - No comparison of two FT versions.

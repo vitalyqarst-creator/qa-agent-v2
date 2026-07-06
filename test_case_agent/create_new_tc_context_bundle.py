@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+from test_case_agent.ooxml_loader import OOXMLTableCellContext, table_context_from_anchor
+
 CREATED_BY_TOOL = "test_case_agent.create_new_tc_context_bundle"
 BUNDLE_PREFIX = "create-new-tc-context-bundle"
 DEFAULT_PACKAGE_ID = "WPKG-000001"
@@ -924,6 +926,10 @@ def _table_source_contexts(
         table_id = _xpath_index(xpath, "tbl")
         row_index = _optional_int(_xpath_index(xpath, "tr"))
         column_index = _optional_int(_xpath_index(xpath, "tc"))
+        real_context = _real_table_context(anchor)
+        if real_context and real_context.row_cells:
+            contexts.append(_table_source_context_from_ooxml(real_context, condition, expected_behavior))
+            continue
         cell_text = _first_nonempty([source_text, normalized_text])
         row_cells = _unique([value for value in [object_value, condition, expected_behavior, cell_text] if value and not _looks_like_ooxml_style_dump(value)])
         normalized_row_facts = _unique([value for value in [condition, expected_behavior, normalized_text, source_text] if value])
@@ -940,6 +946,7 @@ def _table_source_contexts(
             warnings.append("table context does not contain observable expected behavior.")
         if anchor.get("aggregate_kind"):
             warnings.append("aggregate table context is evidence only and does not authorize invented behavior.")
+        warnings.append("table context fallback used; real row/header context unavailable")
         contexts.append(
             TableSourceContext(
                 source_path=anchor.get("source_doc"),
@@ -962,6 +969,67 @@ def _table_source_contexts(
             )
         )
     return contexts
+
+
+def _real_table_context(anchor: dict[str, Any]) -> OOXMLTableCellContext | None:
+    source_path = anchor.get("source_doc")
+    part = anchor.get("part")
+    xpath = anchor.get("xpath")
+    if not source_path or not part or not xpath:
+        return None
+    return table_context_from_anchor(
+        source_path=source_path,
+        part=str(part),
+        xpath=str(xpath),
+        source_version=anchor.get("source_version"),
+        node_id=anchor.get("node_id"),
+    )
+
+
+def _table_source_context_from_ooxml(
+    context: OOXMLTableCellContext,
+    condition: str | None,
+    expected_behavior: str | None,
+) -> TableSourceContext:
+    row_text = " | ".join(context.row_cells)
+    normalized_row_facts = _unique([row_text, context.cell_text, context.table_heading_context, condition, expected_behavior])
+    field_candidates = _field_candidates_from_real_context(context)
+    condition_candidates = _condition_candidates_from_real_context(context, condition)
+    expected_candidates = _expected_candidates_from_real_context(context, expected_behavior)
+    action_candidates = _action_candidates(row_text, condition, context.cell_text, context.table_heading_context)
+    warnings = list(context.warnings)
+    if not action_candidates:
+        warnings.append("real table row/header context does not contain an explicit user action.")
+    if not expected_candidates:
+        warnings.append("real table row/header context does not contain observable expected behavior.")
+    return TableSourceContext(
+        source_path=context.source_path,
+        source_version=context.source_version,
+        table_id=f"table-{context.table_index}" if context.table_index is not None else None,
+        row_index=context.row_index,
+        column_index=context.column_index,
+        header_cells=context.header_cells,
+        row_cells=context.row_cells,
+        cell_text=context.cell_text,
+        row_text=row_text or context.cell_text,
+        neighboring_rows=_neighboring_rows_without_header(context),
+        normalized_row_facts=normalized_row_facts,
+        field_name_candidates=field_candidates,
+        condition_candidates=condition_candidates,
+        expected_behavior_candidates=expected_candidates,
+        action_candidates=action_candidates,
+        confidence=context.confidence,
+        warnings=warnings,
+    )
+
+
+def _neighboring_rows_without_header(context: OOXMLTableCellContext) -> list[str]:
+    rows: list[str | None] = []
+    if context.previous_row_cells and context.previous_row_cells != context.header_cells:
+        rows.append(" | ".join(context.previous_row_cells))
+    if context.next_row_cells:
+        rows.append(" | ".join(context.next_row_cells))
+    return _unique(rows)
 
 
 def _enriched_source_facts(
@@ -1084,6 +1152,70 @@ def _field_name_candidates(object_value: str | None, cell_text: str | None) -> l
         if 3 <= len(before_colon) <= 120 and not _looks_like_ooxml_style_dump(before_colon):
             candidates.append(before_colon)
     return _unique(candidates)
+
+
+def _field_candidates_from_real_context(context: OOXMLTableCellContext) -> list[str]:
+    candidates: list[str] = []
+    cell_text = context.cell_text
+    if context.header_cells and context.column_index and 1 <= context.column_index <= len(context.header_cells):
+        header = context.header_cells[context.column_index - 1]
+        if header and cell_text and _is_object_header(header):
+            candidates.append(f"{header}: {cell_text}")
+    if not candidates and cell_text and not _looks_like_ooxml_style_dump(cell_text):
+        candidates.append(cell_text)
+    return _unique(candidates)
+
+
+def _condition_candidates_from_real_context(
+    context: OOXMLTableCellContext,
+    condition: str | None,
+) -> list[str]:
+    candidates = [condition] if condition else []
+    for header, cell in _header_cell_pairs(context):
+        if _is_condition_header(header) and cell:
+            candidates.append(f"{header}: {cell}")
+    row_text = " | ".join(context.row_cells)
+    candidates.extend(_condition_candidates(None, row_text))
+    return _unique(candidates)
+
+
+def _expected_candidates_from_real_context(
+    context: OOXMLTableCellContext,
+    expected_behavior: str | None,
+) -> list[str]:
+    candidates = [expected_behavior] if expected_behavior else []
+    for header, cell in _header_cell_pairs(context):
+        if _is_expected_header(header) and cell:
+            candidates.append(f"{header}: {cell}")
+    if not candidates and context.cell_text:
+        candidates.append(context.cell_text)
+    return _unique(candidates)
+
+
+def _header_cell_pairs(context: OOXMLTableCellContext) -> list[tuple[str, str]]:
+    pairs: list[tuple[str, str]] = []
+    for index, cell in enumerate(context.row_cells):
+        if index < len(context.header_cells):
+            pairs.append((context.header_cells[index], cell))
+    return pairs
+
+
+def _is_object_header(value: str) -> bool:
+    lowered = value.casefold()
+    return any(marker in lowered for marker in ["field", "object", "screen", "поле", "объект", "экран", "элемент", "название"])
+
+
+def _is_condition_header(value: str) -> bool:
+    lowered = value.casefold()
+    return any(marker in lowered for marker in ["condition", "when", "if", "услов", "если", "при "])
+
+
+def _is_expected_header(value: str) -> bool:
+    lowered = value.casefold()
+    return any(
+        marker in lowered
+        for marker in ["expected", "result", "behavior", "oracle", "ожида", "результ", "поведен", "должен"]
+    )
 
 
 def _condition_candidates(condition: str | None, cell_text: str | None) -> list[str]:

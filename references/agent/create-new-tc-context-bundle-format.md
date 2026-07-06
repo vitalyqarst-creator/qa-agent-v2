@@ -164,3 +164,18 @@ Table cell facts must be interpreted with row/header/anchor context. A table cel
 Aggregate context must be flagged. Aggregate-derived source context can support diagnostics, but it cannot by itself authorize an executable draft.
 
 Existing TC comparison remains non-authoritative for business behavior. It may identify duplicate risk only.
+
+## Stage 9D.5a Real OOXML Table Context
+
+When a source anchor points to an available DOCX OOXML part with `w:tbl[n]/w:tr[m]/w:tc[k]`, the bundle should populate `TableSourceContext` from the real table:
+
+- `header_cells`
+- `row_cells`
+- `cell_text`
+- `row_text`
+- `neighboring_rows`
+- `table_id`, `row_index`, `column_index`
+
+If the raw OOXML source is unavailable or the xpath lacks table/row/cell indexes, the bundle may keep a fallback table context, but it must label it with `table context fallback used; real row/header context unavailable`.
+
+Header/row/neighbouring-row content is audit evidence. It must not be treated as permission to invent missing business behavior.
