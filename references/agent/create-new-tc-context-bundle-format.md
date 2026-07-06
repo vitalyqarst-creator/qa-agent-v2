@@ -139,3 +139,11 @@ The Markdown artifact must include:
 - coverage obligations;
 - warnings and blockers;
 - explicit statement that no canonical TC was created or modified.
+
+## Stage 9D.3 Source Grounding Inputs
+
+The context bundle should preserve source anchors and source text needed for later grounding. Draft stages must use those facts as the only business-rule source for new TC content.
+
+Existing TC matches in the bundle are duplicate-risk evidence only. They may identify similar coverage, but they do not authorize copying steps, expected results, test data, headings, or traceability into a new draft.
+
+When the bundle lacks a concrete object, condition, user action, or observable expected behavior, downstream draft stages must keep the item manual-review-only or non-executable until a source-backed clarification is available.

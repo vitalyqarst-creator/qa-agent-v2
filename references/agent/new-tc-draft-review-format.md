@@ -106,3 +106,17 @@ The Markdown artifact must include:
 - checks;
 - warnings and blockers;
 - explicit safety statement that no canonical TC was created or edited.
+
+## Stage 9D.3 Source Grounding Review Rules
+
+Review must treat unresolved source grounding as a draft-quality issue. A draft that lacks a source-backed user action, concrete object, concrete condition, or observable expected behavior must be marked `needs_revision` unless it is explicitly deferred.
+
+`contains_generic_placeholders=true` is a review warning at minimum. Placeholder-like steps or expected results must not be approved as executable test design.
+
+`is_executable_draft=false` means the draft can remain a planning artifact, but it is not ready for revised draft proposal, controlled create apply, or canonical TC creation.
+
+Review findings should distinguish:
+
+- missing source facts, which require source-grounding work;
+- duplicate-risk uncertainty, which requires manual differentiation or deferral;
+- safety violations, which must keep `safe_for_controlled_create_apply=false`.

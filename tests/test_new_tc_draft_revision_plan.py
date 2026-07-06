@@ -60,6 +60,10 @@ class NewTcDraftRevisionPlanTests(unittest.TestCase):
     def test_required_fixes_are_copied_from_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, bundle_path, proposal_path, review_path = setup_revision_fixture(Path(temp_dir))
+            mutate_first_draft_review(
+                review_path,
+                required_fixes=["Replace generic placeholder steps with source-backed actions."],
+            )
 
             plan = build_plan(root, bundle_path, proposal_path, review_path)
 

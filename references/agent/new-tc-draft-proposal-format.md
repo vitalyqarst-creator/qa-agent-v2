@@ -129,3 +129,20 @@ The Markdown artifact must include:
 - duplicate risk decisions;
 - review focus checklist;
 - warnings and blocking reasons.
+
+## Stage 9D.3 Source Grounding And Draft Quality Rules
+
+Each draft candidate must expose `source_grounding_profiles`, `grounding_confidence`, `manual_questions`, `contains_generic_placeholders`, `draft_quality_flags`, and `is_executable_draft`.
+
+Executable draft steps require source-backed facts for:
+
+- concrete object, screen, section, field, table, value, or rule under test;
+- concrete condition or data state;
+- user action explicitly supported by source text or anchors;
+- observable expected behavior supported by source text.
+
+If these facts are missing, the draft must remain draft-only and non-executable. It may include manual source-grounding questions, but it must not pretend that a writer can execute or apply it safely.
+
+The proposal builder must not emit generic placeholder steps such as "open the source screen", "set up the source-backed condition", or "perform the action needed to observe the behavior". Missing source facts must be recorded in `missing_facts`, `manual_questions`, warnings, and review focus instead of being converted into invented steps.
+
+Existing similar TC content may be used only as duplicate-risk or comparison evidence. It is not a source of business rules and must not be copied into a new draft unless the source requirements independently support the behavior.

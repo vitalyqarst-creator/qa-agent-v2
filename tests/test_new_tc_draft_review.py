@@ -70,6 +70,15 @@ class NewTcDraftReviewTests(unittest.TestCase):
     def test_flags_generic_placeholder_steps_as_needs_revision(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, bundle_path, proposal_path = setup_review_fixture(Path(temp_dir))
+            mutate_first_draft(
+                proposal_path,
+                steps=[
+                    "Open the screen or section identified by the source anchors and draft target recommendation.",
+                    "Set up the source-backed condition for the candidate requirement.",
+                ],
+                contains_generic_placeholders=True,
+                is_executable_draft=False,
+            )
 
             report = build_review(root, bundle_path, proposal_path)
             draft_review = report.draft_reviews[0]
@@ -77,6 +86,21 @@ class NewTcDraftReviewTests(unittest.TestCase):
             self.assertEqual("needs_revision", draft_review.review_status)
             self.assertTrue(any("generic placeholders" in issue for issue in draft_review.issues))
             self.assertFalse(report.safe_for_controlled_create_apply)
+
+    def test_flags_unresolved_source_grounding_as_needs_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path = setup_review_fixture(Path(temp_dir))
+            mutate_first_draft(
+                proposal_path,
+                is_executable_draft=False,
+                manual_questions=["Provide source-backed user action for REQ-DEMO-NEW."],
+            )
+
+            report = build_review(root, bundle_path, proposal_path)
+            draft_review = report.draft_reviews[0]
+
+            self.assertEqual("needs_revision", draft_review.review_status)
+            self.assertTrue(any("not executable" in issue for issue in draft_review.issues))
 
     def test_flags_unknown_req_uid_not_present_in_context_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

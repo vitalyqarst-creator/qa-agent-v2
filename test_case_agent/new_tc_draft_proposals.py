@@ -23,6 +23,73 @@ DuplicateDecision = Literal["draft_with_warning", "defer", "maybe_extend_existin
 
 
 @dataclass(frozen=True)
+class SourceGroundingProfile:
+    req_uid: str | None
+    source_req_id: str | None
+    object: str | None
+    condition: str | None
+    user_action: str | None
+    observable_expected_behavior: str | None
+    source_text: str | None
+    normalized_text: str | None
+    source_anchors: list[dict[str, Any]]
+    has_concrete_object: bool
+    has_concrete_condition: bool
+    has_user_action: bool
+    has_observable_expected_behavior: bool
+    can_support_executable_steps: bool
+    can_support_observable_expected_result: bool
+    missing_facts: list[str]
+    grounding_confidence: DraftConfidence
+    manual_questions: list[str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "req_uid": self.req_uid,
+            "source_req_id": self.source_req_id,
+            "object": self.object,
+            "condition": self.condition,
+            "user_action": self.user_action,
+            "observable_expected_behavior": self.observable_expected_behavior,
+            "source_text": self.source_text,
+            "normalized_text": self.normalized_text,
+            "source_anchors": self.source_anchors,
+            "has_concrete_object": self.has_concrete_object,
+            "has_concrete_condition": self.has_concrete_condition,
+            "has_user_action": self.has_user_action,
+            "has_observable_expected_behavior": self.has_observable_expected_behavior,
+            "can_support_executable_steps": self.can_support_executable_steps,
+            "can_support_observable_expected_result": self.can_support_observable_expected_result,
+            "missing_facts": self.missing_facts,
+            "grounding_confidence": self.grounding_confidence,
+            "manual_questions": self.manual_questions,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "SourceGroundingProfile":
+        return cls(
+            req_uid=data.get("req_uid"),
+            source_req_id=data.get("source_req_id"),
+            object=data.get("object"),
+            condition=data.get("condition"),
+            user_action=data.get("user_action"),
+            observable_expected_behavior=data.get("observable_expected_behavior"),
+            source_text=data.get("source_text"),
+            normalized_text=data.get("normalized_text"),
+            source_anchors=list(data.get("source_anchors") or []),
+            has_concrete_object=bool(data.get("has_concrete_object")),
+            has_concrete_condition=bool(data.get("has_concrete_condition")),
+            has_user_action=bool(data.get("has_user_action")),
+            has_observable_expected_behavior=bool(data.get("has_observable_expected_behavior")),
+            can_support_executable_steps=bool(data.get("can_support_executable_steps")),
+            can_support_observable_expected_result=bool(data.get("can_support_observable_expected_result")),
+            missing_facts=list(data.get("missing_facts") or []),
+            grounding_confidence=data.get("grounding_confidence") or "low",
+            manual_questions=list(data.get("manual_questions") or []),
+        )
+
+
+@dataclass(frozen=True)
 class DraftTestCaseCandidate:
     draft_id: str
     proposed_tc_id: str
@@ -47,6 +114,12 @@ class DraftTestCaseCandidate:
     draft_confidence: DraftConfidence
     requires_manual_review: bool
     warnings: list[str]
+    source_grounding_profiles: list[SourceGroundingProfile] = field(default_factory=list)
+    grounding_confidence: DraftConfidence = "low"
+    manual_questions: list[str] = field(default_factory=list)
+    contains_generic_placeholders: bool = False
+    draft_quality_flags: list[str] = field(default_factory=list)
+    is_executable_draft: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -73,6 +146,12 @@ class DraftTestCaseCandidate:
             "draft_confidence": self.draft_confidence,
             "requires_manual_review": self.requires_manual_review,
             "warnings": self.warnings,
+            "source_grounding_profiles": [profile.to_dict() for profile in self.source_grounding_profiles],
+            "grounding_confidence": self.grounding_confidence,
+            "manual_questions": self.manual_questions,
+            "contains_generic_placeholders": self.contains_generic_placeholders,
+            "draft_quality_flags": self.draft_quality_flags,
+            "is_executable_draft": self.is_executable_draft,
         }
 
     @classmethod
@@ -101,6 +180,15 @@ class DraftTestCaseCandidate:
             draft_confidence=data["draft_confidence"],
             requires_manual_review=bool(data.get("requires_manual_review")),
             warnings=list(data.get("warnings") or []),
+            source_grounding_profiles=[
+                SourceGroundingProfile.from_dict(item)
+                for item in data.get("source_grounding_profiles", [])
+            ],
+            grounding_confidence=data.get("grounding_confidence") or data.get("draft_confidence") or "low",
+            manual_questions=list(data.get("manual_questions") or []),
+            contains_generic_placeholders=bool(data.get("contains_generic_placeholders")),
+            draft_quality_flags=list(data.get("draft_quality_flags") or []),
+            is_executable_draft=bool(data.get("is_executable_draft")),
         )
 
 
@@ -530,6 +618,22 @@ def _draft_candidate(
     plan_item_ids = _unique(candidate.plan_item_id for candidate in candidates if candidate.plan_item_id)
     traceability_refs = _unique([*req_uids, *source_req_ids])
     duplicate_risk_level = _max_risk([decision.risk for decision in duplicate_decisions])
+    grounding_profiles = [_source_grounding_profile(candidate) for candidate in candidates]
+    is_executable = bool(grounding_profiles) and all(
+        profile.can_support_executable_steps and profile.can_support_observable_expected_result
+        for profile in grounding_profiles
+    )
+    grounding_confidence = _grounding_confidence(grounding_profiles)
+    manual_questions = _unique(question for profile in grounding_profiles for question in profile.manual_questions)
+    draft_quality_flags: list[str] = []
+    if not is_executable:
+        draft_quality_flags.append("not_executable_without_manual_source_grounding")
+    if any(not profile.has_user_action for profile in grounding_profiles):
+        draft_quality_flags.append("missing_user_action")
+    if any(not profile.has_observable_expected_behavior for profile in grounding_profiles):
+        draft_quality_flags.append("missing_observable_expected_behavior")
+    if any(not profile.has_concrete_object for profile in grounding_profiles):
+        draft_quality_flags.append("missing_concrete_object")
     warnings = _unique([
         *group.warnings,
         *(
@@ -538,6 +642,7 @@ def _draft_candidate(
             for warning in candidate.warnings
         ),
     ])
+    warnings.extend(f"manual source-grounding question: {question}" for question in manual_questions)
     if duplicate_risk_level in {"medium", "high"}:
         warnings.append(f"{duplicate_risk_level} duplicate risk requires reviewer confirmation.")
     if any(candidate.confidence == "low" for candidate in candidates):
@@ -552,6 +657,14 @@ def _draft_candidate(
         + [candidate.expected_behavior for candidate in candidates]
         + [group.suggested_tc_theme]
     )
+    steps = _draft_steps(grounding_profiles, is_executable)
+    expected_results = _draft_expected_results(grounding_profiles, is_executable)
+    contains_placeholders = any(_is_generic_placeholder(step) for step in steps) or any(
+        _is_generic_placeholder(result) for result in expected_results
+    )
+    if contains_placeholders:
+        draft_quality_flags.append("contains_generic_placeholders")
+
     return DraftTestCaseCandidate(
         draft_id=f"DRAFT-{index:06d}",
         proposed_tc_id=f"DRAFT-TC-{package_id}-{index:03d}",
@@ -565,21 +678,12 @@ def _draft_candidate(
         impact_ids=impact_ids,
         plan_item_ids=plan_item_ids,
         coverage_intent=_coverage_intent(candidates),
-        preconditions=[
-            "Target application area and navigation path must be confirmed during draft review.",
-            "Use only source-backed field values, dictionary values, and fixtures.",
-        ],
+        preconditions=_draft_preconditions(grounding_profiles, is_executable),
         test_data=[
             _test_data_note(candidates),
         ],
-        steps=[
-            "Open the screen or section identified by the source anchors and draft target recommendation.",
-            "Set up the source-backed condition for the candidate requirement.",
-            "Perform the user action needed to observe the described behavior.",
-        ],
-        expected_results=[
-            _expected_result(candidates),
-        ],
+        steps=steps,
+        expected_results=expected_results,
         traceability_refs=traceability_refs,
         traceability_line=", ".join(traceability_refs),
         duplicate_risk_level=duplicate_risk_level,
@@ -590,6 +694,12 @@ def _draft_candidate(
         draft_confidence=draft_confidence,
         requires_manual_review=True,
         warnings=_unique(warnings),
+        source_grounding_profiles=grounding_profiles,
+        grounding_confidence=grounding_confidence,
+        manual_questions=manual_questions,
+        contains_generic_placeholders=contains_placeholders,
+        draft_quality_flags=_unique(draft_quality_flags),
+        is_executable_draft=is_executable and not contains_placeholders,
     )
 
 
@@ -617,6 +727,155 @@ def _duplicate_risk_decisions(bundle: CreateNewTcContextBundle) -> list[Duplicat
             )
         )
     return decisions
+
+
+def _source_grounding_profile(candidate: Any) -> SourceGroundingProfile:
+    user_action = _derive_user_action(candidate)
+    missing: list[str] = []
+    has_object = bool(candidate.object)
+    has_condition = bool(candidate.condition)
+    has_action = bool(user_action)
+    has_expected = bool(candidate.expected_behavior)
+    if not has_object:
+        missing.append("specific object/screen/field")
+    if not has_condition:
+        missing.append("source-backed condition")
+    if not has_action:
+        missing.append("source-backed user action")
+    if not has_expected:
+        missing.append("observable expected behavior")
+    manual_questions = [
+        f"Provide {fact} for {candidate.req_uid or candidate.source_req_id or 'candidate requirement'}."
+        for fact in missing
+    ]
+    can_steps = has_object and has_action
+    can_expected = has_expected
+    if can_steps and can_expected:
+        confidence: DraftConfidence = "high" if candidate.confidence == "high" else "medium"
+    elif can_steps or can_expected:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    return SourceGroundingProfile(
+        req_uid=candidate.req_uid,
+        source_req_id=candidate.source_req_id,
+        object=candidate.object,
+        condition=candidate.condition,
+        user_action=user_action,
+        observable_expected_behavior=candidate.expected_behavior,
+        source_text=candidate.source_text,
+        normalized_text=candidate.normalized_text,
+        source_anchors=list(candidate.source_anchors or []),
+        has_concrete_object=has_object,
+        has_concrete_condition=has_condition,
+        has_user_action=has_action,
+        has_observable_expected_behavior=has_expected,
+        can_support_executable_steps=can_steps,
+        can_support_observable_expected_result=can_expected,
+        missing_facts=missing,
+        grounding_confidence=confidence,
+        manual_questions=manual_questions,
+    )
+
+
+def _derive_user_action(candidate: Any) -> str | None:
+    for value in [candidate.condition, candidate.source_text, candidate.normalized_text]:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        lowered = text.casefold()
+        if any(
+            marker in lowered
+            for marker in [
+                "user ",
+                "пользователь ",
+                "наж",
+                "выбер",
+                "откр",
+                "перей",
+                "ввод",
+                "заполн",
+                "установ",
+                "click",
+                "select",
+                "open",
+                "enter",
+                "set ",
+            ]
+        ):
+            return text
+    return None
+
+
+def _draft_preconditions(
+    profiles: list[SourceGroundingProfile],
+    is_executable: bool,
+) -> list[str]:
+    if not is_executable:
+        return [
+            "Draft is not executable until manual source-grounding questions are resolved.",
+            "Do not convert this draft to canonical TC without source-backed action and expected result.",
+        ]
+    objects = _unique(profile.object for profile in profiles if profile.object)
+    return [f"Source-backed object/screen/field is in scope: {', '.join(objects)}."]
+
+
+def _draft_steps(
+    profiles: list[SourceGroundingProfile],
+    is_executable: bool,
+) -> list[str]:
+    if not is_executable:
+        questions = _unique(question for profile in profiles for question in profile.manual_questions)
+        return [f"Resolve manual source-grounding question before drafting steps: {question}" for question in questions] or [
+            "Resolve manual source-grounding questions before drafting executable steps."
+        ]
+    steps: list[str] = []
+    for profile in profiles:
+        if profile.user_action:
+            steps.append(f"Perform the source-backed action: {profile.user_action}.")
+    return _unique(steps)
+
+
+def _draft_expected_results(
+    profiles: list[SourceGroundingProfile],
+    is_executable: bool,
+) -> list[str]:
+    if not is_executable:
+        missing = _unique(
+            fact
+            for profile in profiles
+            for fact in profile.missing_facts
+            if fact == "observable expected behavior"
+        )
+        if missing:
+            return ["Expected result is not draftable until observable expected behavior is source-backed."]
+    results = [
+        f"Observable expected behavior: {profile.observable_expected_behavior}."
+        for profile in profiles
+        if profile.observable_expected_behavior
+    ]
+    return _unique(results) or ["Expected result requires manual source-grounding before executable draft."]
+
+
+def _grounding_confidence(profiles: list[SourceGroundingProfile]) -> DraftConfidence:
+    if profiles and all(profile.grounding_confidence == "high" for profile in profiles):
+        return "high"
+    if profiles and any(profile.grounding_confidence in {"high", "medium"} for profile in profiles):
+        return "medium"
+    return "low"
+
+
+def _is_generic_placeholder(value: str) -> bool:
+    lowered = value.casefold()
+    return any(
+        pattern in lowered
+        for pattern in [
+            "open the screen or section identified by the source anchors",
+            "set up the source-backed condition",
+            "perform the user action needed to observe",
+            "behavior is observed",
+        ]
+    )
 
 
 def _deferred(group: Any, reason: str) -> DeferredGroup:
@@ -657,6 +916,9 @@ def _coverage_summary(
         "drafted_req_uids_count": len(drafted_req_uids),
         "deferred_req_uids_count": len(deferred_req_uids),
         "undecided_req_uids": sorted(total_req_uids - drafted_req_uids - deferred_req_uids),
+        "executable_drafts_count": sum(1 for draft in drafts if draft.is_executable_draft),
+        "generic_placeholder_drafts_count": sum(1 for draft in drafts if draft.contains_generic_placeholders),
+        "unresolved_source_grounding_drafts_count": sum(1 for draft in drafts if not draft.is_executable_draft),
         "canonical_write_allowed": False,
         "manual_review_required": True,
     }

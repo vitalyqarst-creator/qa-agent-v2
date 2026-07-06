@@ -477,6 +477,27 @@ def _review_draft(draft: DraftTestCaseCandidate, bundle: CreateNewTcContextBundl
         source_grounding_status = "warning"
         issues.append("draft steps are mostly generic placeholders.")
         required_fixes.append("Replace generic navigation/action placeholders with source-backed concrete steps.")
+    if getattr(draft, "contains_generic_placeholders", False):
+        source_grounding_status = "warning"
+        issues.append("draft contains generic placeholders.")
+        required_fixes.append("Remove generic placeholders; defer or ask manual questions if source facts are incomplete.")
+    if not getattr(draft, "is_executable_draft", True):
+        source_grounding_status = "warning"
+        issues.append("draft is not executable from current source grounding.")
+        required_fixes.append("Resolve source-grounding manual questions before treating draft as executable.")
+    for profile in getattr(draft, "source_grounding_profiles", []) or []:
+        if not profile.has_user_action:
+            source_grounding_status = "warning"
+            issues.append(f"missing source-backed user action for {profile.req_uid}.")
+            required_fixes.append(f"Add source-backed action or keep {profile.req_uid} deferred/manual-only.")
+        if not profile.has_observable_expected_behavior:
+            source_grounding_status = "warning"
+            issues.append(f"missing observable expected behavior for {profile.req_uid}.")
+            required_fixes.append(f"Add observable source-backed expected result or keep {profile.req_uid} deferred/manual-only.")
+        if not profile.has_concrete_object:
+            source_grounding_status = "warning"
+            issues.append(f"missing concrete object/screen/field for {profile.req_uid}.")
+            required_fixes.append(f"Add concrete source-backed object/screen/field or keep {profile.req_uid} deferred/manual-only.")
     if not _has_meaningful_overlap(candidate_text, draft_text):
         source_grounding_status = "warning"
         issues.append("draft text has weak overlap with candidate requirement source context.")
@@ -737,7 +758,14 @@ def _quality_score(
 
 def _is_generic_placeholder(step: str) -> bool:
     lowered = step.casefold()
-    return any(pattern in lowered for pattern in GENERIC_STEP_PATTERNS)
+    return any(pattern in lowered for pattern in GENERIC_STEP_PATTERNS) or any(
+        pattern in lowered
+        for pattern in [
+            "behavior is observed",
+            "expected result requires manual source-grounding",
+            "resolve manual source-grounding questions before drafting executable steps",
+        ]
+    )
 
 
 def _has_meaningful_overlap(source: str, draft: str) -> bool:

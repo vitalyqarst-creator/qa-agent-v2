@@ -595,7 +595,7 @@ def build_new_tc_revision_decision_pack(
     tc_blocks, tc_warnings = _read_referenced_tc_blocks(clusters, Path(test_cases_dir))
     warnings.extend(tc_warnings)
     comparisons = _existing_tc_comparisons(plan, draft_by_id, candidate_by_req, tc_blocks)
-    source_resolutions = _source_grounding_resolutions(plan, candidate_by_req)
+    source_resolutions = _source_grounding_resolutions(plan, candidate_by_req, draft_by_id)
     source_resolutions_by_draft = _source_resolutions_by_draft(source_resolutions)
     comparisons_by_draft = _comparisons_by_draft(comparisons)
     replacement_strategies = _replacement_strategies(
@@ -893,6 +893,7 @@ def _compare_existing_tc(
 def _source_grounding_resolutions(
     plan: NewTcDraftRevisionPlan,
     candidate_by_req: dict[str, CandidateRequirement],
+    draft_by_id: dict[str, DraftTestCaseCandidate] | None = None,
 ) -> list[SourceGroundingResolution]:
     resolutions: list[SourceGroundingResolution] = []
     seen: set[tuple[str, str]] = set()
@@ -902,9 +903,11 @@ def _source_grounding_resolutions(
             continue
         seen.add(key)
         candidate = candidate_by_req.get(action.req_uid)
-        usable = _candidate_usable_facts(candidate) if candidate else list(action.usable_facts)
-        missing = _candidate_missing_facts(candidate) if candidate else ["candidate requirement is missing from context bundle"]
-        can_steps = not any(item in missing for item in ["source-backed navigation/action condition", "specific object/field/screen"])
+        draft = (draft_by_id or {}).get(action.draft_id)
+        profile = _draft_profile_for_req(draft, action.req_uid)
+        usable = _candidate_usable_facts(candidate, profile) if candidate else list(action.usable_facts)
+        missing = _candidate_missing_facts(candidate, profile) if candidate else ["candidate requirement is missing from context bundle"]
+        can_steps = not any(item in missing for item in ["source-backed navigation/action condition", "source-backed user action", "specific object/field/screen"])
         can_expected = "observable expected behavior" not in missing
         manual_question = None
         if not can_steps or not can_expected:
@@ -1191,6 +1194,11 @@ def _agent_capability_findings(
     cluster_count = len(duplicate_risk_clusters)
     draft_count = len(draft_decisions)
     needs_manual_count = readiness.needs_manual_decision_count
+    generic_placeholder_drafts_count = sum(
+        1
+        for decision in draft_decisions
+        if any("generic placeholder" in warning.casefold() or "generic placeholders" in warning.casefold() for warning in decision.warnings)
+    )
 
     if raw_duplicate_actions_count and cluster_count >= raw_duplicate_actions_count:
         duplicate_status: CapabilityStatus = "gap"
@@ -1303,6 +1311,7 @@ def _agent_capability_findings(
                 "revise_ready_count": readiness.revise_ready_count,
                 "replace_ready_count": readiness.replace_ready_count,
                 "needs_manual_decision_count": needs_manual_count,
+                "generic_placeholder_drafts_count": generic_placeholder_drafts_count,
             },
             recommendation=quality_recommendation,
             should_update_agent_instructions=quality_status != "works",
@@ -1604,7 +1613,7 @@ def _existing_summary(block: ParsedTcBlock) -> str:
     )
 
 
-def _candidate_usable_facts(candidate: CandidateRequirement | None) -> list[str]:
+def _candidate_usable_facts(candidate: CandidateRequirement | None, profile: Any | None = None) -> list[str]:
     if candidate is None:
         return []
     facts: list[str] = []
@@ -1612,6 +1621,9 @@ def _candidate_usable_facts(candidate: CandidateRequirement | None) -> list[str]
         facts.append(f"object: {candidate.object}")
     if candidate.condition:
         facts.append(f"condition: {candidate.condition}")
+    user_action = getattr(profile, "user_action", None) or _derive_user_action(candidate)
+    if user_action:
+        facts.append(f"user_action: {user_action}")
     if candidate.expected_behavior:
         facts.append(f"expected_behavior: {candidate.expected_behavior}")
     if candidate.source_text:
@@ -1623,12 +1635,15 @@ def _candidate_usable_facts(candidate: CandidateRequirement | None) -> list[str]
     return _unique(facts)
 
 
-def _candidate_missing_facts(candidate: CandidateRequirement | None) -> list[str]:
+def _candidate_missing_facts(candidate: CandidateRequirement | None, profile: Any | None = None) -> list[str]:
     if candidate is None:
         return ["candidate requirement is missing from context bundle"]
     missing: list[str] = []
     if not candidate.condition:
         missing.append("source-backed navigation/action condition")
+    has_action = bool(getattr(profile, "has_user_action", False) or _derive_user_action(candidate))
+    if not has_action:
+        missing.append("source-backed user action")
     if not candidate.expected_behavior:
         missing.append("observable expected behavior")
     if not candidate.object:
@@ -1643,6 +1658,42 @@ def _resolved_instruction(candidate: CandidateRequirement | None, missing: list[
     if missing:
         return "Use available source facts only and keep unresolved facts as manual questions: " + "; ".join(facts)
     return "Use these source facts for revised title, preconditions, action and expected result: " + "; ".join(facts)
+
+
+def _draft_profile_for_req(draft: DraftTestCaseCandidate | None, req_uid: str) -> Any | None:
+    for profile in getattr(draft, "source_grounding_profiles", []) or []:
+        if getattr(profile, "req_uid", None) == req_uid:
+            return profile
+    return None
+
+
+def _derive_user_action(candidate: CandidateRequirement) -> str | None:
+    for value in [candidate.condition, candidate.source_text, candidate.normalized_text]:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        lowered = text.casefold()
+        if any(
+            marker in lowered
+            for marker in [
+                "user ",
+                "пользователь ",
+                "наж",
+                "выбер",
+                "откр",
+                "перей",
+                "ввод",
+                "заполн",
+                "установ",
+                "click",
+                "select",
+                "open",
+                "enter",
+                "set ",
+            ]
+        ):
+            return text
+    return None
 
 
 def _revision_instruction(

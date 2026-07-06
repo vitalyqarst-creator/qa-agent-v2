@@ -110,3 +110,13 @@ Expected interpretation:
 - Do not run `--apply`.
 - Do not apply patches or use `git apply`.
 - Keep `canonical_write_allowed=false`.
+
+## Stage 9D.3 Source Grounding And Readiness Rules
+
+Revision decisions must use source-grounding profiles from the draft proposal when available. A candidate is not ready for a revised draft proposal until the decision pack can identify source-backed usable facts for object, condition, user action, and observable expected behavior.
+
+`needs_manual_decision_count` must remain greater than zero when duplicate-risk decisions, missing source actions, missing expected behavior, or unresolved manual questions remain.
+
+The decision pack may recommend implementation improvements, but it must not force `ready_for_revised_draft_proposal=true` while grounding or duplicate-risk decisions are unresolved.
+
+Agent capability findings should report source-grounding and draft-quality gaps separately from safety-gate behavior. A working safety gate is expected to keep canonical writes disabled even when the draft pipeline is incomplete.

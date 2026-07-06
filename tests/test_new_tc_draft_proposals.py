@@ -118,6 +118,43 @@ class NewTcDraftProposalTests(unittest.TestCase):
             self.assertIn("CHG-000001", draft.change_ids)
             self.assertIn("REQ-DEMO-NEW", draft.traceability_line)
 
+    def test_source_grounding_profile_detects_missing_facts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
+            mutate_first_candidate(bundle_path, object=None, condition=None, expected_behavior=None)
+
+            draft = build_proposal(root, bundle_path).draft_test_cases[0]
+            profile = draft.source_grounding_profiles[0]
+
+            self.assertFalse(profile.has_concrete_object)
+            self.assertFalse(profile.has_concrete_condition)
+            self.assertFalse(profile.has_user_action)
+            self.assertFalse(profile.has_observable_expected_behavior)
+            self.assertIn("source-backed user action", profile.missing_facts)
+
+    def test_draft_proposal_does_not_create_executable_draft_when_action_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
+            mutate_first_candidate(bundle_path, condition=None)
+
+            draft = build_proposal(root, bundle_path).draft_test_cases[0]
+
+            self.assertFalse(draft.is_executable_draft)
+            self.assertTrue(draft.manual_questions)
+            self.assertFalse(draft.contains_generic_placeholders)
+            self.assertTrue(any("Resolve manual source-grounding question" in step for step in draft.steps))
+
+    def test_generated_draft_does_not_use_generic_placeholder_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
+
+            draft = build_proposal(root, bundle_path).draft_test_cases[0]
+            text = " ".join([*draft.steps, *draft.expected_results]).casefold()
+
+            self.assertNotIn("open the screen or section identified by the source anchors", text)
+            self.assertNotIn("set up the source-backed condition", text)
+            self.assertNotIn("perform the user action needed to observe", text)
+
     def test_json_and_markdown_artifacts_are_written(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root, bundle_path = setup_bundle(Path(temp_dir), duplicate_risk="medium")
@@ -170,6 +207,16 @@ def mutate_bundle(
     if blocking_reasons is not None:
         payload["blocking_reasons"] = blocking_reasons
         payload["bundle_status"] = "blocked"
+    bundle_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def mutate_first_candidate(bundle_path: Path, **updates) -> None:
+    payload = json.loads(bundle_path.read_text(encoding="utf-8"))
+    payload["candidate_requirements"][0].update(updates)
     bundle_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
