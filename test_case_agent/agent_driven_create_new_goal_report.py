@@ -28,6 +28,8 @@ class AgentDrivenCreateNewGoalReport:
     stage_9d9_status: str | None
     stage_9e_status: str | None
     stage_9f_status: str | None
+    stage_9e_summary: dict[str, Any]
+    stage_9f_summary: dict[str, Any]
     original_resolver_gate: dict[str, Any]
     hardened_gate: dict[str, Any]
     created_artifacts: list[str]
@@ -53,6 +55,8 @@ class AgentDrivenCreateNewGoalReport:
             stage_9d9_status=data.get("stage_9d9_status"),
             stage_9e_status=data.get("stage_9e_status"),
             stage_9f_status=data.get("stage_9f_status"),
+            stage_9e_summary=dict(data.get("stage_9e_summary") or {}),
+            stage_9f_summary=dict(data.get("stage_9f_summary") or {}),
             original_resolver_gate=dict(data.get("original_resolver_gate") or {}),
             hardened_gate=dict(data.get("hardened_gate") or {}),
             created_artifacts=list(data.get("created_artifacts") or []),
@@ -85,6 +89,8 @@ def build_agent_driven_create_new_goal_report(
     validation = load_agent_decision_validation_report(validation_path) if validation_path.exists() else None
     stage_9e = _read_json(stage_9e_path)
     stage_9f = _read_json(stage_9f_path)
+    stage_9e_summary = _stage_9e_summary(stage_9e)
+    stage_9f_summary = _stage_9f_summary(stage_9f)
 
     executed = []
     skipped = []
@@ -141,6 +147,8 @@ def build_agent_driven_create_new_goal_report(
         stage_9d9_status=validation.validation_status if validation else None,
         stage_9e_status=stage_9e.get("proposal_status") if stage_9e else None,
         stage_9f_status=stage_9f.get("review_status") if stage_9f else None,
+        stage_9e_summary=stage_9e_summary,
+        stage_9f_summary=stage_9f_summary,
         original_resolver_gate=original_gate,
         hardened_gate=hardened_gate,
         created_artifacts=artifacts,
@@ -193,6 +201,12 @@ def render_agent_driven_create_new_goal_report_markdown(report: AgentDrivenCreat
         f"- Stage 9D.9 status: `{report.stage_9d9_status}`",
         f"- Stage 9E status: `{report.stage_9e_status}`",
         f"- Stage 9F status: `{report.stage_9f_status}`",
+        f"- Stage 9E candidates: `{report.stage_9e_summary.get('candidate_count', 0)}`",
+        f"- Stage 9E blocked candidates: `{report.stage_9e_summary.get('blocked_candidate_count', 0)}`",
+        f"- Stage 9F approved: `{report.stage_9f_summary.get('approved_count', 0)}`",
+        f"- Stage 9F approved-with-warnings: `{report.stage_9f_summary.get('approved_with_warnings_count', 0)}`",
+        f"- Stage 9F needs-revision: `{report.stage_9f_summary.get('needs_revision_count', 0)}`",
+        f"- Stage 9F rejected: `{report.stage_9f_summary.get('rejected_count', 0)}`",
         f"- Original Stage 9E allowed: `{report.original_resolver_gate.get('stage_9e_allowed')}`",
         f"- Hardened Stage 9E allowed: `{report.hardened_gate.get('stage_9e_allowed')}`",
         "",
@@ -255,6 +269,41 @@ def _recommended_next_action(
     if validation and validation.stage_9e_gate_hardened.get("stage_9e_allowed") and not stage_9e:
         return "Next safe step: run Stage 9E draft-only proposal for the hardened validated scope."
     return "Review generated artifacts and decide the next safe stage."
+
+
+def _stage_9e_summary(stage_9e: dict[str, Any]) -> dict[str, Any]:
+    if not stage_9e:
+        return {}
+    candidates = list(stage_9e.get("revised_draft_candidates") or [])
+    return {
+        "proposal_status": stage_9e.get("proposal_status"),
+        "candidate_count": len(candidates),
+        "blocked_candidate_count": sum(1 for item in candidates if item.get("candidate_status") == "blocked"),
+        "draft_ready_count": sum(1 for item in candidates if item.get("candidate_status") == "draft-ready"),
+        "canonical_write_allowed": bool(stage_9e.get("canonical_write_allowed")),
+        "manual_review_required": bool(stage_9e.get("manual_review_required")),
+        "hardened_scope_rows": list((stage_9e.get("stage_9e_scope") or {}).get("row_ids") or []),
+    }
+
+
+def _stage_9f_summary(stage_9f: dict[str, Any]) -> dict[str, Any]:
+    if not stage_9f:
+        return {}
+    reviews = list(stage_9f.get("draft_reviews") or [])
+    counts: dict[str, int] = {}
+    for review in reviews:
+        key = f"{review.get('review_result')}_count".replace("-", "_")
+        counts[key] = counts.get(key, 0) + 1
+    for key in ("approved_count", "approved_with_warnings_count", "needs_revision_count", "rejected_count"):
+        counts.setdefault(key, 0)
+    return {
+        "review_status": stage_9f.get("review_status"),
+        "draft_reviews_total": len(reviews),
+        **counts,
+        "stage_9g_readiness": dict(stage_9f.get("stage_9g_readiness") or {}),
+        "canonical_write_allowed": bool(stage_9f.get("canonical_write_allowed")),
+        "manual_review_required": bool(stage_9f.get("manual_review_required")),
+    }
 
 
 def _read_json(path: Path) -> dict[str, Any]:
