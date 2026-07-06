@@ -12,8 +12,8 @@
 ## Summary
 
 - Source files scanned: `15`
-- Test cases with fixture IDs or explicit test data: `244`
-- Distinct fixture IDs: `30`
+- Test cases with fixture IDs or explicit test data: `252`
+- Distinct fixture IDs: `29`
 
 ## Source File Coverage
 
@@ -24,16 +24,16 @@
 | `14-application-card-client-contacts-and-extra-info.md` | 27 | 16 |
 | `14-application-card-client-personal-data.md` | 15 | 12 |
 | `14-application-card-document-recognition-popup.md` | 8 | 2 |
-| `14-application-card-documents-and-questionnaire-files.md` | 31 | 27 |
+| `14-application-card-documents-and-questionnaire-files.md` | 33 | 29 |
 | `14-application-card-employment-income-gosuslugi.md` | 44 | 35 |
 | `14-application-card-participants-coborrower-pledger.md` | 28 | 11 |
-| `14-application-card-passport-current-and-previous.md` | 54 | 50 |
+| `14-application-card-passport-current-and-previous.md` | 58 | 54 |
 | `14-application-card-task-title-and-common-actions.md` | 5 | 2 |
 | `14-application-card-visual-assessment-consents-checks.md` | 19 | 14 |
 | `section-16-print-form-generation.md` | 16 | 16 |
 | `section-17-universal-application-common-actions.md` | 1 | 0 |
 | `section-18-visual-assessment-criteria.md` | 13 | 8 |
-| `section-4.2-applications-menu-search.md` | 24 | 24 |
+| `section-4.2-applications-menu-search.md` | 26 | 26 |
 
 ## Fixture ID Index
 
@@ -51,7 +51,6 @@
 | `FIX-APP-KM-OTHER` | `TC-AMSR-020 (section-4.2-applications-menu-search.md)` |
 | `FIX-APP-SORT-01` | `TC-AMSR-013 (section-4.2-applications-menu-search.md)` |
 | `FIX-APP-TABLE-01` | `TC-AMSR-014 (section-4.2-applications-menu-search.md)` |
-| `FIX-INVALID-FORMAT-01` | `TC-AMSR-015 (section-4.2-applications-menu-search.md)` |
 | `FIX-NO-RESULT-01` | `TC-AMSR-004 (section-4.2-applications-menu-search.md)` |
 | `FIX-PFG-ADDITIONAL-INCOME-TYPE` | `TC-AF-PFG-013 (section-16-print-form-generation.md)` |
 | `FIX-PFG-ADDR-DIFFERENT` | `TC-AF-PFG-007 (section-16-print-form-generation.md)`<br>`TC-AF-PFG-014 (section-16-print-form-generation.md)` |
@@ -88,15 +87,14 @@ Test data:
 - Срок: `60 мес`.
 ```
 
-#### `TC-ACCS-004` - Открытие окна кредитного калькулятора с предзаполненными данными по заявке
+#### `TC-ACCS-004` - Открытие окна кредитного калькулятора по кнопке
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- Заявка содержит VIN `XW8ZZZ61ZKG000001`.
-- Заявка содержит сумму кредита `1500000 Р`.
+Не требуются.
 ```
 
 ### `14-application-card-client-addresses.md`
@@ -908,20 +906,37 @@ Test data:
 Файл: `driver-license.txt`.
 ```
 
-#### `TC-AF-DOC-028` - Обязательность второго документа зависит от типа программы
+#### `TC-AF-DOC-028` - Второй документ не обязателен для программы не ГОС
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-Проверяемые варианты:
-- программа не ГОС;
-- программа ГОС;
-- программа для инвалидов.
+Тип программы: `не ГОС`.
 ```
 
-#### `TC-AF-DOC-029` - Анкета клиента сохраняется в электронном архиве после добавления файла
+#### `TC-AF-DOC-029` - Для программы ГОС обязательным вторым документом является ВУ
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+Тип программы: `ГОС`.
+```
+
+#### `TC-AF-DOC-030` - Для программы для инвалидов обязательным вторым документом является ВУ или СНИЛС
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+Тип программы: `для инвалидов`.
+```
+
+#### `TC-AF-DOC-031` - Анкета клиента сохраняется в электронном архиве после добавления файла
 
 - Fixture IDs: none explicit
 
@@ -931,7 +946,7 @@ Test data:
 Файл `client-questionnaire-archive.pdf`, формат pdf, размер не более 40 МБ.
 ```
 
-#### `TC-AF-DOC-030` - Паспорт клиента сохраняется в электронном архиве после добавления файла
+#### `TC-AF-DOC-032` - Паспорт клиента сохраняется в электронном архиве после добавления файла
 
 - Fixture IDs: none explicit
 
@@ -941,7 +956,7 @@ Test data:
 Файл `passport-client-archive.pdf`, формат pdf, размер не более 40 МБ.
 ```
 
-#### `TC-AF-DOC-031` - Второй документ сохраняется в электронном архиве после добавления файла
+#### `TC-AF-DOC-033` - Второй документ сохраняется в электронном архиве после добавления файла
 
 - Fixture IDs: none explicit
 
@@ -993,14 +1008,14 @@ Test data:
 Социальный статус / тип занятости: военнослужащий.
 ```
 
-#### `TC-AFEIG-006` - Недействующая организация DaData блокирует переход далее
+#### `TC-AFEIG-006` - Недействующая организация DaData отображает предупреждение
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-Организация из тестового контура DaData со статусом, отличным от «действующая».
+DaData fixture `DADATA-ORG-INACTIVE-01`: наименование `ООО Архив Тест`, ИНН `7711111111`, статус организации `недействующая`.
 ```
 
 #### `TC-AFEIG-007` - Выбор действующей организации DaData заполняет организационные поля
@@ -1010,7 +1025,12 @@ Test data:
 Test data:
 
 ```markdown
-Действующая организация тестового контура DaData с известными значениями статуса организации, наименования, ОПФ, ИНН и фактического адреса.
+DaData fixture `DADATA-ORG-ACTIVE-01`:
+- статус организации: `действующая`;
+- наименование: `Ромашка`;
+- ОПФ: `ООО`;
+- ИНН: `7707083893`;
+- фактический адрес: `г Москва, ул Тверская, д 1`.
 ```
 
 #### `TC-AFEIG-008` - Состав значений ОПФ
@@ -1213,34 +1233,34 @@ Test data:
 Файл `income-proof.pdf`, формат pdf, размер не более 40 МБ.
 ```
 
-#### `TC-AFEIG-035` - Основной среднемесячный доход не принимает нечисловое значение
+#### `TC-AFEIG-035` - Основной среднемесячный доход принимает целое числовое значение
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-Среднемесячный доход: `abc`.
+Среднемесячный доход: `66660`.
 ```
 
-#### `TC-AFEIG-036` - Основной среднемесячный доход не принимает отрицательное значение
+#### `TC-AFEIG-036` - Основной среднемесячный доход принимает значение с двумя знаками после разделителя
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-Среднемесячный доход: `-2000`.
+Среднемесячный доход: `66660.98`.
 ```
 
-#### `TC-AFEIG-037` - Основной среднемесячный доход принимает дробное значение через точку и отображает сотые
+#### `TC-AFEIG-037` - Дополнительный среднемесячный доход принимает значение с двумя знаками после разделителя
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-Среднемесячный доход: `66660.981`.
+Среднемесячный доход: `12500.50`.
 ```
 
 #### `TC-AFEIG-038` - Основной среднемесячный доход 1 000 000 не показывает предупреждение о превышении
@@ -1710,16 +1730,6 @@ Test data:
 - Дата выдачи: `01.07.2026`.
 ```
 
-#### `TC-ACPCP-031` - Пустая дата выдачи текущего паспорта
-
-- Fixture IDs: none explicit
-
-Test data:
-
-```markdown
-- Дата выдачи: пусто.
-```
-
 #### `TC-ACPCP-032` - Ввод места рождения
 
 - Fixture IDs: none explicit
@@ -1907,54 +1917,104 @@ Test data:
 - Номер: `654321`.
 ```
 
-#### `TC-ACPCP-051` - Запрет недопустимой длины и нечисловых символов в серии текущего паспорта
+#### `TC-ACPCP-051` - Запрет недопустимой длины серии текущего паспорта
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- Проверяемые значения серии: `123`, `12345`, `12A4`, `12 4`, `+123`, `12.4`.
+- Проверяемые значения серии: `123`, `12345`.
 ```
 
-#### `TC-ACPCP-052` - Запрет недопустимой длины и нечисловых символов в номере текущего паспорта
+#### `TC-ACPCP-052` - Запрет нецифровых символов в серии текущего паспорта
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- Проверяемые значения номера: `12345`, `1234567`, `12345A`, `123 45`, `+12345`, `123.45`.
+- Проверяемые значения серии: `12A4`, `12 4`, `+123`, `12.4`.
 ```
 
-#### `TC-ACPCP-053` - Запрет недопустимой длины и нечисловых символов в коде подразделения
+#### `TC-ACPCP-053` - Запрет недопустимой длины номера текущего паспорта
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- Проверяемые значения кода подразделения: `12345`, `1234567`, `12345A`, `123 45`, `+12345`, `123.45`.
+- Проверяемые значения номера: `12345`, `1234567`.
 ```
 
-#### `TC-ACPCP-054` - Запрет недопустимой длины и нечисловых символов в серии последнего предыдущего паспорта
+#### `TC-ACPCP-054` - Запрет нецифровых символов в номере текущего паспорта
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- Проверяемые значения серии: `321`, `32109`, `32A1`, `32 1`, `+321`, `32.1`.
+- Проверяемые значения номера: `12345A`, `123 45`, `+12345`, `123.45`.
 ```
 
-#### `TC-ACPCP-055` - Запрет недопустимой длины и нечисловых символов в номере последнего предыдущего паспорта
+#### `TC-ACPCP-055` - Запрет недопустимой длины кода подразделения
 
 - Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- Проверяемые значения номера: `65432`, `6543217`, `65432A`, `654 32`, `+65432`, `654.32`.
+- Проверяемые значения кода подразделения: `12345`, `1234567`.
+```
+
+#### `TC-ACPCP-056` - Запрет нецифровых символов в коде подразделения
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+- Проверяемые значения кода подразделения: `12345A`, `123 45`, `+12345`, `123.45`.
+```
+
+#### `TC-ACPCP-057` - Запрет недопустимой длины серии последнего предыдущего паспорта
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+- Проверяемые значения серии: `321`, `32109`.
+```
+
+#### `TC-ACPCP-058` - Запрет нецифровых символов в серии последнего предыдущего паспорта
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+- Проверяемые значения серии: `32A1`, `32 1`, `+321`, `32.1`.
+```
+
+#### `TC-ACPCP-059` - Запрет недопустимой длины номера последнего предыдущего паспорта
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+- Проверяемые значения номера: `65432`, `6543217`.
+```
+
+#### `TC-ACPCP-060` - Запрет нецифровых символов в номере последнего предыдущего паспорта
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+- Проверяемые значения номера: `65432A`, `654 32`, `+65432`, `654.32`.
 ```
 
 ### `14-application-card-task-title-and-common-actions.md`
@@ -2490,7 +2550,7 @@ Test data:
 Test data:
 
 ```markdown
-- `DICT-STATUS-01`
+- Конечные категории статусов по BSR 25: `отмененные`, `отказанные`, `выданные`.
 ```
 
 #### `TC-AMSR-011` - Фильтрация списка точек продаж с первого символа
@@ -2500,7 +2560,12 @@ Test data:
 Test data:
 
 ```markdown
-- `DICT-POS-01`
+Fixture `DICT-POS-01`:
+- `Автосалон Север`;
+- `Автосалон Юг`;
+- `Банк-Партнер Центр`.
+
+Вводимая последовательность: `Авто`.
 ```
 
 #### `TC-AMSR-012` - Список автора заведения заявки использует справочник сотрудников с учетом ролевой модели
@@ -2510,8 +2575,12 @@ Test data:
 Test data:
 
 ```markdown
-- `FIX-ROLE-01`
-- `DICT-EMP-01`
+Fixture `FIX-ROLE-01`: текущий пользователь `Иванов Иван Иванович`, роль `Кредитный менеджер`.
+
+Fixture `DICT-EMP-01`:
+- разрешенный сотрудник `Иванов Иван Иванович`;
+- разрешенный сотрудник `Петров Петр Петрович`;
+- сотрудник вне разрешенной роли `Сидоров Семен Семенович`.
 ```
 
 #### `TC-AMSR-013` - Сортировка результатов по умолчанию по дате заведения заявки по убыванию
@@ -2534,14 +2603,14 @@ Test data:
 - `FIX-APP-TABLE-01`
 ```
 
-#### `TC-AMSR-015` - Форматная валидация заполненных фильтров перед поиском
+#### `TC-AMSR-015` - Форматная валидация телефона перед поиском
 
-- Fixture IDs: `FIX-INVALID-FORMAT-01`
+- Fixture IDs: none explicit
 
 Test data:
 
 ```markdown
-- `FIX-INVALID-FORMAT-01`
+Поле `Мобильный телефон`: `12345`.
 ```
 
 #### `TC-AMSR-016` - Действие `Найти` отображает результаты в таблице `Заявки`
@@ -2635,4 +2704,24 @@ Test data:
 
 ```markdown
 - `FIX-APP-03`
+```
+
+#### `TC-AMSR-025` - Форматная валидация паспорта перед поиском
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+Поле `Паспорт`: `123456789`.
+```
+
+#### `TC-AMSR-026` - Форматная валидация VIN перед поиском
+
+- Fixture IDs: none explicit
+
+Test data:
+
+```markdown
+Поле `VIN`: `1234567890`.
 ```
