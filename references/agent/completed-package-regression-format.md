@@ -4,6 +4,10 @@ Completed package regression is a read-only validation stage for small packages 
 
 It must not run `--apply`, apply patches, call `git apply`, create test cases, or modify canonical test-case files.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stage 10. Stale writer proposals after final apply are warnings; unrelated dirty test-case files block regression and require separate user-directed isolation.
+
 ## Scope
 
 The Stage 8D mini regression validates only the completed small packages:

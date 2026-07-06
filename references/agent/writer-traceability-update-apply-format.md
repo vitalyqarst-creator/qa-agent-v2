@@ -4,6 +4,10 @@ Stage 8B is the controlled executor for a reviewed writer traceability update pr
 
 Default mode is dry-run. Canonical test-case files are not edited unless the CLI is run with explicit `--apply`.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stage 8. Real apply requires the workflow checklist, structured proposal data, backup creation, and post-apply validation.
+
 ## Inputs
 
 - `writer-dry-run-proposal-<package-id>-after-backfill.json`

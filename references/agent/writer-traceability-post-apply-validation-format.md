@@ -10,6 +10,10 @@ The validator must not:
 - create new test cases;
 - change writer/reviewer workflow.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stage 9. A clean git state with `final_state_valid=true` is `final_state_already_baselined`, not a validation failure.
+
 ## Inputs
 
 - `writer-traceability-update-apply-<package-id>-after-backfill.json`

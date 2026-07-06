@@ -43,6 +43,7 @@ fts/
 - [references/agent/user-manual.md](references/agent/user-manual.md) — редактируемый источник полного пользовательского справочника; финальные версии генерируются в `output/doc/` и `output/pdf/`.
 - [references/agent/instruction-contract-index.md](references/agent/instruction-contract-index.md) — карта канонических источников правил, потребителей и validator coverage.
 - [references/agent/content-placement.md](references/agent/content-placement.md) — правила размещения знаний между `AGENTS.md`, `skills/`, `references/`, `fts/` и кодом.
+- [references/agent/controlled-traceability-update-workflow.md](references/agent/controlled-traceability-update-workflow.md) — safe workflow for generated `REQ-*` traceability updates.
 
 ## Что умеет пакет
 

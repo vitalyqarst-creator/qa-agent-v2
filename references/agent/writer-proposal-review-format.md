@@ -10,6 +10,10 @@ The review is read-only:
 - it must not create new test cases;
 - it must not change writer/reviewer workflow.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stage 7. It assumes backfill has already made old generated `REQ-*` refs available in the traceability line.
+
 ## Inputs
 
 - `writer-dry-run-proposal-<package-id>-after-backfill.json`

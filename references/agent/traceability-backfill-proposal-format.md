@@ -2,6 +2,10 @@
 
 Stage 7F creates preview-only proposals for adding missing generated `REQ-*` refs to existing test-case traceability lines. It must not edit canonical test-case files, apply patches, run `--apply`, create new test cases, change writer/reviewer workflow, or perform silent `source_req_id` fallback.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stages 2-3. Use `references/agent/controlled-traceability-update-checklist.md` before building or reviewing any proposal.
+
 ## Inputs
 
 - `traceability-repair-strategy.<old>-to-<new>.json`

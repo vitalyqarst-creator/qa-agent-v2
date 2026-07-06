@@ -2,6 +2,10 @@
 
 Stage 7G reviews preview-only traceability backfill proposals before any possible controlled apply. It must not edit canonical test-case files, apply patches, run `--apply`, or create new test cases.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stage 4. `safe_for_controlled_apply=true` is meaningful only under that workflow's hard safety rules.
+
 ## Inputs
 
 - `traceability-backfill-proposal-<package-id>.json`

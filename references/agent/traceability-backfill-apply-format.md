@@ -2,6 +2,10 @@
 
 Stage 7H is the first traceability backfill stage that can write canonical test-case files. Default mode is dry-run. A real write is allowed only with explicit `--apply`; if the review status is `approved-with-warnings`, real write also requires `--ack-warnings`.
 
+## Workflow Position / Safety Link
+
+This format is part of `references/agent/controlled-traceability-update-workflow.md`, stage 5. Real apply must follow `references/agent/controlled-traceability-update-checklist.md` and must use structured proposal data, not patch application.
+
 ## Inputs
 
 - `traceability-backfill-proposal-<package-id>.json`
