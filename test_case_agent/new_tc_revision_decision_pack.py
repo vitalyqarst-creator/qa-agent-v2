@@ -51,6 +51,15 @@ ComparisonDecision = Literal[
     "insufficient_info",
 ]
 ReplacementMode = Literal["rewrite_from_source", "split_into_multiple_drafts", "defer", "maybe_extend_existing_tc"]
+CapabilityArea = Literal[
+    "duplicate_risk_handling",
+    "source_grounding",
+    "draft_quality",
+    "replacement_strategy",
+    "manual_decision_flow",
+    "safety_gate",
+]
+CapabilityStatus = Literal["works", "partial", "gap"]
 
 TC_HEADING_RE = re.compile(r"^(#{2,6})\s+(TC-[A-Za-z0-9][A-Za-z0-9_-]*)\b[:\-\s]*(.*)$")
 REF_RE = re.compile(
@@ -352,6 +361,37 @@ class RevisedDraftReadiness:
         )
 
 
+@dataclass(frozen=True)
+class AgentCapabilityFinding:
+    finding_id: str
+    capability_area: CapabilityArea
+    status: CapabilityStatus
+    evidence: dict[str, Any]
+    recommendation: str
+    should_update_agent_instructions: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "finding_id": self.finding_id,
+            "capability_area": self.capability_area,
+            "status": self.status,
+            "evidence": self.evidence,
+            "recommendation": self.recommendation,
+            "should_update_agent_instructions": self.should_update_agent_instructions,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "AgentCapabilityFinding":
+        return cls(
+            finding_id=str(data["finding_id"]),
+            capability_area=data["capability_area"],
+            status=data["status"],
+            evidence=dict(data.get("evidence") or {}),
+            recommendation=str(data["recommendation"]),
+            should_update_agent_instructions=bool(data.get("should_update_agent_instructions")),
+        )
+
+
 @dataclass
 class NewTcRevisionDecisionPack:
     package_id: str
@@ -366,6 +406,7 @@ class NewTcRevisionDecisionPack:
     replacement_strategies: list[ReplacementStrategy]
     manual_decisions_required: list[dict[str, Any]]
     revised_draft_readiness: RevisedDraftReadiness
+    agent_capability_findings: list[AgentCapabilityFinding]
     canonical_write_allowed: bool
     manual_review_required: bool
     input_paths: dict[str, str | None]
@@ -388,6 +429,7 @@ class NewTcRevisionDecisionPack:
             "replacement_strategies": [item.to_dict() for item in self.replacement_strategies],
             "manual_decisions_required": self.manual_decisions_required,
             "revised_draft_readiness": self.revised_draft_readiness.to_dict(),
+            "agent_capability_findings": [item.to_dict() for item in self.agent_capability_findings],
             "canonical_write_allowed": self.canonical_write_allowed,
             "manual_review_required": self.manual_review_required,
             "input_paths": self.input_paths,
@@ -421,6 +463,9 @@ class NewTcRevisionDecisionPack:
             ],
             manual_decisions_required=list(data.get("manual_decisions_required") or []),
             revised_draft_readiness=RevisedDraftReadiness.from_dict(data["revised_draft_readiness"]),
+            agent_capability_findings=[
+                AgentCapabilityFinding.from_dict(item) for item in data.get("agent_capability_findings", [])
+            ],
             canonical_write_allowed=bool(data.get("canonical_write_allowed")),
             manual_review_required=bool(data.get("manual_review_required")),
             input_paths=dict(data.get("input_paths") or {}),
@@ -630,6 +675,7 @@ def render_new_tc_revision_decision_pack_markdown(pack: NewTcRevisionDecisionPac
         f"- Existing TC comparisons: `{len(pack.existing_tc_comparisons)}`",
         f"- Source grounding resolutions: `{len(pack.source_grounding_resolutions)}`",
         f"- Replacement strategies: `{len(pack.replacement_strategies)}`",
+        f"- Agent capability findings: `{len(pack.agent_capability_findings)}`",
         f"- Ready for revised draft proposal: `{str(readiness.ready_for_revised_draft_proposal).lower()}`",
         f"- Canonical write allowed: `{str(pack.canonical_write_allowed).lower()}`",
         f"- Manual review required: `{str(pack.manual_review_required).lower()}`",
@@ -692,6 +738,21 @@ def render_new_tc_revision_decision_pack_markdown(pack: NewTcRevisionDecisionPac
             f"`{str(strategy.replacement_allowed).lower()}`: {strategy.reason_for_replacement}"
         )
     if not pack.replacement_strategies:
+        lines.append("- none")
+    lines.extend(["", "## Agent Capability Findings", ""])
+    lines.append("| Area | Status | Update Instructions | Recommendation |")
+    lines.append("| --- | --- | --- | --- |")
+    for finding in pack.agent_capability_findings:
+        lines.append(
+            f"| `{finding.capability_area}` | `{finding.status}` | "
+            f"`{str(finding.should_update_agent_instructions).lower()}` | {finding.recommendation} |"
+        )
+        lines.append("")
+        lines.append(f"Evidence for `{finding.finding_id}`:")
+        for key, value in finding.evidence.items():
+            lines.append(f"- `{key}`: `{value}`")
+        lines.append("")
+    if not pack.agent_capability_findings:
         lines.append("- none")
     lines.extend(["", "## Manual Decisions Required", ""])
     for decision in pack.manual_decisions_required:
@@ -1027,6 +1088,19 @@ def _pack(
     replacement_strategies = replacement_strategies or []
     manual_decisions_required = manual_decisions_required or []
     readiness = _readiness(draft_decisions, duplicate_risk_clusters, source_grounding_resolutions)
+    canonical_write_allowed = False
+    manual_review_required = True
+    agent_capability_findings = _agent_capability_findings(
+        draft_decisions=draft_decisions,
+        duplicate_risk_clusters=duplicate_risk_clusters,
+        existing_tc_comparisons=existing_tc_comparisons,
+        source_grounding_resolutions=source_grounding_resolutions,
+        replacement_strategies=replacement_strategies,
+        manual_decisions_required=manual_decisions_required,
+        readiness=readiness,
+        canonical_write_allowed=canonical_write_allowed,
+        manual_review_required=manual_review_required,
+    )
     if blocking_reasons:
         status: DecisionPackStatus = "blocked"
     elif warnings or not readiness.ready_for_revised_draft_proposal or manual_decisions_required:
@@ -1046,8 +1120,9 @@ def _pack(
         replacement_strategies=replacement_strategies,
         manual_decisions_required=manual_decisions_required,
         revised_draft_readiness=readiness,
-        canonical_write_allowed=False,
-        manual_review_required=True,
+        agent_capability_findings=agent_capability_findings,
+        canonical_write_allowed=canonical_write_allowed,
+        manual_review_required=manual_review_required,
         input_paths=input_paths,
         warnings=warnings,
         blocking_reasons=blocking_reasons,
@@ -1098,6 +1173,177 @@ def _readiness(
         blocking_question_count=blocking_questions,
         readiness_reason=reason,
     )
+
+
+def _agent_capability_findings(
+    *,
+    draft_decisions: list[DraftDecision],
+    duplicate_risk_clusters: list[DuplicateRiskCluster],
+    existing_tc_comparisons: list[ExistingTcComparison],
+    source_grounding_resolutions: list[SourceGroundingResolution],
+    replacement_strategies: list[ReplacementStrategy],
+    manual_decisions_required: list[dict[str, Any]],
+    readiness: RevisedDraftReadiness,
+    canonical_write_allowed: bool,
+    manual_review_required: bool,
+) -> list[AgentCapabilityFinding]:
+    raw_duplicate_actions_count = len(existing_tc_comparisons)
+    cluster_count = len(duplicate_risk_clusters)
+    draft_count = len(draft_decisions)
+    needs_manual_count = readiness.needs_manual_decision_count
+
+    if raw_duplicate_actions_count and cluster_count >= raw_duplicate_actions_count:
+        duplicate_status: CapabilityStatus = "gap"
+        duplicate_recommendation = "Improve duplicate-risk clustering; current grouping does not reduce review load."
+    elif draft_count and needs_manual_count >= max(1, int(draft_count * 0.8)):
+        duplicate_status = "partial"
+        duplicate_recommendation = (
+            "Keep clustering, but add stronger comparison heuristics or human-answer capture before revised drafting."
+        )
+    else:
+        duplicate_status = "works"
+        duplicate_recommendation = "Retain clustered duplicate review as a precondition for revised drafting."
+
+    source_total = len(source_grounding_resolutions)
+    unresolved_source = readiness.unresolved_source_grounding_count
+    if source_total and unresolved_source == 0:
+        source_status: CapabilityStatus = "works"
+        source_recommendation = "Source grounding can support revised draft instructions; keep source-only constraints."
+    elif source_total and unresolved_source < source_total:
+        source_status = "partial"
+        source_recommendation = "Capture missing source facts as explicit manual questions before draft revision."
+    else:
+        source_status = "gap"
+        source_recommendation = "Improve source extraction before creating revised drafts; current facts are insufficient."
+
+    ready_like_count = readiness.revise_ready_count + readiness.replace_ready_count
+    if draft_count and ready_like_count > draft_count / 2:
+        quality_status: CapabilityStatus = "works"
+        quality_recommendation = "Draft quality is sufficient for most candidates after revision gating."
+    elif draft_count and needs_manual_count == draft_count:
+        quality_status = "gap"
+        quality_recommendation = "Update draft-generation instructions to avoid generic placeholders and require source-backed steps/oracles."
+    else:
+        quality_status = "partial"
+        quality_recommendation = "Draft-only safety works, but substantial revision is still needed before create apply."
+
+    replacement_total = len(replacement_strategies)
+    replacement_allowed = sum(1 for strategy in replacement_strategies if strategy.replacement_allowed)
+    replacement_modes = Counter(strategy.replacement_mode for strategy in replacement_strategies)
+    if replacement_total == 0:
+        replacement_status: CapabilityStatus = "works"
+        replacement_recommendation = "No rejected drafts require replacement strategy."
+    elif replacement_allowed == replacement_total:
+        replacement_status = "works"
+        replacement_recommendation = "Rejected drafts have source-grounded replacement paths."
+    elif replacement_allowed > 0 or replacement_total:
+        replacement_status = "partial"
+        replacement_recommendation = "Keep replacement strategies explicit; resolve duplicate/source questions before rewriting rejected drafts."
+    else:
+        replacement_status = "gap"
+        replacement_recommendation = "Rejected drafts cannot be safely replaced from current source facts."
+
+    manual_count = len(manual_decisions_required)
+    if manual_count == 0:
+        manual_status: CapabilityStatus = "works"
+        manual_recommendation = "No manual decisions remain before revised drafting."
+    elif draft_count and manual_count <= draft_count * 2:
+        manual_status = "works"
+        manual_recommendation = "Manual decisions are compact enough for direct reviewer action."
+    elif draft_count and manual_count <= draft_count * 12:
+        manual_status = "partial"
+        manual_recommendation = "Manual decisions are actionable but still numerous; summarize them by cluster before handing to a human."
+    else:
+        manual_status = "gap"
+        manual_recommendation = "Manual decision volume is too high; add more aggregation before reviewer handoff."
+
+    unsafe = canonical_write_allowed or (
+        not manual_review_required
+        or (readiness.ready_for_revised_draft_proposal and (manual_count or needs_manual_count))
+    )
+    if unsafe:
+        safety_status: CapabilityStatus = "gap"
+        safety_recommendation = "Fix safety gate: unresolved decisions must block readiness and canonical writes."
+    else:
+        safety_status = "works"
+        safety_recommendation = "Safety gate correctly keeps canonical writes disabled and requires review while decisions remain."
+
+    return [
+        AgentCapabilityFinding(
+            finding_id="ACF-000001",
+            capability_area="duplicate_risk_handling",
+            status=duplicate_status,
+            evidence={
+                "raw_duplicate_risk_actions_count": raw_duplicate_actions_count,
+                "duplicate_risk_clusters_count": cluster_count,
+                "unresolved_duplicate_risk_count": readiness.unresolved_duplicate_risk_count,
+                "needs_manual_decision_count": needs_manual_count,
+            },
+            recommendation=duplicate_recommendation,
+            should_update_agent_instructions=duplicate_status != "works",
+        ),
+        AgentCapabilityFinding(
+            finding_id="ACF-000002",
+            capability_area="source_grounding",
+            status=source_status,
+            evidence={
+                "source_grounding_resolutions_count": source_total,
+                "unresolved_source_grounding_count": unresolved_source,
+                "can_support_all_ready_candidates": unresolved_source == 0,
+            },
+            recommendation=source_recommendation,
+            should_update_agent_instructions=source_status == "gap",
+        ),
+        AgentCapabilityFinding(
+            finding_id="ACF-000003",
+            capability_area="draft_quality",
+            status=quality_status,
+            evidence={
+                "draft_decisions_count": draft_count,
+                "revise_ready_count": readiness.revise_ready_count,
+                "replace_ready_count": readiness.replace_ready_count,
+                "needs_manual_decision_count": needs_manual_count,
+            },
+            recommendation=quality_recommendation,
+            should_update_agent_instructions=quality_status != "works",
+        ),
+        AgentCapabilityFinding(
+            finding_id="ACF-000004",
+            capability_area="replacement_strategy",
+            status=replacement_status,
+            evidence={
+                "replacement_strategies_count": replacement_total,
+                "replacement_allowed_count": replacement_allowed,
+                "replacement_modes": dict(replacement_modes),
+            },
+            recommendation=replacement_recommendation,
+            should_update_agent_instructions=replacement_status == "gap",
+        ),
+        AgentCapabilityFinding(
+            finding_id="ACF-000005",
+            capability_area="manual_decision_flow",
+            status=manual_status,
+            evidence={
+                "manual_decisions_required_count": manual_count,
+                "draft_decisions_count": draft_count,
+            },
+            recommendation=manual_recommendation,
+            should_update_agent_instructions=manual_status != "works",
+        ),
+        AgentCapabilityFinding(
+            finding_id="ACF-000006",
+            capability_area="safety_gate",
+            status=safety_status,
+            evidence={
+                "canonical_write_allowed": canonical_write_allowed,
+                "manual_review_required": manual_review_required,
+                "ready_for_revised_draft_proposal": readiness.ready_for_revised_draft_proposal,
+                "unresolved_decisions_present": bool(manual_count or needs_manual_count),
+            },
+            recommendation=safety_recommendation,
+            should_update_agent_instructions=safety_status != "works",
+        ),
+    ]
 
 
 def _read_referenced_tc_blocks(

@@ -186,6 +186,7 @@ from test_case_agent.new_tc_draft_revision_plan import (
     write_new_tc_draft_revision_plan,
 )
 from test_case_agent.new_tc_revision_decision_pack import (
+    AgentCapabilityFinding,
     DraftDecision,
     DuplicateRiskCluster,
     ExistingTcComparison,
@@ -275,6 +276,7 @@ __all__ = [
     "DEFAULT_MAX_CHARS",
     "ApplyReport",
     "ApplyResultItem",
+    "AgentCapabilityFinding",
     "InvalidSourceError",
     "ImpactEntry",
     "ImpactReport",

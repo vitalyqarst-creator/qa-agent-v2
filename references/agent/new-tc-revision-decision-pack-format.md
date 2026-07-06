@@ -30,6 +30,7 @@ It is read-only. It does not create revised drafts and does not authorize canoni
 - `existing_tc_comparisons`
 - `source_grounding_resolutions`
 - `replacement_strategies`
+- `agent_capability_findings`
 - `manual_decisions_required`
 - `revised_draft_readiness`
 - `canonical_write_allowed`: always false
@@ -71,6 +72,34 @@ Source grounding records usable source facts and missing facts. Executable steps
 ## ReplacementStrategy
 
 Rejected drafts are handled explicitly. A replacement may be allowed only when the candidate has valid source facts and no blocking duplicate comparison. Otherwise the strategy is `defer` or `maybe_extend_existing_tc`.
+
+## AgentCapabilityFinding
+
+The decision pack includes one automatically generated finding for each agent capability area:
+
+- `duplicate_risk_handling`
+- `source_grounding`
+- `draft_quality`
+- `replacement_strategy`
+- `manual_decision_flow`
+- `safety_gate`
+
+Each finding has:
+
+- `finding_id`
+- `capability_area`
+- `status`: `works`, `partial`, or `gap`
+- `evidence`
+- `recommendation`
+- `should_update_agent_instructions`
+
+The findings are diagnostic. They do not change readiness by themselves and do not authorize writes.
+
+Expected interpretation:
+
+- `works` means the current agent behavior is sufficient for this capability in the observed pack.
+- `partial` means the mechanism exists but still leaves meaningful manual work or weak evidence.
+- `gap` means the current agent behavior is insufficient and agent instructions or implementation should be improved.
 
 ## Safety Rules
 

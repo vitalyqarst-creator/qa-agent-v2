@@ -135,6 +135,94 @@ class NewTcRevisionDecisionPackTests(unittest.TestCase):
             self.assertIn("New TC Revision Decision Pack", markdown)
             self.assertIn("Read-only decision-pack artifact", markdown)
 
+    def test_agent_capability_findings_exist_in_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+            payload = pack.to_dict()
+
+            self.assertIn("agent_capability_findings", payload)
+            self.assertEqual(6, len(payload["agent_capability_findings"]))
+
+    def test_agent_capability_findings_cover_all_areas(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+            areas = {finding.capability_area for finding in pack.agent_capability_findings}
+
+            self.assertEqual(
+                {
+                    "duplicate_risk_handling",
+                    "source_grounding",
+                    "draft_quality",
+                    "replacement_strategy",
+                    "manual_decision_flow",
+                    "safety_gate",
+                },
+                areas,
+            )
+
+    def test_safety_gate_finding_works_when_unresolved_decisions_block_readiness(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+            safety = finding_by_area(pack, "safety_gate")
+
+            self.assertEqual("works", safety.status)
+            self.assertFalse(pack.canonical_write_allowed)
+            self.assertTrue(pack.manual_review_required)
+            self.assertFalse(pack.revised_draft_readiness.ready_for_revised_draft_proposal)
+
+    def test_duplicate_risk_finding_is_partial_or_works_when_clustered(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+            duplicate_first_duplicate_risk_action(plan_path)
+
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+            duplicate = finding_by_area(pack, "duplicate_risk_handling")
+
+            self.assertIn(duplicate.status, {"partial", "works"})
+            self.assertLessEqual(
+                duplicate.evidence["duplicate_risk_clusters_count"],
+                duplicate.evidence["raw_duplicate_risk_actions_count"],
+            )
+
+    def test_draft_quality_not_works_when_all_drafts_need_manual_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+            quality = finding_by_area(pack, "draft_quality")
+
+            if pack.revised_draft_readiness.needs_manual_decision_count == len(pack.draft_decisions):
+                self.assertNotEqual("works", quality.status)
+
+    def test_round_trip_preserves_agent_capability_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+
+            json_path, _markdown_path = write_new_tc_revision_decision_pack(pack, root / "work")
+            loaded = load_new_tc_revision_decision_pack(json_path)
+
+            self.assertEqual(
+                [finding.to_dict() for finding in pack.agent_capability_findings],
+                [finding.to_dict() for finding in loaded.agent_capability_findings],
+            )
+
+    def test_markdown_includes_agent_capability_findings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root, bundle_path, proposal_path, review_path, plan_path = setup_decision_pack_fixture(Path(temp_dir))
+            pack = build_pack(root, bundle_path, proposal_path, review_path, plan_path)
+
+            _json_path, markdown_path = write_new_tc_revision_decision_pack(pack, root / "work")
+            markdown = markdown_path.read_text(encoding="utf-8")
+
+            self.assertIn("Agent Capability Findings", markdown)
+
 
 def setup_decision_pack_fixture(root: Path) -> tuple[Path, Path, Path, Path, Path]:
     root, bundle_path, proposal_path, review_path = setup_revision_fixture(root)
@@ -184,6 +272,21 @@ def mutate_first_candidate(path: Path, **updates) -> None:
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["candidate_requirements"][0].update(updates)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def duplicate_first_duplicate_risk_action(path: Path) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    duplicate = dict(payload["duplicate_risk_actions"][0])
+    duplicate["similar_tc_id"] = f"{duplicate['similar_tc_id']}-ALT"
+    payload["duplicate_risk_actions"].append(duplicate)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
+
+
+def finding_by_area(pack: NewTcRevisionDecisionPack, area: str):
+    for finding in pack.agent_capability_findings:
+        if finding.capability_area == area:
+            return finding
+    raise AssertionError(f"finding not found: {area}")
 
 
 if __name__ == "__main__":

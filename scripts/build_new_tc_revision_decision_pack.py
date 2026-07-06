@@ -62,6 +62,7 @@ def main() -> int:
         "existing_tc_comparisons_count": len(pack.existing_tc_comparisons),
         "source_grounding_resolutions_count": len(pack.source_grounding_resolutions),
         "replacement_strategies_count": len(pack.replacement_strategies),
+        "agent_capability_findings_count": len(pack.agent_capability_findings),
         "ready_for_revised_draft_proposal": readiness.ready_for_revised_draft_proposal,
         "canonical_write_allowed": pack.canonical_write_allowed,
         "manual_review_required": pack.manual_review_required,

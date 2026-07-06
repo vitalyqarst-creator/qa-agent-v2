@@ -41,6 +41,7 @@ from test_case_agent.api import (
     WriterTraceabilityPostApplyValidationReport,
     CompletedPackageRegressionCheck,
     CompletedPackageRegressionReport,
+    AgentCapabilityFinding,
     CandidateGroup,
     CandidateRequirement,
     CreateNewTcContextBundle,
@@ -163,6 +164,7 @@ from test_case_agent.source_quality import (
 __all__ = [
     "ApplyReport",
     "ApplyResultItem",
+    "AgentCapabilityFinding",
     "DEFAULT_MAX_CHARS",
     "InvalidSourceError",
     "ImpactEntry",
