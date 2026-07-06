@@ -149,6 +149,16 @@ from test_case_agent.completed_package_regression import (
     load_completed_package_regression,
     write_completed_package_regression,
 )
+from test_case_agent.create_new_tc_context_bundle import (
+    CandidateGroup,
+    CandidateRequirement,
+    CreateNewTcContextBundle,
+    ExistingTcSimilarity,
+    RecommendedDraftTarget,
+    build_create_new_tc_context_bundle,
+    load_create_new_tc_context_bundle,
+    write_create_new_tc_context_bundle,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -266,6 +276,11 @@ __all__ = [
     "WriterTraceabilityPostApplyValidationReport",
     "CompletedPackageRegressionCheck",
     "CompletedPackageRegressionReport",
+    "CandidateGroup",
+    "CandidateRequirement",
+    "CreateNewTcContextBundle",
+    "ExistingTcSimilarity",
+    "RecommendedDraftTarget",
     "WriterPackageTask",
     "WriterPackageTasksReport",
     "WriterDryRunProposal",
@@ -289,6 +304,7 @@ __all__ = [
     "apply_writer_traceability_update_proposal",
     "build_writer_traceability_post_apply_validation",
     "build_completed_package_regression",
+    "build_create_new_tc_context_bundle",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -307,6 +323,7 @@ __all__ = [
     "load_writer_traceability_update_apply_report",
     "load_writer_traceability_post_apply_validation",
     "load_completed_package_regression",
+    "load_create_new_tc_context_bundle",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -334,6 +351,7 @@ __all__ = [
     "write_writer_traceability_update_apply_report",
     "write_writer_traceability_post_apply_validation",
     "write_completed_package_regression",
+    "write_create_new_tc_context_bundle",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
