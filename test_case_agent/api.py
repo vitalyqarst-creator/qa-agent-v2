@@ -211,6 +211,15 @@ from test_case_agent.agent_capability_improvement_plan import (
     load_agent_capability_improvement_plan,
     write_agent_capability_improvement_plan,
 )
+from test_case_agent.residual_source_grounding_gap_analysis import (
+    DraftGroundingGapAnalysis,
+    RecommendedAgentImprovement,
+    RequirementGroundingGapAnalysis,
+    ResidualSourceGroundingGapAnalysis,
+    build_residual_source_grounding_gap_analysis,
+    load_residual_source_grounding_gap_analysis,
+    write_residual_source_grounding_gap_analysis,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -356,10 +365,14 @@ __all__ = [
     "NewTcDraftProposal",
     "ReplacementStrategy",
     "RecommendedDraftTarget",
+    "RecommendedAgentImprovement",
     "RevisedDraftReadiness",
+    "RequirementGroundingGapAnalysis",
+    "ResidualSourceGroundingGapAnalysis",
     "SourceGroundingResolution",
     "SourceGroundingProfile",
     "SourceGroundingAction",
+    "DraftGroundingGapAnalysis",
     "WriterPackageTask",
     "WriterPackageTasksReport",
     "WriterDryRunProposal",
@@ -389,6 +402,7 @@ __all__ = [
     "build_new_tc_draft_review",
     "build_new_tc_draft_revision_plan",
     "build_new_tc_revision_decision_pack",
+    "build_residual_source_grounding_gap_analysis",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -413,6 +427,7 @@ __all__ = [
     "load_new_tc_draft_review",
     "load_new_tc_draft_revision_plan",
     "load_new_tc_revision_decision_pack",
+    "load_residual_source_grounding_gap_analysis",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -446,6 +461,7 @@ __all__ = [
     "write_new_tc_draft_review",
     "write_new_tc_draft_revision_plan",
     "write_new_tc_revision_decision_pack",
+    "write_residual_source_grounding_gap_analysis",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
