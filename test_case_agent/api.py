@@ -270,6 +270,19 @@ from test_case_agent.agent_decision_resolver import (
     load_agent_decision_resolution,
     write_agent_decision_resolution,
 )
+from test_case_agent.agent_decision_validation import (
+    AgentDecisionValidationReport,
+    AgentDecisionValidationResult,
+    build_agent_decision_validation_report,
+    load_agent_decision_validation_report,
+    write_agent_decision_validation_report,
+)
+from test_case_agent.agent_driven_create_new_goal_report import (
+    AgentDrivenCreateNewGoalReport,
+    build_agent_driven_create_new_goal_report,
+    load_agent_driven_create_new_goal_report,
+    write_agent_driven_create_new_goal_report,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -352,6 +365,9 @@ __all__ = [
     "AgentCapabilityImprovementPlan",
     "AgentDecision",
     "AgentDecisionResolution",
+    "AgentDecisionValidationReport",
+    "AgentDecisionValidationResult",
+    "AgentDrivenCreateNewGoalReport",
     "CapabilityFindingSummary",
     "CodeUpdatePlan",
     "InvalidSourceError",
@@ -456,6 +472,8 @@ __all__ = [
     "build_source_manifest",
     "build_agent_capability_improvement_plan",
     "build_agent_decision_resolution",
+    "build_agent_decision_validation_report",
+    "build_agent_driven_create_new_goal_report",
     "build_requirements_registry",
     "build_requirements_diff",
     "build_impact_report",
@@ -487,6 +505,8 @@ __all__ = [
     "load_impact_report",
     "load_agent_capability_improvement_plan",
     "load_agent_decision_resolution",
+    "load_agent_decision_validation_report",
+    "load_agent_driven_create_new_goal_report",
     "load_test_case_update_plan",
     "load_traceability_mismatch_diagnostics",
     "load_traceability_backfill_proposal",
@@ -527,6 +547,8 @@ __all__ = [
     "write_requirements_diff",
     "write_agent_capability_improvement_plan",
     "write_agent_decision_resolution",
+    "write_agent_decision_validation_report",
+    "write_agent_driven_create_new_goal_report",
     "write_impact_report",
     "write_test_case_update_plan",
     "write_traceability_mismatch_diagnostics",
