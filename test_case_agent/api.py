@@ -261,6 +261,15 @@ from test_case_agent.manual_decision_answer_pack import (
     write_manual_decision_answer_pack,
     write_manual_decision_answer_pack_import_report,
 )
+from test_case_agent.agent_decision_resolver import (
+    AgentDecision,
+    AgentDecisionResolution,
+    DuplicateRiskAssessment,
+    SourceFactCoverage,
+    build_agent_decision_resolution,
+    load_agent_decision_resolution,
+    write_agent_decision_resolution,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -341,6 +350,8 @@ __all__ = [
     "ApplyResultItem",
     "AgentCapabilityFinding",
     "AgentCapabilityImprovementPlan",
+    "AgentDecision",
+    "AgentDecisionResolution",
     "CapabilityFindingSummary",
     "CodeUpdatePlan",
     "InvalidSourceError",
@@ -405,6 +416,7 @@ __all__ = [
     "DraftDecision",
     "DuplicateRiskDecision",
     "DuplicateRiskAction",
+    "DuplicateRiskAssessment",
     "DuplicateRiskCluster",
     "ExistingTcComparison",
     "ExistingTcSimilarity",
@@ -426,6 +438,7 @@ __all__ = [
     "ReviewerAnswerTemplateRow",
     "ReviewerAnswerPackRow",
     "SourceAnchorContext",
+    "SourceFactCoverage",
     "SourceGroundingResolution",
     "SourceGroundingProfile",
     "SourceGroundingAction",
@@ -442,6 +455,7 @@ __all__ = [
     "inspect_source_quality",
     "build_source_manifest",
     "build_agent_capability_improvement_plan",
+    "build_agent_decision_resolution",
     "build_requirements_registry",
     "build_requirements_diff",
     "build_impact_report",
@@ -472,6 +486,7 @@ __all__ = [
     "load_requirements_diff",
     "load_impact_report",
     "load_agent_capability_improvement_plan",
+    "load_agent_decision_resolution",
     "load_test_case_update_plan",
     "load_traceability_mismatch_diagnostics",
     "load_traceability_backfill_proposal",
@@ -511,6 +526,7 @@ __all__ = [
     "resolve_sections",
     "write_requirements_diff",
     "write_agent_capability_improvement_plan",
+    "write_agent_decision_resolution",
     "write_impact_report",
     "write_test_case_update_plan",
     "write_traceability_mismatch_diagnostics",
