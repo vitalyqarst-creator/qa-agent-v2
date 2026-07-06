@@ -168,6 +168,14 @@ from test_case_agent.new_tc_draft_proposals import (
     load_new_tc_draft_proposal,
     write_new_tc_draft_proposal,
 )
+from test_case_agent.new_tc_draft_review import (
+    DraftTestCaseReview,
+    NewTcDraftReviewCheck,
+    NewTcDraftReviewReport,
+    build_new_tc_draft_review,
+    load_new_tc_draft_review,
+    write_new_tc_draft_review,
+)
 from test_case_agent.source_quality import SourceQualityIssue, analyze_sections
 
 DEFAULT_MAX_CHARS = 12000
@@ -289,9 +297,12 @@ __all__ = [
     "CandidateRequirement",
     "CreateNewTcContextBundle",
     "DeferredGroup",
+    "DraftTestCaseReview",
     "DraftTestCaseCandidate",
     "DuplicateRiskDecision",
     "ExistingTcSimilarity",
+    "NewTcDraftReviewCheck",
+    "NewTcDraftReviewReport",
     "NewTcDraftProposal",
     "RecommendedDraftTarget",
     "WriterPackageTask",
@@ -319,6 +330,7 @@ __all__ = [
     "build_completed_package_regression",
     "build_create_new_tc_context_bundle",
     "build_new_tc_draft_proposal",
+    "build_new_tc_draft_review",
     "compute_file_sha256",
     "compute_requirement_text_hash",
     "compute_text_similarity",
@@ -339,6 +351,7 @@ __all__ = [
     "load_completed_package_regression",
     "load_create_new_tc_context_bundle",
     "load_new_tc_draft_proposal",
+    "load_new_tc_draft_review",
     "load_requirements_registry",
     "load_requirements_registry_jsonl",
     "load_source_manifest",
@@ -368,6 +381,7 @@ __all__ = [
     "write_completed_package_regression",
     "write_create_new_tc_context_bundle",
     "write_new_tc_draft_proposal",
+    "write_new_tc_draft_review",
     "write_requirements_registry",
     "write_source_manifest",
     "apply_test_case_update_plan",
