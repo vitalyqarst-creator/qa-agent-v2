@@ -227,6 +227,15 @@ class InstructionContextResolverTests(unittest.TestCase):
                 self.assertEqual("pass", payload["budget"]["status"])
                 self.assertIn("references/agent/source-selection-format.md", paths)
 
+    def test_clarification_question_policy_loads_for_scope_and_iteration(self) -> None:
+        for scenario_id in ("scope.manual", "iteration.full_loop"):
+            with self.subTest(scenario_id=scenario_id):
+                payload = self.resolve_json("--scenario", scenario_id)
+                paths = {item["path"] for item in payload["files"]}
+
+                self.assertEqual("pass", payload["budget"]["status"])
+                self.assertIn("references/agent/requirements-clarification-questioning-policy.md", paths)
+
     def test_reviewer_context_loads_reviewer_and_runtime_contracts(self) -> None:
         payload = self.resolve_json("--scenario", "reviewer.full_existing_cases")
         paths = {item["path"] for item in payload["files"]}
@@ -272,6 +281,7 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/agent/scope-contract-format.md", paths)
         self.assertIn("references/agent/scope-coverage-gaps-format.md", paths)
         self.assertIn("references/agent/scope-clarification-requests-format.md", paths)
+        self.assertIn("references/agent/requirements-clarification-questioning-policy.md", paths)
         self.assertIn("references/qa/review-findings-format.md", paths)
         self.assertNotIn("references/qa/test-case-format.md", paths)
         self.assertNotIn("references/qa/test-case-style-examples.md", paths)

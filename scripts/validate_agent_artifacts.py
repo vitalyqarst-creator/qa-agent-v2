@@ -131,8 +131,101 @@ ALLOWED_FINDING_CATEGORIES = {
     "format",
     "structure",
     "test-design",
+    "clarification-question-quality",
 }
 ALLOWED_FINDING_STATUSES = {"open", "closed", "partially-closed"}
+ALLOWED_CLARIFICATION_QUESTION_TYPES = {
+    "missing-behavior",
+    "ambiguous-behavior",
+    "conflicting-sources",
+    "missing-trigger",
+    "missing-condition",
+    "missing-actor-role",
+    "missing-permission-rule",
+    "missing-state-transition",
+    "missing-validation-rule",
+    "missing-negative-behavior",
+    "missing-boundary",
+    "missing-equivalence-class",
+    "missing-allowed-values",
+    "missing-dictionary-source",
+    "missing-display-format",
+    "missing-error-message",
+    "missing-timing-rule",
+    "missing-persistence-rule",
+    "missing-reopen-behavior",
+    "missing-audit-log-rule",
+    "missing-integration-behavior",
+    "missing-async-retry-behavior",
+    "missing-generated-document-rule",
+    "missing-calculation-rule",
+    "missing-rounding-rule",
+    "missing-sort-filter-rule",
+    "missing-priority-between-rules",
+    "missing-cross-ft-dependency",
+    "mockup-vs-ft-conflict",
+    "support-vs-main-ft-conflict",
+    "xhtml-vs-docx-conflict",
+    "pdf-vs-docx-conflict",
+    "source-extraction-limitation",
+    "other",
+}
+ALLOWED_CLARIFICATION_PRIORITIES = {"P0-blocker", "P1-high", "P2-medium", "P3-low"}
+ALLOWED_CLARIFICATION_BLOCKING_LEVELS = {
+    "blocks-scope-confirmation",
+    "blocks-writer-start",
+    "blocks-ready-for-review",
+    "blocks-sign-off",
+    "allows-limited-coverage",
+    "non-blocking",
+}
+ALLOWED_CLARIFICATION_REQUESTED_FROM = {
+    "business-analyst",
+    "product-owner",
+    "system-analyst",
+    "developer",
+    "qa-lead",
+    "unknown",
+}
+ALLOWED_CLARIFICATION_ANSWER_USAGE_RULES = {
+    "source-update-required",
+    "analyst-confirmation-enough",
+    "product-confirmation-required",
+    "working-assumption-only",
+    "accepted-risk-required",
+    "do-not-use-until-documented",
+}
+REQUIRED_SCOPE_GAP_QUESTION_FIELDS = {
+    "question_type",
+    "question_priority",
+    "blocking_level",
+    "requested_from",
+    "answer_usage_rule",
+    "needed_for",
+    "impact_if_unanswered",
+}
+REQUIRED_SCOPE_CLARIFICATION_COLUMNS = {
+    "question_id",
+    "gap_id",
+    "related_ft_reference",
+    "question_type",
+    "priority",
+    "blocking_level",
+    "question",
+    "answer_options",
+    "needed_for",
+    "impact_if_unanswered",
+    "blocking",
+    "requested_from",
+    "answer_usage_rule",
+    "duplicate_group",
+    "user_response",
+    "response_status",
+    "response_type",
+    "updated_at",
+}
+UNANSWERED_CLARIFICATION_STATUSES = {"", "-", "unanswered"}
+UNANSWERED_CLARIFICATION_RESPONSE_TYPES = {"", "-", "not-provided"}
 REQUIRED_FINDING_FIELDS = {
     "review_mode",
     "severity",
@@ -999,6 +1092,14 @@ def iter_writer_process_diagnostics(root: Path) -> list[Path]:
 
 def iter_writer_self_checks(root: Path) -> list[Path]:
     return iter_named_markdown(root, "writer-self-check.md")
+
+
+def iter_scope_coverage_gaps(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "scope-coverage-gaps.md")
+
+
+def iter_scope_clarification_requests(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "scope-clarification-requests.md")
 
 
 def iter_session_logs(root: Path) -> list[Path]:
@@ -2962,10 +3063,18 @@ def extract_coverage_gaps_section(content: str) -> str | None:
         content,
         flags=re.IGNORECASE | re.MULTILINE,
     )
+    next_heading_pattern = r"^#{1,2}\s+"
     if not match:
-        return None
+        match = re.search(
+            r"^#\s+Scope Coverage Gaps\b.*$",
+            content,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+        next_heading_pattern = r"^#\s+"
+        if not match:
+            return None
 
-    next_heading = re.search(r"^#{1,2}\s+", content[match.end():], flags=re.MULTILINE)
+    next_heading = re.search(next_heading_pattern, content[match.end():], flags=re.MULTILINE)
     section_end = match.end() + next_heading.start() if next_heading else len(content)
     return content[match.end():section_end]
 
@@ -2975,6 +3084,471 @@ def declared_coverage_gap_ids(content: str) -> set[str]:
     if section is None:
         return set()
     return set(extract_gap_ids_from_text(section))
+
+
+def extract_scope_gap_blocks(content: str) -> list[tuple[str, str]]:
+    section = extract_coverage_gaps_section(content)
+    if section is None:
+        return []
+    matches = list(re.finditer(r"^###\s+(GAP-\d+)\s*$", section, flags=re.MULTILINE))
+    blocks: list[tuple[str, str]] = []
+    for index, match in enumerate(matches):
+        start = match.end()
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(section)
+        blocks.append((match.group(1), section[start:end]))
+    return blocks
+
+
+def scope_gap_question_records(content: str) -> dict[str, dict[str, str]]:
+    return {gap_id: parse_markdown_fields(block) for gap_id, block in extract_scope_gap_blocks(content)}
+
+
+def validate_scope_coverage_gap_questions(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="scope-coverage-gaps-unreadable",
+                severity="warning",
+                category="traceability",
+                title="scope-coverage-gaps.md is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save scope-coverage-gaps.md as UTF-8 Markdown.",
+            )
+        )
+        return findings, [Check("scope-coverage-gap-questions", "warn", "scope-coverage-gaps.md is not UTF-8.", display_path)]
+
+    records = scope_gap_question_records(content)
+    question_required_gap_ids: list[str] = []
+    missing_field_evidence: list[str] = []
+    invalid_type_evidence: list[str] = []
+    invalid_priority_evidence: list[str] = []
+    invalid_blocking_level_evidence: list[str] = []
+    invalid_requested_from_evidence: list[str] = []
+    invalid_answer_usage_evidence: list[str] = []
+
+    for gap_id, fields in records.items():
+        question_required = fields.get("question_required", "").lower()
+        if question_required != "yes":
+            continue
+        question_required_gap_ids.append(gap_id)
+        missing_fields = sorted(
+            field
+            for field in REQUIRED_SCOPE_GAP_QUESTION_FIELDS
+            if not fields.get(field) or fields.get(field, "").lower() in {"-", "n/a", "none"}
+        )
+        if not fields.get("affected_test_design_dimension"):
+            missing_fields.append("affected_test_design_dimension")
+        if not any(fields.get(field) for field in ("ft_reference", "source_ref", "source_path", "source_statement")):
+            missing_fields.append("source_anchor")
+        if missing_fields:
+            missing_field_evidence.append(f"{gap_id}: missing={', '.join(sorted(set(missing_fields)))}")
+
+        question_type = fields.get("question_type")
+        if question_type and question_type not in ALLOWED_CLARIFICATION_QUESTION_TYPES:
+            invalid_type_evidence.append(f"{gap_id}:question_type={question_type}")
+        priority = fields.get("question_priority")
+        if priority and priority not in ALLOWED_CLARIFICATION_PRIORITIES:
+            invalid_priority_evidence.append(f"{gap_id}:question_priority={priority}")
+        blocking_level = fields.get("blocking_level")
+        if blocking_level and blocking_level not in ALLOWED_CLARIFICATION_BLOCKING_LEVELS:
+            invalid_blocking_level_evidence.append(f"{gap_id}:blocking_level={blocking_level}")
+        requested_from = fields.get("requested_from")
+        if requested_from and requested_from not in ALLOWED_CLARIFICATION_REQUESTED_FROM:
+            invalid_requested_from_evidence.append(f"{gap_id}:requested_from={requested_from}")
+        answer_usage_rule = fields.get("answer_usage_rule")
+        if answer_usage_rule and answer_usage_rule not in ALLOWED_CLARIFICATION_ANSWER_USAGE_RULES:
+            invalid_answer_usage_evidence.append(f"{gap_id}:answer_usage_rule={answer_usage_rule}")
+
+    if missing_field_evidence:
+        findings.append(
+            Finding(
+                id="scope-gap-question-required-missing-fields",
+                severity="warning",
+                category="clarification-question-quality",
+                title="Question-required scope gaps miss clarification fields",
+                details=(
+                    "`Question Required: yes` gaps must classify the analyst question and explain what downstream "
+                    "test-design decision is blocked."
+                ),
+                path=display_path,
+                evidence=missing_field_evidence[:20],
+                recommended_action=(
+                    "Fill Question Type, Question Priority, Blocking Level, Requested From, Answer Usage Rule, "
+                    "Needed For, Impact If Unanswered, source anchor and Affected Test-design Dimension."
+                ),
+            )
+        )
+
+    for finding_id, title, evidence in (
+        ("scope-clarification-invalid-question-type", "Scope gap uses invalid clarification question type", invalid_type_evidence),
+        ("scope-clarification-invalid-priority", "Scope gap uses invalid clarification priority", invalid_priority_evidence),
+        (
+            "scope-clarification-invalid-blocking-level",
+            "Scope gap uses invalid clarification blocking level",
+            invalid_blocking_level_evidence,
+        ),
+        (
+            "scope-clarification-invalid-answer-usage-rule",
+            "Scope gap uses invalid clarification answer usage rule",
+            invalid_answer_usage_evidence,
+        ),
+    ):
+        if evidence:
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    severity="warning",
+                    category="clarification-question-quality",
+                    title=title,
+                    details="Clarification question fields must use the canonical controlled vocabularies.",
+                    path=display_path,
+                    evidence=evidence[:20],
+                    recommended_action="Use values from requirements-clarification-questioning-policy.md.",
+                )
+            )
+    if invalid_requested_from_evidence:
+        findings.append(
+            Finding(
+                id="scope-clarification-invalid-requested-from",
+                severity="warning",
+                category="clarification-question-quality",
+                title="Scope gap uses invalid clarification request owner",
+                details="Requested From must use the canonical clarification requester vocabulary.",
+                path=display_path,
+                evidence=invalid_requested_from_evidence[:20],
+                recommended_action="Use business-analyst, product-owner, system-analyst, developer, qa-lead or unknown.",
+            )
+        )
+
+    return findings, [
+        Check(
+            "scope-coverage-gap-questions",
+            "warn" if findings else "pass",
+            "Scope gap clarification question fields have issues." if findings else "Scope gap clarification question fields passed.",
+            display_path,
+        )
+    ]
+
+
+def parsed_scope_clarification_request_rows(content: str) -> tuple[list[str], list[dict[str, str]]]:
+    section = extract_markdown_section(content, "Clarification Requests")
+    if section is None:
+        return [], []
+    table_rows = markdown_table_rows_from_text(section)
+    if not table_rows:
+        return [], []
+    header = normalize_table_header(table_rows[0])
+    parsed_rows: list[dict[str, str]] = []
+    for row in table_rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+    return header, parsed_rows
+
+
+def validate_scope_clarification_requests_artifact(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="scope-clarification-requests-unreadable",
+                severity="warning",
+                category="clarification-question-quality",
+                title="scope-clarification-requests.md is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save scope-clarification-requests.md as UTF-8 Markdown.",
+            )
+        )
+        return findings, [Check("scope-clarification-requests", "warn", "Clarification requests are not UTF-8.", display_path)]
+
+    header, rows = parsed_scope_clarification_request_rows(content)
+    if not header:
+        return findings, [
+            Check(
+                "scope-clarification-requests",
+                "pass",
+                "No Clarification Requests table found; legacy free-form artifact is accepted in compatible mode.",
+                display_path,
+            )
+        ]
+
+    missing_columns = sorted(REQUIRED_SCOPE_CLARIFICATION_COLUMNS - set(header))
+    if missing_columns:
+        findings.append(
+            Finding(
+                id="scope-clarification-missing-required-columns",
+                severity="info",
+                category="clarification-question-quality",
+                title="Clarification requests table misses canonical columns",
+                details="New clean clarification request tables must expose the full question classification contract.",
+                path=display_path,
+                evidence=missing_columns,
+                recommended_action="Add the required columns from scope-clarification-requests-format.md.",
+            )
+        )
+        return findings, [
+            Check(
+                "scope-clarification-requests",
+                "pass",
+                "Legacy clarification table missing new columns recorded as info.",
+                display_path,
+            )
+        ]
+
+    missing_required_values: list[str] = []
+    invalid_type_evidence: list[str] = []
+    invalid_priority_evidence: list[str] = []
+    invalid_blocking_level_evidence: list[str] = []
+    invalid_answer_usage_evidence: list[str] = []
+    invalid_requested_from_evidence: list[str] = []
+    blocking_mismatch_evidence: list[str] = []
+    question_ids: list[str] = []
+
+    for index, row in enumerate(rows, start=1):
+        row_label = row.get("question_id") or f"row-{index}"
+        question_id = row.get("question_id", "").strip()
+        if question_id:
+            question_ids.append(question_id)
+        for required_field in ("question_id", "gap_id", "question", "needed_for", "impact_if_unanswered"):
+            value = row.get(required_field, "").strip()
+            if not value or value in {"-", "N/A", "n/a"}:
+                missing_required_values.append(f"{row_label}:{required_field}")
+
+        question_type = row.get("question_type", "").strip()
+        if question_type and question_type not in ALLOWED_CLARIFICATION_QUESTION_TYPES:
+            invalid_type_evidence.append(f"{row_label}:question_type={question_type}")
+        priority = row.get("priority", "").strip()
+        if priority and priority not in ALLOWED_CLARIFICATION_PRIORITIES:
+            invalid_priority_evidence.append(f"{row_label}:priority={priority}")
+        blocking_level = row.get("blocking_level", "").strip()
+        if blocking_level and blocking_level not in ALLOWED_CLARIFICATION_BLOCKING_LEVELS:
+            invalid_blocking_level_evidence.append(f"{row_label}:blocking_level={blocking_level}")
+        answer_usage_rule = row.get("answer_usage_rule", "").strip()
+        if answer_usage_rule and answer_usage_rule not in ALLOWED_CLARIFICATION_ANSWER_USAGE_RULES:
+            invalid_answer_usage_evidence.append(f"{row_label}:answer_usage_rule={answer_usage_rule}")
+        requested_from = row.get("requested_from", "").strip()
+        if requested_from and requested_from not in ALLOWED_CLARIFICATION_REQUESTED_FROM:
+            invalid_requested_from_evidence.append(f"{row_label}:requested_from={requested_from}")
+        if blocking_level.startswith("blocks-") and row.get("blocking", "").strip().lower() != "yes":
+            blocking_mismatch_evidence.append(f"{row_label}:blocking_level={blocking_level}; blocking={row.get('blocking', '') or '<missing>'}")
+
+    duplicate_question_ids = sorted(question_id for question_id, count in Counter(question_ids).items() if count > 1)
+    if missing_required_values or duplicate_question_ids:
+        evidence = missing_required_values[:20]
+        if duplicate_question_ids:
+            evidence.extend(f"duplicate_question_id={question_id}" for question_id in duplicate_question_ids[:20])
+        findings.append(
+            Finding(
+                id="scope-clarification-missing-required-columns",
+                severity="warning",
+                category="clarification-question-quality",
+                title="Clarification request rows miss required values",
+                details="Each clarification request row needs a stable question_id, gap_id, question and downstream impact.",
+                path=display_path,
+                evidence=evidence[:30],
+                recommended_action="Fill required row values and keep question_id unique.",
+            )
+        )
+
+    for finding_id, title, evidence in (
+        ("scope-clarification-invalid-question-type", "Clarification request has invalid question_type", invalid_type_evidence),
+        ("scope-clarification-invalid-priority", "Clarification request has invalid priority", invalid_priority_evidence),
+        ("scope-clarification-invalid-blocking-level", "Clarification request has invalid blocking_level", invalid_blocking_level_evidence),
+        (
+            "scope-clarification-invalid-answer-usage-rule",
+            "Clarification request has invalid answer_usage_rule",
+            invalid_answer_usage_evidence,
+        ),
+    ):
+        if evidence:
+            findings.append(
+                Finding(
+                    id=finding_id,
+                    severity="warning",
+                    category="clarification-question-quality",
+                    title=title,
+                    details="Clarification request fields must use canonical controlled vocabularies.",
+                    path=display_path,
+                    evidence=evidence[:20],
+                    recommended_action="Use values from requirements-clarification-questioning-policy.md.",
+                )
+            )
+    if invalid_requested_from_evidence:
+        findings.append(
+            Finding(
+                id="scope-clarification-invalid-requested-from",
+                severity="warning",
+                category="clarification-question-quality",
+                title="Clarification request has invalid requested_from",
+                details="requested_from must use the canonical requester vocabulary.",
+                path=display_path,
+                evidence=invalid_requested_from_evidence[:20],
+                recommended_action="Use business-analyst, product-owner, system-analyst, developer, qa-lead or unknown.",
+            )
+        )
+    if blocking_mismatch_evidence:
+        findings.append(
+            Finding(
+                id="scope-clarification-blocking-mismatch",
+                severity="warning",
+                category="clarification-question-quality",
+                title="Clarification request blocking flag conflicts with blocking_level",
+                details="Any blocking_level that starts with `blocks-` must have `blocking = yes`.",
+                path=display_path,
+                evidence=blocking_mismatch_evidence[:20],
+                recommended_action="Set blocking to yes or lower the blocking_level.",
+            )
+        )
+
+    return findings, [
+        Check(
+            "scope-clarification-requests",
+            "warn" if any(finding.severity == "warning" for finding in findings) else "pass",
+            "Clarification requests have issues." if findings else "Clarification requests passed.",
+            display_path,
+        )
+    ]
+
+
+def validate_scope_clarification_cross_artifacts(
+    scope_gap_path: Path,
+    clarification_path: Path,
+    workflow_path: Path | None,
+    root: Path,
+    state: dict[str, Any] | None = None,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(workflow_path or clarification_path, root)
+    try:
+        gap_content = scope_gap_path.read_text(encoding="utf-8")
+        clarification_content = clarification_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="scope-clarification-cross-artifact-unreadable",
+                severity="warning",
+                category="clarification-question-quality",
+                title="Scope clarification artifacts are not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[rel(scope_gap_path, root), rel(clarification_path, root)],
+                recommended_action="Save scope gap and clarification request artifacts as UTF-8 Markdown.",
+            )
+        )
+        return findings, [Check("scope-clarification-cross-artifacts", "warn", "Scope clarification artifacts are unreadable.", display_path)]
+
+    gap_records = scope_gap_question_records(gap_content)
+    gap_ids = set(gap_records)
+    question_required_gap_ids = {
+        gap_id
+        for gap_id, fields in gap_records.items()
+        if fields.get("question_required", "").lower() == "yes"
+    }
+    _, request_rows = parsed_scope_clarification_request_rows(clarification_content)
+    request_gap_ids = {row.get("gap_id", "").strip() for row in request_rows if row.get("gap_id", "").strip()}
+
+    missing_request_gap_ids = sorted(question_required_gap_ids - request_gap_ids)
+    if missing_request_gap_ids:
+        findings.append(
+            Finding(
+                id="scope-gap-question-without-request",
+                severity="error",
+                category="clarification-question-quality",
+                title="Question-required scope gap has no clarification request row",
+                details="Every `Question Required: yes` GAP-* must have a matching row in scope-clarification-requests.md.",
+                path=display_path,
+                evidence=[f"missing_request={gap_id}" for gap_id in missing_request_gap_ids[:20]],
+                recommended_action="Add a clarification request row with the same gap_id or set Question Required to no and list the gap under Gaps Without Requests.",
+            )
+        )
+
+    unknown_request_gap_ids = sorted(request_gap_ids - gap_ids)
+    if unknown_request_gap_ids:
+        findings.append(
+            Finding(
+                id="scope-clarification-question-without-gap",
+                severity="error",
+                category="clarification-question-quality",
+                title="Clarification request references unknown gap_id",
+                details="scope-clarification-requests.md must not introduce questions for GAP-* ids absent from scope-coverage-gaps.md.",
+                path=display_path,
+                evidence=[f"unknown_gap={gap_id}" for gap_id in unknown_request_gap_ids[:20]],
+                recommended_action="Fix gap_id or add the missing GAP-* to scope-coverage-gaps.md with source anchor.",
+            )
+        )
+
+    if state is not None:
+        downstream_ready = (
+            is_ready_for_review_state(state)
+            or is_signed_off_state(state)
+            or (
+                state.get("stage_status") == "ready-for-next-stage"
+                and state.get("next_skill") in {"ft-test-case-writer", "ft-test-case-iteration"}
+            )
+        )
+        if downstream_ready:
+            accepted_gap_ids = accepted_risk_gap_ids(state)
+            accepted_risks_qualified = accepted_risk_entries_are_qualified(state)
+            unanswered_blocking_rows: list[str] = []
+            for row in request_rows:
+                priority = row.get("priority", "").strip()
+                blocking_level = row.get("blocking_level", "").strip()
+                response_status = row.get("response_status", "").strip().lower()
+                response_type = row.get("response_type", "").strip().lower()
+                gap_id = row.get("gap_id", "").strip()
+                if priority not in {"P0-blocker", "P1-high"} or not blocking_level.startswith("blocks-"):
+                    continue
+                unanswered = (
+                    response_status in UNANSWERED_CLARIFICATION_STATUSES
+                    or response_type in UNANSWERED_CLARIFICATION_RESPONSE_TYPES
+                )
+                accepted = gap_id in accepted_gap_ids and accepted_risks_qualified
+                if unanswered and not accepted:
+                    unanswered_blocking_rows.append(
+                        f"{row.get('question_id') or '<missing-question-id>'}:{gap_id}:{priority}:{blocking_level}"
+                    )
+            if unanswered_blocking_rows:
+                findings.append(
+                    Finding(
+                        id="workflow-state-unanswered-blocking-clarification-routes-downstream",
+                        severity="error",
+                        category="stage-transition",
+                        title="Unanswered blocking clarification is routed downstream",
+                        details=(
+                            "Unanswered P0/P1 clarification questions with blocking_level=blocks-* must not route "
+                            "to writer/review/sign-off unless the workflow records a qualified accepted risk."
+                        ),
+                        path=display_path,
+                        evidence=unanswered_blocking_rows[:20],
+                        recommended_action=(
+                            "Resolve the clarification, switch to blocked-input/ready-for-gap-review, or add a qualified "
+                            "accepted_risks entry naming the same GAP-*."
+                        ),
+                    )
+                )
+
+    return findings, [
+        Check(
+            "scope-clarification-cross-artifacts",
+            "fail" if any(finding.severity == "error" for finding in findings) else "pass",
+            "Scope clarification cross-artifact checks have issues." if findings else "Scope clarification cross-artifact checks passed.",
+            display_path,
+        )
+    ]
 
 
 def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
@@ -15257,6 +15831,35 @@ def validate_workflow_state(
         findings.extend(inventory_findings)
         checks.extend(inventory_checks)
 
+    linked_scope_gap_paths = dedupe_paths(
+        [
+            resolved
+            for value in [*required_input_values, *latest_artifact_values]
+            if Path(strip_quotes(value)).name == "scope-coverage-gaps.md"
+            for resolved in [resolve_artifact_path(value, path, root, ft_root)]
+            if resolved is not None
+        ]
+    )
+    linked_scope_clarification_paths = dedupe_paths(
+        [
+            resolved
+            for value in [*required_input_values, *latest_artifact_values]
+            if Path(strip_quotes(value)).name == "scope-clarification-requests.md"
+            for resolved in [resolve_artifact_path(value, path, root, ft_root)]
+            if resolved is not None
+        ]
+    )
+    if linked_scope_gap_paths and linked_scope_clarification_paths:
+        scope_cross_findings, scope_cross_checks = validate_scope_clarification_cross_artifacts(
+            linked_scope_gap_paths[0],
+            linked_scope_clarification_paths[0],
+            path,
+            root,
+            state,
+        )
+        findings.extend(scope_cross_findings)
+        checks.extend(scope_cross_checks)
+
     if current_stage == "ft-source-locator":
         if not linked_source_selection_paths:
             findings.append(
@@ -16407,6 +17010,8 @@ def validate(
     root_is_standalone_source_normalization_diagnostic = root.is_file() and root.name == "source-normalization-diagnostic.md"
     root_is_standalone_source_table_normalization = root.is_file() and root.name == "source-table-normalization.md"
     root_is_standalone_dictionary_inventory = root.is_file() and root.name == DICTIONARY_INVENTORY_NAME
+    root_is_standalone_scope_coverage_gaps = root.is_file() and root.name == "scope-coverage-gaps.md"
+    root_is_standalone_scope_clarification_requests = root.is_file() and root.name == "scope-clarification-requests.md"
     root_is_standalone_test_case_file = (
         root.is_file()
         and root.suffix == ".md"
@@ -16428,6 +17033,8 @@ def validate(
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
+    scope_coverage_gaps = iter_scope_coverage_gaps(root)
+    scope_clarification_requests = iter_scope_clarification_requests(root)
     if root_is_standalone_source_normalization_diagnostic:
         workflow_states = []
         artifact_manifests = []
@@ -16444,6 +17051,8 @@ def validate(
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = []
     if root_is_standalone_source_table_normalization:
         workflow_states = []
         artifact_manifests = []
@@ -16459,6 +17068,8 @@ def validate(
         active_text_artifacts = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = []
     if root_is_standalone_dictionary_inventory:
         workflow_states = []
         artifact_manifests = []
@@ -16474,6 +17085,44 @@ def validate(
         decision_logs = []
         active_text_artifacts = []
         mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = []
+    if root_is_standalone_scope_coverage_gaps:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        source_table_normalizations = []
+        writer_process_diagnostics = []
+        writer_self_checks = []
+        session_logs = []
+        decision_logs = []
+        active_text_artifacts = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+        scope_coverage_gaps = [root]
+        scope_clarification_requests = []
+    if root_is_standalone_scope_clarification_requests:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        source_table_normalizations = []
+        writer_process_diagnostics = []
+        writer_self_checks = []
+        session_logs = []
+        decision_logs = []
+        active_text_artifacts = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = [root]
     test_case_id_index = build_test_case_id_index(test_case_files, root)
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -16484,6 +17133,8 @@ def validate(
         root_is_standalone_source_normalization_diagnostic
         or root_is_standalone_source_table_normalization
         or root_is_standalone_dictionary_inventory
+        or root_is_standalone_scope_coverage_gaps
+        or root_is_standalone_scope_clarification_requests
     )
 
     if not standalone_artifact:
@@ -16672,6 +17323,16 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in scope_coverage_gaps:
+        path_findings, path_checks = validate_scope_coverage_gap_questions(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in scope_clarification_requests:
+        path_findings, path_checks = validate_scope_clarification_requests_artifact(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in active_text_artifacts:
         path_findings, path_checks = validate_text_encoding_damage(path, root)
         findings.extend(path_findings)
@@ -16706,6 +17367,8 @@ def validate(
             "decision_logs_checked": len(decision_logs),
             "active_text_artifacts_checked": len(active_text_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
+            "scope_coverage_gaps_checked": len(scope_coverage_gaps),
+            "scope_clarification_requests_checked": len(scope_clarification_requests),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
             "findings_count": len(findings),
@@ -16742,6 +17405,8 @@ def text_report(report: dict[str, Any]) -> str:
         f"- decision logs: {summary['decision_logs_checked']}",
         f"- active text artifacts: {summary['active_text_artifacts_checked']}",
         f"- mockup visual inventories: {summary['mockup_visual_inventories_checked']}",
+        f"- scope coverage gaps: {summary['scope_coverage_gaps_checked']}",
+        f"- scope clarification requests: {summary['scope_clarification_requests_checked']}",
         f"- UI evidence indexes: {summary['ui_evidence_indexes_checked']}",
         f"- UI validation reports: {summary['ui_validation_reports_checked']}",
         (

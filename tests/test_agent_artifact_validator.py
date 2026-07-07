@@ -181,6 +181,187 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_scope_coverage_gaps_with_question(
+        self,
+        path: Path,
+        *,
+        gap_id: str = "GAP-001",
+        question_required: str = "yes",
+        question_type: str = "missing-validation-rule",
+        priority: str = "P1-high",
+        blocking_level: str = "blocks-ready-for-review",
+        impact: str = "blocking",
+        blocks_ready_for_review: str = "yes",
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "\n".join(
+                [
+                    "# Scope Coverage Gaps",
+                    "",
+                    "- Gaps: `1`",
+                    f"- Blocking gaps: `{'yes' if impact == 'blocking' else 'no'}`",
+                    "",
+                    "## Coverage Gaps",
+                    "",
+                    f"### {gap_id}",
+                    "**FT Reference:** `Section 1 / GSR 1 / field A`",
+                    "**Source Path:** `source/main.xhtml`",
+                    "**Source Statement:** `Field A is saved.`",
+                    "**Impact:** `" + impact + "`",
+                    "**Coverage Impact:** `unclear`",
+                    "**Affected Atom ID:** `ATOM-001`",
+                    "**Missing Behavior:** `Validation result is not defined.`",
+                    "**Why Expected Result Not Derivable:** `The FT does not define the validation oracle.`",
+                    "**Affected Test-design Dimension:** `expected-result`",
+                    "**Risk:** `high`",
+                    f"**Blocks Ready For Review:** `{blocks_ready_for_review}`",
+                    f"**Question Required:** `{question_required}`",
+                    "**Question To Analyst:** `What should happen when Field A is invalid?`",
+                    f"**Question Type:** `{question_type}`",
+                    f"**Question Priority:** `{priority}`",
+                    f"**Blocking Level:** `{blocking_level}`",
+                    "**Requested From:** `business-analyst`",
+                    "**Answer Usage Rule:** `analyst-confirmation-enough`",
+                    "**Answer Options:** `show error; block save; open`",
+                    "**Needed For:** `Define the expected result for validation coverage.`",
+                    "**Impact If Unanswered:** `The validation expected result remains unclear.`",
+                    "**Duplicate / Related Questions:** `none`",
+                    "**Temporary Handling:** `Keep invalid-value class as unclear.`",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def write_scope_clarification_requests(
+        self,
+        path: Path,
+        *,
+        question_id: str = "Q-001",
+        gap_id: str = "GAP-001",
+        question_type: str = "missing-validation-rule",
+        priority: str = "P1-high",
+        blocking_level: str = "blocks-ready-for-review",
+        blocking: str = "yes",
+        response_status: str = "unanswered",
+        response_type: str = "not-provided",
+        include_question_id_column: bool = True,
+        include_row: bool = True,
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        header = [
+            "question_id",
+            "gap_id",
+            "related_ft_reference",
+            "question_type",
+            "priority",
+            "blocking_level",
+            "question",
+            "answer_options",
+            "needed_for",
+            "impact_if_unanswered",
+            "blocking",
+            "requested_from",
+            "answer_usage_rule",
+            "duplicate_group",
+            "user_response",
+            "response_status",
+            "response_type",
+            "updated_at",
+        ]
+        if not include_question_id_column:
+            header = [column for column in header if column != "question_id"]
+        row = {
+            "question_id": question_id,
+            "gap_id": gap_id,
+            "related_ft_reference": "Section 1 / GSR 1 / field A",
+            "question_type": question_type,
+            "priority": priority,
+            "blocking_level": blocking_level,
+            "question": "What should happen when Field A is invalid?",
+            "answer_options": "show error; block save; open",
+            "needed_for": "Define expected result.",
+            "impact_if_unanswered": "Validation expected result remains unclear.",
+            "blocking": blocking,
+            "requested_from": "business-analyst",
+            "answer_usage_rule": "analyst-confirmation-enough",
+            "duplicate_group": "none",
+            "user_response": "-",
+            "response_status": response_status,
+            "response_type": response_type,
+            "updated_at": "-",
+        }
+        lines = [
+            "# Scope Clarification Requests",
+            "",
+            "## Clarification Requests",
+            "",
+            "| " + " | ".join(header) + " |",
+            "| " + " | ".join("---" for _ in header) + " |",
+        ]
+        if include_row:
+            lines.append("| " + " | ".join(row[column] for column in header) + " |")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def write_scope_workflow_state_with_clarifications(
+        self,
+        root: Path,
+        *,
+        stage_status: str = "ready-for-gap-review",
+        next_skill: str = "ft-test-case-reviewer",
+        prompt_name: str = "prompt.scope-gaps-to-reviewer.md",
+    ) -> None:
+        self.write_valid_source_selection(root / "source-selection.md")
+        (root / "scope-contract.md").write_text("# Scope Contract\n", encoding="utf-8")
+        (root / prompt_name).write_text(
+            "\n".join(
+                [
+                    "# Prompt",
+                    "",
+                    "## Goal",
+                    "Run the next stage.",
+                    "",
+                    "## Inputs",
+                    "- `source-selection.md`",
+                    "- `scope-contract.md`",
+                    "- `scope-coverage-gaps.md`",
+                    "- `scope-clarification-requests.md`",
+                    "- `workflow-state.yaml`",
+                    "",
+                    "## Guardrails",
+                    "Do not invent expected results.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (root / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "ft_slug: ft-sample",
+                    "scope_slug: ui-main-info",
+                    "current_stage: ft-scope-analyzer",
+                    f"stage_status: {stage_status}",
+                    "current_round: 0",
+                    f"next_skill: {next_skill}",
+                    "required_inputs:",
+                    "  - source-selection.md",
+                    "  - scope-contract.md",
+                    "  - scope-coverage-gaps.md",
+                    "  - scope-clarification-requests.md",
+                    f"  - {prompt_name}",
+                    "latest_artifacts:",
+                    "  source_selection: source-selection.md",
+                    "  scope_contract: scope-contract.md",
+                    "  scope_coverage_gaps: scope-coverage-gaps.md",
+                    "  scope_clarification_requests: scope-clarification-requests.md",
+                    f"  active_transition_prompt: {prompt_name}",
+                    "open_questions: []",
+                    "blocking_reasons: []",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
     def write_source_selection_workflow_state(self, path: Path, source_selection_ref: str = "source-selection.md") -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(
@@ -2173,6 +2354,127 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-scope-analyzer-missing-clarification-requests", finding_ids)
+
+    def test_scope_clarification_requests_new_format_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            clarification_path = fixture_root / "scope-clarification-requests.md"
+            self.write_scope_clarification_requests(clarification_path)
+
+            result = self.run_validator(
+                "--root",
+                str(clarification_path),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["findings"], [])
+
+    def test_scope_clarification_requests_missing_question_id_reports_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            clarification_path = fixture_root / "scope-clarification-requests.md"
+            self.write_scope_clarification_requests(clarification_path, include_question_id_column=False)
+
+            result = self.run_validator("--root", str(clarification_path), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("scope-clarification-missing-required-columns", finding_ids)
+
+    def test_scope_clarification_requests_invalid_question_type_reports_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            clarification_path = fixture_root / "scope-clarification-requests.md"
+            self.write_scope_clarification_requests(clarification_path, question_type="unclear-thing")
+
+            result = self.run_validator("--root", str(clarification_path), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("scope-clarification-invalid-question-type", finding_ids)
+
+    def test_scope_clarification_requests_invalid_priority_reports_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            clarification_path = fixture_root / "scope-clarification-requests.md"
+            self.write_scope_clarification_requests(clarification_path, priority="urgent")
+
+            result = self.run_validator("--root", str(clarification_path), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("scope-clarification-invalid-priority", finding_ids)
+
+    def test_scope_gap_question_required_without_request_reports_finding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_scope_coverage_gaps_with_question(fixture_root / "scope-coverage-gaps.md")
+            self.write_scope_clarification_requests(fixture_root / "scope-clarification-requests.md", include_row=False)
+            self.write_scope_workflow_state_with_clarifications(fixture_root)
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("scope-gap-question-without-request", finding_ids)
+
+    def test_scope_clarification_request_gap_id_must_exist_in_gaps(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_scope_coverage_gaps_with_question(fixture_root / "scope-coverage-gaps.md")
+            self.write_scope_clarification_requests(fixture_root / "scope-clarification-requests.md", gap_id="GAP-999")
+            self.write_scope_workflow_state_with_clarifications(fixture_root)
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("scope-clarification-question-without-gap", finding_ids)
+
+    def test_scope_clarification_blocking_level_requires_blocking_yes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            clarification_path = fixture_root / "scope-clarification-requests.md"
+            self.write_scope_clarification_requests(clarification_path, blocking_level="blocks-writer-start", blocking="no")
+
+            result = self.run_validator("--root", str(clarification_path), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("scope-clarification-blocking-mismatch", finding_ids)
+
+    def test_unanswered_blocking_clarification_blocks_downstream_routing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_scope_coverage_gaps_with_question(
+                fixture_root / "scope-coverage-gaps.md",
+                priority="P0-blocker",
+                blocking_level="blocks-writer-start",
+            )
+            self.write_scope_clarification_requests(
+                fixture_root / "scope-clarification-requests.md",
+                priority="P0-blocker",
+                blocking_level="blocks-writer-start",
+            )
+            self.write_scope_workflow_state_with_clarifications(
+                fixture_root,
+                stage_status="ready-for-next-stage",
+                next_skill="ft-test-case-writer",
+                prompt_name="prompt.scope-to-writer.md",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-unanswered-blocking-clarification-routes-downstream", finding_ids)
 
     def test_scope_analyzer_ready_for_gap_review_accepts_scope_gap_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

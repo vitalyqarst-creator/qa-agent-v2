@@ -26,7 +26,7 @@
 
 - `review_mode` = `traceability | structure | test-design`
 - `severity` = `error | warning | info`
-- `category` = `coverage | atomarity | traceability | expected-result | scope | duplication | format | structure | test-design`
+- `category` = `coverage | atomarity | traceability | expected-result | scope | duplication | format | structure | test-design | clarification-question-quality`
 - `coverage_dimension` = `role-permission | status-lifecycle | decision-table | pairwise | boundary | equivalence | dependency | conditional-visibility | api-server-validation | integration | security | async | persistence | table-list | file-upload | calculation | numeric | date-time | length | scenario-use-case | performance | reliability | compatibility | usability | accessibility-ui | traceability | expected-result | atomarity | format | scope | other`
 - `status` = `open`
 

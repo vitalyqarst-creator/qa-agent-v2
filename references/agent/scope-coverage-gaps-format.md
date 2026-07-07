@@ -48,6 +48,16 @@ For any gap that limits test-design decisions, record these canonical fields in 
 - `risk`
 - `blocks_ready_for_review`
 - `question_to_analyst`
+- `question_required`
+- `question_type`
+- `question_priority`
+- `blocking_level`
+- `requested_from`
+- `answer_usage_rule`
+- `answer_options`
+- `needed_for`
+- `impact_if_unanswered`
+- `duplicate_related_questions`
 - `temporary_handling`
 
 Rules:
@@ -56,6 +66,10 @@ Rules:
 - `blocks_ready_for_review: yes` means writer must not set `stage_status: ready-for-review`; use `stage_status: blocked-input` until the missing behavior is clarified or explicitly deferred.
 - `temporary_handling` must not invent expected behavior. It may say only what can still be covered safely, what is excluded, or which case is marked `unclear`.
 - Explicit deferral requires `accepted_risks` in `workflow-state.yaml` with the same `GAP-*`, owner/role, rationale and revisit condition. Do not treat an open blocking gap as accepted risk just because it is listed in `open_questions`.
+- If `Question Required: yes`, the same `gap_id` must have a row in `scope-clarification-requests.md`.
+- If `Question Required: no`, list the gap in `Gaps Without Requests` in `scope-clarification-requests.md` with a reason.
+- `Question Type`, `Question Priority`, `Blocking Level`, `Requested From` and `Answer Usage Rule` must use `requirements-clarification-questioning-policy.md`.
+- No analyst-facing question is valid without an FT/source anchor and `Affected Test-design Dimension`.
 
 ## Минимальный шаблон
 
@@ -88,7 +102,17 @@ Rules:
 **Affected Test-design Dimension:** `role-permission | status-lifecycle | decision-table | pairwise | boundary | equivalence | dependency | conditional-visibility | api-server-validation | integration | security | async | persistence | table-list | file-upload | calculation | numeric | date-time | length | scenario-use-case | performance | reliability | compatibility | usability | accessibility-ui | traceability | expected-result | atomarity | format | scope | other`
 **Risk:** `high | medium | low`
 **Blocks Ready For Review:** `yes | no`
+**Question Required:** `yes | no`
 **Question To Analyst:** `...`
+**Question Type:** `missing-validation-rule | missing-allowed-values | source-extraction-limitation | ...`
+**Question Priority:** `P0-blocker | P1-high | P2-medium | P3-low`
+**Blocking Level:** `blocks-scope-confirmation | blocks-writer-start | blocks-ready-for-review | blocks-sign-off | allows-limited-coverage | non-blocking`
+**Requested From:** `business-analyst | product-owner | system-analyst | developer | qa-lead | unknown`
+**Answer Usage Rule:** `source-update-required | analyst-confirmation-enough | product-confirmation-required | working-assumption-only | accepted-risk-required | do-not-use-until-documented`
+**Answer Options:** `option A | option B | open`
+**Needed For:** `...`
+**Impact If Unanswered:** `...`
+**Duplicate / Related Questions:** `Q-001 | none`
 **Temporary Handling:** `...`
 **Writer Rule:** ...
 **Reviewer Rule:** ...

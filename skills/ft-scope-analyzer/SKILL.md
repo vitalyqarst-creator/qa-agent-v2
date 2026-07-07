@@ -95,6 +95,8 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 12a. Если `source-parity-check.md` содержит секцию `Table / Row Parity` или подтвержденный scope основан на таблице полей/действий, создай отдельный `source-row-inventory.md` по `source-row-inventory-format.md` до handoff к writer. В inventory должны попасть все source rows выбранного scope, включая rows/list values из XHTML, строки с PDF-only requirement codes и строки, которые могут стать `GAP-*`. Не передавай writer-у табличный scope только с `source-parity-check.md`: writer должен получить независимый row inventory.
 12b. Для табличного scope проверь расшифровку колонок, сокращений и локальных кодов; неподтвержденное значение, влияющее на test design, фиксируй как `GAP-*` типа `missing-source-definition`, а не как догадку.
 13. Перед handoff к writer выполни `Scope Complexity Assessment`: оцени количество полей/блоков, условных зависимостей, validation domains, action flows, integrations/API/async, lifecycle/status rules и ожидаемых gaps.
+13a. Выполни requirements testing для clarification questions: для каждого gap реши, нужен ли вопрос аналитику/владельцу, классифицируй его по `requirements-clarification-questioning-policy.md`, укажи source anchor, affected test-design dimension, `answer_options`, `needed_for` и `impact_if_unanswered`. Не создавай analyst-facing question без source anchor и affected dimension.
+13b. Если есть unanswered `P0-blocker` / `P1-high` с `blocking_level = blocks-*`, который блокирует expected result, validation, state transition, dictionary completeness, integration behavior, source priority или extraction completeness, не создавай writer handoff как готовый к старту; маршрут должен быть `ready-for-gap-review` / `blocked-input` или требовать qualified accepted risk.
 14. Добавь в `scope-contract.md` секцию `Внутренние Рабочие Пакеты` для каждого подтвержденного scope. Если scope простой, создай один `WP-01`; если неоднородный, раздели работу на несколько `WP-*`. Не используй внутренние рабочие пакеты как замену внешнему split для всего ФТ.
 15. Каждый внутренний рабочий пакет должен иметь focus, source_refs, included_requirements, design_method, expected_outputs и split_required. Это рабочий план writer-а, а не новый внешний scope. `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` должны явно требовать `package_id`, package ledger gate, Package Test Design Plan gate и package TC gate.
 16. Если PDF для structural cross-check отсутствует, явно укажи это в промежуточных заметках или `coverage gaps`, а не оставляй неявным.
@@ -106,28 +108,10 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
 ## Канонические references
 
-- Индекс контрактов инструкций: [../../references/agent/instruction-contract-index.md](../../references/agent/instruction-contract-index.md)
-- Workflow state: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md)
-- Session log format: [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md)
-- Agent decision log format: [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md)
-- Artifact write strategy: [../../references/agent/artifact-write-strategy-format.md](../../references/agent/artifact-write-strategy-format.md)
-- Формат next-step prompt: [../../references/agent/next-step-prompt-format.md](../../references/agent/next-step-prompt-format.md)
-- Формат Package Test Design Plan: [../../references/agent/package-test-design-plan-format.md](../../references/agent/package-test-design-plan-format.md)
-- Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
-- Правила трассировки: [../../references/qa/traceability-rules.md](../../references/qa/traceability-rules.md)
-- Формат scope contract: [../../references/agent/scope-contract-format.md](../../references/agent/scope-contract-format.md)
-- Формат scope options: [../../references/agent/scope-options-format.md](../../references/agent/scope-options-format.md)
-- Формат scope selection prompts: [../../references/agent/scope-selection-prompts-format.md](../../references/agent/scope-selection-prompts-format.md)
-- Формат scope coverage gaps: [../../references/agent/scope-coverage-gaps-format.md](../../references/agent/scope-coverage-gaps-format.md)
-- Формат scope clarification requests: [../../references/agent/scope-clarification-requests-format.md](../../references/agent/scope-clarification-requests-format.md)
-- Формат scope execution options: [../../references/agent/scope-execution-options-format.md](../../references/agent/scope-execution-options-format.md)
-- Правило декомпозиции scope-ов: [../../references/agent/scope-decomposition-policy.md](../../references/agent/scope-decomposition-policy.md)
-- Формат source parity check: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
-- Формат Source Row Inventory: [../../references/agent/source-row-inventory-format.md](../../references/agent/source-row-inventory-format.md)
-- Формат mockup visual inventory: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
-- Handoff-модель и numbered naming: [../../references/agent/stage-handoff-model.md](../../references/agent/stage-handoff-model.md)
-- Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
-- Source parsing quality: [../../references/agent/source-parsing-quality.md](../../references/agent/source-parsing-quality.md)
+- Process/handoff: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md), [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md), [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md), [../../references/agent/next-step-prompt-format.md](../../references/agent/next-step-prompt-format.md), [../../references/agent/stage-handoff-model.md](../../references/agent/stage-handoff-model.md)
+- Scope formats: [../../references/agent/scope-contract-format.md](../../references/agent/scope-contract-format.md), [../../references/agent/scope-coverage-gaps-format.md](../../references/agent/scope-coverage-gaps-format.md), [../../references/agent/scope-clarification-requests-format.md](../../references/agent/scope-clarification-requests-format.md), [../../references/agent/scope-execution-options-format.md](../../references/agent/scope-execution-options-format.md), [../../references/agent/scope-decomposition-policy.md](../../references/agent/scope-decomposition-policy.md), [../../references/agent/requirements-clarification-questioning-policy.md](../../references/agent/requirements-clarification-questioning-policy.md)
+- Conditional source/UI artifacts: `source-parity-check-format.md`, `source-row-inventory-format.md`, `mockup-visual-inventory-format.md`, `artifact-write-strategy-format.md`.
+- Scenario-specific references are loaded by [../../references/agent/instruction-loading-manifest.md](../../references/agent/instruction-loading-manifest.md).
 
 ## Ограничения
 

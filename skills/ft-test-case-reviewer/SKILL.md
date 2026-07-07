@@ -65,7 +65,9 @@ Review only gap quality and routing readiness:
 
 - every `GAP-*` has a concrete FT/source anchor: section, requirement code, table/row, field/condition, quote or atomic statement;
 - each gap has a clear impact, blocking classification and downstream handling rule;
-- each gap with an unresolved decision has a matching analyst-facing item in `scope-clarification-requests.md`;
+- each gap with `Question Required: yes` has a matching analyst-facing item in `scope-clarification-requests.md`;
+- each clarification question follows `requirements-clarification-questioning-policy.md`: source anchor, affected test-design dimension, valid `question_type`, priority, blocking level, answer usage rule, answer options when finite, and impact if unanswered;
+- weak or untraceable questions are findings with category `clarification-question-quality`;
 - no source-backed requirement was converted into a gap just because writing it is inconvenient;
 - `source-selection.md` confirms `xhtml_available: yes`; missing XHTML is a blocking input condition for new workflows;
 - table/list-heavy scope coverage is checked against XHTML extraction, `source-row-inventory.md` and `source-table-normalization.md`;
@@ -141,6 +143,7 @@ Expected outputs:
 14. Если writer передал atomic requirements ledger или writer self-check, проверь, что ledger согласован с traceability matrix и source parity, а self-check не скрывает uncovered atoms, merged checks, over-splitting, package coverage, cross-package leakage, assumptions или unclear items.
 15. В режиме `structure` или `full` проверь единый шаблон, обязательные секции, группировку, сквозную нумерацию `TC-*`, порядок кейсов, детерминированность шагов и отсутствие проверяемого действия в предусловиях. Смешанная схема одного `TC-*` является structure blocker: metadata table нельзя дублировать bold metadata fields, а runtime headings нельзя дублировать inline/bold-полями.
 16. В режиме `test-design` или `full` проверь позитивные и негативные сценарии, границы, классы эквивалентности, условные зависимости, взаимное влияние полей, случаи где source fields дублируют друг друга, hallucinated assumptions, unsupported expected-result specificity и package-level design artifacts, если они применимы к scope. Применяй `test-design-review-rubric.md`, `test-design-defect-taxonomy.md`, `coverage-checklist.md`, `test-case-format.md`, `test-case-runtime-format.md` и `review-findings-format.md`; не дублируй полный перечень defect classes в skill.
+    - Если TC, matrix или writer response закрывает unresolved `P0-blocker` / `P1-high` clarification question без accepted risk, это blocking finding. Категория зависит от дефекта: `clarification-question-quality`, `expected-result`, `traceability` или `test-design`.
     - Для table/list-heavy scope reviewer обязан сверять coverage against XHTML extraction, `source-row-inventory.md` and `source-table-normalization.md`. DOCX/PDF-only extraction is insufficient when XHTML is available.
     - Для table/PDF/DOCX/XHTML extraction scopes сначала проверь `source-row-inventory.md`, `source-row-completeness-matrix.md`, `source-table-normalization.md`, `dictionary-inventory.md` при наличии справочников, `test-design-decision-table.md` и `package-test-design-plan.md`.
     - Перед проверкой отдельных `TC-*` проверь split artifacts, matrix rows, package coverage, `DICT-*` links, mockup usage, coverage metrics and gaps together.
@@ -177,35 +180,10 @@ Rules:
 
 ## Канонические references
 
-- Индекс контрактов инструкций: [../../references/agent/instruction-contract-index.md](../../references/agent/instruction-contract-index.md)
-- Workflow state: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md)
-- Session log format: [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md)
-- Agent decision log format: [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md)
-- Формат next-step prompt: [../../references/agent/next-step-prompt-format.md](../../references/agent/next-step-prompt-format.md)
-- Формат reviewer output: [../../references/agent/reviewer-output-format.md](../../references/agent/reviewer-output-format.md)
-- Формат Package Test Design Plan: [../../references/agent/package-test-design-plan-format.md](../../references/agent/package-test-design-plan-format.md)
-- Формат Source Table Normalization: [../../references/agent/source-table-normalization-format.md](../../references/agent/source-table-normalization-format.md)
-- Формат Source Row Inventory: [../../references/agent/source-row-inventory-format.md](../../references/agent/source-row-inventory-format.md)
-- Формат Dictionary Inventory: [../../references/agent/dictionary-inventory-format.md](../../references/agent/dictionary-inventory-format.md)
-- Формат тест-кейса: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
-- Test-design review rubric: [../../references/qa/test-design-review-rubric.md](../../references/qa/test-design-review-rubric.md)
-- Test-design defect taxonomy: [../../references/agent/test-design-defect-taxonomy.md](../../references/agent/test-design-defect-taxonomy.md)
-- Coverage obligation table format: [../../references/agent/coverage-obligation-table-format.md](../../references/agent/coverage-obligation-table-format.md)
-- Test-design coverage metrics format: [../../references/agent/test-design-coverage-metrics-format.md](../../references/agent/test-design-coverage-metrics-format.md)
-- Fixture catalog format: [../../references/agent/fixture-catalog-format.md](../../references/agent/fixture-catalog-format.md)
-- Risk / Priority Map format: [../../references/agent/risk-priority-map-format.md](../../references/agent/risk-priority-map-format.md)
-- Формат review findings и writer response: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)
-- Формат traceability matrix: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
-- Формат source parity check: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
-- Формат mockup visual inventory: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
-- Legacy traceability matrix report: [../../references/agent/traceability-legacy-matrix-report-2026-05-25.md](../../references/agent/traceability-legacy-matrix-report-2026-05-25.md)
-- Strict validator debt report: [../../references/agent/strict-debt-report-2026-05-25.md](../../references/agent/strict-debt-report-2026-05-25.md)
-- Reviewer sign-off migration report: [../../references/agent/reviewer-signoff-migration-report-2026-05-25.md](../../references/agent/reviewer-signoff-migration-report-2026-05-25.md)
-- Eval run report format: [../../references/agent/eval-run-report-format.md](../../references/agent/eval-run-report-format.md)
-- Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
-- Правила трассировки: [../../references/qa/traceability-rules.md](../../references/qa/traceability-rules.md)
-- Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
-- Source parsing quality: [../../references/agent/source-parsing-quality.md](../../references/agent/source-parsing-quality.md)
+- Process/output: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md), [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md), [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md), [../../references/agent/next-step-prompt-format.md](../../references/agent/next-step-prompt-format.md), [../../references/agent/reviewer-output-format.md](../../references/agent/reviewer-output-format.md)
+- Review method: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md), [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md), [../../references/qa/test-design-review-rubric.md](../../references/qa/test-design-review-rubric.md), [../../references/agent/test-design-defect-taxonomy.md](../../references/agent/test-design-defect-taxonomy.md), [../../references/agent/requirements-clarification-questioning-policy.md](../../references/agent/requirements-clarification-questioning-policy.md)
+- Scope/source/package artifacts: `scope-coverage-gaps-format.md`, `scope-clarification-requests-format.md`, `source-parity-check-format.md`, `source-row-inventory-format.md`, `source-table-normalization-format.md`, `dictionary-inventory-format.md`, `package-test-design-plan-format.md`, `mockup-visual-inventory-format.md`.
+- Scenario-specific deep references are loaded by [../../references/agent/instruction-loading-manifest.md](../../references/agent/instruction-loading-manifest.md).
 
 ## Ограничения
 

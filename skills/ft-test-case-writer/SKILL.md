@@ -54,6 +54,8 @@ description: Пишет новые ручные тест-кейсы по уже 
 - В `initial_draft` writer строит atomic requirements ledger, затем тест-кейсы с canonical fields и writer self-check.
 - Если writer создает или обновляет matrix, обязателен `.xlsx`-дубль traceability matrix.
 - Проверяй smell markers из canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-mechanical-field-step-smell.
+- Если `scope-clarification-requests.md` содержит unanswered `P0-blocker` / `P1-high` с `blocking_level = blocks-*`, writer не закрывает этот gap тест-кейсом; можно покрывать только безопасную source-backed часть с сохранением `GAP-*`.
+- Analyst/product confirmed clarification answers must be traced. `working-assumption-only` answers cannot become final expected results without accepted risk.
 
 ## Workflow
 
@@ -119,6 +121,7 @@ Minimum runtime rules:
 - Test case format: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
 - Review findings format: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)
 - Traceability matrix format: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
+- Clarification question policy: [../../references/agent/requirements-clarification-questioning-policy.md](../../references/agent/requirements-clarification-questioning-policy.md)
 Deep process/table/remediation references are loaded by `references/agent/instruction-loading-manifest.md` for matching scenarios.
 
 ## Ограничения

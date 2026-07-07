@@ -32,11 +32,19 @@
 ## Обязательные колонки
 
 - `gap_id`
+- `question_id`
 - `related_ft_reference`
+- `question_type`
+- `priority`
+- `blocking_level`
 - `question`
+- `answer_options`
 - `needed_for`
+- `impact_if_unanswered`
 - `blocking`
 - `requested_from`
+- `answer_usage_rule`
+- `duplicate_group`
 - `user_response`
 - `response_status`
 - `response_type`
@@ -45,11 +53,19 @@
 ## Правила колонок
 
 - `gap_id` — идентификатор из `scope-coverage-gaps.md`, например `GAP-001`.
+- `question_id` — стабильный идентификатор вопроса, например `Q-001`; не переиспользуй его для другого смысла.
 - `related_ft_reference` — краткая ссылка на утверждение ФТ: раздел, `GSR`, таблица/строка, поле/условие, `ATOM-*` или страница PDF.
+- `question_type` — значение из `requirements-clarification-questioning-policy.md`.
+- `priority` = `P0-blocker | P1-high | P2-medium | P3-low`.
+- `blocking_level` = `blocks-scope-confirmation | blocks-writer-start | blocks-ready-for-review | blocks-sign-off | allows-limited-coverage | non-blocking`.
 - `question` — конкретный вопрос, на который можно ответить без чтения всей истории чата.
+- `answer_options` — варианты ответа, если ambiguity конечная; иначе `open`.
 - `needed_for` — что станет возможным после ответа: полное покрытие требования, снятие ambiguity, уточнение тестовых данных.
+- `impact_if_unanswered` — что останется непокрытым, заблокированным или ограниченным, если ответа не будет.
 - `blocking` = `yes | no`; должно соответствовать impact gap-а.
-- `requested_from` = `user | analyst | product-owner | developer | unknown`.
+- `requested_from` = `business-analyst | product-owner | system-analyst | developer | qa-lead | unknown`.
+- `answer_usage_rule` — значение из `requirements-clarification-questioning-policy.md`.
+- `duplicate_group` — общий ключ для дублей/связанных вопросов или `none`.
 - `user_response` — место для ответа. До заполнения оставляй пустым или ставь `-`.
 - `response_status` = `unanswered | answered | superseded | rejected`.
 - `response_type` = `not-provided | working-assumption | analyst-confirmed | product-confirmed | rejected`.
@@ -71,9 +87,9 @@
 
 ## Clarification Requests
 
-| gap_id | related_ft_reference | question | needed_for | blocking | requested_from | user_response | response_status | response_type | updated_at |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| GAP-001 | `GSR 1`, поле `...`, `ATOM-001` | Какое точное значение получает поле после сохранения? | Полное покрытие `GSR 1` | no | analyst | - | unanswered | not-provided | - |
+| question_id | gap_id | related_ft_reference | question_type | priority | blocking_level | question | answer_options | needed_for | impact_if_unanswered | blocking | requested_from | answer_usage_rule | duplicate_group | user_response | response_status | response_type | updated_at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Q-001 | GAP-001 | `GSR 1`, поле `...`, `ATOM-001` | missing-validation-rule | P1-high | blocks-ready-for-review | Какое точное значение получает поле после сохранения? | open | Полное покрытие `GSR 1` | Expected result останется `unclear`, writer не может закрыть atom тест-кейсом. | yes | business-analyst | analyst-confirmation-enough | none | - | unanswered | not-provided | - |
 
 ## Gaps Without Requests
 
@@ -87,6 +103,8 @@
 - Writer может использовать `analyst-confirmed` или `product-confirmed` ответы как уточняющий вход, явно указав это в трассировке.
 - `working-assumption` можно использовать только как ограниченную рабочую гипотезу и обязательно отмечать в assumptions / coverage gaps.
 - Если ответ противоречит основному ФТ, приоритет остается у основного ФТ; противоречие фиксируется как gap.
+- `working-assumption-only` не может стать expected result без accepted risk.
+- `P0-blocker` / `P1-high` с `blocking_level = blocks-*` должны оставаться blocking до ответа или accepted risk.
 ```
 
 ## Что не включать
