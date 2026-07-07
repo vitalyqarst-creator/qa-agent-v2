@@ -34,6 +34,7 @@
 - Если ФТ задает условие видимости элемента, проверяй отображение при выполнении условия и отсутствие отображения при невыполнении условия, если обратная ветка явно следует из требования. Если обратная ветка не определена однозначно, фиксируй `coverage gap` / `unclear` и не додумывай поведение.
 - Перед initial draft используй atomic-ledger-first workflow: сначала atomic requirements ledger, затем тест-кейсы, затем сверка покрытия.
 - Каждый тест-кейс должен быть трассирован к atomic statement id или точному требованию из матрицы.
+- Для table/list-heavy scope сверяй coverage against XHTML extraction, `source-row-inventory.md` и `source-table-normalization.md`; DOCX/PDF-only extraction недостаточен, если XHTML доступен.
 
 ## Эвристики полезного покрытия
 

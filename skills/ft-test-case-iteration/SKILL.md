@@ -43,6 +43,7 @@ Required inputs:
 - confirmed FT package;
 - confirmed `scope_slug`;
 - active handoff folder under `work/stage-handoffs/NN-<scope-slug>/`;
+- `source-selection.md` with `xhtml_available: yes`;
 - `stage-handoffs/` remains the human handoff layer; active cycle execution state remains in `work/review-cycles/<scope-slug>/cycle-state.yaml`;
 - required source/scope artifacts listed in the workflow below.
 
@@ -63,32 +64,35 @@ For a new cycle, ensure these locations exist or are created by the runner:
 
 1. Validate that the selected FT package and scope are stable.
 2. Read `AGENT-NOTES.md` from the FT package root if it exists.
-3. Confirm required scope artifacts:
+3. Before creating or running the cycle, verify that `source-selection.md` contains `xhtml_available: yes`; if XHTML is missing, stop before writer stage as `blocked-input` and do not start the writer/reviewer loop.
+4. Confirm required scope artifacts:
    - `scope-contract.md`;
    - `scope-coverage-gaps.md`;
+   - `source-selection.md` with mandatory main FT XHTML;
    - `source-parity-check.md` when DOCX and PDF are both available;
    - `source-row-inventory.md` for row-level/table-heavy scopes;
    - `mockup-visual-inventory.md` for UI scopes with mockups.
-4. If `cycle-state.yaml` does not exist, create it using `session-based-review-cycle-format.md`.
-5. Put active transition prompts under `work/review-cycles/<scope-slug>/prompts/`.
-6. Run dry-run validation before starting or continuing:
+5. If `cycle-state.yaml` does not exist, create it using `session-based-review-cycle-format.md`.
+6. Put active transition prompts under `work/review-cycles/<scope-slug>/prompts/`.
+7. Run dry-run validation before starting or continuing:
 
 ```powershell
 .\scripts\run_cycle.ps1 validate --state <cycle-state.yaml>
 .\scripts\run_cycle.ps1 start --state <cycle-state.yaml> --dry-run
 ```
 
-7. Start or continue the chain through the SDK runner:
+8. Start or continue the chain through the SDK runner:
 
 ```powershell
 .\scripts\run_cycle.ps1 run-until-terminal --state <cycle-state.yaml>
 ```
 
-8. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.
+9. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.
 
 ## Gates
 
 - Do not start semantic review when structure preflight has blocking findings.
+- Do not start or continue a cycle when source selection is incomplete or `xhtml_available != yes`.
 - Do not start final format review before semantic review passes.
 - Do not start a third semantic review round. After round 2, unresolved semantic findings mean `round-cap-reached`.
 - Do not route `round-cap-reached` or `blocked-input` to `ft-ui-automation-prep`.

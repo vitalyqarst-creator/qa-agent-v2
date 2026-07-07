@@ -74,6 +74,8 @@ ALLOWED_ARTIFACT_EXPORT_POLICIES = {
 REPO_TRACKED_ARTIFACT_POLICIES = {"repo-tracked", "alias-copy"}
 SOURCE_SUPPORT_EXTENSIONS = {
     ".docx",
+    ".xhtml",
+    ".html",
     ".pdf",
     ".xlsx",
     ".xlsb",
@@ -98,6 +100,7 @@ REQUIRED_WORKFLOW_FIELDS = {
 REQUIRED_SOURCE_SELECTION_SECTIONS = {
     "Context",
     "Main FT Documents",
+    "Machine-Readable XHTML Source",
     "Structural Cross-Check PDF",
     "Support Files And Mockups",
     "Source Quality",
@@ -109,6 +112,7 @@ REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
     "selection_status",
 }
 ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
+ALLOWED_XHTML_AVAILABILITY = {"yes", "no"}
 REQUIRED_FINAL_ARTIFACT_ALIASES = {
     "final_findings",
     "final_traceability_matrix",
@@ -3084,11 +3088,17 @@ def source_selection_routes_downstream(state: dict[str, Any]) -> bool:
     )
 
 
+def is_empty_artifact_value(value: str) -> bool:
+    normalized = normalize_markdown_field_value(value).strip().lower()
+    return normalized in {"", "-", "none", "n/a", "not-applicable", "not_applicable"}
+
+
 def validate_source_selection_artifact(
     path: Path,
     root: Path,
     state: dict[str, Any],
     workflow_path: Path,
+    ft_root: Path,
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -3195,6 +3205,121 @@ def validate_source_selection_artifact(
         checks.append(Check("workflow-state-source-selection-selected", "fail", "Source selection is not selected.", rel(workflow_path, root)))
     elif selection_status:
         checks.append(Check("workflow-state-source-selection-selected", "pass", "Source selection status does not block routing.", rel(workflow_path, root)))
+
+    xhtml_section = extract_markdown_section(content, "Machine-Readable XHTML Source")
+    xhtml_fields = parse_bullet_context_fields(xhtml_section or "")
+    raw_xhtml_available = xhtml_fields.get("xhtml_available", "")
+    xhtml_available = normalize_markdown_field_value(raw_xhtml_available).lower()
+    xhtml_path = xhtml_fields.get("xhtml_path", "")
+    xhtml_missing = xhtml_available != "yes"
+
+    if xhtml_section is None:
+        findings.append(
+            Finding(
+                id="source-selection-missing-xhtml-section",
+                severity="warning",
+                category="source-selection",
+                title="source-selection.md misses mandatory XHTML source section",
+                details=(
+                    "`Machine-Readable XHTML Source` is required so downstream stages can prove that the main FT "
+                    "XHTML extraction source was checked before scope analysis, writer or reviewer work."
+                ),
+                path=display_path,
+                evidence=["Machine-Readable XHTML Source"],
+                recommended_action="Add the XHTML section from references/agent/source-selection-format.md.",
+            )
+        )
+        checks.append(Check("source-selection-xhtml-section", "fail", "XHTML section is missing.", display_path))
+    else:
+        checks.append(Check("source-selection-xhtml-section", "pass", "XHTML section is present.", display_path))
+
+    if raw_xhtml_available and xhtml_available not in ALLOWED_XHTML_AVAILABILITY:
+        findings.append(
+            Finding(
+                id="source-selection-invalid-xhtml-availability",
+                severity="error",
+                category="source-selection",
+                title="source-selection.md has invalid xhtml_available value",
+                details="XHTML availability controls whether downstream source/scope/writer/reviewer work may start.",
+                path=display_path,
+                evidence=[f"xhtml_available={raw_xhtml_available}"],
+                recommended_action="Use `xhtml_available: yes` or `xhtml_available: no`.",
+            )
+        )
+        checks.append(Check("source-selection-xhtml-availability", "fail", "xhtml_available is invalid.", display_path))
+    elif raw_xhtml_available:
+        checks.append(Check("source-selection-xhtml-availability", "pass", "xhtml_available is canonical.", display_path))
+
+    if selection_status == "selected" and xhtml_missing:
+        findings.append(
+            Finding(
+                id="workflow-state-source-selection-missing-required-xhtml",
+                severity="error",
+                category="source-selection",
+                title="Selected source selection is missing required main FT XHTML",
+                details=(
+                    "DOCX remains the source of truth, but XHTML is mandatory as the primary machine-readable "
+                    "extraction source. A selected source-selection.md cannot proceed without `xhtml_available: yes`."
+                ),
+                path=display_path,
+                evidence=[f"xhtml_available={raw_xhtml_available or '<missing>'}"],
+                recommended_action="Set `selection_status: blocked-input` and ask for the main FT XHTML under `source/`, or add the valid XHTML path.",
+            )
+        )
+        checks.append(Check("source-selection-required-xhtml", "fail", "Selected source selection lacks XHTML.", display_path))
+    elif selection_status:
+        checks.append(Check("source-selection-required-xhtml", "pass", "Required XHTML state matches selection status.", display_path))
+
+    if xhtml_missing and source_selection_routes_downstream(state):
+        findings.append(
+            Finding(
+                id="workflow-state-source-selection-xhtml-missing-routes-downstream",
+                severity="error",
+                category="workflow-state",
+                title="Workflow routes downstream without required main FT XHTML",
+                details=(
+                    "Missing XHTML is a blocking input condition. Scope analysis, writer, reviewer and iteration "
+                    "must not start until source-selection.md confirms `xhtml_available: yes`."
+                ),
+                path=rel(workflow_path, root),
+                evidence=[f"{display_path} xhtml_available={raw_xhtml_available or '<missing>'}"],
+                recommended_action="Keep the workflow in `blocked-input` until the main FT XHTML is present and linked.",
+            )
+        )
+        checks.append(Check("workflow-state-source-selection-xhtml", "fail", "Workflow routes downstream without XHTML.", rel(workflow_path, root)))
+    elif raw_xhtml_available or xhtml_section is not None:
+        checks.append(Check("workflow-state-source-selection-xhtml", "pass", "XHTML availability does not block routing.", rel(workflow_path, root)))
+
+    if xhtml_available == "yes" and is_empty_artifact_value(xhtml_path):
+        findings.append(
+            Finding(
+                id="source-selection-xhtml-path-missing",
+                severity="error",
+                category="source-selection",
+                title="source-selection.md marks XHTML available but does not link xhtml_path",
+                details="A selected machine-readable XHTML source must have a concrete path that validator can resolve.",
+                path=display_path,
+                evidence=["xhtml_available=yes", "xhtml_path=<empty>"],
+                recommended_action="Set `xhtml_path` to the main FT XHTML under `source/` or another valid relative path inside the FT package.",
+            )
+        )
+        checks.append(Check("source-selection-xhtml-path", "fail", "xhtml_path is missing.", display_path))
+    elif xhtml_available == "yes" and not artifact_exists(xhtml_path, workflow_path, root, ft_root):
+        findings.append(
+            Finding(
+                id="source-selection-xhtml-path-missing",
+                severity="error",
+                category="source-selection",
+                title="source-selection.md xhtml_path does not resolve",
+                details="The mandatory main FT XHTML path must exist in the FT package/source handoff context.",
+                path=display_path,
+                evidence=[f"xhtml_path={xhtml_path}"],
+                recommended_action="Place the main FT XHTML in `fts/<ft-slug>/source/` or fix `xhtml_path`.",
+            )
+        )
+        checks.append(Check("source-selection-xhtml-path", "fail", "xhtml_path does not resolve.", display_path))
+    elif xhtml_available == "yes":
+        checks.append(Check("source-selection-xhtml-path", "pass", "xhtml_path resolves.", display_path))
 
     return findings, checks
 
@@ -15080,6 +15205,7 @@ def validate_workflow_state(
             root,
             state,
             path,
+            ft_root,
         )
         findings.extend(source_selection_findings)
         checks.extend(source_selection_checks)

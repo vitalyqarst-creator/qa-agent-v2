@@ -112,6 +112,14 @@ class SourceParsingQualityTests(unittest.TestCase):
         self.assertTrue(chunks)
         self.assertTrue(all(len(chunk.text) <= 12000 for chunk in chunks))
 
+    def test_source_parsing_quality_docs_xhtml_extraction_contract(self) -> None:
+        content = (ROOT_DIR / "references" / "agent" / "source-parsing-quality.md").read_text(encoding="utf-8")
+
+        self.assertIn("DOCX remains the authoritative main FT source of truth", content)
+        self.assertIn("XHTML is mandatory as the primary machine-readable extraction source", content)
+        self.assertIn("source-selection.md", content)
+        self.assertIn("validates mandatory XHTML availability/path", content)
+
 
 if __name__ == "__main__":
     unittest.main()

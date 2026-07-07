@@ -11,10 +11,13 @@
 ## Приоритеты
 
 - Текст ФТ важнее макета.
+- DOCX остается главным исходным документом ФТ / source of truth.
+- XHTML обязателен как основной машиночитаемый источник извлечения требований для таблиц, списков, вложенных списков, перечней значений и source rows.
 - Если в FT-пакете есть PDF-версия основного ФТ, используй ее для сверки структуры разделов, заголовков и границ scope.
 - PDF используется именно для structural cross-check и навигации, а не как замена текста основного ФТ.
 - Если DOCX и PDF доступны одновременно, перед writer/reviewer handoff должен быть создан `source-parity-check.md` по `references/agent/source-parity-check-format.md`. Этот artifact определяет обязательные к сохранению requirement IDs, включая PDF-only коды.
 - Support-файлы и макеты помогают интерпретации, но не заменяют текст основного ФТ.
+- Если source refs из ledger/matrix/TC ссылаются на table/list-heavy content, они должны сохранять ссылку на XHTML row/list fragment, когда именно XHTML дал полное machine-readable extraction.
 
 ## Формат трассировки
 

@@ -17,8 +17,9 @@ description: Пишет новые ручные тест-кейсы по уже 
 ## Входы
 
 - путь к FT-пакету `fts/<ft-slug>/...`;
-- основной документ ФТ;
-- PDF-версия основного ФТ для сверки структуры, если она есть;
+- основной документ ФТ: DOCX остается главным исходным документом ФТ / source of truth;
+- XHTML-версия основного ФТ как обязательный extraction source для текста, таблиц, списков, вложенных списков и перечней значений;
+- PDF-версия основного ФТ для structural/visual cross-check, если она есть;
 - `source-parity-check.md`, если основной ФТ доступен в DOCX и PDF;
 - `source-row-inventory.md`, если handoff требует row-level/table parity;
 - `dictionary-inventory.md`, если source/support уже ссылается на справочник или фиксированный перечень значений;
@@ -43,6 +44,9 @@ description: Пишет новые ручные тест-кейсы по уже 
 ## Runtime Contract Anchors
 
 - Если доступна PDF-версия основного ФТ для сверки структуры, сверяй по ней структуру разделов, коды требований и порядок источника; не используй PDF как замену тексту основного ФТ.
+- Перед `initial_draft` проверь `source-selection.md`: если `xhtml_available != yes`, не начинай writer draft и верни `blocked-input`.
+- Используй XHTML первым для извлечения таблиц, списков, вложенных списков, перечней значений, source rows и dictionary-source rows; DOCX подтверждает смысл требований, PDF остается structural/visual cross-check.
+- Если список/таблица плохо извлеклись из DOCX/PDF, но доступны в XHTML, учитывай XHTML и фиксируй traceability к соответствующему source fragment / row / list item.
 - Если источники не задают поведение, не придумывай поведение, а выноси это в `coverage gaps`.
 - В `revision_from_findings` используй structured findings artifact и traceability matrix artifact; Обрабатывай findings с учетом `review_mode`.
 - Для traceability findings и writer response сохраняй связь `traceability_ref = ATOM-*`.
@@ -70,6 +74,7 @@ Minimum runtime rules:
 4. Requirement codes, например `GSR 22`, сохраняй буквально.
 5. Не превращай gaps или unclear notes в `TC-*`.
 6. Если source/support задает справочник, создай/обнови `dictionary-inventory.md` и ссылайся на `DICT-*`; branch examples из ФТ не заменяют полный справочник.
+6a. Не закрывай requirement как gap только потому, что список плохо извлекся из DOCX/PDF, если этот список доступен в XHTML.
 7. Не ставь `stage_status: ready-for-review`, пока source/parity/mockup/table/dictionary inputs, Writer Quality Gate и validator blockers не закрыты.
 8. Перед `ready-for-review` проверь canonical TC на unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. Такие формулировки допустимы только если рядом есть конкретный воспроизводимый baseline, literal/параметр или linked fixture artifact; иначе исправь TC или оформи `GAP-*` / `unclear`.
 9. Перед `ready-for-review`, `semantic-review-ready` и финальным handoff проверь каждый `TC-*` по [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` обязательна, optional source fields допустимы только если добавляют недублирующую навигацию или реальную source evidence. Если `TC-*` использует `DICT-*`, тот же id должен быть в `Трассировка`; synthetic quote нельзя выдавать за цитату ФТ.
@@ -111,31 +116,10 @@ Minimum runtime rules:
 - Writer table workflow: [../../references/agent/writer-table-workflow.md](../../references/agent/writer-table-workflow.md)
 - Writer revision workflow: [../../references/agent/writer-revision-workflow.md](../../references/agent/writer-revision-workflow.md)
 - Writer remediation workflow: [../../references/agent/writer-remediation-workflow.md](../../references/agent/writer-remediation-workflow.md)
-- Workflow state: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md)
-- Session log format: [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md)
-- Agent decision log format: [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md)
-- Artifact write strategy: [../../references/agent/artifact-write-strategy-format.md](../../references/agent/artifact-write-strategy-format.md)
-- Writer output format: [../../references/agent/writer-output-format.md](../../references/agent/writer-output-format.md)
-- Writer table artifacts format: [../../references/agent/writer-table-artifacts-format.md](../../references/agent/writer-table-artifacts-format.md)
-- Dictionary inventory format: [../../references/agent/dictionary-inventory-format.md](../../references/agent/dictionary-inventory-format.md)
-- Writer handoff format: [../../references/agent/writer-handoff-format.md](../../references/agent/writer-handoff-format.md)
-- Writer revision output format: [../../references/agent/writer-revision-output-format.md](../../references/agent/writer-revision-output-format.md)
-- Source parity check format: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
-- Mockup visual inventory format: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
-- Test case runtime format: [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md)
 - Test case format: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
 - Review findings format: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)
 - Traceability matrix format: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
-- Coverage runtime checklist: [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md)
-- Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
-- Coverage obligation table format: [../../references/agent/coverage-obligation-table-format.md](../../references/agent/coverage-obligation-table-format.md)
-- Test-design coverage metrics format: [../../references/agent/test-design-coverage-metrics-format.md](../../references/agent/test-design-coverage-metrics-format.md)
-- Fixture catalog format: [../../references/agent/fixture-catalog-format.md](../../references/agent/fixture-catalog-format.md)
-- Risk / Priority Map format: [../../references/agent/risk-priority-map-format.md](../../references/agent/risk-priority-map-format.md)
-- Experience-based coverage format: [../../references/agent/experience-based-coverage-format.md](../../references/agent/experience-based-coverage-format.md)
-- State model coverage format: [../../references/agent/state-model-coverage-format.md](../../references/agent/state-model-coverage-format.md)
-- Traceability rules: [../../references/qa/traceability-rules.md](../../references/qa/traceability-rules.md)
-- Skill boundaries: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
+Deep process/table/remediation references are loaded by `references/agent/instruction-loading-manifest.md` for matching scenarios.
 
 ## Ограничения
 

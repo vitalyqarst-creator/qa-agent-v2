@@ -1,6 +1,6 @@
 # Source Parsing Quality
 
-Source parsing is an upstream quality gate for FT-based test case generation.
+Source parsing is an upstream quality gate for FT-based test case generation. DOCX remains the authoritative main FT source of truth, but XHTML is mandatory as the primary machine-readable extraction source for tables, lists, nested lists, value sets and source rows.
 
 ## Contract
 
@@ -22,11 +22,11 @@ python skills/ft-test-case-writer/scripts/extract_requirement_sections.py <sourc
 
 This helper reports source parsing risks. It does not replace reviewer traceability checks.
 
-It also does not replace `source-parity-check.md`. Source parsing quality checks whether one extracted source is structurally usable; source parity checks whether DOCX and PDF versions of the same FT preserve the same scope boundaries, requirement IDs and table rows.
+It also does not replace `source-selection.md` or `source-parity-check.md`. `source-selection.md` proves that mandatory XHTML is available; source parsing quality checks whether one extracted source is structurally usable; source parity checks whether DOCX and PDF versions of the same FT preserve the same scope boundaries, requirement IDs and table rows.
 
 ## Validator Integration
 
-`scripts/validate_agent_artifacts.py` checks only active source DOCX files referenced by `workflow-state.yaml` or by the active `source-selection.md` artifacts.
+`scripts/validate_agent_artifacts.py` checks active source DOCX parseability and validates mandatory XHTML availability/path through active `source-selection.md` artifacts.
 
 The validator fails on:
 

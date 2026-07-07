@@ -19,7 +19,9 @@ Writer может стартовать только если уже опреде
 
 - FT-пакет;
 - подтвержденный scope и его границы;
-- основной источник ФТ;
+- основной источник ФТ: DOCX remains the authoritative main FT source of truth;
+- `source-selection.md` с `xhtml_available: yes`;
+- main FT XHTML as the mandatory primary machine-readable extraction source;
 - `scope-contract.md`;
 - `scope-coverage-gaps.md`;
 - `workflow-state.yaml` или эквивалентный handoff с `next_skill = ft-test-case-writer`;
@@ -37,6 +39,7 @@ Conditional inputs:
 Не ставь `stage_status: ready-for-review`, если:
 
 - FT-пакет или scope не выбран;
+- main FT XHTML отсутствует или `source-selection.md` не подтверждает `xhtml_available: yes`;
 - отсутствует обязательный input из handoff;
 - есть blocking `coverage gaps` без accepted-risk решения;
 - expected behavior нельзя вывести из ФТ или разрешенных материалов;
@@ -50,13 +53,14 @@ Conditional inputs:
 
 1. Объяви выбранный writer scenario и resolved instruction context.
 2. Прочитай required inputs и зафиксируй missing inputs до генерации `TC-*`.
-3. Подтверди границы scope; не расширяй scope самостоятельно.
-4. Разложи требования на coverage obligations, atomic statements или explicit gaps.
-5. Построй coverage plan и metrics по `coverage-runtime-checklist.md`; для mandatory classes используй `Coverage Obligation Table`.
-6. Напиши `TC-*` по `test-case-runtime-format.md`.
-7. Проверь traceability: каждый `TC-*` связан с `ATOM-*` / requirement code / source reference.
-8. Выполни writer self-check и применимые quality gates.
-9. Обнови `workflow-state.yaml` и создай `prompt.writer-to-reviewer.round-N.md`, если draft готов к review.
+3. Используй XHTML первым для извлечения таблиц, списков, вложенных списков, перечней значений и source rows; DOCX подтверждает смысл, PDF остается structural/visual cross-check.
+4. Подтверди границы scope; не расширяй scope самостоятельно.
+5. Разложи требования на coverage obligations, atomic statements или explicit gaps.
+6. Построй coverage plan и metrics по `coverage-runtime-checklist.md`; для mandatory classes используй `Coverage Obligation Table`.
+7. Напиши `TC-*` по `test-case-runtime-format.md`.
+8. Проверь traceability: каждый `TC-*` связан с `ATOM-*` / requirement code / source reference.
+9. Выполни writer self-check и применимые quality gates.
+10. Обнови `workflow-state.yaml` и создай `prompt.writer-to-reviewer.round-N.md`, если draft готов к review.
 
 ## Output Contract
 

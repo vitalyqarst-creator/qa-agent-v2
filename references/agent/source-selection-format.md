@@ -1,47 +1,48 @@
 # Source Selection Format
 
-Этот reference задает канонический формат `source-selection.md`: артефакта, который фиксирует выбранный FT-пакет, основной документ ФТ, PDF для structural cross-check и связанные материалы перед `ft-scope-analyzer`.
+`source-selection.md` фиксирует выбранный FT-пакет и источники до scope analysis. Он не заменяет `workflow-state.yaml`: первый описывает выбор файлов, второй хранит process-status и routing.
 
-## Назначение
+## Purpose
 
 - сделать выбор источников воспроизводимым без истории чата;
 - не смешивать выбор FT-пакета с определением scope;
 - явно отделить main FT от support/mockups;
-- зафиксировать source quality limitations до downstream writer/reviewer loop;
-- предотвратить работу по неоднозначному или неподтвержденному источнику.
+- зафиксировать `main-ft-xhtml` как mandatory primary machine-readable extraction source;
+- передать source-quality limitations до `ft-scope-analyzer`, writer и reviewer;
+- остановить downstream workflow, если источник неоднозначен или отсутствует обязательный XHTML.
 
-## Расположение
+## Location
 
-Для новых handoff-папок:
+Новый handoff хранится только внутри numbered stage handoff:
 
 ```text
 fts/<ft-slug>/work/stage-handoffs/NN-<scope-or-container-slug>/source-selection.md
 ```
 
-Если scope еще не выбран и создается предварительный контейнер для `agent-proposed-scope`, используй numbered directory вида:
+Для предварительного контейнера без выбранного scope используй `00-<container-slug>`. Не создавай handoff artifacts в корне `fts/<ft-slug>/`: это contamination risk для clean runs.
 
-```text
-fts/<ft-slug>/work/stage-handoffs/00-<container-slug>/source-selection.md
-```
+## Source Priority
 
-`source-selection.md` не заменяет `workflow-state.yaml`: первый фиксирует содержательный выбор файлов, второй фиксирует process-status.
+1. DOCX remains the authoritative main FT source of truth.
+2. XHTML is mandatory as the primary machine-readable extraction source.
+3. PDF is a structural/visual cross-check source.
+4. Support files clarify only within confirmed scope.
+5. Mockups provide UI interaction hints but do not define business rules.
 
-Не создавай `source-selection.md`, `scope-options.md`, `scope-selection-prompts.md`, `workflow-state.yaml` или session logs в корне FT-пакета `fts/<ft-slug>/`. Root-level workflow artifacts считаются contamination risk для clean runs. Используй только `work/stage-handoffs/NN-<scope-or-container-slug>/`.
+DOCX остается главным исходным документом ФТ / source of truth. XHTML обязателен как основной машиночитаемый источник извлечения требований: текст, таблицы, списки, вложенные списки, перечни значений, структура разделов и строки таблиц извлекаются из XHTML первыми. PDF используется для structural/visual cross-check и не заменяет ни DOCX, ни XHTML. Если XHTML противоречит DOCX/PDF, фиксируй discrepancy / `coverage gap`, а не выбирай по догадке.
 
 ## Validator Contract
 
-- Для `current_stage: ft-source-locator` `workflow-state.yaml` обязан ссылаться на `source-selection.md` через `required_inputs` и/или `latest_artifacts.source_selection`.
-- Source-locator handoff не должен содержать `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`. Эти файлы создаются только стадией `ft-scope-analyzer`.
-- Если `source-selection.md` отсутствует или не связан из `workflow-state.yaml`, handoff считается неполным даже при наличии session log.
-- Если source-locator создал scope-stage artifacts, это считается нарушением границы skill-а, а не допустимым ускорением workflow.
-- Если FT-пакет содержит root-level handoff artifacts (`source-selection.md`, `scope-options.md`, `scope-selection-prompts.md`, `workflow-state.yaml`, session logs), validator должен вернуть `ft-package-root-level-handoff-artifacts`.
-
-Additional validator content checks:
-
-- `source-selection.md` must include all required sections: `Context`, `Main FT Documents`, `Structural Cross-Check PDF`, `Support Files And Mockups`, `Source Quality`, `Ambiguity And Decision Log`, `Handoff`.
-- `Context` must include `selected_ft_slug` and `selection_status`; display labels such as `Selected FT slug` and `Selection status` are allowed because they normalize to the same field names.
-- `selection_status` must be one of `selected`, `ambiguous`, `blocked-input`.
-- If `selection_status` is not `selected`, workflow must remain blocked and must not route to `ft-scope-analyzer`, writer, iteration, or reviewer.
+- `current_stage: ft-source-locator` в `workflow-state.yaml` обязан ссылаться на `source-selection.md` через `required_inputs` и/или `latest_artifacts.source_selection`.
+- `source-selection.md` должен содержать required sections: `Context`, `Main FT Documents`, `Machine-Readable XHTML Source`, `Structural Cross-Check PDF`, `Support Files And Mockups`, `Source Quality`, `Ambiguity And Decision Log`, `Handoff`.
+- `Context` должен содержать `selected_ft_slug` и `selection_status`; display labels such as `Selected FT slug` and `Selection status` are allowed because they normalize to the same field names.
+- `selection_status` must be one of `selected | ambiguous | blocked-input`.
+- If `selection_status` is not `selected`, workflow must remain blocked and must not route downstream.
+- `Machine-Readable XHTML Source` must include `xhtml_available: yes | no`.
+- If `selection_status = selected`, then `xhtml_available` must be `yes`.
+- If `xhtml_available != yes`, workflow must remain `blocked-input` and must not route downstream.
+- If `xhtml_available = yes`, `xhtml_path` must resolve to the main FT XHTML under `source/` or another valid relative path inside the FT package.
+- Source-locator handoff не должен создавать `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
 
 ## Required Sections
 
@@ -51,53 +52,54 @@ Additional validator content checks:
 
 - `request_summary`;
 - `selected_ft_slug`;
-- `selection_status`;
+- `selection_status`: `selected | ambiguous | blocked-input`;
 - `created_at`;
 - `created_by`.
 
-Допустимые `selection_status`:
-
-- `selected`;
-- `ambiguous`;
-- `blocked-input`.
-
-Если статус не `selected`, downstream `ft-scope-analyzer` не должен стартовать без явного решения пользователя или обновленного `source-selection.md`.
+Если статус не `selected`, downstream stages не стартуют без явного решения пользователя или обновленного `source-selection.md`.
 
 ### Main FT Documents
 
 Перечисли все документы, которые считаются основным ФТ.
 
-Для каждого документа фиксируй:
+Required columns:
 
 - `path`;
-- `role`: `main-ft-docx | main-ft-pdf | main-ft-other`;
+- `role`: `main-ft-docx | main-ft-xhtml | main-ft-pdf | main-ft-other`;
 - `selection_reason`;
-- `version_or_date`, если доступны;
-- `source_quality_notes`, если есть parseability, section-id или oversized-block risks.
+- `version_or_date`;
+- `source_quality_notes`.
 
-Основной `.docx` должен быть отделен от PDF-версии. PDF не должен становиться единственным source of truth, если доступен исходный main FT document.
+`main-ft-docx` является source of truth. `main-ft-xhtml` обязателен для extraction. `main-ft-pdf` используется только как structural/visual cross-check.
+
+### Machine-Readable XHTML Source
+
+Минимальные поля:
+
+- `xhtml_available`: `yes | no`;
+- `xhtml_path`;
+- `xhtml_matches_main_ft`: `yes | no | not-checked`;
+- `xhtml_extraction_priority`: `primary`;
+- `xhtml_required_for_downstream`: `yes`;
+- `limitation`;
+- `blocking_reason`.
+
+Если XHTML отсутствует, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не создавай downstream handoff как будто источник выбран корректно.
 
 ### Structural Cross-Check PDF
 
-Фиксируй:
+Минимальные поля:
 
 - `pdf_available`: `yes | no`;
-- `pdf_path`, если найден;
+- `pdf_path`;
 - `pdf_matches_main_ft`: `yes | no | not-checked`;
-- `limitation`, если PDF отсутствует или не совпадает с main FT.
+- `limitation`.
 
-Если PDF отсутствует, это не всегда blocker, но limitation должен быть передан в `scope-coverage-gaps.md` или downstream notes, когда structural boundaries ненадежны.
+Отсутствие PDF не всегда blocker, но limitation должен быть передан downstream.
 
 ### Support Files And Mockups
 
-Раздели:
-
-- support files;
-- mockups;
-- package notes;
-- UI notes, если уже известны.
-
-Для каждого файла укажи:
+Required columns:
 
 - `path`;
 - `role`;
@@ -105,35 +107,29 @@ Additional validator content checks:
 - `must_use_downstream`: `yes | no`;
 - `limitations`.
 
-Support/mockups не должны расширять FT scope без явного подтверждения.
+Support files and mockups do not expand scope without explicit DOCX/source-context confirmation.
 
 ### Source Quality
 
-Фиксируй результаты первичной проверки источников:
+Зафиксируй:
 
-- активные source documents для validator;
+- active source documents for validator;
 - parseability status;
 - section-id confidence;
-- oversized blocks или chunking limitations;
-- strict source-quality warnings, если они уже известны.
+- oversized blocks or chunking limitations;
+- strict source-quality warnings.
 
-Если есть strict warnings, не скрывай их. Либо документируй limitation, либо останавливай downstream работу через `blocked-input`, если section matching становится ненадежным.
+Не скрывай strict warnings; документируй limitation или останавливай downstream через `blocked-input`.
 
 ### Ambiguity And Decision Log
 
-Если выбор неоднозначен, перечисли candidate FT packages / files и причину:
+Если выбор неоднозначен, перечисли candidate FT packages/files и причину: похожее имя, несколько версий, missing main FT, missing main-ft-xhtml, PDF mismatch или unclear file role.
 
-- похожее имя;
-- несколько версий;
-- отсутствующий main FT;
-- несоответствие PDF;
-- непонятная роль файла.
-
-Не выбирай источник по догадке. Для `selection_status: ambiguous` `workflow-state.yaml` должен использовать `stage_status: blocked-input` или другой явно неготовый статус.
+Для `selection_status: ambiguous` workflow must use `stage_status: blocked-input` or another explicit non-ready status.
 
 ### Handoff
 
-Если `selection_status: selected`, подготовь handoff к `ft-scope-analyzer`:
+Handoff к `ft-scope-analyzer` разрешен только при `selection_status: selected` and `xhtml_available: yes`:
 
 ```yaml
 current_stage: ft-source-locator
@@ -141,27 +137,22 @@ stage_status: ready-for-next-stage
 next_skill: ft-scope-analyzer
 ```
 
-`latest_artifacts` в `workflow-state.yaml` должен ссылаться на:
+`latest_artifacts` должен ссылаться на `source_selection`, active main FT DOCX, `main_ft_xhtml`, PDF/package notes if available, and artifact manifest if aliases or local-only evidence matter.
 
-- `source_selection`;
-- active main FT document;
-- structural cross-check PDF, если есть;
-- package notes, если есть;
-- artifact manifest, если aliases или local-only evidence значимы.
+## Validator Findings
 
-`source-selection.md` не должен создавать `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`: это ответственность `ft-scope-analyzer`.
-
-Validator findings:
-
-- `workflow-state-source-locator-missing-source-selection`: source-locator workflow не ссылается на `source-selection.md`.
-- `workflow-state-source-locator-premature-scope-artifacts`: source-locator handoff содержит `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
-
-Additional validator findings:
-
+- `workflow-state-source-locator-missing-source-selection`: source-locator workflow does not link `source-selection.md`.
+- `workflow-state-source-locator-premature-scope-artifacts`: source-locator handoff contains `scope-contract.md`, `prompt.scope-to-writer.md` or `prompt.scope-to-iteration.md`.
+- `ft-package-root-level-handoff-artifacts`: FT package root contains root-level handoff artifacts.
 - `source-selection-missing-required-sections`: `source-selection.md` misses one or more required handoff sections.
 - `source-selection-missing-context-fields`: `Context` does not expose `selected_ft_slug` and/or `selection_status`.
 - `source-selection-invalid-selection-status`: `selection_status` is outside `selected | ambiguous | blocked-input`.
 - `workflow-state-source-selection-not-selected`: workflow routes downstream while `source-selection.md` is still `ambiguous` or `blocked-input`.
+- `source-selection-missing-xhtml-section`: `source-selection.md` misses `Machine-Readable XHTML Source`.
+- `source-selection-invalid-xhtml-availability`: `xhtml_available` is outside `yes | no`.
+- `workflow-state-source-selection-missing-required-xhtml`: `selection_status = selected`, but `xhtml_available != yes`.
+- `workflow-state-source-selection-xhtml-missing-routes-downstream`: workflow routes to scope/writer/reviewer/iteration while XHTML is missing.
+- `source-selection-xhtml-path-missing`: `xhtml_available = yes`, but `xhtml_path` is empty or does not resolve.
 
 ## Minimal Template
 
@@ -170,16 +161,26 @@ Additional validator findings:
 
 ## Context
 
-- Request summary:
-- Selected FT slug:
-- Selection status: `selected | ambiguous | blocked-input`
-- Created at:
-- Created by:
+- request_summary:
+- selected_ft_slug:
+- selection_status: `selected | ambiguous | blocked-input`
+- created_at:
+- created_by:
 
 ## Main FT Documents
 
 | path | role | selection_reason | version_or_date | source_quality_notes |
 | --- | --- | --- | --- | --- |
+
+## Machine-Readable XHTML Source
+
+- xhtml_available: `yes | no`
+- xhtml_path:
+- xhtml_matches_main_ft: `yes | no | not-checked`
+- xhtml_extraction_priority: `primary`
+- xhtml_required_for_downstream: `yes`
+- limitation:
+- blocking_reason:
 
 ## Structural Cross-Check PDF
 

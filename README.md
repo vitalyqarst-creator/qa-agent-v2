@@ -1,6 +1,6 @@
 # FT Test Case Agent
 
-Легкий Python-пакет для agent-first разбора функциональных требований из `.docx` и `.pdf`.
+Легкий Python-пакет для agent-first разбора функциональных требований из `.docx`, обязательного `.xhtml` extraction source и `.pdf` structural cross-check.
 
 ## Основные слои
 
@@ -16,7 +16,7 @@ FT-пакеты хранятся в `fts/`. В чистой export-версии 
 ```text
 fts/
   <ft-slug>/
-    source/            # основное ФТ: docx/pdf
+    source/            # основное ФТ: docx source of truth, xhtml extraction source, pdf cross-check
     support/           # связанные документы, справочники, дополнительные материалы
     mockups/           # макеты экранов
     test-cases/        # тест-кейсы только по этому ФТ
@@ -46,13 +46,23 @@ fts/
 - [references/agent/instruction-contract-index.md](references/agent/instruction-contract-index.md) — карта канонических источников правил, потребителей и validator coverage.
 - [references/agent/content-placement.md](references/agent/content-placement.md) — правила размещения знаний между `AGENTS.md`, `skills/`, `references/`, `fts/` и кодом.
 
+## Source Priority
+
+- DOCX остается главным исходным документом ФТ / source of truth.
+- XHTML обязателен как основной машиночитаемый источник извлечения требований для таблиц, списков, вложенных списков, перечней значений и строк таблиц.
+- PDF используется для structural/visual cross-check.
+- Support-файлы уточняют требования только внутри подтвержденного scope.
+- Макеты помогают конкретизировать UI-шаги, но не задают бизнес-правила, обязательность, validation, allowed values или expected results.
+
+Канонический handoff-формат выбора источников: [references/agent/source-selection-format.md](references/agent/source-selection-format.md).
+
 ## Что умеет пакет
 
-- читать требования из DOCX и PDF;
+- читать требования из DOCX и обязательного XHTML extraction source;
 - выделять разделы по иерархии документа;
 - сужать выборку по нужному разделу;
 - показывать превью больших scope через чанки;
-- использовать PDF-версию ФТ для сверки структуры разделов, если она доступна в пакете;
+- использовать PDF-версию ФТ для structural/visual cross-check, если она доступна в пакете;
 - анализировать документы `.docx` и `.pdf` без внешней LLM-зависимости.
 
 ## Быстрый старт
@@ -120,7 +130,7 @@ all_sections = load_sections(source)
 
 ## Где проект особенно полезен
 
-1. Когда нужно быстро разобрать DOCX/PDF.
+1. Когда нужно быстро разобрать DOCX/XHTML/PDF source bundle.
 2. Когда нужно сузить анализ до конкретного раздела требований.
 3. Когда один документ слишком большой для ручного просмотра целиком.
 4. Когда агент должен опираться на структуру документа перед написанием тест-кейсов.
@@ -129,4 +139,5 @@ all_sections = load_sections(source)
 
 - PDF извлекается как плоский текст и может хуже сохранять структуру;
 - DOCX не всегда размечен идеально, поэтому заголовки и вложенность разделов могут требовать дополнительной проверки;
+- отсутствие XHTML-версии основного ФТ блокирует downstream scope/writer/reviewer workflow для новых runs;
 - если требования сформулированы неоднозначно, такие места лучше выносить в `coverage gaps`, а не додумывать.

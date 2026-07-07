@@ -33,6 +33,7 @@
 - В `Разрешенные Источники` явно отделяй допустимые cross-FT ссылки от запрещенного расширения scope.
 - Документ фиксирует рамку работы, а не `coverage gaps`.
 - Если PDF для structural cross-check отсутствует, укажи это явно в секции `Контекст`.
+- Если `source-selection.md` не подтверждает `xhtml_available: yes`, не создавай `scope-contract.md`; останови workflow как `blocked-input`.
 - Если DOCX и PDF основного ФТ доступны, `source-parity-check.md` должен быть создан рядом с `scope-contract.md` до handoff к writer/reviewer.
 - Если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий, рядом со `scope-contract.md` должен быть создан `source-row-inventory.md` до handoff к writer/reviewer.
 - Если подтвержденный UI scope содержит источник типа `mockup` или путь `mockups/*`, рядом со `scope-contract.md` должен быть создан `mockup-visual-inventory.md` по `references/agent/mockup-visual-inventory-format.md`. Недостаточно перечислить файл макета: его визуальное содержимое должно быть открыто и зафиксировано. Если макет нельзя открыть, не переводите scope в `ready-for-next-stage`; используйте `blocked-input`.
@@ -50,6 +51,8 @@
 
 - FT-пакет: `fts/<ft-slug>/...`
 - Основной FT: `...`
+- Main FT XHTML: `source/<main-ft>.xhtml`
+- XHTML extraction notes: `primary source for tables/lists/rows; limitations | none`
 - PDF для structural cross-check: `есть | нет`
 - `AGENT-NOTES.md`: `есть | нет`
 
@@ -76,7 +79,7 @@
 
 | source | type | usage_rule |
 | --- | --- | --- |
-| `...` | `main-ft | pdf | support | related-ft | mockup` | `...` |
+| `...` | `main-ft-docx | main-ft-xhtml | pdf | support | related-ft | mockup` | `...` |
 
 ## Scope Complexity Assessment
 
@@ -112,6 +115,7 @@ Complexity decision:
 ## Условия Старта Следующего Этапа
 
 - Writer использует:
+  - `source-selection.md` с `xhtml_available: yes`
   - `scope-contract.md`
   - `source-parity-check.md`, если доступны DOCX+PDF
   - `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий
@@ -119,6 +123,7 @@ Complexity decision:
   - `scope-coverage-gaps.md`
   - `prompt.scope-to-writer.md`
 - Iteration использует:
+  - `source-selection.md` с `xhtml_available: yes`
   - `scope-contract.md`
   - `source-parity-check.md`, если доступны DOCX+PDF
   - `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий
@@ -132,6 +137,7 @@ Complexity decision:
 
 - Не расширять scope.
 - Не выдумывать поведение вне текста FT.
+- DOCX remains source of truth; XHTML is mandatory as the primary machine-readable extraction source; PDF is structural/visual cross-check.
 - Связанные FT использовать только при явной ссылке из основного FT.
 ```
 

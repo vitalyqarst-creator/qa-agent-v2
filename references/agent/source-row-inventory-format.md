@@ -1,8 +1,8 @@
 # Source Row Inventory Format
 
-`Source Row Inventory` - обязательная инвентаризация строк источника, если scope строится по таблицам полей, таблицам действий, PDF/DOCX extraction или другому табличному источнику.
+`Source Row Inventory` - обязательная инвентаризация строк источника, если scope строится по таблицам полей, таблицам действий, XHTML/PDF/DOCX extraction или другому табличному источнику.
 
-Цель inventory - доказать полноту переноса source rows до атомаризации. Агент сначала инвентаризирует все строки источника внутри подтвержденного scope, затем нормализует их в `Source Table Normalization`, затем строит `Atomic Requirements Ledger`.
+Цель inventory - доказать полноту переноса source rows до атомаризации. Агент сначала инвентаризирует все строки источника внутри подтвержденного scope, используя XHTML как primary machine-readable extraction source для таблиц, списков, вложенных списков и перечней значений, затем нормализует их в `Source Table Normalization`, затем строит `Atomic Requirements Ledger`.
 
 ## Write Strategy
 
@@ -35,6 +35,7 @@ Writer не должен сам становиться единственным 
 ## Правила
 
 - Одна строка inventory = одна строка или явный фрагмент source внутри подтвержденного scope.
+- Для table/list-heavy scope source rows/list items извлекай в первую очередь из XHTML; DOCX остается source of truth для смысла, PDF - structural/visual cross-check.
 - Если одна source row содержит несколько независимых свойств, inventory все равно хранит source row один раз, а `Source Table Normalization` может ссылаться на тот же `source_row_id` несколькими строками.
 - Если одна source row содержит несколько `GSR`/`REQ` или несколько самостоятельных свойств, writer обязан добавить `Source Row Completeness Matrix` перед `Source Table Normalization`: один `source_row_id` должен быть разложен на отдельные `source_property_id`, а каждый `source_property_id` должен вести к `ATOM-*` или `GAP-*`.
 - Handoff `source-row-inventory.md` должен создаваться до `prompt.scope-to-writer.md` / `prompt.scope-to-iteration.md` и передаваться как обязательный input, если `source-parity-check.md` содержит секцию `Table / Row Parity`.

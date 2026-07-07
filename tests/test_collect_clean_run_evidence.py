@@ -314,6 +314,12 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
 
     def write_valid_source_selection(self, path: Path, *, ft_slug: str = "ft-2-OF_11") -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        handoff_root = path.parent
+        while handoff_root.name != "work" and handoff_root != handoff_root.parent:
+            handoff_root = handoff_root.parent
+        source_dir = (handoff_root.parent if handoff_root.name == "work" else path.parent) / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "main.xhtml").write_text("<html><body>Main FT</body></html>\n", encoding="utf-8")
         path.write_text(
             "\n".join(
                 [
@@ -331,7 +337,18 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
                     "",
                     "| path | role | selection_reason | version_or_date | source_quality_notes |",
                     "| --- | --- | --- | --- | --- |",
-                    "| `source/main.docx` | main | Primary FT document | v1 | parseable |",
+                    "| `source/main.docx` | main-ft-docx | DOCX remains source of truth | v1 | parseable |",
+                    "| `source/main.xhtml` | main-ft-xhtml | Mandatory machine-readable extraction source | v1 | primary extraction |",
+                    "",
+                    "## Machine-Readable XHTML Source",
+                    "",
+                    "- xhtml_available: `yes`",
+                    "- xhtml_path: `source/main.xhtml`",
+                    "- xhtml_matches_main_ft: `yes`",
+                    "- xhtml_extraction_priority: `primary`",
+                    "- xhtml_required_for_downstream: `yes`",
+                    "- limitation: none",
+                    "- blocking_reason: none",
                     "",
                     "## Structural Cross-Check PDF",
                     "",

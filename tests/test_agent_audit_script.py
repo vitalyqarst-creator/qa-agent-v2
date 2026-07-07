@@ -70,6 +70,26 @@ class AgentAuditScriptTests(unittest.TestCase):
         self.assertIn("severity", ref_content.lower())
         self.assertIn("summary", ref_content)
 
+    def test_xhtml_source_policy_is_pinned_in_core_instructions(self) -> None:
+        agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        locator = (ROOT_DIR / "skills" / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")
+        source_selection = (ROOT_DIR / "references" / "agent" / "source-selection-format.md").read_text(encoding="utf-8")
+
+        self.assertIn("XHTML", agents)
+        self.assertIn("source of truth", agents)
+        self.assertIn("blocked-input", agents)
+        self.assertIn("structural/visual cross-check", agents)
+
+        self.assertIn("main_ft_xhtml", locator)
+        self.assertIn("xhtml_available", locator)
+        self.assertIn("missing main-ft-xhtml", locator)
+        self.assertIn("Не считай source selection завершенным, если main FT XHTML отсутствует", locator)
+
+        self.assertIn("Machine-Readable XHTML Source", source_selection)
+        self.assertIn("main-ft-xhtml", source_selection)
+        self.assertIn("workflow-state-source-selection-xhtml-missing-routes-downstream", source_selection)
+        self.assertIn("source-selection-xhtml-path-missing", source_selection)
+
     def test_synthetic_fixture_reports_known_violation(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)

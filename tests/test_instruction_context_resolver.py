@@ -212,6 +212,21 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/agent/source-selection-format.md", paths)
         self.assertNotIn("skills/ft-test-case-writer/SKILL.md", paths)
 
+    def test_xhtml_source_selection_contract_loads_for_downstream_scenarios(self) -> None:
+        for scenario_id in (
+            "source_locator.discovery",
+            "scope.manual",
+            "writer.initial_draft.table",
+            "reviewer.full_existing_cases",
+            "iteration.full_loop",
+        ):
+            with self.subTest(scenario_id=scenario_id):
+                payload = self.resolve_json("--scenario", scenario_id)
+                paths = {item["path"] for item in payload["files"]}
+
+                self.assertEqual("pass", payload["budget"]["status"])
+                self.assertIn("references/agent/source-selection-format.md", paths)
+
     def test_reviewer_context_loads_reviewer_and_runtime_contracts(self) -> None:
         payload = self.resolve_json("--scenario", "reviewer.full_existing_cases")
         paths = {item["path"] for item in payload["files"]}

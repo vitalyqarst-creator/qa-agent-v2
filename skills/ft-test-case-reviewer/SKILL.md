@@ -54,6 +54,7 @@ Required inputs:
 - `scope-contract.md`
 - `scope-coverage-gaps.md`
 - `scope-clarification-requests.md`
+- main FT XHTML from `source-selection.md` as mandatory machine-readable extraction source
 - `source-parity-check.md`, when DOCX+PDF are available
 - `source-row-inventory.md`, when row-level/table parity is required
 - `mockup-visual-inventory.md`, when the scope uses mockups
@@ -66,6 +67,8 @@ Review only gap quality and routing readiness:
 - each gap has a clear impact, blocking classification and downstream handling rule;
 - each gap with an unresolved decision has a matching analyst-facing item in `scope-clarification-requests.md`;
 - no source-backed requirement was converted into a gap just because writing it is inconvenient;
+- `source-selection.md` confirms `xhtml_available: yes`; missing XHTML is a blocking input condition for new workflows;
+- table/list-heavy scope coverage is checked against XHTML extraction, `source-row-inventory.md` and `source-table-normalization.md`;
 - no mockup-only detail, internal effect or unsupported expected result is promoted to covered behavior;
 - source parity, row inventory and mockup inventory limitations are carried into gaps or blocking reasons;
 - routing after review is either writer-ready or back to `ft-scope-analyzer`; do not route to UI prep or sign-off from this mode.
@@ -83,6 +86,7 @@ Expected outputs:
 - split test-design artifacts из `work/test-design/<section-id>-<scope-slug>/`, если они есть;
 - релевантный FT-пакет;
 - подтвержденный scope;
+- XHTML-версия основного ФТ как обязательный extraction source для таблиц, списков, вложенных списков и перечней значений;
 - PDF-версия основного ФТ для сверки структуры, если она есть;
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF;
 - `dictionary-inventory.md`, если source/support или split artifacts содержат `dictionary-source` / reference-list rows;
@@ -118,41 +122,44 @@ Expected outputs:
 1. Найди файл тест-кейсов и соответствующий FT-пакет с нужным scope.
 2. Подтверди, что review выполняется только в пределах уже выбранного scope.
 3. Определи `review_mode`. Если режим не указан явно, используй `full`.
-4. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ scope до начала review.
-5. Если для основного ФТ доступны DOCX и PDF, прочитай `source-parity-check.md`. Если artifact отсутствует, зафиксируй blocking traceability finding и не подписывай набор.
-5a. Если подтвержденный UI scope содержит mockup / screen image / `mockups/`, прочитай `mockup-visual-inventory.md`. Mockup помогает конкретизировать UI-шаги, но не является источником бизнес-правил, обязательности, validation, allowed values или expected results.
-5b. Если source/support или `source-table-normalization.md` содержит `dictionary-source`, reference-list, tags или фиксированный перечень значений, прочитай `dictionary-inventory.md` и используй `DICT-*` в traceability/design checks.
-6. В режиме `traceability` или `full` декомпозируй требования выбранного scope на атомарные утверждения.
-7. Построй traceability matrix по каноническому формату из `traceability-matrix-format.md`; каждая строка должна иметь стабильный `atom_id`, который используется как `traceability_ref` в findings. Все mandatory requirement IDs из `source-parity-check.md`, включая PDF-only коды, должны присутствовать в `req_id`.
-8. Создай рядом с Markdown matrix обязательный `.xlsx`-дубль по правилам `traceability-matrix-format.md`; строки, колонки и значения должны совпадать с Markdown matrix.
-9. Для каждой строки матрицы проставь `coverage_status = covered | gap | unclear`.
-10. Если утверждение не покрыто кейсами, но не может быть однозначно интерпретировано по ФТ, фиксируй `unclear`, а не придумывай поведение.
-11. Выполни traceability diff против разрешенного baseline/revalidation context, если он есть в scope contract, handoff, review-cycle snapshots, eval run report или пользовательском prompt-е:
+4. Перед review проверь `source-selection.md`: если для нового workflow `xhtml_available != yes`, зафиксируй blocking finding и не подписывай набор.
+5. Проверь, что writer использовал XHTML для таблиц, списков, вложенных списков, перечней значений, source rows и dictionary-source rows. Если writer ссылается только на DOCX/PDF и пропустил XHTML-only extracted list/table content, это traceability/test-design finding.
+6. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ scope до начала review.
+7. Если для основного ФТ доступны DOCX и PDF, прочитай `source-parity-check.md`. Если artifact отсутствует, зафиксируй blocking traceability finding и не подписывай набор.
+7a. Если подтвержденный UI scope содержит mockup / screen image / `mockups/`, прочитай `mockup-visual-inventory.md`. Mockup помогает конкретизировать UI-шаги, но не является источником бизнес-правил, обязательности, validation, allowed values или expected results.
+7b. Если source/support или `source-table-normalization.md` содержит `dictionary-source`, reference-list, tags или фиксированный перечень значений, прочитай `dictionary-inventory.md` и используй `DICT-*` в traceability/design checks.
+8. В режиме `traceability` или `full` декомпозируй требования выбранного scope на атомарные утверждения.
+9. Построй traceability matrix по каноническому формату из `traceability-matrix-format.md`; каждая строка должна иметь стабильный `atom_id`, который используется как `traceability_ref` в findings. Все mandatory requirement IDs из `source-parity-check.md`, включая PDF-only коды, должны присутствовать в `req_id`.
+10. Создай рядом с Markdown matrix обязательный `.xlsx`-дубль по правилам `traceability-matrix-format.md`; строки, колонки и значения должны совпадать с Markdown matrix.
+11. Для каждой строки матрицы проставь `coverage_status = covered | gap | unclear`.
+12. Если утверждение не покрыто кейсами, но не может быть однозначно интерпретировано по ФТ, фиксируй `unclear`, а не придумывай поведение.
+13. Выполни traceability diff против разрешенного baseline/revalidation context, если он есть в scope contract, handoff, review-cycle snapshots, eval run report или пользовательском prompt-е:
     - atom/code, ранее зафиксированный как `gap` / `unclear`, не должен внезапно стать `covered` без нового наблюдаемого artifact или утвержденного source;
     - буквенно-цифровые коды требований (`GSR`, `REQ`, `ID` и локальные коды ФТ) не должны исчезать из ledger/matrix/TC links;
     - `GAP-*` не должен менять смысл, affected atoms или blocking status без явного writer response;
     - lessons из revalidation findings должны переноситься как regression checks.
-12. Если writer передал atomic requirements ledger или writer self-check, проверь, что ledger согласован с traceability matrix и source parity, а self-check не скрывает uncovered atoms, merged checks, over-splitting, package coverage, cross-package leakage, assumptions или unclear items.
-13. В режиме `structure` или `full` проверь единый шаблон, обязательные секции, группировку, сквозную нумерацию `TC-*`, порядок кейсов, детерминированность шагов и отсутствие проверяемого действия в предусловиях. Смешанная схема одного `TC-*` является structure blocker: metadata table нельзя дублировать bold metadata fields, а runtime headings нельзя дублировать inline/bold-полями.
-14. В режиме `test-design` или `full` проверь позитивные и негативные сценарии, границы, классы эквивалентности, условные зависимости, взаимное влияние полей, случаи где source fields дублируют друг друга, hallucinated assumptions, unsupported expected-result specificity и package-level design artifacts, если они применимы к scope. Применяй `test-design-review-rubric.md`, `test-design-defect-taxonomy.md`, `coverage-checklist.md`, `test-case-format.md`, `test-case-runtime-format.md` и `review-findings-format.md`; не дублируй полный перечень defect classes в skill.
-    - Для table/PDF/DOCX extraction scopes сначала проверь `source-row-inventory.md`, `source-row-completeness-matrix.md`, `source-table-normalization.md`, `dictionary-inventory.md` при наличии справочников, `test-design-decision-table.md` и `package-test-design-plan.md`.
+14. Если writer передал atomic requirements ledger или writer self-check, проверь, что ledger согласован с traceability matrix и source parity, а self-check не скрывает uncovered atoms, merged checks, over-splitting, package coverage, cross-package leakage, assumptions или unclear items.
+15. В режиме `structure` или `full` проверь единый шаблон, обязательные секции, группировку, сквозную нумерацию `TC-*`, порядок кейсов, детерминированность шагов и отсутствие проверяемого действия в предусловиях. Смешанная схема одного `TC-*` является structure blocker: metadata table нельзя дублировать bold metadata fields, а runtime headings нельзя дублировать inline/bold-полями.
+16. В режиме `test-design` или `full` проверь позитивные и негативные сценарии, границы, классы эквивалентности, условные зависимости, взаимное влияние полей, случаи где source fields дублируют друг друга, hallucinated assumptions, unsupported expected-result specificity и package-level design artifacts, если они применимы к scope. Применяй `test-design-review-rubric.md`, `test-design-defect-taxonomy.md`, `coverage-checklist.md`, `test-case-format.md`, `test-case-runtime-format.md` и `review-findings-format.md`; не дублируй полный перечень defect classes в skill.
+    - Для table/list-heavy scope reviewer обязан сверять coverage against XHTML extraction, `source-row-inventory.md` and `source-table-normalization.md`. DOCX/PDF-only extraction is insufficient when XHTML is available.
+    - Для table/PDF/DOCX/XHTML extraction scopes сначала проверь `source-row-inventory.md`, `source-row-completeness-matrix.md`, `source-table-normalization.md`, `dictionary-inventory.md` при наличии справочников, `test-design-decision-table.md` и `package-test-design-plan.md`.
     - Перед проверкой отдельных `TC-*` проверь split artifacts, matrix rows, package coverage, `DICT-*` links, mockup usage, coverage metrics and gaps together.
-15. Обязательно прогони defect-class checklist из `test-design-review-rubric.md` и `test-design-defect-taxonomy.md`; не дублируй полный список классов в выводе, но явно фиксируй найденные blocking classes и evidence.
-16. Для каждого спорного expected result примени evidence-first question: какой наблюдаемый artifact подтверждает pass/fail? Если artifact не указан для API/DB/RabbitMQ/model/internal state, создай `error` или требуй `GAP-*` / `unclear`.
-17. Не требуй проверки, которых нет в ФТ. Например, не отмечай отсутствие проверки видимости, если ФТ не описывает видимость поля.
-18. Для каждого finding укажи `review_mode` и `required_change`.
-19. Для findings режима `traceability` обязательно ссылайся на строку матрицы через `traceability_ref = ATOM-*` или на `coverage_gap:<short-id>`, если строки matrix еще нет.
-20. Для findings режима `structure` привязывай замечание к конкретному `test_case_id` или к месту в наборе.
-21. Для findings режима `test-design` указывай, какой тип проверки отсутствует: `positive | negative | boundary | equivalence | dependency`. Если проблема в неподтвержденном expected result, используй категорию `expected-result`.
-22. Если PDF для structural cross-check отсутствует, явно укажи это в human summary или findings как ограничение входных данных.
-23. Во втором review сверяй не только обновленный набор тест-кейсов, но и writer response artifact. Если writer заявил `fixed`, проверь все affected artifacts: canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan и coverage artifacts; рассинхрон current-scope ссылок `TC-*` / `ATOM-*` / `GAP-*` остается blocking finding.
-24. Во втором review не переоткрывай закрытый finding без нового evidence.
-25. Если findings artifact предыдущего раунда, writer response artifact или traceability matrix структурно невалидны, фиксируй это как blocking review finding.
-26. Во втором review проверяй закрытие traceability findings по `traceability_ref`, а не по похожему тексту `source_path` или повторяющемуся `req_id`.
-27. Если найдены unresolved findings, сохрани `prompt.reviewer-to-writer.round-N.md` для следующего writer round.
-27a. Если review verdict = `not signed-off`, не записывай `stage_status: not-signed-off` в `workflow-state.yaml`: такого process-status нет. Для обычного следующего writer round используй `stage_status: ready-for-writer-revision` и `next_skill: ft-test-case-writer`; если достигнут round cap, используй `stage_status: round-cap-reached`; если нужен внешний input, используй `stage_status: blocked-input`.
-28. Если набор подписан без unresolved findings, перед handoff проверь группировку, сквозную нумерацию `TC-*` и выполни `python scripts\validate_agent_artifacts.py --root <ft-package> --json` или runner validator gate по текущему scope. Final reviewer output должен содержать блок `Reviewer Sign-off Self-check` по `reviewer-output-format.md`; `validator_checked: yes`/`blocking_findings_absent: yes` допустимы только без scope `error`/`warning` либо с валидным `Validator Warning Waivers`. Затем сохрани `prompt.reviewer-to-ui-prep.md` и обнови handoff state.
-29. Не выдавай handoff в `ft-ui-automation-prep`, если остаются `error`, `warning` или traceability `gap`, кроме явно допустимых `unclear`; для одиночного reviewer-pass без orchestrator-а не подменяй lifecycle sign-off, если sign-off должен фиксировать `ft-test-case-iteration`.
+17. Обязательно прогони defect-class checklist из `test-design-review-rubric.md` и `test-design-defect-taxonomy.md`; не дублируй полный список классов в выводе, но явно фиксируй найденные blocking classes и evidence.
+18. Для каждого спорного expected result примени evidence-first question: какой наблюдаемый artifact подтверждает pass/fail? Если artifact не указан для API/DB/RabbitMQ/model/internal state, создай `error` или требуй `GAP-*` / `unclear`.
+19. Не требуй проверки, которых нет в ФТ. Например, не отмечай отсутствие проверки видимости, если ФТ не описывает видимость поля.
+20. Для каждого finding укажи `review_mode` и `required_change`.
+21. Для findings режима `traceability` обязательно ссылайся на строку матрицы через `traceability_ref = ATOM-*` или на `coverage_gap:<short-id>`, если строки matrix еще нет.
+22. Для findings режима `structure` привязывай замечание к конкретному `test_case_id` или к месту в наборе.
+23. Для findings режима `test-design` указывай, какой тип проверки отсутствует: `positive | negative | boundary | equivalence | dependency`. Если проблема в неподтвержденном expected result, используй категорию `expected-result`.
+24. Если PDF для structural cross-check отсутствует, явно укажи это в human summary или findings как ограничение входных данных.
+25. Во втором review сверяй не только обновленный набор тест-кейсов, но и writer response artifact. Если writer заявил `fixed`, проверь все affected artifacts: canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan и coverage artifacts; рассинхрон current-scope ссылок `TC-*` / `ATOM-*` / `GAP-*` остается blocking finding.
+26. Во втором review не переоткрывай закрытый finding без нового evidence.
+27. Если findings artifact предыдущего раунда, writer response artifact или traceability matrix структурно невалидны, фиксируй это как blocking review finding.
+28. Во втором review проверяй закрытие traceability findings по `traceability_ref`, а не по похожему тексту `source_path` или повторяющемуся `req_id`.
+29. Если найдены unresolved findings, сохрани `prompt.reviewer-to-writer.round-N.md` для следующего writer round.
+29a. Если review verdict = `not signed-off`, не записывай `stage_status: not-signed-off` в `workflow-state.yaml`: такого process-status нет. Для обычного следующего writer round используй `stage_status: ready-for-writer-revision` и `next_skill: ft-test-case-writer`; если достигнут round cap, используй `stage_status: round-cap-reached`; если нужен внешний input, используй `stage_status: blocked-input`.
+30. Если набор подписан без unresolved findings, перед handoff проверь группировку, сквозную нумерацию `TC-*` и выполни `python scripts\validate_agent_artifacts.py --root <ft-package> --json` или runner validator gate по текущему scope. Final reviewer output должен содержать блок `Reviewer Sign-off Self-check` по `reviewer-output-format.md`; `validator_checked: yes`/`blocking_findings_absent: yes` допустимы только без scope `error`/`warning` либо с валидным `Validator Warning Waivers`. Затем сохрани `prompt.reviewer-to-ui-prep.md` и обнови handoff state.
+31. Не выдавай handoff в `ft-ui-automation-prep`, если остаются `error`, `warning` или traceability `gap`, кроме явно допустимых `unclear`; для одиночного reviewer-pass без orchestrator-а не подменяй lifecycle sign-off, если sign-off должен фиксировать `ft-test-case-iteration`.
 
 ## Test-design Applicability Matrix Rule
 

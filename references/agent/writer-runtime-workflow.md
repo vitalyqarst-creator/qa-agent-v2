@@ -10,7 +10,8 @@ Required runtime inputs:
 
 - FT package path under `fts/<ft-slug>/...`;
 - confirmed scope or stage handoff;
-- main FT source and relevant support files;
+- main FT DOCX source of truth, mandatory main FT XHTML extraction source, and relevant support files;
+- `source-selection.md` with `xhtml_available: yes`;
 - package `AGENT-NOTES.md` when present;
 - mode: `initial_draft`, `revision_from_findings` or remediation.
 
@@ -18,17 +19,18 @@ Do not expand the scope while writing. New source ambiguity, missing mandatory h
 
 ## Common Flow
 
-1. Confirm the selected package, source files, scope boundary and mode.
+1. Confirm the selected package, source files, scope boundary and mode; if `source-selection.md` lacks `xhtml_available: yes`, stop as `blocked-input` before initial draft.
 2. Read package-specific `AGENT-NOTES.md` before scope analysis, writing or review handoff.
-3. If DOCX and PDF are both available for the main FT, read `source-parity-check.md` before writer handoff. Missing mandatory parity evidence blocks `ready-for-review`.
-4. For UI scopes, read `mockup-visual-inventory.md` before using mockups. Use mockups only to make UI steps concrete; do not infer business rules, allowed values, requiredness, validation or expected results from screenshots.
-5. For table-heavy or row-level parity scopes, follow `writer-table-workflow.md` before ledger and TC writing.
-6. Build coverage obligations and metrics for applicable dimensions before TC writing; one independently checkable obligation becomes one atom or one explicit `GAP-*`.
-7. Build atomic requirements from source-backed statements. One independently checkable obligation becomes one atom.
-8. Create or update the canonical test-case file under `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
-9. Keep every `TC-*` executable, observable and traceable to `ATOM-*`, requirement code, source row or explicit `GAP-*`.
-10. Run `Test Design Review`, `Writer Quality Gate` and writer self-check before routing to reviewer.
-11. Update `workflow-state.yaml`, session log, decision log and `prompt.writer-to-reviewer.round-N.md` only after the output is actually ready for review.
+3. Use XHTML first for machine extraction of tables, lists, nested lists, allowed values and source rows. DOCX remains the authoritative meaning source; PDF remains structural/visual cross-check.
+4. If DOCX and PDF are both available for the main FT, read `source-parity-check.md` before writer handoff. Missing mandatory parity evidence blocks `ready-for-review`.
+5. For UI scopes, read `mockup-visual-inventory.md` before using mockups. Use mockups only to make UI steps concrete; do not infer business rules, allowed values, requiredness, validation or expected results from screenshots.
+6. For table-heavy or row-level parity scopes, follow `writer-table-workflow.md` before ledger and TC writing.
+7. Build coverage obligations and metrics for applicable dimensions before TC writing; one independently checkable obligation becomes one atom or one explicit `GAP-*`.
+8. Build atomic requirements from source-backed statements. One independently checkable obligation becomes one atom.
+9. Create or update the canonical test-case file under `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
+10. Keep every `TC-*` executable, observable and traceable to `ATOM-*`, requirement code, source row or explicit `GAP-*`.
+11. Run `Test Design Review`, `Writer Quality Gate` and writer self-check before routing to reviewer.
+12. Update `workflow-state.yaml`, session log, decision log and `prompt.writer-to-reviewer.round-N.md` only after the output is actually ready for review.
 
 ## Test-Case Rules
 
@@ -65,6 +67,7 @@ For `revision_from_findings`, do not regenerate from scratch. Use `writer-revisi
 Do not set `stage_status: ready-for-review` when any of the following is true:
 
 - required source, parity, mockup or row-inventory artifact is missing;
+- main FT XHTML is missing or not confirmed by source selection;
 - blocking coverage gap is unresolved;
 - Writer Quality Gate has failed rows;
 - applicable coverage metrics or required fixture catalog rows are missing;

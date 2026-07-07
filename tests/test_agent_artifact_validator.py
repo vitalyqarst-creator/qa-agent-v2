@@ -62,8 +62,20 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def write_valid_source_selection(self, path: Path, *, status: str = "selected") -> None:
+    def write_valid_source_selection(
+        self,
+        path: Path,
+        *,
+        status: str = "selected",
+        xhtml_available: str = "yes",
+        xhtml_path: str = "source/main.xhtml",
+        create_xhtml: bool = True,
+    ) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
+        if create_xhtml and xhtml_available == "yes":
+            for source_root in self.source_selection_source_roots(path):
+                source_root.mkdir(parents=True, exist_ok=True)
+                (source_root / "main.xhtml").write_text("<html><body>Main FT</body></html>\n", encoding="utf-8")
         path.write_text(
             "\n".join(
                 [
@@ -81,7 +93,18 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     "",
                     "| path | role | selection_reason | version_or_date | source_quality_notes |",
                     "| --- | --- | --- | --- | --- |",
-                    "| `source/main.docx` | main | Primary FT document | v1 | parseable |",
+                    "| `source/main.docx` | main-ft-docx | DOCX remains source of truth | v1 | parseable |",
+                    "| `source/main.xhtml` | main-ft-xhtml | Mandatory machine-readable extraction source | v1 | primary extraction |",
+                    "",
+                    "## Machine-Readable XHTML Source",
+                    "",
+                    f"- xhtml_available: `{xhtml_available}`",
+                    f"- xhtml_path: `{xhtml_path}`",
+                    "- xhtml_matches_main_ft: `yes`",
+                    "- xhtml_extraction_priority: `primary`",
+                    "- xhtml_required_for_downstream: `yes`",
+                    "- limitation: none",
+                    "- blocking_reason: none",
                     "",
                     "## Structural Cross-Check PDF",
                     "",
@@ -319,6 +342,20 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def source_selection_source_roots(self, path: Path) -> list[Path]:
+        roots = [path.parent / "source"]
+        parts = path.parts
+        if "fts" in parts:
+            index = parts.index("fts")
+            if index + 1 < len(parts):
+                ft_root = Path(*parts[: index + 2])
+                roots.append(ft_root / "source")
+        deduped: list[Path] = []
+        for root in roots:
+            if root not in deduped:
+                deduped.append(root)
+        return deduped
 
     def append_minimal_package_test_design_plan(self, path: Path) -> None:
         path.write_text(
@@ -1811,6 +1848,108 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-source-selection-not-selected", finding_ids)
+
+    def test_source_selection_artifact_requires_xhtml_section(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_source_selection(fixture_root / "source-selection.md", status="blocked-input")
+            source_selection = fixture_root / "source-selection.md"
+            content = source_selection.read_text(encoding="utf-8")
+            content = content.replace(
+                "\n".join(
+                    [
+                        "## Machine-Readable XHTML Source",
+                        "",
+                        "- xhtml_available: `yes`",
+                        "- xhtml_path: `source/main.xhtml`",
+                        "- xhtml_matches_main_ft: `yes`",
+                        "- xhtml_extraction_priority: `primary`",
+                        "- xhtml_required_for_downstream: `yes`",
+                        "- limitation: none",
+                        "- blocking_reason: none",
+                        "",
+                    ]
+                ),
+                "",
+            )
+            source_selection.write_text(content, encoding="utf-8")
+            self.write_source_selection_workflow_state(fixture_root / "workflow-state.yaml")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("source-selection-missing-xhtml-section", finding_ids)
+
+    def test_source_selection_selected_requires_available_xhtml(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_source_selection(
+                fixture_root / "source-selection.md",
+                xhtml_available="no",
+                xhtml_path="-",
+                create_xhtml=False,
+            )
+            self.write_source_selection_workflow_state(fixture_root / "workflow-state.yaml")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-source-selection-missing-required-xhtml", finding_ids)
+        self.assertIn("workflow-state-source-selection-xhtml-missing-routes-downstream", finding_ids)
+
+    def test_source_selection_rejects_invalid_xhtml_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_source_selection(
+                fixture_root / "source-selection.md",
+                xhtml_available="maybe",
+                create_xhtml=False,
+            )
+            self.write_source_selection_workflow_state(fixture_root / "workflow-state.yaml")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("source-selection-invalid-xhtml-availability", finding_ids)
+
+    def test_source_selection_available_xhtml_requires_resolving_path(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_source_selection(
+                fixture_root / "source-selection.md",
+                xhtml_path="source/missing.xhtml",
+                create_xhtml=False,
+            )
+            self.write_source_selection_workflow_state(fixture_root / "workflow-state.yaml")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("source-selection-xhtml-path-missing", finding_ids)
+
+    def test_source_selection_accepts_valid_xhtml_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_source_selection(fixture_root / "source-selection.md")
+            self.write_source_selection_workflow_state(fixture_root / "workflow-state.yaml")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("source-selection-missing-xhtml-section", finding_ids)
+        self.assertNotIn("workflow-state-source-selection-missing-required-xhtml", finding_ids)
+        self.assertNotIn("workflow-state-source-selection-xhtml-missing-routes-downstream", finding_ids)
+        self.assertNotIn("source-selection-xhtml-path-missing", finding_ids)
 
     def test_source_locator_workflow_requires_linked_source_selection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

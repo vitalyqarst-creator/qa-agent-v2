@@ -1,6 +1,6 @@
 # Source Table Normalization Format
 
-`Source Table Normalization` — обязательный split artifact `work/test-design/<scope-slug>/source-table-normalization.md` перед `Test Design Decision Table`, `Coverage Obligation Table` и `Atomic Requirements Ledger`, если scope строится по таблицам полей, таблицам действий, PDF/DOCX extraction или другому табличному источнику. Перед ним должен быть split artifact `source-row-inventory.md`, который доказывает, что все source rows внутри scope перечислены и не потеряны до атомаризации.
+`Source Table Normalization` — обязательный split artifact `work/test-design/<scope-slug>/source-table-normalization.md` перед `Test Design Decision Table`, `Coverage Obligation Table` и `Atomic Requirements Ledger`, если scope строится по таблицам полей, таблицам действий, XHTML/PDF/DOCX extraction или другому табличному источнику. Перед ним должен быть split artifact `source-row-inventory.md`, который доказывает, что все source rows внутри scope перечислены и не потеряны до атомаризации.
 
 Цель секции — отделить восстановление требований из источника от test-design. Writer сначала должен превратить строку источника в чистое проверяемое утверждение, и только потом создавать `ATOM-*`.
 
@@ -31,6 +31,7 @@
 ## Правила
 
 - Одна строка normalization table = одно очищенное свойство поля, действие, условие или ожидаемое поведение.
+- Для table/list-heavy extraction используй XHTML как primary machine-readable source для восстановления rows/list items; DOCX подтверждает смысл требований, PDF сверяет структуру и коды.
 - `source_property_id` — обязательная стабильная ссылка на одно нормализованное свойство внутри source row. Формат: `<source_row_id>.P##`, например `SRC-003.P01`.
 - Нельзя переносить в `expected_behavior` заголовки таблиц, номера страниц, соседние поля, колонки `Название / Видимость / О / Р / Тип ввода поля / Тип значения / Примечание`.
 - Перед использованием заголовков вроде `О` / `Р` выполни `Source Legend And Abbreviation Check`; без подтверждения это `GAP-*`, а не atom.
