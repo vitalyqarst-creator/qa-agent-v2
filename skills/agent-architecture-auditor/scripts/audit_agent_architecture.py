@@ -252,7 +252,7 @@ def audit_task_start_routing(root:Path,checks,findings):
     duplicate_route_ids=sorted([rid for rid,count in Counter(route_ids).items() if rid and count>1])
     route_by_id={item.get("id"):item for item in routes if item.get("id")}
     route_skills={skill for item in routes for skill in item.get("skill_chain",[])}
-    route_scenarios={entry.get("scenario") for item in routes for entry in item.get("instruction_scenarios",[]) if entry.get("scenario")}
+    route_scenarios={entry.get("scenario") for item in routes for entry in route_instruction_entries(item) if entry.get("scenario")}
 
     errors=[]
     missing_skills=sorted(active_skills-route_skills)
@@ -279,6 +279,10 @@ def audit_task_start_routing(root:Path,checks,findings):
         actual_scenarios=[entry.get("scenario") for entry in route.get("instruction_scenarios",[])]
         if expected_scenarios!=actual_scenarios:
             errors.append(f"golden example {idx} scenario mismatch for {route_id}")
+        expected_internal_scenarios=example.get("expected_internal_instruction_scenarios",[])
+        actual_internal_scenarios=[entry.get("scenario") for entry in route.get("internal_instruction_scenarios",[])]
+        if expected_internal_scenarios!=actual_internal_scenarios:
+            errors.append(f"golden example {idx} internal scenario mismatch for {route_id}")
 
     status="pass" if not errors else "warn"
     add_check(
