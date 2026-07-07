@@ -196,6 +196,13 @@ from test_case_agent.new_tc_revised_draft_review import (
     load_new_tc_revised_draft_review,
     write_new_tc_revised_draft_review,
 )
+from test_case_agent.new_tc_create_apply_dry_run import (
+    CreateApplyDryRunItem,
+    NewTcCreateApplyDryRunReport,
+    build_new_tc_create_apply_dry_run,
+    load_new_tc_create_apply_dry_run,
+    write_new_tc_create_apply_dry_run,
+)
 from test_case_agent.new_tc_draft_revision_plan import (
     DraftRevisionItem,
     DuplicateRiskAction,
@@ -442,6 +449,7 @@ __all__ = [
     "CompletedPackageRegressionReport",
     "CandidateGroup",
     "CandidateRequirement",
+    "CreateApplyDryRunItem",
     "CreateNewTcContextBundle",
     "EnrichedSourceFacts",
     "DeferredGroup",
@@ -460,6 +468,7 @@ __all__ = [
     "NewTcDraftRevisionPlan",
     "NewTcRevisionDecisionPack",
     "NewTcDraftProposal",
+    "NewTcCreateApplyDryRunReport",
     "NewTcRevisedDraftProposal",
     "NewTcRevisedDraftReviewReport",
     "ReplacementStrategy",
@@ -517,6 +526,7 @@ __all__ = [
     "build_new_tc_draft_review",
     "build_new_tc_revised_draft_proposal",
     "build_new_tc_revised_draft_review",
+    "build_new_tc_create_apply_dry_run",
     "build_new_tc_draft_revision_plan",
     "build_new_tc_revision_decision_pack",
     "build_residual_source_grounding_gap_analysis",
@@ -553,6 +563,7 @@ __all__ = [
     "load_new_tc_draft_review",
     "load_new_tc_revised_draft_proposal",
     "load_new_tc_revised_draft_review",
+    "load_new_tc_create_apply_dry_run",
     "load_new_tc_draft_revision_plan",
     "load_new_tc_revision_decision_pack",
     "load_residual_source_grounding_gap_analysis",
@@ -598,6 +609,7 @@ __all__ = [
     "write_new_tc_draft_review",
     "write_new_tc_revised_draft_proposal",
     "write_new_tc_revised_draft_review",
+    "write_new_tc_create_apply_dry_run",
     "write_new_tc_draft_revision_plan",
     "write_new_tc_revision_decision_pack",
     "write_residual_source_grounding_gap_analysis",

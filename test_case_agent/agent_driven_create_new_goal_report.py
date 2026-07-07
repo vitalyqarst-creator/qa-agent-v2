@@ -30,6 +30,7 @@ class AgentDrivenCreateNewGoalReport:
     stage_9f_status: str | None
     stage_9e_summary: dict[str, Any]
     stage_9f_summary: dict[str, Any]
+    stage_9g_summary: dict[str, Any]
     original_resolver_gate: dict[str, Any]
     hardened_gate: dict[str, Any]
     created_artifacts: list[str]
@@ -57,6 +58,7 @@ class AgentDrivenCreateNewGoalReport:
             stage_9f_status=data.get("stage_9f_status"),
             stage_9e_summary=dict(data.get("stage_9e_summary") or {}),
             stage_9f_summary=dict(data.get("stage_9f_summary") or {}),
+            stage_9g_summary=dict(data.get("stage_9g_summary") or {}),
             original_resolver_gate=dict(data.get("original_resolver_gate") or {}),
             hardened_gate=dict(data.get("hardened_gate") or {}),
             created_artifacts=list(data.get("created_artifacts") or []),
@@ -84,13 +86,16 @@ def build_agent_driven_create_new_goal_report(
     validation_path = work_dir / f"agent-decision-validation-{package_id}.json"
     stage_9e_path = work_dir / f"new-tc-revised-draft-proposal-{package_id}.json"
     stage_9f_path = work_dir / f"new-tc-revised-draft-review-{package_id}.json"
+    stage_9g_path = work_dir / f"new-tc-create-apply-dry-run-{package_id}.json"
 
     resolution = load_agent_decision_resolution(resolution_path) if resolution_path.exists() else None
     validation = load_agent_decision_validation_report(validation_path) if validation_path.exists() else None
     stage_9e = _read_json(stage_9e_path)
     stage_9f = _read_json(stage_9f_path)
+    stage_9g = _read_json(stage_9g_path)
     stage_9e_summary = _stage_9e_summary(stage_9e)
     stage_9f_summary = _stage_9f_summary(stage_9f)
+    stage_9g_summary = _stage_9g_summary(stage_9g)
 
     executed = []
     skipped = []
@@ -121,6 +126,10 @@ def build_agent_driven_create_new_goal_report(
     else:
         skipped.append({"stage": "Stage 9F", "reason": "Stage 9E artifact was not created"})
 
+    if stage_9g:
+        executed.append({"stage": "Stage 9G", "status": stage_9g.get("dry_run_status")})
+        artifacts.extend([str(stage_9g_path), str(work_dir / f"new-tc-create-apply-dry-run-{package_id}.md")])
+
     original_gate = resolution.stage_9e_gate if resolution else {}
     warnings = []
     blockers = []
@@ -138,7 +147,7 @@ def build_agent_driven_create_new_goal_report(
     if not validation:
         goal_status = "blocked"
 
-    recommended = _recommended_next_action(validation, stage_9e, stage_9f)
+    recommended = _recommended_next_action(validation, stage_9e, stage_9f, stage_9g)
     return AgentDrivenCreateNewGoalReport(
         package_id=package_id,
         goal_status=goal_status,
@@ -149,6 +158,7 @@ def build_agent_driven_create_new_goal_report(
         stage_9f_status=stage_9f.get("review_status") if stage_9f else None,
         stage_9e_summary=stage_9e_summary,
         stage_9f_summary=stage_9f_summary,
+        stage_9g_summary=stage_9g_summary,
         original_resolver_gate=original_gate,
         hardened_gate=hardened_gate,
         created_artifacts=artifacts,
@@ -163,6 +173,7 @@ def build_agent_driven_create_new_goal_report(
             "stage_9e_not_created_unless_hardened_gate_allowed": bool(
                 hardened_gate.get("stage_9e_allowed") or not stage_9e_path.exists()
             ),
+            "stage_9g_does_not_authorize_real_apply": not bool(stage_9g.get("real_apply_authorized")),
         },
         tests_run=tests_run or [],
         git_status_test_cases=git_status_test_cases,
@@ -207,6 +218,9 @@ def render_agent_driven_create_new_goal_report_markdown(report: AgentDrivenCreat
         f"- Stage 9F approved-with-warnings: `{report.stage_9f_summary.get('approved_with_warnings_count', 0)}`",
         f"- Stage 9F needs-revision: `{report.stage_9f_summary.get('needs_revision_count', 0)}`",
         f"- Stage 9F rejected: `{report.stage_9f_summary.get('rejected_count', 0)}`",
+        f"- Stage 9G status: `{report.stage_9g_summary.get('dry_run_status')}`",
+        f"- Stage 9G dry-run items: `{report.stage_9g_summary.get('dry_run_items_total', 0)}`",
+        f"- Stage 9G real apply authorized: `{report.stage_9g_summary.get('real_apply_authorized')}`",
         f"- Original Stage 9E allowed: `{report.original_resolver_gate.get('stage_9e_allowed')}`",
         f"- Hardened Stage 9E allowed: `{report.hardened_gate.get('stage_9e_allowed')}`",
         "",
@@ -257,7 +271,12 @@ def _recommended_next_action(
     validation: AgentDecisionValidationReport | None,
     stage_9e: dict[str, Any],
     stage_9f: dict[str, Any],
+    stage_9g: dict[str, Any],
 ) -> str:
+    if stage_9g.get("dry_run_status") in {"pass", "pass-with-warnings"}:
+        return "Review Stage 9G dry-run design and request a separate Stage 9H design only with explicit approval."
+    if stage_9g.get("dry_run_status") == "blocked":
+        return "Resolve Stage 9G dry-run blockers before any Stage 9H design."
     if stage_9f.get("review_status") in {"approved", "approved-with-warnings"}:
         return "Stage 9G - Controlled Create Apply Dry-Run Design."
     if stage_9f.get("review_status") == "needs-revision":
@@ -303,6 +322,26 @@ def _stage_9f_summary(stage_9f: dict[str, Any]) -> dict[str, Any]:
         "stage_9g_readiness": dict(stage_9f.get("stage_9g_readiness") or {}),
         "canonical_write_allowed": bool(stage_9f.get("canonical_write_allowed")),
         "manual_review_required": bool(stage_9f.get("manual_review_required")),
+    }
+
+
+def _stage_9g_summary(stage_9g: dict[str, Any]) -> dict[str, Any]:
+    if not stage_9g:
+        return {}
+    items = list(stage_9g.get("dry_run_items") or [])
+    counts: dict[str, int] = {}
+    for item in items:
+        key = f"{item.get('dry_run_decision')}_count"
+        counts[key] = counts.get(key, 0) + 1
+    for key in ("dry_run_allowed_count", "dry_run_allowed_with_warnings_count", "blocked_count"):
+        counts.setdefault(key, 0)
+    return {
+        "dry_run_status": stage_9g.get("dry_run_status"),
+        "dry_run_items_total": len(items),
+        **counts,
+        "canonical_write_allowed": bool(stage_9g.get("canonical_write_allowed")),
+        "real_apply_authorized": bool(stage_9g.get("real_apply_authorized")),
+        "stage_9h_readiness": dict(stage_9g.get("stage_9h_readiness") or {}),
     }
 
 
