@@ -338,6 +338,24 @@ def audit(root:Path):
             add_check(checks,f"skill-required:{d.name}","fail","Skill missing required files.",[sp])
             add_finding(findings,f"skill-missing-required-files:{d.name}","error","skills-structure",f"Skill {d.name} is missing required files","Every active skill must include SKILL.md and agents/openai.yaml.","Restore the missing files.",[sp])
             continue
+        meta=parse_openai_yaml_fields(txt(oy))
+        meta_issues=[f"missing {field}" for field in OPENAI_YAML_REQUIRED_FIELDS if not meta.get(field)]
+        prompt=meta.get("default_prompt","")
+        if prompt and f"${d.name}" not in prompt:
+            meta_issues.append(f"default_prompt must contain ${d.name}")
+        add_check(checks,f"skill-openai-yaml:{d.name}","warn" if meta_issues else "pass","Skill OpenAI metadata content check.",[rel(oy,root)])
+        if meta_issues:
+            add_finding(
+                findings,
+                f"skill-openai-yaml-invalid:{d.name}",
+                "warning",
+                "skill-content",
+                f"Skill {d.name} has invalid OpenAI metadata",
+                "agents/openai.yaml must expose display_name, short_description and a default_prompt with the canonical skill invocation.",
+                meta_issues,
+                f"Update {rel(oy,root)} so default_prompt contains ${d.name} and required interface fields are populated.",
+                [rel(oy,root)],
+            )
         sc=txt(sm)
         miss_sec=[s for s in SECTIONS if s not in sc]
         add_check(checks,f"skill-sections:{d.name}","warn" if miss_sec else "pass","Skill section check.",[rel(sm,root)])
@@ -362,6 +380,36 @@ def audit(root:Path):
                     "The writer skill should stay a compact entrypoint; deep workflow belongs in writer workflow references.",
                     [f"{size} bytes"],
                     "Move procedural workflow back into references/agent/writer-*-workflow.md and keep SKILL.md below 20 KiB.",
+                    [rel(sm,root)],
+                )
+        if d.name=="ft-test-case-reviewer":
+            size=sm.stat().st_size
+            lines=sc.splitlines()
+            add_check(checks,"reviewer-skill-runtime-size","warn" if size>=REVIEWER_SKILL_SIZE_LIMIT else "pass",f"{round(size/1024,1)} KiB / {round(REVIEWER_SKILL_SIZE_LIMIT/1024,1)} KiB",[rel(sm,root)])
+            if size>=REVIEWER_SKILL_SIZE_LIMIT:
+                add_finding(
+                    findings,
+                    "reviewer-skill-runtime-size",
+                    "warning",
+                    "skill-content",
+                    "Reviewer skill is too large for runtime loading",
+                    "The reviewer skill should stay a compact entrypoint; detailed defect taxonomy belongs in canonical references.",
+                    [f"{size} bytes",f"{len(lines)} lines"],
+                    "Move detailed reviewer rules into references/qa/test-design-review-rubric.md or references/agent/test-design-defect-taxonomy.md and keep SKILL.md below 30 KiB.",
+                    [rel(sm,root)],
+                )
+            marker_lines=[line.strip() for line in lines if any(marker in line for marker in REVIEWER_DEFECT_MARKERS)]
+            add_check(checks,"reviewer-skill-defect-taxonomy-density","warn" if len(marker_lines)>REVIEWER_DEFECT_MARKER_LIMIT else "pass",f"{len(marker_lines)} marker lines / {REVIEWER_DEFECT_MARKER_LIMIT}",[rel(sm,root)])
+            if len(marker_lines)>REVIEWER_DEFECT_MARKER_LIMIT:
+                add_finding(
+                    findings,
+                    "reviewer-skill-defect-taxonomy-density",
+                    "warning",
+                    "skill-content",
+                    "Reviewer skill duplicates detailed defect taxonomy",
+                    "Too many detailed defect-rule markers in the reviewer skill suggest taxonomy content drifted out of canonical references.",
+                    marker_lines[:8],
+                    "Keep only workflow-level reviewer instructions in SKILL.md and move detailed defect rules to the rubric/taxonomy references.",
                     [rel(sm,root)],
                 )
         local_refs=d/"references"
@@ -400,9 +448,11 @@ def audit(root:Path):
             add_check(checks,f"orphan-reference:{rp.name}","warn","Orphan shared reference detected.",[r])
             add_finding(findings,f"orphan-reference:{rp.name}","warning","references",f"Shared reference {rp.name} is orphaned","A canonical reference exists but is not linked from the active agent layer.","Either link the reference from the relevant skill or remove it from the shared layer.",[r])
 
-    for sp in sorted(root.glob("skills/*/scripts/*.py")):
+    script_paths=sorted(root.glob("skills/*/scripts/*.py"))+sorted(root.glob("scripts/*.py"))
+    auditor_path=Path(__file__).resolve()
+    for sp in script_paths:
         r=rel(sp,root)
-        if sp.name=="audit_agent_architecture.py":
+        if sp.resolve()==auditor_path:
             add_check(checks,f"script-stale-markers:{sp.name}","pass","Skipped self-scan to avoid matching the auditor pattern list.",[r])
             continue
         c=txt(sp); hits=[m for m in STALE if m in c];

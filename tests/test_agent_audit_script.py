@@ -128,6 +128,161 @@ class AgentAuditScriptTests(unittest.TestCase):
             finding_ids = {item["id"] for item in payload["findings"]}
             self.assertIn("agents-procedural-workflow", finding_ids)
 
+    def write_fixture_skill(
+        self,
+        fixture_root: Path,
+        skill_name: str,
+        skill_body: str | None = None,
+        default_prompt: str | None = None,
+    ) -> None:
+        skill_dir = fixture_root / "skills" / skill_name
+        (skill_dir / "agents").mkdir(parents=True, exist_ok=True)
+        (fixture_root / "references" / "agent").mkdir(parents=True, exist_ok=True)
+        (fixture_root / "references" / "qa").mkdir(parents=True, exist_ok=True)
+        (fixture_root / "AGENTS.md").write_text("# Agent\n\n- canonical\n", encoding="utf-8")
+        (fixture_root / "skills" / "README.md").write_text(
+            f"# Skills\n\n- `{skill_name}`\n",
+            encoding="utf-8",
+        )
+        (skill_dir / "SKILL.md").write_text(
+            skill_body
+            or dedent(
+                """
+                ---
+                name: sample-skill
+                description: Test fixture.
+                ---
+
+                # Sample
+
+                ## Входы
+
+                - input
+
+                ## Выходы
+
+                - output
+
+                ## Ограничения
+
+                - none
+
+                ## References
+
+                - references/agent/content-placement.md
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
+        (skill_dir / "agents" / "openai.yaml").write_text(
+            dedent(
+                f"""
+                interface:
+                  display_name: "Sample"
+                  short_description: "Sample"
+                  default_prompt: "{default_prompt or f'Use ${skill_name} to do something.'}"
+                """
+            ).strip()
+            + "\n",
+            encoding="utf-8",
+        )
+
+    def test_synthetic_fixture_reports_broken_openai_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_fixture_skill(
+                fixture_root,
+                "sample-skill",
+                default_prompt="Use -sample-skill to do something.",
+            )
+
+            result = self.run_script("--root", str(fixture_root), "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            finding_ids = {item["id"] for item in payload["findings"]}
+            self.assertIn("skill-openai-yaml-invalid:sample-skill", finding_ids)
+
+    def test_synthetic_fixture_accepts_valid_openai_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_fixture_skill(
+                fixture_root,
+                "sample-skill",
+                default_prompt="Use $sample-skill to do something.",
+            )
+
+            result = self.run_script("--root", str(fixture_root), "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            finding_ids = {item["id"] for item in payload["findings"]}
+            self.assertNotIn("skill-openai-yaml-invalid:sample-skill", finding_ids)
+
+    def test_synthetic_fixture_reports_reviewer_defect_taxonomy_density(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            marker_lines = "\n".join(
+                f"- Ставь `error`, если synthetic detailed rule {index}."
+                for index in range(15)
+            )
+            reviewer_skill = dedent(
+                f"""
+                ---
+                name: ft-test-case-reviewer
+                description: Test fixture.
+                ---
+
+                # Reviewer
+
+                ## Входы
+
+                - input
+
+                ## Выходы
+
+                - output
+
+                ## Workflow
+
+                {marker_lines}
+
+                ## References
+
+                - references/agent/test-design-defect-taxonomy.md
+
+                ## Ограничения
+
+                - none
+                """
+            ).strip()
+            self.write_fixture_skill(
+                fixture_root,
+                "ft-test-case-reviewer",
+                skill_body=reviewer_skill,
+                default_prompt="Use $ft-test-case-reviewer to review cases.",
+            )
+
+            result = self.run_script("--root", str(fixture_root), "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            finding_ids = {item["id"] for item in payload["findings"]}
+            self.assertIn("reviewer-skill-defect-taxonomy-density", finding_ids)
+
+    def test_synthetic_fixture_reports_root_script_stale_marker(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            (fixture_root / "scripts").mkdir(parents=True)
+            (fixture_root / "scripts" / "stale.py").write_text(
+                "# uv run ft-test-agent\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_script("--root", str(fixture_root), "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            finding_ids = {item["id"] for item in payload["findings"]}
+            self.assertIn("script-stale-markers:stale", finding_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

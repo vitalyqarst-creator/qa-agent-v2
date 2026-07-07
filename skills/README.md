@@ -16,7 +16,7 @@
 - Если FT-пакет уже выбран, но еще не определен точный фрагмент требований или нужно разбить большое ФТ на scope-ы: `ft-scope-analyzer`.
 - Если scope уже зафиксирован и нужно написать новые кейсы одним writer-pass без review-cycle: `ft-test-case-writer`.
 - Если scope уже зафиксирован и нужно пройти writer-reviewer iteration: `ft-test-case-iteration`.
-- Если нужен новый session-based writer/reviewer cycle в отдельных Codex sessions с двумя semantic review rounds и versioned snapshots: `ft-test-case-iteration`. Он подготавливает и запускает SDK runner; writer/reviewer stages остаются внутренними runtime-сценариями цикла, а не отдельным user-facing route.
+- Если нужен новый session-based writer/reviewer cycle в отдельных Codex sessions с двумя semantic review rounds и versioned snapshots: `ft-test-case-iteration`. Он подготавливает и запускает `scripts/codex_review_cycle_runner.py` по `session-based-review-cycle-format.md` и `codex-sdk-orchestration-format.md`; writer/reviewer stages остаются внутренними runtime-сценариями цикла, а не отдельным user-facing route.
 - Если кейсы уже существуют и нужен review: `ft-test-case-reviewer`.
   По умолчанию он работает в режиме `full` и последовательно выполняет `traceability` -> `structure` -> `test-design`.
 - Если набор уже получил `signed-off` и нужно сверить его с реальным UI перед подготовкой к автотестам: `ft-ui-automation-prep`.

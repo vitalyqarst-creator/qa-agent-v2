@@ -24,6 +24,10 @@ def load_routing() -> dict:
     return json.loads(match.group(1))
 
 
+def route_instruction_scenarios(route: dict) -> list[dict]:
+    return route["instruction_scenarios"] + route.get("internal_instruction_scenarios", [])
+
+
 class TaskStartSkillRoutingTests(unittest.TestCase):
     def setUp(self) -> None:
         self.routing = load_routing()
@@ -64,14 +68,14 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
         routed_scenarios = {
             item["scenario"]
             for route in self.routes
-            for item in route["instruction_scenarios"]
+            for item in route_instruction_scenarios(route)
         }
         self.assertEqual(manifest_scenarios, routed_scenarios)
 
     def test_every_route_scenario_exists_in_manifest(self) -> None:
         manifest_scenarios = {item["id"] for item in self.manifest["scenarios"]}
         for route in self.routes:
-            for item in route["instruction_scenarios"]:
+            for item in route_instruction_scenarios(route):
                 self.assertIn(item["scenario"], manifest_scenarios, route["id"])
 
     def test_golden_examples_match_routes(self) -> None:
@@ -83,6 +87,10 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
                 example["expected_instruction_scenarios"],
                 [item["scenario"] for item in route["instruction_scenarios"]],
             )
+            self.assertEqual(
+                example.get("expected_internal_instruction_scenarios", []),
+                [item["scenario"] for item in route.get("internal_instruction_scenarios", [])],
+            )
 
     def test_representative_route_expectations(self) -> None:
         self.assertEqual(
@@ -93,15 +101,21 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             [
                 "ft-source-locator",
                 "ft-scope-analyzer",
-                "ft-test-case-writer",
-                "ft-test-case-reviewer",
+                "ft-test-case-iteration",
             ],
             self.route_by_id["review_cycle.session_based"]["skill_chain"],
         )
         self.assertEqual(
+            ["source_locator.discovery", "scope.manual", "iteration.full_loop"],
             [
-                "source_locator.discovery",
-                "scope.manual",
+                item["scenario"]
+                for item in self.route_by_id["review_cycle.session_based"][
+                    "instruction_scenarios"
+                ]
+            ],
+        )
+        self.assertEqual(
+            [
                 "reviewer.scope_gap_review",
                 "writer.session_initial_draft",
                 "reviewer.structure_preflight",
@@ -115,10 +129,12 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             [
                 item["scenario"]
                 for item in self.route_by_id["review_cycle.session_based"][
-                    "instruction_scenarios"
+                    "internal_instruction_scenarios"
                 ]
             ],
         )
+        self.assertNotIn("ft-test-case-writer", self.route_by_id["review_cycle.session_based"]["skill_chain"])
+        self.assertNotIn("ft-test-case-reviewer", self.route_by_id["review_cycle.session_based"]["skill_chain"])
         self.assertEqual(
             ["writer.initial_draft.table"],
             [
