@@ -98,6 +98,7 @@ REQUIRED_WORKFLOW_FIELDS = {
 REQUIRED_SOURCE_SELECTION_SECTIONS = {
     "Context",
     "Main FT Documents",
+    "Machine-Readable XHTML Source",
     "Structural Cross-Check PDF",
     "Support Files And Mockups",
     "Source Quality",
@@ -3084,6 +3085,15 @@ def source_selection_routes_downstream(state: dict[str, Any]) -> bool:
     )
 
 
+def source_selection_has_downstream_next_skill(state: dict[str, Any]) -> bool:
+    return state.get("next_skill") in {
+        "ft-scope-analyzer",
+        "ft-test-case-writer",
+        "ft-test-case-iteration",
+        "ft-test-case-reviewer",
+    }
+
+
 def validate_source_selection_artifact(
     path: Path,
     root: Path,
@@ -3139,6 +3149,28 @@ def validate_source_selection_artifact(
 
     context_section = extract_markdown_section(content, "Context") or ""
     context_fields = parse_bullet_context_fields(context_section)
+    xhtml_section = extract_markdown_section(content, "Machine-Readable XHTML Source")
+    xhtml_fields = parse_bullet_context_fields(xhtml_section or "")
+    xhtml_available = normalize_markdown_field_value(xhtml_fields.get("xhtml_available", "")).lower()
+    xhtml_missing_or_unconfirmed = xhtml_available != "yes"
+
+    if xhtml_section is None:
+        findings.append(
+            Finding(
+                id="source-selection-missing-xhtml-section",
+                severity="warning",
+                category="source-selection",
+                title="source-selection.md misses mandatory XHTML source section",
+                details="Main FT XHTML availability must be recorded before scope, writer, reviewer or iteration routing.",
+                path=display_path,
+                evidence=["Machine-Readable XHTML Source"],
+                recommended_action="Add `Machine-Readable XHTML Source` with `xhtml_available: yes | no`.",
+            )
+        )
+        checks.append(Check("source-selection-xhtml-section", "fail", "Mandatory XHTML source section is missing.", display_path))
+    else:
+        checks.append(Check("source-selection-xhtml-section", "pass", "Mandatory XHTML source section is present.", display_path))
+
     missing_context_fields = sorted(REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS - set(context_fields))
     if missing_context_fields:
         findings.append(
@@ -3175,6 +3207,40 @@ def validate_source_selection_artifact(
         checks.append(Check("source-selection-status", "fail", "selection_status is invalid.", display_path))
     elif raw_status:
         checks.append(Check("source-selection-status", "pass", "selection_status is canonical.", display_path))
+
+    if selection_status == "selected" and xhtml_missing_or_unconfirmed:
+        findings.append(
+            Finding(
+                id="workflow-state-source-selection-missing-required-xhtml",
+                severity="error",
+                category="source-selection",
+                title="Selected source selection lacks required main FT XHTML",
+                details="`selection_status: selected` is allowed only when main FT XHTML is confirmed with `xhtml_available: yes`.",
+                path=display_path,
+                evidence=[f"xhtml_available={xhtml_fields.get('xhtml_available', '<missing>')}"],
+                recommended_action="Set `selection_status: blocked-input` until matching main FT XHTML is added under `source/`.",
+            )
+        )
+        checks.append(Check("source-selection-required-xhtml", "fail", "Selected source selection lacks XHTML.", display_path))
+    elif selection_status:
+        checks.append(Check("source-selection-required-xhtml", "pass", "XHTML availability matches selection status.", display_path))
+
+    if xhtml_missing_or_unconfirmed and source_selection_has_downstream_next_skill(state):
+        findings.append(
+            Finding(
+                id="workflow-state-source-selection-xhtml-missing-routes-downstream",
+                severity="error",
+                category="workflow-state",
+                title="Workflow routes downstream without mandatory main FT XHTML",
+                details="Missing or unconfirmed XHTML must keep the workflow blocked before scope, writer, reviewer or iteration work.",
+                path=rel(workflow_path, root),
+                evidence=[f"{rel(path, root)} xhtml_available={xhtml_fields.get('xhtml_available', '<missing>')}", f"next_skill={state.get('next_skill')}"],
+                recommended_action="Set `next_skill: none` or keep the workflow blocked until `xhtml_available: yes` is confirmed.",
+            )
+        )
+        checks.append(Check("workflow-state-source-selection-xhtml", "fail", "Missing XHTML routes downstream.", rel(workflow_path, root)))
+    else:
+        checks.append(Check("workflow-state-source-selection-xhtml", "pass", "XHTML routing guard passed.", rel(workflow_path, root)))
 
     if selection_status and selection_status != "selected" and source_selection_routes_downstream(state):
         findings.append(

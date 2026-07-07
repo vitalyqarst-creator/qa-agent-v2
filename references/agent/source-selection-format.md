@@ -58,6 +58,7 @@ Additional validator content checks:
 - If `selection_status` is not `selected`, workflow must remain blocked and must not route to `ft-scope-analyzer`, writer, iteration, or reviewer.
 - `Machine-Readable XHTML Source` must include `xhtml_available: yes | no`.
 - If the matching main FT XHTML is missing, source selection must use `selection_status: blocked-input`, set `xhtml_available: no`, and must not route to `ft-scope-analyzer`, writer, iteration or reviewer.
+- XHTML availability and downstream routing are validator-enforced for linked `source-selection.md` / `workflow-state.yaml` artifacts.
 
 ## Required Sections
 
@@ -199,7 +200,7 @@ Additional validator findings:
 - `source-selection-invalid-selection-status`: `selection_status` is outside `selected | ambiguous | blocked-input`.
 - `workflow-state-source-selection-not-selected`: workflow routes downstream while `source-selection.md` is still `ambiguous` or `blocked-input`.
 
-Instruction-only XHTML findings for this branch:
+Validator-enforced XHTML findings:
 
 - `source-selection-missing-xhtml-section`: `source-selection.md` misses `Machine-Readable XHTML Source`.
 - `workflow-state-source-selection-missing-required-xhtml`: `selection_status = selected`, but `xhtml_available != yes`.
