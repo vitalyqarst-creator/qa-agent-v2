@@ -28,6 +28,10 @@ REQ_QA={
 }
 STALE=("uv run ft-test-agent"," ft-test-agent "," list-sections ","skills/ft-test-case-writer/references","/output/")
 SECTIONS=("## Входы","## Выходы","## Ограничения")
+OPENAI_YAML_REQUIRED_FIELDS=("display_name","short_description","default_prompt")
+REVIEWER_SKILL_SIZE_LIMIT=30*1024
+REVIEWER_DEFECT_MARKER_LIMIT=12
+REVIEWER_DEFECT_MARKERS=("Ставь `error`","Ставь error","Ставь","проверь","Проверяй","generic","smell")
 INSTRUCTION_CONTEXT_SCENARIOS=(
     "source_locator.discovery",
     "writer.initial_draft.simple",
@@ -71,6 +75,26 @@ def root_default()->Path:
 def txt(path:Path)->str:
     try:return path.read_text(encoding="utf-8")
     except FileNotFoundError:return ""
+
+def unquote_yaml_scalar(value:str)->str:
+    value=value.strip()
+    if len(value)>=2 and value[0]==value[-1] and value[0] in {"'",'"'}:
+        return value[1:-1]
+    return value
+
+def parse_openai_yaml_fields(content:str)->dict[str,str]:
+    fields={}
+    for raw in content.splitlines():
+        match=re.match(r"^\s*([A-Za-z_][\w-]*)\s*:\s*(.*?)\s*$",raw)
+        if not match:
+            continue
+        key,value=match.groups()
+        if key in OPENAI_YAML_REQUIRED_FIELDS:
+            fields[key]=unquote_yaml_scalar(value)
+    return fields
+
+def route_instruction_entries(route:dict)->list[dict]:
+    return list(route.get("instruction_scenarios",[]))+list(route.get("internal_instruction_scenarios",[]))
 
 def rel(path:Path,root:Path)->str:
     try:return path.relative_to(root).as_posix()
