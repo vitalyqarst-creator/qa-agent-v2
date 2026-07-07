@@ -24,10 +24,12 @@ fts/
     README.md          # краткая карточка конкретного FT-пакета
 ```
 
-Для межэтапного handoff внутри `work/` используются две канонические зоны:
+Для межэтапного handoff и активного writer/reviewer cycle внутри `work/` используются две актуальные зоны:
 
 - `stage-handoffs/<scope-slug>/` — `workflow-state.yaml`, scope contract и prompt-файлы для следующего этапа;
-- `review-loops/<scope-slug>/` — findings, traceability matrix, writer response, loop summary и snapshots.
+- `review-cycles/<scope-slug>/` — active session-based writer/reviewer cycle: `cycle-state.yaml`, prompts, outputs, traceability matrix, writer response и versioned snapshots.
+
+`review-loops/<scope-slug>/` может встречаться только как legacy-only historical evidence для старых запусков. Новые review-cycle artifacts пишутся в `work/review-cycles/<scope-slug>/`.
 
 Такая структура нужна для двух вещей:
 

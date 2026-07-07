@@ -6,7 +6,8 @@ It does not replace `skills/README.md` or `instruction-loading-manifest.md`:
 
 - `skills/README.md` remains the human dispatch map for active skills.
 - `instruction-loading-manifest.md` remains the source of instruction groups and budgets.
-- This file connects task types to skill chains and manifest scenarios.
+- This file connects task types to user-facing skill chains and manifest scenarios.
+- A route may also list `internal_instruction_scenarios` for runner-owned stages. These scenarios prove manifest reachability, but they are not a manual skill chain and must not override `skill_chain`.
 
 ## Preflight Disclosure
 
@@ -158,19 +159,22 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     {
       "id": "review_cycle.session_based",
       "task_type": "Run a session-based writer/reviewer cycle with separate Codex sessions, max two semantic review rounds, versioned snapshots and final format review.",
-      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
+      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
       "instruction_scenarios": [
         {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
         {"skill": "ft-scope-analyzer", "scenario": "scope.manual"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.scope_gap_review"},
-        {"skill": "ft-test-case-writer", "scenario": "writer.session_initial_draft"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.structure_preflight"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.semantic_traceability_test_design"},
-        {"skill": "ft-test-case-writer", "scenario": "writer.session_semantic_revision"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.structure_format_final"},
-        {"skill": "ft-test-case-writer", "scenario": "writer.session_format_revision"},
-        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.semantic_regression"},
-        {"skill": "codex-sdk-runner", "scenario": "sdk_orchestration.review_cycle"}
+        {"skill": "ft-test-case-iteration", "scenario": "iteration.full_loop"}
+      ],
+      "internal_instruction_scenarios": [
+        {"stage": "scope-gap-review", "skill": "ft-test-case-reviewer", "scenario": "reviewer.scope_gap_review"},
+        {"stage": "writer-r1", "skill": "ft-test-case-writer", "scenario": "writer.session_initial_draft"},
+        {"stage": "structure-preflight-r1", "skill": "ft-test-case-reviewer", "scenario": "reviewer.structure_preflight"},
+        {"stage": "semantic-review", "skill": "ft-test-case-reviewer", "scenario": "reviewer.semantic_traceability_test_design"},
+        {"stage": "writer-r2", "skill": "ft-test-case-writer", "scenario": "writer.session_semantic_revision"},
+        {"stage": "format-review-final", "skill": "ft-test-case-reviewer", "scenario": "reviewer.structure_format_final"},
+        {"stage": "writer-format-final", "skill": "ft-test-case-writer", "scenario": "writer.session_format_revision"},
+        {"stage": "semantic-regression-final", "skill": "ft-test-case-reviewer", "scenario": "reviewer.semantic_regression"},
+        {"stage": "sdk-runner", "skill": "codex-sdk-runner", "scenario": "sdk_orchestration.review_cycle"}
       ],
       "verification_gates": ["cycle-state.yaml exists", "codex-session-map.yaml records each stage thread", "semantic review does not exceed two rounds", "version snapshots have snapshot-manifest.yaml", "signed-off requires semantic pass, format pass and semantic regression when format changed"]
     },
@@ -238,8 +242,9 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     {
       "prompt": "Run writer and reviewer in separate Codex sessions with two semantic review rounds and snapshots.",
       "expected_route_id": "review_cycle.session_based",
-      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
-      "expected_instruction_scenarios": ["source_locator.discovery", "scope.manual", "reviewer.scope_gap_review", "writer.session_initial_draft", "reviewer.structure_preflight", "reviewer.semantic_traceability_test_design", "writer.session_semantic_revision", "reviewer.structure_format_final", "writer.session_format_revision", "reviewer.semantic_regression", "sdk_orchestration.review_cycle"]
+      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
+      "expected_instruction_scenarios": ["source_locator.discovery", "scope.manual", "iteration.full_loop"],
+      "expected_internal_instruction_scenarios": ["reviewer.scope_gap_review", "writer.session_initial_draft", "reviewer.structure_preflight", "reviewer.semantic_traceability_test_design", "writer.session_semantic_revision", "reviewer.structure_format_final", "writer.session_format_revision", "reviewer.semantic_regression", "sdk_orchestration.review_cycle"]
     },
     {
       "prompt": "Проведи writer-reviewer iteration до sign-off.",
@@ -268,5 +273,6 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
 - Add a route only when it changes skill selection or instruction scenario selection.
 - Every route skill must exist in `skills/README.md`.
 - Every route scenario must exist in `instruction-loading-manifest.md`.
-- Every manifest scenario should be reachable from at least one route.
+- Every manifest scenario should be reachable from at least one route through `instruction_scenarios` or `internal_instruction_scenarios`.
+- `internal_instruction_scenarios` are runner/internal stages; they must not be treated as a competing user-facing `skill_chain`.
 - Golden examples must point to route ids and scenarios from this JSON block.
