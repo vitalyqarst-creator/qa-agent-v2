@@ -138,6 +138,11 @@ ALLOWED_FINDING_CATEGORIES = {
 }
 COVERAGE_DEPTH_PROFILES = {"simple", "standard", "deep"}
 ARTIFACT_MODES = {"compact", "standard", "full"}
+DEPTH_INHERITANCE_SENTINELS = {
+    "inherited",
+    "inherited-from-scope-contract",
+    "scope-contract",
+}
 TC_SET_OPTIMIZATION_REQUIRED_ITEMS = {
     "duplicate-checks",
     "excessive-fragmentation",
@@ -3712,7 +3717,18 @@ def normalized_depth_value(value: str | None) -> str:
 
 def meaningful_depth_value(value: str | None) -> bool:
     normalized = normalized_depth_value(value)
-    return normalized not in {"", "-", "none", "no", "n/a", "na", "not-applicable", "not_applicable"}
+    return normalized not in {
+        "",
+        "-",
+        "none",
+        "no",
+        "n/a",
+        "na",
+        "not-applicable",
+        "not_applicable",
+        "todo",
+        "tbd",
+    }
 
 
 def extract_depth_fields_from_content(content: str) -> dict[str, str]:
@@ -6167,6 +6183,11 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-package-design-plan-missing",
     "test-case-package-design-plan-empty",
     "test-case-package-design-plan-missing-columns",
+    "test-case-package-design-plan-missing-depth-profile",
+    "test-case-package-design-plan-invalid-depth-profile",
+    "test-case-package-design-plan-missing-artifact-mode",
+    "test-case-package-design-plan-invalid-artifact-mode",
+    "test-case-package-design-plan-missing-depth-rationale",
     "test-case-package-design-plan-missing-package",
     "test-case-package-design-plan-missing-atoms",
     "test-case-package-design-plan-missing-tc-or-gap",
@@ -9982,6 +10003,15 @@ def validate_package_test_design_plan(
         checks.append(Check("test-case-package-design-plan", "warn", "Package Test Design Plan is empty.", display_path))
         return findings, checks
 
+    metadata_findings, _, _ = validate_package_plan_depth_metadata(
+        plan_section,
+        related_scope_contract_fields(path, root),
+        id_prefix="test-case-package-design-plan",
+        severity=plan_severity,
+        display_path=display_path,
+    )
+    findings.extend(metadata_findings)
+
     header = normalize_table_header(rows[0])
     missing_columns = sorted(PACKAGE_DESIGN_PLAN_REQUIRED_COLUMNS - set(header))
     if missing_columns:
@@ -10439,6 +10469,7 @@ def validate_package_test_design_plan(
         or missing_conditional_branch_rows
         or missing_positive_acceptance_rows
         or tc_reused_by_plan_rows
+        or metadata_findings
     )
     checks.append(
         Check(
@@ -10661,6 +10692,145 @@ def related_scope_contract_fields(path: Path, root: Path) -> dict[str, str]:
     return {}
 
 
+def validate_package_plan_depth_metadata(
+    section: str,
+    scope_fields: dict[str, str],
+    *,
+    id_prefix: str,
+    severity: str,
+    display_path: str,
+) -> tuple[list[Finding], str, str]:
+    findings: list[Finding] = []
+    fields = extract_depth_fields_from_content(section)
+
+    raw_profile = fields.get("coverage_depth_profile")
+    raw_mode = fields.get("artifact_mode")
+    raw_rationale = fields.get("depth_rationale")
+    profile = normalized_depth_value(raw_profile)
+    artifact_mode = normalized_depth_value(raw_mode)
+    rationale = normalized_depth_value(raw_rationale)
+
+    effective_profile = profile
+    effective_artifact_mode = artifact_mode
+    inherits_profile = profile in DEPTH_INHERITANCE_SENTINELS
+    inherits_mode = artifact_mode in DEPTH_INHERITANCE_SENTINELS
+
+    if not meaningful_depth_value(raw_profile):
+        findings.append(
+            Finding(
+                id=f"{id_prefix}-missing-depth-profile",
+                severity=severity,
+                category="test-design-depth",
+                title="Package Test Design Plan has no coverage depth profile",
+                details=(
+                    "Package Test Design Plan must declare `coverage_depth_profile` or explicitly inherit it "
+                    "from `scope-contract.md`."
+                ),
+                path=display_path,
+                evidence=["coverage_depth_profile missing"],
+                recommended_action=(
+                    "Add `coverage_depth_profile: simple | standard | deep`, or "
+                    "`coverage_depth_profile: inherited-from-scope-contract` with scope-contract rationale."
+                ),
+            )
+        )
+        effective_profile = ""
+    elif profile not in COVERAGE_DEPTH_PROFILES and not inherits_profile:
+        findings.append(
+            Finding(
+                id=f"{id_prefix}-invalid-depth-profile",
+                severity=severity,
+                category="test-design-depth",
+                title="Package Test Design Plan has invalid coverage depth profile",
+                details=(
+                    "coverage_depth_profile must be `simple`, `standard`, `deep`, "
+                    "`inherited-from-scope-contract`, `inherited` or `scope-contract`."
+                ),
+                path=display_path,
+                evidence=[f"coverage_depth_profile={profile}"],
+                recommended_action="Use a valid depth profile or explicit scope-contract inheritance sentinel.",
+            )
+        )
+        effective_profile = ""
+    elif inherits_profile:
+        effective_profile = normalized_depth_value(
+            scope_fields.get("coverage_depth_profile") or scope_fields.get("recommended_coverage_depth_profile")
+        )
+        if effective_profile not in COVERAGE_DEPTH_PROFILES:
+            effective_profile = ""
+
+    if not meaningful_depth_value(raw_mode):
+        findings.append(
+            Finding(
+                id=f"{id_prefix}-missing-artifact-mode",
+                severity=severity,
+                category="test-design-depth",
+                title="Package Test Design Plan has no artifact mode",
+                details=(
+                    "Package Test Design Plan must declare `artifact_mode` or explicitly inherit it "
+                    "from `scope-contract.md`."
+                ),
+                path=display_path,
+                evidence=["artifact_mode missing"],
+                recommended_action=(
+                    "Add `artifact_mode: compact | standard | full`, or "
+                    "`artifact_mode: inherited-from-scope-contract` with scope-contract rationale."
+                ),
+            )
+        )
+        effective_artifact_mode = ""
+    elif artifact_mode not in ARTIFACT_MODES and not inherits_mode:
+        findings.append(
+            Finding(
+                id=f"{id_prefix}-invalid-artifact-mode",
+                severity=severity,
+                category="test-design-depth",
+                title="Package Test Design Plan has invalid artifact mode",
+                details=(
+                    "artifact_mode must be `compact`, `standard`, `full`, "
+                    "`inherited-from-scope-contract`, `inherited` or `scope-contract`."
+                ),
+                path=display_path,
+                evidence=[f"artifact_mode={artifact_mode}"],
+                recommended_action="Use a valid artifact mode or explicit scope-contract inheritance sentinel.",
+            )
+        )
+        effective_artifact_mode = ""
+    elif inherits_mode:
+        effective_artifact_mode = normalized_depth_value(
+            scope_fields.get("artifact_mode") or scope_fields.get("artifact_mode_recommendation")
+        )
+        if effective_artifact_mode not in ARTIFACT_MODES:
+            effective_artifact_mode = ""
+
+    inherited = inherits_profile or inherits_mode
+    rationale_mentions_scope = bool(
+        raw_rationale
+        and re.search(r"scope-contract\.md|scope contract|scope complexity assessment", raw_rationale, flags=re.IGNORECASE)
+    )
+    if not meaningful_depth_value(raw_rationale) or (inherited and not rationale_mentions_scope):
+        findings.append(
+            Finding(
+                id=f"{id_prefix}-missing-depth-rationale",
+                severity=severity,
+                category="test-design-depth",
+                title="Package Test Design Plan has no depth rationale",
+                details=(
+                    "depth_rationale must explain the selected profile/mode. Inherited metadata must point "
+                    "to `scope-contract.md` / Scope Complexity Assessment."
+                ),
+                path=display_path,
+                evidence=[f"depth_rationale={rationale or 'missing'}"],
+                recommended_action=(
+                    "Add a source/risk rationale, or `See scope-contract.md / Scope Complexity Assessment.` "
+                    "when using inherited metadata."
+                ),
+            )
+        )
+
+    return findings, effective_profile, effective_artifact_mode
+
+
 def package_plan_rows_and_counts(section: str) -> tuple[list[dict[str, str]], int, int]:
     rows = markdown_table_rows_from_text(section)
     if not rows:
@@ -10720,31 +10890,20 @@ def validate_package_test_design_depth(path: Path, root: Path) -> tuple[list[Fin
         return findings, checks
 
     section = extract_package_plan_section_or_content(content)
-    fields = related_scope_contract_fields(path, root)
-    fields.update(extract_depth_fields_from_content(content))
-    profile = normalized_depth_value(
-        fields.get("coverage_depth_profile") or fields.get("recommended_coverage_depth_profile")
+    scope_fields = related_scope_contract_fields(path, root)
+    metadata_findings, profile, artifact_mode = validate_package_plan_depth_metadata(
+        content,
+        scope_fields,
+        id_prefix="package-design-plan",
+        severity="warning",
+        display_path=display_path,
     )
-    artifact_mode = normalized_depth_value(fields.get("artifact_mode") or fields.get("artifact_mode_recommendation"))
-    high_risk_dimensions = fields.get("high_risk_dimensions", "")
+    findings.extend(metadata_findings)
+    high_risk_dimensions = scope_fields.get("high_risk_dimensions", "")
     plan_rows, plan_row_count, tc_count = package_plan_rows_and_counts(section)
     has_high_risk = meaningful_depth_value(high_risk_dimensions)
     has_over_testing_risk = bool(re.search(r"over[-_ ]testing|over[-_ ]test", content, flags=re.IGNORECASE))
     has_optimization = tc_set_optimization_present(path, content)
-
-    if not profile:
-        findings.append(
-            Finding(
-                id="package-design-plan-missing-depth-profile",
-                severity="warning",
-                category="test-design-depth",
-                title="Package Test Design Plan has no coverage depth profile",
-                details="Package Test Design Plan must state `coverage_depth_profile` or rely on a linked scope-contract profile.",
-                path=display_path,
-                evidence=["coverage_depth_profile missing"],
-                recommended_action="Add `coverage_depth_profile: simple | standard | deep` and `artifact_mode`, or link/read the scope-contract profile.",
-            )
-        )
 
     if profile == "deep" and not has_optimization:
         findings.append(
@@ -10810,6 +10969,10 @@ def validate_package_test_design_depth(path: Path, root: Path) -> tuple[list[Fin
         finding.id
         in {
             "package-design-plan-missing-depth-profile",
+            "package-design-plan-invalid-depth-profile",
+            "package-design-plan-missing-artifact-mode",
+            "package-design-plan-invalid-artifact-mode",
+            "package-design-plan-missing-depth-rationale",
             "deep-scope-missing-tc-set-optimization",
             "standard-large-scope-missing-tc-set-optimization",
             "simple-scope-unnecessary-full-artifact-chain",

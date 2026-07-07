@@ -254,6 +254,33 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/qa/test-case-runtime-format.md", paths)
         self.assertIn("references/agent/session-log-format.md", paths)
 
+    def test_test_design_depth_policy_loads_for_scope_reviewer_and_iteration(self) -> None:
+        for scenario_id in (
+            "scope.manual",
+            "reviewer.full_existing_cases",
+            "reviewer.semantic_traceability_test_design",
+            "iteration.full_loop",
+        ):
+            with self.subTest(scenario_id=scenario_id):
+                payload = self.resolve_json("--scenario", scenario_id)
+                paths = {item["path"] for item in payload["files"]}
+
+                self.assertEqual("pass", payload["budget"]["status"])
+                self.assertIn("references/agent/test-design-depth-policy.md", paths)
+
+    def test_tc_set_optimization_format_loads_for_reviewer_and_iteration(self) -> None:
+        for scenario_id in (
+            "reviewer.full_existing_cases",
+            "reviewer.semantic_traceability_test_design",
+            "iteration.full_loop",
+        ):
+            with self.subTest(scenario_id=scenario_id):
+                payload = self.resolve_json("--scenario", scenario_id)
+                paths = {item["path"] for item in payload["files"]}
+
+                self.assertEqual("pass", payload["budget"]["status"])
+                self.assertIn("references/agent/tc-set-optimization-format.md", paths)
+
     def test_session_reviewer_contexts_are_split_by_review_purpose(self) -> None:
         structure = self.resolve_json("--scenario", "reviewer.structure_preflight")
         semantic = self.resolve_json("--scenario", "reviewer.semantic_traceability_test_design")

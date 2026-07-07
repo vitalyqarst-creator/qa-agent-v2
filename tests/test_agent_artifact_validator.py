@@ -553,6 +553,10 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                 [
                     "## Package Test Design Plan",
                     "",
+                    "coverage_depth_profile: `inherited-from-scope-contract`",
+                    "artifact_mode: `inherited-from-scope-contract`",
+                    "depth_rationale: `See scope-contract.md / Scope Complexity Assessment.`",
+                    "",
                     "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
                     "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
                     "| PD-001 | WP-01 | visibility | GSR 1 | ATOM-001 | Open the form | positive | visible-state | standard | The documented form is open. | GSR 1 | TC-SAMPLE-001 | covered |",
@@ -656,6 +660,35 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         return {finding["id"] for finding in payload["findings"]}
+
+    def write_embedded_package_plan_with_metadata(self, path: Path, metadata_lines: list[str]) -> None:
+        self.write_minimal_test_case_file(path)
+        path.write_text(
+            path.read_text(encoding="utf-8")
+            + "\n\n"
+            + "\n".join(
+                [
+                    "## Package Test Design Plan",
+                    "",
+                    *metadata_lines,
+                    "",
+                    "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                    "| PD-001 | WP-01 | equivalence | GSR 1 | ATOM-001 | Check visible source-backed behavior | positive | visible-state | standard | The documented result is visible. | GSR 1 | TC-SAMPLE-001 | covered |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def embedded_package_plan_metadata_finding_ids(self, metadata_lines: list[str]) -> set[str]:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            path = root / "test-cases" / "sample.md"
+            self.write_embedded_package_plan_with_metadata(path, metadata_lines)
+            result = self.run_validator("--root", str(root), "--json")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            return {finding["id"] for finding in payload["findings"]}
 
     def test_depth_policy_valid_simple_scope_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -762,6 +795,65 @@ class AgentArtifactValidatorTests(unittest.TestCase):
 
         self.assertNotIn("standard-large-scope-missing-tc-set-optimization", finding_ids)
         self.assertNotIn("package-design-plan-missing-depth-profile", finding_ids)
+
+    def test_package_design_plan_explicit_depth_metadata_passes(self) -> None:
+        finding_ids = self.embedded_package_plan_metadata_finding_ids(
+            [
+                "coverage_depth_profile: `standard`",
+                "artifact_mode: `standard`",
+                "depth_rationale: `Standard profile: validation rules exist but no high-risk/table-heavy signals.`",
+            ]
+        )
+
+        self.assertNotIn("test-case-package-design-plan-missing-depth-profile", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-invalid-depth-profile", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-missing-artifact-mode", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-invalid-artifact-mode", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-missing-depth-rationale", finding_ids)
+
+    def test_package_design_plan_missing_depth_metadata_warns(self) -> None:
+        finding_ids = self.embedded_package_plan_metadata_finding_ids([])
+
+        self.assertIn("test-case-package-design-plan-missing-depth-profile", finding_ids)
+        self.assertIn("test-case-package-design-plan-missing-artifact-mode", finding_ids)
+        self.assertIn("test-case-package-design-plan-missing-depth-rationale", finding_ids)
+
+    def test_package_design_plan_invalid_depth_profile_warns(self) -> None:
+        finding_ids = self.embedded_package_plan_metadata_finding_ids(
+            [
+                "coverage_depth_profile: `tiny`",
+                "artifact_mode: `standard`",
+                "depth_rationale: `Invalid profile canary.`",
+            ]
+        )
+
+        self.assertIn("test-case-package-design-plan-invalid-depth-profile", finding_ids)
+
+    def test_package_design_plan_inherited_depth_metadata_passes(self) -> None:
+        finding_ids = self.embedded_package_plan_metadata_finding_ids(
+            [
+                "coverage_depth_profile: `inherited-from-scope-contract`",
+                "artifact_mode: `inherited-from-scope-contract`",
+                "depth_rationale: `See scope-contract.md / Scope Complexity Assessment.`",
+            ]
+        )
+
+        self.assertNotIn("test-case-package-design-plan-missing-depth-profile", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-invalid-depth-profile", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-missing-artifact-mode", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-invalid-artifact-mode", finding_ids)
+        self.assertNotIn("test-case-package-design-plan-missing-depth-rationale", finding_ids)
+
+    def test_package_design_plan_empty_depth_rationale_warns(self) -> None:
+        finding_ids = self.embedded_package_plan_metadata_finding_ids(
+            [
+                "coverage_depth_profile: `standard`",
+                "artifact_mode: `standard`",
+                "depth_rationale: `-`",
+            ]
+        )
+
+        self.assertIn("test-case-package-design-plan-missing-depth-rationale", finding_ids)
 
     def write_test_case_file_with_blocking_writer_gates(self, path: Path) -> None:
         self.write_minimal_test_case_file(path)
@@ -10559,6 +10651,10 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     [
                         "# Package Test Design Plan",
                         "",
+                        "coverage_depth_profile: `standard`",
+                        "artifact_mode: `standard`",
+                        "depth_rationale: `Standard numeric taxonomy fixture with split design artifacts and unresolved invalid-class oracle gap.`",
+                        "",
                         "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
                         "| `PLAN-V25-001` | `WP-01` | numeric positive | PDF p.1 row 1 | `ATOM-001` | Enter `123`. | positive-input | `valid-digits` | `123` | Amount contains `123`. | PDF p.1 row 1 | `TC-V25-001` | `covered` |",
@@ -11041,6 +11137,10 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                 "\n".join(
                     [
                         "# Package Test Design Plan",
+                        "",
+                        "coverage_depth_profile: `standard`",
+                        "artifact_mode: `standard`",
+                        "depth_rationale: `Standard split-artifact fixture with one executable numeric representative.`",
                         "",
                         "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",

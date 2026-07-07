@@ -486,10 +486,10 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "reviewer",
       "mode": "full",
       "scope_profile": "any",
-      "required_groups": ["global_core", "reviewer_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "style_remediation"],
+      "required_groups": ["global_core", "reviewer_core", "reviewer_process_artifacts", "test_design_depth_policy", "tc_set_optimization_artifacts"],
+      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 253,
+      "budget_limit_kib": 257,
       "rationale": "Direct review of an existing test-case set for an already confirmed FT package and scope; includes mandatory semantic rubric, defect taxonomy and dictionary checks."
     },
     {
@@ -519,8 +519,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "reviewer",
       "mode": "semantic_traceability_test_design",
       "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "style_remediation"],
+      "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_core", "reviewer_process_artifacts", "test_design_depth_policy", "tc_set_optimization_artifacts"],
+      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 290,
       "rationale": "Session-based semantic review for traceability and test-design, before format polishing."
@@ -552,8 +552,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "scope",
       "mode": "manual",
       "scope_profile": "any",
-      "required_groups": ["global_core", "source_locator_core", "scope_manual_core"],
-      "conditional_groups": ["test_design_depth_policy", "scope_table_artifacts", "scope_ui_artifacts"],
+      "required_groups": ["global_core", "source_locator_core", "scope_manual_core", "test_design_depth_policy"],
+      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 260,
       "rationale": "Manual scope selection when the user already provides the intended section or boundary."
@@ -574,10 +574,10 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "iteration",
       "mode": "full_loop",
       "scope_profile": "any",
-      "required_groups": ["global_core", "source_locator_core", "scope_manual_core", "iteration_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts", "reviewer_core"],
-      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "required_groups": ["global_core", "source_locator_core", "scope_manual_core", "iteration_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts", "reviewer_core", "test_design_depth_policy", "tc_set_optimization_artifacts"],
+      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 425,
+      "budget_limit_kib": 431,
       "rationale": "End-to-end session-based writer/reviewer orchestration context; includes the lifecycle transition matrix and runner gates. Table/UI details remain conditional to the concrete scope profile and semantic reviewer safeguards remain required."
     },
     {

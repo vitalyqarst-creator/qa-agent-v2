@@ -12,12 +12,24 @@
 
 ## Depth Metadata
 
-Перед таблицей укажи `coverage_depth_profile: simple | standard | deep`, `artifact_mode: compact | standard | full` и `depth_rationale`. `simple` допускает compact plan только для малого low-risk scope; `deep` требует full plan и artifacts по `test-design-depth-policy.md`.
+Перед таблицей укажи `coverage_depth_profile`, `artifact_mode` и `depth_rationale`.
+
+Допустимые значения:
+
+- `coverage_depth_profile: simple | standard | deep`;
+- `artifact_mode: compact | standard | full`;
+- для plan, который наследует depth decision из `scope-contract.md`, используй explicit sentinel `inherited-from-scope-contract`, `inherited` или `scope-contract` и rationale со ссылкой на `scope-contract.md` / `Scope Complexity Assessment`.
+
+Пустые значения, `-`, `n/a` и `todo` недопустимы. `simple` допускает compact plan только для малого low-risk scope; `deep` требует full plan и artifacts по `test-design-depth-policy.md`.
 
 ## Минимальный Формат
 
 ```md
 ## Package Test Design Plan
+
+coverage_depth_profile: `standard`
+artifact_mode: `standard`
+depth_rationale: `Standard profile: source has validation rules, but no high-risk/table-heavy signals.`
 
 | design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
