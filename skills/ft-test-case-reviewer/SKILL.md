@@ -66,6 +66,8 @@ Review only gap quality and routing readiness:
 - each gap has a clear impact, blocking classification and downstream handling rule;
 - each gap with an unresolved decision has a matching analyst-facing item in `scope-clarification-requests.md`;
 - no source-backed requirement was converted into a gap just because writing it is inconvenient;
+- source extraction relied on XHTML when `source-selection.md` requires it;
+- table/list rows present in XHTML were not lost before ledger/TC coverage;
 - no mockup-only detail, internal effect or unsupported expected result is promoted to covered behavior;
 - source parity, row inventory and mockup inventory limitations are carried into gaps or blocking reasons;
 - routing after review is either writer-ready or back to `ft-scope-analyzer`; do not route to UI prep or sign-off from this mode.
@@ -83,6 +85,8 @@ Expected outputs:
 - split test-design artifacts из `work/test-design/<section-id>-<scope-slug>/`, если они есть;
 - релевантный FT-пакет;
 - подтвержденный scope;
+- `source-selection.md` с `xhtml_available: yes`;
+- XHTML-версия основного ФТ как обязательный extraction source для таблиц, строк, списков, вложенных списков и перечней значений;
 - PDF-версия основного ФТ для сверки структуры, если она есть;
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF;
 - `dictionary-inventory.md`, если source/support или split artifacts содержат `dictionary-source` / reference-list rows;
@@ -118,8 +122,10 @@ Expected outputs:
 1. Найди файл тест-кейсов и соответствующий FT-пакет с нужным scope.
 2. Подтверди, что review выполняется только в пределах уже выбранного scope.
 3. Определи `review_mode`. Если режим не указан явно, используй `full`.
-4. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ scope до начала review.
-5. Если для основного ФТ доступны DOCX и PDF, прочитай `source-parity-check.md`. Если artifact отсутствует, зафиксируй blocking traceability finding и не подписывай набор.
+4. Перед review проверь `source-selection.md`: если для нового workflow `xhtml_available != yes`, зафиксируй blocking finding и не подписывай набор.
+5. Проверь, что writer использовал XHTML для таблиц, строк, списков, вложенных списков, перечней значений, source rows и dictionary-source rows. Потеря строк/списков, которые присутствуют в XHTML, является traceability/test-design finding.
+6. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ scope до начала review.
+7. Если для основного ФТ доступны DOCX и PDF, прочитай `source-parity-check.md`. Если artifact отсутствует, зафиксируй blocking traceability finding и не подписывай набор.
 5a. Если подтвержденный UI scope содержит mockup / screen image / `mockups/`, прочитай `mockup-visual-inventory.md`. Если inventory отсутствует, не открыт (`opened != yes`) или не содержит guard `not_used_as_requirement_source = yes`, создай blocking finding. В `structure`/`test-design` pass проверь, что writer использовал mockup для конкретизации UI-шагов, но не вывел из него бизнес-правила, обязательность, validation, allowed values или expected results. Mockup-only элементы без подтверждения ФТ должны быть `GAP-*` / conflict, а не `covered`.
 5b. Если source/support или `source-table-normalization.md` содержит `dictionary-source`, reference-list, tags или фиксированный перечень значений, прочитай `dictionary-inventory.md`. Если inventory отсутствует, неполный, не содержит `DICT-*` для referenced dictionary/list или plan/TC используют только примерные значения вместо inventory, создай finding по `dictionary-closed-set-missing`.
 6. В режиме `traceability` или `full` декомпозируй требования выбранного scope на атомарные утверждения.
@@ -144,7 +150,7 @@ Expected outputs:
     - Если negative transition или submit-blocking TC ссылается на generic valid baseline, проверь `fixture-catalog.md` или полное раскрытие baseline в TC.
     - Если применимы high-risk atoms или combinatorial coverage, проверь `risk-priority-map.md` с `impact x likelihood` и `coverage-metrics.md` с выбранной `2-way | 3-way | t-way` strength.
     - Проверь обязательный package-by-package workflow для каждого scope: `scope-contract.md` должен содержать минимум один internal work package, split artifact `internal-work-package-coverage.md` должен содержать `Internal Work Package Coverage`, каждый `ATOM-*` и каждый `TC-*` должен иметь `package_id`.
-    - Если source является таблицей полей/действий или PDF/DOCX extraction, сначала проверь split artifacts `source-row-inventory.md`, `source-row-completeness-matrix.md`, `source-table-normalization.md`, `dictionary-inventory.md` при наличии справочников и `test-design-decision-table.md`: каждая source row внутри подтвержденного scope должна присутствовать и быть связана с `ATOM-*`, `GAP-*` или out-of-scope решением; строки normalization должны иметь `source_property_id`, быть очищены от table-header residue, соседних полей и extraction-мусора, не объединять несколько independently checkable `GSR`/`REQ` и не смешивать разные semantic property classes в одной строке. `dictionary-source`, `min-boundary`, `max-boundary`, `format`, `visibility`, `requiredness`, `editability`, `integration-prefill` должны быть отдельными normalization rows; `dictionary-source` rows должны ссылаться на `DICT-*` или узкий `GAP-*`; `confidence = low | unclear` требует `GAP-*` и не может быть `covered`; каждая `source_property_id` должна иметь ровно одно решение в `Test Design Decision Table`.
+    - Если source является таблицей полей/действий или PDF/DOCX/XHTML extraction, сначала проверь split artifacts `source-row-inventory.md`, `source-row-completeness-matrix.md`, `source-table-normalization.md`, `dictionary-inventory.md` при наличии справочников и `test-design-decision-table.md`: каждая source row внутри подтвержденного scope должна присутствовать и быть связана с `ATOM-*`, `GAP-*` или out-of-scope решением; строки normalization должны иметь `source_property_id`, быть очищены от table-header residue, соседних полей и extraction-мусора, не объединять несколько independently checkable `GSR`/`REQ` и не смешивать разные semantic property classes в одной строке. `dictionary-source`, `min-boundary`, `max-boundary`, `format`, `visibility`, `requiredness`, `editability`, `integration-prefill` должны быть отдельными normalization rows; `dictionary-source` rows должны ссылаться на `DICT-*` или узкий `GAP-*`; `confidence = low | unclear` требует `GAP-*` и не может быть `covered`; каждая `source_property_id` должна иметь ровно одно решение в `Test Design Decision Table`.
     - Проверь `gap-admissibility`: `gap_unclear` и `metadata_only` не должны скрывать source-backed observable behavior. Если в source/PDF/support указаны подсказка, сообщение, красная подсветка, подтверждение, переход, маска, справочник/теги, date-window boundary, отображаемое сохраненное/несохраненное значение после повторного открытия объекта/раздела или другой pass/fail oracle, reviewer должен требовать `TC-*`/obligation coverage для этой части и узкий `GAP-*` только для реально заблокированной части.
     - Перед проверкой отдельных `TC-*` проверь split artifact `package-test-design-plan.md`: каждый `WP-*` и применимый `ATOM-*` должен иметь planned check или `GAP-*`, validation rules должны быть разложены на positive/negative/equivalence/boundary classes, action/dependency rules — на branches.
     - Проверь, что writer обработал scope package-by-package, не смешал независимые проверки из разных packages в одном `TC-*`, не пометил package покрытым без применения указанного `design_method`, и зафиксировал package ledger gate / package design-plan gate / package TC gate.

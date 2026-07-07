@@ -30,6 +30,7 @@
 
 - `scope-contract.md` обязателен только для подтвержденного scope.
 - При `agent-proposed-scope` не создавай `scope-contract.md` до выбора одного candidate scope.
+- Если `source-selection.md` не подтверждает `xhtml_available: yes`, не создавай `scope-contract.md`; останови workflow как `blocked-input`.
 - В `Разрешенные Источники` явно отделяй допустимые cross-FT ссылки от запрещенного расширения scope.
 - Документ фиксирует рамку работы, а не `coverage gaps`.
 - Если PDF для structural cross-check отсутствует, укажи это явно в секции `Контекст`.
@@ -49,7 +50,9 @@
 ## Контекст
 
 - FT-пакет: `fts/<ft-slug>/...`
-- Основной FT: `...`
+- Основной FT DOCX: `...`
+- Main FT XHTML: `source/<main-ft>.xhtml`
+- XHTML extraction notes: `primary source for tables/lists/rows; limitations | none`
 - PDF для structural cross-check: `есть | нет`
 - `AGENT-NOTES.md`: `есть | нет`
 
@@ -76,7 +79,7 @@
 
 | source | type | usage_rule |
 | --- | --- | --- |
-| `...` | `main-ft | pdf | support | related-ft | mockup` | `...` |
+| `...` | `main-ft-docx | main-ft-xhtml | pdf | support | related-ft | mockup` | `...` |
 
 ## Scope Complexity Assessment
 

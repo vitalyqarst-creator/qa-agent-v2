@@ -13,6 +13,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
 - list `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md` and `workflow-state.yaml`;
 - list `source-parity-check.md`, `source-row-inventory.md`, `mockup-visual-inventory.md` and package `AGENT-NOTES.md` when they exist;
+- require `source-selection.md` to confirm `xhtml_available: yes`; missing XHTML keeps the workflow at `blocked-input` before writer/reviewer routing;
 - explicitly request reviewer mode `scope_gap_review`;
 - require reviewer to check source anchors, blocking classification, clarification requests and downstream handling for every `GAP-*`;
 - forbid reviewer from writing or reviewing test cases in this mode;
@@ -25,6 +26,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 Минимум для каждого `prompt.scope-to-writer.md`:
 
 - перечислить `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`;
+- перечислить `source-selection.md` с `xhtml_available: yes`; если XHTML отсутствует или не подтвержден, не запускай writer и зафиксируй blocking input issue;
 - перечислить `source-parity-check.md`, если доступны DOCX+PDF; если artifact должен быть, но отсутствует, не запускай writer и зафиксируй blocking input issue;
 - перечислить `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий; если artifact должен быть, но отсутствует, не запускай writer и зафиксируй blocking input issue;
 - перечислить `mockup-visual-inventory.md`, если подтвержденный UI scope имеет источник `mockup` / `mockups/` / изображение макета; если mockup есть, но visual inventory отсутствует или `opened != yes`, не запускай writer и зафиксируй blocking input issue;
@@ -45,7 +47,8 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
 - выбранный FT-пакет;
 - package-specific `AGENT-NOTES.md`, если он есть в корне FT-пакета;
-- основной документ ФТ;
+- основной DOCX ФТ как authoritative source of truth;
+- XHTML-версия основного ФТ из `source/` как обязательный машиночитаемый extraction source;
 - PDF-версия основного ФТ для сверки структуры, если она есть;
 - запрос пользователя на конкретную область или функцию.
 
@@ -75,9 +78,12 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 Параллельно веди `agent-decision-log.md` по `agent-decision-log-format.md`: фиксируй decomposition decisions, включение/исключение scope, gap decisions, mockup/source parity decisions и выбор downstream route; свяжи его через `latest_artifacts.decision_log`.
 Для русскоязычных источников перед PowerShell-командами выставляй UTF-8 preamble из `session-log-format.md`; если вывод консоли искажает кириллицу, перечитай источник через явный UTF-8 file/script path, не используй mojibake stdout как evidence и зафиксируй это в `Technical Fallbacks`.
 
-1. Используй `test_case_agent.resolve_sections()` для первичного сужения области.
+1. Перед `resolve_sections()` или любым scope narrowing проверь `source-selection.md`: если `xhtml_available != yes`, останови workflow как `blocked-input`, зафиксируй отсутствие обязательного `main-ft-xhtml` и не создавай `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
+1a. Используй `test_case_agent.resolve_sections()` для первичного сужения области.
+1b. Используй XHTML в первую очередь для машинного извлечения текста, таблиц, строк, списков, вложенных списков, перечней значений, `source-row-inventory.md` и `dictionary-source` rows.
+1c. Используй DOCX как authoritative source for meaning: если XHTML и DOCX расходятся, фиксируй discrepancy / `coverage gap`, а не выбирай по догадке.
 2. Если для FT-пакета есть `AGENT-NOTES.md`, учти его как обязательный package-specific context.
-3. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ выбранного scope.
+3. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ выбранного scope; PDF не заменяет DOCX или XHTML.
 4. Примени `scope-decomposition-policy.md`: если пользователь просит большое ФТ, весь документ или несколько разнородных разделов, сначала создай карту внешних candidate scope-ов по разделам/подразделам ФТ в режиме `agent-proposed-scope`.
 5. При `agent-proposed-scope` сохрани `scope-options.md` и `scope-selection-prompts.md` в контейнере `00-<container-slug>/`; не создавай handoff к writer и не создавай `scope-contract.md`, `source-parity-check.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`, пока пользователь не выбрал один candidate scope.
 5a. Все source/scope handoff artifacts сохраняй только в numbered-папке `fts/<ft-slug>/work/stage-handoffs/NN-<scope-or-container-slug>/`. Не создавай `source-selection.md`, `scope-options.md`, `scope-selection-prompts.md`, `workflow-state.yaml` или session logs в корне FT-пакета.
@@ -86,7 +92,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 8. Зафиксируй, какие требования входят в scope, а какие не входят.
 9. Если для основного ФТ доступны DOCX и PDF, создай `source-parity-check.md` по `source-parity-check-format.md`: сверяй коды требований, таблицы, строки, примечания и границы только выбранного scope.
    Если подтвержденный UI scope содержит mockup / screen image / `mockups/`, открой изображение визуально и создай `mockup-visual-inventory.md` по `mockup-visual-inventory-format.md` до handoff к writer. Инвентарь должен фиксировать видимые блоки, поля, действия, interaction hints, mockup-only элементы, конфликты с ФТ и решение `not_used_as_requirement_source = yes`. Если макет нельзя открыть или проверить визуально, переведи workflow в `blocked-input`, а не передавай writer-у задачу с догадками по UI-шагам.
-9a. Если `source-parity-check.md` содержит секцию `Table / Row Parity` или подтвержденный scope основан на таблице полей/действий, создай отдельный `source-row-inventory.md` по `source-row-inventory-format.md` до handoff к writer. В inventory должны попасть все source rows выбранного scope, включая строки с PDF-only requirement codes и строки, которые могут стать `GAP-*`. Не передавай writer-у табличный scope только с `source-parity-check.md`: writer должен получить независимый row inventory.
+9a. Если `source-parity-check.md` содержит секцию `Table / Row Parity` или подтвержденный scope основан на таблице полей/действий, создай отдельный `source-row-inventory.md` по `source-row-inventory-format.md` до handoff к writer. В inventory должны попасть все source rows выбранного scope, включая rows/list values из XHTML, строки с PDF-only requirement codes и строки, которые могут стать `GAP-*`. Не передавай writer-у табличный scope только с `source-parity-check.md`: writer должен получить независимый row inventory.
 9b. Для табличного scope проверь расшифровку колонок, сокращений и локальных кодов; неподтвержденное значение, влияющее на test design, фиксируй как `GAP-*` типа `missing-source-definition`, а не как догадку.
 10. Перед handoff к writer выполни `Scope Complexity Assessment`: оцени количество полей/блоков, условных зависимостей, validation domains, action flows, integrations/API/async, lifecycle/status rules и ожидаемых gaps.
 11. Добавь в `scope-contract.md` секцию `Внутренние Рабочие Пакеты` для каждого подтвержденного scope. Если scope простой, создай один `WP-01`; если неоднородный, раздели работу на несколько `WP-*`. Не используй внутренние рабочие пакеты как замену внешнему split для всего ФТ.
@@ -96,7 +102,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 15. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для контейнера выбора и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
 16. После подтверждения scope сохрани `scope-contract.md`, `scope-coverage-gaps.md`, `prompt.scope-to-writer.md`, `prompt.scope-to-iteration.md` и `scope-execution-options.md`; если доступна пара DOCX+PDF, сохрани `source-parity-check.md`; если нужен row-level/table parity handoff, сохрани `source-row-inventory.md`; если в gaps есть хотя бы один `GAP-*`, дополнительно сохрани `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`.
 17. В `workflow-state.yaml` укажи один активный downstream `next_skill`, но сохраняй второй prompt в `latest_artifacts` как альтернативный user-facing entrypoint, если он применим. Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, активный downstream до writer: `stage_status: ready-for-gap-review`, `next_skill: ft-test-case-reviewer`, `latest_artifacts.active_transition_prompt: prompt.scope-gaps-to-reviewer.md`.
-18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.
+18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о XHTML extraction notes, source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.
 
 ## Канонические references
 

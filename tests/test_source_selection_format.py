@@ -15,9 +15,15 @@ class SourceSelectionFormatTests(unittest.TestCase):
         self.assertIn("selection_status", content)
         self.assertIn("selected | ambiguous | blocked-input", content)
         self.assertIn("Main FT Documents", content)
+        self.assertIn("Machine-Readable XHTML Source", content)
+        self.assertIn("xhtml_available", content)
+        self.assertIn("yes | no", content)
+        self.assertIn("mandatory_machine_readable_extraction_source", content)
         self.assertIn("Structural Cross-Check PDF", content)
         self.assertIn("Source Quality", content)
         self.assertIn("Support Files And Mockups", content)
+        self.assertIn("workflow-state-source-selection-missing-required-xhtml", content)
+        self.assertIn("workflow-state-source-selection-xhtml-missing-routes-downstream", content)
         self.assertIn("source-selection-missing-required-sections", content)
         self.assertIn("workflow-state-source-selection-not-selected", content)
 
@@ -29,9 +35,26 @@ class SourceSelectionFormatTests(unittest.TestCase):
         self.assertIn("source-selection-format.md", locator)
         self.assertIn("session-log-format.md", locator)
         self.assertIn("source-locator-session-log.md", locator)
+        self.assertIn("main_ft_xhtml", locator)
+        self.assertIn("xhtml_available", locator)
+        self.assertIn("missing main-ft-xhtml", locator)
         self.assertIn("source-selection-format.md", handoff)
         self.assertIn("Source selection", contracts)
         self.assertIn("source-selection-format.md", contracts)
+
+    def test_xhtml_source_policy_is_pinned_in_core_instructions(self) -> None:
+        agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        locator = (ROOT_DIR / "skills" / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")
+        scope = (ROOT_DIR / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(encoding="utf-8")
+        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("DOCX остается главным исходным документом ФТ / source of truth", agents)
+        self.assertIn("XHTML-версии основного ФТ нет", agents)
+        self.assertIn("Не считай source selection завершенным, если main FT XHTML отсутствует", locator)
+        self.assertIn("xhtml_available != yes", scope)
+        self.assertIn("Перед `initial_draft` проверь `source-selection.md`", writer)
+        self.assertIn("writer использовал XHTML", reviewer)
 
     def test_source_locator_prompt_uses_valid_skill_names(self) -> None:
         locator_prompt = (ROOT_DIR / "skills" / "ft-source-locator" / "agents" / "openai.yaml").read_text(encoding="utf-8")

@@ -1,6 +1,6 @@
 # Source Parity Check Format
 
-`source-parity-check.md` фиксирует сверку основного FT DOCX и PDF по подтвержденному scope до writer/reviewer handoff.
+`source-parity-check.md` фиксирует сверку основного FT DOCX и PDF по подтвержденному scope до writer/reviewer handoff. Он не заменяет обязательный main FT XHTML extraction source из `source-selection.md`.
 
 Цель artifact - не дать потерять коды требований, строки таблиц, условия и примечания из-за того, что один способ извлечения документа прочитал меньше данных, чем другой.
 
@@ -27,6 +27,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/source-parity-check.md
 Минимально проверь:
 
 - инвентаризацию источников: DOCX path, PDF path, методы извлечения, релевантные разделы DOCX и страницы PDF;
+- ссылку на XHTML extraction notes/source rows, если таблицы, списки или вложенные списки извлекались из XHTML;
 - границы scope: номера разделов, заголовки, начало/конец блока;
 - коды требований: все `GSR`, `REQ` или локальные коды из DOCX и PDF;
 - таблицы: названия/блоки, строки полей, условия видимости/обязательности/редактируемости, примечания;
@@ -40,6 +41,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/source-parity-check.md
 - Если PDF и DOCX различаются только наличием кода требования, поведение бери из текста/таблицы основного ФТ, но код сохраняй из PDF.
 - Если PDF и DOCX дают разные смысловые требования, не выбирай молча один вариант: зафиксируй `coverage gap` с точной привязкой к обеим версиям.
 - Если extractor DOCX теряет таблицу, строки или коды, зафиксируй `extraction-risk` и используй PDF как контрольную карту навигации и кодов.
+- Если DOCX/PDF extraction теряет список, вложенный список, перечень значений или таблицу, но этот фрагмент есть в XHTML, используй XHTML extraction для row/list inventory и зафиксируй это в downstream source refs.
 
 ## Минимальный шаблон
 
@@ -49,8 +51,10 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/source-parity-check.md
 - FT package: `fts/<ft-slug>`
 - Scope: `<scope-slug>`
 - DOCX source: `source/<main-ft>.docx`
+- XHTML source: `source/<main-ft>.xhtml`
 - PDF source: `source/<main-ft>.pdf`
 - DOCX extraction: `<tool/method>`
+- XHTML extraction: `<tool/method>`
 - PDF extraction: `<tool/method>`
 - DOCX scope refs: `<sections/headings>`
 - PDF scope refs: `<pages/sections>`

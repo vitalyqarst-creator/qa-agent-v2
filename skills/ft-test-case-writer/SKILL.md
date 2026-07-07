@@ -18,6 +18,7 @@ description: Пишет новые ручные тест-кейсы по уже 
 
 - путь к FT-пакету `fts/<ft-slug>/...`;
 - основной документ ФТ;
+- `source-selection.md` с `xhtml_available: yes` и main FT XHTML;
 - PDF-версия основного ФТ для сверки структуры, если она есть;
 - `source-parity-check.md`, если основной ФТ доступен в DOCX и PDF;
 - `source-row-inventory.md`, если handoff требует row-level/table parity;
@@ -43,6 +44,7 @@ description: Пишет новые ручные тест-кейсы по уже 
 ## Runtime Contract Anchors
 
 - Если доступна PDF-версия основного ФТ для сверки структуры, сверяй по ней структуру разделов, коды требований и порядок источника; не используй PDF как замену тексту основного ФТ.
+- Перед `initial_draft` проверь `source-selection.md`: без `xhtml_available: yes` верни `blocked-input`; tables/lists бери из XHTML, DOCX - source of truth, PDF/mockups не заменяют main FT.
 - Если источники не задают поведение, не придумывай поведение, а выноси это в `coverage gaps`.
 - В `revision_from_findings` используй structured findings artifact и traceability matrix artifact; Обрабатывай findings с учетом `review_mode`.
 - Для traceability findings и writer response сохраняй связь `traceability_ref = ATOM-*`.
