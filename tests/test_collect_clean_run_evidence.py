@@ -168,6 +168,13 @@ class CollectCleanRunEvidenceTests(unittest.TestCase):
                     "| `internal-observability` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
                     "| `metadata-only-exclusion` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
                     "| `tc-mapping-atomicity` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `coverage-depth-profile-selection` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `artifact-mode-appropriateness` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `over-testing-risk` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `excessive-tc-fragmentation` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `duplicate-tc-risk` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `manual-execution-cost` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
+                    "| `core-vs-deep-coverage-separation` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
                     "| `ready-for-tc-writing` | `pass` | `info` | `WP-01` | Проверено | - | `no` |",
                 ]
             ),

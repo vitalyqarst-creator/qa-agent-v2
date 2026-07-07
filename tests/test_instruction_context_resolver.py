@@ -101,6 +101,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertNotIn("references/agent/writer-table-workflow.md", paths)
         self.assertNotIn("references/agent/writer-revision-workflow.md", paths)
         self.assertNotIn("references/agent/writer-remediation-workflow.md", paths)
+        self.assertNotIn("references/agent/test-design-depth-policy.md", paths)
+        self.assertNotIn("references/agent/tc-set-optimization-format.md", paths)
         self.assertNotIn("references/qa/test-case-format.md", paths)
         self.assertNotIn("references/qa/coverage-checklist.md", paths)
         self.assertNotIn("references/agent/writer-quality-gate-format.md", paths)
@@ -109,6 +111,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/agent/writer-table-workflow.md", skipped)
         self.assertIn("references/agent/writer-revision-workflow.md", skipped)
         self.assertIn("references/agent/writer-remediation-workflow.md", skipped)
+        self.assertIn("references/agent/test-design-depth-policy.md", skipped)
+        self.assertIn("references/agent/tc-set-optimization-format.md", skipped)
         self.assertIn("references/qa/review-findings-format.md", skipped)
         self.assertIn("references/qa/test-case-style-examples.md", skipped)
 
@@ -326,6 +330,21 @@ class InstructionContextResolverTests(unittest.TestCase):
                 "--fail-on-budget",
             )
             self.assertEqual(result.returncode, 0, f"{scenario_id}\n{result.stdout}\n{result.stderr}")
+
+    def test_depth_policy_budget_regression_scenarios_pass(self) -> None:
+        for scenario_id in (
+            "writer.initial_draft.table",
+            "reviewer.full_existing_cases",
+            "iteration.full_loop",
+        ):
+            with self.subTest(scenario_id=scenario_id):
+                result = self.run_resolver(
+                    "--scenario",
+                    scenario_id,
+                    "--budget-report",
+                    "--fail-on-budget",
+                )
+                self.assertEqual(result.returncode, 0, f"{scenario_id}\n{result.stdout}\n{result.stderr}")
 
 
 if __name__ == "__main__":

@@ -46,41 +46,11 @@ description: Делает review существующих тест-кейсов 
 
 ### `scope_gap_review` contract
 
-Use `scope_gap_review` only after `ft-scope-analyzer` has produced a confirmed scope and at least one `GAP-*` in `scope-coverage-gaps.md`. The active prompt is `prompt.scope-gaps-to-reviewer.md`.
+Use `scope_gap_review` only after `ft-scope-analyzer` produced confirmed scope gaps and `prompt.scope-gaps-to-reviewer.md` is active. Inputs: `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md`, `workflow-state.yaml`, plus source parity, row inventory, mockup inventory and `AGENT-NOTES.md` when applicable.
 
-Required inputs:
+Review gap quality and routing only: concrete FT/source anchors, impact/blocking classification, downstream handling, matching clarification questions by `requirements-clarification-questioning-policy.md`, `xhtml_available: yes`, table/list coverage against XHTML and row inventory, no promotion of source-backed behavior to gap for convenience, no mockup-only/internal/unsupported expected result as covered. Weak questions use category `clarification-question-quality`.
 
-- `source-selection.md`
-- `scope-contract.md`
-- `scope-coverage-gaps.md`
-- `scope-clarification-requests.md`
-- main FT XHTML from `source-selection.md` as mandatory machine-readable extraction source
-- `source-parity-check.md`, when DOCX+PDF are available
-- `source-row-inventory.md`, when row-level/table parity is required
-- `mockup-visual-inventory.md`, when the scope uses mockups
-- package `AGENT-NOTES.md`, when present
-- `workflow-state.yaml`
-
-Review only gap quality and routing readiness:
-
-- every `GAP-*` has a concrete FT/source anchor: section, requirement code, table/row, field/condition, quote or atomic statement;
-- each gap has a clear impact, blocking classification and downstream handling rule;
-- each gap with `Question Required: yes` has a matching analyst-facing item in `scope-clarification-requests.md`;
-- each clarification question follows `requirements-clarification-questioning-policy.md`: source anchor, affected test-design dimension, valid `question_type`, priority, blocking level, answer usage rule, answer options when finite, and impact if unanswered;
-- weak or untraceable questions are findings with category `clarification-question-quality`;
-- no source-backed requirement was converted into a gap just because writing it is inconvenient;
-- `source-selection.md` confirms `xhtml_available: yes`; missing XHTML is a blocking input condition for new workflows;
-- table/list-heavy scope coverage is checked against XHTML extraction, `source-row-inventory.md` and `source-table-normalization.md`;
-- no mockup-only detail, internal effect or unsupported expected result is promoted to covered behavior;
-- source parity, row inventory and mockup inventory limitations are carried into gaps or blocking reasons;
-- routing after review is either writer-ready or back to `ft-scope-analyzer`; do not route to UI prep or sign-off from this mode.
-
-Expected outputs:
-
-- `scope-gap-review.md` with verdict `passed | needs-scope-revision | blocked-input`;
-- reviewer session log and decision log in the current stage-handoff folder;
-- if passed: `workflow-state.yaml` routes to writer with `stage_status: ready-for-next-stage`, `next_skill: ft-test-case-writer`, and active prompt `prompt.scope-to-writer.md`;
-- if not passed: `workflow-state.yaml` routes back to `ft-scope-analyzer` or `blocked-input` with explicit findings and blocking reasons.
+Output `scope-gap-review.md` with verdict `passed | needs-scope-revision | blocked-input`, reviewer session/decision logs, and workflow routing either to writer (`ready-for-next-stage`, active `prompt.scope-to-writer.md`) or back to `ft-scope-analyzer` / `blocked-input`.
 
 ## Входы
 
@@ -142,7 +112,10 @@ Expected outputs:
     - lessons из revalidation findings должны переноситься как regression checks.
 14. Если writer передал atomic requirements ledger или writer self-check, проверь, что ledger согласован с traceability matrix и source parity, а self-check не скрывает uncovered atoms, merged checks, over-splitting, package coverage, cross-package leakage, assumptions или unclear items.
 15. В режиме `structure` или `full` проверь единый шаблон, обязательные секции, группировку, сквозную нумерацию `TC-*`, порядок кейсов, детерминированность шагов и отсутствие проверяемого действия в предусловиях. Смешанная схема одного `TC-*` является structure blocker: metadata table нельзя дублировать bold metadata fields, а runtime headings нельзя дублировать inline/bold-полями.
-16. В режиме `test-design` или `full` проверь позитивные и негативные сценарии, границы, классы эквивалентности, условные зависимости, взаимное влияние полей, случаи где source fields дублируют друг друга, hallucinated assumptions, unsupported expected-result specificity и package-level design artifacts, если они применимы к scope. Применяй `test-design-review-rubric.md`, `test-design-defect-taxonomy.md`, `coverage-checklist.md`, `test-case-format.md`, `test-case-runtime-format.md` и `review-findings-format.md`; не дублируй полный перечень defect classes в skill.
+16. В режиме `test-design` или `full` проверь позитивные и негативные сценарии, границы, классы эквивалентности, условные зависимости, взаимное влияние полей, случаи где source fields дублируют друг друга, hallucinated assumptions, unsupported expected-result specificity и package-level design artifacts, если они применимы к scope. Применяй `test-design-review-rubric.md`, `test-design-defect-taxonomy.md`, `coverage-checklist.md`, `test-design-depth-policy.md`, `tc-set-optimization-format.md`, `test-case-format.md`, `test-case-runtime-format.md` и `review-findings-format.md`; не дублируй полный перечень defect classes в skill.
+    - Проверь, что `coverage_depth_profile` и `artifact_mode` соответствуют complexity/risk: simple не перегружен full chain без причины, а deep/high-risk/table-heavy не прошел compact mode.
+    - Проверь `TC Set Optimization Review`, если он обязателен; findings по этой зоне классифицируй как `test-design-depth`, `tc-set-optimization` или `over-testing`, если существующие категории недостаточны.
+    - Ищи over-testing так же строго, как under-coverage: duplicate TC, low-value negatives, excessive fragmentation, several TC with same source_ref/input/oracle, и deep checks без маркировки отдельно от core.
     - Если TC, matrix или writer response закрывает unresolved `P0-blocker` / `P1-high` clarification question без accepted risk, это blocking finding. Категория зависит от дефекта: `clarification-question-quality`, `expected-result`, `traceability` или `test-design`.
     - Для table/list-heavy scope reviewer обязан сверять coverage against XHTML extraction, `source-row-inventory.md` and `source-table-normalization.md`. DOCX/PDF-only extraction is insufficient when XHTML is available.
     - Для table/PDF/DOCX/XHTML extraction scopes сначала проверь `source-row-inventory.md`, `source-row-completeness-matrix.md`, `source-table-normalization.md`, `dictionary-inventory.md` при наличии справочников, `test-design-decision-table.md` и `package-test-design-plan.md`.
@@ -182,7 +155,7 @@ Rules:
 
 - Process/output: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md), [../../references/agent/session-log-format.md](../../references/agent/session-log-format.md), [../../references/agent/agent-decision-log-format.md](../../references/agent/agent-decision-log-format.md), [../../references/agent/next-step-prompt-format.md](../../references/agent/next-step-prompt-format.md), [../../references/agent/reviewer-output-format.md](../../references/agent/reviewer-output-format.md)
 - Review method: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md), [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md), [../../references/qa/test-design-review-rubric.md](../../references/qa/test-design-review-rubric.md), [../../references/agent/test-design-defect-taxonomy.md](../../references/agent/test-design-defect-taxonomy.md), [../../references/agent/requirements-clarification-questioning-policy.md](../../references/agent/requirements-clarification-questioning-policy.md)
-- Scope/source/package artifacts: `scope-coverage-gaps-format.md`, `scope-clarification-requests-format.md`, `source-parity-check-format.md`, `source-row-inventory-format.md`, `source-table-normalization-format.md`, `dictionary-inventory-format.md`, `package-test-design-plan-format.md`, `mockup-visual-inventory-format.md`.
+- Scope/source/package artifacts: `scope-coverage-gaps-format.md`, `scope-clarification-requests-format.md`, `source-parity-check-format.md`, `source-row-inventory-format.md`, `source-table-normalization-format.md`, `dictionary-inventory-format.md`, `package-test-design-plan-format.md`, `test-design-depth-policy.md`, `tc-set-optimization-format.md`, `mockup-visual-inventory-format.md`.
 - Scenario-specific deep references are loaded by [../../references/agent/instruction-loading-manifest.md](../../references/agent/instruction-loading-manifest.md).
 
 ## Ограничения

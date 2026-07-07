@@ -77,6 +77,18 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/writer-quality-gate-format.md"
       ]
     },
+    "test_design_depth_policy": {
+      "rationale": "Risk-based test-design depth and artifact-mode rules, loaded when a session needs full policy text beyond runtime anchors.",
+      "paths": [
+        "references/agent/test-design-depth-policy.md"
+      ]
+    },
+    "tc_set_optimization_artifacts": {
+      "rationale": "TC set optimization review format for deep, large standard or over-testing-risk scopes.",
+      "paths": [
+        "references/agent/tc-set-optimization-format.md"
+      ]
+    },
     "writer_ui_artifacts": {
       "rationale": "UI writer references used only when the confirmed scope has mockups or screen images.",
       "paths": [
@@ -354,7 +366,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "simple",
       "required_groups": ["global_core", "writer_core"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 140,
       "rationale": "Confirmed simple scope without row-level parity, mockups or reviewer findings."
@@ -365,7 +377,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "table",
       "required_groups": ["global_core", "writer_core", "writer_process_artifacts", "writer_table_artifacts"],
-      "conditional_groups": ["writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 300,
       "rationale": "Confirmed table-heavy or row-level parity scope requiring normalization and table design artifacts."
@@ -376,7 +388,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "ui",
       "required_groups": ["global_core", "writer_core", "writer_ui_artifacts"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_process_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 210,
       "rationale": "Confirmed UI scope with mockup or screen image, but without row-level table parity."
@@ -387,7 +399,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "numeric",
       "required_groups": ["global_core", "writer_core", "writer_numeric_coverage"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
       "rationale": "Confirmed scope dominated by numeric/date/length/mask input constraints without table parity."
@@ -398,7 +410,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "integration",
       "required_groups": ["global_core", "writer_core", "writer_integration_coverage"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
       "rationale": "Confirmed scope with integration/API/async/internal effects where fake internal coverage is the primary risk."
@@ -409,7 +421,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "revision_from_findings",
       "scope_profile": "any",
       "required_groups": ["global_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts"],
-      "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
       "rationale": "Revision of an existing TC set by structured reviewer findings without changing source/scope."
@@ -431,7 +443,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "remediation",
       "scope_profile": "validator_failure",
       "required_groups": ["global_core", "writer_core", "writer_validator_failure_deep"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 292,
       "rationale": "Deep repair context after validator or Writer Quality Gate failure."
@@ -442,7 +454,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "session_initial_draft",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "writer_core", "writer_process_artifacts"],
-      "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_revision_artifacts", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_revision_artifacts", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 200,
       "rationale": "Initial writer session inside the session-based review cycle."
@@ -453,7 +465,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "session_semantic_revision",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts"],
-      "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 240,
       "rationale": "Writer semantic revision session after semantic reviewer findings."
@@ -464,7 +476,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "session_format_revision",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "writer_core", "writer_process_artifacts", "style_remediation"],
-      "conditional_groups": ["writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 240,
       "rationale": "Format-only writer revision after final structure/format review."
@@ -475,7 +487,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "full",
       "scope_profile": "any",
       "required_groups": ["global_core", "reviewer_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 253,
       "rationale": "Direct review of an existing test-case set for an already confirmed FT package and scope; includes mandatory semantic rubric, defect taxonomy and dictionary checks."
@@ -486,7 +498,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "scope_gap_review",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "reviewer_scope_gap_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_core"],
+      "conditional_groups": ["test_design_depth_policy", "source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 230,
       "rationale": "Session-based pre-writer review of scope coverage gaps, source anchors and clarification requests."
@@ -497,7 +509,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "structure_preflight",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "reviewer_structure_preflight_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "writer_table_artifacts", "writer_ui_artifacts"],
+      "conditional_groups": ["test_design_depth_policy", "source_locator_core", "scope_manual_core", "writer_table_artifacts", "writer_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 210,
       "rationale": "Session-based lightweight structure preflight before semantic review."
@@ -508,7 +520,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "semantic_traceability_test_design",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 290,
       "rationale": "Session-based semantic review for traceability and test-design, before format polishing."
@@ -519,7 +531,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "structure_format_final",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "reviewer_structure_format_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["reviewer_semantic_core", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "reviewer_semantic_core", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 260,
       "rationale": "Final structure and formatting review after semantic closure."
@@ -530,7 +542,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "semantic_regression",
       "scope_profile": "any",
       "required_groups": ["global_core", "review_cycle_core", "reviewer_semantic_regression_core", "reviewer_process_artifacts"],
-      "conditional_groups": ["reviewer_structure_format_core", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "reviewer_structure_format_core", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 260,
       "rationale": "Final semantic regression pass after format-only changes."
@@ -541,7 +553,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "manual",
       "scope_profile": "any",
       "required_groups": ["global_core", "source_locator_core", "scope_manual_core"],
-      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
+      "conditional_groups": ["test_design_depth_policy", "scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 260,
       "rationale": "Manual scope selection when the user already provides the intended section or boundary."
@@ -552,7 +564,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "agent_proposed",
       "scope_profile": "any",
       "required_groups": ["global_core", "source_locator_core", "scope_agent_proposed_core"],
-      "conditional_groups": ["scope_manual_core"],
+      "conditional_groups": ["test_design_depth_policy", "scope_manual_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 220,
       "rationale": "Candidate-scope proposal before the user confirms one external scope."
@@ -563,7 +575,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "full_loop",
       "scope_profile": "any",
       "required_groups": ["global_core", "source_locator_core", "scope_manual_core", "iteration_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts", "reviewer_core"],
-      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["test_design_depth_policy", "tc_set_optimization_artifacts", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 425,
       "rationale": "End-to-end session-based writer/reviewer orchestration context; includes the lifecycle transition matrix and runner gates. Table/UI details remain conditional to the concrete scope profile and semantic reviewer safeguards remain required."

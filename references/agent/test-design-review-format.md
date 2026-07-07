@@ -1,6 +1,6 @@
 # Test Design Review Format
 
-`Test Design Review` - обязательный split artifact `work/test-design/<scope-slug>/test-design-review.md` для `initial_draft`, если создается `Package Test Design Plan`.
+`Test Design Review` - split artifact или compact embedded section для критической проверки test design перед handoff. Standalone обязателен для `deep`; для `simple` допустим compact review в plan/gate.
 
 Цель artifact-а: заставить writer критически проверить test-design до передачи набора reviewer-у. Это не заменяет финальный `ft-test-case-reviewer`: reviewer все равно проверяет `TC-*`, traceability и expected results независимо.
 
@@ -20,7 +20,7 @@ Writer обязан читать и сверять:
 - `coverage-obligation-table.md`, если scope содержит property types с обязательными coverage classes;
 - `atomic-requirements-ledger.md`;
 - `package-test-design-plan.md`;
-- `coverage-metrics.md`;
+- `coverage-metrics.md`, если он обязателен по `coverage_depth_profile`;
 - `fixture-catalog.md`, если используются reusable baselines или negative transition fixtures;
 - `risk-priority-map.md`, если scope содержит high-risk atoms/dimensions;
 - `test-design-defect-taxonomy.md`;
@@ -79,6 +79,13 @@ Review нельзя делать только по `package-test-design-plan.md`
 - `internal-observability`: internal/API/RabbitMQ/model/persistence/async поведение покрывается только при наличии именованного observable artifact; иначе оно остается `GAP-*`/`unclear`.
 - `metadata-only-exclusion`: structural/value-type/metadata-only строки не создают pseudo-TC и либо исключены с rationale в TDDT, либо явно помечены как non-executable.
 - `tc-mapping-atomicity`: одна executable строка plan соответствует одному `TC-*`/`GAP-*`, кроме явно выделенных scenario/recovery строк, которые не заменяют атомарное покрытие.
+- `coverage-depth-profile-selection`: profile соответствует size/risk/table/list/XHTML signals.
+- `artifact-mode-appropriateness`: artifact mode не перегружает simple и не облегчает deep.
+- `over-testing-risk`: нет лишних source-unsupported проверок ради количества.
+- `excessive-tc-fragmentation`: один observable flow не раздроблен без independent oracle.
+- `duplicate-tc-risk`: нет TC с теми же `source_ref` / input class / oracle.
+- `manual-execution-cost`: execution cost сбалансирован с risk/source coverage.
+- `core-vs-deep-coverage-separation`: `core`, `regression-candidate`, `deep`, `optional`, `blocked-by-gap` не смешаны без маркировки.
 - `ready-for-tc-writing`: итоговое решение по package: `pass` допустим только когда affected package может идти к TC writing/review без известных blocking test-design defects.
 
 ## Блокирующие Правила
@@ -89,7 +96,12 @@ Review нельзя делать только по `package-test-design-plan.md`
 - `Coverage Obligation Table` отсутствует или не содержит обязательные классы для `numeric-format` / `amount-tags`, когда такие property types есть в `Source Table Normalization`;
 - `Coverage Obligation Table` отсутствует или не содержит обязательные классы для `format-mask` / `default-mask`, когда такие property types есть в `Source Table Normalization`;
 - `Coverage Obligation Table` отсутствует или не содержит обязательные классы для `exact-length`, action-created block, repeatable block, checkbox-list или generated document output, когда такие property types есть в source/plan;
-- `coverage-metrics.md` отсутствует или не содержит applicable dimension из matrix;
+- standalone `coverage-metrics.md` обязателен по depth policy, но отсутствует или не содержит applicable dimension из matrix;
+- simple scope требует full chain без source/risk rationale;
+- deep scope проходит compact mode или без source/risk depth rationale;
+- required `TC Set Optimization Review` отсутствует;
+- несколько TC проверяют тот же source/input/oracle без нового source-backed класса/risk rationale;
+- deep checks смешаны с core regression без маркировки.
 - `fixture-catalog.md` отсутствует при reusable/generic baseline или negative transition fixture, если baseline не раскрыт полностью в TC;
 - `risk-priority-map.md` отсутствует или не содержит `impact x likelihood` для high-risk atoms;
 - covered atom не имеет реальной executable строки plan или TC mapping;

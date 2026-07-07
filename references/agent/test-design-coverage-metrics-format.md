@@ -1,6 +1,6 @@
 # Test-design Coverage Metrics Format
 
-`coverage-metrics.md` - split artifact в `work/test-design/<scope-slug>/`, который фиксирует измеримое применение test-design техник. Он создается после `Package Test Design Plan` и до `Writer Quality Gate` для каждого `initial_draft`; в revision mode обновляется, если findings меняют coverage classes, dimensions или gaps.
+`coverage-metrics.md` - split artifact в `work/test-design/<scope-slug>/`, который фиксирует измеримое применение test-design техник. Он создается после `Package Test Design Plan` и до `Writer Quality Gate`, когда этого требует `coverage_depth_profile`; в revision mode обновляется, если findings меняют coverage classes, dimensions или gaps.
 
 Цель artifact - не дать writer-у заменить технику общим заявлением "покрыто". Метрики не являются источником требований и не заменяют traceability matrix, `Coverage Obligation Table` или `Package Test Design Plan`; они только показывают, какие классы/ветки найдены, чем закрыты и где остался gap.
 
@@ -25,7 +25,9 @@
 
 ## Rules
 
-- Каждая строка `Test-design applicability matrix` с `applicable = yes` должна иметь строку в `coverage-metrics.md` или ссылку на artifact, где метрика уже посчитана.
+- Standalone `coverage-metrics.md` обязателен для `deep`; для `standard` - при 2+ dimensions, Coverage Obligation Table, gaps/unclear obligations, high-risk or coverage risk; для `simple` допустим compact metrics section в plan/review/gate.
+- Не создавай standalone `coverage-metrics.md` для `simple`, если он только повторяет plan без measurable counts.
+- Каждая строка `Test-design applicability matrix` с `applicable = yes` должна иметь строку в standalone metrics или ссылку на compact section/artifact, где метрика уже посчитана.
 - `obligations_found` считается по source-backed obligations и обязательным классам техники; `GAP-*` / `unclear` считается найденным obligation, а не отсутствием obligation.
 - Нельзя считать obligation покрытым, если linked `TC-*` не проверяет соответствующую строку `Package Test Design Plan`.
 - `coverage_strength = 2-way` не заменяет явно заданные бизнес-ветки decision table; такие ветки считаются separately.

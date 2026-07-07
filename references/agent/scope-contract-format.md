@@ -38,6 +38,8 @@
 - Если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий, рядом со `scope-contract.md` должен быть создан `source-row-inventory.md` до handoff к writer/reviewer.
 - Если подтвержденный UI scope содержит источник типа `mockup` или путь `mockups/*`, рядом со `scope-contract.md` должен быть создан `mockup-visual-inventory.md` по `references/agent/mockup-visual-inventory-format.md`. Недостаточно перечислить файл макета: его визуальное содержимое должно быть открыто и зафиксировано. Если макет нельзя открыть, не переводите scope в `ready-for-next-stage`; используйте `blocked-input`.
 - `Scope Complexity Assessment` обязателен для каждого подтвержденного scope, даже если scope простой.
+- `Scope Complexity Assessment` фиксирует `coverage_depth_profile`, `artifact_mode`, `risk_escalation_reasons`, `table_list_heavy`, `xhtml_complexity_signals`, `high_risk_dimensions`, `manual_execution_cost_risk`.
+- `simple` запрещен при `table_list_heavy = yes` или high-risk dimensions; `deep` требует source/risk explanation; XHTML nested/table-cell lists or repeated blocks require at least `standard`.
 - `Внутренние Рабочие Пакеты` обязательны для каждого подтвержденного scope. Даже простой scope должен иметь минимум один пакет `WP-01`.
 - Не используй формулировку `не требуются` для внутренних рабочих пакетов. Если scope простой, создай один легкий пакет `WP-01` с focus = весь подтвержденный scope и `split_required = no`.
 - Внутренний рабочий пакет не является новым внешним scope и не создает отдельный canonical test-case file сам по себе.
@@ -92,11 +94,19 @@
 | integrations_api_async | `...` | `low | medium | high` | `...` |
 | status_lifecycle | `...` | `low | medium | high` | `...` |
 | expected_gaps_or_unclear | `...` | `low | medium | high` | `...` |
+| coverage_depth_profile | `simple | standard | deep` | `low | medium | high` | `...` |
+| artifact_mode | `compact | standard | full` | `low | medium | high` | `...` |
+| risk_escalation_reasons | `none | table-heavy | high-risk | xhtml-complexity | gaps | ...` | `low | medium | high` | `...` |
+| table_list_heavy | `yes | no` | `low | medium | high` | `...` |
+| xhtml_complexity_signals | `none | nested-lists | table-cell-lists | repeated-blocks | dictionaries | ...` | `low | medium | high` | `...` |
+| high_risk_dimensions | `none | financial | security | lifecycle | integration | generated-document | ...` | `low | medium | high` | `...` |
+| manual_execution_cost_risk | `low | medium | high` | `low | medium | high` | `...` |
 
 Complexity decision:
 
 - `single_scope_with_internal_packages | split_into_external_scopes`
 - Обоснование: `...`
+- `recommended_coverage_depth_profile`: `simple | standard | deep`; `depth_rationale`: `...`; `artifact_mode_recommendation`: `compact | standard | full`; `risk_escalation_reasons`: `...`
 
 ## Внутренние Рабочие Пакеты
 

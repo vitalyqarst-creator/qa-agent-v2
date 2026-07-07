@@ -49,6 +49,18 @@ def run_command(command: list[str]) -> int:
     return result.returncode
 
 
+def write_stdout(text: str) -> None:
+    try:
+        sys.stdout.write(text)
+    except UnicodeEncodeError:
+        encoding = sys.stdout.encoding or "utf-8"
+        safe_text = text.encode(encoding, errors="replace").decode(
+            encoding,
+            errors="replace",
+        )
+        sys.stdout.write(safe_text)
+
+
 def run_unittest_modules(modules: list[str]) -> int:
     if not modules:
         return 0
@@ -104,6 +116,7 @@ def run_artifact_validator_sharded_tests(shard_count: int) -> int:
     failed_shards: list[int] = []
     with tempfile.TemporaryDirectory(prefix="artifact-validator-shards-") as log_dir:
         processes = []
+        shard_outputs: list[tuple[int, str, int]] = []
         for shard_index in range(1, shard_count + 1):
             log_path = Path(log_dir) / f"shard-{shard_index}.log"
             log_handle = log_path.open("w", encoding="utf-8", errors="replace")
@@ -135,9 +148,16 @@ def run_artifact_validator_sharded_tests(shard_count: int) -> int:
             process.wait()
             log_handle.close()
             output = log_path.read_text(encoding="utf-8", errors="replace")
-            print(f"\n=== artifact-validator shard {shard_index}/{shard_count} output ===")
-            print(output, end="" if output.endswith("\n") else "\n")
-            if process.returncode != 0:
+            shard_outputs.append((shard_index, output, process.returncode))
+
+        for shard_index, output, returncode in shard_outputs:
+            write_stdout(
+                f"\n=== artifact-validator shard {shard_index}/{shard_count} output ===\n"
+            )
+            write_stdout(output)
+            if not output.endswith("\n"):
+                write_stdout("\n")
+            if returncode != 0:
                 failed_shards.append(shard_index)
 
     if failed_shards:

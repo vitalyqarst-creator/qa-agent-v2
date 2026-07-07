@@ -131,8 +131,42 @@ ALLOWED_FINDING_CATEGORIES = {
     "format",
     "structure",
     "test-design",
+    "test-design-depth",
+    "tc-set-optimization",
+    "over-testing",
     "clarification-question-quality",
 }
+COVERAGE_DEPTH_PROFILES = {"simple", "standard", "deep"}
+ARTIFACT_MODES = {"compact", "standard", "full"}
+TC_SET_OPTIMIZATION_REQUIRED_ITEMS = {
+    "duplicate-checks",
+    "excessive-fragmentation",
+    "unsafe-merged-checks",
+    "low-value-negative-cases",
+    "missing-core-scenarios",
+    "regression-candidate-selection",
+    "deep-coverage-isolation",
+    "manual-execution-cost",
+    "risk-vs-effort-balance",
+}
+TC_SET_OPTIMIZATION_DECISIONS = {
+    "keep",
+    "merge",
+    "split",
+    "convert-to-deep-coverage",
+    "convert-to-gap",
+    "remove-as-duplicate",
+    "defer-with-accepted-risk",
+}
+TC_SET_OPTIMIZATION_REQUIRED_COLUMNS = {
+    "optimization_item",
+    "status",
+    "affected_tc_or_plan_rows",
+    "evidence",
+    "decision",
+    "required_action",
+}
+TC_SET_OPTIMIZATION_STATUSES = {"pass", "fail", "blocked", "needs-rewrite"}
 ALLOWED_FINDING_STATUSES = {"open", "closed", "partially-closed"}
 ALLOWED_CLARIFICATION_QUESTION_TYPES = {
     "missing-behavior",
@@ -570,6 +604,9 @@ TRACEABILITY_PLACEHOLDER_COLUMNS_BY_SECTION = {
     "Test Design Review": {
         "required_action",
     },
+    "TC Set Optimization Review": {
+        "required_action",
+    },
 }
 TRACEABILITY_MATRIX_PLACEHOLDER_COLUMNS = {
     "req_id",
@@ -591,6 +628,7 @@ SPLIT_TEST_DESIGN_SECTION_FILES = {
     "Package Test Design Plan": "package-test-design-plan.md",
     "Package Design Plan Self-Check": "package-design-plan-self-check.md",
     "Test Design Review": "test-design-review.md",
+    "TC Set Optimization Review": "tc-set-optimization.md",
     "Dependency Matrix": "dependency-matrix.md",
     "Test-design Applicability Matrix": "test-design-applicability-matrix.md",
     "Risk / Priority Map": "risk-priority-map.md",
@@ -1100,6 +1138,18 @@ def iter_scope_coverage_gaps(root: Path) -> list[Path]:
 
 def iter_scope_clarification_requests(root: Path) -> list[Path]:
     return iter_named_markdown(root, "scope-clarification-requests.md")
+
+
+def iter_scope_contracts(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "scope-contract.md")
+
+
+def iter_package_test_design_plans(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "package-test-design-plan.md")
+
+
+def iter_tc_set_optimizations(root: Path) -> list[Path]:
+    return iter_named_markdown(root, "tc-set-optimization.md")
 
 
 def iter_session_logs(root: Path) -> list[Path]:
@@ -3654,6 +3704,170 @@ def parse_bullet_context_fields(section: str) -> dict[str, str]:
     return fields
 
 
+def normalized_depth_value(value: str | None) -> str:
+    if value is None:
+        return ""
+    return normalize_markdown_field_value(value).strip().strip("`").strip().lower()
+
+
+def meaningful_depth_value(value: str | None) -> bool:
+    normalized = normalized_depth_value(value)
+    return normalized not in {"", "-", "none", "no", "n/a", "na", "not-applicable", "not_applicable"}
+
+
+def extract_depth_fields_from_content(content: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for section in (content, extract_markdown_section(content, "Scope Complexity Assessment") or ""):
+        if not section:
+            continue
+        fields.update({key: value for key, value in parse_bullet_context_fields(section).items() if value})
+        rows = markdown_table_rows_from_text(section)
+        if not rows:
+            continue
+        header = normalize_table_header(rows[0])
+        if "factor" not in header or "value" not in header:
+            continue
+        factor_index = header.index("factor")
+        value_index = header.index("value")
+        for raw_row in rows[1:]:
+            if factor_index >= len(raw_row) or value_index >= len(raw_row):
+                continue
+            factor = normalize_markdown_field_name(raw_row[factor_index].strip().strip("`"))
+            value = normalize_markdown_field_value(raw_row[value_index])
+            if factor and value:
+                fields[factor] = value
+    return fields
+
+
+def has_scope_depth_contract_signal(content: str) -> bool:
+    if extract_markdown_section(content, "Scope Complexity Assessment") is not None:
+        return True
+    return any(
+        token in content
+        for token in (
+            "coverage_depth_profile",
+            "recommended_coverage_depth_profile",
+            "artifact_mode",
+            "table_list_heavy",
+            "high_risk_dimensions",
+        )
+    )
+
+
+def validate_scope_contract_depth(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="scope-contract-not-utf8",
+                severity="warning",
+                category="scope",
+                title="scope-contract.md is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save scope-contract.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("scope-contract-depth-profile", "warn", "scope-contract.md is not UTF-8.", display_path))
+        return findings, checks
+
+    if not has_scope_depth_contract_signal(content):
+        return findings, checks
+
+    fields = extract_depth_fields_from_content(content)
+    profile = normalized_depth_value(
+        fields.get("coverage_depth_profile") or fields.get("recommended_coverage_depth_profile")
+    )
+    artifact_mode = normalized_depth_value(fields.get("artifact_mode") or fields.get("artifact_mode_recommendation"))
+    table_list_heavy = normalized_depth_value(fields.get("table_list_heavy"))
+    high_risk_dimensions = fields.get("high_risk_dimensions", "")
+
+    if not profile:
+        findings.append(
+            Finding(
+                id="scope-contract-missing-coverage-depth-profile",
+                severity="warning",
+                category="test-design-depth",
+                title="Scope contract has no coverage depth profile",
+                details="Confirmed scope contracts with Scope Complexity Assessment must select `simple`, `standard` or `deep` before writer handoff.",
+                path=display_path,
+                evidence=["coverage_depth_profile missing"],
+                recommended_action="Add `coverage_depth_profile` or `recommended_coverage_depth_profile` to Scope Complexity Assessment.",
+            )
+        )
+    elif profile not in COVERAGE_DEPTH_PROFILES:
+        findings.append(
+            Finding(
+                id="scope-contract-invalid-coverage-depth-profile",
+                severity="warning",
+                category="test-design-depth",
+                title="Scope contract has invalid coverage depth profile",
+                details="coverage_depth_profile must be one of `simple`, `standard` or `deep`.",
+                path=display_path,
+                evidence=[f"coverage_depth_profile={profile}"],
+                recommended_action="Use `simple`, `standard` or `deep`.",
+            )
+        )
+
+    if artifact_mode and artifact_mode not in ARTIFACT_MODES:
+        findings.append(
+            Finding(
+                id="scope-contract-invalid-artifact-mode",
+                severity="warning",
+                category="test-design-depth",
+                title="Scope contract has invalid artifact mode",
+                details="artifact_mode must be one of `compact`, `standard` or `full`.",
+                path=display_path,
+                evidence=[f"artifact_mode={artifact_mode}"],
+                recommended_action="Use `compact`, `standard` or `full`.",
+            )
+        )
+
+    if profile == "simple" and table_list_heavy == "yes":
+        findings.append(
+            Finding(
+                id="scope-contract-simple-profile-for-table-heavy-scope",
+                severity="warning",
+                category="test-design-depth",
+                title="Simple profile is not allowed for table-heavy scope",
+                details="table/list-heavy scope needs at least standard coverage depth and often deep coverage.",
+                path=display_path,
+                evidence=["coverage_depth_profile=simple", "table_list_heavy=yes"],
+                recommended_action="Escalate the scope to `standard` or `deep`, or change table_list_heavy only if the source evidence proves no table/list-heavy behavior.",
+            )
+        )
+
+    if profile == "simple" and meaningful_depth_value(high_risk_dimensions):
+        findings.append(
+            Finding(
+                id="scope-contract-simple-profile-for-high-risk-scope",
+                severity="warning",
+                category="test-design-depth",
+                title="Simple profile is not allowed for high-risk scope",
+                details="A scope with high-risk dimensions must use standard or deep coverage depth.",
+                path=display_path,
+                evidence=[f"high_risk_dimensions={high_risk_dimensions}"],
+                recommended_action="Escalate the scope to `standard` or `deep`, and record risk_escalation_reasons.",
+            )
+        )
+
+    has_findings = any(finding.id.startswith("scope-contract-") for finding in findings)
+    checks.append(
+        Check(
+            "scope-contract-depth-profile",
+            "warn" if has_findings else "pass",
+            "Scope contract depth profile has issues." if has_findings else "Scope contract depth profile passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def source_selection_routes_downstream(state: dict[str, Any]) -> bool:
     return (
         state.get("stage_status") in {"ready-for-next-stage", "ready-for-review", "ready-for-writer-revision"}
@@ -5845,6 +6059,13 @@ TEST_DESIGN_REVIEW_REQUIRED_ITEMS = {
     "internal-observability",
     "metadata-only-exclusion",
     "tc-mapping-atomicity",
+    "coverage-depth-profile-selection",
+    "artifact-mode-appropriateness",
+    "over-testing-risk",
+    "excessive-tc-fragmentation",
+    "duplicate-tc-risk",
+    "manual-execution-cost",
+    "core-vs-deep-coverage-separation",
     "ready-for-tc-writing",
 }
 TEST_DESIGN_REVIEW_FAIL_STATUSES = {"fail", "blocked", "needs-rewrite"}
@@ -10409,6 +10630,321 @@ def validate_test_design_review(
         )
     )
     return findings, checks
+
+
+def extract_package_plan_section_or_content(content: str) -> str:
+    section = extract_markdown_section(content, "Package Test Design Plan")
+    if section is not None:
+        return section
+    if re.search(r"^#\s+Package Test Design Plan\s*$", content, flags=re.IGNORECASE | re.MULTILINE):
+        return content
+    return content
+
+
+def related_scope_contract_fields(path: Path, root: Path) -> dict[str, str]:
+    candidates: list[Path] = []
+    for parent in (path.parent, *path.parents):
+        candidate = parent / "scope-contract.md"
+        if candidate.exists():
+            candidates.append(candidate)
+        if parent == root or parent == root.parent:
+            break
+    if root.is_dir():
+        scope_contracts = iter_scope_contracts(root)
+        if len(scope_contracts) == 1:
+            candidates.extend(scope_contracts)
+    for candidate in dedupe_paths(candidates):
+        try:
+            return extract_depth_fields_from_content(candidate.read_text(encoding="utf-8"))
+        except UnicodeDecodeError:
+            continue
+    return {}
+
+
+def package_plan_rows_and_counts(section: str) -> tuple[list[dict[str, str]], int, int]:
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return [], 0, len(set(extract_test_case_ids_from_text(section)))
+    header = normalize_table_header(rows[0])
+    plan_rows: list[dict[str, str]] = []
+    tc_ids: set[str] = set()
+    for raw_row in rows[1:]:
+        row = {
+            column_name: raw_row[index].strip().strip("`") if index < len(raw_row) else ""
+            for index, column_name in enumerate(header)
+        }
+        plan_rows.append(row)
+        tc_ids.update(extract_test_case_ids_from_text(row.get("planned_tc_or_gap", "")))
+    return plan_rows, len(plan_rows), len(tc_ids)
+
+
+def tc_set_optimization_section(content: str) -> str | None:
+    section = extract_markdown_section(content, "TC Set Optimization Review")
+    if section is not None:
+        return section
+    if re.search(r"^#\s+TC Set Optimization Review\s*$", content, flags=re.IGNORECASE | re.MULTILINE):
+        return content
+    return None
+
+
+def tc_set_optimization_present(path: Path, content: str) -> bool:
+    if tc_set_optimization_section(content) is not None:
+        return True
+    for name in ("tc-set-optimization.md", "tc-set-optimization-review.md"):
+        candidate = path.parent / name
+        if candidate.exists():
+            return True
+    return False
+
+
+def validate_package_test_design_depth(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="package-design-plan-not-utf8",
+                severity="warning",
+                category="test-design-depth",
+                title="Package Test Design Plan is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save package-test-design-plan.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("package-design-depth-profile", "warn", "Package Test Design Plan is not UTF-8.", display_path))
+        return findings, checks
+
+    section = extract_package_plan_section_or_content(content)
+    fields = related_scope_contract_fields(path, root)
+    fields.update(extract_depth_fields_from_content(content))
+    profile = normalized_depth_value(
+        fields.get("coverage_depth_profile") or fields.get("recommended_coverage_depth_profile")
+    )
+    artifact_mode = normalized_depth_value(fields.get("artifact_mode") or fields.get("artifact_mode_recommendation"))
+    high_risk_dimensions = fields.get("high_risk_dimensions", "")
+    plan_rows, plan_row_count, tc_count = package_plan_rows_and_counts(section)
+    has_high_risk = meaningful_depth_value(high_risk_dimensions)
+    has_over_testing_risk = bool(re.search(r"over[-_ ]testing|over[-_ ]test", content, flags=re.IGNORECASE))
+    has_optimization = tc_set_optimization_present(path, content)
+
+    if not profile:
+        findings.append(
+            Finding(
+                id="package-design-plan-missing-depth-profile",
+                severity="warning",
+                category="test-design-depth",
+                title="Package Test Design Plan has no coverage depth profile",
+                details="Package Test Design Plan must state `coverage_depth_profile` or rely on a linked scope-contract profile.",
+                path=display_path,
+                evidence=["coverage_depth_profile missing"],
+                recommended_action="Add `coverage_depth_profile: simple | standard | deep` and `artifact_mode`, or link/read the scope-contract profile.",
+            )
+        )
+
+    if profile == "deep" and not has_optimization:
+        findings.append(
+            Finding(
+                id="deep-scope-missing-tc-set-optimization",
+                severity="warning",
+                category="tc-set-optimization",
+                title="Deep scope has no TC Set Optimization Review",
+                details="Deep coverage requires TC Set Optimization Review before sign-off.",
+                path=display_path,
+                evidence=[f"profile={profile}", f"plan_rows={plan_row_count}", f"tc_count={tc_count}"],
+                recommended_action="Create `tc-set-optimization.md` or add `## TC Set Optimization Review` before finalizing the TC set.",
+            )
+        )
+
+    standard_requires_optimization = (
+        profile == "standard"
+        and (tc_count >= 15 or plan_row_count >= 20 or has_high_risk or has_over_testing_risk)
+    )
+    if standard_requires_optimization and not has_optimization:
+        findings.append(
+            Finding(
+                id="standard-large-scope-missing-tc-set-optimization",
+                severity="warning",
+                category="tc-set-optimization",
+                title="Large or high-risk standard scope has no TC Set Optimization Review",
+                details="Standard scope needs TC Set Optimization Review when TC count, plan rows, high-risk dimensions or over-testing risk exceed the threshold.",
+                path=display_path,
+                evidence=[
+                    f"profile={profile}",
+                    f"plan_rows={plan_row_count}",
+                    f"tc_count={tc_count}",
+                    f"high_risk_dimensions={high_risk_dimensions or 'none'}",
+                ],
+                recommended_action="Create `tc-set-optimization.md` or reduce/reclassify the plan with explicit accepted risk.",
+            )
+        )
+
+    simple_full_chain = profile == "simple" and (
+        artifact_mode == "full"
+        or (
+            (path.parent / "coverage-metrics.md").exists()
+            and (path.parent / "coverage-obligation-table.md").exists()
+            and (path.parent / "risk-priority-map.md").exists()
+            and (path.parent / "test-design-review.md").exists()
+        )
+    )
+    if simple_full_chain:
+        findings.append(
+            Finding(
+                id="simple-scope-unnecessary-full-artifact-chain",
+                severity="warning",
+                category="over-testing",
+                title="Simple scope uses unnecessary full artifact chain",
+                details="Simple low-risk scope should use compact artifacts unless there is source/risk rationale for a full chain.",
+                path=display_path,
+                evidence=[f"profile={profile}", f"artifact_mode={artifact_mode or 'not-set'}"],
+                recommended_action="Use `artifact_mode: compact` or escalate the profile with explicit risk/source rationale.",
+            )
+        )
+
+    has_findings = any(
+        finding.id
+        in {
+            "package-design-plan-missing-depth-profile",
+            "deep-scope-missing-tc-set-optimization",
+            "standard-large-scope-missing-tc-set-optimization",
+            "simple-scope-unnecessary-full-artifact-chain",
+        }
+        for finding in findings
+    )
+    checks.append(
+        Check(
+            "package-design-depth-profile",
+            "warn" if has_findings else "pass",
+            "Package Test Design Plan depth profile has issues." if has_findings else "Package Test Design Plan depth profile passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def validate_tc_set_optimization_review(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="tc-set-optimization-not-utf8",
+                severity="warning",
+                category="tc-set-optimization",
+                title="TC Set Optimization Review is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save tc-set-optimization.md as UTF-8 Markdown.",
+            )
+        )
+        return findings, [Check("tc-set-optimization-review", "warn", "TC Set Optimization Review is not UTF-8.", display_path)]
+
+    section = tc_set_optimization_section(content) or content
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        findings.append(
+            Finding(
+                id="tc-set-optimization-no-table",
+                severity="warning",
+                category="tc-set-optimization",
+                title="TC Set Optimization Review has no table",
+                details="TC Set Optimization Review must use the canonical table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the canonical TC Set Optimization Review table.",
+            )
+        )
+    else:
+        header = normalize_table_header(rows[0])
+        missing_columns = sorted(TC_SET_OPTIMIZATION_REQUIRED_COLUMNS - set(header))
+        present_items: set[str] = set()
+        invalid_decisions: list[str] = []
+        invalid_statuses: list[str] = []
+        for raw_row in rows[1:]:
+            row = {
+                column_name: raw_row[index].strip().strip("`") if index < len(raw_row) else ""
+                for index, column_name in enumerate(header)
+            }
+            item = normalized_depth_value(row.get("optimization_item"))
+            if item:
+                present_items.add(item)
+            decision = normalized_depth_value(row.get("decision"))
+            if decision and decision not in TC_SET_OPTIMIZATION_DECISIONS:
+                invalid_decisions.append(f"{item or 'row'}:decision={decision}")
+            status = normalized_depth_value(row.get("status"))
+            if status and status not in TC_SET_OPTIMIZATION_STATUSES:
+                invalid_statuses.append(f"{item or 'row'}:status={status}")
+        missing_items = sorted(TC_SET_OPTIMIZATION_REQUIRED_ITEMS - present_items)
+        if missing_columns:
+            findings.append(
+                Finding(
+                    id="tc-set-optimization-missing-columns",
+                    severity="warning",
+                    category="tc-set-optimization",
+                    title="TC Set Optimization Review misses required columns",
+                    details="The optimization table must expose item, status, affected rows/TC, evidence, decision and required action.",
+                    path=display_path,
+                    evidence=missing_columns,
+                    recommended_action="Use the canonical columns from tc-set-optimization-format.md.",
+                )
+            )
+        if missing_items:
+            findings.append(
+                Finding(
+                    id="tc-set-optimization-missing-required-items",
+                    severity="warning",
+                    category="tc-set-optimization",
+                    title="TC Set Optimization Review misses required items",
+                    details="Optimization must check duplicate, fragmentation, unsafe merge, low-value negative and risk/effort balance items.",
+                    path=display_path,
+                    evidence=missing_items[:20],
+                    recommended_action="Add one row for each required optimization item.",
+                )
+            )
+        if invalid_decisions:
+            findings.append(
+                Finding(
+                    id="tc-set-optimization-invalid-decision",
+                    severity="warning",
+                    category="tc-set-optimization",
+                    title="TC Set Optimization Review has invalid decisions",
+                    details="Optimization decisions must use the controlled decision enum.",
+                    path=display_path,
+                    evidence=invalid_decisions[:20],
+                    recommended_action="Use `keep`, `merge`, `split`, `convert-to-deep-coverage`, `convert-to-gap`, `remove-as-duplicate` or `defer-with-accepted-risk`.",
+                )
+            )
+        if invalid_statuses:
+            findings.append(
+                Finding(
+                    id="tc-set-optimization-invalid-status",
+                    severity="warning",
+                    category="tc-set-optimization",
+                    title="TC Set Optimization Review has invalid statuses",
+                    details="Optimization status must be `pass`, `fail`, `blocked` or `needs-rewrite`.",
+                    path=display_path,
+                    evidence=invalid_statuses[:20],
+                    recommended_action="Use canonical status values.",
+                )
+            )
+
+    has_findings = any(finding.id.startswith("tc-set-optimization") for finding in findings)
+    return findings, [
+        Check(
+            "tc-set-optimization-review",
+            "warn" if has_findings else "pass",
+            "TC Set Optimization Review has issues." if has_findings else "TC Set Optimization Review passed.",
+            display_path,
+        )
+    ]
 
 
 GENERIC_ATOM_SMELL_PATTERNS = [
@@ -17012,6 +17548,9 @@ def validate(
     root_is_standalone_dictionary_inventory = root.is_file() and root.name == DICTIONARY_INVENTORY_NAME
     root_is_standalone_scope_coverage_gaps = root.is_file() and root.name == "scope-coverage-gaps.md"
     root_is_standalone_scope_clarification_requests = root.is_file() and root.name == "scope-clarification-requests.md"
+    root_is_standalone_scope_contract = root.is_file() and root.name == "scope-contract.md"
+    root_is_standalone_package_design_plan = root.is_file() and root.name == "package-test-design-plan.md"
+    root_is_standalone_tc_set_optimization = root.is_file() and root.name == "tc-set-optimization.md"
     root_is_standalone_test_case_file = (
         root.is_file()
         and root.suffix == ".md"
@@ -17035,6 +17574,9 @@ def validate(
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
     scope_coverage_gaps = iter_scope_coverage_gaps(root)
     scope_clarification_requests = iter_scope_clarification_requests(root)
+    scope_contracts = iter_scope_contracts(root)
+    package_design_plans = iter_package_test_design_plans(root)
+    tc_set_optimizations = iter_tc_set_optimizations(root)
     if root_is_standalone_source_normalization_diagnostic:
         workflow_states = []
         artifact_manifests = []
@@ -17053,6 +17595,9 @@ def validate(
         mockup_visual_inventories = []
         scope_coverage_gaps = []
         scope_clarification_requests = []
+        scope_contracts = []
+        package_design_plans = []
+        tc_set_optimizations = []
     if root_is_standalone_source_table_normalization:
         workflow_states = []
         artifact_manifests = []
@@ -17070,6 +17615,9 @@ def validate(
         mockup_visual_inventories = []
         scope_coverage_gaps = []
         scope_clarification_requests = []
+        scope_contracts = []
+        package_design_plans = []
+        tc_set_optimizations = []
     if root_is_standalone_dictionary_inventory:
         workflow_states = []
         artifact_manifests = []
@@ -17087,6 +17635,9 @@ def validate(
         mockup_visual_inventories = []
         scope_coverage_gaps = []
         scope_clarification_requests = []
+        scope_contracts = []
+        package_design_plans = []
+        tc_set_optimizations = []
     if root_is_standalone_scope_coverage_gaps:
         workflow_states = []
         artifact_manifests = []
@@ -17105,6 +17656,9 @@ def validate(
         mockup_visual_inventories = []
         scope_coverage_gaps = [root]
         scope_clarification_requests = []
+        scope_contracts = []
+        package_design_plans = []
+        tc_set_optimizations = []
     if root_is_standalone_scope_clarification_requests:
         workflow_states = []
         artifact_manifests = []
@@ -17123,6 +17677,72 @@ def validate(
         mockup_visual_inventories = []
         scope_coverage_gaps = []
         scope_clarification_requests = [root]
+        scope_contracts = []
+        package_design_plans = []
+        tc_set_optimizations = []
+    if root_is_standalone_scope_contract:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        source_table_normalizations = []
+        writer_process_diagnostics = []
+        writer_self_checks = []
+        session_logs = []
+        decision_logs = []
+        active_text_artifacts = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = []
+        scope_contracts = [root]
+        package_design_plans = []
+        tc_set_optimizations = []
+    if root_is_standalone_package_design_plan:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        source_table_normalizations = []
+        writer_process_diagnostics = []
+        writer_self_checks = []
+        session_logs = []
+        decision_logs = []
+        active_text_artifacts = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = []
+        scope_contracts = []
+        package_design_plans = [root]
+        tc_set_optimizations = []
+    if root_is_standalone_tc_set_optimization:
+        workflow_states = []
+        artifact_manifests = []
+        traceability_matrices = []
+        review_findings = []
+        writer_responses = []
+        test_case_files = []
+        source_normalization_diagnostics = []
+        source_table_normalizations = []
+        writer_process_diagnostics = []
+        writer_self_checks = []
+        session_logs = []
+        decision_logs = []
+        active_text_artifacts = []
+        dictionary_inventories = []
+        mockup_visual_inventories = []
+        scope_coverage_gaps = []
+        scope_clarification_requests = []
+        scope_contracts = []
+        package_design_plans = []
+        tc_set_optimizations = [root]
     test_case_id_index = build_test_case_id_index(test_case_files, root)
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -17135,7 +17755,11 @@ def validate(
         or root_is_standalone_dictionary_inventory
         or root_is_standalone_scope_coverage_gaps
         or root_is_standalone_scope_clarification_requests
+        or root_is_standalone_scope_contract
+        or root_is_standalone_package_design_plan
+        or root_is_standalone_tc_set_optimization
     )
+    depth_artifact_only = bool(scope_contracts or package_design_plans or tc_set_optimizations)
 
     if not standalone_artifact:
         path_findings, path_checks = validate_ft_package_handoff_layout(root)
@@ -17146,6 +17770,7 @@ def validate(
         not workflow_states
         and not standalone_artifact
         and not root_is_standalone_test_case_file
+        and not depth_artifact_only
     ):
         findings.append(
             Finding(
@@ -17333,6 +17958,21 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in scope_contracts:
+        path_findings, path_checks = validate_scope_contract_depth(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in package_design_plans:
+        path_findings, path_checks = validate_package_test_design_depth(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in tc_set_optimizations:
+        path_findings, path_checks = validate_tc_set_optimization_review(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in active_text_artifacts:
         path_findings, path_checks = validate_text_encoding_damage(path, root)
         findings.extend(path_findings)
@@ -17369,6 +18009,9 @@ def validate(
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
             "scope_coverage_gaps_checked": len(scope_coverage_gaps),
             "scope_clarification_requests_checked": len(scope_clarification_requests),
+            "scope_contracts_checked": len(scope_contracts),
+            "package_design_plans_checked": len(package_design_plans),
+            "tc_set_optimizations_checked": len(tc_set_optimizations),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
             "findings_count": len(findings),

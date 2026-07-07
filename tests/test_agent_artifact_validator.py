@@ -518,6 +518,13 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     "| `internal-observability` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
                     "| `metadata-only-exclusion` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
                     "| `tc-mapping-atomicity` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `coverage-depth-profile-selection` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `artifact-mode-appropriateness` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `over-testing-risk` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `excessive-tc-fragmentation` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `duplicate-tc-risk` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `manual-execution-cost` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
+                    "| `core-vs-deep-coverage-separation` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
                     "| `ready-for-tc-writing` | `pass` | `info` | `WP-01` | Проверено | none_required:pass | `no` |",
                 ]
             ),
@@ -553,6 +560,208 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def write_depth_scope_contract(
+        self,
+        root: Path,
+        *,
+        profile: str,
+        artifact_mode: str,
+        table_list_heavy: str = "no",
+        high_risk_dimensions: str = "none",
+    ) -> Path:
+        path = root / "scope-contract.md"
+        path.write_text(
+            "\n".join(
+                [
+                    "# Scope Contract",
+                    "",
+                    "## Scope Complexity Assessment",
+                    "",
+                    "| factor | value | risk | note |",
+                    "| --- | --- | --- | --- |",
+                    f"| coverage_depth_profile | `{profile}` | `low` | selected profile |",
+                    f"| artifact_mode | `{artifact_mode}` | `low` | selected mode |",
+                    "| risk_escalation_reasons | `none` | `low` | no escalation |",
+                    f"| table_list_heavy | `{table_list_heavy}` | `low` | table/list signal |",
+                    "| xhtml_complexity_signals | `none` | `low` | no nested lists |",
+                    f"| high_risk_dimensions | `{high_risk_dimensions}` | `low` | risk dimensions |",
+                    "| manual_execution_cost_risk | `low` | `low` | small set |",
+                ]
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def write_depth_package_plan(
+        self,
+        root: Path,
+        *,
+        profile: str,
+        artifact_mode: str,
+        rows: int = 3,
+    ) -> Path:
+        path = root / "package-test-design-plan.md"
+        body = [
+            "# Package Test Design Plan",
+            "",
+            f"- coverage_depth_profile: `{profile}`",
+            f"- artifact_mode: `{artifact_mode}`",
+            "- depth_rationale: source-backed fixture",
+            "",
+            "## Package Test Design Plan",
+            "",
+            "| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for index in range(1, rows + 1):
+            body.append(
+                "| PD-{0:03d} | WP-01 | equivalence | GSR 1 | ATOM-{0:03d} | "
+                "Check source-backed class {0} | positive | class-{0} | input-{0} | "
+                "Expected behavior {0} is observed. | FT | TC-DEPTH-{0:03d} | planned |".format(index)
+            )
+        path.write_text("\n".join(body) + "\n", encoding="utf-8")
+        return path
+
+    def write_tc_set_optimization(self, root: Path) -> Path:
+        path = root / "tc-set-optimization.md"
+        rows = [
+            "# TC Set Optimization Review",
+            "",
+            "## TC Set Optimization Review",
+            "",
+            "| optimization_item | status | affected_tc_or_plan_rows | evidence | decision | required_action |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+        for item in [
+            "duplicate-checks",
+            "excessive-fragmentation",
+            "unsafe-merged-checks",
+            "low-value-negative-cases",
+            "missing-core-scenarios",
+            "regression-candidate-selection",
+            "deep-coverage-isolation",
+            "manual-execution-cost",
+            "risk-vs-effort-balance",
+        ]:
+            rows.append(
+                f"| `{item}` | `pass` | `all` | Проверено в fixture. | `keep` | none_required:pass |"
+            )
+        path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+        return path
+
+    def depth_finding_ids(self, root: Path) -> set[str]:
+        result = self.run_validator("--root", str(root), "--json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        return {finding["id"] for finding in payload["findings"]}
+
+    def test_depth_policy_valid_simple_scope_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(root, profile="simple", artifact_mode="compact")
+            self.write_depth_package_plan(root, profile="simple", artifact_mode="compact", rows=2)
+
+            finding_ids = self.depth_finding_ids(root)
+
+        self.assertNotIn("scope-contract-missing-coverage-depth-profile", finding_ids)
+        self.assertNotIn("package-design-plan-missing-depth-profile", finding_ids)
+        self.assertNotIn("simple-scope-unnecessary-full-artifact-chain", finding_ids)
+
+    def test_depth_policy_rejects_simple_table_heavy_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(
+                root,
+                profile="simple",
+                artifact_mode="compact",
+                table_list_heavy="yes",
+            )
+            self.write_depth_package_plan(root, profile="simple", artifact_mode="compact", rows=2)
+
+            finding_ids = self.depth_finding_ids(root)
+
+        self.assertIn("scope-contract-simple-profile-for-table-heavy-scope", finding_ids)
+
+    def test_depth_policy_reports_missing_and_invalid_profiles(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "scope-contract.md").write_text(
+                "\n".join(
+                    [
+                        "# Scope Contract",
+                        "",
+                        "## Scope Complexity Assessment",
+                        "",
+                        "| factor | value | risk | note |",
+                        "| --- | --- | --- | --- |",
+                        "| artifact_mode | `compact` | `low` | mode only |",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            self.write_depth_package_plan(root, profile="", artifact_mode="compact", rows=2)
+
+            missing_ids = self.depth_finding_ids(root)
+
+        self.assertIn("scope-contract-missing-coverage-depth-profile", missing_ids)
+        self.assertIn("package-design-plan-missing-depth-profile", missing_ids)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(root, profile="tiny", artifact_mode="compact")
+
+            invalid_ids = self.depth_finding_ids(root)
+
+        self.assertIn("scope-contract-invalid-coverage-depth-profile", invalid_ids)
+
+    def test_depth_policy_rejects_simple_high_risk_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(
+                root,
+                profile="simple",
+                artifact_mode="compact",
+                high_risk_dimensions="security",
+            )
+            self.write_depth_package_plan(root, profile="simple", artifact_mode="compact", rows=2)
+
+            finding_ids = self.depth_finding_ids(root)
+
+        self.assertIn("scope-contract-simple-profile-for-high-risk-scope", finding_ids)
+
+    def test_depth_policy_requires_tc_optimization_for_deep_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(root, profile="deep", artifact_mode="full")
+            self.write_depth_package_plan(root, profile="deep", artifact_mode="full", rows=5)
+
+            finding_ids = self.depth_finding_ids(root)
+
+        self.assertIn("deep-scope-missing-tc-set-optimization", finding_ids)
+
+    def test_depth_policy_requires_tc_optimization_for_large_standard_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(root, profile="standard", artifact_mode="standard")
+            self.write_depth_package_plan(root, profile="standard", artifact_mode="standard", rows=20)
+
+            finding_ids = self.depth_finding_ids(root)
+
+        self.assertIn("standard-large-scope-missing-tc-set-optimization", finding_ids)
+
+    def test_depth_policy_standard_moderate_scope_passes_without_optimization(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self.write_depth_scope_contract(root, profile="standard", artifact_mode="standard")
+            self.write_depth_package_plan(root, profile="standard", artifact_mode="standard", rows=5)
+
+            finding_ids = self.depth_finding_ids(root)
+
+        self.assertNotIn("standard-large-scope-missing-tc-set-optimization", finding_ids)
+        self.assertNotIn("package-design-plan-missing-depth-profile", finding_ids)
 
     def write_test_case_file_with_blocking_writer_gates(self, path: Path) -> None:
         self.write_minimal_test_case_file(path)
@@ -10384,6 +10593,13 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "| `internal-observability` | `pass` | `info` | `WP-01` | no internal effect is in source. | none_required:not_applicable | `no` |",
                         "| `metadata-only-exclusion` | `pass` | `info` | `WP-01` | no metadata-only row is used as coverage. | none_required:pass | `no` |",
                         "| `tc-mapping-atomicity` | `pass` | `info` | `WP-01` | executable TC has one expected result. | none_required:pass | `no` |",
+                        "| `coverage-depth-profile-selection` | `pass` | `info` | `WP-01` | standard profile is sufficient for numeric canary. | none_required:pass | `no` |",
+                        "| `artifact-mode-appropriateness` | `pass` | `info` | `WP-01` | split artifacts are present because this fixture validates split context. | none_required:pass | `no` |",
+                        "| `over-testing-risk` | `pass` | `info` | `WP-01` | invalid classes are grouped through `GAP-001` instead of duplicated TCs. | none_required:pass | `no` |",
+                        "| `excessive-tc-fragmentation` | `pass` | `info` | `WP-01` | one executable positive TC is retained. | none_required:pass | `no` |",
+                        "| `duplicate-tc-risk` | `pass` | `info` | `WP-01` | no duplicate numeric positive TCs are present. | none_required:pass | `no` |",
+                        "| `manual-execution-cost` | `pass` | `info` | `WP-01` | manual set remains one executable TC plus gap evidence. | none_required:pass | `no` |",
+                        "| `core-vs-deep-coverage-separation` | `pass` | `info` | `WP-01` | deep negative execution is deferred until observable oracle exists. | none_required:pass | `no` |",
                         "| `ready-for-tc-writing` | `pass` | `info` | `WP-01` | writer canary is internally consistent. | none_required:pass | `no` |",
                     ]
                 ),
@@ -10855,6 +11071,13 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "| internal-observability | pass | info | WP-01 | Проверено | none_required:pass | no |",
                         "| metadata-only-exclusion | pass | info | WP-01 | Проверено | none_required:pass | no |",
                         "| tc-mapping-atomicity | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| coverage-depth-profile-selection | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| artifact-mode-appropriateness | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| over-testing-risk | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| excessive-tc-fragmentation | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| duplicate-tc-risk | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| manual-execution-cost | pass | info | WP-01 | Проверено | none_required:pass | no |",
+                        "| core-vs-deep-coverage-separation | pass | info | WP-01 | Проверено | none_required:pass | no |",
                         "| ready-for-tc-writing | pass | info | WP-01 | Проверено | none_required:pass | no |",
                     ]
                 ),
