@@ -62,6 +62,8 @@ python scripts/resolve_instruction_context.py --phase writer --mode initial_draf
 - Intermediate decision log format: [../references/agent/agent-decision-log-format.md](../references/agent/agent-decision-log-format.md)
 - Scope decomposition policy: [../references/agent/scope-decomposition-policy.md](../references/agent/scope-decomposition-policy.md)
 - Source parity check format: [../references/agent/source-parity-check-format.md](../references/agent/source-parity-check-format.md)
+- Negative Oracle Inventory: [../references/agent/negative-oracle-inventory-format.md](../references/agent/negative-oracle-inventory-format.md)
+- Requiredness Oracle Inventory: [../references/agent/requiredness-oracle-inventory-format.md](../references/agent/requiredness-oracle-inventory-format.md)
 - Quality feedback loop: [../references/agent/quality-feedback-loop.md](../references/agent/quality-feedback-loop.md)
 - Test-design defect taxonomy: [../references/agent/test-design-defect-taxonomy.md](../references/agent/test-design-defect-taxonomy.md)
 - Test case style examples: [../references/qa/test-case-style-examples.md](../references/qa/test-case-style-examples.md)

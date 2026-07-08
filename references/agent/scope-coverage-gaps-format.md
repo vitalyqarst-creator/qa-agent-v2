@@ -32,6 +32,7 @@
 - Если gap обнаружен после атомизации требований или review, указывай связанные `ATOM-*`, строки traceability matrix или явно пиши `not-yet-assigned`, если атом еще не создан.
 - Не создавай gap без FT anchor. Если точный anchor не удается восстановить, это отдельный blocking gap о недостаточной трассировке источника.
 - Если требование в целом покрыто, но gap ограничивает тест-дизайн для конкретной границы, округления, обязательности, видимости или редактируемости, все равно указывай affected FT statement и помечай `Coverage Impact` как `design-constraint-on-covered-atom`.
+- Для validation/invalid-input/boundary/requiredness gaps указывай `Scope Obligation ID(s)` из oracle inventory и явные blocked classes; не прячь `reject-letters`, `future-date`, `empty-required-field` внутри общей фразы.
 - Если gaps нет, сохрани файл с пустым списком и явным `Writing можно стартовать: yes`.
 - Для пользовательских или аналитических ответов на gaps используй `scope-clarification-requests.md`, сохраняя привязку к `GAP-*` и краткую FT reference.
 
@@ -49,12 +50,18 @@ For any gap that limits test-design decisions, record these canonical fields in 
 - `blocks_ready_for_review`
 - `question_to_analyst`
 - `temporary_handling`
+- `scope_obligation_ids`
+- `blocked_negative_classes`
+- `missing_observable_oracle`
+- `why_not_executable`
+- `downstream_do_not_test`
 
 Rules:
 
 - `affected_test_design_dimension` must use the `coverage_dimension` vocabulary from `references/qa/review-findings-format.md`.
 - `blocks_ready_for_review: yes` means writer must not set `stage_status: ready-for-review`; use `stage_status: blocked-input` until the missing behavior is clarified or explicitly deferred.
 - `temporary_handling` must not invent expected behavior. It may say only what can still be covered safely, what is excluded, or which case is marked `unclear`.
+- For validation/requiredness gaps, `scope_obligation_ids` comes from oracle inventory; `blocked_negative_classes`, `missing_observable_oracle`, `why_not_executable`, and `downstream_do_not_test` must make the blocked executable checks explicit. Use `not_applicable` only for non-validation gaps.
 - Explicit deferral requires `accepted_risks` in `workflow-state.yaml` with the same `GAP-*`, owner/role, rationale and revisit condition. Do not treat an open blocking gap as accepted risk just because it is listed in `open_questions`.
 
 ## Минимальный шаблон
@@ -86,6 +93,11 @@ Rules:
 **Missing Behavior:** `...`
 **Why Expected Result Not Derivable:** `...`
 **Affected Test-design Dimension:** `role-permission | status-lifecycle | decision-table | pairwise | boundary | equivalence | dependency | conditional-visibility | api-server-validation | integration | security | async | persistence | table-list | file-upload | calculation | numeric | date-time | length | scenario-use-case | performance | reliability | compatibility | usability | accessibility-ui | traceability | expected-result | atomarity | format | scope | other`
+**Scope Obligation ID(s):** `SO-NEG-001; SO-REQ-001 | not-yet-assigned | not_applicable`
+**Blocked Negative Classes:** `letters; spaces; special-chars; future-date | not_applicable`
+**Missing Observable Oracle:** `exact message / red highlight / blocked transition / input filtering / visible marker / not_applicable`
+**Why Not Executable:** `...`
+**Downstream Do Not Test:** `...`
 **Risk:** `high | medium | low`
 **Blocks Ready For Review:** `yes | no`
 **Question To Analyst:** `...`

@@ -2222,6 +2222,98 @@ def workflow_mockup_visual_inventory_paths(
     )
 
 
+def workflow_artifact_paths_by_name(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+    expected_name: str,
+) -> list[Path]:
+    return resolve_workflow_artifacts_by_name(state, workflow_path, root, ft_root, expected_name)
+
+
+def scope_oracle_signal_evidence(
+    state: dict[str, Any],
+    workflow_path: Path,
+    root: Path,
+    ft_root: Path,
+    pattern: re.Pattern[str],
+) -> list[str]:
+    evidence: list[str] = []
+    source_paths = [
+        *workflow_scope_contract_paths(state, workflow_path, root, ft_root),
+        *workflow_artifact_paths_by_name(state, workflow_path, root, ft_root, "source-row-inventory.md"),
+    ]
+    for source_path in dedupe_paths(source_paths):
+        try:
+            content = source_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        display_path = rel(source_path, root)
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            if pattern.search(line):
+                evidence.append(f"{display_path}:{line_number}:{line.strip()[:180]}")
+                if len(evidence) >= 20:
+                    return evidence
+    return evidence
+
+
+def oracle_inventory_summary(path: Path) -> dict[str, Any]:
+    content = path.read_text(encoding="utf-8")
+    rows = markdown_table_rows_from_text(content)
+    if not rows:
+        return {
+            "has_table": False,
+            "missing_columns": [],
+            "gap_rows_without_gap": [],
+            "decisions": [],
+        }
+
+    header = normalize_table_header(rows[0])
+    required_columns = {
+        "scope_obligation_id",
+        "source_ref",
+        "field_or_block",
+        "oracle_source",
+        "decision",
+        "gap_id",
+        "analyst_question",
+        "handoff_rule",
+    }
+    if path.name == REQUIREDNESS_ORACLE_INVENTORY_NAME:
+        required_columns.update({"marker_oracle_found", "empty_value_oracle_found"})
+    else:
+        required_columns.add("observable_oracle_found")
+    missing_columns = sorted(required_columns - set(header))
+
+    parsed_rows: list[dict[str, str]] = []
+    for row in rows[1:]:
+        parsed_rows.append(
+            {
+                column_name: row[index].strip().strip("`") if index < len(row) else ""
+                for index, column_name in enumerate(header)
+            }
+        )
+
+    gap_rows_without_gap: list[str] = []
+    decisions: list[str] = []
+    for index, row in enumerate(parsed_rows, start=2):
+        decision = row.get("decision", "").strip().strip("`").lower()
+        gap_id = row.get("gap_id", "").strip()
+        scope_obligation_id = row.get("scope_obligation_id", "").strip() or f"row-{index}"
+        if decision:
+            decisions.append(decision)
+        if decision in {"gap_required", "clarification_required"} and not real_gap_ids(gap_id):
+            gap_rows_without_gap.append(f"{scope_obligation_id}:decision={decision};gap_id={gap_id or '-'}")
+
+    return {
+        "has_table": True,
+        "missing_columns": missing_columns,
+        "gap_rows_without_gap": gap_rows_without_gap,
+        "decisions": decisions,
+    }
+
+
 SESSION_LOG_REQUIRED_STAGES = {
     "ft-source-locator",
     "ft-scope-analyzer",
@@ -2636,7 +2728,12 @@ def validate_active_transition_prompt(
         }
         if prompt_path.name == "prompt.scope-gaps-to-reviewer.md":
             required_scope_input_names.add("workflow-state.yaml")
-        for conditional_name in ("source-parity-check.md", "mockup-visual-inventory.md"):
+        for conditional_name in (
+            "source-parity-check.md",
+            "mockup-visual-inventory.md",
+            NEGATIVE_ORACLE_INVENTORY_NAME,
+            REQUIREDNESS_ORACLE_INVENTORY_NAME,
+        ):
             if resolving_artifact_by_name(conditional_name, workflow_artifact_values, workflow_path, root, ft_root) is not None:
                 required_scope_input_names.add(conditional_name)
 
@@ -5430,6 +5527,8 @@ DICTIONARY_INVENTORY_ALLOWED_STATUSES = (
 )
 
 MOCKUP_VISUAL_INVENTORY_NAME = "mockup-visual-inventory.md"
+NEGATIVE_ORACLE_INVENTORY_NAME = "negative-oracle-inventory.md"
+REQUIREDNESS_ORACLE_INVENTORY_NAME = "requiredness-oracle-inventory.md"
 
 MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS = {
     "mockup_path",
@@ -5449,6 +5548,20 @@ MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS = {
 MOCKUP_SOURCE_RE = re.compile(
     r"\bmockup\b|mockups?[\\/]|макет|макеты|\.(?:png|jpe?g|webp)\b",
     re.IGNORECASE,
+)
+NEGATIVE_ORACLE_SCOPE_RE = re.compile(
+    r"\b(?:validation_domains|validation|numeric|digits?|date[-_ ]?time|email|e-mail|length|"
+    r"allowed[-_ ]?values?|dictionary|reference[-_ ]?list|mask|invalid|negative)\b|"
+    r"\b(?:(?:input|value|field)[-_ ]?format|format[-_ ]?(?:rule|restriction|validation|mask))\b|"
+    r"(?:валидац|числов|цифр|e-mail|email|длин|маск|справочн|перечень|недопуст|"
+    r"не\s+долж|только\s+\w+|формат.{0,40}(?:пол|знач|ввод|валид|маск)|"
+    r"дат[аы].{0,40}(?:валид|формат|будущ|прошед|раньше|позже))",
+    flags=re.IGNORECASE,
+)
+REQUIREDNESS_ORACLE_SCOPE_RE = re.compile(
+    r"\b(?:requiredness|mandatory|required[-_ ]?(?:field|when|source|marker))\b|"
+    r"(?:обязател|колонк[аи]\s+`?О`?|`О`\s*=|^|\s)О\s*(?:=|:|yes|да|\|)",
+    flags=re.IGNORECASE,
 )
 
 
@@ -15196,6 +15309,102 @@ def validate_workflow_state(
         )
         findings.extend(inventory_findings)
         checks.extend(inventory_checks)
+
+    scope_analyzer_ready_state = (
+        current_stage == "ft-scope-analyzer"
+        and stage_status in {"ready-for-gap-review", "ready-for-next-stage"}
+        and next_skill in {"ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-iteration"}
+    )
+    if scope_analyzer_ready_state:
+        oracle_requirements = [
+            (
+                NEGATIVE_ORACLE_INVENTORY_NAME,
+                "workflow-state-scope-analyzer-missing-negative-oracle-inventory",
+                "Negative oracle inventory is required for validation restrictions",
+                (
+                    "Scope analysis found validation/format/date/email/length/numeric/allowed-values signals. "
+                    "Before routing downstream, it must decide whether each invalid class has an observable oracle "
+                    "or must become a GAP/clarification."
+                ),
+                scope_oracle_signal_evidence(state, path, root, ft_root, NEGATIVE_ORACLE_SCOPE_RE),
+            ),
+            (
+                REQUIREDNESS_ORACLE_INVENTORY_NAME,
+                "workflow-state-scope-analyzer-missing-requiredness-oracle-inventory",
+                "Requiredness oracle inventory is required for mandatory fields",
+                (
+                    "Scope analysis found requiredness/mandatory-field signals. Before routing downstream, it must "
+                    "decide whether requiredness is testable through a visible marker or empty-value validation oracle, "
+                    "or must become a GAP/clarification."
+                ),
+                scope_oracle_signal_evidence(state, path, root, ft_root, REQUIREDNESS_ORACLE_SCOPE_RE),
+            ),
+        ]
+
+        for inventory_name, finding_id, title, details, signal_evidence in oracle_requirements:
+            check_name = finding_id.replace("workflow-state-", "")
+            if not signal_evidence:
+                checks.append(Check(check_name, "pass", f"{inventory_name} not required by scope signals.", display_path))
+                continue
+
+            inventory_paths = workflow_artifact_paths_by_name(state, path, root, ft_root, inventory_name)
+            if not inventory_paths:
+                findings.append(
+                    Finding(
+                        id=finding_id,
+                        severity="error",
+                        category="artifact-links",
+                        title=title,
+                        details=details,
+                        path=display_path,
+                        evidence=signal_evidence[:10],
+                        recommended_action=(
+                            f"Create/link `{inventory_name}` in required_inputs/latest_artifacts, or keep the "
+                            "scope workflow blocked until oracle/gap handling is explicit."
+                        ),
+                    )
+                )
+                checks.append(Check(check_name, "fail", f"{inventory_name} is missing.", display_path))
+                continue
+
+            inventory_errors: list[str] = []
+            for inventory_path in inventory_paths:
+                try:
+                    summary = oracle_inventory_summary(inventory_path)
+                except UnicodeDecodeError:
+                    inventory_errors.append(f"{rel(inventory_path, root)}:not-utf8")
+                    continue
+                if not summary["has_table"]:
+                    inventory_errors.append(f"{rel(inventory_path, root)}:no parseable table")
+                if summary["missing_columns"]:
+                    inventory_errors.append(
+                        f"{rel(inventory_path, root)}:missing columns {', '.join(summary['missing_columns'][:8])}"
+                    )
+                if summary["gap_rows_without_gap"]:
+                    inventory_errors.extend(
+                        f"{rel(inventory_path, root)}:{error}"
+                        for error in summary["gap_rows_without_gap"][:8]
+                    )
+
+            if inventory_errors:
+                findings.append(
+                    Finding(
+                        id=finding_id.replace("missing", "invalid"),
+                        severity="error",
+                        category="artifact-format",
+                        title=f"{inventory_name} is incomplete",
+                        details=(
+                            "Scope-level oracle inventories must use the canonical columns and every "
+                            "`gap_required` / `clarification_required` row must link a real GAP-*."
+                        ),
+                        path=display_path,
+                        evidence=inventory_errors[:12],
+                        recommended_action=f"Rewrite `{inventory_name}` using the canonical reference format.",
+                    )
+                )
+                checks.append(Check(check_name.replace("missing", "invalid"), "fail", f"{inventory_name} is invalid.", display_path))
+            else:
+                checks.append(Check(check_name, "pass", f"{inventory_name} resolves and has required shape.", display_path))
 
     if current_stage == "ft-source-locator":
         if not linked_source_selection_paths:

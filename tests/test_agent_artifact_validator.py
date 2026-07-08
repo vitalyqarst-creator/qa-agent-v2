@@ -2188,6 +2188,250 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-scope-analyzer-missing-clarification-requests", finding_ids)
 
+    def test_scope_analyzer_ready_handoff_requires_oracle_inventories_for_validation_signals(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_session_log(fixture_root / "scope-analyzer-session-log.md", skill="ft-scope-analyzer")
+            self.write_valid_source_selection(fixture_root / "source-selection.md")
+            (fixture_root / "scope-contract.md").write_text(
+                "\n".join(
+                    [
+                        "# Scope Contract",
+                        "",
+                        "## Scope Complexity Assessment",
+                        "",
+                        "| attribute | value |",
+                        "| --- | --- |",
+                        "| validation_domains | numeric; date-time |",
+                        "| requiredness | mandatory fields, column O |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "scope-coverage-gaps.md").write_text(
+                "\n".join(
+                    [
+                        "# Scope Coverage Gaps",
+                        "",
+                        "- Gaps: `1`",
+                        "- Blocking gaps: `no`",
+                        "",
+                        "### GAP-001",
+                        "",
+                        "**Source:** `Section 1 / GSR 1`",
+                        "**Scope Obligation ID(s):** `SO-NEG-001`, `SO-REQ-001`",
+                        "**Impact:** `non-blocking`",
+                        "**Blocks Ready For Review:** `no`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "scope-clarification-requests.md").write_text(
+                "# Scope Clarification Requests\n\n- GAP-001: clarify validation and requiredness oracle.\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "prompt.scope-to-iteration.md").write_text(
+                "\n".join(
+                    [
+                        "# Prompt",
+                        "",
+                        "## Goal",
+                        "Run the iteration stage.",
+                        "",
+                        "## Inputs",
+                        "- `source-selection.md`",
+                        "- `scope-contract.md`",
+                        "- `scope-coverage-gaps.md`",
+                        "- `scope-clarification-requests.md`",
+                        "",
+                        "## Guardrails",
+                        "Do not expand scope.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "ft_slug: ft-sample",
+                        "scope_slug: ui-main-info",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-next-stage",
+                        "current_round: 0",
+                        "next_skill: ft-test-case-iteration",
+                        "required_inputs:",
+                        "  - source-selection.md",
+                        "  - scope-contract.md",
+                        "  - scope-coverage-gaps.md",
+                        "  - scope-clarification-requests.md",
+                        "  - prompt.scope-to-iteration.md",
+                        "latest_artifacts:",
+                        "  session_log: scope-analyzer-session-log.md",
+                        "  source_selection: source-selection.md",
+                        "  scope_contract: scope-contract.md",
+                        "  scope_coverage_gaps: scope-coverage-gaps.md",
+                        "  scope_clarification_requests: scope-clarification-requests.md",
+                        "  prompt_scope_to_iteration: prompt.scope-to-iteration.md",
+                        "open_questions: []",
+                        "blocking_reasons: []",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "error",
+                "--session-log-policy",
+                "strict",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-scope-analyzer-missing-negative-oracle-inventory", finding_ids)
+        self.assertIn("workflow-state-scope-analyzer-missing-requiredness-oracle-inventory", finding_ids)
+
+    def test_scope_analyzer_ready_handoff_accepts_valid_oracle_inventories(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_session_log(fixture_root / "scope-analyzer-session-log.md", skill="ft-scope-analyzer")
+            self.write_valid_source_selection(fixture_root / "source-selection.md")
+            (fixture_root / "scope-contract.md").write_text(
+                "\n".join(
+                    [
+                        "# Scope Contract",
+                        "",
+                        "## Scope Complexity Assessment",
+                        "",
+                        "| attribute | value |",
+                        "| --- | --- |",
+                        "| validation_domains | numeric; date-time |",
+                        "| requiredness | mandatory fields, column O |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "scope-coverage-gaps.md").write_text(
+                "\n".join(
+                    [
+                        "# Scope Coverage Gaps",
+                        "",
+                        "- Gaps: `1`",
+                        "- Blocking gaps: `no`",
+                        "",
+                        "### GAP-001",
+                        "",
+                        "**Source:** `Section 1 / GSR 1`",
+                        "**Scope Obligation ID(s):** `SO-NEG-001`, `SO-REQ-001`",
+                        "**Impact:** `non-blocking`",
+                        "**Blocks Ready For Review:** `no`",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "scope-clarification-requests.md").write_text(
+                "# Scope Clarification Requests\n\n- GAP-001: clarify validation and requiredness oracle.\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "negative-oracle-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "# Negative Oracle Inventory",
+                        "",
+                        "| scope_obligation_id | source_ref | field_or_block | restriction_type | invalid_class | source_statement | representative_invalid_value | observable_oracle_found | oracle_source | decision | gap_id | analyst_question | handoff_rule |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SO-NEG-001 | Section 1 / GSR 1 | Amount | numeric | letters | Digits only. | 12A | no | not_found | gap_required | GAP-001 | How is invalid input rejected? | Do not create executable negative TC until clarified. |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "requiredness-oracle-inventory.md").write_text(
+                "\n".join(
+                    [
+                        "# Requiredness Oracle Inventory",
+                        "",
+                        "| scope_obligation_id | source_ref | field_or_block | requiredness_source | required_when | marker_oracle_found | empty_value_oracle_found | oracle_source | decision | gap_id | analyst_question | handoff_rule |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SO-REQ-001 | Section 1 / GSR 1 | Amount | mandatory field | always | no | no | not_found | gap_required | GAP-001 | How is an empty required field rejected? | Do not cover requiredness through valid value only. |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "prompt.scope-to-iteration.md").write_text(
+                "\n".join(
+                    [
+                        "# Prompt",
+                        "",
+                        "## Goal",
+                        "Run the iteration stage.",
+                        "",
+                        "## Inputs",
+                        "- `source-selection.md`",
+                        "- `scope-contract.md`",
+                        "- `scope-coverage-gaps.md`",
+                        "- `scope-clarification-requests.md`",
+                        "- `negative-oracle-inventory.md`",
+                        "- `requiredness-oracle-inventory.md`",
+                        "",
+                        "## Guardrails",
+                        "Do not expand scope.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "ft_slug: ft-sample",
+                        "scope_slug: ui-main-info",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-next-stage",
+                        "current_round: 0",
+                        "next_skill: ft-test-case-iteration",
+                        "required_inputs:",
+                        "  - source-selection.md",
+                        "  - scope-contract.md",
+                        "  - scope-coverage-gaps.md",
+                        "  - scope-clarification-requests.md",
+                        "  - negative-oracle-inventory.md",
+                        "  - requiredness-oracle-inventory.md",
+                        "  - prompt.scope-to-iteration.md",
+                        "latest_artifacts:",
+                        "  session_log: scope-analyzer-session-log.md",
+                        "  source_selection: source-selection.md",
+                        "  scope_contract: scope-contract.md",
+                        "  scope_coverage_gaps: scope-coverage-gaps.md",
+                        "  scope_clarification_requests: scope-clarification-requests.md",
+                        "  negative_oracle_inventory: negative-oracle-inventory.md",
+                        "  requiredness_oracle_inventory: requiredness-oracle-inventory.md",
+                        "  prompt_scope_to_iteration: prompt.scope-to-iteration.md",
+                        "open_questions: []",
+                        "blocking_reasons: []",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "error",
+                "--session-log-policy",
+                "strict",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("workflow-state-scope-analyzer-missing-negative-oracle-inventory", finding_ids)
+        self.assertNotIn("workflow-state-scope-analyzer-missing-requiredness-oracle-inventory", finding_ids)
+
     def test_scope_analyzer_ready_for_gap_review_accepts_scope_gap_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
