@@ -23,7 +23,7 @@ Do not expand the scope while writing. New source ambiguity, missing mandatory h
 3. If DOCX and PDF are both available for the main FT, read `source-parity-check.md` before writer handoff. Missing mandatory parity evidence blocks `ready-for-review`.
 4. For UI scopes, read `mockup-visual-inventory.md` before using mockups. Use mockups only to make UI steps concrete; do not infer business rules, allowed values, requiredness, validation or expected results from screenshots.
 5. For table-heavy or row-level parity scopes, follow `writer-table-workflow.md` before ledger and TC writing.
-6. Build coverage obligations and metrics for applicable dimensions before TC writing; one independently checkable obligation becomes one atom or one explicit `GAP-*`.
+6. Build coverage obligations and metrics for applicable dimensions before TC writing; one independently checkable obligation becomes one atom, one candidate TC obligation, or one explicit `GAP-*`.
 7. Build atomic requirements from source-backed statements. One independently checkable obligation becomes one atom.
 8. Create or update the canonical test-case file under `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
 9. Keep every `TC-*` executable, observable and traceable to `ATOM-*`, requirement code, source row or explicit `GAP-*`.
@@ -38,7 +38,7 @@ Runtime rules:
 
 - one test case covers one check and one main expected result;
 - do not combine positive acceptance and invalid-value rejection in one `TC-*`;
-- do not use `TC-*` as a container for gap or unclear notes;
+- do not use `TC-*` as a container for gap or unclear notes; candidate UI calibration TC are allowed only with `oracle_status = ui-calibration-required` and explicit calibration marker;
 - do not turn metadata-only statements such as value type into standalone behavior without a source-backed observable oracle;
 - do not use source dumps, extraction artifacts or generic FT references as expected results;
 - keep exact requirement codes such as `GSR 22` when present;
@@ -52,7 +52,7 @@ Use `coverage-runtime-checklist.md` as the default coverage prompt. Load deep co
 - integration/API/async/persistence/internal effects: `coverage-integration-async.md`;
 - full validator or quality-gate remediation: `coverage-checklist.md`.
 
-If a requirement has no observable artifact, route it to `coverage gap` or `unclear`; do not fabricate API, DB, queue, status or UI evidence.
+If a requirement has no observable artifact, route it to `coverage gap` or `unclear`; do not fabricate API, DB, queue, status or UI evidence. Exception: source-backed input restriction/requiredness obligations with unknown UI mechanism become candidate TC with `ui-calibration-required`, not pure gaps.
 
 For numeric-only, exact-length, action-created blocks, repeatable blocks, checkbox-list, generated document mapping or high-risk combinations, use `coverage-obligation-table-format.md`, `test-design-coverage-metrics-format.md`, `fixture-catalog-format.md` and `risk-priority-map-format.md` as applicable before writing `TC-*`.
 

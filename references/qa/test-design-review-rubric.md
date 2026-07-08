@@ -272,6 +272,7 @@ Reviewer проверяет:
 20b. TC не использует unresolved generic valid baseline/test data и не строит expected result на `значении из тестовых данных`, если concrete input не задан. Если конкретика недоступна из источников, это `GAP-*` / `unclear`, а не executable TC.
 20c. TC не использует placeholder traceability, source-rule oracle, generic editability steps, closed-list oracle without absence-of-extra-values, or derived-obligation contamination. These smells are blocking for semantic sign-off unless the affected TC is explicitly out-of-scope or non-baseline exploratory evidence.
 20d. Если TC ссылается на `GAP-*` как на нерешенный способ выполнить действие, увидеть feedback или выбрать exact oracle, такой TC не считается исполнимым coverage до split/resolution; reviewer блокирует sign-off даже при корректной структуре Markdown.
+20e. `ui-calibration-required` / `candidate-ui-calibration` TC не требует exact UI-oracle, но требует marker, `scope_obligation_id` traceability и отсутствие выдуманной UI-реакции.
 21. Если atom/TC содержит правило вида `A и B`, reviewer проверяет, могут ли `A` и `B` pass/fail независимо. Если да, объединение является `atomarity` error.
 22. Action/async TC с expected result `действие инициируется` допустим только при named observable artifact. Без artifact это `expected-result` / `async` error или `GAP-*`.
 

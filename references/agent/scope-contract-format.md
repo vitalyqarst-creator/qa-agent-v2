@@ -36,7 +36,7 @@
 - Если PDF для structural cross-check отсутствует, укажи это явно в секции `Контекст`.
 - Если DOCX и PDF основного ФТ доступны, `source-parity-check.md` должен быть создан рядом с `scope-contract.md` до handoff к writer/reviewer.
 - Если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий, рядом со `scope-contract.md` должен быть создан `source-row-inventory.md` до handoff к writer/reviewer.
-- Если complexity/source rows выявляют validation/format ограничения или обязательность, создай рядом соответствующий oracle inventory: `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md`; строки `gap_required` / `clarification_required` связывай с `scope-coverage-gaps.md` через `Scope Obligation ID(s)`.
+- Если complexity/source rows выявляют validation/format ограничения или обязательность, создай рядом соответствующий oracle inventory: `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md`; строки `candidate_tc_required` передавай writer-у как candidate TC с `oracle_status = ui-calibration-required`, а строки `gap_required` / `clarification_required` связывай с `scope-coverage-gaps.md` через `Scope Obligation ID(s)`.
 - Если подтвержденный UI scope содержит источник типа `mockup` или путь `mockups/*`, рядом со `scope-contract.md` должен быть создан `mockup-visual-inventory.md` по `references/agent/mockup-visual-inventory-format.md`. Недостаточно перечислить файл макета: его визуальное содержимое должно быть открыто и зафиксировано. Если макет нельзя открыть, не переводите scope в `ready-for-next-stage`; используйте `blocked-input`.
 - `Scope Complexity Assessment` обязателен для каждого подтвержденного scope, даже если scope простой.
 - `Внутренние Рабочие Пакеты` обязательны для каждого подтвержденного scope. Даже простой scope должен иметь минимум один пакет `WP-01`.
@@ -120,6 +120,7 @@ Complexity decision:
   - `source-row-inventory.md`, если нужен row/table parity handoff;
   - `negative-oracle-inventory.md`, если есть validation/format restrictions;
   - `requiredness-oracle-inventory.md`, если есть обязательность;
+  - `negative-ui-calibration-policy.md`, если inventories содержат `candidate_tc_required`;
   - `mockup-visual-inventory.md`, если scope содержит mockup.
 - Scope готов к handoff, когда созданы все обязательные артефакты.
 - Scope готов к handoff только если в `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` явно перенесены package-by-package gate, обязательный `package_id` для `ATOM-*`/`TC-*`, Package Test Design Plan gate и запрет переходить к следующему package без package self-check.
