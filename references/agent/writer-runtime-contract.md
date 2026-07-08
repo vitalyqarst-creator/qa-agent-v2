@@ -30,6 +30,7 @@ Conditional inputs:
 - `source-parity-check.md` обязателен, если основной ФТ доступен в DOCX и PDF;
 - `source-row-inventory.md` обязателен для row-level/table parity;
 - `mockup-visual-inventory.md` обязателен для UI scope с mockup/screen image;
+- `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` обязательны, если scope handoff содержит validation/format restrictions или requiredness obligations;
 - structured findings и traceability matrix обязательны для `revision_from_findings`, если они были переданы reviewer-ом.
 
 ## Hard Stops
@@ -39,7 +40,7 @@ Conditional inputs:
 - FT-пакет или scope не выбран;
 - отсутствует обязательный input из handoff;
 - есть blocking `coverage gaps` без accepted-risk решения;
-- expected behavior нельзя вывести из ФТ или разрешенных материалов;
+- expected behavior нельзя вывести из ФТ или разрешенных материалов, и obligation нельзя честно оформить как `ui-calibration-required` candidate TC;
 - writer обнаружил новый gap, который блокирует исполнимый результат;
 - simple runtime context оказался недостаточным: нужен table/UI/revision/validator deep context из manifest;
 - технический fallback привел к compact draft, потере детализации, one-shot giant write или непроверенному mojibake output.
@@ -54,6 +55,7 @@ Conditional inputs:
 4. Разложи требования на coverage obligations, atomic statements или explicit gaps.
 5. Построй coverage plan и metrics по `coverage-runtime-checklist.md`; для mandatory classes используй `Coverage Obligation Table`.
 6. Напиши `TC-*` по `test-case-runtime-format.md`.
+6a. Для `oracle_status = ui-calibration-required` создай candidate TC по `negative-ui-calibration-policy.md`; не заменяй его общим `GAP-*`.
 7. Проверь traceability: каждый `TC-*` связан с `ATOM-*` / requirement code / source reference.
 8. Выполни writer self-check и применимые quality gates.
 9. Обнови `workflow-state.yaml` и создай `prompt.writer-to-reviewer.round-N.md`, если draft готов к review.
@@ -87,6 +89,7 @@ Default writer output:
 - Full writer output: `writer-output-format.md`
 - Writer Quality Gate details: `writer-quality-gate-format.md`
 - Coverage obligations: `references/agent/coverage-obligation-table-format.md`
+- Negative UI calibration: `references/agent/negative-ui-calibration-policy.md`
 - Coverage metrics: `references/agent/test-design-coverage-metrics-format.md`
 - Fixture catalog: `references/agent/fixture-catalog-format.md`
 - Risk / Priority Map: `references/agent/risk-priority-map-format.md`

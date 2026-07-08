@@ -35,7 +35,7 @@
 - Не используй альтернативные negative oracles через `или`: `значение очищено, не сохранено или поле подсвечено`, `символ отклонен или значение осталось пустым/предыдущим`. Выбери один подтвержденный observable oracle или оформи `GAP-*` / `unclear`.
 - Не используй source-rule oracle: `по правилу из источника`, `по правилу видимости из источника`, `согласно источнику`, `согласно ФТ` вместо конкретного наблюдаемого результата.
 - Не добавляй exact text, colors, sorting, normalization, status codes or backend effects unless they are source-backed.
-- Если behavior unclear, создай `GAP-*` / `unclear`, а не executable TC.
+- Если behavior unclear, создай `GAP-*` / `unclear`, а не executable TC. Для source-backed restriction с unknown UI reaction используй candidate markers from `negative-ui-calibration-policy.md`.
 - Каждый `TC-*` должен иметь traceability to source statement; gap-only notes не оформляются как `TC-*`.
 - `Трассировка` является обязательным source-link полем. `Ссылка на ФТ`, `Источник требования` и `Источник / цитата требования` допустимы только если добавляют недублирующую навигацию, иерархию источника или короткую реальную цитату. Не заполняй эти поля тем же набором `ATOM-*`/`SRC-*`, который уже указан в `Трассировка`.
 - В `Трассировка` и optional source fields не оставляй placeholder `-`, `N/A` или пустой элемент между разделителями. Если у source statement нет `GSR`/`REQ`, укажи `ATOM-*`, `SRC-*`, раздел/строку/страницу и цитату без фиктивного id.
@@ -62,6 +62,8 @@
 7. boundary/equivalence/dependency checks, если применимы и source-backed.
 
 Для input restrictions не додумывай механизм enforcement. `Только цифры`, length или mask задают класс допустимых значений, но не доказывают, что UI фильтрует ввод, очищает поле, показывает marker или блокирует переход. Используй field-state только с evidence, transition-state только с полным valid fixture остальных обязательных полей, иначе `GAP-*` / `unclear`.
+
+Если такой restriction пришел из oracle inventory с `decision = candidate_tc_required`, сохраняй проверку как candidate TC по `negative-ui-calibration-policy.md`.
 
 Для numeric/input rejection не заменяй один unsupported oracle другим. Если validator или reviewer отклонил `значение не отображается`, `значение очищено`, `символы отфильтрованы` или `значение не принято` как неподтвержденный UI-механизм, writer не должен исправлять это на `поле подсвечено красным`, `появляется ошибка`, `Следующий шаг заблокирован` или `раздел не открыт`, если source прямо не задает такую реакцию именно для invalid numeric/input class. Разрешены только:
 

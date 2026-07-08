@@ -70,6 +70,7 @@
 - обновляет `ui-validation-report.md`;
 - обновляет `ui-evidence-index.md`;
 - актуализирует `automation-ready` по фактически подтвержденному UI behavior;
+- для `candidate-ui-calibration` фиксирует observed UI behavior, предлагает regression-ready expected result и меняет `oracle_status` на `observed-ui-backed` только в automation-ready версии с evidence;
 - при необходимости обновляет агрегирующие списки неподтвержденных кейсов.
 
 ## Правила обновления после UI-прогона

@@ -117,6 +117,8 @@ User comments after a run are input for rerun, not evidence for direct status ch
 
 Automation-ready case может уточнять executable flow только по фактически проверенному UI behavior.
 
+Для `candidate-ui-calibration` case evidence должно дополнительно фиксировать фактический trigger валидации, observed UI reaction, message text если есть, transition/save effect и вывод, какой regression-ready expected result предлагается. Без такого evidence `oracle_status` нельзя менять с `ui-calibration-required` на `observed-ui-backed`.
+
 Если evidence limited:
 
 - сохраняй case в automation-ready;

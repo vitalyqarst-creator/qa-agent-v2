@@ -40,6 +40,7 @@
   - `boundary`
   - `equivalence`
   - `dependency`
+- Для candidate UI calibration finding указывай `ui-calibration-required` или `candidate-ui-calibration` в `evidence`.
 - Для `test-design` finding и для категорий `coverage`, `test-design`, `expected-result`, `scope` обязательно указывать `coverage_dimension`. Используй `other` только если применимая dimension отсутствует в словаре, и объясни это в `problem`.
 
 ## Рекомендуемый шаблон findings artifact

@@ -24,6 +24,8 @@ Skill не пересматривает scope, не заменяет session-bas
 - при необходимости support-файлы и mockups из того же FT-пакета для интерпретации расхождений;
 - рабочий Playwright CLI через wrapper script.
 
+Если набор содержит `**Статус тест-кейса:** candidate-ui-calibration` или `**Статус oracle:** ui-calibration-required`, UI-stage должен выполнить calibration: найти фактический trigger валидации, зафиксировать observed UI behavior, предложить regression-ready expected result и перевести oracle только в `observed-ui-backed` после evidence.
+
 Если `automation-ready` файл для нужного scope отсутствует, но baseline файл в `fts/<ft-slug>/test-cases/` уже существует, skill должен сначала создать initial `automation-ready` версию на основе baseline и только потом использовать ее как вход для UI-прогона. Подробный lifecycle см. в [../../references/qa/automation-ready-lifecycle.md](../../references/qa/automation-ready-lifecycle.md).
 
 ## Выходы
@@ -71,6 +73,7 @@ Skill не пересматривает scope, не заменяет session-bas
 14. Если после прогона пользователь дает комментарий с уточнением воспроизведения, ожидаемого поведения или недостающего шага, используй этот комментарий как вход для повторной UI-проверки нужного кейса, а не как прямое основание для смены статуса.
 15. Перед актуализацией статуса, evidence или automation-ready кейса перепройди затронутый кейс в UI с учетом пользовательского комментария и заново подтверди либо не подтверди воспроизводимость ожидаемого поведения.
 16. Для `confirmed` кейсов разрешено дополнять и конкретизировать предусловия, тестовые данные, шаги и ожидаемый результат под реально наблюдаемый UI, если трассировка к ФТ сохраняется.
+16a. Для `candidate-ui-calibration` кейсов зафиксируй observed UI behavior в `ui-validation-report.md` и `ui-evidence-index.md`, обнови automation-ready expected result на один конкретный observed oracle, измени `Статус oracle` на `observed-ui-backed` и сохрани связь с исходным candidate/baseline. Baseline FT-first файл не переписывай без evidence.
 17. Для `mismatch-ft-ui` кейсов разрешено отражать фактический executable flow UI, включая дополнительные действия, нужные для прохождения ветки в интерфейсе, но расхождение с ФТ должно оставаться отдельной явной пометкой `FT/UI Divergence`.
 18. Если прохождение кейса требует дополнительного действия, неочевидного из baseline, фиксируй это действие в самом automation-ready кейсе, а не оставляй его только в `Automation Notes`.
 19. Для `blocked-*` и `not-automatable-manual-only` кейсов не удаляй кейс из automation-ready версии: оставляй blocker или limitation как часть результата и не додумывай недостающий executable path.
@@ -81,6 +84,7 @@ Skill не пересматривает scope, не заменяет session-bas
 - Карта skill-ов: [../README.md](../README.md)
 - Индекс контрактов инструкций: [../../references/agent/instruction-contract-index.md](../../references/agent/instruction-contract-index.md)
 - Политика UI evidence: [../../references/agent/ui-evidence-policy.md](../../references/agent/ui-evidence-policy.md)
+- Negative UI calibration policy: [../../references/agent/negative-ui-calibration-policy.md](../../references/agent/negative-ui-calibration-policy.md)
 - Workflow state: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md)
 - Формат next-step prompt: [../../references/agent/next-step-prompt-format.md](../../references/agent/next-step-prompt-format.md)
 - Формат ручного тест-кейса: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)

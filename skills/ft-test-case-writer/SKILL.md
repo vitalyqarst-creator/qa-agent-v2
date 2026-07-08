@@ -45,7 +45,7 @@ description: Пишет новые ручные тест-кейсы по уже 
 
 - Если доступна PDF-версия основного ФТ для сверки структуры, сверяй по ней структуру разделов, коды требований и порядок источника; не используй PDF как замену тексту основного ФТ.
 - Перед `initial_draft` проверь `source-selection.md`: без `xhtml_available: yes` верни `blocked-input`; tables/lists бери из XHTML, DOCX - source of truth, PDF/mockups не заменяют main FT.
-- Если источники не задают поведение, не придумывай поведение, а выноси это в `coverage gaps`.
+- Если источники не задают поведение, не придумывай поведение, а выноси это в `coverage gaps` или UI calibration candidates по runtime contract.
 - В `revision_from_findings` используй structured findings artifact и traceability matrix artifact; Обрабатывай findings с учетом `review_mode`.
 - Для traceability findings и writer response сохраняй связь `traceability_ref = ATOM-*`.
 - Handoff по review mode: `traceability` — закрывай gaps покрытия; `structure` — выравнивай шаблон, порядок, группировку и сквозную нумерацию; `test-design` — добавляй или корректируй проверки и expected results.

@@ -66,6 +66,7 @@ Review only gap quality and routing readiness:
 - each gap has a clear impact, blocking classification and downstream handling rule;
 - each gap with an unresolved decision has a matching analyst-facing item in `scope-clarification-requests.md`;
 - no source-backed requirement was converted into a gap just because writing it is inconvenient;
+- unknown negative/requiredness UI mechanisms are listed as child inventory obligations, not hidden only in parent `GAP-*`;
 - source extraction relied on XHTML when `source-selection.md` requires it;
 - table/list rows present in XHTML were not lost before ledger/TC coverage;
 - no mockup-only detail, internal effect or unsupported expected result is promoted to covered behavior;
@@ -145,6 +146,7 @@ Expected outputs:
     - Проверяй избыточную атомаризацию: несколько кейсов, которые отличаются только одним значением одного и того же списка/справочника и выполняют одну и ту же проверку, должны быть объединены в один кейс на состав списка, если значения не запускают отдельную бизнес-логику.
     - Если ФТ задает закрытый перечень значений, проверяй, что тест-кейс покрывает и наличие ожидаемых значений, и отсутствие лишних значений. Если закрытость перечня не следует из ФТ, не требуй такую проверку и фиксируй неоднозначность только при необходимости.
     - Для правил вида `допустимы только ...` проверяй, что набор не ограничился одним общим кейсом `недопустимые символы`, а содержит отдельные атомарные негативные `equivalence`-проверки по различимым классам невалидного ввода, если такие классы следуют из текста ФТ без домысливания.
+    - Для `ui-calibration-required` / `candidate-ui-calibration` не требуй точный UI-oracle; требуй calibration note, `scope_obligation_id` traceability и отсутствие выдуманной UI-реакции.
     - Для условной видимости проверяй позитивную и негативную ветку по `coverage-checklist.md` и `traceability-rules.md`, если обратная ветка явно следует из ФТ.
     - Для `numeric-format`, `exact-length`, action-created blocks, repeatable blocks, checkbox-list и generated documents проверь наличие соответствующих obligation rows, plan rows, metrics и `TC-*`/`GAP-*`; один общий positive/negative case не доказывает эти classes.
     - Если negative transition или submit-blocking TC ссылается на generic valid baseline, проверь `fixture-catalog.md` или полное раскрытие baseline в TC.
@@ -224,6 +226,7 @@ Rules:
 - Формат traceability matrix: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
 - Формат source parity check: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
 - Формат mockup visual inventory: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
+- Negative UI calibration policy: [../../references/agent/negative-ui-calibration-policy.md](../../references/agent/negative-ui-calibration-policy.md)
 - Legacy traceability matrix report: [../../references/agent/traceability-legacy-matrix-report-2026-05-25.md](../../references/agent/traceability-legacy-matrix-report-2026-05-25.md)
 - Strict validator debt report: [../../references/agent/strict-debt-report-2026-05-25.md](../../references/agent/strict-debt-report-2026-05-25.md)
 - Reviewer sign-off migration report: [../../references/agent/reviewer-signoff-migration-report-2026-05-25.md](../../references/agent/reviewer-signoff-migration-report-2026-05-25.md)

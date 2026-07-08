@@ -2266,6 +2266,9 @@ def oracle_inventory_summary(path: Path) -> dict[str, Any]:
             "has_table": False,
             "missing_columns": [],
             "gap_rows_without_gap": [],
+            "invalid_rows": [],
+            "candidate_rows": [],
+            "row_count": 0,
             "decisions": [],
         }
 
@@ -2274,16 +2277,22 @@ def oracle_inventory_summary(path: Path) -> dict[str, Any]:
         "scope_obligation_id",
         "source_ref",
         "field_or_block",
+        "restriction_type",
         "oracle_source",
+        "oracle_status",
         "decision",
+        "planned_tc_or_gap",
         "gap_id",
         "analyst_question",
         "handoff_rule",
+        "calibration_notes",
     }
     if path.name == REQUIREDNESS_ORACLE_INVENTORY_NAME:
-        required_columns.update({"marker_oracle_found", "empty_value_oracle_found"})
+        required_columns.update({"requiredness_class", "marker_oracle_found", "empty_value_oracle_found"})
     else:
         required_columns.add("observable_oracle_found")
+        if "negative_class" not in header and "invalid_class" not in header:
+            required_columns.add("negative_class")
     missing_columns = sorted(required_columns - set(header))
 
     parsed_rows: list[dict[str, str]] = []
@@ -2296,13 +2305,30 @@ def oracle_inventory_summary(path: Path) -> dict[str, Any]:
         )
 
     gap_rows_without_gap: list[str] = []
+    invalid_rows: list[str] = []
+    candidate_rows: list[str] = []
     decisions: list[str] = []
     for index, row in enumerate(parsed_rows, start=2):
         decision = row.get("decision", "").strip().strip("`").lower()
+        oracle_status = row.get("oracle_status", "").strip().strip("`").lower()
         gap_id = row.get("gap_id", "").strip()
         scope_obligation_id = row.get("scope_obligation_id", "").strip() or f"row-{index}"
         if decision:
             decisions.append(decision)
+        if decision and decision not in ALLOWED_ORACLE_INVENTORY_DECISIONS:
+            invalid_rows.append(f"{scope_obligation_id}:invalid decision={decision}")
+        if oracle_status and oracle_status not in ALLOWED_ORACLE_STATUSES:
+            invalid_rows.append(f"{scope_obligation_id}:invalid oracle_status={oracle_status}")
+        if decision == "candidate_tc_required":
+            candidate_rows.append(scope_obligation_id)
+            if oracle_status != "ui-calibration-required":
+                invalid_rows.append(
+                    f"{scope_obligation_id}:candidate_tc_required requires oracle_status=ui-calibration-required"
+                )
+            if not row.get("planned_tc_or_gap", "").strip():
+                invalid_rows.append(f"{scope_obligation_id}:candidate_tc_required missing planned_tc_or_gap")
+            if not row.get("calibration_notes", "").strip():
+                invalid_rows.append(f"{scope_obligation_id}:candidate_tc_required missing calibration_notes")
         if decision in {"gap_required", "clarification_required"} and not real_gap_ids(gap_id):
             gap_rows_without_gap.append(f"{scope_obligation_id}:decision={decision};gap_id={gap_id or '-'}")
 
@@ -2310,8 +2336,117 @@ def oracle_inventory_summary(path: Path) -> dict[str, Any]:
         "has_table": True,
         "missing_columns": missing_columns,
         "gap_rows_without_gap": gap_rows_without_gap,
+        "invalid_rows": invalid_rows,
+        "candidate_rows": candidate_rows,
+        "row_count": len(parsed_rows),
         "decisions": decisions,
     }
+
+
+def oracle_inventory_candidate_obligations(path: Path, root: Path) -> list[dict[str, str]]:
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+    rows = markdown_table_rows_from_text(content)
+    if not rows:
+        return []
+    header = normalize_table_header(rows[0])
+    obligations: list[dict[str, str]] = []
+    for index, raw_row in enumerate(rows[1:], start=2):
+        row = {
+            column_name: raw_row[column_index].strip().strip("`") if column_index < len(raw_row) else ""
+            for column_index, column_name in enumerate(header)
+        }
+        if row.get("decision", "").strip().lower() != "candidate_tc_required":
+            continue
+        scope_obligation_id = row.get("scope_obligation_id", "").strip()
+        if not scope_obligation_id:
+            scope_obligation_id = f"row-{index}"
+        obligations.append(
+            {
+                "scope_obligation_id": scope_obligation_id,
+                "gap_id": row.get("gap_id", "").strip(),
+                "source_ref": row.get("source_ref", "").strip(),
+                "path": rel(path, root),
+            }
+        )
+    return obligations
+
+
+def validate_candidate_oracle_obligation_coverage(
+    root: Path,
+    inventory_paths: list[Path],
+    test_case_files: list[Path],
+) -> tuple[list[Finding], list[Check]]:
+    obligations: list[dict[str, str]] = []
+    for inventory_path in inventory_paths:
+        obligations.extend(oracle_inventory_candidate_obligations(inventory_path, root))
+    if not obligations:
+        return [], [
+            Check(
+                "oracle-candidate-obligation-coverage",
+                "pass",
+                "No candidate_tc_required oracle obligations found.",
+                rel(root, root),
+            )
+        ]
+
+    searchable_outputs: list[tuple[str, str]] = []
+    for test_case_file in test_case_files:
+        try:
+            searchable_outputs.append((rel(test_case_file, root), test_case_file.read_text(encoding="utf-8")))
+        except UnicodeDecodeError:
+            continue
+
+    missing: list[str] = []
+    for obligation in obligations:
+        obligation_id = obligation["scope_obligation_id"]
+        gap_ids = real_gap_ids(obligation.get("gap_id", ""))
+        tokens = [obligation_id, *gap_ids]
+        if not any(
+            any(token and token in content for token in tokens)
+            for _, content in searchable_outputs
+        ):
+            missing.append(
+                f"{obligation['path']}:{obligation_id}; gap_id={obligation.get('gap_id') or '-'}; source={obligation.get('source_ref') or '-'}"
+            )
+
+    if not missing:
+        return [], [
+            Check(
+                "oracle-candidate-obligation-coverage",
+                "pass",
+                "All candidate_tc_required obligations are linked from writer output.",
+                rel(root, root),
+            )
+        ]
+
+    return [
+        Finding(
+            id="oracle-candidate-obligation-without-test-case",
+            severity="warning",
+            category="coverage",
+            title="Candidate oracle obligations are not covered by candidate test cases",
+            details=(
+                "Rows with `decision = candidate_tc_required` must be carried into writer output as "
+                "candidate TC traceability by matching `scope_obligation_id` or related GAP-*."
+            ),
+            path=rel(root, root),
+            evidence=missing[:20],
+            recommended_action=(
+                "Create candidate TC sections for these obligations and include the stable "
+                "`scope_obligation_id` in `Трассировка` or the TC body."
+            ),
+        )
+    ], [
+        Check(
+            "oracle-candidate-obligation-coverage",
+            "warn",
+            "Some candidate_tc_required obligations are missing candidate TC coverage.",
+            rel(root, root),
+        )
+    ]
 
 
 SESSION_LOG_REQUIRED_STAGES = {
@@ -5529,6 +5664,46 @@ DICTIONARY_INVENTORY_ALLOWED_STATUSES = (
 MOCKUP_VISUAL_INVENTORY_NAME = "mockup-visual-inventory.md"
 NEGATIVE_ORACLE_INVENTORY_NAME = "negative-oracle-inventory.md"
 REQUIREDNESS_ORACLE_INVENTORY_NAME = "requiredness-oracle-inventory.md"
+ORACLE_INVENTORY_NAMES = {NEGATIVE_ORACLE_INVENTORY_NAME, REQUIREDNESS_ORACLE_INVENTORY_NAME}
+ALLOWED_ORACLE_STATUSES = {
+    "source-backed",
+    "common-standard-backed",
+    "analyst-confirmed",
+    "ui-calibration-required",
+    "observed-ui-backed",
+    "not-testable-gap",
+}
+ALLOWED_ORACLE_INVENTORY_DECISIONS = {
+    "executable_tc",
+    "candidate_tc_required",
+    "gap_required",
+    "clarification_required",
+    "not_applicable",
+}
+UI_CALIBRATION_REQUIRED_RE = re.compile(r"\bui-calibration-required\b", flags=re.IGNORECASE)
+CANDIDATE_UI_CALIBRATION_RE = re.compile(
+    r"\b(?:candidate-ui-calibration|requires-ui-calibration)\b",
+    flags=re.IGNORECASE,
+)
+UI_CALIBRATION_NOTE_RE = re.compile(
+    r"Что\s+нужно\s+зафиксировать\s+при\s+UI\s+calibration|"
+    r"what\s+to\s+record\s+during\s+UI\s+calibration|"
+    r"calibration_notes?",
+    flags=re.IGNORECASE,
+)
+UI_CALIBRATION_ALLOWED_EXPECTED_RE = re.compile(
+    r"Конкретн\w+\s+(?:наблюдаем\w+\s+)?механизм\w*[^.\n]{0,120}"
+    r"требу\w+\s+зафиксир\w+\s+при\s+UI\s+calibration",
+    flags=re.IGNORECASE,
+)
+CONCRETE_UI_REACTION_WITHOUT_EVIDENCE_RE = re.compile(
+    r"(?:сообщени[ея]|ошибк[аи]|message|error)\s*(?:[:=]|[\"«`])|"
+    r"(?:красн\w+\s+подсвет|подсвечива\w+\s+красн|red\s+highlight)|"
+    r"(?:кнопк[ауы]\s+[^.\n]{0,60}(?:disabled|недоступн|заблокирован))|"
+    r"(?:точн\w+\s+текст|exact\s+(?:message|text))|"
+    r"(?:значени[ея]\s+[^.\n]{0,80}(?:очища\w+|удаля\w+|не\s+сохраня\w+))",
+    flags=re.IGNORECASE,
+)
 
 MOCKUP_VISUAL_INVENTORY_REQUIRED_TERMS = {
     "mockup_path",
@@ -10472,6 +10647,97 @@ def extract_test_case_field_block(block: str, field_names: list[str]) -> str:
     return block[start:end].strip()
 
 
+def is_ui_calibration_candidate_block(block: str) -> bool:
+    return bool(
+        UI_CALIBRATION_REQUIRED_RE.search(block)
+        or CANDIDATE_UI_CALIBRATION_RE.search(block)
+    )
+
+
+def validate_ui_calibration_candidate_test_cases(
+    blocks: list[tuple[str, str]],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    display_path = rel(path, root)
+    missing_markers: list[str] = []
+    invented_reactions: list[str] = []
+    for test_case_id, block in blocks:
+        if not is_ui_calibration_candidate_block(block):
+            continue
+        has_oracle_status = bool(UI_CALIBRATION_REQUIRED_RE.search(block))
+        has_candidate_status = bool(CANDIDATE_UI_CALIBRATION_RE.search(block))
+        has_calibration_note = bool(UI_CALIBRATION_NOTE_RE.search(block))
+        if not (has_oracle_status and has_candidate_status and has_calibration_note):
+            missing = []
+            if not has_oracle_status:
+                missing.append("oracle_status/ui-calibration-required")
+            if not has_candidate_status:
+                missing.append("candidate-ui-calibration")
+            if not has_calibration_note:
+                missing.append("calibration note")
+            missing_markers.append(f"{test_case_id}:missing={', '.join(missing)}")
+
+        expected_result = extract_test_case_field_block(
+            block,
+            ["Итоговый ожидаемый результат", "Ожидаемый результат", "Expected Result"],
+        )
+        if (
+            has_oracle_status
+            and expected_result
+            and CONCRETE_UI_REACTION_WITHOUT_EVIDENCE_RE.search(expected_result)
+            and not UI_CALIBRATION_ALLOWED_EXPECTED_RE.search(expected_result)
+        ):
+            invented_reactions.append(f"{test_case_id}:expected={expected_result[:180]}")
+
+    findings: list[Finding] = []
+    if missing_markers:
+        findings.append(
+            Finding(
+                id="test-case-ui-calibration-candidate-missing-marker",
+                severity="warning",
+                category="test-case-format",
+                title="UI calibration candidate test cases miss required markers",
+                details=(
+                    "A candidate TC must explicitly expose `ui-calibration-required`, "
+                    "`candidate-ui-calibration` and what must be recorded during UI calibration."
+                ),
+                path=display_path,
+                evidence=missing_markers[:20],
+                recommended_action=(
+                    "Add `Статус oracle: ui-calibration-required`, `Статус тест-кейса: "
+                    "candidate-ui-calibration`, and `Что нужно зафиксировать при UI calibration`."
+                ),
+            )
+        )
+    if invented_reactions:
+        findings.append(
+            Finding(
+                id="test-case-ui-calibration-candidate-invents-ui-reaction",
+                severity="warning",
+                category="expected-result",
+                title="UI calibration candidate asserts a concrete UI reaction",
+                details=(
+                    "`ui-calibration-required` means the exact UI reaction is not known yet. "
+                    "The expected result may state that invalid/empty input must not be accepted, "
+                    "but must not invent a concrete message, highlight, filtering, blocked transition or save behavior."
+                ),
+                path=display_path,
+                evidence=invented_reactions[:20],
+                recommended_action="Replace the invented UI reaction with the canonical calibration wording.",
+            )
+        )
+    has_findings = bool(missing_markers or invented_reactions)
+    return findings, [
+        Check(
+            "test-case-ui-calibration-candidates",
+            "warn" if has_findings else "pass",
+            "UI calibration candidate markers have issues." if has_findings else "UI calibration candidate markers passed.",
+            display_path,
+        )
+    ]
+
+
 def generic_test_case_smell_matches(test_case_id: str, field_values: list[tuple[str, str]]) -> list[str]:
     matches: list[str] = []
     for field_name, value in field_values:
@@ -10862,6 +11128,7 @@ def validate_test_case_quality_smells(
     branch_oracle_records: list[dict[str, str]] = []
     boundary_groups: dict[str, dict[str, Any]] = {}
     for test_case_id, block in blocks:
+        is_calibration_candidate = is_ui_calibration_candidate_block(block)
         expected_result = extract_test_case_expected_result(block)
         test_case_type = extract_test_case_type(block)
         title = extract_test_case_field_block(block, ["Title", "title", "Название"])
@@ -10963,6 +11230,8 @@ def validate_test_case_quality_smells(
         ):
             abstract_oracles.append(f"{test_case_id}:expected={expected_result[:180]}")
         if (
+            not is_calibration_candidate
+            and
             is_negative_test_case_type(test_case_type)
             and steps
             and expected_result
@@ -11079,6 +11348,8 @@ def validate_test_case_quality_smells(
         if expected_result and GENERIC_TEST_DATA_ORACLE_RE.search(expected_result):
             generic_test_data_oracles.append(f"{test_case_id}:expected={expected_result[:150]}; test_data={test_data[:120] or '-'}")
         if (
+            not is_calibration_candidate
+            and
             is_negative_test_case_type(test_case_type)
             and expected_result
             and NONDETERMINISTIC_ALTERNATIVE_ORACLE_RE.search(expected_result)
@@ -11158,6 +11429,8 @@ def validate_test_case_quality_smells(
             or INPUT_FILTERING_ORACLE_SUPPLEMENTAL_RE.search(source_backed_filtering_context)
         )
         if (
+            not is_calibration_candidate
+            and
             is_negative_test_case_type(test_case_type)
             and expected_assumes_input_filtering
             and NUMERIC_INVALID_INPUT_CONTEXT_RE.search(numeric_invalid_context)
@@ -11167,6 +11440,8 @@ def validate_test_case_quality_smells(
                 f"{test_case_id}:expected={expected_result[:160]}; source={source_backed_filtering_context[:120] or '-'}"
             )
         if (
+            not is_calibration_candidate
+            and
             is_negative_test_case_type(test_case_type)
             and expected_result
             and NUMERIC_VALIDATION_FEEDBACK_ORACLE_RE.search(expected_result)
@@ -12640,6 +12915,14 @@ def validate_test_case_file(
     )
     findings.extend(mixed_schema_findings)
     checks.extend(mixed_schema_checks)
+
+    calibration_findings, calibration_checks = validate_ui_calibration_candidate_test_cases(
+        blocks,
+        path,
+        root,
+    )
+    findings.extend(calibration_findings)
+    checks.extend(calibration_checks)
 
     calculation_findings, calculation_checks = validate_calculation_oracles(content, path, root, blocks)
     findings.extend(calculation_findings)
@@ -15376,9 +15659,16 @@ def validate_workflow_state(
                     continue
                 if not summary["has_table"]:
                     inventory_errors.append(f"{rel(inventory_path, root)}:no parseable table")
+                elif summary["row_count"] == 0:
+                    inventory_errors.append(f"{rel(inventory_path, root)}:no child obligation rows")
                 if summary["missing_columns"]:
                     inventory_errors.append(
                         f"{rel(inventory_path, root)}:missing columns {', '.join(summary['missing_columns'][:8])}"
+                    )
+                if summary["invalid_rows"]:
+                    inventory_errors.extend(
+                        f"{rel(inventory_path, root)}:{error}"
+                        for error in summary["invalid_rows"][:8]
                     )
                 if summary["gap_rows_without_gap"]:
                     inventory_errors.extend(
@@ -15395,7 +15685,8 @@ def validate_workflow_state(
                         title=f"{inventory_name} is incomplete",
                         details=(
                             "Scope-level oracle inventories must use the canonical columns and every "
-                            "`gap_required` / `clarification_required` row must link a real GAP-*."
+                            "`candidate_tc_required` row must use `oracle_status = ui-calibration-required`; "
+                            "`gap_required` / `clarification_required` rows must link a real GAP-*."
                         ),
                         path=display_path,
                         evidence=inventory_errors[:12],
@@ -16577,6 +16868,10 @@ def validate(
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
+    oracle_inventories = [
+        *iter_named_markdown(root, NEGATIVE_ORACLE_INVENTORY_NAME),
+        *iter_named_markdown(root, REQUIREDNESS_ORACLE_INVENTORY_NAME),
+    ]
     if root_is_standalone_source_normalization_diagnostic:
         workflow_states = []
         artifact_manifests = []
@@ -16593,6 +16888,7 @@ def validate(
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        oracle_inventories = []
     if root_is_standalone_source_table_normalization:
         workflow_states = []
         artifact_manifests = []
@@ -16608,6 +16904,7 @@ def validate(
         active_text_artifacts = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        oracle_inventories = []
     if root_is_standalone_dictionary_inventory:
         workflow_states = []
         artifact_manifests = []
@@ -16623,6 +16920,7 @@ def validate(
         decision_logs = []
         active_text_artifacts = []
         mockup_visual_inventories = []
+        oracle_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -16694,6 +16992,14 @@ def validate(
         path_findings, path_checks = validate_source_support_duplicates(root, declared_artifact_paths)
         findings.extend(path_findings)
         checks.extend(path_checks)
+
+        candidate_findings, candidate_checks = validate_candidate_oracle_obligation_coverage(
+            root,
+            oracle_inventories,
+            test_case_files,
+        )
+        findings.extend(candidate_findings)
+        checks.extend(candidate_checks)
 
     blocked_writer_gate_suppression_paths = blocked_writer_gate_suppression_test_case_paths(
         workflow_states,
