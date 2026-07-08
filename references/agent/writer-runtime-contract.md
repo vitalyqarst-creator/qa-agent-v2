@@ -55,7 +55,8 @@ Conditional inputs:
 4. Разложи требования на coverage obligations, atomic statements или explicit gaps.
 5. Построй coverage plan и metrics по `coverage-runtime-checklist.md`; для mandatory classes используй `Coverage Obligation Table`.
 6. Напиши `TC-*` по `test-case-runtime-format.md`.
-6a. Для `oracle_status = ui-calibration-required` создай candidate TC по `negative-ui-calibration-policy.md`; не заменяй его общим `GAP-*`.
+6a. Для `oracle_status = ui-calibration-required` создай candidate TC по `negative-ui-calibration-policy.md`; не заменяй его общим `GAP-*` и не выдумывай точную UI-реакцию без source-backed oracle.
+6b. В каждом `TC-*` пиши `Предусловия` как воспроизводимый setup: numbered action setup steps, fixture/API setup или reusable setup profile. Не оставляй magic/passive UI states без действия, которое их создает; `Дождаться` / `Убедиться` допустимы только после setup action.
 7. Проверь traceability: каждый `TC-*` связан с `ATOM-*` / requirement code / source reference.
 8. Выполни writer self-check и применимые quality gates.
 9. Обнови `workflow-state.yaml` и создай `prompt.writer-to-reviewer.round-N.md`, если draft готов к review.

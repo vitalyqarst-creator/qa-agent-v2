@@ -97,6 +97,8 @@ DOM-seeded observation не может быть самостоятельным �
 
 User comments after a run are input for rerun, not evidence for direct status change.
 
+`confirmed` and `mismatch-ft-ui` also require reproducible preconditions. If `Предусловия` contain a magic or passive UI state without action setup steps, fixture/API setup or reusable setup profile, treat the case as not automation-ready until the setup path is recorded.
+
 ## Required Declarations In UI Evidence Index
 
 Если применимо, `ui-evidence-index.md` должен содержать policy block before evidence table:

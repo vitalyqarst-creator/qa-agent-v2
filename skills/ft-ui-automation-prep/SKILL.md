@@ -51,6 +51,7 @@ Skill не пересматривает scope, не заменяет session-bas
    - не меняй baseline файл;
    - не ставь `confirmed`, `mismatch-ft-ui` или `blocked-*` только потому, что файл подготовлен;
    - не переписывай expected result под предполагаемое UI behavior до реального прогона.
+   - если `Предусловия` требуют UI state, но дают только passive state без action setup steps, fixture/API setup или reusable setup profile, пометь кейс как not automation-ready до уточнения setup path; не додумывай путь подготовки.
 7. Используй Playwright CLI в CLI-first режиме. Перед обращением к element refs всегда делай свежий `snapshot`.
 8. Делай повторный `snapshot` после навигации, открытия модалок, крупных UI changes и смены вкладок.
 9. Для каждого кейса проставь один `ui_verification_status`:
@@ -60,6 +61,7 @@ Skill не пересматривает scope, не заменяет session-bas
    - `blocked-access`
    - `blocked-observability`
    - `not-automatable-manual-only`
+   A test case is not automation-ready when `Предусловия` require a UI state but provide only passive state wording without action setup steps, fixture, API setup, or reusable setup profile.
 10. Для каждого кейса со статусом `confirmed` или `mismatch-ft-ui` сохраняй screenshot. Если шаг падает, происходит неожиданная навигация или найден mismatch, дополнительно сохраняй trace.
 11. Индексируй все screenshots, snapshots, traces и logs в `ui-evidence-index.md`.
     - Evidence quality, DOM-seeded observations, local `output/` paths и trace limitations оценивай по [../../references/agent/ui-evidence-policy.md](../../references/agent/ui-evidence-policy.md).

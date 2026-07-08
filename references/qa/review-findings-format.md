@@ -42,6 +42,7 @@
   - `dependency`
 - Для candidate UI calibration finding указывай `ui-calibration-required` или `candidate-ui-calibration` в `evidence`.
 - Для `test-design` finding и для категорий `coverage`, `test-design`, `expected-result`, `scope` обязательно указывать `coverage_dimension`. Используй `other` только если применимая dimension отсутствует в словаре, и объясни это в `problem`.
+- Для невоспроизводимых/passive предусловий без action/fixture/API/profile: `category = test-design`, `coverage_dimension = other`, `test_case_id = TC-*`, marker `non-reproducible-precondition`; для ambiguous setup marker `ambiguous-precondition-setup`.
 
 ## Рекомендуемый шаблон findings artifact
 
