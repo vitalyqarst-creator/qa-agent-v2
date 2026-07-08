@@ -11942,6 +11942,96 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-generic-executable-smell", finding_ids)
 
+    def test_magic_precondition_state_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "magic-precondition.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-PRE-001")
+            content = test_case_file.read_text(encoding="utf-8").replace(
+                "- Form is open.",
+                "- У поля `Адрес регистрации` отображается подсказка о квартире.",
+            )
+            test_case_file.write_text(content, encoding="utf-8")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-non-reproducible-precondition", finding_ids)
+
+    def test_numbered_setup_preconditions_pass_reproducibility_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "numbered-precondition.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-PRE-002")
+            content = test_case_file.read_text(encoding="utf-8").replace(
+                "- Form is open.",
+                "\n".join(
+                    [
+                        "1. Авторизоваться в системе.",
+                        "2. Открыть карточку `Заявка`.",
+                        "3. Ввести адрес регистрации без квартиры.",
+                        "4. Дождаться отображения подсказки о квартире.",
+                    ]
+                ),
+            )
+            test_case_file.write_text(content, encoding="utf-8")
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-non-reproducible-precondition", finding_ids)
+
+    def test_fixture_api_preconditions_pass_reproducibility_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "api-precondition.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-PRE-003")
+            content = test_case_file.read_text(encoding="utf-8").replace(
+                "- Form is open.",
+                "- Создать заявку через API-фикстуру `application_with_client_addresses`.",
+            )
+            test_case_file.write_text(content, encoding="utf-8")
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-non-reproducible-precondition", finding_ids)
+
+    def test_ambiguous_precondition_setup_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "ambiguous-precondition.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-PRE-004")
+            content = test_case_file.read_text(encoding="utf-8").replace(
+                "- Form is open.",
+                "- Выбрать или ввести адрес без квартиры.",
+            )
+            test_case_file.write_text(content, encoding="utf-8")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-ambiguous-precondition-setup", finding_ids)
+
+    def test_reproducible_precondition_rules_are_in_runtime_instructions(self) -> None:
+        writer_skill = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
+        reviewer_skill = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
+        ui_prep_skill = (ROOT_DIR / "skills" / "ft-ui-automation-prep" / "SKILL.md").read_text(encoding="utf-8")
+        runtime_format = (ROOT_DIR / "references" / "qa" / "test-case-runtime-format.md").read_text(encoding="utf-8")
+
+        self.assertIn("воспроизводимые setup steps", writer_skill)
+        self.assertIn("non-reproducible-precondition", reviewer_skill)
+        self.assertIn("not automation-ready", ui_prep_skill)
+        self.assertIn("magic states", runtime_format)
+
     def test_generic_valid_fixture_and_test_data_oracle_smells_warn(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)

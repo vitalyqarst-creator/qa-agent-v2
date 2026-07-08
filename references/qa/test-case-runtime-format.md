@@ -29,6 +29,7 @@
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
 - Не помещай проверяемое действие в предусловия. Для созданного/выбранного/настроенного UI-state укажи путь: шаг пользователя с кнопкой/полем/значением/блоком или fixture/setup artifact; если путь неизвестен, используй `GAP-*` / `unclear`.
+- `Предусловия`: воспроизводимые setup steps, not magic states. Для special UI-state дай numbered UI setup, fixture/API/profile; если путь неизвестен, фиксируй `GAP-*` / `unclear`. Vague setup (`выбрать или ввести`, `при необходимости`, `если нужно`) запрещен.
 - В шагах описывай действие пользователя, а не внутреннюю реализацию.
 - Expected result должен быть наблюдаемым: visible UI state, accepted/rejected value, saved/not saved state, navigation blocked/opened, generated document, message, API/log artifact only if source explicitly allows it.
 - Не используй invisible oracle: `считается невалидным`, `корректно обрабатывается`, `соответствует ФТ`, `по системному правилу`.

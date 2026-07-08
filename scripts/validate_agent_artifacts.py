@@ -10587,6 +10587,39 @@ MULTI_INVALID_CLASS_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+NON_REPRODUCIBLE_PRECONDITION_STATE_RE = re.compile(
+    r"(?:отображается\s+подсказк|поле\s+[^.\n;]{0,80}заполнено|создана\s+строк|добавлена\s+строк|"
+    r"включен\s+ручной\s+ввод|выбран\s+адрес|добавлен\s+телефон|добавлено\s+контактное\s+лицо|"
+    r"hint\s+is\s+(?:shown|displayed)|field\s+[^.\n;]{0,80}is\s+filled|row\s+is\s+(?:created|added)|"
+    r"manual\s+input\s+is\s+enabled|address\s+is\s+selected|phone\s+is\s+added|contact\s+person\s+is\s+added)",
+    flags=re.IGNORECASE,
+)
+PRECONDITION_SETUP_ACTION_RE = re.compile(
+    r"^\s*\d+\.\s+|(?:нажать|ввести|выбрать|открыть|перейти|установить|создать|добавить|авторизоваться|"
+    r"click|press|enter|type|select|open|navigate|set|create|add|log\s+in|sign\s+in)",
+    flags=re.IGNORECASE | re.MULTILINE,
+)
+PRECONDITION_FIXTURE_OR_API_RE = re.compile(
+    r"\b(?:fixture|api|setup\s+profile|test\s+data\s+builder|seed|factory)\b|"
+    r"(?:фикстур|api-фикстур|api\s+фикстур|профиль\s+подготовки|тестовый\s+профиль)",
+    flags=re.IGNORECASE,
+)
+AMBIGUOUS_PRECONDITION_SETUP_RE = re.compile(
+    r"(?:выбрать\s+или\s+ввести|ввести\s+или\s+выбрать|при\s+необходимости|если\s+нужно|"
+    r"select\s+or\s+enter|enter\s+or\s+select|if\s+needed|when\s+needed|as\s+needed)",
+    flags=re.IGNORECASE,
+)
+
+
+def has_precondition_setup_path(preconditions: str) -> bool:
+    return bool(
+        preconditions
+        and (
+            PRECONDITION_SETUP_ACTION_RE.search(preconditions)
+            or PRECONDITION_FIXTURE_OR_API_RE.search(preconditions)
+        )
+    )
+
 
 def branch_choices_in_text(value: str) -> set[str]:
     return {match.group(1).casefold() for match in BRANCH_CHOICE_RE.finditer(value or "")}
@@ -10859,6 +10892,8 @@ def validate_test_case_quality_smells(
     synthetic_requirement_quotes: list[str] = []
     action_created_block_without_cleanup: list[str] = []
     bundled_negative_input_classes: list[str] = []
+    non_reproducible_preconditions: list[str] = []
+    ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
     boundary_groups: dict[str, dict[str, Any]] = {}
     for test_case_id, block in blocks:
@@ -10889,6 +10924,14 @@ def validate_test_case_quality_smells(
         traceability_tokens = normalize_test_case_ref_tokens(traceability)
         ft_reference_tokens = normalize_test_case_ref_tokens(ft_reference)
         requirement_source_tokens = normalize_test_case_ref_tokens(requirement_source)
+        if preconditions and AMBIGUOUS_PRECONDITION_SETUP_RE.search(preconditions):
+            ambiguous_precondition_setup.append(f"{test_case_id}:preconditions={preconditions[:180]}")
+        if (
+            preconditions
+            and NON_REPRODUCIBLE_PRECONDITION_STATE_RE.search(preconditions)
+            and not has_precondition_setup_path(preconditions)
+        ):
+            non_reproducible_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
         if ft_reference_tokens and traceability_tokens and ft_reference_tokens == traceability_tokens:
             duplicated_source_reference_fields.append(
                 f"{test_case_id}:FT Reference duplicates Traceability={traceability[:160]}"
@@ -11266,6 +11309,49 @@ def validate_test_case_quality_smells(
                 f"{record['test_case_id']} vs {other['test_case_id']}: same expected result; "
                 f"{record['evidence']} | {other['evidence']}"
             )
+
+    if non_reproducible_preconditions:
+        findings.append(
+            Finding(
+                id="test-case-non-reproducible-precondition",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases use magic UI states in preconditions",
+                details=(
+                    "`Предусловия` must describe reproducible setup steps, a fixture/API setup, or a reusable setup "
+                    "profile. A bare UI state such as a displayed hint, filled field, created row, enabled manual "
+                    "mode, selected address, added phone or contact person is not enough for manual execution or "
+                    "automation."
+                ),
+                path=display_path,
+                evidence=non_reproducible_preconditions[:30],
+                recommended_action=(
+                    "Rewrite preconditions as numbered setup steps that reach the state, or name the exact fixture/API "
+                    "setup. If the setup path is unknown, use `GAP-*` / `unclear` instead of an executable TC."
+                ),
+            )
+        )
+
+    if ambiguous_precondition_setup:
+        findings.append(
+            Finding(
+                id="test-case-ambiguous-precondition-setup",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases use ambiguous setup alternatives in preconditions",
+                details=(
+                    "Preconditions must choose one reproducible setup path. Phrases such as `выбрать или ввести`, "
+                    "`при необходимости`, `если нужно`, `select or enter` or `if needed` leave automation agents "
+                    "without a deterministic preparation path."
+                ),
+                path=display_path,
+                evidence=ambiguous_precondition_setup[:30],
+                recommended_action=(
+                    "Choose one setup path, split setup variants into separate test cases, or document the exact "
+                    "condition that selects the branch."
+                ),
+            )
+        )
 
     if duplicated_source_reference_fields:
         findings.append(
@@ -12261,6 +12347,8 @@ def validate_test_case_quality_smells(
         or action_created_block_without_cleanup
         or branch_oracles_without_distinction
         or bundled_negative_input_classes
+        or non_reproducible_preconditions
+        or ambiguous_precondition_setup
         or broad_scenario_test_cases
         or excessive_atom_fan_in
     )
