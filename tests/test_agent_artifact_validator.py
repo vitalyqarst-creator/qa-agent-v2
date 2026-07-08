@@ -11960,6 +11960,24 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-non-reproducible-precondition", finding_ids)
 
+    def test_passive_manual_input_precondition_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "passive-precondition.md"
+            self.write_minimal_test_case_file(test_case_file, test_case_id="TC-PRE-001A")
+            content = test_case_file.read_text(encoding="utf-8").replace(
+                "- Form is open.",
+                "1. Включен ручной ввод адреса регистрации.",
+            )
+            test_case_file.write_text(content, encoding="utf-8")
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-non-reproducible-precondition", finding_ids)
+
     def test_numbered_setup_preconditions_pass_reproducibility_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -11971,8 +11989,11 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                     [
                         "1. Авторизоваться в системе.",
                         "2. Открыть карточку `Заявка`.",
-                        "3. Ввести адрес регистрации без квартиры.",
-                        "4. Дождаться отображения подсказки о квартире.",
+                        "3. Установить переключатель `Ввести вручную` для адреса регистрации в значение `Да`.",
+                        "4. Заполнить поле `Регион` допустимым значением.",
+                        "5. Заполнить поле `Дом` значением `1`.",
+                        "6. Оставить поле `Квартира` пустым.",
+                        "7. Дождаться отображения подсказки о квартире.",
                     ]
                 ),
             )
@@ -12030,6 +12051,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertIn("воспроизводимые setup steps", writer_skill)
         self.assertIn("non-reproducible-precondition", reviewer_skill)
         self.assertIn("not automation-ready", ui_prep_skill)
+        self.assertIn("action setup", runtime_format)
         self.assertIn("magic states", runtime_format)
 
     def test_generic_valid_fixture_and_test_data_oracle_smells_warn(self) -> None:

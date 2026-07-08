@@ -41,7 +41,7 @@
   - `equivalence`
   - `dependency`
 - Для `test-design` finding и для категорий `coverage`, `test-design`, `expected-result`, `scope` обязательно указывать `coverage_dimension`. Используй `other` только если применимая dimension отсутствует в словаре, и объясни это в `problem`.
-- Для невоспроизводимых предусловий: `category = test-design`, `coverage_dimension = other`, `test_case_id = TC-*`, marker `non-reproducible-precondition` или `ambiguous-precondition-setup`.
+- Для невоспроизводимых/passive предусловий без action/fixture/API/profile: `category = test-design`, `coverage_dimension = other`, `test_case_id = TC-*`, marker `non-reproducible-precondition`; для ambiguous setup marker `ambiguous-precondition-setup`.
 
 ## Рекомендуемый шаблон findings artifact
 

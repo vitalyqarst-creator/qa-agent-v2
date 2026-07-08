@@ -10588,15 +10588,24 @@ MULTI_INVALID_CLASS_RE = re.compile(
 )
 
 NON_REPRODUCIBLE_PRECONDITION_STATE_RE = re.compile(
-    r"(?:отображается\s+подсказк|поле\s+[^.\n;]{0,80}заполнено|создана\s+строк|добавлена\s+строк|"
-    r"включен\s+ручной\s+ввод|выбран\s+адрес|добавлен\s+телефон|добавлено\s+контактное\s+лицо|"
+    r"(?:отображается\s+подсказк|дождаться\s+отображени[яю]\s+подсказк|"
+    r"убедиться[^.\n;]{0,120}(?:отображается|заполнен[аоы]?|установлен[аоы]?|включен[аоы]?|добавлен[аоы]?)|"
+    r"поле\s+[^.\n;]{0,80}заполнено|ручн\w+\s+пол[яе][^.\n;]{0,120}заполнен[аоы]?|"
+    r"поле\s+[^.\n;]{0,80}оставлено\s+пустым|переключател[ья]\s+[^.\n;]{0,120}установлен[аоы]?|"
+    r"создана\s+строк|добавлена\s+строк|включен\s+ручной\s+ввод|выбран\s+адрес|"
+    r"добавлен\s+телефон|добавлено\s+контактное\s+лицо|"
     r"hint\s+is\s+(?:shown|displayed)|field\s+[^.\n;]{0,80}is\s+filled|row\s+is\s+(?:created|added)|"
-    r"manual\s+input\s+is\s+enabled|address\s+is\s+selected|phone\s+is\s+added|contact\s+person\s+is\s+added)",
+    r"wait\s+for\s+(?:a\s+)?hint\s+to\s+(?:appear|be\s+shown|be\s+displayed)|"
+    r"manual\s+input\s+is\s+enabled|switch\s+[^.\n;]{0,80}is\s+set|address\s+is\s+selected|"
+    r"phone\s+is\s+added|contact\s+person\s+is\s+added)",
     flags=re.IGNORECASE,
 )
 PRECONDITION_SETUP_ACTION_RE = re.compile(
-    r"^\s*\d+\.\s+|(?:нажать|ввести|выбрать|открыть|перейти|установить|создать|добавить|авторизоваться|"
-    r"click|press|enter|type|select|open|navigate|set|create|add|log\s+in|sign\s+in)",
+    r"^\s*(?:[-*]\s*)?(?:\d+\.\s*)?"
+    r"(?:нажать|ввести|выбрать|открыть|перейти|установить|заполнить|очистить|оставить|"
+    r"создать|добавить|авторизоваться|подготовить|закрыть|"
+    r"click|press|enter|type|select|open|navigate|set|fill|clear|leave|create|add|"
+    r"log\s+in|sign\s+in|prepare|close)\b",
     flags=re.IGNORECASE | re.MULTILINE,
 )
 PRECONDITION_FIXTURE_OR_API_RE = re.compile(
@@ -11319,15 +11328,17 @@ def validate_test_case_quality_smells(
                 title="Test cases use magic UI states in preconditions",
                 details=(
                     "`Предусловия` must describe reproducible setup steps, a fixture/API setup, or a reusable setup "
-                    "profile. A bare UI state such as a displayed hint, filled field, created row, enabled manual "
-                    "mode, selected address, added phone or contact person is not enough for manual execution or "
-                    "automation."
+                    "profile. A bare or numbered passive UI state such as a displayed hint, filled field, configured "
+                    "switch, created row, enabled manual mode, selected address, added phone or contact person is not "
+                    "enough for manual execution or automation. Wait/assertion lines such as `Дождаться...` or "
+                    "`Убедиться...` are valid only after an action/setup step that can create the state."
                 ),
                 path=display_path,
                 evidence=non_reproducible_preconditions[:30],
                 recommended_action=(
-                    "Rewrite preconditions as numbered setup steps that reach the state, or name the exact fixture/API "
-                    "setup. If the setup path is unknown, use `GAP-*` / `unclear` instead of an executable TC."
+                    "Rewrite preconditions as numbered action setup steps that reach the state, then add any required "
+                    "wait/assertion as a separate result check, or name the exact fixture/API setup. If the setup path "
+                    "is unknown, use `GAP-*` / `unclear` instead of an executable TC."
                 ),
             )
         )
