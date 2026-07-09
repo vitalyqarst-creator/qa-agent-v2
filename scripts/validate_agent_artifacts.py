@@ -11616,14 +11616,23 @@ def scenario_rationale_domain_mismatch_groups(rationale: str, context: str) -> l
 def production_line_structure_evidence(content: str) -> tuple[list[str], list[str]]:
     heading_evidence: list[str] = []
     metadata_evidence: list[str] = []
-    for line_number, line in enumerate(content.splitlines(), start=1):
-        heading_index = line.find("## TC-")
-        if heading_index > 0:
-            heading_evidence.append(f"line {line_number}: heading starts at column {heading_index + 1}: {line[:160]}")
+    # Split only on LF: bare CR is not a physical Markdown line break in GitHub raw/rendered views.
+    for line_number, line in enumerate(content.split("\n"), start=1):
+        line = line.rstrip("\r")
+        display_line = line.replace("\r", "\\r")
+        for heading_match in re.finditer(r"## TC-", line):
+            heading_index = heading_match.start()
+            if heading_index > 0:
+                heading_evidence.append(
+                    f"line {line_number}: heading starts at column {heading_index + 1}: {display_line[:160]}"
+                )
         for field in PRODUCTION_TEST_CASE_METADATA_FIELDS:
-            field_index = line.find(field)
-            if field_index > 0:
-                metadata_evidence.append(f"line {line_number}: field {field} starts at column {field_index + 1}: {line[:160]}")
+            for field_match in re.finditer(re.escape(field), line):
+                field_index = field_match.start()
+                if field_index > 0:
+                    metadata_evidence.append(
+                        f"line {line_number}: field {field} starts at column {field_index + 1}: {display_line[:160]}"
+                    )
     return heading_evidence, metadata_evidence
 
 
@@ -11635,6 +11644,7 @@ def validate_test_case_quality_smells(
     blocks: list[tuple[str, str]],
     rolling_date_boundary_policy: str = "compatible",
     atomicity_coverage_policy: str = "compatible",
+    physical_content: str | None = None,
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -11762,7 +11772,9 @@ def validate_test_case_quality_smells(
     branch_oracle_records: list[dict[str, str]] = []
     boundary_groups: dict[str, dict[str, Any]] = {}
     if production_test_case_file:
-        production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(content)
+        production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(
+            physical_content if physical_content is not None else content
+        )
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and not REPRESENTATIVE_STRATEGY_RE.search(content):
         missing_representative_strategy.append("partial representative coverage is declared without representative/pairwise strategy or residual risk")
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and REPRESENTATIVE_STRATEGY_RE.search(content):
@@ -13868,7 +13880,8 @@ def validate_test_case_file(
     structural_severity = "warning" if test_case_policy == "strict" else "info"
 
     try:
-        raw_content = path.read_text(encoding="utf-8")
+        raw_file_bytes = path.read_bytes()
+        raw_content = raw_file_bytes.decode("utf-8")
         content = test_case_validation_content(path, root)
     except UnicodeDecodeError as exc:
         findings.append(
@@ -13957,7 +13970,7 @@ def validate_test_case_file(
     blocks = extract_test_case_blocks(content)
     if not blocks:
         if is_production_test_case_path(path):
-            production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(content)
+            production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(raw_content)
             if production_glued_headings:
                 findings.append(
                     Finding(
@@ -14151,6 +14164,7 @@ def validate_test_case_file(
         blocks=blocks,
         rolling_date_boundary_policy=rolling_date_boundary_policy,
         atomicity_coverage_policy=atomicity_coverage_policy,
+        physical_content=raw_content,
     )
     findings.extend(smell_findings)
     checks.extend(smell_checks)

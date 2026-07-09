@@ -73,7 +73,7 @@
 | defect found | Five v3 rationales were copied from unrelated domains: residence postal index described phone/email, client mobile phone described contact-person FIO, work phone described birth-date boundary, home/work phone delete described citizenship/relation, and contact-person phone described passport series/number. |
 | remediation | All 12 rationale fields now use canonical `**Сценарное обоснование:**`; the five unrelated rationales were rewritten to name the checked field/block, BSR/source rows and sibling negative/candidate TC where applicable. |
 | TC count impact | `none`; no TC split/merge was performed because the defect was rationale quality, not coverage decomposition. |
-| physical structure check | v3 has no `## TC-*` heading or runtime metadata field glued to preceding text (`bad_lines=0`). |
+| physical structure check | v3 has no `## TC-*` heading or runtime metadata field glued to preceding text (`bad_lines=0`). Follow-up normalized the committed artifact to UTF-8 without BOM and LF-only physical lines, then added a raw-content validator regression for CR-only/glued Markdown. |
 
 ## Validator Evidence
 
@@ -89,7 +89,7 @@
 | `python scripts\validate_agent_artifacts.py --root fts\AutoFin\work\canary-runs\independent-wide-canary-v3 --json --input-restriction-gap-policy strict-canary --rolling-date-boundary-policy strict-canary --atomicity-coverage-policy strict-canary --fail-on error` | pass; 0 errors; 5 generated source-basis artifacts checked |
 | `python scripts\run_tests.py --suite architecture` | pass; 0 findings |
 | `python scripts\run_tests.py --suite agent-layer-fast` | pass; 215 tests, 1 skipped |
-| `python scripts\run_tests.py --suite artifact-validator-sharded` | pass; 337 tests across 7 shards |
+| `python scripts\run_tests.py --suite artifact-validator-sharded` | pass; 338 tests across 7 shards |
 | `git diff --check` | pass |
 
 ## Severity Behavior

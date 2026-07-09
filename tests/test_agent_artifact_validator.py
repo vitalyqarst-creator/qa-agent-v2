@@ -14758,6 +14758,39 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(findings["production-markdown-heading-not-at-line-start"]["severity"], "error")
         self.assertEqual(findings["production-metadata-field-not-at-line-start"]["severity"], "error")
 
+    def test_production_cr_only_markdown_structure_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "structure.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_bytes(
+                (
+                    "# Structure\r"
+                    "## TC-RAT-001\r"
+                    "**Название:** Registration address block is shown\r"
+                    "**Тип:** Positive\r"
+                    "**Постусловия:** Not required. ## TC-RAT-002\r"
+                    "**Название:** Residence address block is shown\r"
+                    "**Тип:** Positive\r"
+                ).encode("utf-8")
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["production-markdown-heading-not-at-line-start"]["severity"], "error")
+        self.assertEqual(findings["production-metadata-field-not-at-line-start"]["severity"], "error")
+
     def test_generated_artifact_used_as_source_of_truth_errors_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
