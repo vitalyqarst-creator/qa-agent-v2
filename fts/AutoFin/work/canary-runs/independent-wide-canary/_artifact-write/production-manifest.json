@@ -1,0 +1,26 @@
+{
+  "target_path": "../../../../test-cases/4.3-application-card-client-addresses-contacts-independent-wide-canary.md",
+  "preamble_file": "production-preamble.md",
+  "sections": [
+    {
+      "level": 1,
+      "heading": "Тест-кейсы",
+      "content_file": "production-wp01.md"
+    },
+    {
+      "level": 1,
+      "heading": "Адрес фактического места жительства",
+      "content_file": "production-wp02.md"
+    },
+    {
+      "level": 1,
+      "heading": "Контакты клиента",
+      "content_file": "production-wp03.md"
+    },
+    {
+      "level": 1,
+      "heading": "Контактные лица",
+      "content_file": "production-wp04.md"
+    }
+  ]
+}
