@@ -15839,6 +15839,253 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
         self.assertEqual(findings["source-backed-ui-term-inconsistency"]["severity"], "warning")
 
+    def write_persistence_calibration_package(self, fixture_root: Path) -> Path:
+        package_dir = fixture_root / "fts" / "sample-ft" / "work" / "calibration" / "persistence-save-flow"
+        package_dir.mkdir(parents=True)
+        for name in (
+            "ba-ui-calibration-questions.md",
+            "persistence-tc-conversion-plan.md",
+            "save-flow-calibration-checklist.md",
+            "persistence-calibration-evaluation-report.md",
+        ):
+            (package_dir / name).write_text(
+                "# Persistence calibration\n\nBA-PS-001..BA-PS-007 are tracked here.\n",
+                encoding="utf-8",
+            )
+        return package_dir
+
+    def test_candidate_persistence_tc_without_calibration_questions_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=[
+                    "**Статус тест-кейса:** candidate-persistence-calibration",
+                ],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-candidate-without-calibration-questions"]["severity"], "error")
+
+    def test_candidate_persistence_tc_with_calibration_package_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_calibration_package(fixture_root)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=[
+                    "**Статус тест-кейса:** candidate-persistence-calibration",
+                    "**Требуется подтверждение:** `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005`.",
+                ],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-candidate-without-calibration-questions", finding_ids)
+
+    def test_executable_persistence_tc_with_unconfirmed_save_flow_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=[
+                    "**Статус oracle:** save-flow-calibration-required",
+                    "**Требуется подтверждение:** Exact save action is not source-backed.",
+                ],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["executable-persistence-with-unconfirmed-save-flow"]["severity"], "error")
+
+    def test_executable_persistence_tc_with_save_placeholder_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card confirmed method.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Save action source is confirmed by BA."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-save-placeholder-in-executable-tc"]["severity"], "error")
+
+    def test_candidate_persistence_tc_may_contain_save_placeholder(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_calibration_package(fixture_root)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card confirmed method.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=[
+                    "**Статус тест-кейса:** candidate-persistence-calibration",
+                    "**Требуется подтверждение:** `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005`.",
+                ],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-save-placeholder-in-executable-tc", finding_ids)
+
+    def write_persistence_work_dir_report(self, fixture_root: Path) -> Path:
+        work_dir = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "persistence-smoke-canary"
+        work_dir.mkdir(parents=True)
+        (work_dir / "persistence-smoke-evaluation-report.md").write_text(
+            "\n".join(
+                [
+                    "# Persistence Smoke Evaluation Report",
+                    "",
+                    "| item | value |",
+                    "|---|---|",
+                    "| status | `candidate-persistence-calibration` |",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return work_dir
+
+    def test_persistence_work_dir_without_calibration_package_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            work_dir = self.write_persistence_work_dir_report(fixture_root)
+
+            result = self.run_validator("--root", str(work_dir), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-calibration-package-missing"]["severity"], "error")
+
+    def test_persistence_work_dir_with_full_calibration_package_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            work_dir = self.write_persistence_work_dir_report(fixture_root)
+            self.write_persistence_calibration_package(fixture_root)
+
+            result = self.run_validator("--root", str(work_dir), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-calibration-package-missing", finding_ids)
+
+    def test_relation_terminology_mismatch_warns_without_mapping(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Contact person relation persists after reopening the card",
+                test_data="Field `Отношение к клиенту`: `сестра/брат`. Source uses `Отношение к заявителю`.",
+                steps=[
+                    "1. Select `сестра/брат` in `Отношение к клиенту`.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, `Отношение к клиенту` displays `сестра/брат`.",
+                postconditions="Delete the added contact person or use isolated data.",
+                extra_fields=["**Требуется подтверждение:** Save action source is confirmed by BA."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-terminology-source-mismatch"]["severity"], "warning")
+
+    def test_relation_terminology_mapping_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Contact person relation persists after reopening the card",
+                test_data="Field `Отношение к клиенту`: `сестра/брат`. Source uses `Отношение к заявителю`.",
+                steps=[
+                    "1. Select `сестра/брат` in `Отношение к клиенту`.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, `Отношение к клиенту` displays `сестра/брат`.",
+                postconditions="Delete the added contact person or use isolated data.",
+                extra_fields=[
+                    "**Требуется подтверждение:** Save action source is confirmed by BA.",
+                    "**Terminology evidence:** `Отношение к заявителю` is the source-backed term; `Отношение к клиенту` is the UI alias under calibration.",
+                ],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-terminology-source-mismatch", finding_ids)
+
+    def test_existing_persistence_smoke_artifact_remains_valid_with_calibration_package(self) -> None:
+        artifact = (
+            ROOT_DIR
+            / "fts"
+            / "AutoFin"
+            / "test-cases"
+            / "4.3-application-card-client-addresses-contacts-persistence-smoke.md"
+        )
+
+        result = self.run_validator(
+            "--root",
+            str(artifact),
+            "--json",
+            "--atomicity-coverage-policy",
+            "strict-canary",
+            "--rolling-date-boundary-policy",
+            "strict-canary",
+            "--fail-on",
+            "error",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["summary"]["errors_count"], 0)
+
     def test_independent_wide_canary_v3_reports_human_review_quality_findings(self) -> None:
         artifact = (
             ROOT_DIR

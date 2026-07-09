@@ -11,6 +11,8 @@
 | package_notes | `fts/AutoFin/AGENT-NOTES.md` |
 | v4_field_level_canary_role | style/reference fixture only; not source of truth |
 | decision_source_basis | FT source rows and BSR references from `FT4AutoFinFinal.xhtml` / DOCX source of truth |
+| calibration_package | `fts/AutoFin/work/calibration/persistence-save-flow/` |
+| save_flow_source_review | `fts/AutoFin/work/canary-runs/persistence-smoke-canary/save-flow-source-review.md` |
 
 ## Persistence Source Findings
 
@@ -31,6 +33,7 @@
 | --- | --- | --- | --- |
 | `Блок «Контакты клиента»` | `Контакты клиента` | `Контактная информация` | Use the section 4.3 term in persistence smoke TC. The appendix term is not used as the primary block label for this scope. |
 | `Блок «Контактные лица» (блок-повторитель)` | `Контактные лица` | `Контактное лицо` | Use the section 4.3 repeated-block term in persistence smoke TC. Singular wording may describe an entity, not the UI block name. |
+| `Отношение к заявителю` | `Отношение к заявителю` | `Отношение к клиенту` | Use the section 4.3 source term. `Отношение к клиенту` was removed from persistence smoke TC. |
 
 ## Decision
 
@@ -41,11 +44,20 @@ Executable after confirmation:
 - reopen path is source-backed by `BSR 35`;
 - exact save action, exit-after-save path and cleanup mechanics require BA/UI confirmation.
 
+Conversion handoff:
+- BA/UI questions: `fts/AutoFin/work/calibration/persistence-save-flow/ba-ui-calibration-questions.md`;
+- TC conversion plan: `fts/AutoFin/work/calibration/persistence-save-flow/persistence-tc-conversion-plan.md`;
+- calibration checklist: `fts/AutoFin/work/calibration/persistence-save-flow/save-flow-calibration-checklist.md`;
+- calibration evaluation: `fts/AutoFin/work/calibration/persistence-save-flow/persistence-calibration-evaluation-report.md`.
+
 ## BA Questions / Blockers
 
 | id | blocker | question | affected_tc |
 | --- | --- | --- | --- |
 | `BA-PS-001` | Exact save action is not source-backed. | What exact UI action saves changes in the application card for section 4.3? Is it manual save, autosave, transition save, or another mechanism? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
-| `BA-PS-002` | Exit-after-save path is not source-backed. | After saving, how should a tester leave the card before reopening it without discarding saved data? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
-| `BA-PS-003` | Cleanup mechanics are not source-backed. | Which values/entities can be safely reset, and should smoke tests use isolated applications instead of restoring shared data? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
-| `BA-PS-004` | Application date source for rolling birth-date data is not source-backed. | Which date must be used as `D` for contact-person birth-date calculations: current UI business date, server date, or tester local date? | `TC-AF43-PS-006`; setup in `TC-AF43-PS-007` |
+| `BA-PS-002` | Save success oracle is not source-backed. | What observable signal confirms that save succeeded? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
+| `BA-PS-003` | Exit-after-save path is not source-backed. | After saving, how should a tester leave the card before reopening it without discarding saved data? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
+| `BA-PS-004` | Same-application reopen flow is only partially source-backed. | How should the tester find/select and reopen the same saved application after save? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
+| `BA-PS-005` | Cleanup mechanics are not source-backed. | Which values/entities can be safely reset, and should smoke tests use isolated applications instead of restoring shared data? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
+| `BA-PS-006` | Application date source for rolling birth-date data is not source-backed. | Which date must be used as `D` for contact-person birth-date calculations: current UI business date, server date, or tester local date? | `TC-AF43-PS-006`; setup in `TC-AF43-PS-007` |
+| `BA-PS-007` | Runtime UI terminology may diverge from FT source term. | Should persistence artifacts use FT term `Отношение к заявителю` if the UI label differs? | `TC-AF43-PS-006`; `TC-AF43-PS-007`; related v4 TC |

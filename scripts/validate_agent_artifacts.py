@@ -3497,6 +3497,13 @@ def validate_generated_artifact_source_basis(
     sampled_group_evidence: list[str] = []
     coverage_matrix_domain_mismatches: list[str] = []
     field_level_canary_without_persistence_scope_note: list[str] = []
+    persistence_calibration_package_missing: list[str] = []
+    if PERSISTENCE_CANDIDATE_STATUS_RE.search(content):
+        missing_files = persistence_calibration_package_missing_files(path, root)
+        if missing_files:
+            persistence_calibration_package_missing.append(
+                f"missing files: {', '.join(missing_files)}"
+            )
     if path.name == "coverage-matrix.md":
         representative_section = extract_markdown_section(content, "Representative / Pairwise Coverage Decisions") or content
         if re.search(r"e-?mail|e-mail|электронн\w*\s+почт", content, flags=re.IGNORECASE) and not re.search(
@@ -3565,6 +3572,20 @@ def validate_generated_artifact_source_basis(
                 path=display_path,
                 evidence=field_level_canary_without_persistence_scope_note[:20],
                 recommended_action="Add an explicit save/persistence follow-up or out-of-scope rationale to the canary evaluation report.",
+            )
+        )
+    if persistence_calibration_package_missing:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-calibration-package-missing",
+                severity=severity,
+                category="test-design",
+                title="Persistence candidate artifacts lack calibration package",
+                details="Candidate persistence smoke artifacts require a BA/UI save-flow calibration package before they can be treated as controlled handoff material.",
+                path=display_path,
+                evidence=persistence_calibration_package_missing[:20],
+                recommended_action="Add `ba-ui-calibration-questions.md`, `persistence-tc-conversion-plan.md`, `save-flow-calibration-checklist.md` and `persistence-calibration-evaluation-report.md` under `work/calibration/persistence-save-flow/`.",
             )
         )
 
@@ -11103,6 +11124,45 @@ PERSISTENCE_TC_SIGNAL_RE = re.compile(
     r"повторн\w*\s+откры[\s\S]{0,80}(?:сохран\w*|значен)",
     flags=re.IGNORECASE,
 )
+PERSISTENCE_CANDIDATE_STATUS_RE = re.compile(
+    r"candidate-persistence-calibration",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_CALIBRATION_LINK_RE = re.compile(
+    r"BA-PS-\d{3}|persistence-save-flow|ba-ui-calibration-questions|calibration\s+package",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_SAVE_FLOW_CONFIRMED_RE = re.compile(
+    r"save[-\s]?flow\s*[:=]\s*confirmed|save\s+flow\s+confirmed|"
+    r"exact\s+save\s+action\s*[:=]\s*(?!not\s+found)(?:confirmed|source-backed|found)|"
+    r"точн\w*\s+действ\w*\s+сохран\w*[\s\S]{0,80}(?:подтвержден|source-backed)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_SAVE_FLOW_UNCONFIRMED_RE = re.compile(
+    r"save[-\s]?flow-calibration-required|exact\s+save\s+action\s+(?:is\s+)?not\s+source-backed|"
+    r"exact\s+save\s+action\s+found\s*\|\s*no|save\s+success\s+oracle\s+found\s*\|\s*no|"
+    r"exit-after-save\s+flow\s+found\s*\|\s*no|cleanup/isolation\s+found\s*\|\s*no|"
+    r"точн\w*\s+UI-механизм\s+сохран\w*[\s\S]{0,120}не\s+найден|"
+    r"точн\w*\s+действ\w*\s+сохран\w*[\s\S]{0,120}не\s+source-backed",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_SAVE_PLACEHOLDER_RE = re.compile(
+    r"подтвержденн\w*\s+(?:для\s+[^.\n]{0,80}\s+)?способ\w*|source-backed\s+способ|confirmed\s+method",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_RELATION_CLIENT_RE = re.compile(r"Отношение\s+к\s+клиенту", flags=re.IGNORECASE)
+PERSISTENCE_RELATION_APPLICANT_RE = re.compile(r"Отношение\s+к\s+заявителю", flags=re.IGNORECASE)
+PERSISTENCE_TERMINOLOGY_MAPPING_RE = re.compile(
+    r"Terminology evidence|terminology\s+mapping|source-backed\s+term|терминолог\w*\s+mapping|"
+    r"source-backed\s+terminology|UI\s+alias",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_CALIBRATION_PACKAGE_REQUIRED_FILES = (
+    "ba-ui-calibration-questions.md",
+    "persistence-tc-conversion-plan.md",
+    "save-flow-calibration-checklist.md",
+    "persistence-calibration-evaluation-report.md",
+)
 PERSISTENCE_SAVE_ACTION_RE = re.compile(
     r"\bsave\b|save\s+card|save\s+application|сохран\w*\s+(?:карточк|заявк|данн|изменен|значен)",
     flags=re.IGNORECASE,
@@ -12034,6 +12094,37 @@ def representative_strategy_data_mismatch_evidence(test_case_id: str, strategy_t
     return evidence
 
 
+def ft_package_root_for_path(path: Path) -> Path | None:
+    parts = list(path.resolve().parts)
+    if "fts" not in parts:
+        return None
+    fts_index = parts.index("fts")
+    if len(parts) <= fts_index + 1:
+        return None
+    return Path(*parts[: fts_index + 2])
+
+
+def persistence_calibration_package_dir(path: Path, root: Path) -> Path:
+    package_root = ft_package_root_for_path(path) or ft_package_root_for_path(root)
+    if package_root is not None:
+        return package_root / "work" / "calibration" / "persistence-save-flow"
+    root_dir = root if root.is_dir() else root.parent
+    return root_dir / "work" / "calibration" / "persistence-save-flow"
+
+
+def persistence_calibration_package_missing_files(path: Path, root: Path) -> list[str]:
+    package_dir = persistence_calibration_package_dir(path, root)
+    return [
+        name
+        for name in PERSISTENCE_CALIBRATION_PACKAGE_REQUIRED_FILES
+        if not (package_dir / name).is_file()
+    ]
+
+
+def has_persistence_calibration_package(path: Path, root: Path) -> bool:
+    return not persistence_calibration_package_missing_files(path, root)
+
+
 def validate_test_case_quality_smells(
     content: str,
     path: Path,
@@ -12185,6 +12276,10 @@ def validate_test_case_quality_smells(
     rolling_date_boundary_unformalized_relative_value: list[str] = []
     persistence_grouped_smoke_without_residual_risk: list[str] = []
     source_backed_ui_term_inconsistency: list[str] = []
+    persistence_candidate_without_calibration_questions: list[str] = []
+    executable_persistence_with_unconfirmed_save_flow: list[str] = []
+    persistence_save_placeholder_in_executable_tc: list[str] = []
+    persistence_terminology_source_mismatch: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
@@ -12323,6 +12418,27 @@ def validate_test_case_quality_smells(
         persistence_context = " ".join([title, scenario_rationale, expected_result])
         persistence_body = " ".join([steps, expected_result, postconditions])
         if PERSISTENCE_TC_SIGNAL_RE.search(persistence_context):
+            is_persistence_candidate = bool(PERSISTENCE_CANDIDATE_STATUS_RE.search(block))
+            if is_persistence_candidate and not (
+                PERSISTENCE_CALIBRATION_LINK_RE.search(block)
+                or PERSISTENCE_CALIBRATION_LINK_RE.search(content[:2000])
+                or has_persistence_calibration_package(path, root)
+            ):
+                persistence_candidate_without_calibration_questions.append(
+                    f"{test_case_id}:candidate status lacks BA/UI calibration links or package"
+                )
+            if (
+                not is_persistence_candidate
+                and PERSISTENCE_SAVE_FLOW_UNCONFIRMED_RE.search(" ".join([content[:2500], block]))
+                and not PERSISTENCE_SAVE_FLOW_CONFIRMED_RE.search(" ".join([content[:2500], block]))
+            ):
+                executable_persistence_with_unconfirmed_save_flow.append(
+                    f"{test_case_id}:persistence TC is executable while save/reopen/cleanup flow remains unconfirmed"
+                )
+            if not is_persistence_candidate and PERSISTENCE_SAVE_PLACEHOLDER_RE.search(block):
+                persistence_save_placeholder_in_executable_tc.append(
+                    f"{test_case_id}:placeholder save wording remains in executable persistence TC"
+                )
             if preconditions and PERSISTENCE_PASSIVE_PRECONDITION_RE.search(preconditions):
                 persistence_precondition_passive_state.append(
                     f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}"
@@ -12388,6 +12504,14 @@ def validate_test_case_quality_smells(
             and not SOURCE_BACKED_UI_TERM_DECISION_RE.search(content)
         ):
             source_backed_ui_term_inconsistency.append(f"{test_case_id}:mixed section/appended UI block terms")
+        if (
+            PERSISTENCE_RELATION_CLIENT_RE.search(block)
+            and PERSISTENCE_RELATION_APPLICANT_RE.search(content)
+            and not PERSISTENCE_TERMINOLOGY_MAPPING_RE.search(content)
+        ):
+            persistence_terminology_source_mismatch.append(
+                f"{test_case_id}:mixed `Отношение к клиенту` / `Отношение к заявителю` without mapping"
+            )
         if production_test_case_file:
             if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
                 environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
@@ -14347,6 +14471,65 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if persistence_candidate_without_calibration_questions:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-candidate-without-calibration-questions",
+                severity=severity,
+                category="test-design",
+                title="Candidate persistence TC lacks calibration handoff links",
+                details="A candidate persistence TC must link BA/UI calibration questions or a calibration package so it cannot be mistaken for fully executable coverage.",
+                path=display_path,
+                evidence=persistence_candidate_without_calibration_questions[:20],
+                recommended_action="Link the TC to BA/UI calibration question IDs or add the persistence save-flow calibration package.",
+            )
+        )
+
+    if executable_persistence_with_unconfirmed_save_flow:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="executable-persistence-with-unconfirmed-save-flow",
+                severity=severity,
+                category="test-design",
+                title="Executable persistence TC has unconfirmed save flow",
+                details="Persistence TC must not be converted from candidate status while save action, save success oracle, exit/reopen and cleanup remain unconfirmed.",
+                path=display_path,
+                evidence=executable_persistence_with_unconfirmed_save_flow[:20],
+                recommended_action="Restore `candidate-persistence-calibration` or add source-backed/BA-confirmed save-flow evidence before conversion.",
+            )
+        )
+
+    if persistence_save_placeholder_in_executable_tc:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-save-placeholder-in-executable-tc",
+                severity=severity,
+                category="test-design",
+                title="Executable persistence TC still uses save placeholder wording",
+                details="Placeholder save wording is allowed only while the TC remains `candidate-persistence-calibration`.",
+                path=display_path,
+                evidence=persistence_save_placeholder_in_executable_tc[:20],
+                recommended_action="Replace placeholder wording with the confirmed exact save action or restore candidate calibration status.",
+            )
+        )
+
+    if persistence_terminology_source_mismatch:
+        findings.append(
+            Finding(
+                id="persistence-terminology-source-mismatch",
+                severity="warning",
+                category="traceability",
+                title="Persistence artifact mixes relation-field terminology",
+                details="Artifacts must not mix `Отношение к клиенту` and `Отношение к заявителю` without an explicit source-backed terminology mapping.",
+                path=display_path,
+                evidence=persistence_terminology_source_mismatch[:20],
+                recommended_action="Normalize to the source-backed term or add a terminology mapping with source evidence.",
+            )
+        )
+
     if persist_coverage_missing:
         findings.append(
             Finding(
@@ -14522,6 +14705,10 @@ def validate_test_case_quality_smells(
         or rolling_date_boundary_unformalized_relative_value
         or persistence_grouped_smoke_without_residual_risk
         or source_backed_ui_term_inconsistency
+        or persistence_candidate_without_calibration_questions
+        or executable_persistence_with_unconfirmed_save_flow
+        or persistence_save_placeholder_in_executable_tc
+        or persistence_terminology_source_mismatch
         or noncanonical_scenario_rationale_fields
         or scenario_rationale_domain_mismatches
         or scenario_rationale_too_generic

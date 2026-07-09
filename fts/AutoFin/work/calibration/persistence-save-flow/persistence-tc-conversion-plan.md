@@ -1,0 +1,13 @@
+# Persistence TC conversion plan
+
+No persistence smoke TC is converted in this task. Conversion requires confirmed save action, save success oracle, exit/reopen flow and cleanup/isolation strategy.
+
+| TC id | current status | blocked by questions | conversion after confirmation | fields to update |
+|---|---|---|---|---|
+| `TC-AF43-PS-001` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005` | Convert to executable Positive after save/reopen/cleanup flow is confirmed. | Remove candidate status, replace `подтвержденным способом`, update save success oracle and cleanup wording. |
+| `TC-AF43-PS-002` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005` | Convert to executable Positive after save/reopen/cleanup flow is confirmed. | Remove candidate status, replace `подтвержденным способом`, update save success oracle and cleanup wording. |
+| `TC-AF43-PS-003` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005` | Convert to executable Positive after save/reopen/cleanup flow is confirmed. | Remove candidate status, replace `подтвержденным способом`, update save success oracle and cleanup wording. |
+| `TC-AF43-PS-004` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005` | Convert to executable Positive after save/reopen/cleanup flow is confirmed. | Remove candidate status, replace `подтвержденным способом`, update save success oracle and cleanup wording. |
+| `TC-AF43-PS-005` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005` | Convert to executable Positive after save/reopen/cleanup flow is confirmed. | Remove candidate status, replace `подтвержденным способом`, update save success oracle and cleanup wording. |
+| `TC-AF43-PS-006` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005`, `BA-PS-006`, `BA-PS-007` | Convert to executable Positive after save/reopen/cleanup flow, date source and relation terminology are confirmed. | Remove candidate status, replace `подтвержденным способом`, update save success oracle, cleanup wording, `D` authority if needed, and relation field label if BA/UI contradicts FT. |
+| `TC-AF43-PS-007` | `candidate-persistence-calibration` | `BA-PS-001`, `BA-PS-002`, `BA-PS-003`, `BA-PS-004`, `BA-PS-005`, `BA-PS-007` | Convert to executable Positive after setup save/reopen, delete save/reopen, cleanup and relation terminology are confirmed. | Remove candidate status, replace `подтвержденным способом`, update setup save oracle, delete save oracle and cleanup wording. |
