@@ -14,6 +14,8 @@
 | mockups_used_as_requirement_source | `no` |
 | previous_test_cases_used | `no` |
 | original_independent_wide_canary_used_as_success_template | `no` |
+| v2_generated_artifact_role | diagnostic failure fixture only; not source of truth |
+| decision_source_basis | `FT4AutoFinFinal.xhtml` source rows, `FT4AutoFinFinal.docx` as main FT source of truth, BSR references |
 
 ## Selected Scope
 

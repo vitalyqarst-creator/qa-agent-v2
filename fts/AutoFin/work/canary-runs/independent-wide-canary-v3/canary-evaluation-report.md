@@ -10,6 +10,7 @@
 | work_dir | `fts/AutoFin/work/canary-runs/independent-wide-canary-v3/` |
 | source_basis | `FT4AutoFinFinal.xhtml`, `FT4AutoFinFinal.docx`, package `AGENT-NOTES.md` |
 | old_independent_wide_canary_role | diagnostic failure fixture only |
+| generated_v2_source_of_truth | `no`; v2 was used only to identify failure modes, while decisions cite source rows and BSR |
 
 ## Counts
 
@@ -63,6 +64,7 @@
 | FIO representative strategy | `TC-AF43-AW3-020` and `coverage-matrix.md` state selected combinations, omitted combinations and residual risk for the shared surname/first-name/patronymic restriction. |
 | positive allowed-class coverage | Positive allowed-class TC are retained, including `TC-AF43-AW3-020` for FIO and positive phone/postal/email/date cases. |
 | candidate-negative coverage | Visible source-backed input restrictions still have candidate-negative TC with concrete invalid values and UI calibration markers. |
+| generated artifact source guard | V3 work artifacts state that v2 is diagnostic/failure fixture only and cite source rows/BSR for decisions. |
 
 ## Validator Evidence
 
@@ -70,12 +72,13 @@
 | --- | --- |
 | `python -m py_compile scripts\validate_agent_artifacts.py` | pass |
 | `python -m pytest tests\test_agent_artifact_validator.py -k "source_backed_input_restriction_gap_only or gap_only_visible_input_restriction or representative_strategy or overmerged_source_backed or partial_similar_field_coverage"` | pass; 11 passed |
+| `python -m pytest tests\test_agent_artifact_validator.py -k "generated_artifact or representative_strategy or overmerged_source_backed or partial_similar_field_coverage"` | pass; 11 passed |
 | `python scripts\validate_agent_artifacts.py --root fts\AutoFin\test-cases\4.3-application-card-client-addresses-contacts-independent-wide-canary-v2.md --json --atomicity-coverage-policy strict-canary --fail-on error` | expected fail; 2 errors: `test-case-excessive-atom-fan-in`, `test-case-overmerged-atoms-without-rationale` |
 | `python scripts\validate_agent_artifacts.py --root fts\AutoFin\test-cases\4.3-application-card-client-addresses-contacts-independent-wide-canary-v3.md --json --input-restriction-gap-policy strict-canary --rolling-date-boundary-policy strict-canary --atomicity-coverage-policy strict-canary --fail-on error` | pass; 0 errors |
-| `python scripts\validate_agent_artifacts.py --root fts\AutoFin\work\canary-runs\independent-wide-canary-v3 --json --input-restriction-gap-policy strict-canary --rolling-date-boundary-policy strict-canary --atomicity-coverage-policy strict-canary --fail-on error` | pass; 0 errors |
+| `python scripts\validate_agent_artifacts.py --root fts\AutoFin\work\canary-runs\independent-wide-canary-v3 --json --input-restriction-gap-policy strict-canary --rolling-date-boundary-policy strict-canary --atomicity-coverage-policy strict-canary --fail-on error` | pass; 0 errors; 5 generated source-basis artifacts checked |
 | `python scripts\run_tests.py --suite architecture` | pass; 0 findings |
 | `python scripts\run_tests.py --suite agent-layer-fast` | pass; 215 tests, 1 skipped |
-| `python scripts\run_tests.py --suite artifact-validator-sharded` | pass; 329 tests across 7 shards |
+| `python scripts\run_tests.py --suite artifact-validator-sharded` | pass; 331 tests across 7 shards |
 | `git diff --check` | pass |
 
 ## Severity Behavior
@@ -97,6 +100,16 @@
 | `strict-canary` | same | `error` | fails `--fail-on error` |
 | `writer-final` | same | `error` | fails `--fail-on error` |
 | `production` | same | `error` | fails `--fail-on error` |
+
+## Generated Artifact Source-basis Severity
+
+| profile / policy | `generated-artifact-used-as-source-of-truth` severity | sign-off impact |
+| --- | --- | --- |
+| `compatible` | `warning` | diagnostic only |
+| `diagnostic` | `warning` | diagnostic only |
+| `strict-canary` | `error` | fails `--fail-on error` |
+| `writer-final` | `error` | fails `--fail-on error` |
+| `production` | `error` | fails `--fail-on error` |
 
 ## Rolling Date Boundary Severity
 

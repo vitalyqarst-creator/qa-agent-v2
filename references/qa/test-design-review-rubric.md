@@ -93,6 +93,7 @@ Reviewer обязан критически проверять заявления
 - Candidate negative TC invents a concrete rejection mechanism, message, highlight, filtering, clearing, transition block or save/no-save behavior.
 - Source-backed input restriction has negative/candidate-negative coverage but no sibling positive allowed-class TC.
 - Similar fields/classes with shared restrictions are covered by representative/pairwise sampling without selected combinations, omitted combinations and residual risk.
+- Evaluation/work artifacts use old generated TC/canary output as source of truth for split/grouping/representative decisions instead of FT source rows, BSR/GSR/REQ or source artifacts.
 - Final TC uses generic test data placeholders instead of concrete values or a defined setup/fixture profile.
 - Numbered preconditions are passive states instead of action-oriented setup or a defined setup profile.
 - Production TC under `fts/**/test-cases/*.md` is not self-contained: setup profile reference, stand/environment wording, package-name leakage, missing reveal action for action-created fields, or embedded diagnostic/design sections.

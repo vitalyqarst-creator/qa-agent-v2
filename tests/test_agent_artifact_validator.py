@@ -14507,6 +14507,73 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("test-case-overmerged-atoms-without-rationale", finding_ids)
 
+    def test_generated_artifact_used_as_source_of_truth_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            report = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v3" / "canary-evaluation-report.md"
+            report.parent.mkdir(parents=True)
+            report.write_text(
+                "\n".join(
+                    [
+                        "# Canary evaluation",
+                        "",
+                        "## Decision Basis",
+                        "",
+                        "Coverage decisions were derived only from generated v2 wide-canary artifact.",
+                        "The generated artifact was used as the source of truth for split and representative decisions.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["generated-artifact-used-as-source-of-truth"]["severity"], "error")
+
+    def test_generated_artifact_failure_fixture_with_source_cross_check_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            report = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v3" / "canary-evaluation-report.md"
+            report.parent.mkdir(parents=True)
+            report.write_text(
+                "\n".join(
+                    [
+                        "# Canary evaluation",
+                        "",
+                        "## Decision Basis",
+                        "",
+                        "V2 is used only as a diagnostic failure fixture, not as source of truth.",
+                        "Atomicity decisions cite FT4AutoFinFinal.xhtml source rows and BSR 174, BSR 176, BSR 178.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("generated-artifact-used-as-source-of-truth", finding_ids)
+
     def test_rolling_date_boundary_static_future_date_fails_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)

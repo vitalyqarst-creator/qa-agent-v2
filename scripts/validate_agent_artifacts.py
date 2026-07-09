@@ -1095,6 +1095,23 @@ def iter_active_text_artifacts(root: Path) -> list[Path]:
     )
 
 
+def is_canary_run_markdown(path: Path, root: Path) -> bool:
+    if path.suffix.lower() != ".md" or is_historical_or_scratch_artifact(path):
+        return False
+    relative_text = f"/{rel(path, root)}/"
+    return "/work/canary-runs/" in relative_text or "canary-runs" in path.parts
+
+
+def iter_generated_source_basis_artifacts(root: Path) -> list[Path]:
+    if root.is_file() and root.suffix.lower() == ".md":
+        return [root]
+    return sorted(
+        path
+        for path in validation_scope(root).rglob("*.md")
+        if path.is_file() and is_canary_run_markdown(path, root)
+    )
+
+
 def iter_decision_logs(root: Path) -> list[Path]:
     if root.is_file() and root.suffix == ".md" and "decision-log" in root.name.lower():
         return [root]
@@ -3355,6 +3372,59 @@ def validate_coverage_gap_inventory(
             "coverage-gap-inventory",
             "fail" if any(finding.severity == "error" for finding in findings) else "warn" if findings else "pass",
             "Coverage gap inventory has missing declarations." if findings else "Coverage gap inventory passed.",
+            display_path,
+        )
+    ]
+    return findings, checks
+
+
+def validate_generated_artifact_source_basis(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    atomicity_coverage_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    display_path = rel(path, root)
+    direct_sole_source = GENERATED_ARTIFACT_SOLE_SOURCE_RE.search(content)
+    generated_decision_basis = GENERATED_ARTIFACT_DECISION_BASIS_RE.search(content)
+    has_failure_fixture_guard = GENERATED_ARTIFACT_FAILURE_FIXTURE_RE.search(content)
+    has_source_cross_check = SOURCE_BASIS_CROSS_CHECK_RE.search(content)
+
+    evidence: list[str] = []
+    if direct_sole_source and not has_failure_fixture_guard:
+        evidence.append(direct_sole_source.group(0).strip()[:220])
+    if generated_decision_basis and not has_failure_fixture_guard and not has_source_cross_check:
+        evidence.append(generated_decision_basis.group(0).strip()[:220])
+
+    if evidence:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="generated-artifact-used-as-source-of-truth",
+                severity=severity,
+                category="source-selection",
+                title="Generated artifact is used as source of truth",
+                details=(
+                    "Canary or evaluation artifacts may use older generated outputs as diagnostic failure fixtures, "
+                    "but TC decisions, split/grouping decisions and representative coverage decisions must be backed "
+                    "by source rows, BSR/GSR/REQ references or FT source artifacts."
+                ),
+                path=display_path,
+                evidence=evidence[:20],
+                recommended_action=(
+                    "State that the generated artifact is diagnostic-only and cite source rows/BSR/FT artifacts used "
+                    "for each decision, or remove decisions derived solely from generated output."
+                ),
+            )
+        )
+
+    checks = [
+        Check(
+            "generated-artifact-source-basis",
+            "fail" if any(finding.severity == "error" for finding in findings) else "warn" if findings else "pass",
+            "Generated artifact source-basis issues found." if findings else "Generated artifact source-basis guard passed.",
             display_path,
         )
     ]
@@ -10726,6 +10796,35 @@ SCENARIO_RATIONALE_RE = re.compile(
     r"\*\*(?:Scenario\s+rationale|Сценарное\s+обоснование|РЎС†РµРЅР°СЂРЅРѕРµ\s+РѕР±РѕСЃРЅРѕРІР°РЅРёРµ):\*\*",
     flags=re.IGNORECASE,
 )
+GENERATED_ARTIFACT_SOLE_SOURCE_RE = re.compile(
+    r"(?:generated|previous|old|v\d+)[^\n.;|]{0,120}"
+    r"(?:used\s+as|is|was|treated\s+as|became)[^\n.;|]{0,60}"
+    r"(?:source\s+of\s+truth|authoritative\s+source|sole\s+source|only\s+source)|"
+    r"(?:decisions?|coverage|tc|test[-\s]?cases?|representative\s+strategy)[^\n.;|]{0,120}"
+    r"(?:derived|based|copied|taken)[^\n.;|]{0,80}"
+    r"(?:only|solely|exclusively)[^\n.;|]{0,80}"
+    r"(?:generated|previous|old|v\d+|wide[-\s]?canary)",
+    flags=re.IGNORECASE,
+)
+GENERATED_ARTIFACT_DECISION_BASIS_RE = re.compile(
+    r"(?:generated|previous|old|v\d+|wide[-\s]?canary)[^\n.;|]{0,120}"
+    r"(?:basis|source|input|used)[^\n.;|]{0,80}"
+    r"(?:decisions?|coverage|tc|test[-\s]?cases?|representative|atomicity)|"
+    r"(?:decisions?|coverage|tc|test[-\s]?cases?|representative|atomicity)[^\n.;|]{0,120}"
+    r"(?:generated|previous|old|v\d+|wide[-\s]?canary)",
+    flags=re.IGNORECASE,
+)
+GENERATED_ARTIFACT_FAILURE_FIXTURE_RE = re.compile(
+    r"failure\s+fixture|diagnostic(?:/failure)?\s+fixture|diagnostic\s+input|"
+    r"not\s+(?:a\s+)?source\s+of\s+truth|not\s+as\s+(?:a\s+)?source\s+of\s+truth|"
+    r"diagnostic\s+result\s+only",
+    flags=re.IGNORECASE,
+)
+SOURCE_BASIS_CROSS_CHECK_RE = re.compile(
+    r"\b(?:BSR|GSR)\s+\d+\b|\bREQ[-\s]?\d+\b|source\s+rows?|source\s+artifact|"
+    r"FT4AutoFinFinal|\.xhtml|\.docx|main_ft|ФТ|cross[-\s]?check|Table\s+\d+\s+row",
+    flags=re.IGNORECASE,
+)
 VALID_TEST_DATA_VALUE_RE = re.compile(
     r"(?<![A-Za-z\u0410-\u042f\u0430-\u044f\u0401\u0451])(?:valid(?:\s+value)?|allowed(?:\s+value)?|"
     r"\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\w*\s+\u0437\u043d\u0430\u0447\u0435\u043d\w*)\s*:\s*`?([^`;\n]+)`?",
@@ -17654,6 +17753,7 @@ def validate(
     session_logs = iter_session_logs(root)
     decision_logs = iter_decision_logs(root)
     active_text_artifacts = iter_active_text_artifacts(root)
+    generated_source_basis_artifacts = iter_generated_source_basis_artifacts(root)
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
@@ -17675,6 +17775,7 @@ def validate(
         session_logs = []
         decision_logs = []
         active_text_artifacts = []
+        generated_source_basis_artifacts = []
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
@@ -17693,6 +17794,7 @@ def validate(
         session_logs = []
         decision_logs = []
         active_text_artifacts = []
+        generated_source_basis_artifacts = []
         dictionary_inventories = []
         mockup_visual_inventories = []
         oracle_inventories = []
@@ -17711,6 +17813,7 @@ def validate(
         session_logs = []
         decision_logs = []
         active_text_artifacts = []
+        generated_source_basis_artifacts = []
         mockup_visual_inventories = []
         oracle_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
@@ -17954,6 +18057,33 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in generated_source_basis_artifacts:
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            findings.append(
+                Finding(
+                    id="generated-source-basis-not-utf8",
+                    severity="warning",
+                    category="source-selection",
+                    title="Generated source-basis artifact is not valid UTF-8",
+                    details=str(exc),
+                    path=rel(path, root),
+                    evidence=[],
+                    recommended_action="Save the artifact as UTF-8 Markdown.",
+                )
+            )
+            checks.append(Check("generated-artifact-source-basis", "warn", "Artifact is not UTF-8.", rel(path, root)))
+            continue
+        path_findings, path_checks = validate_generated_artifact_source_basis(
+            content,
+            path,
+            root,
+            atomicity_coverage_policy=atomicity_coverage_policy,
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in iter_named_markdown(root, "ui-evidence-index.md"):
         path_findings, path_checks = validate_ui_evidence_index(path, root)
         findings.extend(path_findings)
@@ -17983,6 +18113,7 @@ def validate(
             "session_logs_checked": len(session_logs),
             "decision_logs_checked": len(decision_logs),
             "active_text_artifacts_checked": len(active_text_artifacts),
+            "generated_source_basis_artifacts_checked": len(generated_source_basis_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
@@ -18020,6 +18151,7 @@ def text_report(report: dict[str, Any]) -> str:
         f"- session logs: {summary['session_logs_checked']}",
         f"- decision logs: {summary['decision_logs_checked']}",
         f"- active text artifacts: {summary['active_text_artifacts_checked']}",
+        f"- generated source-basis artifacts: {summary['generated_source_basis_artifacts_checked']}",
         f"- mockup visual inventories: {summary['mockup_visual_inventories_checked']}",
         f"- UI evidence indexes: {summary['ui_evidence_indexes_checked']}",
         f"- UI validation reports: {summary['ui_validation_reports_checked']}",

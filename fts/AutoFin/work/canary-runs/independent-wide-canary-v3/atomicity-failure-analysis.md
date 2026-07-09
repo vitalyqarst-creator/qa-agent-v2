@@ -9,6 +9,16 @@
 | original_failure_fixture_modified | `no` |
 | validator_policy | `--atomicity-coverage-policy strict-canary` |
 
+## Source Cross-check Evidence
+
+| decision area | source rows / BSR | source artifacts used | result |
+| --- | --- | --- | --- |
+| Address composition grouping | Table 7 rows 33-44, `BSR 115`-`BSR 137` | `FT4AutoFinFinal.xhtml`; `FT4AutoFinFinal.docx` | Address fields have independent BSR, but composed manual-address entry is one visible workflow; grouped TC require scenario rationale. |
+| Residence address grouping | Table 7 rows 45-57, `BSR 138`-`BSR 161` | `FT4AutoFinFinal.xhtml`; `FT4AutoFinFinal.docx` | Same-as-registration branch and manual residence entry are separate source rows; grouped TC require scenario rationale and separate invalid-class TC. |
+| Contact-person block reveal | Table 7 rows 66-73, `BSR 173`-`BSR 189` | `FT4AutoFinFinal.xhtml`; `FT4AutoFinFinal.docx` | Adding a contact person reveals a composed subform; grouped reveal TC is acceptable only with scenario rationale. |
+| Contact-person FIO restriction | Table 7 rows 66-68, `BSR 174`, `BSR 176`, `BSR 178` | `FT4AutoFinFinal.xhtml`; `FT4AutoFinFinal.docx` | The fields share the same text/hyphen source restriction; partial field x invalid-class coverage needs explicit representative/pairwise strategy. |
+| Contact phone and birth date | Table 7 rows 70-71, `BSR 181`-`BSR 185` | `FT4AutoFinFinal.xhtml`; `FT4AutoFinFinal.docx` | Phone format and date boundary are independent obligations; invalid phone and future date stay as separate candidate-negative TC. |
+
 ## V2 Findings Preserved
 
 | v2_tc | source_ref_count | v3_resolution |
