@@ -6313,6 +6313,7 @@ def validate_test_design_decision_table(
 
         if (
             decision in {"standalone_tc", "covered_by_existing_tc"}
+            and property_type != "text-symbol-restriction"
             and row_has_numeric_format_context(
                 row,
                 (
@@ -10490,7 +10491,7 @@ FIXED_BUSINESS_DATE_CONTEXT_RE = re.compile(
     flags=re.IGNORECASE,
 )
 VALID_TEST_DATA_VALUE_RE = re.compile(
-    r"(?:valid(?:\s+value)?|allowed(?:\s+value)?|"
+    r"(?<![A-Za-z\u0410-\u042f\u0430-\u044f\u0401\u0451])(?:valid(?:\s+value)?|allowed(?:\s+value)?|"
     r"\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\w*\s+\u0437\u043d\u0430\u0447\u0435\u043d\w*)\s*:\s*`?([^`;\n]+)`?",
     flags=re.IGNORECASE,
 )

@@ -1,0 +1,11 @@
+{
+  "command": "python scripts/validate_agent_artifacts.py --root fts/AutoFin/test-cases/4.3-application-card-client-addresses-contacts-canary.md --json --test-case-policy strict --fail-on warning",
+  "generated_by": "codex_review_cycle_runner",
+  "scope_slug": "application-card-client-addresses-contacts",
+  "canonical_test_cases": [
+    "fts/AutoFin/test-cases/4.3-application-card-client-addresses-contacts-canary.md"
+  ],
+  "test_design_dir": "fts/AutoFin/test-cases/4.3-application-card-client-addresses-contacts-canary.md",
+  "current_scope_findings": [],
+  "unresolved_warning_error_count": 0
+}

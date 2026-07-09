@@ -12732,6 +12732,104 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("test-case-action-treated-as-required-field-smell", finding_ids)
 
+    def test_text_symbol_candidate_invalid_value_is_not_numeric_valid_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "text-symbol-candidate.md"
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Text Symbol Candidate",
+                        "",
+                        "## TC-TEXT-001",
+                        "**Название:** Фамилия отклоняет цифру",
+                        "**Приоритет:** Medium",
+                        "**Тип:** Negative",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Цель:** Проверить, что поле `Фамилия` не принимает цифру по BSR 174.",
+                        "**Предусловия:**",
+                        "- Использован setup profile `SETUP-CANARY-AUTOFIN-EDITABLE-DRAFT`.",
+                        "**Тестовые данные:**",
+                        "- Недопустимое значение: `Иванов1`.",
+                        "**Шаги:**",
+                        "1. Ввести `Иванов1` в поле `Фамилия`.",
+                        "**Итоговый ожидаемый результат:** Недопустимое значение `Иванов1` не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration.",
+                        "**Требуется подтверждение:** Как UI отклоняет цифру в поле `Фамилия`?",
+                        "**Постусловия:** Не требуются.",
+                        "**Трассировка:** ATOM-001; BSR 174; SRC-CANARY-174.P01",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-numeric-only-valid-data-invalid-smell", finding_ids)
+
+    def test_text_symbol_tddt_can_group_required_equivalence_classes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "text-symbol-tddt.md"
+            tc_blocks: list[str] = []
+            for index, tc_id in enumerate(("TC-TEXT-001", "TC-TEXT-002", "TC-TEXT-003", "TC-TEXT-004"), start=1):
+                tc_blocks.extend(
+                    [
+                        f"## {tc_id}",
+                        f"**Title:** Text-symbol class {index}",
+                        "**Priority:** Medium",
+                        "**Type:** Negative" if index >= 3 else "**Type:** Positive",
+                        "**Goal:** Verify text-symbol restriction for `ATOM-001`.",
+                        "**Preconditions:**",
+                        "- Use setup profile `SETUP-TEXT-SYMBOL`.",
+                        "**Test Data:**",
+                        "- Value: `Ivanov1`." if index == 3 else "- Value: `Ivanov`.",
+                        "**Steps:**",
+                        "1. Enter the value into the field.",
+                        "**Expected Result:** The field behavior matches the text-symbol restriction.",
+                        "**Postconditions:** Not required.",
+                        "**Traceability:** ATOM-001; SRC-001.P01",
+                        "",
+                    ]
+                )
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Text Symbol TDDT",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Surname | text-symbol-restriction | always | Only text symbols and `-` are allowed; digit and non-hyphen special classes are excluded. | BSR 174 | Section 1 | high | none_required:covered | ATOM-001 |",
+                        "",
+                        "## Test Design Decision Table",
+                        "",
+                        "| decision_id | package_id | source_property_id | linked_atom_id | property_type | decision | decision_reason | planned_tc_or_gap | oracle_source | must_be_executable | observable_oracle | testable_part | blocked_part | gap_admissibility | review_risk |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| TDD-001 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | standalone_tc | Source defines allowed text/hyphen classes plus digit and non-hyphen special invalid classes. | TC-TEXT-001; TC-TEXT-002; TC-TEXT-003; TC-TEXT-004 | source-backed positive; ui-calibration-required negative | yes | Positive values are displayed; negative exact mechanism requires calibration. | valid-letters; valid-letters-hyphen; reject-digits; reject-special-chars-other-than-hyphen | none_required:no_blocked_part | none_required:no_gap | medium |",
+                        "",
+                        "## Atomic Requirements Ledger",
+                        "",
+                        "| atom_id | source_row_id | req_id | field | atomic_statement | covered_by_tc | coverage_status | gap_note |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | SRC-001 | BSR 174 | Surname | Field accepts text symbols and `-`; other symbols are invalid classes. | TC-TEXT-001; TC-TEXT-002; TC-TEXT-003; TC-TEXT-004 | covered | none_required:covered |",
+                        "",
+                        *tc_blocks,
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-design-decision-table-duplicate-source-property", finding_ids)
+        self.assertNotIn("test-design-decision-table-merged-numeric-class-decision", finding_ids)
+
     def test_next_step_transition_cases_are_not_action_requiredness_false_positives(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
