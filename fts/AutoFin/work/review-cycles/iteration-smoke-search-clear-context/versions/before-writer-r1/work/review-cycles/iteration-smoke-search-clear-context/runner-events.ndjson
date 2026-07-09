@@ -1,0 +1,3 @@
+{"command": "run-until-terminal", "event": "lock_acquired", "pid": 43496, "state": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-search-clear-context\\cycle-state.yaml", "ts_epoch": 1783613368}
+{"event": "session_child_started", "payload": "work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-child-payload-43496.json", "stage": "writer-r1", "timeout_seconds": 900, "ts_epoch": 1783613369}
+{"cycle_id": "autofin-iteration-smoke-search-clear-context", "event": "session_preparing", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "stage_status": "scope-ready-for-writer", "ts_epoch": 1783613372}

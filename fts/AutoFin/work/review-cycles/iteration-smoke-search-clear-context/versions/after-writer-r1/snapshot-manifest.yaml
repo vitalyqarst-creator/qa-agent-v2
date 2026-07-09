@@ -1,0 +1,175 @@
+version: 1
+snapshot_id: after-writer-r1
+cycle_id: autofin-iteration-smoke-search-clear-context
+stage_status: blocked-input
+files:
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\cycle-state.yaml
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/cycle-state.yaml
+    bytes: 3626
+    sha256: c52dc6a2ecf5bbe56c29c37f934853e2a2566fad585d661064c2d9b5f1f881da
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\test-cases\\4.2-iteration-smoke-rerun-search-clear-context.md"
+    snapshot_path: test-cases/4.2-iteration-smoke-rerun-search-clear-context.md
+    bytes: 8030
+    sha256: 65d28ea7c4d42b6ae9203f304541ee06d45a957f4c9915a81394c852470314d0
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\codex-session-map.yaml
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/codex-session-map.yaml
+    bytes: 696
+    sha256: e9dfe7e3c72ffcd6783d490c4f10ba10ab892bb262f11287a2ff7e6c2735aa75
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\runner-events.ndjson
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/runner-events.ndjson
+    bytes: 1959
+    sha256: 5cec81cfd4163d51798368f6aa704513612eaea706c268255a898f072725a122
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\atomic-requirements-ledger.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/atomic-requirements-ledger.md
+    bytes: 1186
+    sha256: c8d8aed03f80b1dab4d768dc41a57dadd1b49813d69322fca0622181a0edb604
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\coverage-gaps.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-gaps.md
+    bytes: 372
+    sha256: 9d19686fadd5da19ba1f63820f085a44b4f9445e3a154fa1671306a5a103e98b
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\coverage-map.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-map.md
+    bytes: 751
+    sha256: 415e898b35a3a721ff5964d6b749ea62a5a603c30451a73204b39012d77d0eb7
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\coverage-metrics.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-metrics.md
+    bytes: 1382
+    sha256: a760b984e2e835b95a332a9cd1d8d0ab029589b0596ceb29e6b6852ba384205f
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\coverage-obligation-table.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-obligation-table.md
+    bytes: 1679
+    sha256: 57198a6460f85536af20dab52480f7d04797ef1e04c586b432207415fea1ced8
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\fixture-catalog.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/fixture-catalog.md
+    bytes: 975
+    sha256: fd2a87bdc644a7b11cf2413cf0cf280b40be2e115fbf2615967e826cf1abab21
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\package-test-design-plan.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/package-test-design-plan.md
+    bytes: 1971
+    sha256: 2aac00d0efdc7eeb572a77d37b3592c760771b801dc63722108e8d4e584e4aad
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\risk-priority-map.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/risk-priority-map.md
+    bytes: 1380
+    sha256: 50586ad718dcd3dd98ae5c8d3b2344d33b30b35ea49227c412b3e2c1e9e3bf38
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\source-row-completeness-matrix.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-row-completeness-matrix.md
+    bytes: 545
+    sha256: e953f11a48a2f4bbd3385adf7daa585da01f7d48e995ad08ec177eb434711ac3
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\source-row-inventory.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-row-inventory.md
+    bytes: 575
+    sha256: 98b1ce7ac555864e95ae46446af44f974e3f6a925e6cb413a5e606d1441998e9
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\source-table-normalization.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-table-normalization.md
+    bytes: 1723
+    sha256: f2710cedd64238d78b2ac62693b9d638886503f68b06105a0a6a6ce64dd36d9c
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\test-design-applicability-matrix.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-applicability-matrix.md
+    bytes: 2935
+    sha256: f90974ad02d006b36d9d71a64fb5e2c1332e6d4cce4f7908db027b5141cb6157
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\test-design-decision-table.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-decision-table.md
+    bytes: 2679
+    sha256: 79fbc493ead12a168f3abc69a74d3004ddf354e5a0045938c973a4839fef860c
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\test-design-review.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-review.md
+    bytes: 1016
+    sha256: 3ad67fd284ef9fadfca5591c574e9072d14717809dd9f74c96ca0c6610eaae0e
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\writer-quality-gate.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-quality-gate.md
+    bytes: 2559
+    sha256: 32669255c0b06492fc2b578a9be13994b8dd7c63d6308b33219191f25a32865e
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\test-design\\4.2-iteration-smoke-rerun-search-clear-context\\writer-self-check.md"
+    snapshot_path: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-self-check.md
+    bytes: 1667
+    sha256: 6085f079a453c093d1ff5e483d5cc7be56eef5967ca4a874b5c89c2634901724
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\agent-decision-log.writer-r1.md
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/agent-decision-log.writer-r1.md
+    bytes: 2350
+    sha256: 2782b5517c15d001fbea193641878e665d9d6abe9ae56dc5acb234940b8958db
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\scoped-validator-profile.structure-preflight-r1.json
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/scoped-validator-profile.structure-preflight-r1.json
+    bytes: 10667
+    sha256: b9500ff5567f07aec36c1ce736bd023e97d344804a6849a2d481c9729324d4b3
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\validator-report.canonical-only.json
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/validator-report.canonical-only.json
+    bytes: 19277
+    sha256: a169179599faa5e804cc2a31e4ea6b6e4901dcbd9cecfe0d30a175724fda3260
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\validator-report.writer-r1.latest.json
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/validator-report.writer-r1.latest.json
+    bytes: 4705356
+    sha256: 34c1b8a238eb7c4a145f2ed5869221ca0b3bc9a10b16f37aa3db219a3430486e
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\writer-r1-completion.yaml
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-completion.yaml
+    bytes: 1164
+    sha256: dc48ea89ad9759dc0db0c9ed97181ea651512748f9af9a1c826cff056d1ddad3
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\writer-r1-response.md
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-response.md
+    bytes: 2462
+    sha256: 0afe83bb5c9d1b958df9c6d169f348473ebae77497614d2124a1eea578db9c6c
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\writer-r1-timeout-recovery.md
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-timeout-recovery.md
+    bytes: 542
+    sha256: 43e30cb69a3738e8351df57b362a7bfa8197acf19d3f25cc9b387d98334a5651
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\outputs\writer-session-log.writer-r1.md
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-session-log.writer-r1.md
+    bytes: 7416
+    sha256: 68ffe15be54316a961e16275f0d6008346f0fb9d8aacb7a8a6e4ae76da94d0f5
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\source-selection.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+    bytes: 1094
+    sha256: f83766080ee5c9f0e635582497858735d1645b3500d908f47351345942643865
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\scope-contract.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-contract.md
+    bytes: 2451
+    sha256: 936b86d2b85307ef8cc1510c310d6f626af48a2e3e3ce55eddeae97b98ec87ef
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\source-row-inventory.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md
+    bytes: 983
+    sha256: a9c598e9cbac4fbc423407b5a33568083385644c867bad2fed3adbea37413abe
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\source-parity-check.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md
+    bytes: 2237
+    sha256: 4da91d8c1f82090bd74d13dbced907941c0fa4583c469be2d1cca328422a6283
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\scope-coverage-gaps.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md
+    bytes: 597
+    sha256: c879d7ce9bf404cdd3d0f5c1a65234bddd9a51d70d50721482f8aa79fb91cdba
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\iteration-smoke-search-clear-context\\prompts\\prompt.structure-preflight-r1.md"
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/prompts/prompt.structure-preflight-r1.md
+    bytes: 2688
+    sha256: 57f603e6be05c7298c20ef5015467a7398abb5476c76e86b45a94e5199c1fdfa

@@ -1,0 +1,45 @@
+version: 1
+snapshot_id: before-writer-r1
+cycle_id: autofin-iteration-smoke-search-clear-context
+stage_status: scope-ready-for-writer
+files:
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\cycle-state.yaml
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/cycle-state.yaml
+    bytes: 1343
+    sha256: 4951e8f92929d7b3c95dd13f8dd87065428acaa6de85ee096ef31b36c75684bb
+  -
+    source: fts\AutoFin\work\review-cycles\iteration-smoke-search-clear-context\runner-events.ndjson
+    snapshot_path: work/review-cycles/iteration-smoke-search-clear-context/runner-events.ndjson
+    bytes: 644
+    sha256: 52e45348b4912906ae76731a1317cb0ab3ee94680a20412f3ce759f16e87db20
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\source-selection.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+    bytes: 1094
+    sha256: f83766080ee5c9f0e635582497858735d1645b3500d908f47351345942643865
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\scope-contract.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-contract.md
+    bytes: 2451
+    sha256: 936b86d2b85307ef8cc1510c310d6f626af48a2e3e3ce55eddeae97b98ec87ef
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\source-row-inventory.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md
+    bytes: 983
+    sha256: a9c598e9cbac4fbc423407b5a33568083385644c867bad2fed3adbea37413abe
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\source-parity-check.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md
+    bytes: 2237
+    sha256: 4da91d8c1f82090bd74d13dbced907941c0fa4583c469be2d1cca328422a6283
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\scope-coverage-gaps.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md
+    bytes: 597
+    sha256: c879d7ce9bf404cdd3d0f5c1a65234bddd9a51d70d50721482f8aa79fb91cdba
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\stage-handoffs\\19-iteration-smoke-search-clear-context\\agent-decision-log.md"
+    snapshot_path: work/stage-handoffs/19-iteration-smoke-search-clear-context/agent-decision-log.md
+    bytes: 1139
+    sha256: e1502859300468d5032d74b8788242816c1c35eddd78efd10fdd76f763f1bdbf

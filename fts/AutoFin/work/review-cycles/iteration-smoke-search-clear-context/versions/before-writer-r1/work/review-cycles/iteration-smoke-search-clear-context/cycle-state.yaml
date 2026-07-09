@@ -1,0 +1,25 @@
+cycle_id: autofin-iteration-smoke-search-clear-context
+ft_slug: AutoFin
+scope_slug: iteration-smoke-search-clear-context
+section_id: 4.2
+current_stage: writer-r1
+stage_status: scope-ready-for-writer
+semantic_round: 0
+max_semantic_rounds: 2
+canonical_test_cases: test-cases/4.2-iteration-smoke-rerun-search-clear-context.md
+test_design_dir: work/test-design/4.2-iteration-smoke-rerun-search-clear-context
+active_snapshot: none
+active_transition_prompt: work/review-cycles/iteration-smoke-search-clear-context/prompts/prompt.writer-r1.md
+sessions:
+latest_artifacts:
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-contract.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/agent-decision-log.md
+blocking_reasons:
+blocking_findings:
+open_questions:
+accepted_risks:
+  - RISK-001 Exact default sort, pagination values and concrete filter fields are not specified by BSR 32; writer must compare with observable initial/default UI state and avoid invented values.

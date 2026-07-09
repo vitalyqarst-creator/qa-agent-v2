@@ -1,0 +1,35 @@
+ft_slug: AutoFin
+scope_slug: iteration-smoke-search-clear-context
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 1
+next_skill: none
+cycle_state: work/review-cycles/iteration-smoke-search-clear-context/cycle-state.yaml
+latest_artifacts:
+  source_selection: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+  scope_contract: work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-contract.md
+  source_row_inventory: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md
+  source_parity_check: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md
+  scope_coverage_gaps: work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md
+  decision_log: work/stage-handoffs/19-iteration-smoke-search-clear-context/agent-decision-log.md
+  session_log: work/stage-handoffs/19-iteration-smoke-search-clear-context/iteration-session-log.md
+  cycle_state: work/review-cycles/iteration-smoke-search-clear-context/cycle-state.yaml
+  process_report: work/iteration-smoke-rerun/iteration-process-report.md
+  blocked_runner_report: work/iteration-smoke-rerun/blocked-runner-report.md
+  artifact_map: work/iteration-smoke-rerun/artifact-map.md
+required_inputs:
+  - AGENT-NOTES.md
+  - source/FT4AutoFinFinal.docx
+  - source/FT4AutoFinFinal.xhtml
+  - source/FT4AutoFinFinal.pdf
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-contract.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/agent-decision-log.md
+  - work/stage-handoffs/19-iteration-smoke-search-clear-context/iteration-session-log.md
+open_questions: []
+blocking_reasons:
+  - "writer-r1: Codex SDK turn timed out after 900 seconds"
+  - "writer-r1: timeout artifact recovery did not continue because outputs/scoped-validator-profile.writer-r1.json was missing"

@@ -1,0 +1,9 @@
+{"command": "run-until-terminal", "event": "lock_acquired", "pid": 43496, "state": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-search-clear-context\\cycle-state.yaml", "ts_epoch": 1783613368}
+{"event": "session_child_started", "payload": "work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-child-payload-43496.json", "stage": "writer-r1", "timeout_seconds": 900, "ts_epoch": 1783613369}
+{"cycle_id": "autofin-iteration-smoke-search-clear-context", "event": "session_preparing", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "stage_status": "scope-ready-for-writer", "ts_epoch": 1783613372}
+{"event": "input_snapshot_created", "snapshot_id": "before-writer-r1", "stage": "writer-r1", "ts_epoch": 1783613376}
+{"event": "thread_started", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "thread_id": "019f47a4-5be9-73e2-a70a-088e6c74d1a7", "ts_epoch": 1783613392}
+{"event": "turn_started", "stage": "writer-r1", "thread_id": "019f47a4-5be9-73e2-a70a-088e6c74d1a7", "ts_epoch": 1783613392}
+{"event": "scoped_validator_profile_written", "profile": "work/review-cycles/iteration-smoke-search-clear-context/outputs/scoped-validator-profile.structure-preflight-r1.json", "stage": "structure-preflight-r1", "ts_epoch": 1783614043, "unresolved_warning_error_count": 11}
+{"event": "scoped_validator_profile_written", "profile": "work/review-cycles/iteration-smoke-search-clear-context/outputs/scoped-validator-profile.structure-preflight-r1.json", "stage": "structure-preflight-r1", "ts_epoch": 1783614336, "unresolved_warning_error_count": 11}
+{"child_pid": 43192, "child_timeout_phase": "sdk-turn-timeout-after-turn-started", "event": "session_child_timeout", "stage": "writer-r1", "stderr_tail": "", "stdout_tail": "", "thread_id": "019f47a4-5be9-73e2-a70a-088e6c74d1a7", "thread_started_epoch": 1783613392, "timeout_seconds": 900, "ts_epoch": 1783614336, "turn_started_epoch": 1783613392}

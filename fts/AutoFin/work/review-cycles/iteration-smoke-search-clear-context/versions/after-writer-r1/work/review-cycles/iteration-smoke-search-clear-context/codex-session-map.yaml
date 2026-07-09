@@ -1,0 +1,21 @@
+version: 1
+ft_slug: AutoFin
+scope_slug: iteration-smoke-search-clear-context
+sessions:
+  - stage: writer-r1
+    role: writer
+    scenario: writer.session_initial_draft
+    thread_id: 019f47a4-5be9-73e2-a70a-088e6c74d1a7
+    turn_id: ""
+    turn_status: ""
+    sandbox: workspace_write
+    approval_mode: auto_review
+    model: ""
+    prompt: work/review-cycles/iteration-smoke-search-clear-context/prompts/prompt.writer-r1.md
+    input_snapshot: work/review-cycles/iteration-smoke-search-clear-context/versions/before-writer-r1
+    output_snapshot: ""
+    final_response: ""
+    started_at_epoch: 1783613376
+    completed_at_epoch: ""
+    duration_ms: ""
+    status: started

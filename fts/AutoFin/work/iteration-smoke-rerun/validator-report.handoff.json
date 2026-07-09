@@ -1,0 +1,263 @@
+{
+  "summary": {
+    "workflow_states_checked": 1,
+    "source_documents_checked": 1,
+    "artifact_manifests_checked": 0,
+    "traceability_matrices_checked": 0,
+    "review_findings_checked": 0,
+    "writer_responses_checked": 0,
+    "test_case_files_checked": 0,
+    "source_normalization_diagnostics_checked": 0,
+    "source_table_normalizations_checked": 0,
+    "dictionary_inventories_checked": 0,
+    "writer_process_diagnostics_checked": 0,
+    "writer_self_checks_checked": 0,
+    "coverage_gap_artifacts_checked": 1,
+    "session_logs_checked": 0,
+    "decision_logs_checked": 1,
+    "active_text_artifacts_checked": 0,
+    "generated_source_basis_artifacts_checked": 0,
+    "mockup_visual_inventories_checked": 0,
+    "ui_evidence_indexes_checked": 0,
+    "ui_validation_reports_checked": 0,
+    "findings_count": 9,
+    "errors_count": 0,
+    "warnings_count": 4,
+    "info_count": 5,
+    "checks_count": 17
+  },
+  "findings": [
+    {
+      "id": "source-row-inventory-missing-columns",
+      "severity": "warning",
+      "category": "traceability",
+      "title": "Source Row Inventory misses required columns",
+      "details": "The inventory must expose source row identity, package, scope decision and ATOM/GAP mapping.",
+      "path": "source-row-inventory.md",
+      "evidence": [
+        "missing=field_or_action, in_scope, mapped_atom_or_gap, package_id, requirement_codes, source_ref",
+        "columns=source_row_id, xhtml_ref, req_id, column_button, column_business_need, column_action, column_description"
+      ],
+      "recommended_action": "Rewrite the table with the canonical columns from source-row-inventory-format.md."
+    },
+    {
+      "id": "source-selection-missing-context-fields",
+      "severity": "warning",
+      "category": "source-selection",
+      "title": "source-selection.md misses required context fields",
+      "details": "Downstream stages need an explicit FT slug and selection status from the source locator.",
+      "path": "source-selection.md",
+      "evidence": [
+        "selected_ft_slug",
+        "selection_status"
+      ],
+      "recommended_action": "Add `selected_ft_slug` and `selection_status` to the Context section."
+    },
+    {
+      "id": "source-selection-missing-required-sections",
+      "severity": "warning",
+      "category": "source-selection",
+      "title": "source-selection.md misses required sections",
+      "details": "The source selection artifact must be a reproducible handoff, not only a placeholder file.",
+      "path": "source-selection.md",
+      "evidence": [
+        "Ambiguity And Decision Log",
+        "Context",
+        "Handoff",
+        "Machine-Readable XHTML Source",
+        "Main FT Documents",
+        "Source Quality",
+        "Structural Cross-Check PDF",
+        "Support Files And Mockups"
+      ],
+      "recommended_action": "Add the required sections from references/agent/source-selection-format.md before routing to ft-scope-analyzer."
+    },
+    {
+      "id": "source-selection-missing-xhtml-section",
+      "severity": "warning",
+      "category": "source-selection",
+      "title": "source-selection.md misses mandatory XHTML source section",
+      "details": "Main FT XHTML availability must be recorded before scope, writer, reviewer or iteration routing.",
+      "path": "source-selection.md",
+      "evidence": [
+        "Machine-Readable XHTML Source"
+      ],
+      "recommended_action": "Add `Machine-Readable XHTML Source` with `xhtml_available: yes | no`."
+    },
+    {
+      "id": "decision-log-missing-required-section",
+      "severity": "info",
+      "category": "decision-log",
+      "title": "Decision log misses Decision Log section",
+      "details": "agent-decision-log.md must contain a `## Decision Log` table with observable intermediate decisions, not hidden chain-of-thought.",
+      "path": "agent-decision-log.md",
+      "evidence": [
+        "Decision Log"
+      ],
+      "recommended_action": "Rewrite the artifact using references/agent/agent-decision-log-format.md."
+    },
+    {
+      "id": "source-quality-many-untitled-sections",
+      "severity": "info",
+      "category": "source-quality",
+      "title": "Active source extraction has quality risk",
+      "details": "Most sections were inferred from heading styles without numeric section ids.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "evidence": [
+        "untitled=14",
+        "sections=14"
+      ],
+      "recommended_action": "Inspect source extraction before relying on downstream test cases."
+    },
+    {
+      "id": "source-quality-no-numeric-sections",
+      "severity": "info",
+      "category": "source-quality",
+      "title": "Active source extraction has quality risk",
+      "details": "No numeric section ids were detected; section filtering may be unreliable.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "evidence": [
+        "section-1",
+        "section-2",
+        "section-3",
+        "section-4",
+        "section-5",
+        "section-7",
+        "section-8",
+        "section-15",
+        "section-16",
+        "section-17"
+      ],
+      "recommended_action": "Inspect source extraction before relying on downstream test cases."
+    },
+    {
+      "id": "source-quality-oversized-blocks",
+      "severity": "info",
+      "category": "source-quality",
+      "title": "Active source extraction has quality risk",
+      "details": "Some source blocks are larger than max_chars and require defensive splitting.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "evidence": [
+        "section-16:67018"
+      ],
+      "recommended_action": "Inspect source extraction before relying on downstream test cases."
+    },
+    {
+      "id": "workflow-state-missing-session-log",
+      "severity": "info",
+      "category": "session-log",
+      "title": "Workflow state does not link a stage session log",
+      "details": "Source locator, scope analyzer, writer, reviewer and iteration stages should persist a decision/audit session log so later analysis does not depend on chat history.",
+      "path": "workflow-state.yaml",
+      "evidence": [
+        "current_stage=ft-test-case-iteration",
+        "stage_status=blocked-input"
+      ],
+      "recommended_action": "Create `<stage>-session-log.md` in the current handoff folder and link it from `latest_artifacts` as `session_log` or `<stage>_session_log`."
+    }
+  ],
+  "checks": [
+    {
+      "name": "workflow-state-required-fields",
+      "status": "pass",
+      "details": "Required fields present.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-required-input-artifacts",
+      "status": "pass",
+      "details": "Required input artifacts resolve.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-latest-artifact-links",
+      "status": "pass",
+      "details": "Latest artifact links resolve.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "source-selection-required-sections",
+      "status": "fail",
+      "details": "Required sections are missing.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "source-selection-xhtml-section",
+      "status": "fail",
+      "details": "Mandatory XHTML source section is missing.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "source-selection-context-fields",
+      "status": "fail",
+      "details": "Required context fields are missing.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "workflow-state-source-selection-xhtml",
+      "status": "pass",
+      "details": "XHTML routing guard passed.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "source-row-inventory",
+      "status": "warn",
+      "details": "Source Row Inventory has issues.",
+      "path": "source-row-inventory.md"
+    },
+    {
+      "name": "workflow-state-signed-off-gate",
+      "status": "pass",
+      "details": "No signed-off blocking-gap conflict.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-session-log",
+      "status": "pass",
+      "details": "Stage session log is not linked.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-decision-log",
+      "status": "pass",
+      "details": "Stage decision log resolves.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-stage-transition",
+      "status": "pass",
+      "details": "Stage transition contract has no active prompt requirement.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "active-source-quality",
+      "status": "pass",
+      "details": "Active source quality gate passed.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx"
+    },
+    {
+      "name": "source-support-duplicate-manifest",
+      "status": "pass",
+      "details": "Duplicate source/support files are covered by artifact manifest or absent.",
+      "path": "."
+    },
+    {
+      "name": "oracle-candidate-obligation-coverage",
+      "status": "pass",
+      "details": "No candidate_tc_required oracle obligations found.",
+      "path": "."
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory section not present.",
+      "path": "scope-coverage-gaps.md"
+    },
+    {
+      "name": "decision-log-format",
+      "status": "pass",
+      "details": "Decision log misses required section.",
+      "path": "agent-decision-log.md"
+    }
+  ]
+}
