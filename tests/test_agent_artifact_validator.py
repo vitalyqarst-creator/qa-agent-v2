@@ -111,6 +111,44 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_date_boundary_test_case(
+        self,
+        path: Path,
+        *,
+        title: str,
+        test_data: list[str],
+        steps: list[str],
+        expected_result: str,
+        test_case_type: str = "Negative",
+        requirement_quote: str = "Дата рождения не позже текущей даты.",
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "\n".join(
+                [
+                    "# Date boundary sample",
+                    "",
+                    "## TC-DATE-001",
+                    f"**Название:** {title}",
+                    "**Приоритет:** High",
+                    f"**Тип:** {test_case_type}",
+                    "**package_id:** WP-01",
+                    "**Трассировка:** `BSR 185`",
+                    "**Предусловия:**",
+                    "- Открыта карточка заявки.",
+                    "**Тестовые данные:**",
+                    *test_data,
+                    "**Шаги:**",
+                    *steps,
+                    f"**Итоговый ожидаемый результат:** {expected_result}",
+                    "**Постусловия:**",
+                    "- Не требуются.",
+                    f"**Источник / цитата требования:** {requirement_quote}",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
     def write_valid_source_selection(
         self,
         path: Path,
@@ -14100,6 +14138,167 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertIn("test-case-abstract-oracle-smell", finding_ids)
         self.assertIn("test-case-negative-input-without-observable-oracle", finding_ids)
         self.assertIn("test-case-date-dependent-absolute-date-smell", finding_ids)
+
+    def test_rolling_date_boundary_static_future_date_fails_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "date-boundary.md"
+            self.write_date_boundary_test_case(
+                test_case_file,
+                title="Дата рождения контактного лица не принимает будущую дату",
+                test_data=["- Недопустимая дата рождения: `10.07.2026`."],
+                steps=["1. В поле `Дата рождения` ввести `10.07.2026`."],
+                expected_result="Значение `10.07.2026` не принимается как валидное.",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--rolling-date-boundary-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["rolling-date-boundary-static-test-data"]["severity"], "error")
+
+    def test_rolling_date_boundary_static_future_date_warns_in_diagnostic_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "date-boundary.md"
+            self.write_date_boundary_test_case(
+                test_case_file,
+                title="Дата рождения контактного лица не принимает будущую дату",
+                test_data=["- Недопустимая дата рождения: `10.07.2026`."],
+                steps=["1. В поле `Дата рождения` ввести `10.07.2026`."],
+                expected_result="Значение `10.07.2026` не принимается как валидное.",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--rolling-date-boundary-policy",
+                "diagnostic",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["rolling-date-boundary-static-test-data"]["severity"], "warning")
+
+    def test_rolling_date_boundary_formula_with_static_example_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "date-boundary.md"
+            self.write_date_boundary_test_case(
+                test_case_file,
+                title="Дата рождения контактного лица не принимает будущую дату",
+                test_data=[
+                    "- Опорная дата D: текущая дата приложения на момент выполнения теста.",
+                    "- Недопустимая дата рождения: D + 1 календарный день в формате DD.MM.YYYY.",
+                    "- Пример: если D = `09.07.2026`, использовать `10.07.2026`.",
+                ],
+                steps=[
+                    "1. В поле `Дата рождения` ввести рассчитанное значение D + 1 календарный день.",
+                ],
+                expected_result="Значение D + 1 календарный день не принимается как валидное.",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--rolling-date-boundary-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("rolling-date-boundary-static-test-data", finding_ids)
+
+    def test_current_date_boundary_with_old_fixed_date_fails_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "date-boundary.md"
+            self.write_date_boundary_test_case(
+                test_case_file,
+                title="Дата рождения контактного лица принимает дату не позже текущей даты",
+                test_data=["- Дата рождения контактного лица: `10.01.1985`."],
+                steps=["1. В поле `Дата рождения` ввести `10.01.1985`."],
+                expected_result="Поле `Дата рождения` содержит значение `10.01.1985`.",
+                test_case_type="Positive",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--rolling-date-boundary-policy",
+                "writer-final",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["rolling-date-boundary-static-test-data"]["severity"], "error")
+
+    def test_typical_past_birth_date_without_boundary_claim_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "date-boundary.md"
+            self.write_date_boundary_test_case(
+                test_case_file,
+                title="Дата рождения контактного лица принимает прошедшую дату рождения",
+                test_data=["- Дата рождения контактного лица: `10.01.1985`."],
+                steps=["1. В поле `Дата рождения` ввести `10.01.1985`."],
+                expected_result="Поле `Дата рождения` содержит значение `10.01.1985`.",
+                test_case_type="Positive",
+                requirement_quote="Дата рождения принимает валидную прошедшую дату.",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_file),
+                "--json",
+                "--rolling-date-boundary-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("rolling-date-boundary-static-test-data", finding_ids)
+
+    def test_independent_wide_canary_v2_records_current_date_source_ba_question(self) -> None:
+        coverage_gaps = (
+            ROOT_DIR
+            / "fts"
+            / "AutoFin"
+            / "work"
+            / "canary-runs"
+            / "independent-wide-canary-v2"
+            / "coverage-gaps.md"
+        )
+        text = coverage_gaps.read_text(encoding="utf-8")
+
+        self.assertIn("BAQ-DATE-CURRENT-SOURCE", text)
+        self.assertIn("BSR 185", text)
+        self.assertIn("TC-AF43-AW2-027", text)
+        self.assertIn("TC-AF43-AW2-028", text)
 
     def test_concrete_transition_oracle_and_fixed_date_do_not_warn(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

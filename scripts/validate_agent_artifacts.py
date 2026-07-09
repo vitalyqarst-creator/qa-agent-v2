@@ -718,6 +718,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--rolling-date-boundary-policy",
+        choices=("compatible", "diagnostic", "strict-canary", "writer-final", "production"),
+        default="compatible",
+        help=(
+            "Select severity for rolling/current-date boundary TC that uses static calendar dates. "
+            "compatible/diagnostic keep legacy audit artifacts as warnings; "
+            "strict-canary, writer-final and production report them as errors."
+        ),
+    )
+    parser.add_argument(
         "--reviewer-signoff-policy",
         choices=("compatible", "strict"),
         default="compatible",
@@ -3239,6 +3249,12 @@ def declared_coverage_gap_ids(content: str) -> set[str]:
 
 
 def input_restriction_gap_only_severity(policy: str) -> str:
+    if policy in {"strict-canary", "writer-final", "production"}:
+        return "error"
+    return "warning"
+
+
+def rolling_date_boundary_severity(policy: str) -> str:
     if policy in {"strict-canary", "writer-final", "production"}:
         return "error"
     return "warning"
@@ -10632,6 +10648,25 @@ FIELD_LEVEL_OBSERVABLE_ORACLE_RE = re.compile(
 
 DATE_DEPENDENT_SOURCE_RE = re.compile(r"текущ\w+\s+дат|current\s+date|минус\s+\d+\s+лет", flags=re.IGNORECASE)
 ABSOLUTE_DATE_RE = re.compile(r"\b20\d{2}-\d{2}-\d{2}\b")
+STATIC_CALENDAR_DATE_RE = re.compile(r"\b(?:\d{2}\.\d{2}\.\d{4}|20\d{2}-\d{2}-\d{2})\b")
+ROLLING_DATE_BOUNDARY_SIGNAL_RE = re.compile(
+    r"текущ\w*\s+дат|"
+    r"больше\s+текущ\w*\s+дат|"
+    r"не\s+позже\s+текущ\w*\s+дат|"
+    r"будущ\w*\s+дат|"
+    r"возраст|"
+    r"future\s+date|current\s+date|today|tomorrow|"
+    r"\bD\s*[+-]",
+    flags=re.IGNORECASE,
+)
+ROLLING_DATE_FORMULA_RE = re.compile(
+    r"(?<![A-Za-zА-Яа-яЁё])D(?![A-Za-zА-Яа-яЁё])|"
+    r"текущая\s+дата\s+приложения|"
+    r"дата\s+выполнения\s+теста|"
+    r"current\s+application\s+date|execution\s+date|"
+    r"[+-]\s*\d+\s*(?:календарн\w*\s+день|calendar\s+day)",
+    flags=re.IGNORECASE,
+)
 FIXED_BUSINESS_DATE_CONTEXT_RE = re.compile(
     r"бизнес-дата|системн\w+\s+дат\w+\s+зафиксирован|"
     r"дата\s+проверки\s+зафиксирован|тестов\w+\s+дат\w+\s+зафиксирован|fixed\s+(?:business\s+)?date",
@@ -11351,6 +11386,7 @@ def validate_test_case_quality_smells(
     root: Path,
     *,
     blocks: list[tuple[str, str]],
+    rolling_date_boundary_policy: str = "compatible",
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -11436,6 +11472,7 @@ def validate_test_case_quality_smells(
     abstract_oracles: list[str] = []
     negative_input_without_observable_oracle: list[str] = []
     date_dependent_absolute_dates: list[str] = []
+    rolling_date_boundary_static_data: list[str] = []
     action_treated_as_required_field: list[str] = []
     action_without_observable_artifact: list[str] = []
     broad_scenario_test_cases: list[str] = []
@@ -11607,6 +11644,28 @@ def validate_test_case_quality_smells(
         ):
             date_dependent_absolute_dates.append(
                 f"{test_case_id}:preconditions={preconditions[:100] or '-'}"
+            )
+        rolling_boundary_context = " ".join(
+            [
+                title,
+                goal,
+                expected_result,
+                traceability,
+                ft_reference,
+                requirement_source,
+                requirement_quote,
+            ]
+        )
+        rolling_boundary_data = " ".join([test_data, steps])
+        if (
+            ROLLING_DATE_BOUNDARY_SIGNAL_RE.search(rolling_boundary_context)
+            and STATIC_CALENDAR_DATE_RE.search(rolling_boundary_data)
+            and not ROLLING_DATE_FORMULA_RE.search(rolling_boundary_data)
+            and not FIXED_BUSINESS_DATE_CONTEXT_RE.search(preconditions)
+        ):
+            dates = ", ".join(sorted(set(STATIC_CALENDAR_DATE_RE.findall(rolling_boundary_data)))[:5])
+            rolling_date_boundary_static_data.append(
+                f"{test_case_id}:dates={dates}; title={title[:120] or '<missing>'}"
             )
         linked_atom_text = " | ".join(
             ledger_text_by_atom.get(atom_id, "")
@@ -12899,6 +12958,29 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if rolling_date_boundary_static_data:
+        severity = rolling_date_boundary_severity(rolling_date_boundary_policy)
+        findings.append(
+            Finding(
+                id="rolling-date-boundary-static-test-data",
+                severity=severity,
+                category="test-data",
+                title="Rolling date boundary TC uses static calendar test data",
+                details=(
+                    "A TC tied to the current application date, future date, today/tomorrow or an age/current-date "
+                    "boundary must not use a fixed absolute calendar date as the only boundary or negative value. "
+                    "The test data must define an execution-relative formula such as D or D + 1 calendar day."
+                ),
+                path=display_path,
+                evidence=rolling_date_boundary_static_data[:30],
+                recommended_action=(
+                    "Replace the fixed boundary value with calculated test data: define D as the current application "
+                    "date at test execution, state the date format, and include an example. If the source of D is "
+                    "unclear, add a BA question for application/server/business/browser date source."
+                ),
+            )
+        )
+
     if action_treated_as_required_field:
         findings.append(
             Finding(
@@ -13071,6 +13153,7 @@ def validate_test_case_quality_smells(
         or abstract_oracles
         or negative_input_without_observable_oracle
         or date_dependent_absolute_dates
+        or rolling_date_boundary_static_data
         or action_treated_as_required_field
         or action_without_observable_artifact
         or gap_placeholder_sections
@@ -13318,6 +13401,7 @@ def validate_test_case_file(
     *,
     test_case_policy: str = "compatible",
     input_restriction_gap_policy: str = "compatible",
+    rolling_date_boundary_policy: str = "compatible",
     known_test_case_ids: set[str] | None = None,
     suppress_blocked_input_gate_failures: bool = False,
 ) -> tuple[list[Finding], list[Check]]:
@@ -13580,6 +13664,7 @@ def validate_test_case_file(
         path,
         root,
         blocks=blocks,
+        rolling_date_boundary_policy=rolling_date_boundary_policy,
     )
     findings.extend(smell_findings)
     checks.extend(smell_checks)
@@ -17394,6 +17479,7 @@ def validate(
     writer_response_policy: str = "compatible",
     test_case_policy: str = "compatible",
     input_restriction_gap_policy: str = "compatible",
+    rolling_date_boundary_policy: str = "compatible",
     reviewer_signoff_policy: str = "compatible",
     final_alias_policy: str = "compatible",
     session_log_policy: str = "compatible",
@@ -17604,6 +17690,7 @@ def validate(
             root,
             test_case_policy=test_case_policy,
             input_restriction_gap_policy=input_restriction_gap_policy,
+            rolling_date_boundary_policy=rolling_date_boundary_policy,
             known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
             suppress_blocked_input_gate_failures=path.resolve() in blocked_writer_gate_suppression_paths,
         )
@@ -17838,6 +17925,7 @@ def main() -> int:
         writer_response_policy=args.writer_response_policy,
         test_case_policy=args.test_case_policy,
         input_restriction_gap_policy=args.input_restriction_gap_policy,
+        rolling_date_boundary_policy=args.rolling_date_boundary_policy,
         reviewer_signoff_policy=args.reviewer_signoff_policy,
         final_alias_policy=args.final_alias_policy,
         session_log_policy=args.session_log_policy,
