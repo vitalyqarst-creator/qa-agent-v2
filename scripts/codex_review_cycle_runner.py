@@ -1486,7 +1486,7 @@ def validate_state(
         raise RunnerError("canonical_test_cases must point to the FT test-cases directory")
     if "versions" in canonical.parts:
         raise RunnerError("canonical_test_cases must not point to a version snapshot")
-    if status not in PRE_WRITER_STATUSES and not canonical.exists():
+    if status not in PRE_WRITER_STATUSES and status != "blocked-input" and not canonical.exists():
         raise RunnerError(f"Canonical test-case file does not exist: {canonical}")
 
     if status not in TERMINAL_STATUSES:
@@ -3197,6 +3197,10 @@ def write_completion_manifest(
     return path
 
 
+def completion_manifest_path_for_stage(state_path: Path, stage: str) -> Path:
+    return state_path.parent / "outputs" / f"{stage}{COMPLETION_MANIFEST_SUFFIX}"
+
+
 def run_codex_turn_with_timeout(
     thread: Any,
     prompt: str,
@@ -3434,6 +3438,152 @@ def recover_timed_out_session(
         "session_status": "failed",
         "state_advanced": True,
         "final_response": str(timeout_output),
+        "completion_manifest": str(completion_manifest_path),
+        "input_snapshot": before_snapshot_id,
+        "output_snapshot": after_manifest["snapshot_id"],
+    }
+
+
+def recover_missing_completion_as_blocked(
+    state_path: Path,
+    *,
+    state_before: dict[str, Any],
+    next_session: NextSession,
+    recovered_lock: dict[str, Any],
+    approval_mode: str,
+    model: str | None,
+    before_snapshot_id: str,
+    after_snapshot_id: str,
+) -> dict[str, Any]:
+    ft_root = infer_ft_root(state_path)
+    completed_at = int(time.time())
+    started_at = int(recovered_lock.get("started_at_epoch") or completed_at)
+    output_dir = state_path.parent / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    diagnostic_path = output_dir / f"{next_session.stage}-completion-missing.md"
+    diagnostic_lines, diagnostic_reasons = timeout_recovery_diagnostics(
+        state_path,
+        state_before,
+        next_session,
+    )
+    missing_manifest = relative_or_name(
+        completion_manifest_path_for_stage(state_path, next_session.stage),
+        ft_root,
+    )
+    diagnostic_path.write_text(
+        "\n".join(
+            [
+                f"# {next_session.stage} completion missing",
+                "",
+                "blocker: blocked-runner-completion-missing",
+                f"expected completion manifest: `{missing_manifest}`",
+                "expected terminal events: `turn_finished`, `stage_completed`",
+                "",
+                "## Artifact Recovery Diagnostics",
+                "",
+                *diagnostic_lines,
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    state_after = load_simple_yaml(state_path)
+    state_after["stage_status"] = "blocked-input"
+    state_after["current_stage"] = next_session.stage
+    state_after["blocking_reasons"] = [
+        f"blocked-runner-completion-missing: {next_session.stage} has no completion manifest after stale lock recovery",
+    ]
+    if diagnostic_reasons:
+        state_after["blocking_reasons"].append(
+            f"{next_session.stage}: incomplete writer artifact recovery: "
+            + "; ".join(diagnostic_reasons[:4])
+        )
+    state_after["blocking_findings"] = []
+    state_after["active_transition_prompt"] = next_session.prompt_path
+    diagnostic_ref = relative_or_name(diagnostic_path, ft_root)
+    state_after["latest_artifacts"] = unique_nonempty_strings(
+        state_after.get("latest_artifacts"),
+        diagnostic_ref,
+    )
+    state_after["sessions"] = []
+    write_simple_yaml(state_path, state_after)
+    validate_state(state_after, state_path)
+
+    input_snapshot = relative_or_name(state_path.parent / "versions" / before_snapshot_id, ft_root)
+    output_snapshot = relative_or_name(state_path.parent / "versions" / after_snapshot_id, ft_root)
+    completion_manifest_path = write_completion_manifest(
+        state_path,
+        state_before=state_before,
+        state_after=state_after,
+        next_session=next_session,
+        thread_id=str(recovered_lock.get("thread_id") or ""),
+        turn_id="",
+        turn_status="interrupted",
+        session_status="failed",
+        state_advanced=True,
+        input_snapshot=input_snapshot,
+        output_snapshot=output_snapshot,
+        final_response=diagnostic_path,
+        started_at_epoch=started_at,
+        completed_at_epoch=completed_at,
+        duration_ms=(completed_at - started_at) * 1000,
+    )
+    completion_ref = relative_or_name(completion_manifest_path, ft_root)
+    state_after["latest_artifacts"] = unique_nonempty_strings(
+        state_after.get("latest_artifacts"),
+        completion_ref,
+    )
+    write_simple_yaml(state_path, state_after)
+    validate_state(state_after, state_path)
+    after_manifest = snapshot_state(state_path, after_snapshot_id)
+    append_session_record(
+        state_path.parent / "codex-session-map.yaml",
+        state_before,
+        {
+            "stage": next_session.stage,
+            "role": next_session.role,
+            "scenario": next_session.scenario,
+            "thread_id": str(recovered_lock.get("thread_id") or ""),
+            "turn_id": "",
+            "turn_status": "interrupted",
+            "sandbox": next_session.sandbox_policy,
+            "approval_mode": approval_mode,
+            "model": model or "",
+            "prompt": next_session.prompt_path,
+            "input_snapshot": input_snapshot,
+            "output_snapshot": output_snapshot,
+            "final_response": diagnostic_ref,
+            "completion_manifest": completion_ref,
+            "started_at_epoch": started_at,
+            "completed_at_epoch": completed_at,
+            "duration_ms": (completed_at - started_at) * 1000,
+            "state_advanced": True,
+            "status": "failed",
+            "abort_reason": "blocked-runner-completion-missing",
+        },
+    )
+    append_runner_event(
+        state_path.parent,
+        "session_completion_missing_blocked",
+        stage=next_session.stage,
+        thread_id=str(recovered_lock.get("thread_id") or ""),
+        completion_manifest=completion_ref,
+        diagnostic=diagnostic_ref,
+    )
+    return {
+        "action": "blocked-runner-completion-missing",
+        "cycle_id": state_before["cycle_id"],
+        "stage": next_session.stage,
+        "role": next_session.role,
+        "scenario": next_session.scenario,
+        "execution_mode": "sdk",
+        "thread_id": str(recovered_lock.get("thread_id") or ""),
+        "turn_id": "",
+        "turn_status": "interrupted",
+        "session_status": "failed",
+        "state_advanced": True,
+        "final_response": str(diagnostic_path),
         "completion_manifest": str(completion_manifest_path),
         "input_snapshot": before_snapshot_id,
         "output_snapshot": after_manifest["snapshot_id"],
@@ -3841,6 +3991,216 @@ def completed_payload_from_timed_out_writer_artifact_progress(
         "input_snapshot": before_snapshot_id,
         "output_snapshot": after_manifest["snapshot_id"],
     }
+
+
+def completed_payload_from_incomplete_writer_artifact_progress(
+    state_path: Path,
+    *,
+    state_before: dict[str, Any],
+    next_session: NextSession,
+    recovered_lock: dict[str, Any],
+    approval_mode: str,
+    model: str | None,
+    before_snapshot_id: str,
+    after_snapshot_id: str,
+) -> dict[str, Any] | None:
+    if next_session.role != "writer":
+        return None
+
+    state_current = load_simple_yaml(state_path)
+    if state_progress_marker(state_current) != state_progress_marker(state_before):
+        return None
+
+    ft_root = infer_ft_root(state_path)
+    output_dir = state_path.parent / "outputs"
+    writer_response = output_dir / f"{next_session.stage}-response.md"
+    if not existing_relative_artifact(writer_response, ft_root):
+        return None
+
+    profile_path = clean_scoped_validator_profile_for_stage(
+        state_path,
+        state_current,
+        next_session.stage,
+    )
+    if profile_path is None:
+        return None
+
+    next_review = next_writer_review_prompt(state_path, state_before, next_session)
+    if next_review is None:
+        return None
+    next_stage, next_status, next_round, next_prompt_name = next_review
+    next_prompt = state_path.parent / "prompts" / next_prompt_name
+    if not existing_relative_artifact(next_prompt, ft_root):
+        return None
+
+    state_after = dict(state_current)
+    state_after["current_stage"] = next_stage
+    state_after["stage_status"] = next_status
+    state_after["semantic_round"] = next_round
+    state_after["active_transition_prompt"] = relative_or_name(next_prompt, ft_root)
+    state_after["blocking_reasons"] = []
+    state_after["blocking_findings"] = []
+    latest: list[str] = []
+    if isinstance(state_current.get("latest_artifacts"), list):
+        latest.extend(str(item) for item in state_current["latest_artifacts"])
+    latest.extend(writer_timeout_artifact_candidates(state_path, state_after, next_session))
+    latest.append(relative_or_name(next_prompt, ft_root))
+    state_after["latest_artifacts"] = list(dict.fromkeys(latest))
+    state_after["sessions"] = []
+    write_simple_yaml(state_path, state_after)
+    validate_state(state_after, state_path)
+    validate_post_session_state_transition(state_before, state_after, next_session, state_path)
+
+    completed_at = int(time.time())
+    started_at = int(recovered_lock.get("started_at_epoch") or completed_at)
+    diagnostic_path = output_dir / f"{next_session.stage}-completion-recovered-from-artifacts.md"
+    diagnostic_path.write_text(
+        "\n".join(
+            [
+                f"# {next_session.stage} completion recovered from artifacts",
+                "",
+                "Previous runner process ended before writing the completion manifest.",
+                "Writer response, clean scoped validator profile and next review prompt were present, so the runner recovered the next state.",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    state_after["latest_artifacts"] = list(
+        dict.fromkeys(
+            [*state_after["latest_artifacts"], relative_or_name(diagnostic_path, ft_root)]
+        )
+    )
+    write_simple_yaml(state_path, state_after)
+    validate_state(state_after, state_path)
+
+    after_manifest = snapshot_state(state_path, after_snapshot_id)
+    input_snapshot = relative_or_name(state_path.parent / "versions" / before_snapshot_id, ft_root)
+    output_snapshot = relative_or_name(state_path.parent / "versions" / after_snapshot_id, ft_root)
+    completion_manifest_path = write_completion_manifest(
+        state_path,
+        state_before=state_before,
+        state_after=state_after,
+        next_session=next_session,
+        thread_id=str(recovered_lock.get("thread_id") or ""),
+        turn_id="",
+        turn_status="interrupted",
+        session_status="completed-with-progress",
+        state_advanced=True,
+        input_snapshot=input_snapshot,
+        output_snapshot=output_snapshot,
+        final_response=diagnostic_path,
+        started_at_epoch=started_at,
+        completed_at_epoch=completed_at,
+        duration_ms=(completed_at - started_at) * 1000,
+    )
+    completion_ref = relative_or_name(completion_manifest_path, ft_root)
+    append_session_record(
+        state_path.parent / "codex-session-map.yaml",
+        state_before,
+        {
+            "stage": next_session.stage,
+            "role": next_session.role,
+            "scenario": next_session.scenario,
+            "thread_id": str(recovered_lock.get("thread_id") or ""),
+            "turn_id": "",
+            "turn_status": "interrupted",
+            "sandbox": next_session.sandbox_policy,
+            "approval_mode": approval_mode,
+            "model": model or "",
+            "prompt": next_session.prompt_path,
+            "input_snapshot": input_snapshot,
+            "output_snapshot": output_snapshot,
+            "final_response": relative_or_name(diagnostic_path, ft_root),
+            "completion_manifest": completion_ref,
+            "started_at_epoch": started_at,
+            "completed_at_epoch": completed_at,
+            "duration_ms": (completed_at - started_at) * 1000,
+            "state_advanced": True,
+            "status": "completed-with-progress",
+            "abort_reason": "completion recovered from writer artifacts after stale lock",
+        },
+    )
+    append_runner_event(
+        state_path.parent,
+        "session_incomplete_recovered_after_artifact_progress",
+        stage=next_session.stage,
+        thread_id=str(recovered_lock.get("thread_id") or ""),
+        scoped_validator_profile=relative_or_name(profile_path, ft_root),
+        completion_manifest=completion_ref,
+    )
+    return {
+        "action": "completed-session-after-incomplete-run",
+        "cycle_id": state_before["cycle_id"],
+        "stage": next_session.stage,
+        "role": next_session.role,
+        "scenario": next_session.scenario,
+        "execution_mode": "sdk",
+        "thread_id": str(recovered_lock.get("thread_id") or ""),
+        "turn_id": "",
+        "turn_status": "interrupted",
+        "session_status": "completed-with-progress",
+        "state_advanced": True,
+        "final_response": str(diagnostic_path),
+        "completion_manifest": str(completion_manifest_path),
+        "input_snapshot": before_snapshot_id,
+        "output_snapshot": after_manifest["snapshot_id"],
+    }
+
+
+def recover_incomplete_stage_after_stale_lock(
+    state_path: Path,
+    *,
+    recovered_lock: dict[str, Any] | None,
+    approval_mode: str,
+    model: str | None,
+    runner_lock: RunnerFileLock | None,
+) -> dict[str, Any] | None:
+    if not recovered_lock:
+        return None
+    state = load_simple_yaml(state_path)
+    validate_state(state, state_path)
+    next_session = next_session_for_state(state)
+    if next_session is None:
+        return None
+    recovered_stage = str(recovered_lock.get("stage") or "")
+    if recovered_stage and recovered_stage != next_session.stage:
+        return None
+    manifest_path = completion_manifest_path_for_stage(state_path, next_session.stage)
+    if manifest_path.exists():
+        return None
+
+    before_snapshot_id = f"before-{next_session.stage}"
+    after_snapshot_id = f"after-{next_session.stage}"
+    if runner_lock is not None:
+        runner_lock.update(
+            stage=next_session.stage,
+            scenario=next_session.scenario,
+            thread_id=str(recovered_lock.get("thread_id") or ""),
+            status="recovering-incomplete-stage",
+        )
+    artifact_payload = completed_payload_from_incomplete_writer_artifact_progress(
+        state_path,
+        state_before=state,
+        next_session=next_session,
+        recovered_lock=recovered_lock,
+        approval_mode=approval_mode,
+        model=model,
+        before_snapshot_id=before_snapshot_id,
+        after_snapshot_id=after_snapshot_id,
+    )
+    if artifact_payload is not None:
+        return artifact_payload
+    return recover_missing_completion_as_blocked(
+        state_path,
+        state_before=state,
+        next_session=next_session,
+        recovered_lock=recovered_lock,
+        approval_mode=approval_mode,
+        model=model,
+        before_snapshot_id=before_snapshot_id,
+        after_snapshot_id=after_snapshot_id,
+    )
 
 
 def run_deterministic_structure_preflight(
@@ -5500,6 +5860,35 @@ def build_doctor_payload(
     output_dir = cycle_dir / "outputs"
     manifests = sorted(output_dir.glob(f"*{COMPLETION_MANIFEST_SUFFIX}")) if output_dir.exists() else []
     payload["completion_manifests"] = [relative_or_name(path, ft_root) for path in manifests]
+    if state is not None:
+        next_session = next_session_for_state(state)
+        if next_session is not None:
+            expected_manifest = completion_manifest_path_for_stage(state_path, next_session.stage)
+            next_review = (
+                next_writer_review_prompt(state_path, state, next_session)
+                if next_session.role == "writer"
+                else None
+            )
+            payload["completion_contract"] = {
+                "stage": next_session.stage,
+                "role": next_session.role,
+                "scenario": next_session.scenario,
+                "expected_completion_manifest": relative_or_name(expected_manifest, ft_root),
+                "completion_manifest_exists": expected_manifest.exists(),
+                "expected_terminal_events": ["turn_finished", "stage_completed"],
+                "actual_last_event": last_event,
+                "missing": [] if expected_manifest.exists() else ["completion_manifest"],
+                "recoverable_writer_next_state": (
+                    {
+                        "current_stage": next_review[0],
+                        "stage_status": next_review[1],
+                        "semantic_round": next_review[2],
+                        "active_transition_prompt": f"work/review-cycles/{state.get('scope_slug')}/prompts/{next_review[3]}",
+                    }
+                    if next_review is not None
+                    else None
+                ),
+            }
 
     status = str(payload.get("stage_status") or "")
     if status == "signed-off":
@@ -5710,14 +6099,27 @@ def cmd_run_until_terminal(args: argparse.Namespace) -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
-    if next_session_requires_sdk(next_session_for_state(state)):
-        ensure_openai_codex_runtime_available()
+    recovered_lock: dict[str, Any] | None = None
+    if args.recover_stale_lock and (state_path.parent / RUNNER_LOCK_FILE).exists():
+        recovered_lock = read_lock_file(state_path.parent / RUNNER_LOCK_FILE)
     with RunnerFileLock(
         state_path,
         command=args.command,
         stale_lock_seconds=args.stale_lock_seconds,
         recover_stale_lock=args.recover_stale_lock,
     ) as runner_lock:
+        recovery_payload = recover_incomplete_stage_after_stale_lock(
+            state_path,
+            recovered_lock=recovered_lock,
+            approval_mode=args.approval_mode,
+            model=args.model,
+            runner_lock=runner_lock,
+        )
+        if recovery_payload is not None:
+            print(json.dumps(recovery_payload, ensure_ascii=False, indent=2))
+            return 0
+        if next_session_requires_sdk(next_session_for_state(load_simple_yaml(state_path))):
+            ensure_openai_codex_runtime_available()
         payload = run_until_terminal(
             state_path,
             cwd=args.cwd,
@@ -5748,6 +6150,9 @@ def cmd_resume(args: argparse.Namespace) -> int:
         stale_lock_seconds=args.stale_lock_seconds,
         recover_stale_lock=args.recover_stale_lock,
     )
+    recovered_lock: dict[str, Any] | None = None
+    if args.recover_stale_lock and (state_path.parent / RUNNER_LOCK_FILE).exists():
+        recovered_lock = read_lock_file(state_path.parent / RUNNER_LOCK_FILE)
     if args.recover_only:
         diagnostics = lock_diagnostics(
             state_path,
@@ -5768,13 +6173,24 @@ def cmd_resume(args: argparse.Namespace) -> int:
         )
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
-    ensure_openai_codex_runtime_available()
     with RunnerFileLock(
         state_path,
         command=args.command,
         stale_lock_seconds=args.stale_lock_seconds,
         recover_stale_lock=args.recover_stale_lock,
     ) as runner_lock:
+        recovery_payload = recover_incomplete_stage_after_stale_lock(
+            state_path,
+            recovered_lock=recovered_lock,
+            approval_mode=args.approval_mode,
+            model=args.model,
+            runner_lock=runner_lock,
+        )
+        if recovery_payload is not None:
+            print(json.dumps(recovery_payload, ensure_ascii=False, indent=2))
+            return 0
+        if next_session_requires_sdk(next_session_for_state(load_simple_yaml(state_path))):
+            ensure_openai_codex_runtime_available()
         payload = run_until_terminal(
             state_path,
             cwd=args.cwd,

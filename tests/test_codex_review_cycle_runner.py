@@ -2096,6 +2096,116 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn('"thread_id": "real-reviewer-thread"', events)
         self.assertIn('"child_timeout_phase": "sdk-turn-timeout-after-turn-started"', events)
 
+    def write_stale_writer_lock(self) -> None:
+        (self.cycle_dir / "runner.lock.yaml").write_text(
+            "\n".join(
+                [
+                    "pid: 999999",
+                    "command: resume",
+                    f"state: {self.state_path}",
+                    "started_at_epoch: 1",
+                    "last_heartbeat_epoch: 1",
+                    "stage: writer-r1",
+                    "scenario: writer.session_initial_draft",
+                    "thread_id: stale-writer-thread",
+                    "status: running-session-child",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+    def test_resume_recovered_stale_writer_lock_advances_from_complete_artifacts_without_new_sdk_session(self) -> None:
+        self.write_state(status="scope-ready-for-writer")
+        output_dir = self.cycle_dir / "outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "writer-r1-response.md").write_text(
+            "# Writer R1 Response\n\n- result: `writer-draft-ready`\n",
+            encoding="utf-8",
+        )
+        self.write_scoped_validator_profile()
+        (self.prompt_dir / "prompt.structure-preflight-r1.md").write_text(
+            "Run deterministic structure preflight.",
+            encoding="utf-8",
+        )
+        self.write_stale_writer_lock()
+
+        result = self.run_runner(
+            "resume",
+            "--state",
+            str(self.state_path),
+            "--recover-stale-lock",
+            "--stale-lock-seconds",
+            "1",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        runner = load_runner_module()
+        updated_state = runner.load_simple_yaml(self.state_path)
+        self.assertEqual("completed-session-after-incomplete-run", payload["action"])
+        self.assertEqual("completed-with-progress", payload["session_status"])
+        self.assertEqual("interrupted", payload["turn_status"])
+        self.assertEqual("structure-preflight-r1", updated_state["current_stage"])
+        self.assertEqual("writer-draft-ready", updated_state["stage_status"])
+        self.assertFalse((self.cycle_dir / "runner.lock.yaml").exists())
+        self.assertTrue((output_dir / "writer-r1-completion.yaml").exists())
+        events = (self.cycle_dir / "runner-events.ndjson").read_text(encoding="utf-8")
+        self.assertIn("session_incomplete_recovered_after_artifact_progress", events)
+        self.assertNotIn("session_child_started", events)
+
+    def test_resume_recovered_stale_writer_lock_blocks_when_completion_and_artifacts_missing(self) -> None:
+        self.write_state(status="scope-ready-for-writer")
+        self.test_case.unlink()
+        self.write_stale_writer_lock()
+
+        result = self.run_runner(
+            "resume",
+            "--state",
+            str(self.state_path),
+            "--recover-stale-lock",
+            "--stale-lock-seconds",
+            "1",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        runner = load_runner_module()
+        updated_state = runner.load_simple_yaml(self.state_path)
+        self.assertEqual("blocked-runner-completion-missing", payload["action"])
+        self.assertEqual("failed", payload["session_status"])
+        self.assertEqual("interrupted", payload["turn_status"])
+        self.assertEqual("blocked-input", updated_state["stage_status"])
+        self.assertTrue(
+            any(
+                reason.startswith("blocked-runner-completion-missing:")
+                for reason in updated_state["blocking_reasons"]
+            )
+        )
+        self.assertFalse((self.cycle_dir / "runner.lock.yaml").exists())
+        self.assertTrue((self.cycle_dir / "outputs" / "writer-r1-completion-missing.md").exists())
+        self.assertTrue((self.cycle_dir / "outputs" / "writer-r1-completion.yaml").exists())
+        events = (self.cycle_dir / "runner-events.ndjson").read_text(encoding="utf-8")
+        self.assertIn("session_completion_missing_blocked", events)
+        self.assertNotIn("session_child_started", events)
+
+    def test_doctor_reports_expected_completion_contract_for_next_stage(self) -> None:
+        self.write_state(status="scope-ready-for-writer")
+        result = self.run_runner("doctor", "--state", str(self.state_path))
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        contract = payload["completion_contract"]
+        self.assertEqual("writer-r1", contract["stage"])
+        self.assertEqual("writer.session_initial_draft", contract["scenario"])
+        self.assertEqual(
+            "work/review-cycles/section-scope/outputs/writer-r1-completion.yaml",
+            contract["expected_completion_manifest"],
+        )
+        self.assertFalse(contract["completion_manifest_exists"])
+        self.assertIn("completion_manifest", contract["missing"])
+        self.assertEqual("structure-preflight-r1", contract["recoverable_writer_next_state"]["current_stage"])
+
     def test_effective_session_timeout_uses_stage_defaults_and_allows_override_or_disable(self) -> None:
         runner = load_runner_module()
         writer = runner.NextSession(
