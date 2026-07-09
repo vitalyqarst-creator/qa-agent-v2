@@ -14478,7 +14478,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "**Priority:** High",
                         "**Type:** Positive",
                         "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
-                        "**Scenario rationale:** One visible user workflow opens the address block and exposes the three source-backed labels together; separate atomic coverage remains in linked matrix rows.",
+                        "**Сценарное обоснование:** Проверяется блок адреса регистрации: BSR 1, BSR 2 и BSR 3 описывают видимость связанных labels в одной UI-композиции, а отдельная atomic coverage остается в matrix rows.",
                         "**Preconditions:**",
                         "- Form is open.",
                         "**Test Data:**",
@@ -14506,6 +14506,257 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("test-case-overmerged-atoms-without-rationale", finding_ids)
+
+    def test_scenario_rationale_english_field_warns_in_compatible_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Registration address block is shown",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
+                        "**Scenario rationale:** Address block BSR 1, BSR 2 and BSR 3 are displayed as one UI composition.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Open the registration address block.",
+                        "**Expected Result:** Registration address block is shown.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["scenario-rationale-noncanonical-field"]["severity"], "warning")
+
+    def test_scenario_rationale_english_field_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Registration address block is shown",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
+                        "**Scenario rationale:** Address block BSR 1, BSR 2 and BSR 3 are displayed as one UI composition.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Open the registration address block.",
+                        "**Expected Result:** Registration address block is shown.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["scenario-rationale-noncanonical-field"]["severity"], "error")
+
+    def test_scenario_rationale_unrelated_domain_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Client work phone accepts ten digits",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 168`; `BSR 169`; `BSR 170`",
+                        "**Сценарное обоснование:** The birth-date field and current-date boundary are part of one visible contact-person subform.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Valid phone: `9234567890`.",
+                        "**Steps:**",
+                        "1. Add a work phone.",
+                        "2. Enter `9234567890`.",
+                        "**Expected Result:** Work phone is displayed.",
+                        "**Postconditions:**",
+                        "- Remove the added phone.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["scenario-rationale-domain-mismatch"]["severity"], "error")
+
+    def test_scenario_rationale_generic_without_target_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Registration address block is shown",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
+                        "**Сценарное обоснование:** One visible workflow checks the current block.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Open the block.",
+                        "**Expected Result:** Block is shown.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["scenario-rationale-too-generic"]["severity"], "error")
+
+    def test_relevant_canonical_scenario_rationale_passes_strict_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Registration address block is shown",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
+                        "**Сценарное обоснование:** Проверяется блок адреса регистрации: BSR 1, BSR 2 и BSR 3 описывают связанные address labels в одной UI-композиции.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Open the registration address block.",
+                        "**Expected Result:** Registration address block is shown.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertEqual(result.returncode, 0)
+        self.assertNotIn("scenario-rationale-noncanonical-field", finding_ids)
+        self.assertNotIn("scenario-rationale-domain-mismatch", finding_ids)
+        self.assertNotIn("scenario-rationale-too-generic", finding_ids)
+
+    def test_production_glued_heading_and_metadata_error_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "structure.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Structure",
+                        "Intro text ## TC-RAT-001",
+                        "prefix **Название:** Registration address block is shown",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["production-markdown-heading-not-at-line-start"]["severity"], "error")
+        self.assertEqual(findings["production-metadata-field-not-at-line-start"]["severity"], "error")
 
     def test_generated_artifact_used_as_source_of_truth_errors_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

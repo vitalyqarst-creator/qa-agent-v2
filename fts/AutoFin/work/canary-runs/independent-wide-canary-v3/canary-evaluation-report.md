@@ -60,17 +60,28 @@
 | item | result |
 | --- | --- |
 | v2 diagnostic role | V2 remains unchanged and fails strict atomicity coverage because multiple TC reference more than two independent source-backed obligations without scenario rationale. |
-| v3 atomicity fix | V3 adds `Scenario rationale` only where one visible source-backed workflow justifies grouping; independent invalid classes stay in separate candidate-negative TC. |
+| v3 atomicity fix | V3 uses canonical `Сценарное обоснование` only where one visible source-backed workflow justifies grouping; independent invalid classes stay in separate candidate-negative TC. |
 | FIO representative strategy | `TC-AF43-AW3-020` and `coverage-matrix.md` state selected combinations, omitted combinations and residual risk for the shared surname/first-name/patronymic restriction. |
 | positive allowed-class coverage | Positive allowed-class TC are retained, including `TC-AF43-AW3-020` for FIO and positive phone/postal/email/date cases. |
 | candidate-negative coverage | Visible source-backed input restrictions still have candidate-negative TC with concrete invalid values and UI calibration markers. |
 | generated artifact source guard | V3 work artifacts state that v2 is diagnostic/failure fixture only and cite source rows/BSR for decisions. |
+
+## Scenario Rationale Quality Follow-up
+
+| item | result |
+| --- | --- |
+| defect found | Five v3 rationales were copied from unrelated domains: residence postal index described phone/email, client mobile phone described contact-person FIO, work phone described birth-date boundary, home/work phone delete described citizenship/relation, and contact-person phone described passport series/number. |
+| remediation | All 12 rationale fields now use canonical `**Сценарное обоснование:**`; the five unrelated rationales were rewritten to name the checked field/block, BSR/source rows and sibling negative/candidate TC where applicable. |
+| TC count impact | `none`; no TC split/merge was performed because the defect was rationale quality, not coverage decomposition. |
+| physical structure check | v3 has no `## TC-*` heading or runtime metadata field glued to preceding text (`bad_lines=0`). |
 
 ## Validator Evidence
 
 | command | result |
 | --- | --- |
 | `python -m py_compile scripts\validate_agent_artifacts.py` | pass |
+| `python -m unittest tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_overmerged_source_backed_tc_with_scenario_rationale_passes_atomicity_gate tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_scenario_rationale_english_field_warns_in_compatible_profile tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_scenario_rationale_english_field_errors_in_strict_profile tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_scenario_rationale_unrelated_domain_errors_in_strict_profile tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_scenario_rationale_generic_without_target_errors_in_strict_profile tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_relevant_canonical_scenario_rationale_passes_strict_gate tests.test_agent_artifact_validator.AgentArtifactValidatorTests.test_production_glued_heading_and_metadata_error_in_strict_profile` | pass; 7 passed |
+| `python scripts\validate_agent_artifacts.py --root fts\AutoFin\test-cases\4.3-application-card-client-addresses-contacts-independent-wide-canary-v3.md --json --atomicity-coverage-policy strict-canary --fail-on error` | pass; 0 errors; no scenario-rationale findings |
 | `python -m pytest tests\test_agent_artifact_validator.py -k "source_backed_input_restriction_gap_only or gap_only_visible_input_restriction or representative_strategy or overmerged_source_backed or partial_similar_field_coverage"` | pass; 11 passed |
 | `python -m pytest tests\test_agent_artifact_validator.py -k "generated_artifact or representative_strategy or overmerged_source_backed or partial_similar_field_coverage"` | pass; 11 passed |
 | `python scripts\validate_agent_artifacts.py --root fts\AutoFin\test-cases\4.3-application-card-client-addresses-contacts-independent-wide-canary-v2.md --json --atomicity-coverage-policy strict-canary --fail-on error` | expected fail; 2 errors: `test-case-excessive-atom-fan-in`, `test-case-overmerged-atoms-without-rationale` |
@@ -78,7 +89,7 @@
 | `python scripts\validate_agent_artifacts.py --root fts\AutoFin\work\canary-runs\independent-wide-canary-v3 --json --input-restriction-gap-policy strict-canary --rolling-date-boundary-policy strict-canary --atomicity-coverage-policy strict-canary --fail-on error` | pass; 0 errors; 5 generated source-basis artifacts checked |
 | `python scripts\run_tests.py --suite architecture` | pass; 0 findings |
 | `python scripts\run_tests.py --suite agent-layer-fast` | pass; 215 tests, 1 skipped |
-| `python scripts\run_tests.py --suite artifact-validator-sharded` | pass; 331 tests across 7 shards |
+| `python scripts\run_tests.py --suite artifact-validator-sharded` | pass; 337 tests across 7 shards |
 | `git diff --check` | pass |
 
 ## Severity Behavior
@@ -96,6 +107,16 @@
 | profile / policy | findings | severity | sign-off impact |
 | --- | --- | --- | --- |
 | `compatible` | `test-case-overmerged-atoms-without-rationale`, `test-case-excessive-atom-fan-in`, `missing-representative-strategy`, `representative-strategy-without-omitted-combinations`, `representative-strategy-without-residual-risk` | `warning` | diagnostic only |
+| `diagnostic` | same | `warning` | diagnostic only |
+| `strict-canary` | same | `error` | fails `--fail-on error` |
+| `writer-final` | same | `error` | fails `--fail-on error` |
+| `production` | same | `error` | fails `--fail-on error` |
+
+## Scenario Rationale Severity
+
+| profile / policy | findings | severity | sign-off impact |
+| --- | --- | --- | --- |
+| `compatible` | `scenario-rationale-noncanonical-field`, `scenario-rationale-domain-mismatch`, `scenario-rationale-too-generic`, `production-markdown-heading-not-at-line-start`, `production-metadata-field-not-at-line-start` | `warning` | diagnostic only |
 | `diagnostic` | same | `warning` | diagnostic only |
 | `strict-canary` | same | `error` | fails `--fail-on error` |
 | `writer-final` | same | `error` | fails `--fail-on error` |

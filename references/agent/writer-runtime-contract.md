@@ -59,7 +59,7 @@ Conditional inputs:
 6b. В каждом `TC-*` пиши `Предусловия` как воспроизводимый setup: numbered action setup steps, fixture/API setup или reusable setup profile. Не оставляй magic/passive UI states без действия, которое их создает; `Дождаться` / `Убедиться` допустимы только после setup action.
 6b.1. Production files under `fts/**/test-cases/*.md` are self-contained runtime artifacts: no setup profile references, stand/environment wording or package-name leakage; dynamically created fields must include the reveal/create action in preconditions, for contact-person fields - `Добавить контактное лицо`.
 6c. Для source-backed input restriction всегда разложи allowed classes и invalid classes; напиши positive TC на allowed representative values и negative/candidate-negative TC на invalid representative values. Candidate negative TC не заменяет positive allowed-class TC.
-6d. If one TC references more than two independent source-backed obligations, split it unless one visible source-backed workflow justifies grouping. Grouped TC must include `Scenario rationale` and must not hide missing atomic TC/GAP coverage.
+6d. If one TC references more than two independent source-backed obligations, split it unless one visible source-backed workflow justifies grouping. Grouped TC must include `**Сценарное обоснование:**` and must not hide missing atomic TC/GAP coverage.
 6e. For similar fields/classes with shared restrictions, representative or pairwise coverage is allowed only when the artifact states selected combinations, omitted combinations and residual risk. Otherwise write the missing TC/GAP items.
 7. Проверь traceability: каждый `TC-*` связан с `ATOM-*` / requirement code / source reference.
 8. Выполни writer self-check и применимые quality gates.

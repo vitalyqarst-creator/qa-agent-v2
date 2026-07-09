@@ -10796,6 +10796,69 @@ SCENARIO_RATIONALE_RE = re.compile(
     r"\*\*(?:Scenario\s+rationale|Сценарное\s+обоснование|РЎС†РµРЅР°СЂРЅРѕРµ\s+РѕР±РѕСЃРЅРѕРІР°РЅРёРµ):\*\*",
     flags=re.IGNORECASE,
 )
+SCENARIO_RATIONALE_FIELD_LINE_RE = re.compile(
+    r"^\*\*(Scenario\s+rationale|Сценарное\s+обоснование):\*\*\s*(.*)$",
+    flags=re.IGNORECASE | re.MULTILINE,
+)
+CANONICAL_SCENARIO_RATIONALE_FIELD_RE = re.compile(
+    r"^\*\*Сценарное\s+обоснование:\*\*",
+    flags=re.IGNORECASE,
+)
+SCENARIO_RATIONALE_GENERIC_ONLY_RE = re.compile(
+    r"\b(?:one\s+visible\s+(?:ui\s+)?(?:workflow|row)|one\s+visible\s+user\s+workflow|"
+    r"these\s+source\s+rows\s+form\s+one\s+visible|current\s+block|composed\s+section)\b",
+    flags=re.IGNORECASE,
+)
+SCENARIO_RATIONALE_CONCRETE_TARGET_RE = re.compile(
+    r"\b(?:BSR|GSR|Table\s+\d+|row\s+\d+|address|postal|index|phone|email|surname|first[-\s]?name|"
+    r"patronymic|passport|birth[-\s]?date|citizenship|relation)\b|"
+    r"адрес|индекс|телефон|почт|фамил|имя|отчеств|паспорт|дат[ауы]\s+рожд|гражданств|отношен",
+    flags=re.IGNORECASE,
+)
+SCENARIO_RATIONALE_DOMAIN_GROUPS = (
+    (
+        "phone-email",
+        re.compile(r"\b(?:phone|email|e-mail)\b|телефон|электронн\w*\s+почт", flags=re.IGNORECASE),
+        re.compile(r"\b(?:phone|email|e-mail)\b|телефон|электронн\w*\s+почт", flags=re.IGNORECASE),
+    ),
+    (
+        "fio",
+        re.compile(r"\b(?:surname|first[-\s]?name|patronymic|fio)\b|фио|фамил|имя|отчеств", flags=re.IGNORECASE),
+        re.compile(r"\b(?:surname|first[-\s]?name|patronymic|fio)\b|фио|фамил|имя|отчеств", flags=re.IGNORECASE),
+    ),
+    (
+        "birth-date-current-date",
+        re.compile(r"\b(?:birth[-\s]?date|current[-\s]?date)\b|дат[ауы]\s+рожд|текущ\w*\s+дат", flags=re.IGNORECASE),
+        re.compile(r"\b(?:birth[-\s]?date|current[-\s]?date)\b|дат[ауы]\s+рожд|текущ\w*\s+дат", flags=re.IGNORECASE),
+    ),
+    (
+        "citizenship-relation",
+        re.compile(r"\b(?:citizenship|relation)\b|гражданств|отношен", flags=re.IGNORECASE),
+        re.compile(r"\b(?:citizenship|relation)\b|гражданств|отношен", flags=re.IGNORECASE),
+    ),
+    (
+        "passport-document",
+        re.compile(r"\bpassport\b|сер[иия]\w*\s*/?\s*номер|паспорт", flags=re.IGNORECASE),
+        re.compile(r"\bpassport\b|сер[иия]\w*\s*/?\s*номер|паспорт", flags=re.IGNORECASE),
+    ),
+)
+PRODUCTION_TEST_CASE_METADATA_FIELDS = (
+    "**Название:**",
+    "**Тип:**",
+    "**Приоритет:**",
+    "**package_id:**",
+    "**Трассировка:**",
+    "**Сценарное обоснование:**",
+    "**Scenario rationale:**",
+    "**Предусловия:**",
+    "**Тестовые данные:**",
+    "**Шаги:**",
+    "**Ожидаемый результат:**",
+    "**Постусловия:**",
+    "**Статус oracle:**",
+    "**Статус тест-кейса:**",
+    "**Требуется подтверждение:**",
+)
 GENERATED_ARTIFACT_SOLE_SOURCE_RE = re.compile(
     r"(?:generated|previous|old|v\d+)[^\n.;|]{0,120}"
     r"(?:used\s+as|is|was|treated\s+as|became)[^\n.;|]{0,60}"
@@ -11533,6 +11596,37 @@ def is_negative_test_case_type(test_case_type: str) -> bool:
     return test_case_type.startswith("negative") or test_case_type.startswith("негатив")
 
 
+def extract_scenario_rationale_field(block: str) -> tuple[str, str, str]:
+    match = SCENARIO_RATIONALE_FIELD_LINE_RE.search(block)
+    if not match:
+        return "", "", ""
+    return match.group(0), match.group(1), match.group(2).strip()
+
+
+def scenario_rationale_domain_mismatch_groups(rationale: str, context: str) -> list[str]:
+    mismatches: list[str] = []
+    if not rationale:
+        return mismatches
+    for group_name, rationale_pattern, context_pattern in SCENARIO_RATIONALE_DOMAIN_GROUPS:
+        if rationale_pattern.search(rationale) and not context_pattern.search(context):
+            mismatches.append(group_name)
+    return mismatches
+
+
+def production_line_structure_evidence(content: str) -> tuple[list[str], list[str]]:
+    heading_evidence: list[str] = []
+    metadata_evidence: list[str] = []
+    for line_number, line in enumerate(content.splitlines(), start=1):
+        heading_index = line.find("## TC-")
+        if heading_index > 0:
+            heading_evidence.append(f"line {line_number}: heading starts at column {heading_index + 1}: {line[:160]}")
+        for field in PRODUCTION_TEST_CASE_METADATA_FIELDS:
+            field_index = line.find(field)
+            if field_index > 0:
+                metadata_evidence.append(f"line {line_number}: field {field} starts at column {field_index + 1}: {line[:160]}")
+    return heading_evidence, metadata_evidence
+
+
 def validate_test_case_quality_smells(
     content: str,
     path: Path,
@@ -11658,10 +11752,17 @@ def validate_test_case_quality_smells(
     action_created_block_without_cleanup: list[str] = []
     bundled_negative_input_classes: list[str] = []
     overmerged_test_cases: list[str] = []
+    noncanonical_scenario_rationale_fields: list[str] = []
+    scenario_rationale_domain_mismatches: list[str] = []
+    scenario_rationale_too_generic: list[str] = []
+    production_glued_headings: list[str] = []
+    production_glued_metadata_fields: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
     boundary_groups: dict[str, dict[str, Any]] = {}
+    if production_test_case_file:
+        production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(content)
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and not REPRESENTATIVE_STRATEGY_RE.search(content):
         missing_representative_strategy.append("partial representative coverage is declared without representative/pairwise strategy or residual risk")
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and REPRESENTATIVE_STRATEGY_RE.search(content):
@@ -11699,6 +11800,34 @@ def validate_test_case_quality_smells(
             ],
         )
         status = extract_test_case_field_block(block, ["Status", "status", "Статус"]).lower()
+        scenario_rationale_line, _, scenario_rationale = extract_scenario_rationale_field(block)
+        if scenario_rationale_line and not CANONICAL_SCENARIO_RATIONALE_FIELD_RE.match(scenario_rationale_line):
+            noncanonical_scenario_rationale_fields.append(f"{test_case_id}:{scenario_rationale_line[:180]}")
+        if scenario_rationale:
+            rationale_context = " ".join(
+                [
+                    title,
+                    goal,
+                    preconditions,
+                    test_data,
+                    steps,
+                    expected_result,
+                    traceability,
+                    ft_reference,
+                    requirement_source,
+                    requirement_quote,
+                ]
+            )
+            mismatch_groups = scenario_rationale_domain_mismatch_groups(scenario_rationale, rationale_context)
+            if mismatch_groups:
+                scenario_rationale_domain_mismatches.append(
+                    f"{test_case_id}:groups={','.join(mismatch_groups)}; rationale={scenario_rationale[:180]}"
+                )
+            if (
+                SCENARIO_RATIONALE_GENERIC_ONLY_RE.search(scenario_rationale)
+                and not SCENARIO_RATIONALE_CONCRETE_TARGET_RE.search(scenario_rationale)
+            ):
+                scenario_rationale_too_generic.append(f"{test_case_id}:rationale={scenario_rationale[:180]}")
         if production_test_case_file:
             if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
                 environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
@@ -13350,6 +13479,90 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if noncanonical_scenario_rationale_fields:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="scenario-rationale-noncanonical-field",
+                severity=severity,
+                category="atomarity",
+                title="Scenario rationale uses non-canonical field label",
+                details=(
+                    "Production TC files must use the canonical Russian field `Сценарное обоснование`. "
+                    "The English `Scenario rationale` label is treated as legacy/diagnostic notation only."
+                ),
+                path=display_path,
+                evidence=noncanonical_scenario_rationale_fields[:20],
+                recommended_action="Rename the field to `**Сценарное обоснование:**` and keep the rationale content intact if it is still valid.",
+            )
+        )
+
+    if scenario_rationale_domain_mismatches:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="scenario-rationale-domain-mismatch",
+                severity=severity,
+                category="atomarity",
+                title="Scenario rationale appears unrelated to the test case domain",
+                details=(
+                    "A scenario rationale must justify why this TC may group the source-backed checks it actually "
+                    "executes. Rationale text that talks about another field family is likely copied from a different TC."
+                ),
+                path=display_path,
+                evidence=scenario_rationale_domain_mismatches[:20],
+                recommended_action="Rewrite the rationale so it names the tested field/block, source rows and separate TC/GAP coverage for independently failing checks.",
+            )
+        )
+
+    if scenario_rationale_too_generic:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="scenario-rationale-too-generic",
+                severity=severity,
+                category="atomarity",
+                title="Scenario rationale is too generic to justify grouping",
+                details=(
+                    "Generic phrases such as `one visible workflow` are not enough when they do not name the tested "
+                    "target, source rows or why separate atomic coverage remains traceable."
+                ),
+                path=display_path,
+                evidence=scenario_rationale_too_generic[:20],
+                recommended_action="Replace generic wording with a target-specific grouping rationale tied to source-backed fields and residual atomic coverage.",
+            )
+        )
+
+    if production_glued_headings:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="production-markdown-heading-not-at-line-start",
+                severity=severity,
+                category="structure",
+                title="Production TC heading is glued to preceding text",
+                details="A TC heading must begin at the start of its own line so extraction and review do not silently drop the case.",
+                path=display_path,
+                evidence=production_glued_headings[:20],
+                recommended_action="Move every `## TC-*` heading to the start of a separate line.",
+            )
+        )
+
+    if production_glued_metadata_fields:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="production-metadata-field-not-at-line-start",
+                severity=severity,
+                category="structure",
+                title="Production TC metadata field is glued to preceding text",
+                details="Runtime metadata fields must start at the beginning of a line to remain parseable and reviewable.",
+                path=display_path,
+                evidence=production_glued_metadata_fields[:20],
+                recommended_action="Move every TC metadata field to the start of its own line.",
+            )
+        )
+
     has_smells = bool(
         generic_atoms
         or compressed_atoms
@@ -13407,6 +13620,11 @@ def validate_test_case_quality_smells(
         or broad_scenario_test_cases
         or excessive_atom_fan_in
         or overmerged_test_cases
+        or noncanonical_scenario_rationale_fields
+        or scenario_rationale_domain_mismatches
+        or scenario_rationale_too_generic
+        or production_glued_headings
+        or production_glued_metadata_fields
     )
     checks.append(
         Check(
@@ -13738,6 +13956,34 @@ def validate_test_case_file(
 
     blocks = extract_test_case_blocks(content)
     if not blocks:
+        if is_production_test_case_path(path):
+            production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(content)
+            if production_glued_headings:
+                findings.append(
+                    Finding(
+                        id="production-markdown-heading-not-at-line-start",
+                        severity=atomicity_coverage_severity(atomicity_coverage_policy),
+                        category="structure",
+                        title="Production TC heading is glued to preceding text",
+                        details="A TC heading must begin at the start of its own line so extraction and review do not silently drop the case.",
+                        path=display_path,
+                        evidence=production_glued_headings[:20],
+                        recommended_action="Move every `## TC-*` heading to the start of a separate line.",
+                    )
+                )
+            if production_glued_metadata_fields:
+                findings.append(
+                    Finding(
+                        id="production-metadata-field-not-at-line-start",
+                        severity=atomicity_coverage_severity(atomicity_coverage_policy),
+                        category="structure",
+                        title="Production TC metadata field is glued to preceding text",
+                        details="Runtime metadata fields must start at the beginning of a line to remain parseable and reviewable.",
+                        path=display_path,
+                        evidence=production_glued_metadata_fields[:20],
+                        recommended_action="Move every TC metadata field to the start of its own line.",
+                    )
+                )
         findings.append(
             Finding(
                 id="test-case-file-no-structured-cases",

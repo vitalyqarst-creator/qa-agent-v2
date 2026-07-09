@@ -27,7 +27,7 @@
 - Canonical writer output must use parser-supported bold metadata fields from `test-case-format.md`: `**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`. A table-only metadata block such as `| Поле | Значение |` / `| package_id | WP-01 |` is not acceptable for canonical `TC-*`, because validator parsing of required fields and `package_id` relies on the bold-field/runtime-field contract. Do not mix table metadata with the same bold fields either; use bold fields only.
 
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
-- If one `TC-*` references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`), split it unless a single visible source-backed workflow has explicit `Scenario rationale` and separate atomic coverage remains traceable.
+- If one `TC-*` references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`), split it unless a single visible source-backed workflow has explicit `**Сценарное обоснование:**` and separate atomic coverage remains traceable.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
 - `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
 - Не помещай проверяемое действие в предусловия. Для созданного/выбранного/настроенного UI-state укажи путь: setup-действие пользователя с кнопкой/полем/значением/блоком или fixture/setup artifact; если путь неизвестен, используй `GAP-*` / `unclear`.

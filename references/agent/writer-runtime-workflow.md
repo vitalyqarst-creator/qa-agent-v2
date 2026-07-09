@@ -43,7 +43,7 @@ Runtime rules:
 - do not use source dumps, extraction artifacts or generic FT references as expected results;
 - keep exact requirement codes such as `GSR 22` when present;
 - use concrete user intent in steps, not mouse mechanics, unless the mechanism itself is the tested behavior.
-- split TC that reference more than two independent source-backed obligations, unless a single visible source-backed workflow has `Scenario rationale` and atomic coverage stays traceable elsewhere.
+- split TC that reference more than two independent source-backed obligations, unless a single visible source-backed workflow has `**Сценарное обоснование:**` and atomic coverage stays traceable elsewhere.
 - keep setup inside `Предусловия` as numbered action setup steps, fixture/API setup or reusable setup profile. Do not add a separate `Подготовительные шаги` section unless the current TC format already uses it. Avoid magic/passive states and ambiguous setup alternatives such as `выбрать или ввести`, `при необходимости` or `если нужно`; put `Дождаться...` / `Убедиться...` only after the action that creates the setup state.
 - for production `fts/**/test-cases/*.md`, inline full preconditions in every TC: no setup profile references, stand/environment wording, package-name leakage, or missing reveal action for action-created fields such as contact-person `Фамилия`/`Имя`/`Отчество`.
 
