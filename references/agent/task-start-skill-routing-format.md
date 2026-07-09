@@ -84,6 +84,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["source-row-inventory.md exists when row parity is required", "table design artifacts exist", "writer quality gate passes"]
     },
     {
+      "id": "writer.initial_table_deep_debug",
+      "task_type": "Debug a table-heavy writer package with optional coverage metrics, risk/state templates or reviewer-oriented table diagnostics.",
+      "skill_chain": ["ft-test-case-writer"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-writer", "scenario": "writer.initial_draft.table.deep_debug"}
+      ],
+      "verification_gates": ["deep/debug need is explicit", "default table writer remains compact", "scoped validator or reviewer finding is rerun"]
+    },
+    {
       "id": "writer.initial_ui",
       "task_type": "Write new test cases for a confirmed UI scope with mockups or screen images.",
       "skill_chain": ["ft-test-case-writer"],
@@ -129,6 +138,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["style finding is resolved", "test meaning and traceability are unchanged"]
     },
     {
+      "id": "writer.remediate_style_deep_examples",
+      "task_type": "Use long style examples for a rare wording or formatting remediation that the compact checklist cannot resolve.",
+      "skill_chain": ["ft-test-case-writer"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-writer", "scenario": "writer.remediation.style.deep_examples"}
+      ],
+      "verification_gates": ["deep example need is explicit", "test meaning and traceability are unchanged"]
+    },
+    {
       "id": "writer.remediate_validator_failure",
       "task_type": "Repair validator or Writer Quality Gate failures.",
       "skill_chain": ["ft-test-case-writer"],
@@ -136,6 +154,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
         {"skill": "ft-test-case-writer", "scenario": "writer.remediation.validator_failure"}
       ],
       "verification_gates": ["failed validator rule is rerun", "Writer Quality Gate passes or residual risk is explicit"]
+    },
+    {
+      "id": "writer.remediate_validator_failure_deep_debug",
+      "task_type": "Repair validator or Writer Quality Gate failures that require detailed deep references after the compact finding map is insufficient.",
+      "skill_chain": ["ft-test-case-writer"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-writer", "scenario": "writer.remediation.validator_failure.deep_debug"}
+      ],
+      "verification_gates": ["deep/debug need is explicit", "failed validator rule is rerun", "unaffected TC remain unchanged"]
     },
     {
       "id": "reviewer.full_existing_cases",

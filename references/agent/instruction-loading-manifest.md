@@ -67,8 +67,9 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "writer_table_artifacts": {
-      "rationale": "Table-heavy and row-level parity writer artifacts required before ledger and TC writing.",
+      "rationale": "Compact table-heavy and row-level parity writer artifacts required before ledger and TC writing.",
       "paths": [
+        "references/agent/table-writer-runtime-checklist.md",
         "references/agent/writer-table-workflow.md",
         "references/agent/writer-table-artifacts-format.md",
         "references/agent/artifact-write-strategy-format.md",
@@ -78,13 +79,18 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/source-normalization-diagnostic-format.md",
         "references/agent/dictionary-inventory-format.md",
         "references/agent/test-design-decision-table-format.md",
+        "references/agent/package-test-design-plan-format.md"
+      ]
+    },
+    "writer_table_deep_artifacts": {
+      "rationale": "Optional deep table/debug templates for coverage metrics, risk, state and reviewer-oriented design checks.",
+      "paths": [
         "references/agent/coverage-obligation-table-format.md",
         "references/agent/test-design-coverage-metrics-format.md",
         "references/agent/fixture-catalog-format.md",
         "references/agent/risk-priority-map-format.md",
         "references/agent/state-model-coverage-format.md",
         "references/agent/experience-based-coverage-format.md",
-        "references/agent/package-test-design-plan-format.md",
         "references/agent/test-design-review-format.md",
         "references/agent/writer-quality-gate-format.md"
       ]
@@ -116,10 +122,16 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/qa/coverage-integration-async.md"
       ]
     },
-    "writer_validator_failure_deep": {
-      "rationale": "Deep references for remediation after validator or Writer Quality Gate failures.",
+    "writer_validator_failure_compact": {
+      "rationale": "Compact finding-targeted remediation map for validator or Writer Quality Gate failures.",
       "paths": [
-        "references/agent/writer-remediation-workflow.md",
+        "references/agent/validator-finding-remediation-map.md",
+        "references/agent/writer-remediation-workflow.md"
+      ]
+    },
+    "writer_validator_failure_deep": {
+      "rationale": "Optional deep references for remediation after validator or Writer Quality Gate failures.",
+      "paths": [
         "references/agent/writer-output-format.md",
         "references/agent/writer-quality-gate-format.md",
         "references/agent/dictionary-inventory-format.md",
@@ -318,14 +330,21 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/content-placement.md",
         "references/agent/skill-boundaries.md",
         "references/agent/duplication-policy.md",
+        "references/agent/deep-reference-loading-policy.md",
         "references/agent/maintenance-checklist.md",
         "references/agent/audit-output-format.md"
       ]
     },
-    "style_remediation": {
-      "rationale": "Examples for style-specific remediation after a style finding, not default writer runtime.",
+    "style_remediation_compact": {
+      "rationale": "Compact style remediation checklist and final TC schema without long examples.",
       "paths": [
         "references/qa/test-case-format.md",
+        "references/agent/style-remediation-checklist.md"
+      ]
+    },
+    "style_remediation": {
+      "rationale": "Optional long examples for style-specific remediation after a style finding.",
+      "paths": [
         "references/qa/test-case-style-examples.md"
       ]
     },
@@ -347,6 +366,7 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/content-placement.md",
         "references/agent/skill-boundaries.md",
         "references/agent/duplication-policy.md",
+        "references/agent/deep-reference-loading-policy.md",
         "references/agent/maintenance-checklist.md",
         "references/agent/audit-output-format.md"
       ]
@@ -370,7 +390,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "simple",
       "required_groups": ["global_core", "writer_core", "quality_rule_cards"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_table_deep_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_compact", "writer_validator_failure_deep", "style_remediation_compact", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 140,
       "rationale": "Confirmed simple scope without row-level parity, mockups or reviewer findings."
@@ -381,10 +401,21 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "initial_draft",
       "scope_profile": "table",
       "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_table_artifacts"],
-      "conditional_groups": ["writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "conditional_groups": ["writer_table_deep_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_compact", "writer_validator_failure_deep", "style_remediation_compact", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 300,
       "rationale": "Confirmed table-heavy or row-level parity scope requiring normalization and table design artifacts."
+    },
+    {
+      "id": "writer.initial_draft.table.deep_debug",
+      "phase": "writer",
+      "mode": "initial_draft_deep_debug",
+      "scope_profile": "table",
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_table_artifacts", "writer_table_deep_artifacts"],
+      "conditional_groups": ["writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_compact", "writer_validator_failure_deep", "style_remediation_compact", "style_remediation"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 340,
+      "rationale": "Explicit deep/debug table writer context for optional coverage metrics, risk/state templates and reviewer-oriented table diagnostics."
     },
     {
       "id": "writer.initial_draft.ui",
@@ -435,22 +466,44 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "remediation",
       "scope_profile": "style",
-      "required_groups": ["global_core", "writer_core", "style_remediation"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep"],
+      "required_groups": ["global_core", "writer_core", "style_remediation_compact"],
+      "conditional_groups": ["style_remediation", "writer_process_artifacts", "writer_table_artifacts", "writer_table_deep_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_compact", "writer_validator_failure_deep"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
       "rationale": "Style/wording remediation after reviewer or validator finding."
+    },
+    {
+      "id": "writer.remediation.style.deep_examples",
+      "phase": "writer",
+      "mode": "remediation_deep_examples",
+      "scope_profile": "style",
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "style_remediation"],
+      "conditional_groups": ["style_remediation_compact", "writer_process_artifacts", "writer_table_artifacts", "writer_table_deep_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_compact", "writer_validator_failure_deep"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 180,
+      "rationale": "Explicit style example context for rare wording/format fixes that require long examples."
     },
     {
       "id": "writer.remediation.validator_failure",
       "phase": "writer",
       "mode": "remediation",
       "scope_profile": "validator_failure",
-      "required_groups": ["global_core", "writer_core", "writer_validator_failure_deep"],
-      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_validator_failure_compact"],
+      "conditional_groups": ["writer_validator_failure_deep", "writer_process_artifacts", "writer_table_artifacts", "writer_table_deep_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 292,
-      "rationale": "Deep repair context after validator or Writer Quality Gate failure."
+      "rationale": "Compact finding-targeted repair context after validator or Writer Quality Gate failure."
+    },
+    {
+      "id": "writer.remediation.validator_failure.deep_debug",
+      "phase": "writer",
+      "mode": "remediation_deep_debug",
+      "scope_profile": "validator_failure",
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_validator_failure_compact", "writer_validator_failure_deep"],
+      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_table_deep_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact", "style_remediation"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 340,
+      "rationale": "Explicit deep/debug validator-remediation context when compact finding map is insufficient."
     },
     {
       "id": "writer.session_initial_draft",

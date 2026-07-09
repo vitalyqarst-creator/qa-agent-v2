@@ -15,12 +15,15 @@ REQUIRED_SCENARIOS = {
     "source_locator.discovery",
     "writer.initial_draft.simple",
     "writer.initial_draft.table",
+    "writer.initial_draft.table.deep_debug",
     "writer.initial_draft.ui",
     "writer.initial_draft.numeric",
     "writer.initial_draft.integration",
     "writer.revision_from_findings",
     "writer.remediation.style",
+    "writer.remediation.style.deep_examples",
     "writer.remediation.validator_failure",
+    "writer.remediation.validator_failure.deep_debug",
     "writer.session_initial_draft",
     "writer.session_semantic_revision",
     "writer.session_format_revision",
@@ -124,18 +127,22 @@ class InstructionContextResolverTests(unittest.TestCase):
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertIn("references/agent/writer-process-workflow.md", paths)
+        self.assertIn("references/agent/table-writer-runtime-checklist.md", paths)
         self.assertIn("references/agent/writer-table-workflow.md", paths)
         self.assertIn("references/agent/source-row-inventory-format.md", paths)
         self.assertIn("references/agent/source-table-normalization-format.md", paths)
         self.assertIn("references/agent/source-normalization-diagnostic-format.md", paths)
         self.assertIn("references/agent/dictionary-inventory-format.md", paths)
         self.assertIn("references/agent/test-design-decision-table-format.md", paths)
-        self.assertIn("references/agent/coverage-obligation-table-format.md", paths)
         self.assertIn("references/agent/writer-table-artifacts-format.md", paths)
-        self.assertIn("references/agent/writer-quality-gate-format.md", paths)
+        self.assertIn("references/agent/package-test-design-plan-format.md", paths)
+        self.assertNotIn("references/agent/coverage-obligation-table-format.md", paths)
+        self.assertNotIn("references/agent/writer-quality-gate-format.md", paths)
         self.assertNotIn("references/agent/writer-output-format.md", paths)
         self.assertNotIn("references/agent/mockup-visual-inventory-format.md", paths)
         self.assertNotIn("references/qa/review-findings-format.md", paths)
+        self.assertNotIn("references/qa/test-case-style-examples.md", paths)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 
     def test_ui_writer_loads_mockup_reference_but_not_table_or_revision(self) -> None:
         payload = self.resolve_json("--scenario", "writer.initial_draft.ui")
@@ -189,25 +196,53 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/qa/review-findings-format.md", paths)
         self.assertNotIn("references/qa/test-case-style-examples.md", paths)
 
-    def test_style_remediation_loads_full_format_and_examples(self) -> None:
+    def test_style_remediation_loads_compact_checklist_without_examples(self) -> None:
         payload = self.resolve_json("--scenario", "writer.remediation.style")
         paths = {item["path"] for item in payload["files"]}
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertIn("references/qa/test-case-format.md", paths)
-        self.assertIn("references/qa/test-case-style-examples.md", paths)
+        self.assertIn("references/agent/style-remediation-checklist.md", paths)
+        self.assertNotIn("references/qa/test-case-style-examples.md", paths)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 
-    def test_validator_failure_loads_deep_quality_references(self) -> None:
+    def test_validator_failure_loads_compact_remediation_map_by_default(self) -> None:
         payload = self.resolve_json("--scenario", "writer.remediation.validator_failure")
         paths = {item["path"] for item in payload["files"]}
 
         self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("references/agent/runtime-quality-rule-cards.md", paths)
+        self.assertIn("references/agent/validator-finding-remediation-map.md", paths)
         self.assertIn("references/agent/writer-remediation-workflow.md", paths)
-        self.assertIn("references/agent/writer-output-format.md", paths)
-        self.assertIn("references/agent/writer-quality-gate-format.md", paths)
-        self.assertIn("references/qa/test-case-format.md", paths)
+        self.assertNotIn("references/agent/writer-output-format.md", paths)
+        self.assertNotIn("references/agent/writer-quality-gate-format.md", paths)
+        self.assertNotIn("references/qa/test-case-format.md", paths)
         self.assertIn("references/qa/coverage-runtime-checklist.md", paths)
         self.assertNotIn("references/qa/coverage-checklist.md", paths)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
+
+    def test_deep_writer_scenarios_keep_optional_references_available(self) -> None:
+        table_payload = self.resolve_json("--scenario", "writer.initial_draft.table.deep_debug")
+        validator_payload = self.resolve_json("--scenario", "writer.remediation.validator_failure.deep_debug")
+        style_payload = self.resolve_json("--scenario", "writer.remediation.style.deep_examples")
+
+        table_paths = {item["path"] for item in table_payload["files"]}
+        validator_paths = {item["path"] for item in validator_payload["files"]}
+        style_paths = {item["path"] for item in style_payload["files"]}
+
+        self.assertEqual("pass", table_payload["budget"]["status"])
+        self.assertIn("references/agent/coverage-obligation-table-format.md", table_paths)
+        self.assertIn("references/agent/test-design-review-format.md", table_paths)
+        self.assertIn("references/agent/writer-quality-gate-format.md", table_paths)
+
+        self.assertEqual("pass", validator_payload["budget"]["status"])
+        self.assertIn("references/agent/validator-finding-remediation-map.md", validator_paths)
+        self.assertIn("references/agent/writer-output-format.md", validator_paths)
+        self.assertIn("references/qa/test-case-format.md", validator_paths)
+
+        self.assertEqual("pass", style_payload["budget"]["status"])
+        self.assertIn("references/qa/test-case-style-examples.md", style_paths)
+        self.assertNotIn("references/qa/test-case-format.md", style_paths)
 
     def test_source_locator_discovery_context_loads_locator_core(self) -> None:
         payload = self.resolve_json("--scenario", "source_locator.discovery")
@@ -328,7 +363,7 @@ class InstructionContextResolverTests(unittest.TestCase):
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
-        self.assertLessEqual(payload["budget"]["total_kib"], 260.0)
+        self.assertLessEqual(payload["budget"]["total_kib"], 150.0)
         self.assertIn("iteration_stage_summaries", groups)
         self.assertIn("references/agent/runtime-quality-rule-cards.md", paths)
         self.assertIn("references/agent/stage-routing-summary.md", paths)
@@ -351,6 +386,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         default_scenarios = [
             "writer.initial_draft.simple",
             "writer.session_initial_draft",
+            "writer.remediation.style",
+            "writer.remediation.validator_failure",
             "reviewer.semantic_traceability_test_design",
             "reviewer.structure_format_final",
             "iteration.full_loop",
@@ -360,7 +397,7 @@ class InstructionContextResolverTests(unittest.TestCase):
             paths = {item["path"] for item in payload["files"]}
             self.assertNotIn("references/qa/test-case-style-examples.md", paths, scenario_id)
 
-        style_payload = self.resolve_json("--scenario", "writer.remediation.style")
+        style_payload = self.resolve_json("--scenario", "writer.remediation.style.deep_examples")
         self.assertIn(
             "references/qa/test-case-style-examples.md",
             {item["path"] for item in style_payload["files"]},

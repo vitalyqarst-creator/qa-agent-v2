@@ -19,6 +19,9 @@ MANIFEST_RE = re.compile(
 DEFAULT_MIN_HEADROOM_KIB = 15.0
 SCENARIO_MIN_HEADROOM_KIB = {
     "iteration.full_loop": 30.0,
+    "writer.initial_draft.table": 30.0,
+    "writer.remediation.style": 30.0,
+    "writer.remediation.validator_failure": 30.0,
 }
 
 
