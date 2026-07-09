@@ -152,7 +152,7 @@ def audit_instruction_budgets(root:Path,checks,findings):
             checks,
             f"instruction-budget:{scenario_id}",
             status,
-            f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB",
+            f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB, headroom {budget.get('headroom_kib')} KiB",
             [item["path"] for item in result["files"]],
         )
         rows.append({
@@ -160,18 +160,29 @@ def audit_instruction_budgets(root:Path,checks,findings):
             "files_count": len(result["files"]),
             "total_kib": budget["total_kib"],
             "limit_kib": budget["limit_kib"],
+            "headroom_kib": budget.get("headroom_kib"),
+            "min_headroom_kib": budget.get("min_headroom_kib"),
             "status": status,
         })
         if status!="pass":
-            evidence=[f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB"]
+            evidence=[
+                f"{budget['total_kib']} KiB / {budget['limit_kib']} KiB",
+                f"headroom {budget.get('headroom_kib')} KiB / min {budget.get('min_headroom_kib')} KiB",
+                f"budget_status={budget['status']}",
+            ]
             evidence+=result["missing"]
+            title = (
+                f"Instruction budget near limit for {scenario_id}"
+                if budget["status"] == "near_limit"
+                else f"Instruction budget exceeded for {scenario_id}"
+            )
             add_finding(
                 findings,
                 f"instruction-budget:{scenario_id}",
                 "warning",
                 "references",
-                f"Instruction budget exceeded for {scenario_id}",
-                "The scenario's runtime instruction context exceeds the manifest budget or references missing files.",
+                title,
+                "The scenario's runtime instruction context exceeds the manifest budget, violates safety headroom, or references missing files.",
                 evidence,
                 "Tighten the manifest groups, move rarely used references to conditional/audit-only, or explicitly raise the limit with rationale.",
                 [rel(manifest,root)],
@@ -438,7 +449,7 @@ def text_report(report):
     if report.get("instruction_budgets"):
         lines.append("- instruction budgets:")
         for b in report["instruction_budgets"]:
-            lines.append(f"  - [{b['status']}] {b['scenario']}: {b['total_kib']} KiB / {b['limit_kib']} KiB ({b['files_count']} files)")
+            lines.append(f"  - [{b['status']}] {b['scenario']}: {b['total_kib']} KiB / {b['limit_kib']} KiB, headroom {b.get('headroom_kib')} KiB ({b['files_count']} files)")
     if report.get("task_start_routing"):
         r=report["task_start_routing"]
         lines.append(f"- task start routing: {r['status']} ({r['routes_count']} routes, {r['golden_examples_count']} golden examples)")

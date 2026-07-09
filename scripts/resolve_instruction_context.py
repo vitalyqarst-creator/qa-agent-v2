@@ -16,6 +16,10 @@ MANIFEST_RE = re.compile(
     r"<!--\s*instruction-loading-manifest:v1\s*-->\s*```json\s*(.*?)\s*```",
     re.DOTALL,
 )
+DEFAULT_MIN_HEADROOM_KIB = 15.0
+SCENARIO_MIN_HEADROOM_KIB = {
+    "iteration.full_loop": 30.0,
+}
 
 
 @dataclass(frozen=True)
@@ -163,6 +167,43 @@ def path_stats(root: Path, path: str, group: str, category: str) -> FileStat:
     )
 
 
+def min_headroom_for_scenario(scenario_id: str) -> float:
+    return SCENARIO_MIN_HEADROOM_KIB.get(scenario_id, DEFAULT_MIN_HEADROOM_KIB)
+
+
+def budget_status(total_kib: float, limit_kib: float, min_headroom_kib: float) -> str:
+    if total_kib > limit_kib:
+        return "fail"
+    if round(limit_kib - total_kib, 1) < min_headroom_kib:
+        return "near_limit"
+    return "pass"
+
+
+def group_budget_summary(files: list[FileStat]) -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for item in files:
+        row = groups.setdefault(
+            item.group,
+            {"group": item.group, "category": item.category, "files_count": 0, "bytes": 0, "lines": 0},
+        )
+        row["files_count"] += 1
+        row["bytes"] += item.bytes
+        row["lines"] += item.lines
+    result = []
+    for row in groups.values():
+        result.append(
+            {
+                "group": row["group"],
+                "category": row["category"],
+                "files_count": row["files_count"],
+                "bytes": row["bytes"],
+                "kib": round(row["bytes"] / 1024, 1),
+                "lines": row["lines"],
+            }
+        )
+    return sorted(result, key=lambda item: (-item["bytes"], item["group"]))
+
+
 def resolve_instruction_context(
     *,
     root: Path = ROOT_DIR,
@@ -208,7 +249,11 @@ def resolve_instruction_context(
     total_kib = round(total_bytes / 1024, 1)
     total_lines = sum(item.lines for item in selected_stats)
     budget_limit = float(scenario["budget_limit_kib"])
-    budget_status = "pass" if total_kib <= budget_limit else "warn"
+    min_headroom_kib = min_headroom_for_scenario(scenario["id"])
+    headroom_kib = round(budget_limit - total_kib, 1)
+    headroom_percent = round((headroom_kib / budget_limit) * 100, 1) if budget_limit else 0.0
+    status = budget_status(total_kib, budget_limit, min_headroom_kib)
+    top_files = sorted(selected_stats, key=lambda item: item.bytes, reverse=True)[:10]
 
     return {
         "scenario": scenario["id"],
@@ -221,9 +266,14 @@ def resolve_instruction_context(
             "total_kib": total_kib,
             "total_lines": total_lines,
             "limit_kib": budget_limit,
-            "status": budget_status,
+            "headroom_kib": headroom_kib,
+            "headroom_percent": headroom_percent,
+            "min_headroom_kib": min_headroom_kib,
+            "status": status,
             "baseline": manifest.get("baseline", {}),
         },
+        "groups": group_budget_summary(selected_stats),
+        "top_files": [item.__dict__ for item in top_files],
         "files": [item.__dict__ for item in selected_stats],
         "skipped": skipped,
         "duplicates": duplicates,
@@ -254,8 +304,20 @@ def text_report(result: dict[str, Any], *, include_budget: bool = False) -> str:
     ]
     if include_budget:
         lines.append(
-            f"- budget: {budget['status']} ({budget['total_kib']} / {budget['limit_kib']} KiB)"
+            f"- budget: {budget['status']} ({budget['total_kib']} / {budget['limit_kib']} KiB, "
+            f"headroom {budget['headroom_kib']} KiB / min {budget['min_headroom_kib']} KiB, "
+            f"{budget['headroom_percent']}%)"
         )
+        lines.append("- groups:")
+        for item in result["groups"]:
+            lines.append(
+                f"  - {item['group']}: {item['kib']} KiB, {item['files_count']} files"
+            )
+        lines.append("- top files:")
+        for item in result["top_files"][:5]:
+            lines.append(
+                f"  - {item['path']} ({item['kib']} KiB, group={item['group']})"
+            )
     if result["missing"]:
         lines.append(f"- missing: {', '.join(result['missing'])}")
     if result["duplicates"]:

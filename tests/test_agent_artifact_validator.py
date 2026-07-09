@@ -14139,6 +14139,87 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertIn("test-case-negative-input-without-observable-oracle", finding_ids)
         self.assertIn("test-case-date-dependent-absolute-date-smell", finding_ids)
 
+    def test_partial_similar_field_coverage_without_strategy_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "representative-missing.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Representative missing",
+                        "",
+                        "## Coverage Summary",
+                        "",
+                        "Partial coverage for similar fields with the same restriction is used in this scope.",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Last name accepts letters",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `GSR 1`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Last name: `Ivanov`.",
+                        "**Steps:**",
+                        "1. Enter `Ivanov` into Last name.",
+                        "**Expected Result:** Last name contains `Ivanov`.",
+                        "**Postconditions:**",
+                        "- Clear Last name.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("missing-representative-strategy", finding_ids)
+
+    def test_partial_similar_field_coverage_with_strategy_passes_representative_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "representative-documented.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Representative documented",
+                        "",
+                        "## Coverage Summary",
+                        "",
+                        "Partial coverage for similar fields with the same restriction is used in this scope.",
+                        "Representative strategy: Last name is selected as the longest visible surname field.",
+                        "Residual risk: First name and middle name may have field-specific UI defects; validator coverage remains limited.",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Last name accepts letters",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `GSR 1`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Last name: `Ivanov`.",
+                        "**Steps:**",
+                        "1. Enter `Ivanov` into Last name.",
+                        "**Expected Result:** Last name contains `Ivanov`.",
+                        "**Postconditions:**",
+                        "- Clear Last name.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("missing-representative-strategy", finding_ids)
+
     def test_rolling_date_boundary_static_future_date_fails_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)

@@ -81,8 +81,14 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("skills/ft-test-case-writer/SKILL.md", paths)
         self.assertIn("references/agent/writer-runtime-workflow.md", paths)
         self.assertIn("references/agent/writer-runtime-contract.md", paths)
+        self.assertIn("references/agent/runtime-quality-rule-cards.md", paths)
         self.assertIn("references/qa/test-case-runtime-format.md", paths)
         self.assertIn("references/qa/coverage-runtime-checklist.md", paths)
+        self.assertIn("headroom_kib", payload["budget"])
+        self.assertIn("headroom_percent", payload["budget"])
+        self.assertIn("min_headroom_kib", payload["budget"])
+        self.assertIn("groups", payload)
+        self.assertIn("top_files", payload)
         writer_skill = ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md"
         self.assertLess(len(writer_skill.read_bytes()), 20 * 1024)
         self.assertEqual(len(paths), len(payload["files"]))
@@ -218,13 +224,14 @@ class InstructionContextResolverTests(unittest.TestCase):
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertIn("skills/ft-test-case-reviewer/SKILL.md", paths)
+        self.assertIn("references/agent/runtime-quality-rule-cards.md", paths)
         self.assertIn("references/agent/reviewer-output-format.md", paths)
-        self.assertIn("references/agent/package-test-design-plan-format.md", paths)
         self.assertIn("references/qa/test-design-review-rubric.md", paths)
         self.assertIn("references/agent/test-design-defect-taxonomy.md", paths)
-        self.assertIn("references/agent/dictionary-inventory-format.md", paths)
         self.assertIn("references/qa/test-case-runtime-format.md", paths)
         self.assertIn("references/agent/session-log-format.md", paths)
+        self.assertNotIn("references/agent/package-test-design-plan-format.md", paths)
+        self.assertNotIn("references/agent/dictionary-inventory-format.md", paths)
 
     def test_session_reviewer_contexts_are_split_by_review_purpose(self) -> None:
         structure = self.resolve_json("--scenario", "reviewer.structure_preflight")
@@ -245,7 +252,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertNotIn("references/qa/test-case-style-examples.md", semantic_paths)
 
         self.assertIn("references/qa/test-case-format.md", formatting_paths)
-        self.assertIn("references/qa/test-case-style-examples.md", formatting_paths)
+        self.assertIn("references/agent/runtime-quality-rule-cards.md", formatting_paths)
+        self.assertNotIn("references/qa/test-case-style-examples.md", formatting_paths)
 
     def test_scope_gap_reviewer_context_loads_scope_gap_contracts(self) -> None:
         payload = self.resolve_json("--scenario", "reviewer.scope_gap_review")
@@ -301,6 +309,62 @@ class InstructionContextResolverTests(unittest.TestCase):
                 "--fail-on-budget",
             )
             self.assertEqual(result.returncode, 0, f"{scenario_id}\n{result.stdout}\n{result.stderr}")
+
+    def test_all_manifest_budgets_keep_safety_headroom(self) -> None:
+        for scenario_id in REQUIRED_SCENARIOS:
+            payload = self.resolve_json("--scenario", scenario_id)
+            budget = payload["budget"]
+            self.assertEqual("pass", budget["status"], scenario_id)
+            self.assertGreaterEqual(
+                budget["headroom_kib"],
+                budget["min_headroom_kib"],
+                scenario_id,
+            )
+
+    def test_iteration_full_loop_is_orchestration_only(self) -> None:
+        payload = self.resolve_json("--scenario", "iteration.full_loop")
+        paths = {item["path"] for item in payload["files"]}
+        groups = {item["group"] for item in payload["groups"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
+        self.assertLessEqual(payload["budget"]["total_kib"], 260.0)
+        self.assertIn("iteration_stage_summaries", groups)
+        self.assertIn("references/agent/runtime-quality-rule-cards.md", paths)
+        self.assertIn("references/agent/stage-routing-summary.md", paths)
+
+        forbidden_groups = {
+            "source_locator_core",
+            "scope_manual_core",
+            "writer_core",
+            "writer_process_artifacts",
+            "writer_revision_artifacts",
+            "reviewer_core",
+        }
+        self.assertTrue(forbidden_groups.isdisjoint(groups))
+        self.assertNotIn("skills/ft-test-case-writer/SKILL.md", paths)
+        self.assertNotIn("skills/ft-test-case-reviewer/SKILL.md", paths)
+        self.assertNotIn("skills/ft-source-locator/SKILL.md", paths)
+        self.assertNotIn("skills/ft-scope-analyzer/SKILL.md", paths)
+
+    def test_default_runtime_scenarios_do_not_load_deep_examples(self) -> None:
+        default_scenarios = [
+            "writer.initial_draft.simple",
+            "writer.session_initial_draft",
+            "reviewer.semantic_traceability_test_design",
+            "reviewer.structure_format_final",
+            "iteration.full_loop",
+        ]
+        for scenario_id in default_scenarios:
+            payload = self.resolve_json("--scenario", scenario_id)
+            paths = {item["path"] for item in payload["files"]}
+            self.assertNotIn("references/qa/test-case-style-examples.md", paths, scenario_id)
+
+        style_payload = self.resolve_json("--scenario", "writer.remediation.style")
+        self.assertIn(
+            "references/qa/test-case-style-examples.md",
+            {item["path"] for item in style_payload["files"]},
+        )
 
 
 if __name__ == "__main__":

@@ -10672,6 +10672,22 @@ FIXED_BUSINESS_DATE_CONTEXT_RE = re.compile(
     r"дата\s+проверки\s+зафиксирован|тестов\w+\s+дат\w+\s+зафиксирован|fixed\s+(?:business\s+)?date",
     flags=re.IGNORECASE,
 )
+REPRESENTATIVE_PARTIAL_COVERAGE_RE = re.compile(
+    r"partial(?:ly)?\s+(?:representative\s+)?coverage|"
+    r"sampled\s+coverage|"
+    r"similar\s+fields[\s\S]{0,160}(?:same|shared)\s+(?:restriction|rule)|"
+    r"covered\s+(?:only\s+)?(?:one|some)\s+of\s+(?:the\s+)?similar\s+fields|"
+    r"field\s+family[\s\S]{0,160}(?:partial|sampled|representative)",
+    flags=re.IGNORECASE,
+)
+REPRESENTATIVE_STRATEGY_RE = re.compile(
+    r"representative[-_\s]?strategy|"
+    r"pairwise[-_\s]?strategy|"
+    r"representative\s+selection\s+rationale|"
+    r"residual\s+risk|"
+    r"why\s+(?:this|these)\s+representative",
+    flags=re.IGNORECASE,
+)
 VALID_TEST_DATA_VALUE_RE = re.compile(
     r"(?<![A-Za-z\u0410-\u042f\u0430-\u044f\u0401\u0451])(?:valid(?:\s+value)?|allowed(?:\s+value)?|"
     r"\u0434\u043e\u043f\u0443\u0441\u0442\u0438\u043c\w*\s+\u0437\u043d\u0430\u0447\u0435\u043d\w*)\s*:\s*`?([^`;\n]+)`?",
@@ -11473,6 +11489,7 @@ def validate_test_case_quality_smells(
     negative_input_without_observable_oracle: list[str] = []
     date_dependent_absolute_dates: list[str] = []
     rolling_date_boundary_static_data: list[str] = []
+    missing_representative_strategy: list[str] = []
     action_treated_as_required_field: list[str] = []
     action_without_observable_artifact: list[str] = []
     broad_scenario_test_cases: list[str] = []
@@ -11505,6 +11522,8 @@ def validate_test_case_quality_smells(
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
     boundary_groups: dict[str, dict[str, Any]] = {}
+    if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and not REPRESENTATIVE_STRATEGY_RE.search(content):
+        missing_representative_strategy.append("partial representative coverage is declared without representative/pairwise strategy or residual risk")
     for test_case_id, block in blocks:
         is_calibration_candidate = is_ui_calibration_candidate_block(block)
         expected_result = extract_test_case_expected_result(block)
@@ -13064,6 +13083,27 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if missing_representative_strategy:
+        findings.append(
+            Finding(
+                id="missing-representative-strategy",
+                severity="warning",
+                category="test-design",
+                title="Partial similar-field coverage lacks representative strategy",
+                details=(
+                    "When an artifact explicitly says coverage is partial, sampled or representative for similar "
+                    "fields with a shared rule, it must document why the selected representatives are enough and "
+                    "what residual risk remains."
+                ),
+                path=display_path,
+                evidence=missing_representative_strategy[:20],
+                recommended_action=(
+                    "Add a representative or pairwise strategy with selected fields/classes, excluded similar "
+                    "fields, rationale and residual risk; otherwise add the missing TC/GAP coverage."
+                ),
+            )
+        )
+
     if broad_scenario_test_cases:
         findings.append(
             Finding(
@@ -13154,6 +13194,7 @@ def validate_test_case_quality_smells(
         or negative_input_without_observable_oracle
         or date_dependent_absolute_dates
         or rolling_date_boundary_static_data
+        or missing_representative_strategy
         or action_treated_as_required_field
         or action_without_observable_artifact
         or gap_placeholder_sections

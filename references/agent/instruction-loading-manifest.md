@@ -31,6 +31,19 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/codex-sdk-orchestration-format.md"
       ]
     },
+    "iteration_stage_summaries": {
+      "rationale": "Compact orchestration summaries for the full-loop dispatcher; detailed writer/reviewer rules load only in stage-specific sessions.",
+      "paths": [
+        "references/agent/runtime-quality-rule-cards.md",
+        "references/agent/stage-routing-summary.md"
+      ]
+    },
+    "quality_rule_cards": {
+      "rationale": "Compact high-risk QA rule reminders for default writer/reviewer sessions.",
+      "paths": [
+        "references/agent/runtime-quality-rule-cards.md"
+      ]
+    },
     "writer_core": {
       "rationale": "Minimum runtime contract for writing test cases when the FT package and scope are already confirmed.",
       "paths": [
@@ -73,7 +86,6 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/experience-based-coverage-format.md",
         "references/agent/package-test-design-plan-format.md",
         "references/agent/test-design-review-format.md",
-        "references/agent/test-design-defect-taxonomy.md",
         "references/agent/writer-quality-gate-format.md"
       ]
     },
@@ -112,6 +124,12 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/writer-quality-gate-format.md",
         "references/agent/dictionary-inventory-format.md",
         "references/agent/test-design-defect-taxonomy.md",
+        "references/qa/test-case-format.md"
+      ]
+    },
+    "format_remediation": {
+      "rationale": "Full TC format for format-only revision without loading long style examples by default.",
+      "paths": [
         "references/qa/test-case-format.md"
       ]
     },
@@ -176,8 +194,6 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Orchestrator context for the session-based writer/reviewer cycle and final routing.",
       "paths": [
         "skills/ft-test-case-iteration/SKILL.md",
-        "references/agent/session-based-review-cycle-format.md",
-        "references/agent/codex-sdk-orchestration-format.md",
         "references/qa/test-case-versioning-policy.md",
         "references/agent/workflow-state-format.md",
         "references/agent/session-log-format.md",
@@ -189,13 +205,12 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Reviewer context needed by iteration to understand review modes and findings contracts.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
-        "references/agent/package-test-design-plan-format.md",
         "references/qa/review-findings-format.md",
         "references/qa/traceability-matrix-format.md",
         "references/qa/test-design-review-rubric.md",
         "references/agent/test-design-defect-taxonomy.md",
-        "references/agent/dictionary-inventory-format.md",
         "references/agent/negative-ui-calibration-policy.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md",
@@ -238,6 +253,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Semantic reviewer pass for traceability, coverage, test-design and expected-result observability.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
         "references/agent/package-test-design-plan-format.md",
         "references/agent/dictionary-inventory-format.md",
@@ -253,10 +269,10 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Final reviewer pass for template, numbering, grouping, wording and format-only findings after semantic closure.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
         "references/qa/review-findings-format.md",
-        "references/qa/test-case-format.md",
-        "references/qa/test-case-style-examples.md"
+        "references/qa/test-case-format.md"
       ]
     },
     "reviewer_semantic_regression_core": {
@@ -353,7 +369,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "initial_draft",
       "scope_profile": "simple",
-      "required_groups": ["global_core", "writer_core"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards"],
       "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 140,
@@ -364,7 +380,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "initial_draft",
       "scope_profile": "table",
-      "required_groups": ["global_core", "writer_core", "writer_process_artifacts", "writer_table_artifacts"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_table_artifacts"],
       "conditional_groups": ["writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 300,
@@ -375,7 +391,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "initial_draft",
       "scope_profile": "ui",
-      "required_groups": ["global_core", "writer_core", "writer_ui_artifacts"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_ui_artifacts"],
       "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 210,
@@ -386,7 +402,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "initial_draft",
       "scope_profile": "numeric",
-      "required_groups": ["global_core", "writer_core", "writer_numeric_coverage"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_numeric_coverage"],
       "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
@@ -397,7 +413,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "initial_draft",
       "scope_profile": "integration",
-      "required_groups": ["global_core", "writer_core", "writer_integration_coverage"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_integration_coverage"],
       "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_revision_artifacts", "writer_numeric_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
@@ -408,7 +424,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "revision_from_findings",
       "scope_profile": "any",
-      "required_groups": ["global_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts"],
+      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts"],
       "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
@@ -441,7 +457,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "session_initial_draft",
       "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "writer_core", "writer_process_artifacts"],
+      "required_groups": ["global_core", "review_cycle_core", "writer_core", "quality_rule_cards", "writer_process_artifacts"],
       "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_revision_artifacts", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 200,
@@ -452,7 +468,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "session_semantic_revision",
       "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts"],
+      "required_groups": ["global_core", "review_cycle_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts"],
       "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 240,
@@ -463,8 +479,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "session_format_revision",
       "scope_profile": "any",
-      "required_groups": ["global_core", "review_cycle_core", "writer_core", "writer_process_artifacts", "style_remediation"],
-      "conditional_groups": ["writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep"],
+      "required_groups": ["global_core", "review_cycle_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "format_remediation"],
+      "conditional_groups": ["writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 240,
       "rationale": "Format-only writer revision after final structure/format review."
@@ -562,11 +578,11 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "iteration",
       "mode": "full_loop",
       "scope_profile": "any",
-      "required_groups": ["global_core", "source_locator_core", "scope_manual_core", "iteration_core", "writer_core", "writer_process_artifacts", "writer_revision_artifacts", "reviewer_core"],
-      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "required_groups": ["global_core", "review_cycle_core", "iteration_core", "iteration_stage_summaries"],
+      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "format_remediation", "style_remediation", "reviewer_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 445,
-      "rationale": "End-to-end session-based writer/reviewer orchestration context; includes the lifecycle transition matrix and runner gates. Budget raised minimally after scope oracle inventory gates added a pre-writer semantic contract; avoid unsafe instruction pruning for a 0.1 KiB overage."
+      "rationale": "Orchestration-only full-loop dispatcher. It loads lifecycle, stage routing and compact quality summaries; source, scope, writer and reviewer rules load in their stage-specific scenarios."
     },
     {
       "id": "ui_automation_prep.signed_off",
