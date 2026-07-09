@@ -12,6 +12,7 @@ Default validator remediation is finding-targeted. Read the validator finding id
 | `scenario-rationale-noncanonical-field` | Rename the field to `**Сценарное обоснование:**`; do not change TC split unless another finding requires it. | `references/qa/test-design-review-rubric.md` |
 | `scenario-rationale-domain-mismatch` | Replace copied/unrelated rationale with a field/block-specific source-backed grouping reason. | `references/qa/test-design-review-rubric.md` |
 | `scenario-rationale-too-generic` | Add concrete target, source rows/codes and statement that independent checks remain covered elsewhere. | `references/qa/test-design-review-rubric.md` |
+| `scenario-rationale-stimulus-mismatch` | Rewrite title/rationale to match the exercised stimulus, or split visibility/default-state and input/selection checks. | `references/agent/runtime-quality-rule-cards.md` |
 | `missing-representative-strategy` | Document representative/pairwise strategy, selected combinations, omitted combinations and residual risk. | `references/agent/coverage-obligation-table-format.md` |
 | `representative-strategy-without-omitted-combinations` | Add omitted/excluded field-class combinations, or add the missing TC/GAP rows. | `references/agent/coverage-obligation-table-format.md` |
 | `representative-strategy-without-residual-risk` | Add explicit residual risk, or replace the representative shortcut with full TC/GAP coverage. | `references/agent/coverage-obligation-table-format.md` |
@@ -21,8 +22,11 @@ Default validator remediation is finding-targeted. Read the validator finding id
 | `representative-strategy-data-mismatch` | Align representative strategy with concrete test data or change data to match the stated class. | `references/agent/coverage-obligation-table-format.md` |
 | `production-artifact-internal-language-leak` | Replace internal English strategy labels with Russian production labels or move details to work artifacts. | `references/qa/test-case-format.md` |
 | `candidate-negative-validation-trigger-missing` | Add a neutral completion/focus/validation/save trigger or a BA question about trigger selection. | `references/agent/negative-ui-calibration-policy.md` |
+| `candidate-negative-trigger-too-specific` | Replace blur/focus-only trigger wording with focus loss or another available validation action; record exact trigger during UI calibration. | `references/agent/negative-ui-calibration-policy.md` |
 | `sampled-field-group-without-group-strategy` | Add explicit sampled-field group strategy for the affected field family. | `references/agent/coverage-obligation-table-format.md` |
+| `coverage-matrix-tc-domain-mismatch` | Move mismatched TC ids to the correct representative group or fix the group label/source rows. | `references/agent/coverage-obligation-table-format.md` |
 | `persist-coverage-missing-for-crud-scope` | Add save/persist smoke coverage plan or explicit out-of-scope rationale. | `references/qa/test-design-review-rubric.md` |
+| `field-level-canary-without-persistence-scope-note` | Add explicit field-level/risk-based scope and persistence follow-up/out-of-scope note to the canary evaluation report. | `references/agent/runtime-quality-rule-cards.md` |
 | `generated-artifact-used-as-source-of-truth` | Treat old generated artifacts only as diagnostic fixtures; cite source rows/BSR/FT artifacts for decisions. | `references/agent/source-row-inventory-format.md` |
 | `production-setup-profile-reference` | Replace production setup profile/stand/environment leakage with inline action-oriented preconditions. | `references/qa/test-case-format.md` |
 | `test-case-generic-test-data-reference-smell` | Put concrete literal, fixture value or formula in test data and reference it in the step. | `references/qa/test-case-format.md` |

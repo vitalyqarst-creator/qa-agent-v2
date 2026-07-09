@@ -3378,6 +3378,80 @@ def validate_coverage_gap_inventory(
     return findings, checks
 
 
+def coverage_matrix_group_domain(row_text: str) -> str | None:
+    text = row_text.lower()
+    if re.search(r"e-?mail|электронн\w*\s+почт", text, flags=re.IGNORECASE):
+        return "email"
+    if re.search(r"phone|телефон", text, flags=re.IGNORECASE):
+        return "phone"
+    if re.search(r"postal|почтов\w*\s+индекс", text, flags=re.IGNORECASE):
+        return "postal"
+    if re.search(r"\bfio\b|фио|surname|patronymic|фамил|отчеств", text, flags=re.IGNORECASE):
+        return "fio"
+    if re.search(r"birth\s+date|date\s+boundary|дата\s+рожд|дат\w*\s+границ", text, flags=re.IGNORECASE):
+        return "date"
+    if re.search(r"address|адрес|dadata", text, flags=re.IGNORECASE):
+        return "address"
+    return None
+
+
+def coverage_matrix_tc_domain(tc_id: str) -> str | None:
+    upper = tc_id.upper()
+    for token, domain in (
+        ("EMAIL", "email"),
+        ("E-MAIL", "email"),
+        ("PHONE", "phone"),
+        ("POSTAL", "postal"),
+        ("FIO", "fio"),
+        ("DATE", "date"),
+        ("ADDRESS", "address"),
+    ):
+        if token in upper:
+            return domain
+    match = re.search(r"TC-AF43-AW4-(\d{3})", upper)
+    if not match:
+        return None
+    number = int(match.group(1))
+    if number in {4, 5, 9, 10}:
+        return "postal"
+    if number in {11, 12, 16, 17, 18, 25, 26, 30}:
+        return "phone"
+    if number in {13, 14, 15}:
+        return "email"
+    if number in {20, 21, 22, 23}:
+        return "fio"
+    if number in {27, 28}:
+        return "date"
+    if number in {1, 2, 3, 6, 8, 29}:
+        return "address"
+    return None
+
+
+def coverage_matrix_domain_mismatch_evidence(content: str) -> list[str]:
+    header, rows = parsed_section_table_rows(content, "Representative / Pairwise Coverage Decisions")
+    if not rows:
+        return []
+    normalized_header = {column.strip().lower() for column in header}
+    evidence: list[str] = []
+    missing_columns = sorted(COVERAGE_MATRIX_REQUIRED_GROUP_COLUMNS - normalized_header)
+    if missing_columns:
+        evidence.append(f"missing columns: {', '.join(missing_columns)}")
+    for row in rows:
+        label_text = " ".join(
+            row.get(column, "")
+            for column in ("fields", "field_family", "shared_restriction", "source_restriction")
+        )
+        expected_domain = coverage_matrix_group_domain(label_text)
+        if not expected_domain:
+            continue
+        tc_text = row.get("tc_ids", "") or row.get("selected_combinations", "") or row.get("selected_strategy", "")
+        for tc_id in sorted(set(re.findall(r"TC-[A-Z0-9-]+", tc_text, flags=re.IGNORECASE))):
+            actual_domain = coverage_matrix_tc_domain(tc_id)
+            if actual_domain and actual_domain != expected_domain:
+                evidence.append(f"{label_text[:120]}: expected={expected_domain}; {tc_id}={actual_domain}")
+    return evidence
+
+
 def validate_generated_artifact_source_basis(
     content: str,
     path: Path,
@@ -3421,10 +3495,12 @@ def validate_generated_artifact_source_basis(
         )
 
     sampled_group_evidence: list[str] = []
+    coverage_matrix_domain_mismatches: list[str] = []
+    field_level_canary_without_persistence_scope_note: list[str] = []
     if path.name == "coverage-matrix.md":
         representative_section = extract_markdown_section(content, "Representative / Pairwise Coverage Decisions") or content
         if re.search(r"e-?mail|e-mail|электронн\w*\s+почт", content, flags=re.IGNORECASE) and not re.search(
-            r"e-?mail\s+restrictions|e-mail\s+restrictions|email\s+fields|электронн\w*\s+почт",
+            r"e-?mail\s+(?:restrictions|fields?|field)|e-mail\s+(?:restrictions|fields?|field)|электронн\w*\s+почт",
             representative_section,
             flags=re.IGNORECASE,
         ):
@@ -3435,6 +3511,12 @@ def validate_generated_artifact_source_basis(
         ):
             if re.search(pattern, content, flags=re.IGNORECASE) and not re.search(pattern, representative_section, flags=re.IGNORECASE):
                 sampled_group_evidence.append(f"{label} are covered/sampled but have no explicit group strategy row")
+        coverage_matrix_domain_mismatches = coverage_matrix_domain_mismatch_evidence(content)
+    if path.name == "canary-evaluation-report.md" and FIELD_LEVEL_CANARY_RE.search(content):
+        if not PERSISTENCE_SCOPE_NOTE_RE.search(content):
+            field_level_canary_without_persistence_scope_note.append(
+                "field-level/risk-based canary report lacks persistence follow-up or out-of-scope rationale"
+            )
     if sampled_group_evidence:
         severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
@@ -3450,6 +3532,39 @@ def validate_generated_artifact_source_basis(
                 path=display_path,
                 evidence=sampled_group_evidence[:20],
                 recommended_action="Add a representative/pairwise group strategy row for each sampled field family.",
+            )
+        )
+    if coverage_matrix_domain_mismatches:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="coverage-matrix-tc-domain-mismatch",
+                severity=severity,
+                category="test-design",
+                title="Coverage matrix group references TC from another field domain",
+                details=(
+                    "Representative/pairwise group rows must reference TC from the same field family. "
+                    "Postal, phone, e-mail, FIO and date groups must not borrow unrelated TC ids."
+                ),
+                path=display_path,
+                evidence=coverage_matrix_domain_mismatches[:20],
+                recommended_action="Move the TC id to the correct group or update the group label/source rows so the domain is explicit.",
+            )
+        )
+    if field_level_canary_without_persistence_scope_note:
+        findings.append(
+            Finding(
+                id="field-level-canary-without-persistence-scope-note",
+                severity="warning",
+                category="test-design",
+                title="Field-level canary lacks persistence scope note",
+                details=(
+                    "A field-level / risk-based canary that does not cover save/persistence must state that "
+                    "persistence is out of scope or planned as a separate follow-up suite."
+                ),
+                path=display_path,
+                evidence=field_level_canary_without_persistence_scope_note[:20],
+                recommended_action="Add an explicit save/persistence follow-up or out-of-scope rationale to the canary evaluation report.",
             )
         )
 
@@ -10940,6 +11055,48 @@ SAMPLED_GROUP_STRATEGY_RE = re.compile(
     r"postal\s+indexes|phone\s+fields|email\s+restrictions|e-mail\s+restrictions|fio",
     flags=re.IGNORECASE,
 )
+DADATA_SELECTION_SIGNAL_RE = re.compile(
+    r"dadata|подсказк|найденн\w*\s+адрес|выбр\w*\s+.*(?:адрес|suggest)|suggestion",
+    flags=re.IGNORECASE,
+)
+INITIAL_VISIBILITY_RATIONALE_RE = re.compile(
+    r"стартов\w*\s+отображ|исходн\w*\s+ui-состоя|initial\s+(?:visibility|state)|default\s+state",
+    flags=re.IGNORECASE,
+)
+VISIBILITY_ONLY_TITLE_RE = re.compile(
+    r"(?:поле|блок|field|block)[^.\n]{0,80}(?:отображ|visible|shown)|"
+    r"(?:отображ|visible|shown)[^.\n]{0,80}(?:поле|блок|field|block)",
+    flags=re.IGNORECASE,
+)
+TITLE_SCENARIO_ACTION_RE = re.compile(
+    r"dadata|принима\w*|выбр\w*|selection|accept",
+    flags=re.IGNORECASE,
+)
+CANDIDATE_TRIGGER_TOO_SPECIFIC_RE = re.compile(
+    r"перевести\s+фокус[\s\S]{0,80}(?:чтобы|для)\s+инициир|move\s+focus[\s\S]{0,80}trigger",
+    flags=re.IGNORECASE,
+)
+CANDIDATE_TRIGGER_ALTERNATIVE_RE = re.compile(
+    r"\bили\b|\bor\b|доступн\w*\s+в\s+ui|выполнить\s+действие|при\s+вводе|сохранени|переходе\s+дальше|другом\s+действии",
+    flags=re.IGNORECASE,
+)
+COVERAGE_MATRIX_REQUIRED_GROUP_COLUMNS = {
+    "fields",
+    "shared_restriction",
+    "source_rows_bsr",
+    "selected_strategy",
+    "tc_ids",
+    "covered_classes",
+    "omitted_combinations",
+    "residual_risk",
+    "reason",
+}
+FIELD_LEVEL_CANARY_RE = re.compile(r"field[-\s]?level|risk[-\s]?based", flags=re.IGNORECASE)
+PERSISTENCE_SCOPE_NOTE_RE = re.compile(
+    r"(?:persist|save)[\s\S]{0,160}(?:follow[-\s]?up|out\s+of\s+scope|separate\s+(?:suite|smoke)|not\s+a\s+full)|"
+    r"(?:follow[-\s]?up|out\s+of\s+scope|separate\s+(?:suite|smoke)|not\s+a\s+full)[\s\S]{0,160}(?:persist|save)",
+    flags=re.IGNORECASE,
+)
 GENERATED_ARTIFACT_SOLE_SOURCE_RE = re.compile(
     r"(?:generated|previous|old|v\d+)[^\n.;|]{0,120}"
     r"(?:used\s+as|is|was|treated\s+as|became)[^\n.;|]{0,60}"
@@ -11908,6 +12065,8 @@ def validate_test_case_quality_smells(
     representative_strategy_data_mismatches: list[str] = []
     production_internal_language_leaks: list[str] = []
     candidate_negative_trigger_missing: list[str] = []
+    candidate_negative_trigger_too_specific: list[str] = []
+    scenario_rationale_stimulus_mismatches: list[str] = []
     persist_coverage_missing: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
@@ -11982,6 +12141,19 @@ def validate_test_case_quality_smells(
                 and not SCENARIO_RATIONALE_CONCRETE_TARGET_RE.search(scenario_rationale)
             ):
                 scenario_rationale_too_generic.append(f"{test_case_id}:rationale={scenario_rationale[:180]}")
+            stimulus_context = " ".join([title, test_data, steps, expected_result])
+            if DADATA_SELECTION_SIGNAL_RE.search(stimulus_context) and INITIAL_VISIBILITY_RATIONALE_RE.search(scenario_rationale):
+                scenario_rationale_stimulus_mismatches.append(
+                    f"{test_case_id}:DaData stimulus with visibility/default-state rationale={scenario_rationale[:180]}"
+                )
+            if (
+                VISIBILITY_ONLY_TITLE_RE.search(title)
+                and not TITLE_SCENARIO_ACTION_RE.search(title)
+                and DADATA_SELECTION_SIGNAL_RE.search(" ".join([steps, expected_result]))
+            ):
+                scenario_rationale_stimulus_mismatches.append(
+                    f"{test_case_id}:visibility-only title with input/select DaData steps; title={title[:120]}"
+                )
         if (
             is_positive_test_case_type(test_case_type)
             and expected_result
@@ -12025,6 +12197,12 @@ def validate_test_case_quality_smells(
             and not TRIGGER_BA_QUESTION_RE.search(block)
         ):
             candidate_negative_trigger_missing.append(f"{test_case_id}:steps={steps[:180]}")
+        if (
+            is_calibration_candidate
+            and CANDIDATE_TRIGGER_TOO_SPECIFIC_RE.search(steps)
+            and not CANDIDATE_TRIGGER_ALTERNATIVE_RE.search(" ".join([steps, block]))
+        ):
+            candidate_negative_trigger_too_specific.append(f"{test_case_id}:steps={steps[:180]}")
         if production_test_case_file:
             if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
                 environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
@@ -13784,6 +13962,45 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if candidate_negative_trigger_too_specific:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="candidate-negative-trigger-too-specific",
+                severity=severity,
+                category="test-design",
+                title="Candidate-negative trigger assumes a specific UI validation mechanism",
+                details=(
+                    "A UI-calibration candidate may trigger validation, but it must not imply that blur/focus loss is "
+                    "the confirmed mechanism unless that is source-backed or calibrated."
+                ),
+                path=display_path,
+                evidence=candidate_negative_trigger_too_specific[:20],
+                recommended_action=(
+                    "Use neutral wording such as focus loss or another available validation action, and record the "
+                    "actual trigger during UI calibration."
+                ),
+            )
+        )
+
+    if scenario_rationale_stimulus_mismatches:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="scenario-rationale-stimulus-mismatch",
+                severity=severity,
+                category="atomarity",
+                title="Scenario rationale does not match the stimulus exercised by steps",
+                details=(
+                    "A TC that enters data and selects a DaData suggestion must not be justified only as initial "
+                    "visibility/default-state coverage, and a visibility-only title must not hide input/selection steps."
+                ),
+                path=display_path,
+                evidence=scenario_rationale_stimulus_mismatches[:20],
+                recommended_action="Rewrite the title/rationale to match the exercised stimulus or split visibility and selection checks.",
+            )
+        )
+
     if persist_coverage_missing:
         findings.append(
             Finding(
@@ -13945,6 +14162,8 @@ def validate_test_case_quality_smells(
         or representative_strategy_data_mismatches
         or production_internal_language_leaks
         or candidate_negative_trigger_missing
+        or candidate_negative_trigger_too_specific
+        or scenario_rationale_stimulus_mismatches
         or persist_coverage_missing
         or noncanonical_scenario_rationale_fields
         or scenario_rationale_domain_mismatches

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This v4 run preserves the original v3 artifact as a diagnostic failure fixture and creates a corrected production-style artifact for section 4.3 client addresses and contacts.
+This v4 run preserves the original v3 artifact as a diagnostic failure fixture and creates a corrected field-level / risk-based canary artifact for section 4.3 client addresses and contacts. It is not a full production regression suite for every persistence, integration and cartesian field-combination obligation in section 4.3.
 
 ## Human Review Findings Captured
 
@@ -13,9 +13,20 @@ This v4 run preserves the original v3 artifact as a diagnostic failure fixture a
 | `multiple-independent-assertions-in-one-tc` | TC-AF43-AW4-024 checks relation dictionary values only; `Иное` branch moved to TC-AF43-AW4-031. |
 | `representative-strategy-data-mismatch` | TC-AF43-AW4-020 no longer exposes internal strategy bullets whose examples conflict with test data. |
 | `production-artifact-internal-language-leak` | Representative strategy is kept in `coverage-matrix.md`, not in production TC text. |
-| `candidate-negative-validation-trigger-missing` | Candidate UI-calibration negative TC include a neutral trigger step: finish input and move focus to initiate available UI validation. |
-| `sampled-field-group-without-group-strategy` | Coverage matrix now includes group strategy rows for postal indexes, phones, e-mail restrictions and contact-person FIO. |
+| `candidate-negative-validation-trigger-missing` | Candidate UI-calibration negative TC include a neutral trigger step: finish input through focus change or another available validation action; exact trigger remains UI-calibration-required. |
+| `sampled-field-group-without-group-strategy` | Coverage matrix now includes verified group strategy rows for postal indexes, phones, e-mail restrictions, contact-person FIO, birth-date boundary and address composition. |
 | `persist-coverage-missing-for-crud-scope` | Save/persistence is explicitly tracked as a separate smoke plan instead of being implied by field-level TC. |
+
+## Design Polish Repair Pass
+
+| Item | Result |
+|---|---|
+| Header metadata | Fixed diagnostic materials label from `v2` to `v4`. |
+| `TC-AF43-AW4-001` | Rationale now matches the DaData selection scenario: input, suggestion selection and displayed selected registration address. |
+| `TC-AF43-AW4-008` | Title and rationale now describe one scenario: residence address field appears when it differs from registration address and accepts selected DaData address. |
+| `TC-AF43-AW4-020` | Rationale now matches data: surname and first name contain letters plus hyphen, patronymic contains letters. |
+| Candidate-negative trigger wording | Updated to avoid assuming blur-only validation; confirmation now records both UI mechanism and trigger. |
+| Coverage matrix | Representative groups were checked and fixed so postal, phone, e-mail, FIO, date and address groups reference matching TC/BSR domains. |
 
 ## TC Counts
 
@@ -28,7 +39,7 @@ This v4 run preserves the original v3 artifact as a diagnostic failure fixture a
 
 ## Candidate-Negative Coverage
 
-Candidate-negative TC now cover source-backed visible input restrictions for postal index overlength, invalid e-mail format, phone length, contact-person FIO digit/special-symbol restrictions and contact-person phone overlength. Each candidate-negative TC has a concrete invalid representative value, UI calibration status, confirmation requirement and neutral validation trigger.
+Candidate-negative TC now cover source-backed visible input restrictions for postal indexes, invalid e-mail format, phone value classes, contact-person FIO digit/special-symbol restrictions, contact-person phone value classes and future birth-date boundary. Each candidate-negative TC has a concrete invalid representative value, UI calibration status, confirmation requirement and neutral trigger wording that does not assume a blur-only validation mechanism.
 
 ## Remaining Gaps
 
@@ -36,8 +47,8 @@ Candidate-negative TC now cover source-backed visible input restrictions for pos
 
 ## Save / Persistence Coverage Plan
 
-The v4 artifact is still a section 4.3 field-level canary. Save/persistence is not asserted by invalid-value candidate TC. A follow-up smoke should save one valid representative edit in the application card, reopen the card and verify persisted values for one address field, one phone field and one contact-person field.
+The v4 artifact is a field-level / risk-based canary, not a full persistence suite. Save/persistence coverage is out of scope for this v4 artifact and must be handled by a separate follow-up smoke suite. That follow-up should save one valid representative edit in the application card, reopen the card and verify persisted values for one address field, one phone field and one contact-person field.
 
 ## Validation Summary
 
-Strict validator routing treats v3 human-review defects as test-design findings. The v4 artifact is expected to pass strict canary validation with zero errors; any persistence item remains a warning unless the scope claims end-to-end save behavior.
+Strict validator routing treats v3 human-review defects as test-design findings. The v4 artifact is expected to pass strict canary validation with zero errors; persistence remains a documented follow-up/out-of-scope item unless a later suite claims end-to-end save behavior.

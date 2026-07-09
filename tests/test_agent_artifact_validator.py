@@ -14726,6 +14726,132 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertNotIn("scenario-rationale-domain-mismatch", finding_ids)
         self.assertNotIn("scenario-rationale-too-generic", finding_ids)
 
+    def test_dadata_steps_with_visibility_only_rationale_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Registration address shows selected DaData address",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 115`; `BSR 116`",
+                        "**Сценарное обоснование:** Initial visibility state of the registration address block is checked.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `10 Main St`",
+                        "**Steps:**",
+                        "1. Enter `10 Main St`.",
+                        "2. Select the found address suggestion from DaData.",
+                        "**Expected Result:** Selected address is displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["scenario-rationale-stimulus-mismatch"]["severity"], "error")
+
+    def test_visibility_title_with_dadata_steps_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Residence address field is visible",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 140`; `BSR 141`",
+                        "**Сценарное обоснование:** Field is shown when residence address differs from registration address.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `20 Main St`",
+                        "**Steps:**",
+                        "1. Enter `20 Main St`.",
+                        "2. Select the address suggestion from DaData.",
+                        "**Expected Result:** Selected residence address is displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["scenario-rationale-stimulus-mismatch"]["severity"], "error")
+
+    def test_corrected_dadata_scenario_rationale_passes_strict_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "rationale.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Rationale",
+                        "",
+                        "## TC-RAT-001",
+                        "**Title:** Residence address field accepts selected DaData address",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 140`; `BSR 141`",
+                        "**Сценарное обоснование:** The scenario checks DaData address selection: entering an address, selecting a suggestion, and displaying the selected address.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `20 Main St`",
+                        "**Steps:**",
+                        "1. Enter `20 Main St`.",
+                        "2. Select the address suggestion from DaData.",
+                        "**Expected Result:** Selected residence address is displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("scenario-rationale-stimulus-mismatch", finding_ids)
+
     def test_production_glued_heading_and_metadata_error_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -14999,6 +15125,41 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(findings["representative-strategy-data-mismatch"]["severity"], "error")
         self.assertEqual(findings["production-artifact-internal-language-leak"]["severity"], "error")
 
+    def test_corrected_fio_representative_strategy_passes_data_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Contact FIO accepts values",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 174`; `BSR 176`; `BSR 178`",
+                        "**Сценарное обоснование:** Checks letters and hyphen in surname and first name, and letters in patronymic.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:**",
+                        "- Surname: `Иванов-Петров`.",
+                        "- First name: `Анна-Мария`.",
+                        "- Patronymic: `Сергеевна`.",
+                        "**Steps:**",
+                        "1. Fill FIO.",
+                        "**Expected Result:** Values are displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("representative-strategy-data-mismatch", finding_ids)
+
     def test_candidate_negative_without_trigger_errors_and_with_trigger_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -15031,7 +15192,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
 
             test_case_file.write_text(test_case_file.read_text(encoding="utf-8").replace(
                 "1. Enter `92345A7890`.",
-                "1. Enter `92345A7890`.\n2. Move focus from the field to trigger validation.",
+                "1. Enter `92345A7890`.\n2. Complete input by moving focus from the field or performing another available validation action.",
             ), encoding="utf-8")
             result_with_trigger = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
 
@@ -15040,6 +15201,41 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(missing_findings["candidate-negative-validation-trigger-missing"]["severity"], "error")
         with_trigger_ids = {finding["id"] for finding in json.loads(result_with_trigger.stdout)["findings"]}
         self.assertNotIn("candidate-negative-validation-trigger-missing", with_trigger_ids)
+
+    def test_candidate_negative_focus_only_trigger_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Invalid phone is rejected",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**Traceability:** `BSR 1`",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `92345A7890`",
+                        "**Steps:**",
+                        "1. Enter `92345A7890`.",
+                        "2. Move focus from the field to trigger validation.",
+                        "**Expected Result:** Invalid value is not accepted.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["candidate-negative-trigger-too-specific"]["severity"], "error")
 
     def test_sampled_email_group_without_strategy_errors_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15070,6 +15266,87 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
         self.assertEqual(findings["sampled-field-group-without-group-strategy"]["severity"], "error")
+
+    def test_phone_coverage_matrix_group_referencing_email_or_date_tc_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            matrix = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v4" / "coverage-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Matrix",
+                        "",
+                        "## Representative / Pairwise Coverage Decisions",
+                        "",
+                        "| Fields | Shared restriction | Source rows / BSR | Selected strategy | TC ids | Covered classes | Omitted combinations | Residual risk | Reason |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| Phone fields | Ten digits only. | `BSR 1` | Sample phone values. | `TC-EMAIL-001`; `TC-DATE-001` | letter/overlength | short values | calibration | risk-based |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["coverage-matrix-tc-domain-mismatch"]["severity"], "error")
+
+    def test_email_coverage_matrix_group_referencing_postal_tc_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            matrix = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v4" / "coverage-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Matrix",
+                        "",
+                        "## Representative / Pairwise Coverage Decisions",
+                        "",
+                        "| Fields | Shared restriction | Source rows / BSR | Selected strategy | TC ids | Covered classes | Omitted combinations | Residual risk | Reason |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| E-mail restrictions | Single email with @. | `BSR 1` | Sample email values. | `TC-POSTAL-001` | missing @ | other malformed strings | calibration | risk-based |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["coverage-matrix-tc-domain-mismatch"]["severity"], "error")
+
+    def test_correct_coverage_matrix_groups_pass_domain_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            matrix = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v4" / "coverage-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Matrix",
+                        "",
+                        "## Representative / Pairwise Coverage Decisions",
+                        "",
+                        "| Fields | Shared restriction | Source rows / BSR | Selected strategy | TC ids | Covered classes | Omitted combinations | Residual risk | Reason |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| Postal indexes | Six digits. | `BSR 1` | Sample postal values. | `TC-POSTAL-001` | valid/invalid length | other malformed values | calibration | risk-based |",
+                        "| Phone fields | Ten digits. | `BSR 2` | Sample phone values. | `TC-PHONE-001` | valid/letter | other lengths | calibration | risk-based |",
+                        "| E-mail restrictions | One address with @. | `BSR 3` | Sample email values. | `TC-EMAIL-001` | valid/missing @ | other malformed strings | calibration | risk-based |",
+                        "| Contact-person FIO fields | Letters and hyphen. | `BSR 4` | Sample FIO values. | `TC-FIO-001` | letters/hyphen/digit | other combinations | calibration | risk-based |",
+                        "| Contact-person birth date | Not greater than current date. | `BSR 5` | D and D + 1. | `TC-DATE-001` | current/future | invalid formats | calibration | risk-based |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("coverage-matrix-tc-domain-mismatch", finding_ids)
 
     def test_persist_coverage_missing_warns_for_editable_card_scope(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -15102,6 +15379,49 @@ class AgentArtifactValidatorTests(unittest.TestCase):
 
         findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
         self.assertEqual(findings["persist-coverage-missing-for-crud-scope"]["severity"], "warning")
+
+    def test_field_level_canary_without_persistence_scope_note_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            report = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v4" / "canary-evaluation-report.md"
+            report.parent.mkdir(parents=True)
+            report.write_text(
+                "\n".join(
+                    [
+                        "# Canary evaluation",
+                        "",
+                        "This is a field-level risk-based canary for editable application-card fields.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["field-level-canary-without-persistence-scope-note"]["severity"], "warning")
+
+    def test_field_level_canary_with_persistence_followup_note_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            report = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v4" / "canary-evaluation-report.md"
+            report.parent.mkdir(parents=True)
+            report.write_text(
+                "\n".join(
+                    [
+                        "# Canary evaluation",
+                        "",
+                        "This is a field-level risk-based canary for editable application-card fields.",
+                        "Save/persistence coverage is out of scope here and planned as a separate follow-up smoke suite.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("field-level-canary-without-persistence-scope-note", finding_ids)
 
     def test_independent_wide_canary_v3_reports_human_review_quality_findings(self) -> None:
         artifact = (
