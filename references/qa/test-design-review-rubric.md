@@ -94,8 +94,14 @@ Reviewer обязан критически проверять заявления
 - Candidate negative TC invents a concrete rejection mechanism, message, highlight, filtering, clearing, transition block or save/no-save behavior.
 - Source-backed input restriction has negative/candidate-negative coverage but no sibling positive allowed-class TC.
 - Similar fields/classes with shared restrictions are covered by representative/pairwise sampling without selected combinations, omitted combinations and residual risk.
+- TC type is inconsistent with expected result: `Positive` cannot expect validation error, highlight, rejection or required-field feedback unless the TC explicitly checks normal-state informational hint presence.
+- Traceability references source behavior that is not exercised by title, test data, steps, expected result or scenario rationale.
+- Representative/pairwise strategy does not match actual test data values/classes.
+- Candidate-negative TC enters an invalid value but has no neutral trigger step or trigger BA question.
+- Russian production TC leaks internal English strategy labels such as `Representative/pairwise strategy`, `Omitted combinations` or `Residual risk`.
 - Evaluation/work artifacts use old generated TC/canary output as source of truth for split/grouping/representative decisions instead of FT source rows, BSR/GSR/REQ or source artifacts.
 - Production markdown structure glues `## TC-*` headings or runtime metadata fields to preceding text, making extraction/review ambiguous.
+- Editable CRUD/card scope has no save/persist smoke coverage plan and no explicit out-of-scope rationale.
 - Final TC uses generic test data placeholders instead of concrete values or a defined setup/fixture profile.
 - Numbered preconditions are passive states instead of action-oriented setup or a defined setup profile.
 - Production TC under `fts/**/test-cases/*.md` is not self-contained: setup profile reference, stand/environment wording, package-name leakage, missing reveal action for action-created fields, or embedded diagnostic/design sections.

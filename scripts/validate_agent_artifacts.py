@@ -3420,6 +3420,39 @@ def validate_generated_artifact_source_basis(
             )
         )
 
+    sampled_group_evidence: list[str] = []
+    if path.name == "coverage-matrix.md":
+        representative_section = extract_markdown_section(content, "Representative / Pairwise Coverage Decisions") or content
+        if re.search(r"e-?mail|e-mail|электронн\w*\s+почт", content, flags=re.IGNORECASE) and not re.search(
+            r"e-?mail\s+restrictions|e-mail\s+restrictions|email\s+fields|электронн\w*\s+почт",
+            representative_section,
+            flags=re.IGNORECASE,
+        ):
+            sampled_group_evidence.append("email restrictions are covered/sampled but have no explicit group strategy row")
+        for label, pattern in (
+            ("postal indexes", r"postal\s+indexes|почтов\w*\s+индекс"),
+            ("phone fields", r"phone\s+fields|телефон"),
+        ):
+            if re.search(pattern, content, flags=re.IGNORECASE) and not re.search(pattern, representative_section, flags=re.IGNORECASE):
+                sampled_group_evidence.append(f"{label} are covered/sampled but have no explicit group strategy row")
+    if sampled_group_evidence:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="sampled-field-group-without-group-strategy",
+                severity=severity,
+                category="test-design",
+                title="Sampled similar-field group lacks explicit group strategy",
+                details=(
+                    "When invalid classes are sampled across similar postal, phone, e-mail or FIO fields, the coverage "
+                    "matrix must state the selected classes, omitted combinations and residual risk for that group."
+                ),
+                path=display_path,
+                evidence=sampled_group_evidence[:20],
+                recommended_action="Add a representative/pairwise group strategy row for each sampled field family.",
+            )
+        )
+
     checks = [
         Check(
             "generated-artifact-source-basis",
@@ -10859,6 +10892,54 @@ PRODUCTION_TEST_CASE_METADATA_FIELDS = (
     "**Статус тест-кейса:**",
     "**Требуется подтверждение:**",
 )
+VALIDATION_ERROR_EXPECTED_RE = re.compile(
+    r"подсвеч|подсказ|не\s+должно\s+быть\s+принято|не\s+принимается|некорректн|ошибк|"
+    r"обязательн|требует|required|error|invalid|highlight|validation",
+    flags=re.IGNORECASE,
+)
+NORMAL_STATE_HINT_EXCEPTION_RE = re.compile(
+    r"информационн\w*\s+подсказ|normal[-\s]?state\s+hint|presence\s+of\s+(?:an\s+)?informational\s+hint",
+    flags=re.IGNORECASE,
+)
+DICTIONARY_AND_BRANCH_ASSERTION_RE = re.compile(
+    r"(?:список\s+содержит|содержит\s+перечисленные\s+значения)[\s\S]{0,240}"
+    r"(?:при\s+выборе|отображается\s+поле)",
+    flags=re.IGNORECASE,
+)
+INTERNAL_ENGLISH_STRATEGY_FIELD_RE = re.compile(
+    r"(?m)^\*\*(?:Representative/pairwise strategy|Omitted combinations|Residual risk):\*\*",
+    flags=re.IGNORECASE,
+)
+NEUTRAL_VALIDATION_TRIGGER_RE = re.compile(
+    r"завершить\s+ввод|перевести\s+фокус|инициир\w*\s+проверк|попытаться\s+сохранить|"
+    r"move\s+focus|complete\s+input|trigger\s+validation|attempt\s+to\s+save",
+    flags=re.IGNORECASE,
+)
+TRIGGER_BA_QUESTION_RE = re.compile(
+    r"(?:BAQ|Требуется\s+подтверждение|вопрос)[\s\S]{0,160}(?:trigger|фокус|проверк|завершить\s+ввод)",
+    flags=re.IGNORECASE,
+)
+SAVE_PERSISTENCE_COVERAGE_RE = re.compile(
+    r"save\s*/\s*persistence\s+coverage\s+plan|"
+    r"persist(?:ence)?\s+(?:coverage|smoke|plan)|"
+    r"save\s+(?:smoke|coverage|plan)|"
+    r"сохран\w*[\s\S]{0,120}(?:smoke|план|покрыт|провер|повторн\w*\s+открыт|перезагруз)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_OUT_OF_SCOPE_RE = re.compile(
+    r"save\s*/\s*persistence\s+coverage\s+plan|out[-\s]?of[-\s]?scope[\s\S]{0,80}persist|"
+    r"сохран\w*[\s\S]{0,120}(?:out[-\s]?of[-\s]?scope|вне\s+scope|не\s+входит)",
+    flags=re.IGNORECASE,
+)
+EDITABLE_CARD_SCOPE_RE = re.compile(
+    r"карточк\w*\s+заявк|application\s+card|доступн\w*\s+для\s+редакт",
+    flags=re.IGNORECASE,
+)
+SAMPLED_GROUP_STRATEGY_RE = re.compile(
+    r"Representative\s*/\s*Pairwise\s+Coverage\s+Decisions|group\s+strategy|стратег\w*\s+групп|"
+    r"postal\s+indexes|phone\s+fields|email\s+restrictions|e-mail\s+restrictions|fio",
+    flags=re.IGNORECASE,
+)
 GENERATED_ARTIFACT_SOLE_SOURCE_RE = re.compile(
     r"(?:generated|previous|old|v\d+)[^\n.;|]{0,120}"
     r"(?:used\s+as|is|was|treated\s+as|became)[^\n.;|]{0,60}"
@@ -11636,6 +11717,60 @@ def production_line_structure_evidence(content: str) -> tuple[list[str], list[st
     return heading_evidence, metadata_evidence
 
 
+def quoted_values(text: str) -> list[str]:
+    return [match.group(1) for match in re.finditer(r"`([^`]+)`", text or "")]
+
+
+def value_has_special_symbol(value: str) -> bool:
+    return bool(re.search(r"[^A-Za-zА-Яа-яЁё0-9\s-]", value))
+
+
+def representative_strategy_data_mismatch_evidence(test_case_id: str, strategy_text: str, test_data: str) -> list[str]:
+    evidence: list[str] = []
+    if not strategy_text:
+        return evidence
+
+    text = strategy_text.lower()
+    values = quoted_values(test_data)
+    if not values:
+        return evidence
+
+    surname_value = ""
+    first_name_value = ""
+    patronymic_value = ""
+    for line in test_data.splitlines():
+        value_match = re.search(r"`([^`]+)`", line)
+        if not value_match:
+            continue
+        value = value_match.group(1)
+        if re.search(r"фамил|surname", line, flags=re.IGNORECASE):
+            surname_value = value
+        elif re.search(r"\bимя\b|first[-\s]?name", line, flags=re.IGNORECASE):
+            first_name_value = value
+        elif re.search(r"отчеств|patronymic", line, flags=re.IGNORECASE):
+            patronymic_value = value
+
+    class_checks = [
+        ("surname letters", surname_value),
+        ("фамилия только буквы", surname_value),
+        ("first-name letters", first_name_value),
+        ("имя только буквы", first_name_value),
+        ("patronymic letters", patronymic_value),
+        ("отчество только буквы", patronymic_value),
+    ]
+    for marker, value in class_checks:
+        if marker in text and value and re.search(r"[-\d]", value):
+            evidence.append(f"{test_case_id}:{marker}; value={value}")
+
+    if re.search(r"with\s+hyphen|с\s+дефис", text) and not any("-" in value for value in values):
+        evidence.append(f"{test_case_id}:strategy expects hyphen but no test value contains hyphen")
+    if re.search(r"\bdigit\b|цифр", text) and not any(re.search(r"\d", value) for value in values):
+        evidence.append(f"{test_case_id}:strategy expects digit but no test value contains digit")
+    if re.search(r"special\s+symbol|спец", text) and not any(value_has_special_symbol(value) for value in values):
+        evidence.append(f"{test_case_id}:strategy expects special symbol but no test value contains one")
+    return evidence
+
+
 def validate_test_case_quality_smells(
     content: str,
     path: Path,
@@ -11767,6 +11902,13 @@ def validate_test_case_quality_smells(
     scenario_rationale_too_generic: list[str] = []
     production_glued_headings: list[str] = []
     production_glued_metadata_fields: list[str] = []
+    tc_type_expected_result_mismatch: list[str] = []
+    trace_not_exercised_by_steps: list[str] = []
+    multiple_independent_assertions: list[str] = []
+    representative_strategy_data_mismatches: list[str] = []
+    production_internal_language_leaks: list[str] = []
+    candidate_negative_trigger_missing: list[str] = []
+    persist_coverage_missing: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
@@ -11840,6 +11982,49 @@ def validate_test_case_quality_smells(
                 and not SCENARIO_RATIONALE_CONCRETE_TARGET_RE.search(scenario_rationale)
             ):
                 scenario_rationale_too_generic.append(f"{test_case_id}:rationale={scenario_rationale[:180]}")
+        if (
+            is_positive_test_case_type(test_case_type)
+            and expected_result
+            and VALIDATION_ERROR_EXPECTED_RE.search(expected_result)
+            and not NORMAL_STATE_HINT_EXCEPTION_RE.search(" ".join([title, scenario_rationale, expected_result]))
+        ):
+            tc_type_expected_result_mismatch.append(
+                f"{test_case_id}:type={test_case_type}; expected={expected_result[:180]}"
+            )
+        exercised_context = " ".join([title, test_data, steps, expected_result, scenario_rationale])
+        executable_context = " ".join([title, test_data, steps, expected_result])
+        if (
+            re.search(r"\bBSR\s+167\b", traceability)
+            and re.search(r"\bBSR\s+17[12]\b", traceability)
+            and re.search(r"домашн|home", executable_context, flags=re.IGNORECASE)
+            and not re.search(r"рабоч|work", executable_context, flags=re.IGNORECASE)
+        ):
+            trace_not_exercised_by_steps.append(
+                f"{test_case_id}:trace={traceability[:160]}; exercised={executable_context[:180]}"
+            )
+        if expected_result and DICTIONARY_AND_BRANCH_ASSERTION_RE.search(expected_result):
+            multiple_independent_assertions.append(f"{test_case_id}:expected={expected_result[:180]}")
+        strategy_text = "\n".join(
+            line
+            for line in block.splitlines()
+            if re.search(
+                r"Representative/pairwise strategy|Omitted combinations|Residual risk|"
+                r"РџСЂРµРґСЃС‚Р°РІРёС‚РµР»|РћРїСѓС‰РµРЅ|РћСЃС‚Р°С‚РѕС‡РЅ",
+                line,
+                flags=re.IGNORECASE,
+            )
+        )
+        representative_strategy_data_mismatches.extend(
+            representative_strategy_data_mismatch_evidence(test_case_id, strategy_text, test_data)
+        )
+        if production_test_case_file and INTERNAL_ENGLISH_STRATEGY_FIELD_RE.search(block):
+            production_internal_language_leaks.append(f"{test_case_id}:internal English strategy labels")
+        if (
+            is_calibration_candidate
+            and not NEUTRAL_VALIDATION_TRIGGER_RE.search(steps)
+            and not TRIGGER_BA_QUESTION_RE.search(block)
+        ):
+            candidate_negative_trigger_missing.append(f"{test_case_id}:steps={steps[:180]}")
         if production_test_case_file:
             if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
                 environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
@@ -12026,7 +12211,16 @@ def validate_test_case_quality_smells(
                 "min_acceptance": False,
             },
         )
-        negative_oracle = bool(expected_result and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result))
+        negative_oracle = bool(
+            expected_result
+            and (
+                NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result)
+                or (
+                    VALIDATION_ERROR_EXPECTED_RE.search(expected_result)
+                    and not NORMAL_STATE_HINT_EXCEPTION_RE.search(expected_result)
+                )
+            )
+        )
         if negative_oracle and OFF_BOUNDARY_MAX_RE.search(boundary_context):
             boundary_group["above_max_rejection"].append(test_case_id)
         if negative_oracle and OFF_BOUNDARY_MIN_RE.search(boundary_context):
@@ -13377,6 +13571,15 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if (
+        production_test_case_file
+        and source_row_inventory_required(content)
+        and EDITABLE_CARD_SCOPE_RE.search(content)
+        and not SAVE_PERSISTENCE_COVERAGE_RE.search(content)
+        and not PERSISTENCE_OUT_OF_SCOPE_RE.search(content)
+    ):
+        persist_coverage_missing.append("editable application-card scope has no save/persist smoke plan or out-of-scope rationale")
+
     if missing_representative_strategy:
         severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
@@ -13488,6 +13691,110 @@ def validate_test_case_quality_smells(
                 path=display_path,
                 evidence=overmerged_test_cases[:20],
                 recommended_action="Split the TC or add `Сценарное обоснование` and keep independent atomic TC/GAP coverage.",
+            )
+        )
+
+    if tc_type_expected_result_mismatch:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="tc-type-expected-result-mismatch",
+                severity=severity,
+                category="test-design",
+                title="TC type conflicts with validation/error expected result",
+                details="Positive TC must not expect validation error, highlight, rejection or required-field feedback.",
+                path=display_path,
+                evidence=tc_type_expected_result_mismatch[:20],
+                recommended_action="Change type to Negative / Validation Negative or split/add a positive pair.",
+            )
+        )
+
+    if trace_not_exercised_by_steps:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="trace-not-exercised-by-steps",
+                severity=severity,
+                category="traceability",
+                title="Trace references behavior not exercised by the TC",
+                details="Each traced source behavior must be exercised by title, test data, steps, expected result or scenario rationale.",
+                path=display_path,
+                evidence=trace_not_exercised_by_steps[:20],
+                recommended_action="Remove the unexercised trace or split/add a TC for that source behavior.",
+            )
+        )
+
+    if multiple_independent_assertions:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="multiple-independent-assertions-in-one-tc",
+                severity=severity,
+                category="atomarity",
+                title="TC combines independent assertions",
+                details="Dictionary completeness and conditional branch display are independent pass/fail checks and must not be bundled in one TC.",
+                path=display_path,
+                evidence=multiple_independent_assertions[:20],
+                recommended_action="Split into separate TC for dictionary values and conditional branch behavior.",
+            )
+        )
+
+    if representative_strategy_data_mismatches:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="representative-strategy-data-mismatch",
+                severity=severity,
+                category="test-design",
+                title="Representative strategy does not match concrete test data",
+                details="Representative/pairwise strategy must describe the actual concrete values and invalid classes used by the TC.",
+                path=display_path,
+                evidence=representative_strategy_data_mismatches[:20],
+                recommended_action="Align strategy text with test data or change data to match the stated representative class.",
+            )
+        )
+
+    if production_internal_language_leaks:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="production-artifact-internal-language-leak",
+                severity=severity,
+                category="test-case-format",
+                title="Production TC leaks internal English strategy labels",
+                details="Russian production TC should not expose internal English strategy fields.",
+                path=display_path,
+                evidence=production_internal_language_leaks[:20],
+                recommended_action="Use Russian production labels or move detailed strategy to work artifacts.",
+            )
+        )
+
+    if candidate_negative_trigger_missing:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="candidate-negative-validation-trigger-missing",
+                severity=severity,
+                category="test-design",
+                title="Candidate-negative TC lacks neutral validation trigger",
+                details="Entering an invalid value is not enough; the TC must complete input or initiate an available validation point without inventing exact rejection mechanics.",
+                path=display_path,
+                evidence=candidate_negative_trigger_missing[:20],
+                recommended_action="Add focus/completion/validation/save-attempt trigger step or a BA question about trigger selection.",
+            )
+        )
+
+    if persist_coverage_missing:
+        findings.append(
+            Finding(
+                id="persist-coverage-missing-for-crud-scope",
+                severity="warning",
+                category="test-design",
+                title="Editable card scope lacks save/persist coverage plan",
+                details="CRUD/card scopes need explicit save/persist smoke coverage or a documented out-of-scope rationale.",
+                path=display_path,
+                evidence=persist_coverage_missing[:20],
+                recommended_action="Add save/persist smoke TC or an explicit Save / persistence coverage plan.",
             )
         )
 
@@ -13632,6 +13939,13 @@ def validate_test_case_quality_smells(
         or broad_scenario_test_cases
         or excessive_atom_fan_in
         or overmerged_test_cases
+        or tc_type_expected_result_mismatch
+        or trace_not_exercised_by_steps
+        or multiple_independent_assertions
+        or representative_strategy_data_mismatches
+        or production_internal_language_leaks
+        or candidate_negative_trigger_missing
+        or persist_coverage_missing
         or noncanonical_scenario_rationale_fields
         or scenario_rationale_domain_mismatches
         or scenario_rationale_too_generic

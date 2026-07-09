@@ -15,6 +15,14 @@ Default validator remediation is finding-targeted. Read the validator finding id
 | `missing-representative-strategy` | Document representative/pairwise strategy, selected combinations, omitted combinations and residual risk. | `references/agent/coverage-obligation-table-format.md` |
 | `representative-strategy-without-omitted-combinations` | Add omitted/excluded field-class combinations, or add the missing TC/GAP rows. | `references/agent/coverage-obligation-table-format.md` |
 | `representative-strategy-without-residual-risk` | Add explicit residual risk, or replace the representative shortcut with full TC/GAP coverage. | `references/agent/coverage-obligation-table-format.md` |
+| `tc-type-expected-result-mismatch` | Change TC type to Negative / Validation Negative or split/add a positive pair. | `references/qa/test-design-review-rubric.md` |
+| `trace-not-exercised-by-steps` | Remove unexercised trace or split/add a TC that actually exercises that source behavior. | `references/qa/test-design-review-rubric.md` |
+| `multiple-independent-assertions-in-one-tc` | Split independent dictionary, branch, action or persistence assertions into separate TC. | `references/qa/test-design-review-rubric.md` |
+| `representative-strategy-data-mismatch` | Align representative strategy with concrete test data or change data to match the stated class. | `references/agent/coverage-obligation-table-format.md` |
+| `production-artifact-internal-language-leak` | Replace internal English strategy labels with Russian production labels or move details to work artifacts. | `references/qa/test-case-format.md` |
+| `candidate-negative-validation-trigger-missing` | Add a neutral completion/focus/validation/save trigger or a BA question about trigger selection. | `references/agent/negative-ui-calibration-policy.md` |
+| `sampled-field-group-without-group-strategy` | Add explicit sampled-field group strategy for the affected field family. | `references/agent/coverage-obligation-table-format.md` |
+| `persist-coverage-missing-for-crud-scope` | Add save/persist smoke coverage plan or explicit out-of-scope rationale. | `references/qa/test-design-review-rubric.md` |
 | `generated-artifact-used-as-source-of-truth` | Treat old generated artifacts only as diagnostic fixtures; cite source rows/BSR/FT artifacts for decisions. | `references/agent/source-row-inventory-format.md` |
 | `production-setup-profile-reference` | Replace production setup profile/stand/environment leakage with inline action-oriented preconditions. | `references/qa/test-case-format.md` |
 | `test-case-generic-test-data-reference-smell` | Put concrete literal, fixture value or formula in test data and reference it in the step. | `references/qa/test-case-format.md` |

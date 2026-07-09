@@ -14791,6 +14791,385 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(findings["production-markdown-heading-not-at-line-start"]["severity"], "error")
         self.assertEqual(findings["production-metadata-field-not-at-line-start"]["severity"], "error")
 
+    def test_positive_tc_with_validation_hint_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Invalid address shows hint",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `bad`",
+                        "**Steps:**",
+                        "1. Enter `bad`.",
+                        "**Expected Result:** Field is highlighted and a validation hint is shown.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["tc-type-expected-result-mismatch"]["severity"], "error")
+
+    def test_negative_tc_with_validation_hint_passes_type_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Invalid address shows hint",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `bad`",
+                        "**Steps:**",
+                        "1. Enter `bad`.",
+                        "**Expected Result:** Field is highlighted and a validation hint is shown.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("tc-type-expected-result-mismatch", finding_ids)
+
+    def test_home_work_phone_trace_but_only_home_exercised_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Delete home phone",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 167`; `BSR 171`; `BSR 172`",
+                        "**Preconditions:** Home phone is added.",
+                        "**Test Data:** Not required.",
+                        "**Steps:**",
+                        "1. Delete the home phone.",
+                        "**Expected Result:** Home phone is not displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["trace-not-exercised-by-steps"]["severity"], "error")
+
+    def test_dictionary_values_and_other_branch_in_one_tc_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Relation values and other branch",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 179`; `BSR 180`",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `Иное`",
+                        "**Steps:**",
+                        "1. Open relation list.",
+                        "2. Select `Иное`.",
+                        "**Expected Result:** Список содержит перечисленные значения, и при выборе `Иное` отображается поле.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["multiple-independent-assertions-in-one-tc"]["severity"], "error")
+
+    def test_split_dictionary_and_other_branch_passes_independent_assertion_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Relation list contains values",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 179`",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** Not required.",
+                        "**Steps:**",
+                        "1. Open relation list.",
+                        "**Expected Result:** Список содержит перечисленные значения.",
+                        "**Postconditions:** Not required.",
+                        "",
+                        "## TC-QA-002",
+                        "**Title:** Other relation shows field",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 180`",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `Иное`",
+                        "**Steps:**",
+                        "1. Select `Иное`.",
+                        "**Expected Result:** Отображается поле `Иное`.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("multiple-independent-assertions-in-one-tc", finding_ids)
+
+    def test_representative_strategy_letters_with_hyphen_data_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Contact FIO accepts values",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 174`; `BSR 176`; `BSR 178`",
+                        "**Representative/pairwise strategy:** Selected positive combinations: surname letters, first-name letters, patronymic letters.",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:**",
+                        "- Surname: `Иванов-Петров`.",
+                        "- First name: `Анна`.",
+                        "- Patronymic: `Сергеевна`.",
+                        "**Steps:**",
+                        "1. Fill FIO.",
+                        "**Expected Result:** Values are displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["representative-strategy-data-mismatch"]["severity"], "error")
+        self.assertEqual(findings["production-artifact-internal-language-leak"]["severity"], "error")
+
+    def test_candidate_negative_without_trigger_errors_and_with_trigger_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Invalid phone is rejected",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**Traceability:** `BSR 1`",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Preconditions:** Form is open.",
+                        "**Test Data:** `92345A7890`",
+                        "**Steps:**",
+                        "1. Enter `92345A7890`.",
+                        "**Expected Result:** Invalid value is not accepted.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result_missing = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+            test_case_file.write_text(test_case_file.read_text(encoding="utf-8").replace(
+                "1. Enter `92345A7890`.",
+                "1. Enter `92345A7890`.\n2. Move focus from the field to trigger validation.",
+            ), encoding="utf-8")
+            result_with_trigger = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result_missing.returncode, 1)
+        missing_findings = {finding["id"]: finding for finding in json.loads(result_missing.stdout)["findings"]}
+        self.assertEqual(missing_findings["candidate-negative-validation-trigger-missing"]["severity"], "error")
+        with_trigger_ids = {finding["id"] for finding in json.loads(result_with_trigger.stdout)["findings"]}
+        self.assertNotIn("candidate-negative-validation-trigger-missing", with_trigger_ids)
+
+    def test_sampled_email_group_without_strategy_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            matrix = fixture_root / "fts" / "sample-ft" / "work" / "canary-runs" / "run-v4" / "coverage-matrix.md"
+            matrix.parent.mkdir(parents=True)
+            matrix.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Matrix",
+                        "",
+                        "| source_ref | obligation | covered_by |",
+                        "| --- | --- | --- |",
+                        "| SRC-1 | E-mail positive, missing @ and multiple-address invalid classes. | TC-1; TC-2; TC-3 |",
+                        "",
+                        "## Representative / Pairwise Coverage Decisions",
+                        "",
+                        "| field family | source restriction | selected combinations | omitted combinations | residual risk |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| Phone fields | Ten numeric characters only. | letter | short/long | calibration |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["sampled-field-group-without-group-strategy"]["severity"], "error")
+
+    def test_persist_coverage_missing_warns_for_editable_card_scope(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "quality.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Quality",
+                        "",
+                        "## TC-QA-001",
+                        "**Title:** Editable application card displays address",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**package_id:** WP-01",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:** Application card is open for editing.",
+                        "**Test Data:** Not required.",
+                        "**Steps:**",
+                        "1. Open address block.",
+                        "**Expected Result:** Address block is displayed.",
+                        "**Postconditions:** Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persist-coverage-missing-for-crud-scope"]["severity"], "warning")
+
+    def test_independent_wide_canary_v3_reports_human_review_quality_findings(self) -> None:
+        artifact = (
+            ROOT_DIR
+            / "fts"
+            / "AutoFin"
+            / "test-cases"
+            / "4.3-application-card-client-addresses-contacts-independent-wide-canary-v3.md"
+        )
+
+        result = self.run_validator(
+            "--root",
+            str(artifact),
+            "--json",
+            "--atomicity-coverage-policy",
+            "strict-canary",
+            "--fail-on",
+            "error",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        expected_error_ids = {
+            "candidate-negative-validation-trigger-missing",
+            "multiple-independent-assertions-in-one-tc",
+            "production-artifact-internal-language-leak",
+            "representative-strategy-data-mismatch",
+            "tc-type-expected-result-mismatch",
+            "trace-not-exercised-by-steps",
+        }
+        self.assertTrue(expected_error_ids.issubset(findings.keys()))
+        for finding_id in expected_error_ids:
+            self.assertEqual(findings[finding_id]["severity"], "error")
+        self.assertEqual(findings["persist-coverage-missing-for-crud-scope"]["severity"], "warning")
+
+    def test_independent_wide_canary_v4_passes_strict_quality_gates(self) -> None:
+        artifact = (
+            ROOT_DIR
+            / "fts"
+            / "AutoFin"
+            / "test-cases"
+            / "4.3-application-card-client-addresses-contacts-independent-wide-canary-v4.md"
+        )
+
+        result = self.run_validator(
+            "--root",
+            str(artifact),
+            "--json",
+            "--atomicity-coverage-policy",
+            "strict-canary",
+            "--fail-on",
+            "error",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["summary"]["errors_count"], 0)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        blocked_ids = {
+            "candidate-negative-validation-trigger-missing",
+            "multiple-independent-assertions-in-one-tc",
+            "production-artifact-internal-language-leak",
+            "representative-strategy-data-mismatch",
+            "tc-type-expected-result-mismatch",
+            "trace-not-exercised-by-steps",
+        }
+        self.assertTrue(blocked_ids.isdisjoint(finding_ids))
+
     def test_generated_artifact_used_as_source_of_truth_errors_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
