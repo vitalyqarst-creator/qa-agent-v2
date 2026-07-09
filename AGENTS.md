@@ -12,6 +12,10 @@
 
 - Не выдумывай поведение системы, статусы, поля, кнопки и интеграции, которых нет в документах.
 - Приоритет имеет текст требований, а не макет, если между ними есть расхождение.
+- Перед shell-командами определяй runtime-среду: ОС, shell, Python/stdout/stderr encoding и пробу кириллицы. Используй `scripts/probe_environment.py` или уже сохраненный результат probe. Не предполагай Bash или PowerShell заранее; каноническая shell/UTF-8 policy хранится в `references/agent/runtime-environment-encoding-policy.md`.
+- Для PowerShell не используй Bash heredoc `python <<'PY'`; многострочную логику выноси в UTF-8 `.py`/helper. Для Bash heredoc допустим только после подтверждения Bash. Для unknown shell используй короткие ASCII-only команды или UTF-8 helper files.
+- Русские search strings не передавай через risky inline commands; читай/ищи через UTF-8 файлы/helpers/normalized sources. BSR/DIT/GSR codes and row numbers are anchors, not replacements for checking Russian requirement text.
+- Runtime/debug details about shell, encoding, heredoc, mojibake and extractor diagnostics belong only in work/debug/session artifacts; never in production `fts/**/test-cases/*.md`.
 - DOCX остается главным исходным документом ФТ / source of truth. XHTML-версия основного ФТ в `source/` обязательна как основной машиночитаемый источник извлечения таблиц, строк, списков, вложенных списков, перечней значений и структуры разделов. Если XHTML-версии основного ФТ нет, downstream workflow по scope/writer/reviewer должен быть остановлен как `blocked-input` на этапе source selection / source locator.
 - PDF используется только для structural/visual cross-check и не заменяет ни DOCX как source of truth, ни XHTML как mandatory machine-readable extraction source. Support-файлы уточняют требования только внутри подтвержденного scope; макеты помогают конкретизировать UI-шаги, но не задают бизнес-правила, обязательность, validation, allowed values или expected results.
 - Если в требованиях есть неоднозначность, выноси ее в `coverage gaps` и открытые вопросы, а не додумывай.

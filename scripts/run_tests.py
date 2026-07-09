@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 import tempfile
@@ -19,6 +20,7 @@ AGENT_LAYER_MODULES = [
     "tests.test_codex_review_cycle_runner",
     "tests.test_instruction_context_resolver",
     "tests.test_iteration_contracts",
+    "tests.test_probe_environment",
     "tests.test_qa_rules",
     "tests.test_reviewer_contracts",
     "tests.test_session_based_review_cycle_contracts",
@@ -45,8 +47,15 @@ EXCLUDED_FULL_DISCOVERY_MODULES = {ARTIFACT_VALIDATOR_MODULE}
 
 
 def run_command(command: list[str]) -> int:
-    result = subprocess.run(command, cwd=ROOT_DIR, check=False)
+    result = subprocess.run(command, cwd=ROOT_DIR, check=False, env=utf8_subprocess_env())
     return result.returncode
+
+
+def utf8_subprocess_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env.setdefault("PYTHONUTF8", "1")
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    return env
 
 
 def write_stdout(text: str) -> None:
@@ -135,6 +144,7 @@ def run_artifact_validator_sharded_tests(shard_count: int) -> int:
                     str(shard_index),
                 ],
                 cwd=ROOT_DIR,
+                env=utf8_subprocess_env(),
                 stdout=log_handle,
                 stderr=subprocess.STDOUT,
                 text=True,

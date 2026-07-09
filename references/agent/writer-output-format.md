@@ -25,6 +25,8 @@ fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md
 - краткий human summary по покрытию, gaps и готовности к review без дублирования полных таблиц;
 - тест-кейсы в формате `references/qa/test-case-format.md`, сгруппированные по функциональности/блоку/элементу/операции с единой сквозной нумерацией `TC-*` в пределах файла;
 
+Файл не должен содержать runtime/debug diagnostics: PowerShell/Bash/heredoc notes, stdout/stderr encoding dumps, mojibake samples, extractor debug logs или technical workaround narratives. Такие сведения храни только в session logs, debug artifacts или work folders.
+
 Не вставляй в canonical test-case file полные таблицы `Source Row Inventory`, `Source Table Normalization`, `Test Design Decision Table`, `Coverage Obligation Table`, `Atomic Requirements Ledger`, `Package Test Design Plan`, `Coverage Map`, `Coverage Gaps`, `Writer Quality Gate` и другие table-heavy design artifacts, если для scope есть `work/test-design/<scope-slug>/`. Дублирование создает два источника истины и должно блокировать clean validation.
 
 Не создавай второй canonical test-case file для того же scope. Если нужен snapshot, он хранится в `work/review-cycles/<scope-slug>/versions/<snapshot-id>/`, а не заменяет canonical file.

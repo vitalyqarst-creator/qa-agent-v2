@@ -134,6 +134,8 @@ Audit-секции не заменяют findings, writer response или review
 
 ## UTF-8 / Console Handling
 
+Canonical shell/runtime policy: `references/agent/runtime-environment-encoding-policy.md`. This section only defines how to disclose encoding fallbacks in session logs.
+
 Для русскоязычных ФТ и Markdown-артефактов не используй обычный PowerShell stdout как источник истины, если есть риск mojibake. Перед чтением русских файлов через shell выставляй UTF-8 preamble:
 
 ```powershell

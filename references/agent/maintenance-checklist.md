@@ -27,11 +27,20 @@
 - `skills/README.md` совпадает с реальным набором активных skill-ов.
 - `references/agent/instruction-loading-manifest.md` содержит актуальные scenario budgets, а `scripts/resolve_instruction_context.py` возвращает только нужные runtime references для выбранного сценария.
 
+## Runtime Environment And Encoding
+
+- Shell/UTF-8 правила имеют один canonical source: `references/agent/runtime-environment-encoding-policy.md`, краткое обязательное правило остается в `AGENTS.md`.
+- Перед изменениями source extraction, writer/reviewer generators, command examples или Cyrillic-sensitive workflows запускай `python scripts/probe_environment.py` либо фиксируй эквивалентный probe.
+- PowerShell-инструкции не используют Bash heredoc `python <<'PY'`; Bash-инструкции явно выставляют UTF-8 environment; unknown-shell инструкции используют ASCII-only команды или UTF-8 helper files.
+- Production `fts/**/test-cases/*.md` не содержит PowerShell/heredoc/stdout encoding/mojibake/extractor debug diagnostics.
+- Коды требований используются как anchors; русскоязычный текст ФТ должен быть прочитан через UTF-8-safe source/helper.
+
 ## Проверки
 
 После изменения `AGENTS.md`, `skills/`, `references/agent/`, `references/qa/`, `README.md` или agent-layer scripts запускай:
 
 ```powershell
+python scripts/probe_environment.py
 python scripts/run_tests.py --suite architecture
 python scripts/run_tests.py --suite agent-layer
 python scripts/resolve_instruction_context.py --scenario writer.initial_draft.simple --budget-report --fail-on-budget
