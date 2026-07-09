@@ -47,6 +47,7 @@ Reviewer обязан критически проверять заявления
 - Проверяемое действие спрятано в предусловиях или тестовых данных вместо шагов.
 - Magic/vague/passive `Предусловия` без action setup path, fixture/API/profile.
 - Один тест-кейс объединяет независимые бизнес-проверки, которые могут pass/fail отдельно.
+- One TC references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`) without explicit source-backed `Scenario rationale` and traceable atomic coverage elsewhere.
 - Positive и negative сценарии смешаны в одном тест-кейсе.
 - Тест-кейс на ограничение ввода одновременно проверяет, что недопустимое значение отклоняется, а допустимое значение принимается, вместо разделения на отдельные `TC-*` или отдельный восстановительный сценарий.
 - Тест-кейс заявляет покрытие `ATOM-*`, но не проверяет condition и expected behavior этого атома.
@@ -91,6 +92,7 @@ Reviewer обязан критически проверять заявления
 - Candidate negative TC has no concrete representative invalid value.
 - Candidate negative TC invents a concrete rejection mechanism, message, highlight, filtering, clearing, transition block or save/no-save behavior.
 - Source-backed input restriction has negative/candidate-negative coverage but no sibling positive allowed-class TC.
+- Similar fields/classes with shared restrictions are covered by representative/pairwise sampling without selected combinations, omitted combinations and residual risk.
 - Final TC uses generic test data placeholders instead of concrete values or a defined setup/fixture profile.
 - Numbered preconditions are passive states instead of action-oriented setup or a defined setup profile.
 - Production TC under `fts/**/test-cases/*.md` is not self-contained: setup profile reference, stand/environment wording, package-name leakage, missing reveal action for action-created fields, or embedded diagnostic/design sections.

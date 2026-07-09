@@ -43,6 +43,7 @@ Runtime rules:
 - do not use source dumps, extraction artifacts or generic FT references as expected results;
 - keep exact requirement codes such as `GSR 22` when present;
 - use concrete user intent in steps, not mouse mechanics, unless the mechanism itself is the tested behavior.
+- split TC that reference more than two independent source-backed obligations, unless a single visible source-backed workflow has `Scenario rationale` and atomic coverage stays traceable elsewhere.
 - keep setup inside `Предусловия` as numbered action setup steps, fixture/API setup or reusable setup profile. Do not add a separate `Подготовительные шаги` section unless the current TC format already uses it. Avoid magic/passive states and ambiguous setup alternatives such as `выбрать или ввести`, `при необходимости` or `если нужно`; put `Дождаться...` / `Убедиться...` only after the action that creates the setup state.
 - for production `fts/**/test-cases/*.md`, inline full preconditions in every TC: no setup profile references, stand/environment wording, package-name leakage, or missing reveal action for action-created fields such as contact-person `Фамилия`/`Имя`/`Отчество`.
 
@@ -63,7 +64,8 @@ For every source-backed input restriction, apply this decomposition before writi
 3. Write positive TC for allowed representative values.
 4. Write negative or candidate-negative TC for invalid representative values.
 5. Emit BA questions for the unknown observable rejection mechanism.
-6. Never suppress a positive allowed-class TC because a negative candidate exists.
+6. For shared restrictions across similar fields/classes, state representative/pairwise selected combinations, omitted combinations and residual risk.
+7. Never suppress a positive allowed-class TC because a negative candidate exists.
 
 Example: `Возможен ввод только текстовых символов и специальный символ «-».`
 

@@ -27,6 +27,7 @@
 - Canonical writer output must use parser-supported bold metadata fields from `test-case-format.md`: `**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`. A table-only metadata block such as `| Поле | Значение |` / `| package_id | WP-01 |` is not acceptable for canonical `TC-*`, because validator parsing of required fields and `package_id` relies on the bold-field/runtime-field contract. Do not mix table metadata with the same bold fields either; use bold fields only.
 
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
+- If one `TC-*` references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`), split it unless a single visible source-backed workflow has explicit `Scenario rationale` and separate atomic coverage remains traceable.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
 - `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
 - Не помещай проверяемое действие в предусловия. Для созданного/выбранного/настроенного UI-state укажи путь: setup-действие пользователя с кнопкой/полем/значением/блоком или fixture/setup artifact; если путь неизвестен, используй `GAP-*` / `unclear`.
@@ -52,6 +53,7 @@
 - Постусловия должны соответствовать действиям TC. Для read-only/list-composition/visibility checks используй `Не требуются`, а не шаблонное восстановление измененных данных. Если TC создает repeatable/action-created block, постусловия должны удалять созданный блок, закрывать без сохранения или явно объяснять, почему созданное состояние не сохраняется.
 - Для branch choices (`Да`/`Нет`, confirm/cancel, save/discard, back/stay) expected result должен различать выбранную ветку. Две ветки с одинаковым oracle допустимы только если source прямо задает одинаковое поведение или оформлен `GAP-*`.
 - Negative input TC не должен объединять несколько независимых invalid classes под одним generic oracle. Разделяй классы или используй параметризованный набор только когда реакция на каждый класс source-backed и наблюдаемо одинаковая.
+- Representative/pairwise coverage across similar fields/classes must state selected combinations, omitted combinations and residual risk. Without that, add missing TC/GAP coverage instead of relying on an implicit sample.
 
 ## Field-Level Checks
 

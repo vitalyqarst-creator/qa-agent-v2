@@ -207,6 +207,10 @@ TEST_CASE_TRACEABILITY_TOKEN_RE = re.compile(
     r"\b(ATOM-\d{3,}|GSR\s+\d+|BSR\s+\d+|REQ[-\s]?\d+)\b|PDF",
     flags=re.IGNORECASE,
 )
+SOURCE_BACKED_TEST_CASE_REF_RE = re.compile(
+    r"\b(?:[A-Z0-9-]+-)?ATOM-\d{3,}\b|\b(?:GSR|BSR)\s+\d+\b|\bREQ[-\s]?\d+\b",
+    flags=re.IGNORECASE,
+)
 REQUIREMENT_CODE_RANGE_RE = re.compile(
     r"\b([A-ZА-Я]{2,10})\s*[-:]?\s*(\d+)\b\s*`?\s*(?:-|–|—)\s*`?\s*(?:\1\s*[-:]?\s*)?(\d+)\b",
     flags=re.IGNORECASE,
@@ -723,6 +727,16 @@ def parse_args() -> argparse.Namespace:
         default="compatible",
         help=(
             "Select severity for rolling/current-date boundary TC that uses static calendar dates. "
+            "compatible/diagnostic keep legacy audit artifacts as warnings; "
+            "strict-canary, writer-final and production report them as errors."
+        ),
+    )
+    parser.add_argument(
+        "--atomicity-coverage-policy",
+        choices=("compatible", "diagnostic", "strict-canary", "writer-final", "production"),
+        default="compatible",
+        help=(
+            "Select severity for TC atomicity and representative/pairwise coverage strategy gates. "
             "compatible/diagnostic keep legacy audit artifacts as warnings; "
             "strict-canary, writer-final and production report them as errors."
         ),
@@ -1269,6 +1283,15 @@ def extract_atom_ids_from_text(value: str) -> list[str]:
 
 def extract_any_atom_ids_from_text(value: str) -> list[str]:
     return sorted(set(ANY_ATOM_ID_RE.findall(value)))
+
+
+def extract_source_backed_test_case_refs(value: str) -> list[str]:
+    return sorted(
+        {
+            re.sub(r"\s+", " ", match.group(0).strip().upper())
+            for match in SOURCE_BACKED_TEST_CASE_REF_RE.finditer(value)
+        }
+    )
 
 
 def extract_gap_ids_from_text(value: str) -> list[str]:
@@ -3255,6 +3278,12 @@ def input_restriction_gap_only_severity(policy: str) -> str:
 
 
 def rolling_date_boundary_severity(policy: str) -> str:
+    if policy in {"strict-canary", "writer-final", "production"}:
+        return "error"
+    return "warning"
+
+
+def atomicity_coverage_severity(policy: str) -> str:
     if policy in {"strict-canary", "writer-final", "production"}:
         return "error"
     return "warning"
@@ -10684,8 +10713,17 @@ REPRESENTATIVE_STRATEGY_RE = re.compile(
     r"representative[-_\s]?strategy|"
     r"pairwise[-_\s]?strategy|"
     r"representative\s+selection\s+rationale|"
-    r"residual\s+risk|"
     r"why\s+(?:this|these)\s+representative",
+    flags=re.IGNORECASE,
+)
+REPRESENTATIVE_OMITTED_COMBINATIONS_RE = re.compile(
+    r"omitted\s+combinations|excluded\s+(?:combinations|fields|classes)|"
+    r"not\s+covered|not\s+selected|uncovered\s+(?:combinations|fields|classes)",
+    flags=re.IGNORECASE,
+)
+REPRESENTATIVE_RESIDUAL_RISK_RE = re.compile(r"residual\s+risk", flags=re.IGNORECASE)
+SCENARIO_RATIONALE_RE = re.compile(
+    r"\*\*(?:Scenario\s+rationale|Сценарное\s+обоснование|РЎС†РµРЅР°СЂРЅРѕРµ\s+РѕР±РѕСЃРЅРѕРІР°РЅРёРµ):\*\*",
     flags=re.IGNORECASE,
 )
 VALID_TEST_DATA_VALUE_RE = re.compile(
@@ -11403,6 +11441,7 @@ def validate_test_case_quality_smells(
     *,
     blocks: list[tuple[str, str]],
     rolling_date_boundary_policy: str = "compatible",
+    atomicity_coverage_policy: str = "compatible",
 ) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -11490,6 +11529,8 @@ def validate_test_case_quality_smells(
     date_dependent_absolute_dates: list[str] = []
     rolling_date_boundary_static_data: list[str] = []
     missing_representative_strategy: list[str] = []
+    representative_strategy_without_omitted_combinations: list[str] = []
+    representative_strategy_without_residual_risk: list[str] = []
     action_treated_as_required_field: list[str] = []
     action_without_observable_artifact: list[str] = []
     broad_scenario_test_cases: list[str] = []
@@ -11524,6 +11565,15 @@ def validate_test_case_quality_smells(
     boundary_groups: dict[str, dict[str, Any]] = {}
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and not REPRESENTATIVE_STRATEGY_RE.search(content):
         missing_representative_strategy.append("partial representative coverage is declared without representative/pairwise strategy or residual risk")
+    if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and REPRESENTATIVE_STRATEGY_RE.search(content):
+        if not REPRESENTATIVE_OMITTED_COMBINATIONS_RE.search(content):
+            representative_strategy_without_omitted_combinations.append(
+                "representative/pairwise strategy does not list omitted or excluded combinations/fields/classes"
+            )
+        if not REPRESENTATIVE_RESIDUAL_RISK_RE.search(content):
+            representative_strategy_without_residual_risk.append(
+                "representative/pairwise strategy does not state residual risk"
+            )
     for test_case_id, block in blocks:
         is_calibration_candidate = is_ui_calibration_candidate_block(block)
         expected_result = extract_test_case_expected_result(block)
@@ -11632,6 +11682,7 @@ def validate_test_case_quality_smells(
             )
         )
         atom_ids_in_block = extract_any_atom_ids_from_text(block)
+        source_refs_in_block = extract_source_backed_test_case_refs(block)
         for formulation_label, formulation_pattern in FORBIDDEN_TEST_CASE_FORMULATION_PATTERNS:
             if match := formulation_pattern.search(block):
                 forbidden_formulations.append(
@@ -11946,17 +11997,20 @@ def validate_test_case_quality_smells(
             ):
                 broad_scenario_test_cases.append(f"{test_case_id}:scenario_range_or_deferred_oracle")
 
-        if len(atom_ids_in_block) > 5 and not re.search(
+        source_ref_count = max(len(atom_ids_in_block), len(source_refs_in_block))
+        if source_ref_count > 5 and not re.search(
             r"(?i)\bscenario\b|\buse[-\s]?case\b|сценар|сквозн|e2e|end[-\s]?to[-\s]?end",
             block,
         ):
-            excessive_atom_fan_in.append(f"{test_case_id}:atoms={len(atom_ids_in_block)}")
+            excessive_atom_fan_in.append(f"{test_case_id}:source_refs={source_ref_count}")
         if (
-            len(atom_ids_in_block) > 2
+            source_ref_count > 2
             and not re.search(r"(?i)\bscenario\b|\buse[-\s]?case\b|сценар|сквозн|e2e|end[-\s]?to[-\s]?end", block)
-            and not re.search(r"\*\*Сценарное\s+обоснование:\*\*|\*\*Scenario\s+rationale:\*\*", block, flags=re.IGNORECASE)
+            and not SCENARIO_RATIONALE_RE.search(block)
         ):
-            overmerged_test_cases.append(f"{test_case_id}:atoms={len(atom_ids_in_block)}")
+            overmerged_test_cases.append(
+                f"{test_case_id}:source_refs={source_ref_count}; refs={','.join(source_refs_in_block[:8])}"
+            )
 
     for group, boundary_flags in boundary_groups.items():
         above_max_rejection = boundary_flags["above_max_rejection"]
@@ -13084,10 +13138,11 @@ def validate_test_case_quality_smells(
         )
 
     if missing_representative_strategy:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
             Finding(
                 id="missing-representative-strategy",
-                severity="warning",
+                severity=severity,
                 category="test-design",
                 title="Partial similar-field coverage lacks representative strategy",
                 details=(
@@ -13101,6 +13156,45 @@ def validate_test_case_quality_smells(
                     "Add a representative or pairwise strategy with selected fields/classes, excluded similar "
                     "fields, rationale and residual risk; otherwise add the missing TC/GAP coverage."
                 ),
+            )
+        )
+
+    if representative_strategy_without_omitted_combinations:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="representative-strategy-without-omitted-combinations",
+                severity=severity,
+                category="test-design",
+                title="Representative strategy omits untested combinations",
+                details=(
+                    "A representative or pairwise strategy is only auditable when it states which similar fields, "
+                    "classes or combinations are intentionally not covered by executable TC."
+                ),
+                path=display_path,
+                evidence=representative_strategy_without_omitted_combinations[:20],
+                recommended_action=(
+                    "List omitted fields/classes/combinations, or add the missing TC/GAP items instead of relying "
+                    "on an implicit representative shortcut."
+                ),
+            )
+        )
+
+    if representative_strategy_without_residual_risk:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="representative-strategy-without-residual-risk",
+                severity=severity,
+                category="test-design",
+                title="Representative strategy omits residual risk",
+                details=(
+                    "Representative or pairwise coverage still leaves field-specific and combination-specific risk. "
+                    "The artifact must make that risk explicit so reviewer sign-off is not based on hidden coverage debt."
+                ),
+                path=display_path,
+                evidence=representative_strategy_without_residual_risk[:20],
+                recommended_action="Add a residual risk statement or expand executable TC/GAP coverage.",
             )
         )
 
@@ -13122,10 +13216,11 @@ def validate_test_case_quality_smells(
         )
 
     if excessive_atom_fan_in:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
             Finding(
                 id="test-case-excessive-atom-fan-in",
-                severity="warning",
+                severity=severity,
                 category="atomarity",
                 title="Some test cases reference too many atoms without scenario rationale",
                 details=(
@@ -13139,10 +13234,11 @@ def validate_test_case_quality_smells(
         )
 
     if overmerged_test_cases:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
             Finding(
                 id="test-case-overmerged-atoms-without-rationale",
-                severity="warning",
+                severity=severity,
                 category="atomarity",
                 title="Test cases reference more than two atoms without scenario rationale",
                 details=(
@@ -13195,6 +13291,8 @@ def validate_test_case_quality_smells(
         or date_dependent_absolute_dates
         or rolling_date_boundary_static_data
         or missing_representative_strategy
+        or representative_strategy_without_omitted_combinations
+        or representative_strategy_without_residual_risk
         or action_treated_as_required_field
         or action_without_observable_artifact
         or gap_placeholder_sections
@@ -13443,6 +13541,7 @@ def validate_test_case_file(
     test_case_policy: str = "compatible",
     input_restriction_gap_policy: str = "compatible",
     rolling_date_boundary_policy: str = "compatible",
+    atomicity_coverage_policy: str = "compatible",
     known_test_case_ids: set[str] | None = None,
     suppress_blocked_input_gate_failures: bool = False,
 ) -> tuple[list[Finding], list[Check]]:
@@ -13706,6 +13805,7 @@ def validate_test_case_file(
         root,
         blocks=blocks,
         rolling_date_boundary_policy=rolling_date_boundary_policy,
+        atomicity_coverage_policy=atomicity_coverage_policy,
     )
     findings.extend(smell_findings)
     checks.extend(smell_checks)
@@ -17521,6 +17621,7 @@ def validate(
     test_case_policy: str = "compatible",
     input_restriction_gap_policy: str = "compatible",
     rolling_date_boundary_policy: str = "compatible",
+    atomicity_coverage_policy: str = "compatible",
     reviewer_signoff_policy: str = "compatible",
     final_alias_policy: str = "compatible",
     session_log_policy: str = "compatible",
@@ -17732,6 +17833,7 @@ def validate(
             test_case_policy=test_case_policy,
             input_restriction_gap_policy=input_restriction_gap_policy,
             rolling_date_boundary_policy=rolling_date_boundary_policy,
+            atomicity_coverage_policy=atomicity_coverage_policy,
             known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
             suppress_blocked_input_gate_failures=path.resolve() in blocked_writer_gate_suppression_paths,
         )
@@ -17967,6 +18069,7 @@ def main() -> int:
         test_case_policy=args.test_case_policy,
         input_restriction_gap_policy=args.input_restriction_gap_policy,
         rolling_date_boundary_policy=args.rolling_date_boundary_policy,
+        atomicity_coverage_policy=args.atomicity_coverage_policy,
         reviewer_signoff_policy=args.reviewer_signoff_policy,
         final_alias_policy=args.final_alias_policy,
         session_log_policy=args.session_log_policy,

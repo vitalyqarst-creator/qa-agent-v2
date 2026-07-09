@@ -14193,6 +14193,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "Partial coverage for similar fields with the same restriction is used in this scope.",
                         "Representative strategy: Last name is selected as the longest visible surname field.",
+                        "Omitted combinations: First name and middle name are not covered for the same letters-only acceptance class.",
                         "Residual risk: First name and middle name may have field-specific UI defects; validator coverage remains limited.",
                         "",
                         "## TC-REP-001",
@@ -14219,6 +14220,292 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("missing-representative-strategy", finding_ids)
+        self.assertNotIn("representative-strategy-without-omitted-combinations", finding_ids)
+        self.assertNotIn("representative-strategy-without-residual-risk", finding_ids)
+
+    def test_partial_similar_field_coverage_without_strategy_errors_in_strict_canary_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "representative-missing.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Representative missing",
+                        "",
+                        "## Coverage Summary",
+                        "",
+                        "Partial coverage for similar fields with the same restriction is used in this scope.",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Last name accepts letters",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Last name: `Ivanov`.",
+                        "**Steps:**",
+                        "1. Enter `Ivanov` into Last name.",
+                        "**Expected Result:** Last name contains `Ivanov`.",
+                        "**Postconditions:**",
+                        "- Clear Last name.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["missing-representative-strategy"]["severity"], "error")
+
+    def test_partial_similar_field_coverage_without_strategy_warns_in_diagnostic_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "representative-missing.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Representative missing",
+                        "",
+                        "## Coverage Summary",
+                        "",
+                        "Partial coverage for similar fields with the same restriction is used in this scope.",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Last name accepts letters",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Last name: `Ivanov`.",
+                        "**Steps:**",
+                        "1. Enter `Ivanov` into Last name.",
+                        "**Expected Result:** Last name contains `Ivanov`.",
+                        "**Postconditions:**",
+                        "- Clear Last name.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "diagnostic",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 0)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["missing-representative-strategy"]["severity"], "warning")
+
+    def test_representative_strategy_without_omitted_combinations_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "representative-incomplete.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Representative incomplete",
+                        "",
+                        "## Coverage Summary",
+                        "",
+                        "Partial coverage for similar fields with the same restriction is used in this scope.",
+                        "Representative strategy: Last name digit rejection covers the shared letters-only rule.",
+                        "Residual risk: other name fields may have field-specific UI defects.",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Last name rejects digits",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Last name: `Ivanov1`.",
+                        "**Steps:**",
+                        "1. Enter `Ivanov1` into Last name.",
+                        "**Expected Result:** Last name does not accept `Ivanov1` as valid.",
+                        "**Postconditions:**",
+                        "- Clear Last name.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "writer-final",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["representative-strategy-without-omitted-combinations"]["severity"], "error")
+
+    def test_representative_strategy_without_residual_risk_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "representative-incomplete.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Representative incomplete",
+                        "",
+                        "## Coverage Summary",
+                        "",
+                        "Partial coverage for similar fields with the same restriction is used in this scope.",
+                        "Pairwise strategy: surname digit and first-name special symbol cover field x invalid-class pairs.",
+                        "Omitted combinations: patronymic digit and surname special symbol are not covered.",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Last name rejects digits",
+                        "**Priority:** High",
+                        "**Type:** Negative",
+                        "**Traceability:** `BSR 1`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Last name: `Ivanov1`.",
+                        "**Steps:**",
+                        "1. Enter `Ivanov1` into Last name.",
+                        "**Expected Result:** Last name does not accept `Ivanov1` as valid.",
+                        "**Postconditions:**",
+                        "- Clear Last name.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "production",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["representative-strategy-without-residual-risk"]["severity"], "error")
+
+    def test_overmerged_source_backed_tc_without_scenario_rationale_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "overmerged.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Overmerged",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Contact address block is shown",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Open the contact block.",
+                        "**Expected Result:** Contact address block is shown.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertEqual(findings["test-case-overmerged-atoms-without-rationale"]["severity"], "error")
+
+    def test_overmerged_source_backed_tc_with_scenario_rationale_passes_atomicity_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "overmerged.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Overmerged documented",
+                        "",
+                        "## TC-REP-001",
+                        "**Title:** Contact address block is shown",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Traceability:** `BSR 1`; `BSR 2`; `BSR 3`",
+                        "**Scenario rationale:** One visible user workflow opens the address block and exposes the three source-backed labels together; separate atomic coverage remains in linked matrix rows.",
+                        "**Preconditions:**",
+                        "- Form is open.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Open the contact block.",
+                        "**Expected Result:** Contact address block is shown.",
+                        "**Postconditions:**",
+                        "- Not required.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--atomicity-coverage-policy",
+                "strict-canary",
+                "--fail-on",
+                "error",
+            )
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-overmerged-atoms-without-rationale", finding_ids)
 
     def test_rolling_date_boundary_static_future_date_fails_in_strict_profile(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
