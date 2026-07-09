@@ -25,6 +25,13 @@
 | `FT4AutoFinFinal.xhtml` | Section 4.3, Table 7 rows 66-72 | `BSR 173`-`BSR 185` | Contact-person FIO, relation, phone and birth date fields after adding a contact person. | Not specified. | Use `BSR 35`. | Added contact person with FIO, relation, phone and birth date. | Exact save action is not described in these rows. |
 | `FT4AutoFinFinal.xhtml` | Section 4.3, Table 7 rows 72-73 | `BSR 186`-`BSR 189` | Add and delete contact-person row. | Not specified. | Use `BSR 35`. | Deleted contact person remains absent after reopen. | Exact save action and restore/cleanup strategy require BA/UI confirmation. |
 
+## UI Block Naming
+
+| section 4.3 source-backed term | artifact term | non-selected appendix/legacy term | decision |
+| --- | --- | --- | --- |
+| `Блок «Контакты клиента»` | `Контакты клиента` | `Контактная информация` | Use the section 4.3 term in persistence smoke TC. The appendix term is not used as the primary block label for this scope. |
+| `Блок «Контактные лица» (блок-повторитель)` | `Контактные лица` | `Контактное лицо` | Use the section 4.3 repeated-block term in persistence smoke TC. Singular wording may describe an entity, not the UI block name. |
+
 ## Decision
 
 Exact save action for the application card is not source-backed in the inspected section 4.3 rows or the adjacent source-backed reopen action. The persistence smoke TC therefore use confirmation-required save wording and are marked `candidate-persistence-calibration`.
@@ -41,3 +48,4 @@ Executable after confirmation:
 | `BA-PS-001` | Exact save action is not source-backed. | What exact UI action saves changes in the application card for section 4.3? Is it manual save, autosave, transition save, or another mechanism? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
 | `BA-PS-002` | Exit-after-save path is not source-backed. | After saving, how should a tester leave the card before reopening it without discarding saved data? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
 | `BA-PS-003` | Cleanup mechanics are not source-backed. | Which values/entities can be safely reset, and should smoke tests use isolated applications instead of restoring shared data? | `TC-AF43-PS-001`..`TC-AF43-PS-007` |
+| `BA-PS-004` | Application date source for rolling birth-date data is not source-backed. | Which date must be used as `D` for contact-person birth-date calculations: current UI business date, server date, or tester local date? | `TC-AF43-PS-006`; setup in `TC-AF43-PS-007` |

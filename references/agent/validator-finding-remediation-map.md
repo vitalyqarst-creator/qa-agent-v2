@@ -7,6 +7,7 @@ Default validator remediation is finding-targeted. Read the validator finding id
 | `source-backed-input-restriction-gap-only` | Add candidate-negative TC with a concrete invalid value and `ui-calibration-required`, or prove the restriction is non-UI/internal. | `references/agent/negative-ui-calibration-policy.md` |
 | `test-case-ui-calibration-candidate-missing-concrete-invalid-value` | Add a concrete representative invalid value to candidate UI calibration TC. | `references/agent/negative-ui-calibration-policy.md` |
 | `rolling-date-boundary-static-test-data` | Replace fixed date-only test data with `D` / `D + 1 calendar day` formula; fixed dates may remain examples only. | `references/qa/coverage-input-boundaries.md` |
+| `rolling-date-boundary-unformalized-relative-value` | Define `D`, state the output format, include an example value, and assert the calculated value instead of a raw relative placeholder. | `references/qa/coverage-input-boundaries.md` |
 | `test-case-overmerged-atoms-without-rationale` | Split independent obligations or add source-backed scenario rationale and keep atomic checks elsewhere. | `references/qa/test-design-review-rubric.md` |
 | `test-case-excessive-atom-fan-in` | Split high fan-in TC or document why one user workflow is the intended scenario container. | `references/qa/test-design-review-rubric.md` |
 | `scenario-rationale-noncanonical-field` | Rename the field to `**Сценарное обоснование:**`; do not change TC split unless another finding requires it. | `references/qa/test-design-review-rubric.md` |
@@ -32,6 +33,11 @@ Default validator remediation is finding-targeted. Read the validator finding id
 | `persistence-tc-closes-without-saving` | Save and verify persisted data before cleanup; do not use close-without-saving as a persistence TC exit path. | `references/agent/runtime-quality-rule-cards.md` |
 | `persistence-tc-unsourced-save-action` | Cite the save action source or replace the concrete save control with a confirmation-required save step. | `references/agent/runtime-quality-rule-cards.md` |
 | `persistence-smoke-without-cleanup-strategy` | Add cleanup/isolation postconditions so saved smoke data does not silently remain in the application. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-trace-not-exercised` | Remove the unexercised BSR from primary trace, move it to supporting/setup notes, or add a TC that directly exercises it. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-precondition-passive-state` | Rewrite preconditions as action-oriented setup steps that open/navigate/create/verify the required state. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-delete-tc-not-self-contained` | Create and save the entity in setup, reopen and verify it exists, then delete/save/reopen; or cite a defined fixture. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-grouped-smoke-without-residual-risk` | Add explicit grouped-smoke rationale and residual risk, or split the grouped check into atomic persistence TC. | `references/agent/runtime-quality-rule-cards.md` |
+| `source-backed-ui-term-inconsistency` | Normalize to the source-backed UI block term for the active section or document a source/appended-term naming decision. | `references/agent/runtime-quality-rule-cards.md` |
 | `generated-artifact-used-as-source-of-truth` | Treat old generated artifacts only as diagnostic fixtures; cite source rows/BSR/FT artifacts for decisions. | `references/agent/source-row-inventory-format.md` |
 | `production-setup-profile-reference` | Replace production setup profile/stand/environment leakage with inline action-oriented preconditions. | `references/qa/test-case-format.md` |
 | `test-case-generic-test-data-reference-smell` | Put concrete literal, fixture value or formula in test data and reference it in the step. | `references/qa/test-case-format.md` |

@@ -11135,6 +11135,74 @@ PERSISTENCE_CLEANUP_STRATEGY_RE = re.compile(
     r"cleanup|isolation|restore|delete\s+test|reset|вернуть|восстанов|удалить\s+тест|очистить|изолирован",
     flags=re.IGNORECASE,
 )
+PERSISTENCE_PASSIVE_PRECONDITION_RE = re.compile(
+    r"(?m)^\s*(?:\d+\.\s*)?(?:"
+    r"(?:application|card|form|block|field|record|entity|contact|phone|address)[^\n]{0,80}\b(?:is|are)\s+(?:open|opened|available|filled|created|present|displayed|selected|set|exists)\b|"
+    r"(?:existing|created|available|filled|selected)\s+(?:application|card|form|block|field|record|entity|contact|phone|address)\b|"
+    r"(?:Открыт|Открыта|Открыто|Открыты|Заполнен|Заполнена|Заполнено|Заполнены|Создан|Создана|Создано|Созданы|Выбран|Выбрана|Выбрано|Выбраны)\b|"
+    r"(?:В\s+блоке|На\s+форме)[^\n]{0,120}\b(?:есть|отображается|заполнен|заполнена|создан)"
+    r")",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_TRACE_NOT_EXERCISED_RULES: tuple[tuple[str, re.Pattern[str], re.Pattern[str]], ...] = (
+    (
+        "BSR 119",
+        re.compile(r"\bBSR\s*119\b", flags=re.IGNORECASE),
+        re.compile(r"ручн|manual|decompos|разлож|компонент|пол[ея]", flags=re.IGNORECASE),
+    ),
+    (
+        "BSR 148",
+        re.compile(r"\bBSR\s*148\b", flags=re.IGNORECASE),
+        re.compile(r"ручн|manual|видим|visibility", flags=re.IGNORECASE),
+    ),
+    (
+        "BSR 167",
+        re.compile(r"\bBSR\s*167\b", flags=re.IGNORECASE),
+        re.compile(r"добав\w*\s+(?:телефон|phone)|add\s+(?:phone|telephone)|кнопк\w*\s+добав", flags=re.IGNORECASE),
+    ),
+)
+PERSISTENCE_DELETE_TC_SIGNAL_RE = re.compile(
+    r"delete|deleted|deletion|remove|removed|removal|удал\w*",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_DELETE_SELF_CONTAINED_SETUP_RE = re.compile(
+    r"(?:add|create|созда|добав)[\s\S]{0,240}(?:save|сохран)[\s\S]{0,240}"
+    r"(?:reopen|open\s+the\s+same|повторн\w*\s+откры|открыть\s+ту\s+же)[\s\S]{0,240}"
+    r"(?:verify|ensure|убедиться|проверить|отображ)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_DELETE_FIXTURE_RE = re.compile(
+    r"fixture|test\s+fixture|defined\s+test\s+data|предопределенн\w*\s+фикстур|определенн\w*\s+фикстур",
+    flags=re.IGNORECASE,
+)
+ROLLING_DATE_UNFORMALIZED_RELATIVE_RE = re.compile(
+    r"\bD\s*[-+]\s*\d+\s*(?:years?|лет|год|года|calendar\s+years?)\b",
+    flags=re.IGNORECASE,
+)
+ROLLING_DATE_FORMALIZATION_RE = re.compile(
+    r"(?:DD\.MM\.YYYY|ДД\.ММ\.ГГГГ)[\s\S]{0,220}(?:example|пример|\d{2}\.\d{2}\.\d{4})|"
+    r"(?:example|пример|\d{2}\.\d{2}\.\d{4})[\s\S]{0,220}(?:DD\.MM\.YYYY|ДД\.ММ\.ГГГГ)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_GROUPED_PHONE_EMAIL_RE = re.compile(
+    r"(?:phone|телефон|мобильн)[\s\S]{0,420}(?:e-?mail|email|электронн)|"
+    r"(?:e-?mail|email|электронн)[\s\S]{0,420}(?:phone|телефон|мобильн)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_GROUPED_SMOKE_RISK_RE = re.compile(
+    r"(?:grouped|representative|smoke|сгрупп|минимальн)[\s\S]{0,260}(?:residual\s+risk|остаточн\w*\s+риск|риск)|"
+    r"(?:residual\s+risk|остаточн\w*\s+риск|риск)[\s\S]{0,260}(?:grouped|representative|smoke|сгрупп|минимальн)",
+    flags=re.IGNORECASE,
+)
+SOURCE_BACKED_UI_TERM_INCONSISTENCY_RE = re.compile(
+    r"(?:Контакты клиента[\s\S]{0,1200}Контактная информация|Контактная информация[\s\S]{0,1200}Контакты клиента|"
+    r"Контактные лица[\s\S]{0,1200}[`\"'«]Контактное лицо[`\"'»]|[`\"'«]Контактное лицо[`\"'»][\s\S]{0,1200}Контактные лица)",
+    flags=re.IGNORECASE,
+)
+SOURCE_BACKED_UI_TERM_DECISION_RE = re.compile(
+    r"UI\s+Block\s+Naming|UI\s+block\s+naming|source-backed\s+term|Блок\s+«Контакты клиента»|Блок\s+«Контактные лица»",
+    flags=re.IGNORECASE,
+)
 GENERATED_ARTIFACT_SOLE_SOURCE_RE = re.compile(
     r"(?:generated|previous|old|v\d+)[^\n.;|]{0,120}"
     r"(?:used\s+as|is|was|treated\s+as|became)[^\n.;|]{0,60}"
@@ -12111,6 +12179,12 @@ def validate_test_case_quality_smells(
     persistence_tc_closes_without_saving: list[str] = []
     persistence_tc_unsourced_save_action: list[str] = []
     persistence_smoke_without_cleanup_strategy: list[str] = []
+    persistence_trace_not_exercised: list[str] = []
+    persistence_precondition_passive_state: list[str] = []
+    persistence_delete_tc_not_self_contained: list[str] = []
+    rolling_date_boundary_unformalized_relative_value: list[str] = []
+    persistence_grouped_smoke_without_residual_risk: list[str] = []
+    source_backed_ui_term_inconsistency: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
@@ -12249,6 +12323,41 @@ def validate_test_case_quality_smells(
         persistence_context = " ".join([title, scenario_rationale, expected_result])
         persistence_body = " ".join([steps, expected_result, postconditions])
         if PERSISTENCE_TC_SIGNAL_RE.search(persistence_context):
+            if preconditions and PERSISTENCE_PASSIVE_PRECONDITION_RE.search(preconditions):
+                persistence_precondition_passive_state.append(
+                    f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}"
+                )
+            exercise_context = " ".join([title, scenario_rationale, preconditions, steps, expected_result])
+            for ref_label, ref_re, exercise_re in PERSISTENCE_TRACE_NOT_EXERCISED_RULES:
+                if ref_re.search(traceability) and not exercise_re.search(exercise_context):
+                    persistence_trace_not_exercised.append(
+                        f"{test_case_id}:{ref_label} not exercised by steps/rationale"
+                    )
+            delete_context = " ".join([title, scenario_rationale, preconditions, steps, expected_result])
+            if (
+                PERSISTENCE_DELETE_TC_SIGNAL_RE.search(delete_context)
+                and not PERSISTENCE_DELETE_SELF_CONTAINED_SETUP_RE.search(preconditions)
+                and not PERSISTENCE_DELETE_FIXTURE_RE.search(preconditions)
+            ):
+                persistence_delete_tc_not_self_contained.append(
+                    f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}"
+                )
+            rolling_date_context = " ".join([test_data, steps, expected_result])
+            if (
+                ROLLING_DATE_UNFORMALIZED_RELATIVE_RE.search(rolling_date_context)
+                and not ROLLING_DATE_FORMALIZATION_RE.search(rolling_date_context)
+            ):
+                rolling_date_boundary_unformalized_relative_value.append(
+                    f"{test_case_id}:date_data={rolling_date_context[:180]}"
+                )
+            grouped_context = " ".join([title, scenario_rationale, test_data, steps, expected_result])
+            if (
+                PERSISTENCE_GROUPED_PHONE_EMAIL_RE.search(grouped_context)
+                and not PERSISTENCE_GROUPED_SMOKE_RISK_RE.search(grouped_context)
+            ):
+                persistence_grouped_smoke_without_residual_risk.append(
+                    f"{test_case_id}:scenario_rationale={scenario_rationale[:180] or '<missing>'}"
+                )
             if not PERSISTENCE_SAVE_ACTION_RE.search(steps):
                 persistence_tc_without_save_action.append(f"{test_case_id}:steps={steps[:180] or '<missing>'}")
             if not (
@@ -12274,6 +12383,11 @@ def validate_test_case_quality_smells(
                 persistence_smoke_without_cleanup_strategy.append(
                     f"{test_case_id}:postconditions={postconditions[:180] or '<missing>'}"
                 )
+        if (
+            SOURCE_BACKED_UI_TERM_INCONSISTENCY_RE.search(block)
+            and not SOURCE_BACKED_UI_TERM_DECISION_RE.search(content)
+        ):
+            source_backed_ui_term_inconsistency.append(f"{test_case_id}:mixed section/appended UI block terms")
         if production_test_case_file:
             if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
                 environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
@@ -14145,6 +14259,94 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if persistence_trace_not_exercised:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-trace-not-exercised",
+                severity=severity,
+                category="traceability",
+                title="Persistence TC traces a requirement it does not exercise",
+                details="A persistence smoke TC must not list a BSR as primary trace when the steps and rationale only use it as setup or do not exercise it at all.",
+                path=display_path,
+                evidence=persistence_trace_not_exercised[:20],
+                recommended_action="Remove the BSR from primary trace, move it to supporting/setup notes, or add a TC that directly exercises it.",
+            )
+        )
+
+    if persistence_precondition_passive_state:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-precondition-passive-state",
+                severity=severity,
+                category="test-design",
+                title="Persistence TC uses passive state as a precondition",
+                details="Persistence smoke preconditions must describe how to reach the setup state, not only state that the card/block/entity is already open or present.",
+                path=display_path,
+                evidence=persistence_precondition_passive_state[:20],
+                recommended_action="Rewrite preconditions as action-oriented setup steps such as open the card, navigate to the block, add the entity and verify readiness.",
+            )
+        )
+
+    if persistence_delete_tc_not_self_contained:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-delete-tc-not-self-contained",
+                severity=severity,
+                category="test-design",
+                title="Persistence deletion TC is not self-contained",
+                details="A deletion persistence TC that depends on an existing row/entity is not reproducible unless it creates the row itself or references a defined fixture.",
+                path=display_path,
+                evidence=persistence_delete_tc_not_self_contained[:20],
+                recommended_action="Create and save the entity in setup, reopen and verify it exists, then perform the delete/save/reopen check; alternatively cite a defined fixture.",
+            )
+        )
+
+    if rolling_date_boundary_unformalized_relative_value:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="rolling-date-boundary-unformalized-relative-value",
+                severity=severity,
+                category="test-data",
+                title="Relative rolling date value is not formalized",
+                details="Relative date data such as `D - 30 years` must define D, the output format and an example value so execution is reproducible.",
+                path=display_path,
+                evidence=rolling_date_boundary_unformalized_relative_value[:20],
+                recommended_action="Define D, use an explicit format such as DD.MM.YYYY, include an example, and assert the calculated value rather than a raw placeholder string.",
+            )
+        )
+
+    if persistence_grouped_smoke_without_residual_risk:
+        findings.append(
+            Finding(
+                id="persistence-grouped-smoke-without-residual-risk",
+                severity="warning",
+                category="test-design",
+                title="Grouped persistence smoke lacks residual risk",
+                details="A grouped phone/e-mail persistence smoke may be acceptable, but the TC or matrix must state the grouping rationale and residual risk.",
+                path=display_path,
+                evidence=persistence_grouped_smoke_without_residual_risk[:20],
+                recommended_action="Add explicit grouped-smoke rationale and residual risk, or split into atomic persistence TC.",
+            )
+        )
+
+    if source_backed_ui_term_inconsistency:
+        findings.append(
+            Finding(
+                id="source-backed-ui-term-inconsistency",
+                severity="warning",
+                category="traceability",
+                title="Artifact mixes source-backed UI block terms",
+                details="A scope should consistently use the source-backed UI block term unless a naming decision documents why another term is present.",
+                path=display_path,
+                evidence=source_backed_ui_term_inconsistency[:20],
+                recommended_action="Normalize to the section source term or add a UI block naming decision that maps source and appendix terms.",
+            )
+        )
+
     if persist_coverage_missing:
         findings.append(
             Finding(
@@ -14314,6 +14516,12 @@ def validate_test_case_quality_smells(
         or persistence_tc_closes_without_saving
         or persistence_tc_unsourced_save_action
         or persistence_smoke_without_cleanup_strategy
+        or persistence_trace_not_exercised
+        or persistence_precondition_passive_state
+        or persistence_delete_tc_not_self_contained
+        or rolling_date_boundary_unformalized_relative_value
+        or persistence_grouped_smoke_without_residual_risk
+        or source_backed_ui_term_inconsistency
         or noncanonical_scenario_rationale_fields
         or scenario_rationale_domain_mismatches
         or scenario_rationale_too_generic

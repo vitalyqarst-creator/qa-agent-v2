@@ -15423,21 +15423,34 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
         self.assertNotIn("field-level-canary-without-persistence-scope-note", finding_ids)
 
-    def write_persistence_fixture(self, fixture_root: Path, *, steps: list[str], expected: str, postconditions: str, extra_fields: list[str] | None = None) -> Path:
+    def write_persistence_fixture(
+        self,
+        fixture_root: Path,
+        *,
+        steps: list[str],
+        expected: str,
+        postconditions: str,
+        extra_fields: list[str] | None = None,
+        preconditions: str = "Open application card for editing.",
+        traceability: str = "`BSR 35`; `BSR 162`",
+        title: str = "Saved client phone persists after reopening the application card",
+        test_data: str = "Client phone: `9234567890`.",
+        scenario_rationale: str = "Persistence smoke for a valid card field.",
+    ) -> Path:
         test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "persistence.md"
         test_case_file.parent.mkdir(parents=True)
         fields = [
             "# Persistence",
             "",
             "## TC-PS-001",
-            "**Title:** Saved client phone persists after reopening the application card",
+            f"**Title:** {title}",
             "**Type:** Positive",
             "**Priority:** High",
             "**package_id:** PS-01",
-            "**Traceability:** `BSR 35`; `BSR 162`",
-            "**Сценарное обоснование:** Persistence smoke for a valid card field.",
-            "**Preconditions:** Application card is open for editing.",
-            "**Test Data:** Client phone: `9234567890`.",
+            f"**Traceability:** {traceability}",
+            f"**Сценарное обоснование:** {scenario_rationale}",
+            f"**Preconditions:** {preconditions}",
+            f"**Test Data:** {test_data}",
         ]
         if extra_fields:
             fields.extend(extra_fields)
@@ -15579,6 +15592,252 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
         self.assertNotIn("persistence-tc-unsourced-save-action", finding_ids)
+
+    def test_persistence_passive_precondition_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                preconditions="Application card is open for editing.",
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-precondition-passive-state"]["severity"], "error")
+
+    def test_persistence_action_oriented_precondition_passes_strict_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                preconditions="Open application card for editing and navigate to the Contacts block.",
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-precondition-passive-state", finding_ids)
+
+    def test_persistence_trace_not_exercised_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                traceability="`BSR 35`; `BSR 119`",
+                title="Selected DaData address persists after reopening the card",
+                scenario_rationale="Persistence smoke for selected DaData address display after reopen.",
+                test_data="Registration address: `g Krasnoyarsk, Mira 10`.",
+                steps=[
+                    "1. Enter `g Krasnoyarsk, Mira 10` into Registration address.",
+                    "2. Select the DaData suggestion.",
+                    "3. Save application card using the confirmed action.",
+                    "4. Close and reopen the same card.",
+                ],
+                expected="After reopen, Registration address displays saved value `g Krasnoyarsk, Mira 10`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-trace-not-exercised"]["severity"], "error")
+
+    def test_persistence_delete_tc_without_self_contained_setup_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Deleted contact person remains absent after reopening the card",
+                traceability="`BSR 35`; `BSR 186`; `BSR 187`",
+                preconditions="A contact person exists for deletion.",
+                test_data="Contact person: `Petrov Anna`.",
+                steps=[
+                    "1. Delete contact person `Petrov Anna`.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, contact person `Petrov Anna` is not displayed.",
+                postconditions="Restore the contact person if shared data was used.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-delete-tc-not-self-contained"]["severity"], "error")
+
+    def test_persistence_delete_tc_with_self_contained_setup_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Deleted contact person remains absent after reopening the card",
+                traceability="`BSR 35`; `BSR 186`; `BSR 187`",
+                preconditions=(
+                    "Add contact person `Petrov Anna`, save application card, close and reopen the same card, "
+                    "and verify the contact person is displayed before deletion."
+                ),
+                test_data="Contact person: `Petrov Anna`.",
+                steps=[
+                    "1. Delete contact person `Petrov Anna`.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, contact person `Petrov Anna` is not displayed.",
+                postconditions="Restore the contact person if shared data was used.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-delete-tc-not-self-contained", finding_ids)
+
+    def test_rolling_date_relative_value_without_format_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Contact person birth date persists after reopening the card",
+                test_data="Birth date: `D - 30 years`.",
+                steps=[
+                    "1. Enter birth date `D - 30 years`.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, birth date displays `D - 30 years`.",
+                postconditions="Delete the added contact person or use isolated data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["rolling-date-boundary-unformalized-relative-value"]["severity"], "error")
+
+    def test_rolling_date_relative_value_with_format_and_example_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Contact person birth date persists after reopening the card",
+                test_data=(
+                    "Reference date `D`: current application date. Birth date: `D - 30 calendar years` "
+                    "in `DD.MM.YYYY`. Example: if `D = 09.07.2026`, use `09.07.1996`."
+                ),
+                steps=[
+                    "1. Enter the calculated birth date.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, birth date displays the calculated `D - 30 calendar years` value.",
+                postconditions="Delete the added contact person or use isolated data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("rolling-date-boundary-unformalized-relative-value", finding_ids)
+
+    def test_grouped_persistence_smoke_without_residual_risk_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Client phone and e-mail persist after reopening the card",
+                scenario_rationale="Persistence smoke for client contacts.",
+                test_data="Mobile phone: `9234567890`. E-mail: `ivanov@example.ru`.",
+                steps=[
+                    "1. Enter mobile phone and e-mail.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, mobile phone and e-mail display the saved values.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-grouped-smoke-without-residual-risk"]["severity"], "warning")
+
+    def test_grouped_persistence_smoke_with_residual_risk_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                title="Client phone and e-mail persist after reopening the card",
+                scenario_rationale=(
+                    "Grouped persistence smoke for client contacts. Residual risk: a field-specific phone or "
+                    "e-mail persistence defect may require later atomic TC."
+                ),
+                test_data="Mobile phone: `9234567890`. E-mail: `ivanov@example.ru`.",
+                steps=[
+                    "1. Enter mobile phone and e-mail.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, mobile phone and e-mail display the saved values.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-grouped-smoke-without-residual-risk", finding_ids)
+
+    def test_source_backed_ui_term_inconsistency_warns_without_naming_decision(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                preconditions="Open application card and navigate to the Contacts block.",
+                test_data="Use block labels `Контакты клиента` and `Контактная информация`.",
+                steps=[
+                    "1. Enter `9234567890` in block `Контактная информация`.",
+                    "2. Save application card using the confirmed action.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, block `Контакты клиента` displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["source-backed-ui-term-inconsistency"]["severity"], "warning")
 
     def test_independent_wide_canary_v3_reports_human_review_quality_findings(self) -> None:
         artifact = (
