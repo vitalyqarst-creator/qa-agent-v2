@@ -11097,6 +11097,44 @@ PERSISTENCE_SCOPE_NOTE_RE = re.compile(
     r"(?:follow[-\s]?up|out\s+of\s+scope|separate\s+(?:suite|smoke)|not\s+a\s+full)[\s\S]{0,160}(?:persist|save)",
     flags=re.IGNORECASE,
 )
+PERSISTENCE_TC_SIGNAL_RE = re.compile(
+    r"persist|save\s*/\s*reopen|save\s+and\s+reopen|saved\s+value|reopen(?:ed)?\s+card|"
+    r"сохран\w*[\s\S]{0,80}(?:повторн\w*\s+откры|отображ|значен|карточ)|"
+    r"повторн\w*\s+откры[\s\S]{0,80}(?:сохран\w*|значен)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_SAVE_ACTION_RE = re.compile(
+    r"\bsave\b|save\s+card|save\s+application|сохран\w*\s+(?:карточк|заявк|данн|изменен|значен)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_REOPEN_ACTION_RE = re.compile(
+    r"(?:close|leave|exit|reload|refresh|reopen)[\s\S]{0,180}(?:reopen|reload|refresh|open\s+the\s+same\s+card|same\s+card)|"
+    r"(?:закры|покин|перезагруз)[\s\S]{0,180}(?:повторн\w*\s+откры|открыть\s+ту\s+же|перезагруз)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_REOPEN_VERIFICATION_RE = re.compile(
+    r"(?:after|после)\s+(?:reopen|reload|refresh|повторн\w*\s+откры|перезагруз)[\s\S]{0,180}"
+    r"(?:display|shown|visible|saved|отображ|видн|сохран)",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_CLOSE_WITHOUT_SAVE_RE = re.compile(
+    r"close\s+without\s+sav|without\s+saving|закры\w*[\s\S]{0,60}без\s+сохран|без\s+сохран\w*[\s\S]{0,60}закры",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_CONCRETE_UNSOURCED_SAVE_RE = re.compile(
+    r"(?:click|press|select|tap)\s+(?:the\s+)?[`\"']?(?:save|сохранить)[`\"']?|"
+    r"(?:нажать|выбрать|кликнуть)\s+(?:кнопк\w*\s+)?[`\"'«]?(?:сохранить|сохранение|сохранить заявку)[`\"'»]?",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_SAVE_SOURCE_OR_CONFIRMATION_RE = re.compile(
+    r"source[-\s]?backed|source\s+inventory|подтвержден\w*|Требуется\s+подтверждение[\s\S]{0,180}сохран|"
+    r"BA\s+question[\s\S]{0,180}save|вопрос[\s\S]{0,180}сохран",
+    flags=re.IGNORECASE,
+)
+PERSISTENCE_CLEANUP_STRATEGY_RE = re.compile(
+    r"cleanup|isolation|restore|delete\s+test|reset|вернуть|восстанов|удалить\s+тест|очистить|изолирован",
+    flags=re.IGNORECASE,
+)
 GENERATED_ARTIFACT_SOLE_SOURCE_RE = re.compile(
     r"(?:generated|previous|old|v\d+)[^\n.;|]{0,120}"
     r"(?:used\s+as|is|was|treated\s+as|became)[^\n.;|]{0,60}"
@@ -12068,6 +12106,11 @@ def validate_test_case_quality_smells(
     candidate_negative_trigger_too_specific: list[str] = []
     scenario_rationale_stimulus_mismatches: list[str] = []
     persist_coverage_missing: list[str] = []
+    persistence_tc_without_save_action: list[str] = []
+    persistence_tc_without_reopen_verification: list[str] = []
+    persistence_tc_closes_without_saving: list[str] = []
+    persistence_tc_unsourced_save_action: list[str] = []
+    persistence_smoke_without_cleanup_strategy: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
@@ -12203,6 +12246,34 @@ def validate_test_case_quality_smells(
             and not CANDIDATE_TRIGGER_ALTERNATIVE_RE.search(" ".join([steps, block]))
         ):
             candidate_negative_trigger_too_specific.append(f"{test_case_id}:steps={steps[:180]}")
+        persistence_context = " ".join([title, scenario_rationale, expected_result])
+        persistence_body = " ".join([steps, expected_result, postconditions])
+        if PERSISTENCE_TC_SIGNAL_RE.search(persistence_context):
+            if not PERSISTENCE_SAVE_ACTION_RE.search(steps):
+                persistence_tc_without_save_action.append(f"{test_case_id}:steps={steps[:180] or '<missing>'}")
+            if not (
+                PERSISTENCE_REOPEN_ACTION_RE.search(steps)
+                and (
+                    PERSISTENCE_REOPEN_VERIFICATION_RE.search(expected_result)
+                    or PERSISTENCE_REOPEN_VERIFICATION_RE.search(" ".join([steps, expected_result]))
+                )
+            ):
+                persistence_tc_without_reopen_verification.append(
+                    f"{test_case_id}:steps={steps[:180] or '<missing>'}; expected={expected_result[:160] or '<missing>'}"
+                )
+            if PERSISTENCE_CLOSE_WITHOUT_SAVE_RE.search(persistence_body):
+                persistence_tc_closes_without_saving.append(
+                    f"{test_case_id}:steps={steps[:140]}; postconditions={postconditions[:140] or '-'}"
+                )
+            if (
+                PERSISTENCE_CONCRETE_UNSOURCED_SAVE_RE.search(steps)
+                and not PERSISTENCE_SAVE_SOURCE_OR_CONFIRMATION_RE.search(block)
+            ):
+                persistence_tc_unsourced_save_action.append(f"{test_case_id}:steps={steps[:180]}")
+            if not PERSISTENCE_CLEANUP_STRATEGY_RE.search(postconditions):
+                persistence_smoke_without_cleanup_strategy.append(
+                    f"{test_case_id}:postconditions={postconditions[:180] or '<missing>'}"
+                )
         if production_test_case_file:
             if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
                 environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
@@ -14001,6 +14072,79 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if persistence_tc_without_save_action:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-tc-without-save-action",
+                severity=severity,
+                category="test-design",
+                title="Persistence TC has no save action",
+                details="A persistence/save-reopen TC must perform a save action before leaving or reopening the card.",
+                path=display_path,
+                evidence=persistence_tc_without_save_action[:20],
+                recommended_action="Add a source-backed save action, or mark the TC as requiring confirmation if the exact save flow is unknown.",
+            )
+        )
+
+    if persistence_tc_without_reopen_verification:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-tc-without-reopen-verification",
+                severity=severity,
+                category="test-design",
+                title="Persistence TC lacks reopen verification",
+                details="Saving data in the same open form does not prove persistence; the TC must reopen/reload the card and verify the value after reopen.",
+                path=display_path,
+                evidence=persistence_tc_without_reopen_verification[:20],
+                recommended_action="Close/leave/reload, reopen the same card, and assert the saved value after reopen.",
+            )
+        )
+
+    if persistence_tc_closes_without_saving:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="persistence-tc-closes-without-saving",
+                severity=severity,
+                category="test-design",
+                title="Persistence TC closes without saving",
+                details="A save/reopen smoke TC must not use close-without-saving as its cleanup or primary exit path.",
+                path=display_path,
+                evidence=persistence_tc_closes_without_saving[:20],
+                recommended_action="Save first, verify after reopen, then use a separate cleanup/isolation strategy.",
+            )
+        )
+
+    if persistence_tc_unsourced_save_action:
+        findings.append(
+            Finding(
+                id="persistence-tc-unsourced-save-action",
+                severity="warning",
+                category="test-design",
+                title="Persistence TC uses an unsourced concrete save action",
+                details="A named save button/action must be source-backed or explicitly marked for BA/UI confirmation.",
+                path=display_path,
+                evidence=persistence_tc_unsourced_save_action[:20],
+                recommended_action="Cite the source inventory for the save action, or replace the concrete action with a confirmation-required save step.",
+            )
+        )
+
+    if persistence_smoke_without_cleanup_strategy:
+        findings.append(
+            Finding(
+                id="persistence-smoke-without-cleanup-strategy",
+                severity="warning",
+                category="test-design",
+                title="Persistence smoke TC lacks cleanup or isolation strategy",
+                details="A persistence smoke TC leaves saved data behind unless postconditions describe cleanup, reset, deletion or isolated test data.",
+                path=display_path,
+                evidence=persistence_smoke_without_cleanup_strategy[:20],
+                recommended_action="Add cleanup/isolation postconditions or state why no persistent cleanup is required.",
+            )
+        )
+
     if persist_coverage_missing:
         findings.append(
             Finding(
@@ -14165,6 +14309,11 @@ def validate_test_case_quality_smells(
         or candidate_negative_trigger_too_specific
         or scenario_rationale_stimulus_mismatches
         or persist_coverage_missing
+        or persistence_tc_without_save_action
+        or persistence_tc_without_reopen_verification
+        or persistence_tc_closes_without_saving
+        or persistence_tc_unsourced_save_action
+        or persistence_smoke_without_cleanup_strategy
         or noncanonical_scenario_rationale_fields
         or scenario_rationale_domain_mismatches
         or scenario_rationale_too_generic

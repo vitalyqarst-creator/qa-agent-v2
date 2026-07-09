@@ -27,6 +27,11 @@ Default validator remediation is finding-targeted. Read the validator finding id
 | `coverage-matrix-tc-domain-mismatch` | Move mismatched TC ids to the correct representative group or fix the group label/source rows. | `references/agent/coverage-obligation-table-format.md` |
 | `persist-coverage-missing-for-crud-scope` | Add save/persist smoke coverage plan or explicit out-of-scope rationale. | `references/qa/test-design-review-rubric.md` |
 | `field-level-canary-without-persistence-scope-note` | Add explicit field-level/risk-based scope and persistence follow-up/out-of-scope note to the canary evaluation report. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-tc-without-save-action` | Add a source-backed save action, or mark the save step as requiring BA/UI confirmation if the exact action is unknown. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-tc-without-reopen-verification` | Close/leave/reload, reopen the same card, and verify the saved value after reopen. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-tc-closes-without-saving` | Save and verify persisted data before cleanup; do not use close-without-saving as a persistence TC exit path. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-tc-unsourced-save-action` | Cite the save action source or replace the concrete save control with a confirmation-required save step. | `references/agent/runtime-quality-rule-cards.md` |
+| `persistence-smoke-without-cleanup-strategy` | Add cleanup/isolation postconditions so saved smoke data does not silently remain in the application. | `references/agent/runtime-quality-rule-cards.md` |
 | `generated-artifact-used-as-source-of-truth` | Treat old generated artifacts only as diagnostic fixtures; cite source rows/BSR/FT artifacts for decisions. | `references/agent/source-row-inventory-format.md` |
 | `production-setup-profile-reference` | Replace production setup profile/stand/environment leakage with inline action-oriented preconditions. | `references/qa/test-case-format.md` |
 | `test-case-generic-test-data-reference-smell` | Put concrete literal, fixture value or formula in test data and reference it in the step. | `references/qa/test-case-format.md` |

@@ -15423,6 +15423,163 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
         self.assertNotIn("field-level-canary-without-persistence-scope-note", finding_ids)
 
+    def write_persistence_fixture(self, fixture_root: Path, *, steps: list[str], expected: str, postconditions: str, extra_fields: list[str] | None = None) -> Path:
+        test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "persistence.md"
+        test_case_file.parent.mkdir(parents=True)
+        fields = [
+            "# Persistence",
+            "",
+            "## TC-PS-001",
+            "**Title:** Saved client phone persists after reopening the application card",
+            "**Type:** Positive",
+            "**Priority:** High",
+            "**package_id:** PS-01",
+            "**Traceability:** `BSR 35`; `BSR 162`",
+            "**Сценарное обоснование:** Persistence smoke for a valid card field.",
+            "**Preconditions:** Application card is open for editing.",
+            "**Test Data:** Client phone: `9234567890`.",
+        ]
+        if extra_fields:
+            fields.extend(extra_fields)
+        fields.extend(
+            [
+                "**Steps:**",
+                *steps,
+                "**Expected Result:**",
+                expected,
+                "**Postconditions:**",
+                postconditions,
+            ]
+        )
+        test_case_file.write_text("\n".join(fields), encoding="utf-8")
+        return test_case_file
+
+    def test_persistence_tc_without_save_action_errors_in_strict_profile(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-tc-without-save-action"]["severity"], "error")
+
+    def test_persistence_tc_with_save_but_no_reopen_verification_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card.",
+                    "3. Verify the value in the current open form.",
+                ],
+                expected="Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Save action source is confirmed by BA."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-tc-without-reopen-verification"]["severity"], "error")
+
+    def test_persistence_tc_closing_without_saving_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card.",
+                    "3. Close without saving changes.",
+                    "4. Reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Save action source is confirmed by BA."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 1)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-tc-closes-without-saving"]["severity"], "error")
+
+    def test_persistence_tc_with_save_reopen_verify_and_cleanup_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Save action source is confirmed by BA."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-tc-without-save-action", finding_ids)
+        self.assertNotIn("persistence-tc-without-reopen-verification", finding_ids)
+        self.assertNotIn("persistence-smoke-without-cleanup-strategy", finding_ids)
+
+    def test_persistence_tc_with_concrete_unsourced_save_action_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Click `Save`.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        findings = {finding["id"]: finding for finding in json.loads(result.stdout)["findings"]}
+        self.assertEqual(findings["persistence-tc-unsourced-save-action"]["severity"], "warning")
+
+    def test_persistence_tc_with_unknown_save_flow_confirmation_passes_strict_errors(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_persistence_fixture(
+                fixture_root,
+                steps=[
+                    "1. Enter `9234567890` into Client phone.",
+                    "2. Save application card using the action confirmed for this section.",
+                    "3. Close and reopen the same card.",
+                ],
+                expected="After reopen, Client phone displays saved value `9234567890`.",
+                postconditions="Restore the application card to its initial data.",
+                extra_fields=["**Требуется подтверждение:** Confirm the exact save action before execution."],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--atomicity-coverage-policy", "strict-canary", "--fail-on", "error")
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persistence-tc-unsourced-save-action", finding_ids)
+
     def test_independent_wide_canary_v3_reports_human_review_quality_findings(self) -> None:
         artifact = (
             ROOT_DIR
