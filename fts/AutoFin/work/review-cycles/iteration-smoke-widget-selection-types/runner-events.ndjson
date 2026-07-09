@@ -1,0 +1,16 @@
+{"command": "run-until-terminal", "event": "lock_acquired", "pid": 33104, "state": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-widget-selection-types\\cycle-state.yaml", "ts_epoch": 1783608270}
+{"event": "session_child_started", "payload": "work/review-cycles/iteration-smoke-widget-selection-types/outputs/writer-r1-child-payload-33104.json", "stage": "writer-r1", "timeout_seconds": 3600, "ts_epoch": 1783608270}
+{"cycle_id": "autofin-iteration-smoke-widget-selection-types", "event": "session_preparing", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "stage_status": "scope-ready-for-writer", "ts_epoch": 1783608273}
+{"event": "input_snapshot_created", "snapshot_id": "before-writer-r1", "stage": "writer-r1", "ts_epoch": 1783608276}
+{"event": "thread_started", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "thread_id": "019f4756-8a46-7c50-99c2-8556e27c63e1", "ts_epoch": 1783608292}
+{"event": "turn_started", "stage": "writer-r1", "thread_id": "019f4756-8a46-7c50-99c2-8556e27c63e1", "ts_epoch": 1783608292}
+{"command": "run-until-terminal", "event": "lock_recovered", "pid": 33104, "recovered_lock": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-widget-selection-types\\runner.lock.recovered-1783608900.yaml", "stage": "writer-r1", "thread_id": "", "ts_epoch": 1783608901}
+{"command": "resume", "event": "lock_acquired", "pid": 39384, "state": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-widget-selection-types\\cycle-state.yaml", "ts_epoch": 1783608901}
+{"event": "session_child_started", "payload": "work/review-cycles/iteration-smoke-widget-selection-types/outputs/writer-r1-child-payload-39384.json", "stage": "writer-r1", "timeout_seconds": 3600, "ts_epoch": 1783608901}
+{"cycle_id": "autofin-iteration-smoke-widget-selection-types", "event": "session_preparing", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "stage_status": "scope-ready-for-writer", "ts_epoch": 1783608904}
+{"event": "input_snapshot_created", "snapshot_id": "before-writer-r1", "stage": "writer-r1", "ts_epoch": 1783608907}
+{"event": "thread_started", "scenario": "writer.session_initial_draft", "stage": "writer-r1", "thread_id": "019f4760-1d88-75a3-8c53-f08df136f6de", "ts_epoch": 1783608919}
+{"event": "turn_started", "stage": "writer-r1", "thread_id": "019f4760-1d88-75a3-8c53-f08df136f6de", "ts_epoch": 1783608919}
+{"command": "resume", "event": "lock_recovered", "pid": 39384, "recovered_lock": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-widget-selection-types\\runner.lock.recovered-1783609561.yaml", "stage": "writer-r1", "thread_id": "", "ts_epoch": 1783609561}
+{"command": "resume", "event": "lock_acquired", "pid": 23416, "state": "fts\\AutoFin\\work\\review-cycles\\iteration-smoke-widget-selection-types\\cycle-state.yaml", "ts_epoch": 1783609561}
+{"command": "resume", "event": "lock_released", "pid": 23416, "ts_epoch": 1783609561}

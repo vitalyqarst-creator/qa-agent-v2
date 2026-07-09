@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "generated_by": "codex_review_cycle_runner",
+  "command": "python scripts/validate_agent_artifacts.py --root fts/AutoFin --json",
+  "scope_slug": "iteration-smoke-widget-selection-types",
+  "canonical_test_cases": "test-cases/3-iteration-smoke-widget-selection-types.md",
+  "test_design_dir": "work/test-design/3-iteration-smoke-widget-selection-types",
+  "current_stage": "writer-r1",
+  "current_scope_findings": [],
+  "unresolved_warning_error_count": 0
+}

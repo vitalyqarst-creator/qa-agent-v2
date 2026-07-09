@@ -1,0 +1,84 @@
+version: 1
+ft_slug: AutoFin
+scope_slug: iteration-smoke-widget-selection-types
+sessions:
+  - stage: writer-r1
+    role: writer
+    scenario: writer.session_initial_draft
+    thread_id: 019f4756-8a46-7c50-99c2-8556e27c63e1
+    turn_id: ""
+    turn_status: ""
+    sandbox: workspace_write
+    approval_mode: auto_review
+    model: ""
+    prompt: work/review-cycles/iteration-smoke-widget-selection-types/prompts/prompt.writer-r1.md
+    input_snapshot: work/review-cycles/iteration-smoke-widget-selection-types/versions/before-writer-r1
+    output_snapshot: ""
+    final_response: ""
+    started_at_epoch: 1783608276
+    completed_at_epoch: ""
+    duration_ms: ""
+    status: started
+  - stage: writer-r1
+    role: ""
+    scenario: writer.session_initial_draft
+    thread_id: ""
+    turn_id: ""
+    turn_status: aborted
+    sandbox: ""
+    approval_mode: ""
+    model: ""
+    prompt: ""
+    input_snapshot: ""
+    output_snapshot: ""
+    final_response: ""
+    started_at_epoch: 1783608270
+    completed_at_epoch: 1783608900
+    duration_ms: ""
+    status: aborted
+    abort_reason: stale runner lock recovered
+    recovered_lock: fts\AutoFin\work\review-cycles\iteration-smoke-widget-selection-types\runner.lock.recovered-1783608900.yaml
+    recovered_pid: 33104
+    recovered_command: run-until-terminal
+    recovered_status: running-session-child
+    recovered_last_heartbeat_epoch: 1783608810
+  - stage: writer-r1
+    role: writer
+    scenario: writer.session_initial_draft
+    thread_id: 019f4760-1d88-75a3-8c53-f08df136f6de
+    turn_id: ""
+    turn_status: ""
+    sandbox: workspace_write
+    approval_mode: auto_review
+    model: ""
+    prompt: work/review-cycles/iteration-smoke-widget-selection-types/prompts/prompt.writer-r1.md
+    input_snapshot: work/review-cycles/iteration-smoke-widget-selection-types/versions/before-writer-r1
+    output_snapshot: ""
+    final_response: ""
+    started_at_epoch: 1783608907
+    completed_at_epoch: ""
+    duration_ms: ""
+    status: started
+  - stage: writer-r1
+    role: ""
+    scenario: writer.session_initial_draft
+    thread_id: ""
+    turn_id: ""
+    turn_status: aborted
+    sandbox: ""
+    approval_mode: ""
+    model: ""
+    prompt: ""
+    input_snapshot: ""
+    output_snapshot: ""
+    final_response: ""
+    started_at_epoch: 1783608900
+    completed_at_epoch: 1783609561
+    duration_ms: ""
+    status: aborted
+    abort_reason: stale runner lock recovered
+    recovered_lock: fts\AutoFin\work\review-cycles\iteration-smoke-widget-selection-types\runner.lock.recovered-1783609561.yaml
+    recovered_pid: 39384
+    recovered_command: resume
+    recovered_status: running-session-child
+    recovered_last_heartbeat_epoch: 1783609501

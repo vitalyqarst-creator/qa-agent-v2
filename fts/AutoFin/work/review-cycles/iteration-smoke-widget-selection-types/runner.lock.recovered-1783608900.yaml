@@ -1,0 +1,10 @@
+version: 1
+pid: 33104
+command: run-until-terminal
+state: fts\AutoFin\work\review-cycles\iteration-smoke-widget-selection-types\cycle-state.yaml
+started_at_epoch: 1783608270
+last_heartbeat_epoch: 1783608810
+stage: writer-r1
+scenario: writer.session_initial_draft
+thread_id: ""
+status: running-session-child

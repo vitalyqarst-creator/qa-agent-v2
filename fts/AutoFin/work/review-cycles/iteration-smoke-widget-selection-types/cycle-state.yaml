@@ -1,0 +1,30 @@
+cycle_id: autofin-iteration-smoke-widget-selection-types
+ft_slug: AutoFin
+scope_slug: iteration-smoke-widget-selection-types
+section_id: 3
+current_stage: writer-r1
+stage_status: blocked-input
+semantic_round: 0
+max_semantic_rounds: 2
+canonical_test_cases: test-cases/3-iteration-smoke-widget-selection-types.md
+test_design_dir: work/test-design/3-iteration-smoke-widget-selection-types
+active_snapshot: none
+active_transition_prompt: none
+sessions:
+  - writer-r1 thread 019f4756-8a46-7c50-99c2-8556e27c63e1 interrupted before runner completion
+  - writer-r1 retry thread 019f4760-1d88-75a3-8c53-f08df136f6de interrupted before runner completion
+latest_artifacts:
+  - work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-selection.md
+  - work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-contract.md
+  - work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-row-inventory.md
+  - work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-parity-check.md
+  - work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-coverage-gaps.md
+  - work/iteration-smoke/writer-draft-from-interrupted-run.md
+  - work/iteration-smoke/blocked-runner-report.md
+blocking_reasons:
+  - live SDK runner did not produce writer completion manifest or advance cycle-state after two writer-r1 attempts
+blocking_findings:
+  - no reviewer stage started; final production TC is not accepted
+open_questions:
+accepted_risks:
+  - RISK-001 generic widget constraints require source-backed fixture handling.

@@ -1,0 +1,33 @@
+ft_slug: AutoFin
+scope_slug: iteration-smoke-widget-selection-types
+current_stage: ft-scope-analyzer
+current_round: 0
+stage_status: ready-for-next-stage
+next_skill: ft-test-case-iteration
+active_transition_prompt: prompt.scope-to-iteration.md
+required_inputs:
+  - source-selection.md
+  - scope-contract.md
+  - source-row-inventory.md
+  - source-parity-check.md
+  - scope-coverage-gaps.md
+  - negative-oracle-inventory.md
+  - requiredness-oracle-inventory.md
+  - agent-decision-log.md
+latest_artifacts:
+  source_selection: source-selection.md
+  scope_contract: scope-contract.md
+  source_row_inventory: source-row-inventory.md
+  source_parity_check: source-parity-check.md
+  scope_coverage_gaps: scope-coverage-gaps.md
+  negative_oracle_inventory: negative-oracle-inventory.md
+  requiredness_oracle_inventory: requiredness-oracle-inventory.md
+  scope_execution_options: scope-execution-options.md
+  active_transition_prompt: prompt.scope-to-iteration.md
+  session_log: scope-analyzer-session-log.md
+  decision_log: agent-decision-log.md
+  cycle_state: ../../review-cycles/iteration-smoke-widget-selection-types/cycle-state.yaml
+blocking_reasons: []
+open_questions: []
+accepted_risks:
+  - RISK-001 generic widget constraints require source-backed fixture handling by writer/reviewer.
