@@ -23,13 +23,15 @@ The timeout recovery report states:
 
 - writer response: present;
 - next review prompt: present;
-- `outputs/scoped-validator-profile.writer-r1.json`: missing.
+- expected stage-appropriate scoped profile: `outputs/scoped-validator-profile.structure-preflight-r1.json`;
+- profile exists, but `unresolved_warning_error_count=2`.
+- blocking scoped findings: `source-row-inventory-missing`, `writer-quality-gate-missing`.
 
-Because the current-stage scoped validator profile was missing, the runner correctly refused to recover the writer output into reviewer execution and marked the cycle `blocked-input`.
+The original runner incorrectly reported a missing writer-stage profile. The actionable blocker is the existing structure-preflight profile with unresolved scoped findings; recovery must not start reviewer execution until those findings are resolved or the profile is regenerated cleanly.
 
 ## Consequence
 
-No reviewer stage started. There are no reviewer findings, no revision, no final reviewer output and no sign-off. The generated test-case file is only an unsigned writer draft and must not be treated as a final production artifact.
+No reviewer stage started. There are no reviewer findings, no revision, no final reviewer output and no sign-off. The generated test-case file was only an unsigned writer draft and has been moved to `work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`; it must not be treated as a final production artifact.
 
 ## Evidence
 
@@ -38,5 +40,6 @@ No reviewer stage started. There are no reviewer findings, no revision, no final
 | runner events | `work/review-cycles/iteration-smoke-search-clear-context/runner-events.ndjson` |
 | session map | `work/review-cycles/iteration-smoke-search-clear-context/codex-session-map.yaml` |
 | completion manifest | `work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-completion.yaml` |
+| unsigned writer draft | `work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md` |
 | timeout recovery report | `work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-timeout-recovery.md` |
 | after snapshot | `work/review-cycles/iteration-smoke-search-clear-context/versions/after-writer-r1/snapshot-manifest.yaml` |

@@ -8,184 +8,35 @@
   "current_stage": "structure-preflight-r1",
   "current_scope_findings": [
     {
-      "id": "coverage-obligation-table-unknown-source-property",
+      "id": "source-row-inventory-missing",
       "severity": "warning",
       "category": "traceability",
-      "title": "Coverage Obligation Table references unknown or non-obligatory source properties",
-      "details": "Obligation rows must point to source_property_id values from Source Table Normalization that need obligation expansion.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "OBL-001:SRC-001.P01:clear-applied-filter",
-        "OBL-002:SRC-001.P02:clear-applied-sort",
-        "OBL-003:SRC-001.P03:clear-pagination-state",
-        "OBL-004:SRC-001.P04:clear-selected-row-state"
-      ],
-      "recommended_action": "Use the exact source_property_id from Source Table Normalization or remove the row if it is not an obligation-bearing property."
+      "title": "Package-based test-case file has no Source Row Inventory",
+      "details": "Writer output must inventory every source row in the confirmed scope before normalization, so a source row cannot silently disappear from the ledger and TC coverage.",
+      "path": "work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md",
+      "evidence": [],
+      "recommended_action": "Add `## Source Row Inventory` with source_row_id, package_id, field_or_action, source_ref, requirement_codes, in_scope and mapped_atom_or_gap."
     },
     {
-      "id": "internal-diagnostic-section-in-production-testcases",
+      "id": "writer-quality-gate-missing",
       "severity": "warning",
       "category": "test-case-format",
-      "title": "Production test-case file contains internal diagnostic sections",
-      "details": "Files under fts/**/test-cases/*.md must be manual-ready runtime artifacts. Design/debug sections belong under fts/**/work/**, evals/**, or dedicated diagnostic reports.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "Source Row Inventory",
-        "Source Table Normalization",
-        "Test Design Decision Table",
-        "Test-design Applicability Matrix",
-        "Atomic Requirements Ledger",
-        "Coverage Obligation Table",
-        "Writer Quality Gate"
-      ],
-      "recommended_action": "Move diagnostic sections to a work/canary report and keep only test cases in the production file."
+      "title": "Package-based test-case file has no Writer Quality Gate",
+      "details": "Package-based writer output must self-reject semantic compression, merged TC, broad GSR ranges and unobservable internal behavior before it is sent to reviewer.",
+      "path": "work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md",
+      "evidence": [],
+      "recommended_action": "Add `## Writer Quality Gate` with the canonical gate items and block failed packages before ready-for-review."
     },
     {
-      "id": "split-artifact-redundant-section-heading",
-      "severity": "warning",
-      "category": "test-case-format",
-      "title": "Split artifact has redundant duplicate section headings",
-      "details": "A split artifact must expose exactly one canonical section heading. Adjacent `# Section` and `## Section` wrappers create ambiguous section extraction and should be normalized at write time.",
-      "path": "work/test-design/4.2-iteration-smoke-rerun-search-clear-context/risk-priority-map.md",
-      "evidence": [
-        "# Risk / Priority Map + ## Risk / Priority Map"
-      ],
-      "recommended_action": "Keep only one canonical heading, `# Risk / Priority Map` or `## Risk / Priority Map`, before the table/body."
-    },
-    {
-      "id": "split-artifact-redundant-section-heading",
-      "severity": "warning",
-      "category": "test-case-format",
-      "title": "Split artifact has redundant duplicate section headings",
-      "details": "A split artifact must expose exactly one canonical section heading. Adjacent `# Section` and `## Section` wrappers create ambiguous section extraction and should be normalized at write time.",
-      "path": "work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-self-check.md",
-      "evidence": [
-        "# Writer Self-Check + ## Writer Self-Check"
-      ],
-      "recommended_action": "Keep only one canonical heading, `# Writer Self-Check` or `## Writer Self-Check`, before the table/body."
-    },
-    {
-      "id": "test-case-risk-priority-map-missing-columns",
-      "severity": "warning",
+      "id": "test-design-applicability-matrix-missing",
+      "severity": "info",
       "category": "test-design",
-      "title": "Risk / Priority Map misses required columns",
-      "details": "The map must expose atom id, risk, required priority, TC/GAP links, and rationale.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "missing=atom_id, gap_id, linked_test_cases, rationale, risk_factors, source_ref",
-        "columns=risk_id, package_id, linked_atom_id, risk_statement, impact, likelihood, risk_score, risk_level, required_priority, residual_risk_decision"
-      ],
-      "recommended_action": "Add the missing columns from writer-output-format.md."
-    },
-    {
-      "id": "test-design-applicability-matrix-missing-columns",
-      "severity": "warning",
-      "category": "test-design",
-      "title": "Test-design applicability matrix misses required columns",
-      "details": "The matrix must expose all required columns so reviewer can audit coverage decisions.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "missing=gap_id, linked_test_cases, reason",
-        "columns=dimension, applicable, source_ref, linked_atoms, planned_tc_or_gap, rationale"
-      ],
-      "recommended_action": "Add the missing columns from writer-output-format.md."
-    },
-    {
-      "id": "test-design-decision-table-executable-cross-section-conflict",
-      "severity": "warning",
-      "category": "test-design",
-      "title": "Executable TDDT decisions conflict with ledger, plan, or TC links",
-      "details": "A standalone_tc or covered_by_existing_tc decision must stay synchronized with the same atom in Atomic Requirements Ledger, Package Test Design Plan and real TC sections. Extra or missing TC-* links create false coverage in the decision table.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "TDDT-001:SRC-001.P01:ATOM-001:ledger has no covered_by_tc for executable decision",
-        "TDDT-001:SRC-001.P01:ATOM-001:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-001",
-        "TDDT-002:SRC-001.P02:ATOM-002:ledger has no covered_by_tc for executable decision",
-        "TDDT-002:SRC-001.P02:ATOM-002:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-002",
-        "TDDT-003:SRC-001.P03:ATOM-003:ledger has no covered_by_tc for executable decision",
-        "TDDT-003:SRC-001.P03:ATOM-003:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-003",
-        "TDDT-004:SRC-001.P04:ATOM-004:ledger has no covered_by_tc for executable decision",
-        "TDDT-004:SRC-001.P04:ATOM-004:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-004"
-      ],
-      "recommended_action": "Synchronize planned_tc_or_gap with the atom's covered_by_tc, package plan row and TC sections, or reclassify the row as gap_unclear/metadata_only when no executable coverage exists."
-    },
-    {
-      "id": "test-design-review-missing-required-items",
-      "severity": "warning",
-      "category": "test-design",
-      "title": "Test Design Review misses required review items",
-      "details": "The review must explicitly criticize decision-table classification, ledger/plan alignment, coverage classes, numeric length/boundary classes, conditional branches, gap specificity, internal observability, metadata-only exclusion and TC mapping atomicity.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "applicability-linked-tc-semantics",
-        "conditional-branches",
-        "coverage-class-completeness",
-        "decision-table-classification",
-        "dictionary-closed-set",
-        "gap-admissibility",
-        "gap-specificity",
-        "internal-observability",
-        "ledger-plan-alignment",
-        "mask-format-coverage",
-        "metadata-only-exclusion",
-        "negative-fixture-isolation",
-        "numeric-length-boundaries",
-        "ready-for-tc-writing",
-        "tc-mapping-atomicity",
-        "unsupported-ui-mechanism"
-      ],
-      "recommended_action": "Add one row for each required review item before moving the writer artifact to review."
-    },
-    {
-      "id": "test-design-review-unknown-items",
-      "severity": "warning",
-      "category": "test-design",
-      "title": "Test Design Review uses noncanonical review items",
-      "details": "Extra review_item values are not part of the canonical Test Design Review contract. They may be useful as evidence, but they do not replace the required canonical items.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "atomization",
-        "out-of-scope-behavior",
-        "source-boundary",
-        "tc-atomicity",
-        "unsupported-defaults"
-      ],
-      "recommended_action": "Move extra checks into evidence or use only canonical review_item identifiers from test-design-review-format.md."
-    },
-    {
-      "id": "writer-quality-gate-failed",
-      "severity": "warning",
-      "category": "test-design",
-      "title": "Writer Quality Gate contains blocking failures",
-      "details": "The writer file self-identifies failed quality gates. It must not be routed to reviewer until the affected packages are rewritten or the workflow is blocked.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "scoped-validator-findings:status=blocked;blocks=yes"
-      ],
-      "recommended_action": "Rewrite affected packages from Source Table Normalization through TC, or set workflow-state to blocked-input."
-    },
-    {
-      "id": "writer-quality-gate-missing-required-items",
-      "severity": "warning",
-      "category": "test-design",
-      "title": "Writer Quality Gate misses required gate items",
-      "details": "The gate must explicitly check artifact write strategy, mockup visual inventory, source normalization, ledger atomicity, GSR compression, plan atomicity, scenarios, TC atomicity, observability and package readiness.",
-      "path": "test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
-      "evidence": [
-        "action-observability",
-        "design-plan-atomicity",
-        "gsr-range-compression",
-        "internal-observability",
-        "ledger-atomicity",
-        "mockup-visual-inventory",
-        "package-ready",
-        "scenario-does-not-replace-atomic",
-        "semantic-req-id-parity",
-        "tc-atomicity",
-        "test-data-specificity"
-      ],
-      "recommended_action": "Add one row for each required gate item before moving the writer artifact to review."
+      "title": "Test-case file has no Test-design applicability matrix",
+      "details": "Canonical initial drafts should explicitly record which coverage dimensions apply, do not apply, or remain unclear.",
+      "path": "work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md",
+      "evidence": [],
+      "recommended_action": "Add a Test-design Applicability Matrix before review handoff."
     }
   ],
-  "unresolved_warning_error_count": 11
+  "unresolved_warning_error_count": 2
 }

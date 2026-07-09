@@ -17,6 +17,7 @@ latest_artifacts:
   process_report: work/iteration-smoke-rerun/iteration-process-report.md
   blocked_runner_report: work/iteration-smoke-rerun/blocked-runner-report.md
   artifact_map: work/iteration-smoke-rerun/artifact-map.md
+  writer_draft: work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md
 required_inputs:
   - AGENT-NOTES.md
   - source/FT4AutoFinFinal.docx
@@ -32,4 +33,4 @@ required_inputs:
 open_questions: []
 blocking_reasons:
   - "writer-r1: Codex SDK turn timed out after 900 seconds"
-  - "writer-r1: timeout artifact recovery did not continue because outputs/scoped-validator-profile.writer-r1.json was missing"
+  - "writer-r1: timeout artifact recovery did not continue because stage-appropriate scoped validator profile outputs/scoped-validator-profile.structure-preflight-r1.json has unresolved_warning_error_count=2"

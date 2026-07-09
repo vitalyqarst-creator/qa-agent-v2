@@ -1,0 +1,507 @@
+{
+  "summary": {
+    "workflow_states_checked": 0,
+    "source_documents_checked": 0,
+    "artifact_manifests_checked": 0,
+    "traceability_matrices_checked": 0,
+    "review_findings_checked": 0,
+    "writer_responses_checked": 0,
+    "test_case_files_checked": 1,
+    "source_normalization_diagnostics_checked": 0,
+    "source_table_normalizations_checked": 0,
+    "dictionary_inventories_checked": 0,
+    "writer_process_diagnostics_checked": 0,
+    "writer_self_checks_checked": 1,
+    "coverage_gap_artifacts_checked": 3,
+    "session_logs_checked": 2,
+    "decision_logs_checked": 3,
+    "active_text_artifacts_checked": 1,
+    "generated_source_basis_artifacts_checked": 0,
+    "mockup_visual_inventories_checked": 0,
+    "ui_evidence_indexes_checked": 0,
+    "ui_validation_reports_checked": 0,
+    "findings_count": 13,
+    "errors_count": 0,
+    "warnings_count": 12,
+    "info_count": 1,
+    "checks_count": 46
+  },
+  "findings": [
+    {
+      "id": "artifact-write-strategy-missing",
+      "severity": "warning",
+      "category": "test-case-format",
+      "title": "Large canonical test-case file has no Artifact Write Strategy",
+      "details": "Large or package-based writer outputs must record the preflight write strategy before content generation so the writer does not hit Windows command-line limits or switch to compact/ad-hoc generation.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "chars=24299",
+        "tc_count=4",
+        "atom_count=4",
+        "has_wp=no"
+      ],
+      "recommended_action": "Add `## Artifact Write Strategy` with preflight result, file-based/chunked write method, WP chunk plan, helper artifact policy and validation plan."
+    },
+    {
+      "id": "coverage-obligation-table-unknown-source-property",
+      "severity": "warning",
+      "category": "traceability",
+      "title": "Coverage Obligation Table references unknown or non-obligatory source properties",
+      "details": "Obligation rows must point to source_property_id values from Source Table Normalization that need obligation expansion.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "OBL-001:SRC-001.P01:clear-applied-filter",
+        "OBL-002:SRC-001.P02:clear-applied-sort",
+        "OBL-003:SRC-001.P03:clear-pagination-state",
+        "OBL-004:SRC-001.P04:clear-selected-row-state"
+      ],
+      "recommended_action": "Use the exact source_property_id from Source Table Normalization or remove the row if it is not an obligation-bearing property."
+    },
+    {
+      "id": "split-artifact-redundant-section-heading",
+      "severity": "warning",
+      "category": "test-case-format",
+      "title": "Split artifact has redundant duplicate section headings",
+      "details": "A split artifact must expose exactly one canonical section heading. Adjacent `# Section` and `## Section` wrappers create ambiguous section extraction and should be normalized at write time.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/risk-priority-map.md",
+      "evidence": [
+        "# Risk / Priority Map + ## Risk / Priority Map"
+      ],
+      "recommended_action": "Keep only one canonical heading, `# Risk / Priority Map` or `## Risk / Priority Map`, before the table/body."
+    },
+    {
+      "id": "split-artifact-redundant-section-heading",
+      "severity": "warning",
+      "category": "test-case-format",
+      "title": "Split artifact has redundant duplicate section headings",
+      "details": "A split artifact must expose exactly one canonical section heading. Adjacent `# Section` and `## Section` wrappers create ambiguous section extraction and should be normalized at write time.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-self-check.md",
+      "evidence": [
+        "# Writer Self-Check + ## Writer Self-Check"
+      ],
+      "recommended_action": "Keep only one canonical heading, `# Writer Self-Check` or `## Writer Self-Check`, before the table/body."
+    },
+    {
+      "id": "test-case-risk-priority-map-missing-columns",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Risk / Priority Map misses required columns",
+      "details": "The map must expose atom id, risk, required priority, TC/GAP links, and rationale.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "missing=atom_id, gap_id, linked_test_cases, rationale, risk_factors, source_ref",
+        "columns=risk_id, package_id, linked_atom_id, risk_statement, impact, likelihood, risk_score, risk_level, required_priority, residual_risk_decision"
+      ],
+      "recommended_action": "Add the missing columns from writer-output-format.md."
+    },
+    {
+      "id": "test-design-applicability-matrix-missing-columns",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Test-design applicability matrix misses required columns",
+      "details": "The matrix must expose all required columns so reviewer can audit coverage decisions.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "missing=gap_id, linked_test_cases, reason",
+        "columns=dimension, applicable, source_ref, linked_atoms, planned_tc_or_gap, rationale"
+      ],
+      "recommended_action": "Add the missing columns from writer-output-format.md."
+    },
+    {
+      "id": "test-design-decision-table-executable-cross-section-conflict",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Executable TDDT decisions conflict with ledger, plan, or TC links",
+      "details": "A standalone_tc or covered_by_existing_tc decision must stay synchronized with the same atom in Atomic Requirements Ledger, Package Test Design Plan and real TC sections. Extra or missing TC-* links create false coverage in the decision table.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "TDDT-001:SRC-001.P01:ATOM-001:ledger has no covered_by_tc for executable decision",
+        "TDDT-001:SRC-001.P01:ATOM-001:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-001",
+        "TDDT-002:SRC-001.P02:ATOM-002:ledger has no covered_by_tc for executable decision",
+        "TDDT-002:SRC-001.P02:ATOM-002:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-002",
+        "TDDT-003:SRC-001.P03:ATOM-003:ledger has no covered_by_tc for executable decision",
+        "TDDT-003:SRC-001.P03:ATOM-003:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-003",
+        "TDDT-004:SRC-001.P04:ATOM-004:ledger has no covered_by_tc for executable decision",
+        "TDDT-004:SRC-001.P04:ATOM-004:planned_tc_or_gap has TC not in ledger covered_by_tc: TC-BSR32-004"
+      ],
+      "recommended_action": "Synchronize planned_tc_or_gap with the atom's covered_by_tc, package plan row and TC sections, or reclassify the row as gap_unclear/metadata_only when no executable coverage exists."
+    },
+    {
+      "id": "test-design-review-missing-required-items",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Test Design Review misses required review items",
+      "details": "The review must explicitly criticize decision-table classification, ledger/plan alignment, coverage classes, numeric length/boundary classes, conditional branches, gap specificity, internal observability, metadata-only exclusion and TC mapping atomicity.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "applicability-linked-tc-semantics",
+        "conditional-branches",
+        "coverage-class-completeness",
+        "decision-table-classification",
+        "dictionary-closed-set",
+        "gap-admissibility",
+        "gap-specificity",
+        "internal-observability",
+        "ledger-plan-alignment",
+        "mask-format-coverage",
+        "metadata-only-exclusion",
+        "negative-fixture-isolation",
+        "numeric-length-boundaries",
+        "ready-for-tc-writing",
+        "tc-mapping-atomicity",
+        "unsupported-ui-mechanism"
+      ],
+      "recommended_action": "Add one row for each required review item before moving the writer artifact to review."
+    },
+    {
+      "id": "test-design-review-unknown-items",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Test Design Review uses noncanonical review items",
+      "details": "Extra review_item values are not part of the canonical Test Design Review contract. They may be useful as evidence, but they do not replace the required canonical items.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "atomization",
+        "out-of-scope-behavior",
+        "source-boundary",
+        "tc-atomicity",
+        "unsupported-defaults"
+      ],
+      "recommended_action": "Move extra checks into evidence or use only canonical review_item identifiers from test-design-review-format.md."
+    },
+    {
+      "id": "workflow-state-not-found",
+      "severity": "warning",
+      "category": "workflow-state",
+      "title": "No workflow-state.yaml files found",
+      "details": "The validator did not find any handoff state files.",
+      "path": ".",
+      "evidence": [],
+      "recommended_action": "Run the validator against a repository or fixture containing workflow-state.yaml."
+    },
+    {
+      "id": "writer-quality-gate-failed",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Writer Quality Gate contains blocking failures",
+      "details": "The writer file self-identifies failed quality gates. It must not be routed to reviewer until the affected packages are rewritten or the workflow is blocked.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "scoped-validator-findings:status=blocked;blocks=yes"
+      ],
+      "recommended_action": "Rewrite affected packages from Source Table Normalization through TC, or set workflow-state to blocked-input."
+    },
+    {
+      "id": "writer-quality-gate-missing-required-items",
+      "severity": "warning",
+      "category": "test-design",
+      "title": "Writer Quality Gate misses required gate items",
+      "details": "The gate must explicitly check artifact write strategy, mockup visual inventory, source normalization, ledger atomicity, GSR compression, plan atomicity, scenarios, TC atomicity, observability and package readiness.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md",
+      "evidence": [
+        "action-observability",
+        "design-plan-atomicity",
+        "gsr-range-compression",
+        "internal-observability",
+        "ledger-atomicity",
+        "mockup-visual-inventory",
+        "package-ready",
+        "scenario-does-not-replace-atomic",
+        "semantic-req-id-parity",
+        "tc-atomicity",
+        "test-data-specificity"
+      ],
+      "recommended_action": "Add one row for each required gate item before moving the writer artifact to review."
+    },
+    {
+      "id": "decision-log-missing-required-section",
+      "severity": "info",
+      "category": "decision-log",
+      "title": "Decision log misses Decision Log section",
+      "details": "agent-decision-log.md must contain a `## Decision Log` table with observable intermediate decisions, not hidden chain-of-thought.",
+      "path": "versions/before-writer-r1/work/stage-handoffs/19-iteration-smoke-search-clear-context/agent-decision-log.md",
+      "evidence": [
+        "Decision Log"
+      ],
+      "recommended_action": "Rewrite the artifact using references/agent/agent-decision-log-format.md."
+    }
+  ],
+  "checks": [
+    {
+      "name": "workflow-state-discovery",
+      "status": "warn",
+      "details": "No workflow-state.yaml files found.",
+      "path": "."
+    },
+    {
+      "name": "session-cycle-unsigned-production-draft",
+      "status": "pass",
+      "details": "No unsigned production test-case draft is exposed by this cycle.",
+      "path": "cycle-state.yaml"
+    },
+    {
+      "name": "source-support-duplicate-manifest",
+      "status": "pass",
+      "details": "Duplicate source/support files are covered by artifact manifest or absent.",
+      "path": "."
+    },
+    {
+      "name": "oracle-candidate-obligation-coverage",
+      "status": "pass",
+      "details": "No candidate_tc_required oracle obligations found.",
+      "path": "."
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-row-inventory.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-row-completeness-matrix.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-table-normalization.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-decision-table.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-obligation-table.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/atomic-requirements-ledger.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/package-test-design-plan.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-review.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-applicability-matrix.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "warn",
+      "details": "Split artifact has redundant headings.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/risk-priority-map.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-map.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-gaps.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "pass",
+      "details": "Split artifact heading shape passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-quality-gate.md"
+    },
+    {
+      "name": "split-artifact-heading-shape",
+      "status": "warn",
+      "details": "Split artifact has redundant headings.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-self-check.md"
+    },
+    {
+      "name": "traceability-placeholder-sentinel",
+      "status": "pass",
+      "details": "Traceability-bearing placeholder sentinel check passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-design-applicability-matrix",
+      "status": "warn",
+      "details": "Applicability matrix columns are incomplete.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-mixed-schema",
+      "status": "pass",
+      "details": "No mixed TC schema duplicates found.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-ui-calibration-candidates",
+      "status": "pass",
+      "details": "UI calibration candidate markers passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-risk-priority-map",
+      "status": "warn",
+      "details": "Risk / Priority Map columns are incomplete.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "source-table-normalization",
+      "status": "pass",
+      "details": "Source Table Normalization contract passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "source-row-inventory",
+      "status": "pass",
+      "details": "Source Row Inventory contract passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-design-decision-table",
+      "status": "warn",
+      "details": "Test Design Decision Table has issues.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "coverage-obligation-table",
+      "status": "warn",
+      "details": "Coverage Obligation Table has issues.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-atomic-ledger",
+      "status": "pass",
+      "details": "Atomic ledger structural contract passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-package-design-plan",
+      "status": "pass",
+      "details": "Package Test Design Plan contract passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-design-review",
+      "status": "warn",
+      "details": "Test Design Review has issues.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "writer-quality-gate",
+      "status": "warn",
+      "details": "Writer Quality Gate has issues.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "writer-self-check-sections",
+      "status": "pass",
+      "details": "Writer self-check sections passed.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "artifact-write-strategy",
+      "status": "warn",
+      "details": "Artifact Write Strategy is missing.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-quality-smells",
+      "status": "pass",
+      "details": "No generic atom/TC quality smells found.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "test-case-format",
+      "status": "warn",
+      "details": "Test-case format contract has issues.",
+      "path": "versions/after-writer-r1/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md"
+    },
+    {
+      "name": "writer-self-check-sections",
+      "status": "pass",
+      "details": "Writer self-check sections passed.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/writer-self-check.md"
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory section not present.",
+      "path": "versions/after-writer-r1/work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-gaps.md"
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory section not present.",
+      "path": "versions/after-writer-r1/work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md"
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory section not present.",
+      "path": "versions/before-writer-r1/work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md"
+    },
+    {
+      "name": "session-log-format",
+      "status": "pass",
+      "details": "Session log format passed.",
+      "path": "outputs/writer-session-log.writer-r1.md"
+    },
+    {
+      "name": "session-log-format",
+      "status": "pass",
+      "details": "Session log format passed.",
+      "path": "versions/after-writer-r1/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-session-log.writer-r1.md"
+    },
+    {
+      "name": "decision-log-format",
+      "status": "pass",
+      "details": "Decision log format passed.",
+      "path": "outputs/agent-decision-log.writer-r1.md"
+    },
+    {
+      "name": "decision-log-format",
+      "status": "pass",
+      "details": "Decision log format passed.",
+      "path": "versions/after-writer-r1/work/review-cycles/iteration-smoke-search-clear-context/outputs/agent-decision-log.writer-r1.md"
+    },
+    {
+      "name": "decision-log-format",
+      "status": "pass",
+      "details": "Decision log misses required section.",
+      "path": "versions/before-writer-r1/work/stage-handoffs/19-iteration-smoke-search-clear-context/agent-decision-log.md"
+    },
+    {
+      "name": "active-text-encoding-damage",
+      "status": "pass",
+      "details": "Active text artifact has no encoding damage markers.",
+      "path": "outputs/writer-session-log.writer-r1.md"
+    }
+  ]
+}

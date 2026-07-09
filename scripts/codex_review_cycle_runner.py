@@ -945,12 +945,14 @@ def finding_belongs_to_current_scope(
         return False
 
     canonical = normalize_artifact_path_text(state.get("canonical_test_cases"))
+    draft = normalize_artifact_path_text(state.get("draft_test_cases"))
     test_design_dir = normalize_artifact_path_text(state.get("test_design_dir"))
     ft_root = infer_ft_root(state_path)
     outputs_dir = relative_or_name(state_path.parent / "outputs", ft_root)
 
     return (
         path == canonical
+        or path == draft
         or path_is_under(path, test_design_dir)
         or path_is_under(path, outputs_dir)
     )
@@ -1033,6 +1035,29 @@ def write_runner_scoped_validator_profile(
         unresolved_warning_error_count=len(unresolved_warning_errors),
     )
     return profile_path
+
+
+def default_writer_draft_test_cases_ref(state_path: Path, stage: str) -> str:
+    ft_root = infer_ft_root(state_path)
+    return relative_or_name(state_path.parent / "outputs" / f"{stage}-draft.md", ft_root)
+
+
+def active_test_cases_ref(state: dict[str, Any], state_path: Path) -> str:
+    draft_ref = normalize_artifact_path_text(state.get("draft_test_cases"))
+    if draft_ref and str(state.get("stage_status") or "") != "signed-off":
+        draft_path = resolve_artifact_path(draft_ref, infer_ft_root(state_path))
+        if draft_path is not None and draft_path.exists():
+            return draft_ref
+    return normalize_artifact_path_text(state.get("canonical_test_cases"))
+
+
+def active_test_cases_path(state: dict[str, Any], state_path: Path) -> Path:
+    ft_root = infer_ft_root(state_path)
+    active_ref = active_test_cases_ref(state, state_path)
+    active_path = resolve_artifact_path(active_ref, ft_root)
+    if active_path is None:
+        raise RunnerError(f"Active test-case file does not exist: {active_ref}")
+    return active_path
 
 
 def table_cells(line: str) -> list[str]:
@@ -1486,8 +1511,11 @@ def validate_state(
         raise RunnerError("canonical_test_cases must point to the FT test-cases directory")
     if "versions" in canonical.parts:
         raise RunnerError("canonical_test_cases must not point to a version snapshot")
-    if status not in PRE_WRITER_STATUSES and status != "blocked-input" and not canonical.exists():
-        raise RunnerError(f"Canonical test-case file does not exist: {canonical}")
+    draft_ref = normalize_artifact_path_text(state.get("draft_test_cases"))
+    draft = resolve_artifact_path(draft_ref, ft_root) if draft_ref else None
+    draft_exists = draft is not None and draft.exists()
+    if status not in PRE_WRITER_STATUSES and status != "blocked-input" and not canonical.exists() and not draft_exists:
+        raise RunnerError(f"Canonical test-case file does not exist and no draft_test_cases exists: {canonical}")
 
     if status not in TERMINAL_STATUSES:
         prompt_path = state.get("active_transition_prompt")
@@ -1974,6 +2002,11 @@ def prompt_text_for_session(
             f"cycle_state: {state_path.resolve()}",
             f"ft_root: {ft_root.resolve()}",
             f"canonical_test_cases: {resolve_artifact_path(str(state.get('canonical_test_cases')), ft_root)}",
+            (
+                f"draft_test_cases: {resolve_artifact_path(default_writer_draft_test_cases_ref(state_path, next_session.stage), ft_root)}"
+                if next_session.role == "writer"
+                else f"active_test_cases: {active_test_cases_path(state, state_path)}"
+            ),
             "",
             "Runner state contract:",
             "- cycle-state.yaml is the source of truth for this automated chain.",
@@ -1981,6 +2014,7 @@ def prompt_text_for_session(
             "- Keep cycle-state.yaml in runner simple-YAML form: top-level scalar fields plus top-level string lists only. Do not write nested maps under latest_artifacts, blocking_reasons, blocking_findings, open_questions, accepted_risks or sessions; put rich detail in sidecar artifacts and list their paths.",
             "- If the active prompt below mentions workflow-state.yaml, update it only as compatibility; do not leave cycle-state.yaml stale.",
             "- Use session-based stage_status values from cycle-state.yaml, not legacy workflow-state.yaml status names.",
+            "- Writer sessions must write unsigned test-case drafts to draft_test_cases and record `draft_test_cases: <path>` in cycle-state.yaml; do not create or update the canonical production test-cases file before reviewer sign-off.",
             "- Writer sessions must not set writer-draft-ready or semantic-review-ready while the current scoped validator profile has any error/warning finding; resolve the findings or route to blocked-input with evidence.",
             "- In session-based writer stages, prefer stage-specific output names such as outputs/writer-session-log.<stage>.md and outputs/agent-decision-log.<stage>.md; legacy writer-session-log.md is tolerated only as compatibility evidence.",
             "- Do not edit codex-session-map.yaml; it is owned by the SDK runner.",
@@ -2077,13 +2111,19 @@ def find_writer_scoped_validator_profile(state: dict[str, Any], state_path: Path
         if not isinstance(artifact, str):
             continue
         name = Path(artifact).name
-        if name.startswith("scoped-validator-profile.writer") and name.endswith(".json"):
+        if name.startswith("scoped-validator-profile.") and name.endswith(".json"):
             candidates.append(resolve_artifact_path(artifact, ft_root))
     output_dir = state_path.parent / "outputs"
     if output_dir.exists():
+        current_stage = str(state.get("current_stage") or "").strip()
+        if current_stage:
+            candidates.append(output_dir / f"scoped-validator-profile.{current_stage}.json")
         candidates.extend(sorted(output_dir.glob("scoped-validator-profile.writer*.json")))
+        candidates.extend(sorted(output_dir.glob("scoped-validator-profile.structure-preflight*.json")))
     seen: set[Path] = set()
     for candidate in candidates:
+        if candidate is None:
+            continue
         resolved = candidate.resolve()
         if resolved in seen:
             continue
@@ -2104,9 +2144,9 @@ def validate_scoped_writer_profile(
             make_structure_finding(
                 "structure-preflight-validator-profile-missing",
                 "Writer scoped validator profile is missing",
-                "No scoped-validator-profile.writer*.json artifact was found for the current scope.",
-                ["outputs/scoped-validator-profile.writer*.json"],
-                "Run the writer-stage scoped validator and attach the generated profile before structure preflight.",
+                "No scoped-validator-profile for the current structure-preflight stage or preceding writer stage was found for the current scope.",
+                ["outputs/scoped-validator-profile.<current-stage>.json", "outputs/scoped-validator-profile.writer*.json"],
+                "Run the scoped validator for the current cycle state and attach the generated profile before structure preflight.",
             )
         ]
     try:
@@ -2146,14 +2186,15 @@ def validate_scoped_writer_profile(
             )
         )
     profile_stage = str(profile.get("current_stage") or "")
-    if profile_stage and not profile_stage.startswith("writer"):
+    allowed_profile_stages = ("writer", "structure-preflight")
+    if profile_stage and not profile_stage.startswith(allowed_profile_stages):
         findings.append(
             make_structure_finding(
                 "structure-preflight-validator-profile-stage-mismatch",
-                "Scoped validator profile is not from a writer stage",
-                f"Profile current_stage is {profile_stage!r}; structure preflight requires writer-stage proof.",
+                "Scoped validator profile is not from a writer or structure-preflight stage",
+                f"Profile current_stage is {profile_stage!r}; structure preflight requires post-writer scoped validator proof.",
                 [relative_or_name(profile_path, infer_ft_root(state_path))],
-                "Attach the scoped profile generated immediately after the writer draft or writer remediation stage.",
+                "Attach the scoped profile generated immediately after writer draft/remediation or for the deterministic structure-preflight state.",
             )
         )
     unresolved = profile.get("unresolved_warning_error_count")
@@ -2189,23 +2230,23 @@ def evaluate_test_case_markdown_structure(
     state_path: Path,
 ) -> tuple[list[dict[str, Any]], list[str]]:
     ft_root = infer_ft_root(state_path)
-    canonical_ref = str(state.get("canonical_test_cases") or "")
-    canonical_path = resolve_artifact_path(canonical_ref, ft_root)
-    checked_paths = [canonical_ref or relative_or_name(canonical_path, ft_root)]
-    if not canonical_path.exists():
+    active_ref = active_test_cases_ref(state, state_path)
+    active_path = resolve_artifact_path(active_ref, ft_root)
+    checked_paths = [active_ref or relative_or_name(active_path, ft_root)]
+    if active_path is None or not active_path.exists():
         return (
             [
                 make_structure_finding(
                     "structure-preflight-canonical-test-cases-missing",
-                    "Canonical test case file is missing",
-                    f"canonical_test_cases points to {canonical_ref!r}, but the file does not exist.",
-                    [canonical_ref],
-                    "Create or restore the canonical test case file before reviewer preflight.",
+                    "Active test case file is missing",
+                    f"active test-case artifact points to {active_ref!r}, but the file does not exist.",
+                    [active_ref],
+                    "Create or restore draft_test_cases before reviewer preflight, or promote a signed-off canonical test-case file.",
                 )
             ],
             checked_paths,
         )
-    markdown = canonical_path.read_text(encoding="utf-8")
+    markdown = active_path.read_text(encoding="utf-8")
     findings: list[dict[str, Any]] = []
     noncanonical_headings = [match.group(1) for match in NONCANONICAL_TEST_CASE_HEADING_RE.finditer(markdown)]
     if noncanonical_headings:
@@ -2214,7 +2255,7 @@ def evaluate_test_case_markdown_structure(
                 "structure-preflight-test-case-noncanonical-heading-level",
                 "Test cases use noncanonical heading level",
                 f"TC headings must be level 2. Noncanonical headings: {', '.join(noncanonical_headings[:20])}.",
-                [relative_or_name(canonical_path, ft_root)],
+                [relative_or_name(active_path, ft_root)],
                 "Rewrite every test case heading as '## TC-...'.",
             )
         )
@@ -2225,7 +2266,7 @@ def evaluate_test_case_markdown_structure(
                 "structure-preflight-test-case-blocks-missing",
                 "No canonical test case blocks were found",
                 "The canonical test case file must contain one or more '## TC-...' blocks.",
-                [relative_or_name(canonical_path, ft_root)],
+                [relative_or_name(active_path, ft_root)],
                 "Add executable test case blocks with canonical TC IDs.",
             )
         )
@@ -2239,7 +2280,7 @@ def evaluate_test_case_markdown_structure(
                 "structure-preflight-test-case-duplicate-ids",
                 "Duplicate test case IDs were found",
                 f"Duplicate TC IDs: {', '.join(duplicates)}.",
-                [relative_or_name(canonical_path, ft_root)],
+                [relative_or_name(active_path, ft_root)],
                 "Deduplicate or renumber test case blocks so every TC ID is unique.",
             )
         )
@@ -2252,7 +2293,7 @@ def evaluate_test_case_markdown_structure(
                 "structure-preflight-test-case-id-not-numeric",
                 "Test case IDs do not end with a numeric sequence",
                 f"IDs without numeric suffix: {', '.join(invalid)}.",
-                [relative_or_name(canonical_path, ft_root)],
+                [relative_or_name(active_path, ft_root)],
                 "Use stable IDs ending with a zero-padded numeric suffix.",
             )
         )
@@ -2267,7 +2308,7 @@ def evaluate_test_case_markdown_structure(
                     "structure-preflight-test-case-id-sequence-not-contiguous",
                     "Test case IDs are not a contiguous ordered sequence",
                     f"Actual IDs: {', '.join(tc_ids)}.",
-                    [relative_or_name(canonical_path, ft_root)],
+                    [relative_or_name(active_path, ft_root)],
                     "Renumber test cases into one contiguous ordered sequence without gaps.",
                 )
             )
@@ -2284,7 +2325,7 @@ def evaluate_test_case_markdown_structure(
                 "structure-preflight-duplicate-wrapper-headings",
                 "Duplicate wrapper headings were found",
                 f"Duplicate non-TC H2 headings: {', '.join(duplicate_wrappers)}.",
-                [relative_or_name(canonical_path, ft_root)],
+                [relative_or_name(active_path, ft_root)],
                 "Remove duplicate wrapper sections or merge their content.",
             )
         )
@@ -2301,7 +2342,7 @@ def evaluate_test_case_markdown_structure(
                     "structure-preflight-test-case-runtime-field-missing",
                     f"{tc_id} is missing required runtime fields",
                     f"Missing fields/sections: {', '.join(missing)}.",
-                    [f"{relative_or_name(canonical_path, ft_root)}#{tc_id}"],
+                    [f"{relative_or_name(active_path, ft_root)}#{tc_id}"],
                     "Add every required runtime field and section to this test case.",
                 )
             )
@@ -2315,7 +2356,7 @@ def evaluate_test_case_markdown_structure(
                     "structure-preflight-coverage-summary-range-stale",
                     "Coverage Summary executable case range is stale",
                     f"Coverage Summary says {summary_ids[0]}..{summary_ids[-1]}, actual executable range is {tc_ids[0]}..{tc_ids[-1]}.",
-                    [relative_or_name(canonical_path, ft_root)],
+                    [relative_or_name(active_path, ft_root)],
                     "Update Coverage Summary executable_test_cases to match the canonical TC range.",
                 )
             )
@@ -2908,9 +2949,9 @@ def bounded_reviewer_artifact_paths(
     ft_root = infer_ft_root(state_path)
     path_base = cwd_base or ft_root.parent.parent
     paths: list[str] = []
-    canonical = resolve_artifact_path(str(state.get("canonical_test_cases") or ""), ft_root)
-    if canonical is not None and canonical.exists():
-        paths.append(relative_or_name(canonical, path_base))
+    active_test_cases = active_test_cases_path(state, state_path)
+    if active_test_cases.exists():
+        paths.append(relative_or_name(active_test_cases, path_base))
     test_design_dir = resolve_artifact_path(str(state.get("test_design_dir") or ""), ft_root)
     if test_design_dir is not None and test_design_dir.is_dir():
         for path in sorted(test_design_dir.glob("*.md")):
@@ -3252,6 +3293,12 @@ def timeout_recovery_diagnostics(
     output_dir = state_path.parent / "outputs"
     markdown: list[str] = []
     reasons: list[str] = []
+    try:
+        state_for_profile = load_simple_yaml(state_path)
+    except RunnerError:
+        state_for_profile = state
+    profile_stage = writer_timeout_recovery_profile_stage(state_path, state_for_profile, next_session)
+    expected_profile_name = f"scoped-validator-profile.{profile_stage}.json"
 
     writer_response = output_dir / f"{next_session.stage}-response.md"
     if existing_relative_artifact(writer_response, ft_root):
@@ -3260,16 +3307,20 @@ def timeout_recovery_diagnostics(
         markdown.append(f"- writer response: missing (`outputs/{next_session.stage}-response.md`)")
         reasons.append("writer response missing")
 
-    profile_path = output_dir / f"scoped-validator-profile.{next_session.stage}.json"
+    profile_path = output_dir / expected_profile_name
     if not profile_path.exists():
-        markdown.append(f"- scoped validator profile: missing (`outputs/scoped-validator-profile.{next_session.stage}.json`)")
-        reasons.append("current-stage scoped validator profile missing")
+        markdown.append(f"- scoped validator profile: missing (`outputs/{expected_profile_name}`)")
+        markdown.append(
+            "- recovery action: run `python scripts/validate_agent_artifacts.py --root <ft-root> --json` "
+            "for this cycle and write the stage-appropriate scoped profile before resuming."
+        )
+        reasons.append(f"writer-timeout-recovery-missing-profile: outputs/{expected_profile_name}")
     else:
         try:
             profile = json.loads(profile_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             markdown.append(f"- scoped validator profile: invalid JSON (`{relative_or_name(profile_path, ft_root)}`)")
-            reasons.append("current-stage scoped validator profile invalid")
+            reasons.append(f"writer-timeout-recovery-missing-profile: outputs/{expected_profile_name} invalid JSON")
         else:
             unresolved = profile.get("unresolved_warning_error_count")
             markdown.append(
@@ -3281,7 +3332,7 @@ def timeout_recovery_diagnostics(
             except (TypeError, ValueError):
                 unresolved_count = 1
             if unresolved_count != 0:
-                reasons.append(f"current-stage scoped validator profile unresolved={unresolved!r}")
+                reasons.append(f"stage-appropriate scoped validator profile unresolved={unresolved!r}")
 
     next_review = next_writer_review_prompt(state_path, state, next_session)
     if next_review is None:
@@ -3765,17 +3816,24 @@ def writer_timeout_artifact_candidates(
     if canonical and canonical.exists():
         artifacts.append(relative_or_name(canonical, ft_root))
 
+    draft = resolve_artifact_path(str(state.get("draft_test_cases") or ""), ft_root)
+    if draft and draft.exists():
+        artifacts.append(relative_or_name(draft, ft_root))
+
     test_design_dir = resolve_artifact_path(str(state.get("test_design_dir") or ""), ft_root)
     if test_design_dir and test_design_dir.exists():
         artifacts.append(relative_or_name(test_design_dir, ft_root))
 
+    profile_stage = writer_timeout_recovery_profile_stage(state_path, state, next_session)
     candidate_paths = [
         output_dir / f"{next_session.stage}-response.md",
+        output_dir / f"{next_session.stage}-draft.md",
         output_dir / f"writer-session-log.{next_session.stage}.md",
         output_dir / "writer-session-log.md",
         output_dir / f"agent-decision-log.{next_session.stage}.md",
         output_dir / "agent-decision-log.md",
         output_dir / f"scoped-validator-profile.{next_session.stage}.json",
+        output_dir / f"scoped-validator-profile.{profile_stage}.json",
     ]
     for path in candidate_paths:
         relative = existing_relative_artifact(path, ft_root)
@@ -3783,6 +3841,23 @@ def writer_timeout_artifact_candidates(
             artifacts.append(relative)
 
     return list(dict.fromkeys(artifacts))
+
+
+def writer_timeout_recovery_profile_stage(
+    state_path: Path,
+    state: dict[str, Any],
+    next_session: NextSession,
+) -> str:
+    current_stage = str(state.get("current_stage") or "").strip()
+    if current_stage and current_stage != next_session.stage:
+        return current_stage
+    next_review = next_writer_review_prompt(state_path, state, next_session)
+    if next_review is not None:
+        next_stage, _, _, _ = next_review
+        next_profile = state_path.parent / "outputs" / f"scoped-validator-profile.{next_stage}.json"
+        if next_profile.exists():
+            return next_stage
+    return next_session.stage
 
 
 def next_writer_review_prompt(
@@ -3826,6 +3901,18 @@ def clean_scoped_validator_profile_for_stage(
     return profile_path
 
 
+def clean_scoped_validator_profile_for_writer_timeout_recovery(
+    state_path: Path,
+    state: dict[str, Any],
+    next_session: NextSession,
+) -> Path | None:
+    return clean_scoped_validator_profile_for_stage(
+        state_path,
+        state,
+        writer_timeout_recovery_profile_stage(state_path, state, next_session),
+    )
+
+
 def completed_payload_from_timed_out_writer_artifact_progress(
     state_path: Path,
     *,
@@ -3852,10 +3939,10 @@ def completed_payload_from_timed_out_writer_artifact_progress(
     if not existing_relative_artifact(writer_response, ft_root):
         return None
 
-    profile_path = clean_scoped_validator_profile_for_stage(
+    profile_path = clean_scoped_validator_profile_for_writer_timeout_recovery(
         state_path,
         state_current,
-        next_session.stage,
+        next_session,
     )
     if profile_path is None:
         return None
@@ -4017,10 +4104,10 @@ def completed_payload_from_incomplete_writer_artifact_progress(
     if not existing_relative_artifact(writer_response, ft_root):
         return None
 
-    profile_path = clean_scoped_validator_profile_for_stage(
+    profile_path = clean_scoped_validator_profile_for_writer_timeout_recovery(
         state_path,
         state_current,
-        next_session.stage,
+        next_session,
     )
     if profile_path is None:
         return None
@@ -5805,6 +5892,38 @@ def next_session_summary(state: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def blocked_timeout_recovery_contract(
+    state_path: Path,
+    state: dict[str, Any],
+) -> dict[str, Any] | None:
+    reasons = [str(item) for item in state.get("blocking_reasons") or []]
+    if not any("timed out" in reason or "timeout" in reason for reason in reasons):
+        return None
+    writer_stage = ""
+    for reason in reasons:
+        if reason.startswith("writer"):
+            writer_stage = reason.split(":", 1)[0]
+            break
+    if not writer_stage:
+        return None
+    prompt_path = str(state.get("active_transition_prompt") or "")
+    profile_stage = str(state.get("current_stage") or writer_stage)
+    profile_path = state_path.parent / "outputs" / f"scoped-validator-profile.{profile_stage}.json"
+    ft_root = infer_ft_root(state_path)
+    return {
+        "blocked_reason": "writer-timeout-recovery",
+        "timed_out_stage": writer_stage,
+        "expected_profile": relative_or_name(profile_path, ft_root),
+        "profile_exists": profile_path.exists(),
+        "active_transition_prompt": prompt_path,
+        "resume_starts_new_writer": False,
+        "recovery_action": (
+            "resolve scoped validator findings or regenerate the expected profile before resume; "
+            "blocked-input has no runnable next session"
+        ),
+    }
+
+
 def build_doctor_payload(
     state_path: Path,
     *,
@@ -5862,6 +5981,9 @@ def build_doctor_payload(
     payload["completion_manifests"] = [relative_or_name(path, ft_root) for path in manifests]
     if state is not None:
         next_session = next_session_for_state(state)
+        timeout_contract = blocked_timeout_recovery_contract(state_path, state)
+        if timeout_contract is not None:
+            payload["timeout_recovery_contract"] = timeout_contract
         if next_session is not None:
             expected_manifest = completion_manifest_path_for_stage(state_path, next_session.stage)
             next_review = (

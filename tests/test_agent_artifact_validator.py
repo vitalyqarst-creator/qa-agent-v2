@@ -17317,6 +17317,111 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("active-text-artifact-encoding-damage", finding_ids)
 
+    def test_blocked_cycle_with_unsigned_production_test_case_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "sample-ft"
+            test_case = ft_root / "test-cases" / "sample.md"
+            self.write_minimal_test_case_file(test_case)
+            cycle_state = ft_root / "work" / "review-cycles" / "sample-scope" / "cycle-state.yaml"
+            cycle_state.parent.mkdir(parents=True, exist_ok=True)
+            cycle_state.write_text(
+                "\n".join(
+                    [
+                        "cycle_id: sample-cycle",
+                        "ft_slug: sample-ft",
+                        "scope_slug: sample-scope",
+                        "canonical_test_cases: test-cases/sample.md",
+                        "test_design_dir: work/test-design/sample-scope",
+                        "current_stage: structure-preflight-r1",
+                        "stage_status: blocked-input",
+                        "semantic_round: 1",
+                        "max_semantic_rounds: 2",
+                        "active_transition_prompt: work/review-cycles/sample-scope/prompts/prompt.structure-preflight-r1.md",
+                        "blocking_reasons:",
+                        "  - writer-r1: timeout",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("blocked-cycle-must-not-commit-final-artifact", finding_ids)
+
+    def test_blocked_cycle_with_work_dir_draft_does_not_warn_as_unsigned_production(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "sample-ft"
+            draft = ft_root / "work" / "review-cycles" / "sample-scope" / "outputs" / "writer-r1-draft.md"
+            self.write_minimal_test_case_file(draft)
+            cycle_state = ft_root / "work" / "review-cycles" / "sample-scope" / "cycle-state.yaml"
+            cycle_state.parent.mkdir(parents=True, exist_ok=True)
+            cycle_state.write_text(
+                "\n".join(
+                    [
+                        "cycle_id: sample-cycle",
+                        "ft_slug: sample-ft",
+                        "scope_slug: sample-scope",
+                        "canonical_test_cases: test-cases/sample.md",
+                        "draft_test_cases: work/review-cycles/sample-scope/outputs/writer-r1-draft.md",
+                        "test_design_dir: work/test-design/sample-scope",
+                        "current_stage: structure-preflight-r1",
+                        "stage_status: blocked-input",
+                        "semantic_round: 1",
+                        "max_semantic_rounds: 2",
+                        "active_transition_prompt: work/review-cycles/sample-scope/prompts/prompt.structure-preflight-r1.md",
+                        "blocking_reasons:",
+                        "  - writer-r1: timeout",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("blocked-cycle-must-not-commit-final-artifact", finding_ids)
+        self.assertNotIn("unsigned-draft-in-production-test-cases", finding_ids)
+
+    def test_signed_off_cycle_with_canonical_test_case_passes_unsigned_draft_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "sample-ft"
+            test_case = ft_root / "test-cases" / "sample.md"
+            self.write_minimal_test_case_file(test_case)
+            cycle_state = ft_root / "work" / "review-cycles" / "sample-scope" / "cycle-state.yaml"
+            cycle_state.parent.mkdir(parents=True)
+            cycle_state.write_text(
+                "\n".join(
+                    [
+                        "cycle_id: sample-cycle",
+                        "ft_slug: sample-ft",
+                        "scope_slug: sample-scope",
+                        "canonical_test_cases: test-cases/sample.md",
+                        "test_design_dir: work/test-design/sample-scope",
+                        "current_stage: semantic-regression-final",
+                        "stage_status: signed-off",
+                        "semantic_round: 2",
+                        "max_semantic_rounds: 2",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("blocked-cycle-must-not-commit-final-artifact", finding_ids)
+        self.assertNotIn("unsigned-draft-in-production-test-cases", finding_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

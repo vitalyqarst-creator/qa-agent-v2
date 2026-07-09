@@ -31,8 +31,9 @@
 
 - Selected a fresh `BSR 32` source-backed scope.
 - Used the штатный `run_cycle.ps1 run-until-terminal` runner path.
-- Preserved terminal `blocked-input` after writer SDK timeout and missing `scoped-validator-profile.writer-r1.json`.
+- Preserved terminal `blocked-input` after writer SDK timeout and unresolved stage-appropriate `scoped-validator-profile.structure-preflight-r1.json`.
 - Did not promote the unsigned writer draft to final artifact.
+- Moved unsigned writer draft to work-only evidence path `work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`.
 
 ## Risks And Fallbacks
 

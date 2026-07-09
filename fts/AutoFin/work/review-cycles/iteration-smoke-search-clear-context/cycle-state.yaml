@@ -7,6 +7,7 @@ stage_status: blocked-input
 semantic_round: 1
 max_semantic_rounds: 2
 canonical_test_cases: test-cases/4.2-iteration-smoke-rerun-search-clear-context.md
+draft_test_cases: work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md
 test_design_dir: work/test-design/4.2-iteration-smoke-rerun-search-clear-context
 active_snapshot: none
 active_transition_prompt: work/review-cycles/iteration-smoke-search-clear-context/prompts/prompt.structure-preflight-r1.md
@@ -17,7 +18,7 @@ latest_artifacts:
   - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md
   - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md
   - work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md
-  - test-cases/4.2-iteration-smoke-rerun-search-clear-context.md
+  - work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md
   - work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-row-inventory.md
   - work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-row-completeness-matrix.md
   - work/test-design/4.2-iteration-smoke-rerun-search-clear-context/source-table-normalization.md
@@ -42,7 +43,7 @@ latest_artifacts:
   - work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-completion.yaml
 blocking_reasons:
   - "writer-r1: Codex SDK turn timed out after 900 seconds"
-  - "writer-r1: timeout artifact recovery did not continue: current-stage scoped validator profile missing"
+  - "writer-r1: timeout artifact recovery did not continue: stage-appropriate scoped validator profile unresolved=2 at outputs/scoped-validator-profile.structure-preflight-r1.json"
 blocking_findings:
 open_questions:
 accepted_risks:

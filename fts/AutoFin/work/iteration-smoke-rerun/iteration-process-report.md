@@ -19,7 +19,7 @@ The rerun did not reach writer-reviewer sign-off. The runner produced an honest 
 | Source handoff | pass | `work/stage-handoffs/19-iteration-smoke-search-clear-context/*` |
 | Runner validate/dry-run before start | pass | next stage was `writer-r1`, scenario `writer.session_initial_draft`, sandbox `workspace_write` |
 | Live SDK writer session | timeout | thread `019f47a4-5be9-73e2-a70a-088e6c74d1a7` |
-| Runner timeout recovery | blocked | missing `outputs/scoped-validator-profile.writer-r1.json` |
+| Runner timeout recovery | blocked | stage-appropriate profile `outputs/scoped-validator-profile.structure-preflight-r1.json` exists with unresolved findings |
 | Reviewer stage | not started | terminal `blocked-input` before reviewer |
 | Sign-off | not reached | no final reviewer output |
 
@@ -31,7 +31,7 @@ The rerun did not reach writer-reviewer sign-off. The runner produced an honest 
 - `stage_status: blocked-input`
 - `semantic_round: 1`
 - blocking reason 1: `writer-r1: Codex SDK turn timed out after 900 seconds`
-- blocking reason 2: `writer-r1: timeout artifact recovery did not continue: current-stage scoped validator profile missing`
+- blocking reason 2: `writer-r1: timeout artifact recovery did not continue: stage-appropriate scoped validator profile unresolved=2 at outputs/scoped-validator-profile.structure-preflight-r1.json`
 
 ## Validator Findings
 
@@ -39,6 +39,7 @@ The unsigned writer draft is not validator-clean. Current-scope validator report
 
 - `validator-report.review-cycle.json`: 0 errors, 12 warnings, 1 info.
 - `validator-report.writer-draft.json`: 0 errors, 11 warnings.
+- `validator-report.writer-draft.after-timeout-fix.json`: 0 errors, 3 warnings, 1 info for the moved work-dir draft.
 - Writer quality gate finding: `writer-quality-gate-failed`.
 - Additional warnings include incomplete risk/applicability matrix columns, TDDT/ledger synchronization issues, unknown coverage obligation source properties, duplicate split headings and noncanonical test-design review items.
 
@@ -62,4 +63,4 @@ Package-level validation was also run and saved to `validator-report.autofin-pac
 
 ## Final Artifact Decision
 
-No final production test-case artifact is accepted for this rerun. The file `test-cases/4.2-iteration-smoke-rerun-search-clear-context.md` exists only because the writer session created a draft before timeout; it is not reviewer-signed, not automation-ready and not a final deliverable.
+No final production test-case artifact is accepted for this rerun. The writer-created draft was moved out of `test-cases/` to `work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`; it is not reviewer-signed, not automation-ready and not a final deliverable.

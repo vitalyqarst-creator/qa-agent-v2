@@ -8,7 +8,8 @@ Scope:
 - Scope slug: `iteration-smoke-search-clear-context`
 - Section: `4.2. Меню «Заявки в системе»`
 - Requirement id: `BSR 32`
-- Canonical test-case file: `fts/AutoFin/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md`
+- Draft test-case file: `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`
+- Canonical test-case file after sign-off: `fts/AutoFin/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md`
 - Test-design directory: `fts/AutoFin/work/test-design/4.2-iteration-smoke-rerun-search-clear-context`
 
 Required inputs:
@@ -34,7 +35,7 @@ Process constraints:
 
 Expected writer outputs:
 
-- Canonical test-case draft at `fts/AutoFin/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md`
+- Unsigned test-case draft at `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`
 - Test-design artifacts under `fts/AutoFin/work/test-design/4.2-iteration-smoke-rerun-search-clear-context`
 - Writer response, session log and decision log under `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs`
 - Next prompt for `structure-preflight-r1` under `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/prompts`

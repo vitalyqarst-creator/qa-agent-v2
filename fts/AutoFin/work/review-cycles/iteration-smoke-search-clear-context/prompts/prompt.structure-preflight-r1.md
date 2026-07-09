@@ -14,7 +14,8 @@ Scope:
 - Scope slug: `iteration-smoke-search-clear-context`
 - Section: `4.2. Меню «Заявки в системе»`
 - Requirement id: `BSR 32`
-- Canonical test-case file: `fts/AutoFin/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md`
+- Active unsigned draft: `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`
+- Canonical test-case file after sign-off: `fts/AutoFin/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md`
 - Test-design directory: `fts/AutoFin/work/test-design/4.2-iteration-smoke-rerun-search-clear-context`
 - Cycle state: `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/cycle-state.yaml`
 
@@ -26,7 +27,7 @@ Required inputs:
 - `fts/AutoFin/work/stage-handoffs/19-iteration-smoke-search-clear-context/source-row-inventory.md`
 - `fts/AutoFin/work/stage-handoffs/19-iteration-smoke-search-clear-context/source-parity-check.md`
 - `fts/AutoFin/work/stage-handoffs/19-iteration-smoke-search-clear-context/scope-coverage-gaps.md`
-- `fts/AutoFin/test-cases/4.2-iteration-smoke-rerun-search-clear-context.md`
+- `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-draft.md`
 - `fts/AutoFin/work/test-design/4.2-iteration-smoke-rerun-search-clear-context`
 - `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-r1-response.md`
 - `fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-session-log.writer-r1.md`

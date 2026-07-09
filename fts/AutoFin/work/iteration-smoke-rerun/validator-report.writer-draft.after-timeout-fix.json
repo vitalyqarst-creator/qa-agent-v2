@@ -1,0 +1,193 @@
+{
+  "summary": {
+    "workflow_states_checked": 0,
+    "source_documents_checked": 0,
+    "artifact_manifests_checked": 0,
+    "traceability_matrices_checked": 0,
+    "review_findings_checked": 0,
+    "writer_responses_checked": 0,
+    "test_case_files_checked": 1,
+    "source_normalization_diagnostics_checked": 0,
+    "source_table_normalizations_checked": 0,
+    "dictionary_inventories_checked": 0,
+    "writer_process_diagnostics_checked": 0,
+    "writer_self_checks_checked": 0,
+    "coverage_gap_artifacts_checked": 0,
+    "session_logs_checked": 1,
+    "decision_logs_checked": 1,
+    "active_text_artifacts_checked": 0,
+    "generated_source_basis_artifacts_checked": 1,
+    "mockup_visual_inventories_checked": 0,
+    "ui_evidence_indexes_checked": 0,
+    "ui_validation_reports_checked": 0,
+    "findings_count": 4,
+    "errors_count": 0,
+    "warnings_count": 3,
+    "info_count": 1,
+    "checks_count": 20
+  },
+  "findings": [
+    {
+      "id": "source-row-inventory-missing",
+      "severity": "warning",
+      "category": "traceability",
+      "title": "Package-based test-case file has no Source Row Inventory",
+      "details": "Writer output must inventory every source row in the confirmed scope before normalization, so a source row cannot silently disappear from the ledger and TC coverage.",
+      "path": ".",
+      "evidence": [],
+      "recommended_action": "Add `## Source Row Inventory` with source_row_id, package_id, field_or_action, source_ref, requirement_codes, in_scope and mapped_atom_or_gap."
+    },
+    {
+      "id": "workflow-state-not-found",
+      "severity": "warning",
+      "category": "workflow-state",
+      "title": "No workflow-state.yaml files found",
+      "details": "The validator did not find any handoff state files.",
+      "path": ".",
+      "evidence": [],
+      "recommended_action": "Run the validator against a repository or fixture containing workflow-state.yaml."
+    },
+    {
+      "id": "writer-quality-gate-missing",
+      "severity": "warning",
+      "category": "test-case-format",
+      "title": "Package-based test-case file has no Writer Quality Gate",
+      "details": "Package-based writer output must self-reject semantic compression, merged TC, broad GSR ranges and unobservable internal behavior before it is sent to reviewer.",
+      "path": ".",
+      "evidence": [],
+      "recommended_action": "Add `## Writer Quality Gate` with the canonical gate items and block failed packages before ready-for-review."
+    },
+    {
+      "id": "test-design-applicability-matrix-missing",
+      "severity": "info",
+      "category": "test-design",
+      "title": "Test-case file has no Test-design applicability matrix",
+      "details": "Canonical initial drafts should explicitly record which coverage dimensions apply, do not apply, or remain unclear.",
+      "path": ".",
+      "evidence": [],
+      "recommended_action": "Add a Test-design Applicability Matrix before review handoff."
+    }
+  ],
+  "checks": [
+    {
+      "name": "workflow-state-discovery",
+      "status": "warn",
+      "details": "No workflow-state.yaml files found.",
+      "path": "."
+    },
+    {
+      "name": "source-support-duplicate-manifest",
+      "status": "pass",
+      "details": "Duplicate source/support files are covered by artifact manifest or absent.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs"
+    },
+    {
+      "name": "oracle-candidate-obligation-coverage",
+      "status": "pass",
+      "details": "No candidate_tc_required oracle obligations found.",
+      "path": "."
+    },
+    {
+      "name": "traceability-placeholder-sentinel",
+      "status": "pass",
+      "details": "Traceability-bearing placeholder sentinel check passed.",
+      "path": "."
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory section not present.",
+      "path": "."
+    },
+    {
+      "name": "test-design-applicability-matrix",
+      "status": "pass",
+      "details": "Applicability matrix missing recorded as legacy info.",
+      "path": "."
+    },
+    {
+      "name": "test-case-mixed-schema",
+      "status": "pass",
+      "details": "No mixed TC schema duplicates found.",
+      "path": "."
+    },
+    {
+      "name": "test-case-ui-calibration-candidates",
+      "status": "pass",
+      "details": "UI calibration candidate markers passed.",
+      "path": "."
+    },
+    {
+      "name": "source-row-inventory",
+      "status": "warn",
+      "details": "Source Row Inventory is missing.",
+      "path": "."
+    },
+    {
+      "name": "test-design-decision-table",
+      "status": "pass",
+      "details": "Test Design Decision Table is not required for this artifact.",
+      "path": "."
+    },
+    {
+      "name": "coverage-obligation-table",
+      "status": "pass",
+      "details": "Coverage Obligation Table is not required for this artifact.",
+      "path": "."
+    },
+    {
+      "name": "test-design-review",
+      "status": "pass",
+      "details": "Test Design Review is not required for this artifact.",
+      "path": "."
+    },
+    {
+      "name": "writer-quality-gate",
+      "status": "warn",
+      "details": "Writer Quality Gate is missing.",
+      "path": "."
+    },
+    {
+      "name": "writer-self-check-sections",
+      "status": "pass",
+      "details": "Writer self-check sections passed.",
+      "path": "."
+    },
+    {
+      "name": "artifact-write-strategy",
+      "status": "pass",
+      "details": "Artifact Write Strategy is not required for this small/simple file.",
+      "path": "."
+    },
+    {
+      "name": "test-case-quality-smells",
+      "status": "pass",
+      "details": "No generic atom/TC quality smells found.",
+      "path": "."
+    },
+    {
+      "name": "test-case-format",
+      "status": "warn",
+      "details": "Test-case format contract has issues.",
+      "path": "."
+    },
+    {
+      "name": "session-log-format",
+      "status": "pass",
+      "details": "Session log format passed.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/writer-session-log.writer-r1.md"
+    },
+    {
+      "name": "decision-log-format",
+      "status": "pass",
+      "details": "Decision log format passed.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/iteration-smoke-search-clear-context/outputs/agent-decision-log.writer-r1.md"
+    },
+    {
+      "name": "generated-artifact-source-basis",
+      "status": "pass",
+      "details": "Generated artifact source-basis guard passed.",
+      "path": "."
+    }
+  ]
+}

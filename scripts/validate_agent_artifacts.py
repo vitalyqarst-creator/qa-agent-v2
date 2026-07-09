@@ -864,6 +864,19 @@ def iter_workflow_states(root: Path) -> list[Path]:
     return sorted(root.rglob("workflow-state.yaml"))
 
 
+def iter_session_cycle_states(root: Path) -> list[Path]:
+    if root.is_file() and root.name == "cycle-state.yaml":
+        return [root]
+    if (root / "cycle-state.yaml").is_file():
+        return [root / "cycle-state.yaml"]
+    scope = validation_scope(root)
+    return sorted(
+        path
+        for path in scope.rglob("work/review-cycles/*/cycle-state.yaml")
+        if "versions" not in path.parts
+    )
+
+
 def find_authoritative_session_cycle_state(
     workflow_state: dict[str, Any],
     workflow_path: Path,
@@ -913,6 +926,92 @@ def find_authoritative_session_cycle_state(
         return candidate, cycle_state
 
     return None
+
+
+def validate_session_cycle_state_artifacts(
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    display_path = rel(path, root)
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    try:
+        state = parse_workflow_state(path)
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="session-cycle-state-unreadable",
+                severity="error",
+                category="workflow-state",
+                title="cycle-state.yaml is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save cycle-state.yaml as UTF-8.",
+            )
+        )
+        checks.append(Check("session-cycle-state-artifacts", "fail", "cycle-state.yaml is unreadable.", display_path))
+        return findings, checks
+
+    stage_status = str(state.get("stage_status") or "")
+    canonical_ref = strip_quotes(str(state.get("canonical_test_cases") or ""))
+    draft_ref = strip_quotes(str(state.get("draft_test_cases") or ""))
+    ft_root = path.parents[3] if len(path.parents) > 3 else root
+    canonical = resolve_artifact_path(canonical_ref, path, root, ft_root) if canonical_ref else None
+    draft = resolve_artifact_path(draft_ref, path, root, ft_root) if draft_ref else None
+    canonical_exists = canonical is not None and canonical.exists()
+    draft_exists = draft is not None and draft.exists()
+    explicitly_draft = str(state.get("draft_or_unsigned") or "").lower() in {"true", "yes", "1"}
+    signed_off = stage_status == "signed-off"
+
+    if canonical_exists and not signed_off and not draft_exists and not explicitly_draft:
+        severity = "warning"
+        check_status = "warn"
+        finding_id = "unsigned-draft-in-production-test-cases"
+        title = "Unsigned writer draft is present under production test-cases"
+        details = (
+            "Session cycle is not signed off, but canonical_test_cases resolves under fts/**/test-cases/*.md "
+            "without draft_test_cases or an explicit draft marker. This can make an unsigned writer draft look final."
+        )
+        if stage_status == "blocked-input":
+            finding_id = "blocked-cycle-must-not-commit-final-artifact"
+            title = "Blocked cycle exposes canonical test-case file as active artifact"
+            details = (
+                "A blocked-input cycle must not make a production test-case path look like an accepted final artifact. "
+                "Move the unsigned draft into work/review-cycles/<cycle>/outputs/ and set draft_test_cases, "
+                "or complete reviewer sign-off before keeping the production file."
+            )
+        findings.append(
+            Finding(
+                id=finding_id,
+                severity=severity,
+                category="workflow-state",
+                title=title,
+                details=details,
+                path=display_path,
+                evidence=[
+                    f"stage_status={stage_status}",
+                    f"canonical_test_cases={canonical_ref}",
+                    f"draft_test_cases={draft_ref or '<missing>'}",
+                ],
+                recommended_action=(
+                    "Move unsigned drafts to the cycle work outputs and set draft_test_cases, or promote to "
+                    "canonical test-cases only after reviewer sign-off."
+                ),
+            )
+        )
+        checks.append(Check("session-cycle-unsigned-production-draft", check_status, title, display_path))
+    else:
+        checks.append(
+            Check(
+                "session-cycle-unsigned-production-draft",
+                "pass",
+                "No unsigned production test-case draft is exposed by this cycle.",
+                display_path,
+            )
+        )
+
+    return findings, checks
 
 
 def validation_scope(root: Path) -> Path:
@@ -1033,10 +1132,22 @@ def iter_writer_responses(root: Path) -> list[Path]:
 def iter_test_case_files(root: Path) -> list[Path]:
     if root.is_file() and root.suffix == ".md" and root.parent.name == "test-cases" and root.name != "README.md":
         return [root]
+    if root.is_file() and root.suffix == ".md" and root.name.endswith("-draft.md"):
+        return [root]
+    scope = validation_scope(root)
     return sorted(
-        path
-        for path in validation_scope(root).rglob("test-cases/*.md")
-        if path.name != "README.md"
+        {
+            *(
+                path
+                for path in scope.rglob("test-cases/*.md")
+                if path.name != "README.md"
+            ),
+            *(
+                path
+                for path in scope.rglob("work/review-cycles/*/outputs/*-draft.md")
+                if "versions" not in path.parts
+            ),
+        }
     )
 
 
@@ -19073,6 +19184,7 @@ def validate(
         and root.name != "README.md"
     )
     workflow_states = iter_workflow_states(root)
+    session_cycle_states = iter_session_cycle_states(root)
     artifact_manifests = iter_artifact_manifests(root)
     traceability_matrices = iter_traceability_matrices(root)
     review_findings = iter_review_findings(root)
@@ -19100,6 +19212,7 @@ def validate(
     ]
     if root_is_standalone_source_normalization_diagnostic:
         workflow_states = []
+        session_cycle_states = []
         artifact_manifests = []
         traceability_matrices = []
         review_findings = []
@@ -19119,6 +19232,7 @@ def validate(
         oracle_inventories = []
     if root_is_standalone_source_table_normalization:
         workflow_states = []
+        session_cycle_states = []
         artifact_manifests = []
         traceability_matrices = []
         review_findings = []
@@ -19137,6 +19251,7 @@ def validate(
         oracle_inventories = []
     if root_is_standalone_dictionary_inventory:
         workflow_states = []
+        session_cycle_states = []
         artifact_manifests = []
         traceability_matrices = []
         review_findings = []
@@ -19204,6 +19319,11 @@ def validate(
             active_source_documents.update(collect_active_source_documents(path, root))
         except UnicodeDecodeError:
             pass
+
+    for path in session_cycle_states:
+        path_findings, path_checks = validate_session_cycle_state_artifacts(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
 
     for path in sorted(active_source_documents):
         path_findings, path_checks = validate_active_source_document(

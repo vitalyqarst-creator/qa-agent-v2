@@ -1677,7 +1677,7 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("unresolved_warning_error_count=1", timeout_text)
         self.assertIn("next review prompt: missing", timeout_text)
         self.assertTrue(
-            any("current-stage scoped validator profile unresolved=1" in reason for reason in updated_state["blocking_reasons"])
+            any("stage-appropriate scoped validator profile unresolved=1" in reason for reason in updated_state["blocking_reasons"])
         )
         self.assertIn("test-cases/1-section-scope.md", updated_state["latest_artifacts"])
         self.assertIn(
@@ -1696,6 +1696,136 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
             ["source-quality-oversized-blocks: selected rows are split defensively."],
             updated_state["accepted_risks"],
         )
+
+    def test_timeout_recovery_diagnostics_use_advanced_stage_profile(self) -> None:
+        self.write_state(status="scope-ready-for-writer")
+        runner = load_runner_module()
+        state_before = runner.load_simple_yaml(self.state_path)
+        next_session = runner.next_session_for_state(state_before)
+        self.assertIsNotNone(next_session)
+        output_dir = self.cycle_dir / "outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "writer-r1-response.md").write_text("# Writer response\n", encoding="utf-8")
+        (self.prompt_dir / "prompt.structure-preflight-r1.md").write_text("Structure preflight", encoding="utf-8")
+        self.state_path.write_text(
+            "\n".join(
+                [
+                    "cycle_id: cycle-demo",
+                    "ft_slug: demo-ft",
+                    "scope_slug: section-scope",
+                    "canonical_test_cases: test-cases/1-section-scope.md",
+                    "draft_test_cases: work/review-cycles/section-scope/outputs/writer-r1-draft.md",
+                    "test_design_dir: work/test-design/section-scope",
+                    "current_stage: structure-preflight-r1",
+                    "stage_status: blocked-input",
+                    "semantic_round: 1",
+                    "max_semantic_rounds: 2",
+                    "active_transition_prompt: work/review-cycles/section-scope/prompts/prompt.structure-preflight-r1.md",
+                    "blocking_reasons:",
+                    "  - writer-r1: timeout",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (output_dir / "writer-r1-draft.md").write_text("# Draft\n\n## TC-001\n", encoding="utf-8")
+        (output_dir / "scoped-validator-profile.structure-preflight-r1.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "scope_slug": "section-scope",
+                    "current_stage": "structure-preflight-r1",
+                    "current_scope_findings": [{"id": "writer-quality-gate-failed", "severity": "warning"}],
+                    "unresolved_warning_error_count": 1,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        lines, reasons = runner.timeout_recovery_diagnostics(
+            self.state_path,
+            state_before,
+            next_session,
+        )
+        text = "\n".join(lines)
+
+        self.assertIn("scoped-validator-profile.structure-preflight-r1.json", text)
+        self.assertNotIn("scoped-validator-profile.writer-r1.json`: missing", text)
+        self.assertIn("stage-appropriate scoped validator profile unresolved=1", reasons)
+
+    def test_writer_timeout_artifact_progress_uses_next_stage_profile_when_writer_profile_missing(self) -> None:
+        self.write_state(status="scope-ready-for-writer")
+        (self.prompt_dir / "prompt.structure-preflight-r1.md").write_text("Structure preflight", encoding="utf-8")
+        runner = load_runner_module()
+        state = runner.load_simple_yaml(self.state_path)
+        next_session = runner.next_session_for_state(state)
+        self.assertIsNotNone(next_session)
+        output_dir = self.cycle_dir / "outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "writer-r1-response.md").write_text("# Writer response\n", encoding="utf-8")
+        (output_dir / "scoped-validator-profile.structure-preflight-r1.json").write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "scope_slug": "section-scope",
+                    "current_stage": "structure-preflight-r1",
+                    "current_scope_findings": [],
+                    "unresolved_warning_error_count": 0,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        payload = runner.completed_payload_from_timed_out_writer_artifact_progress(
+            self.state_path,
+            state_before=state,
+            next_session=next_session,
+            thread_id="thread-timeout",
+            approval_mode="auto_review",
+            model=None,
+            before_snapshot_id="before-writer-r1",
+            after_snapshot_id="after-writer-r1",
+            started_at_epoch=100,
+            timeout_seconds=900,
+        )
+
+        self.assertIsNotNone(payload)
+        updated_state = runner.load_simple_yaml(self.state_path)
+        self.assertEqual("writer-draft-ready", updated_state["stage_status"])
+        self.assertIn(
+            "work/review-cycles/section-scope/outputs/scoped-validator-profile.structure-preflight-r1.json",
+            updated_state["latest_artifacts"],
+        )
+
+    def test_timeout_recovery_missing_profile_blocker_is_actionable(self) -> None:
+        self.write_state(status="scope-ready-for-writer")
+        runner = load_runner_module()
+        state = runner.load_simple_yaml(self.state_path)
+        next_session = runner.next_session_for_state(state)
+        self.assertIsNotNone(next_session)
+        output_dir = self.cycle_dir / "outputs"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "writer-r1-response.md").write_text("# Writer response\n", encoding="utf-8")
+
+        payload = runner.recover_timed_out_session(
+            self.state_path,
+            state_before=state,
+            next_session=next_session,
+            thread_id="thread-timeout",
+            approval_mode="auto_review",
+            model=None,
+            before_snapshot_id="before-writer-r1",
+            after_snapshot_id="after-writer-r1",
+            started_at_epoch=100,
+            timeout_seconds=900,
+        )
+
+        updated_state = runner.load_simple_yaml(self.state_path)
+        timeout_text = (self.cycle_dir / "outputs" / "writer-r1-timeout-recovery.md").read_text(encoding="utf-8")
+        self.assertEqual("recovered-timeout-session", payload["action"])
+        self.assertEqual("blocked-input", updated_state["stage_status"])
+        self.assertIn("writer-timeout-recovery-missing-profile", "\n".join(updated_state["blocking_reasons"]))
+        self.assertIn("recovery action:", timeout_text)
         snapshot_manifest = (
             self.cycle_dir / "versions" / "after-writer-r1" / "snapshot-manifest.yaml"
         ).read_text(encoding="utf-8")
