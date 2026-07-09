@@ -708,6 +708,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--input-restriction-gap-policy",
+        choices=("compatible", "diagnostic", "strict-canary", "writer-final", "production"),
+        default="compatible",
+        help=(
+            "Select severity for source-backed input restrictions routed as gap-only. "
+            "compatible/diagnostic keep legacy audit artifacts as warnings; "
+            "strict-canary, writer-final and production report them as errors."
+        ),
+    )
+    parser.add_argument(
         "--reviewer-signoff-policy",
         choices=("compatible", "strict"),
         default="compatible",
@@ -3228,7 +3238,19 @@ def declared_coverage_gap_ids(content: str) -> set[str]:
     return set(extract_gap_ids_from_text(section))
 
 
-def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+def input_restriction_gap_only_severity(policy: str) -> str:
+    if policy in {"strict-canary", "writer-final", "production"}:
+        return "error"
+    return "warning"
+
+
+def validate_coverage_gap_inventory(
+    content: str,
+    path: Path,
+    root: Path,
+    *,
+    input_restriction_gap_policy: str = "compatible",
+) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     display_path = rel(path, root)
     coverage_gaps_section = extract_coverage_gaps_section(content)
@@ -3261,10 +3283,11 @@ def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tup
 
     gap_only_input_restrictions = gap_only_input_restriction_rows(coverage_gaps_section)
     if gap_only_input_restrictions:
+        gap_only_severity = input_restriction_gap_only_severity(input_restriction_gap_policy)
         findings.append(
             Finding(
                 id="source-backed-input-restriction-gap-only",
-                severity="warning",
+                severity=gap_only_severity,
                 category="coverage",
                 title="Source-backed input restriction is routed as gap-only",
                 details=(
@@ -3285,7 +3308,7 @@ def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tup
     checks = [
         Check(
             "coverage-gap-inventory",
-            "warn" if findings else "pass",
+            "fail" if any(finding.severity == "error" for finding in findings) else "warn" if findings else "pass",
             "Coverage gap inventory has missing declarations." if findings else "Coverage gap inventory passed.",
             display_path,
         )
@@ -5834,6 +5857,22 @@ CANDIDATE_CONFIRMATION_FIELD_RE = re.compile(
 )
 GENERIC_CONFIRMATION_QUESTION_RE = re.compile(
     r"^\s*(?:-|n/?a|none|уточнить|требуется\s+подтверждение|unknown|tbd)\.?\s*$",
+    flags=re.IGNORECASE,
+)
+UI_CALIBRATION_NOTE_RE = re.compile(
+    r"Требуется\s+подтверждение|"
+    r"Что\s+нужно\s+зафиксировать\s+при\s+UI\s+calibration|"
+    + UI_CALIBRATION_NOTE_RE.pattern,
+    flags=re.IGNORECASE,
+)
+CANDIDATE_CONFIRMATION_FIELD_RE = re.compile(
+    r"^\*\*(?:Требуется\s+подтверждение|"
+    + CANDIDATE_CONFIRMATION_FIELD_RE.pattern.removeprefix(r"^\*\*(?:"),
+    flags=re.IGNORECASE | re.MULTILINE,
+)
+GENERIC_CONFIRMATION_QUESTION_RE = re.compile(
+    r"^\s*(?:-|n/?a|none|уточнить|требуется\s+подтверждение|unknown|tbd)\.?\s*$|"
+    + GENERIC_CONFIRMATION_QUESTION_RE.pattern,
     flags=re.IGNORECASE,
 )
 CONCRETE_BACKTICK_VALUE_RE = re.compile(r"`([^`\n]{1,80})`")
@@ -13278,6 +13317,7 @@ def validate_test_case_file(
     root: Path,
     *,
     test_case_policy: str = "compatible",
+    input_restriction_gap_policy: str = "compatible",
     known_test_case_ids: set[str] | None = None,
     suppress_blocked_input_gate_failures: bool = False,
 ) -> tuple[list[Finding], list[Check]]:
@@ -13340,7 +13380,12 @@ def validate_test_case_file(
     findings.extend(placeholder_findings)
     checks.extend(placeholder_checks)
 
-    gap_inventory_findings, gap_inventory_checks = validate_coverage_gap_inventory(content, path, root)
+    gap_inventory_findings, gap_inventory_checks = validate_coverage_gap_inventory(
+        content,
+        path,
+        root,
+        input_restriction_gap_policy=input_restriction_gap_policy,
+    )
     findings.extend(gap_inventory_findings)
     checks.extend(gap_inventory_checks)
 
@@ -17348,6 +17393,7 @@ def validate(
     findings_policy: str = "compatible",
     writer_response_policy: str = "compatible",
     test_case_policy: str = "compatible",
+    input_restriction_gap_policy: str = "compatible",
     reviewer_signoff_policy: str = "compatible",
     final_alias_policy: str = "compatible",
     session_log_policy: str = "compatible",
@@ -17557,6 +17603,7 @@ def validate(
             path,
             root,
             test_case_policy=test_case_policy,
+            input_restriction_gap_policy=input_restriction_gap_policy,
             known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
             suppress_blocked_input_gate_failures=path.resolve() in blocked_writer_gate_suppression_paths,
         )
@@ -17640,7 +17687,12 @@ def validate(
             )
             checks.append(Check("coverage-gap-inventory", "warn", "Coverage gaps artifact is not UTF-8.", rel(path, root)))
             continue
-        path_findings, path_checks = validate_coverage_gap_inventory(content, path, root)
+        path_findings, path_checks = validate_coverage_gap_inventory(
+            content,
+            path,
+            root,
+            input_restriction_gap_policy=input_restriction_gap_policy,
+        )
         findings.extend(path_findings)
         checks.extend(path_checks)
 
@@ -17785,6 +17837,7 @@ def main() -> int:
         findings_policy=args.findings_policy,
         writer_response_policy=args.writer_response_policy,
         test_case_policy=args.test_case_policy,
+        input_restriction_gap_policy=args.input_restriction_gap_policy,
         reviewer_signoff_policy=args.reviewer_signoff_policy,
         final_alias_policy=args.final_alias_policy,
         session_log_policy=args.session_log_policy,

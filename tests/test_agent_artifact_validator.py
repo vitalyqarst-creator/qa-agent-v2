@@ -3043,8 +3043,92 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             result = self.run_validator("--root", str(coverage_gaps), "--json")
 
         payload = json.loads(result.stdout)
-        finding_ids = {finding["id"] for finding in payload["findings"]}
-        self.assertIn("source-backed-input-restriction-gap-only", finding_ids)
+        matching = [
+            finding
+            for finding in payload["findings"]
+            if finding["id"] == "source-backed-input-restriction-gap-only"
+        ]
+        self.assertTrue(matching, result.stdout + result.stderr)
+        self.assertEqual(matching[0]["severity"], "warning")
+
+    def test_gap_only_visible_input_restriction_diagnostic_policy_warns_without_error_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            coverage_gaps = fixture_root / "coverage-gaps.md"
+            coverage_gaps.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Gaps And BA Questions",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "| gap_id | source_ref | related_req | gap_type | description | downstream handling |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        "| GAP-001 | Table 7 row 35 | BSR 124 | missing-ui-oracle | Postal index restriction says only 6 numeric chars, but source does not define exact UI reaction for non-numeric input. | Positive valid-value TC only; invalid class requires UI calibration. |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(coverage_gaps),
+                "--json",
+                "--fail-on",
+                "error",
+                "--input-restriction-gap-policy",
+                "diagnostic",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        matching = [
+            finding
+            for finding in payload["findings"]
+            if finding["id"] == "source-backed-input-restriction-gap-only"
+        ]
+        self.assertTrue(matching, result.stdout + result.stderr)
+        self.assertEqual(matching[0]["severity"], "warning")
+
+    def test_gap_only_visible_input_restriction_strict_profiles_are_errors(self) -> None:
+        for policy in ("strict-canary", "writer-final", "production"):
+            with self.subTest(policy=policy), tempfile.TemporaryDirectory() as tmp_dir:
+                fixture_root = Path(tmp_dir)
+                coverage_gaps = fixture_root / "coverage-gaps.md"
+                coverage_gaps.write_text(
+                    "\n".join(
+                        [
+                            "# Coverage Gaps And BA Questions",
+                            "",
+                            "## Coverage Gaps",
+                            "",
+                            "| gap_id | source_ref | related_req | gap_type | description | downstream handling |",
+                            "| --- | --- | --- | --- | --- | --- |",
+                            "| GAP-001 | Table 7 row 35 | BSR 124 | missing-ui-oracle | Postal index restriction says only 6 numeric chars, but source does not define exact UI reaction for non-numeric input. | Positive valid-value TC only; invalid class requires UI calibration. |",
+                        ]
+                    ),
+                    encoding="utf-8",
+                )
+
+                result = self.run_validator(
+                    "--root",
+                    str(coverage_gaps),
+                    "--json",
+                    "--fail-on",
+                    "error",
+                    "--input-restriction-gap-policy",
+                    policy,
+                )
+
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                payload = json.loads(result.stdout)
+                matching = [
+                    finding
+                    for finding in payload["findings"]
+                    if finding["id"] == "source-backed-input-restriction-gap-only"
+                ]
+                self.assertTrue(matching, result.stdout + result.stderr)
+                self.assertEqual(matching[0]["severity"], "error")
 
     def test_gap_with_candidate_obligation_link_does_not_warn_as_gap_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
