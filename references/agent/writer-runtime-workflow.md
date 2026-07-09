@@ -55,6 +55,23 @@ Use `coverage-runtime-checklist.md` as the default coverage prompt. Load deep co
 
 If a requirement has no observable artifact, route it to `coverage gap` or `unclear`; do not fabricate API, DB, queue, status or UI evidence. Exception: source-backed input restriction/requiredness obligations with unknown UI mechanism become candidate TC with `ui-calibration-required`, not pure gaps.
 
+For every source-backed input restriction, apply this decomposition before writing `TC-*`:
+
+1. Derive allowed equivalence classes from the source wording.
+2. Derive invalid equivalence classes from the excluded values.
+3. Write positive TC for allowed representative values.
+4. Write negative or candidate-negative TC for invalid representative values.
+5. Emit BA questions for the unknown observable rejection mechanism.
+6. Never suppress a positive allowed-class TC because a negative candidate exists.
+
+Example: `Возможен ввод только текстовых символов и специальный символ «-».`
+
+- positive: letters only, for example `Иванов`;
+- positive: letters with hyphen, for example `Иванов-Петров`;
+- negative candidate: digit, for example `Иванов1`;
+- negative candidate: special symbol other than hyphen, for example `Иванов@`;
+- question/candidate for ambiguous classes such as space, Latin letters, apostrophe and `ё`, if the source does not define them.
+
 For numeric-only, exact-length, action-created blocks, repeatable blocks, checkbox-list, generated document mapping or high-risk combinations, use `coverage-obligation-table-format.md`, `test-design-coverage-metrics-format.md`, `fixture-catalog-format.md` and `risk-priority-map-format.md` as applicable before writing `TC-*`.
 
 ## Revision Mode

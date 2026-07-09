@@ -155,6 +155,22 @@ def timeout_diagnostics(output_dir: Path) -> dict[str, Any]:
     }
 
 
+def blocked_status_from_failure_text(text: str) -> str | None:
+    normalized = text.lower()
+    if "openai-codex is not installed" in normalized or "openai-codex runtime is incomplete" in normalized:
+        return "blocked-sdk-runtime"
+    if (
+        "authentication" in normalized
+        or "unauthorized" in normalized
+        or "invalid api key" in normalized
+        or "api key" in normalized
+        or "auth failed" in normalized
+        or "auth error" in normalized
+    ):
+        return "blocked-sdk-auth"
+    return None
+
+
 def base_run_payload(
     *,
     cwd: str,
@@ -304,9 +320,18 @@ def run_diagnostic(
             result = {"status": "invalid-result-json"}
 
     if process.returncode != 0:
+        failure_text = "\n".join(
+            [
+                stdout or "",
+                stderr or "",
+                (output_dir / "exception.md").read_text(encoding="utf-8", errors="replace")
+                if (output_dir / "exception.md").exists()
+                else "",
+            ]
+        )
         run_payload.update(
             {
-                "status": "exception",
+                "status": blocked_status_from_failure_text(failure_text) or "exception",
                 "returncode": process.returncode,
                 "elapsed_ms": elapsed_ms,
                 "stdout_tail": (stdout or "")[-1000:],

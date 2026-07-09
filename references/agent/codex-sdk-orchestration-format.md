@@ -15,6 +15,7 @@ The SDK runner:
 - starts a new Codex thread for each writer or reviewer stage;
 - passes the active transition prompt and required artifact paths;
 - records the Codex `thread_id`;
+- records role, stage, scope/package, round, thread id, turn/session id, sandbox, model, prompt hash and a final response summary when available;
 - creates before/after snapshots;
 - writes an append-only runner event log for lock/session lifecycle diagnostics;
 - writes a stage completion manifest for every completed SDK turn;
@@ -65,13 +66,14 @@ sessions:
 
 Default sandbox by stage:
 
-- `structure-preflight-*`: `workspace_write`, because the reviewer session must write findings, logs, transition prompts and the updated `cycle-state.yaml`.
-- `semantic-review-*`: `workspace_write`.
-- `format-review-*`: `workspace_write`.
+- reviewer stages: `read_only`; the reviewer returns structured findings and the runner persists reviewer artifacts/state.
+- `reviewer.scope_gap_review`, `reviewer.semantic_traceability_test_design`, `reviewer.structure_format_final` and `reviewer.semantic_regression` run as bounded read-only SDK turns; `reviewer.structure_preflight` is deterministic runner-owned.
 - `writer-*`: `workspace_write`.
 - `snapshot` and `validate`: local file write/read only.
 
 `full_access` is not a default for this process.
+
+The runner is Python-based and must use one explicit Python runtime containing `openai-codex`. TypeScript SDKs must not be invoked implicitly by this runner. If the SDK package or auth/app-server access is unavailable, report `blocked-sdk-runtime` or `blocked-sdk-auth` explicitly instead of recording silent success.
 
 ## Prompt Contract
 

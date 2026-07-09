@@ -346,6 +346,24 @@ COVERAGE_OBLIGATION_REQUIRED_CLASSES_BY_PROPERTY_TYPE = {
         "reject-decimal-separator",
         "reject-sign",
     ),
+    "text-symbol-restriction": (
+        "valid-letters",
+        "valid-letters-hyphen",
+        "reject-digits",
+        "reject-special-chars-other-than-hyphen",
+    ),
+    "text-format": (
+        "valid-letters",
+        "valid-letters-hyphen",
+        "reject-digits",
+        "reject-special-chars-other-than-hyphen",
+    ),
+    "allowed-symbols": (
+        "valid-letters",
+        "valid-letters-hyphen",
+        "reject-digits",
+        "reject-special-chars-other-than-hyphen",
+    ),
     "amount-tags": (
         "dictionary-values-shown",
         "tag-selection-fills-field",
@@ -5686,8 +5704,10 @@ CANDIDATE_UI_CALIBRATION_RE = re.compile(
     flags=re.IGNORECASE,
 )
 UI_CALIBRATION_NOTE_RE = re.compile(
+    r"Требуется\s+подтверждение|"
     r"Что\s+нужно\s+зафиксировать\s+при\s+UI\s+calibration|"
     r"what\s+to\s+record\s+during\s+UI\s+calibration|"
+    r"requires\s+confirmation|"
     r"calibration_notes?",
     flags=re.IGNORECASE,
 )
@@ -5702,6 +5722,28 @@ CONCRETE_UI_REACTION_WITHOUT_EVIDENCE_RE = re.compile(
     r"(?:кнопк[ауы]\s+[^.\n]{0,60}(?:disabled|недоступн|заблокирован))|"
     r"(?:точн\w+\s+текст|exact\s+(?:message|text))|"
     r"(?:значени[ея]\s+[^.\n]{0,80}(?:очища\w+|удаля\w+|не\s+сохраня\w+))",
+    flags=re.IGNORECASE,
+)
+CANDIDATE_CONFIRMATION_FIELD_RE = re.compile(
+    r"^\*\*(?:Требуется\s+подтверждение|Requires\s+confirmation):\*\*\s*(.+)$",
+    flags=re.IGNORECASE | re.MULTILINE,
+)
+GENERIC_CONFIRMATION_QUESTION_RE = re.compile(
+    r"^\s*(?:-|n/?a|none|уточнить|требуется\s+подтверждение|unknown|tbd)\.?\s*$",
+    flags=re.IGNORECASE,
+)
+CONCRETE_BACKTICK_VALUE_RE = re.compile(r"`([^`\n]{1,80})`")
+GENERIC_INVALID_VALUE_TEXT_RE = re.compile(
+    r"(?:invalid|невалидн\w*|недопустим\w*)\s+(?:value|значени[ея])",
+    flags=re.IGNORECASE,
+)
+ENTER_CONCRETE_VALUE_RE = re.compile(
+    r"(?:enter|type|input|ввести|указать|заполнить)[^.\n]{0,80}`([^`\n]{1,80})`",
+    flags=re.IGNORECASE,
+)
+TEST_CASE_TITLE_PROCESS_MARKER_RE = re.compile(
+    r"\bUI\s+calibration\b|\bcandidate\b|\boracle\b|\brequires\s+confirmation\b|"
+    r"требу(?:ет|ется)\s+подтверждени[ея]",
     flags=re.IGNORECASE,
 )
 
@@ -10112,12 +10154,16 @@ GENERIC_TC_SMELL_PATTERNS = [
 GENERIC_VALID_FIXTURE_PLACEHOLDER_RE = re.compile(
     r"минимальн\w+\s+валидн\w+\s+набор|"
     r"валидн\w+\s+(?:заявк|анкет|карточк|данн\w+)|"
+    r"валидн\w+\s+значени[ея]\s+из\s+предуслови|"
+    r"source-backed\s+baseline|"
     r"если\s+требуется\s+запуск\s+действи|"
     r"full\s+valid\s+(?:fixture|data|set)",
     flags=re.IGNORECASE,
 )
 GENERIC_TEST_DATA_REFERENCE_RE = re.compile(
-    r"значени[ея]\s+из\s+тестов\w+\s+данн\w+",
+    r"значени[ея]\s+из\s+тестов\w+\s+данн\w+|"
+    r"использовать\s+воспроизводим\w+\s+тестов\w+\s+значени[ея]\s+из\s+шага|"
+    r"невалидн\w+\s+или\s+пуст\w+\s+значени[ея]\s+указан\w+",
     flags=re.IGNORECASE,
 )
 GENERIC_TEST_DATA_ORACLE_RE = re.compile(
@@ -10280,6 +10326,7 @@ GENERIC_EXPECTED_RESULT_PATTERNS = [
     re.compile(r"ожидаем\w+\s+правил\w+\s+фт", flags=re.IGNORECASE),
     re.compile(r"^поле\s+.+\s+принимает\s+только\s+.+$", flags=re.IGNORECASE),
     re.compile(r"^поле\s+.+\s+обязательно\s+к\s+заполнению\.?$", flags=re.IGNORECASE),
+    re.compile(r"целев\w+\s+пользовательск\w+\s+переход", flags=re.IGNORECASE),
 ]
 
 REQUIREDNESS_RE = re.compile(r"обязател", flags=re.IGNORECASE)
@@ -10654,6 +10701,19 @@ def is_ui_calibration_candidate_block(block: str) -> bool:
     )
 
 
+def candidate_has_concrete_invalid_value(test_data: str, steps: str) -> bool:
+    if CONCRETE_BACKTICK_VALUE_RE.search(test_data or ""):
+        return True
+    for match in ENTER_CONCRETE_VALUE_RE.finditer(steps or ""):
+        value = match.group(1).strip()
+        matched_text = match.group(0)
+        if GENERIC_INVALID_VALUE_TEXT_RE.search(matched_text):
+            continue
+        if value and not GENERIC_INVALID_VALUE_TEXT_RE.search(value):
+            return True
+    return False
+
+
 def validate_ui_calibration_candidate_test_cases(
     blocks: list[tuple[str, str]],
     path: Path,
@@ -10661,6 +10721,8 @@ def validate_ui_calibration_candidate_test_cases(
 ) -> tuple[list[Finding], list[Check]]:
     display_path = rel(path, root)
     missing_markers: list[str] = []
+    missing_confirmation_questions: list[str] = []
+    missing_concrete_values: list[str] = []
     invented_reactions: list[str] = []
     for test_case_id, block in blocks:
         if not is_ui_calibration_candidate_block(block):
@@ -10668,6 +10730,7 @@ def validate_ui_calibration_candidate_test_cases(
         has_oracle_status = bool(UI_CALIBRATION_REQUIRED_RE.search(block))
         has_candidate_status = bool(CANDIDATE_UI_CALIBRATION_RE.search(block))
         has_calibration_note = bool(UI_CALIBRATION_NOTE_RE.search(block))
+        confirmation_match = CANDIDATE_CONFIRMATION_FIELD_RE.search(block)
         if not (has_oracle_status and has_candidate_status and has_calibration_note):
             missing = []
             if not has_oracle_status:
@@ -10675,8 +10738,17 @@ def validate_ui_calibration_candidate_test_cases(
             if not has_candidate_status:
                 missing.append("candidate-ui-calibration")
             if not has_calibration_note:
-                missing.append("calibration note")
+                missing.append("Требуется подтверждение")
             missing_markers.append(f"{test_case_id}:missing={', '.join(missing)}")
+        if not confirmation_match or GENERIC_CONFIRMATION_QUESTION_RE.fullmatch(confirmation_match.group(1).strip()):
+            missing_confirmation_questions.append(f"{test_case_id}:missing specific confirmation question")
+
+        test_data = extract_test_case_field_block(block, ["Тестовые данные", "Test Data", "test_data", "test data"])
+        steps = extract_test_case_field_block(block, ["Шаги", "Steps", "steps"])
+        if not candidate_has_concrete_invalid_value(test_data, steps):
+            missing_concrete_values.append(
+                f"{test_case_id}:test_data={test_data[:120] or '-'}; steps={steps[:120] or '-'}"
+            )
 
         expected_result = extract_test_case_field_block(
             block,
@@ -10700,14 +10772,46 @@ def validate_ui_calibration_candidate_test_cases(
                 title="UI calibration candidate test cases miss required markers",
                 details=(
                     "A candidate TC must explicitly expose `ui-calibration-required`, "
-                    "`candidate-ui-calibration` and what must be recorded during UI calibration."
+                    "`candidate-ui-calibration` and a specific confirmation question."
                 ),
                 path=display_path,
                 evidence=missing_markers[:20],
                 recommended_action=(
                     "Add `Статус oracle: ui-calibration-required`, `Статус тест-кейса: "
-                    "candidate-ui-calibration`, and `Что нужно зафиксировать при UI calibration`."
+                    "candidate-ui-calibration`, and `Требуется подтверждение: <specific missing oracle question>`."
                 ),
+            )
+        )
+    if missing_confirmation_questions:
+        findings.append(
+            Finding(
+                id="test-case-ui-calibration-candidate-missing-confirmation-question",
+                severity="warning",
+                category="test-case-format",
+                title="UI calibration candidate has no specific confirmation question",
+                details=(
+                    "Candidate status is useful only when it states the exact missing oracle that BA/UI calibration "
+                    "must resolve."
+                ),
+                path=display_path,
+                evidence=missing_confirmation_questions[:20],
+                recommended_action="Add `Требуется подтверждение: <specific missing oracle question>` to the candidate body.",
+            )
+        )
+    if missing_concrete_values:
+        findings.append(
+            Finding(
+                id="test-case-ui-calibration-candidate-missing-concrete-invalid-value",
+                severity="warning",
+                category="test-case-format",
+                title="UI calibration candidate has no concrete invalid value",
+                details=(
+                    "A candidate negative TC must still exercise a representative invalid class. Generic wording "
+                    "such as `invalid value` is not executable manual test data."
+                ),
+                path=display_path,
+                evidence=missing_concrete_values[:20],
+                recommended_action="Put a concrete representative invalid value in `Тестовые данные` or in the validation action step.",
             )
         )
     if invented_reactions:
@@ -10727,7 +10831,7 @@ def validate_ui_calibration_candidate_test_cases(
                 recommended_action="Replace the invented UI reaction with the canonical calibration wording.",
             )
         )
-    has_findings = bool(missing_markers or invented_reactions)
+    has_findings = bool(missing_markers or missing_confirmation_questions or missing_concrete_values or invented_reactions)
     return findings, [
         Check(
             "test-case-ui-calibration-candidates",
@@ -11147,6 +11251,7 @@ def validate_test_case_quality_smells(
     excessive_atom_fan_in: list[str] = []
     mockup_generic_ui_steps: list[str] = []
     generic_titles: list[str] = []
+    process_marker_titles: list[str] = []
     positive_type_negative_oracle: list[str] = []
     negative_type_without_negative_oracle: list[str] = []
     generic_valid_fixture_placeholders: list[str] = []
@@ -11167,6 +11272,7 @@ def validate_test_case_quality_smells(
     synthetic_requirement_quotes: list[str] = []
     action_created_block_without_cleanup: list[str] = []
     bundled_negative_input_classes: list[str] = []
+    overmerged_test_cases: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
@@ -11370,6 +11476,8 @@ def validate_test_case_quality_smells(
             boundary_group["min_acceptance"] = True
         if title and any(pattern.search(title) for pattern in GENERIC_TC_TITLE_PATTERNS):
             generic_titles.append(f"{test_case_id}:{title[:140]}")
+        if title and TEST_CASE_TITLE_PROCESS_MARKER_RE.search(title):
+            process_marker_titles.append(f"{test_case_id}:{title[:160]}")
         if is_positive_test_case_type(test_case_type) and expected_result and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result):
             positive_type_negative_oracle.append(f"{test_case_id}:type={test_case_type}; expected={expected_result[:150]}")
         if is_negative_test_case_type(test_case_type) and not negative_oracle:
@@ -11565,6 +11673,12 @@ def validate_test_case_quality_smells(
             block,
         ):
             excessive_atom_fan_in.append(f"{test_case_id}:atoms={len(atom_ids_in_block)}")
+        if (
+            len(atom_ids_in_block) > 2
+            and not re.search(r"(?i)\bscenario\b|\buse[-\s]?case\b|сценар|сквозн|e2e|end[-\s]?to[-\s]?end", block)
+            and not re.search(r"\*\*Сценарное\s+обоснование:\*\*|\*\*Scenario\s+rationale:\*\*", block, flags=re.IGNORECASE)
+        ):
+            overmerged_test_cases.append(f"{test_case_id}:atoms={len(atom_ids_in_block)}")
 
     for group, boundary_flags in boundary_groups.items():
         above_max_rejection = boundary_flags["above_max_rejection"]
@@ -11863,6 +11977,26 @@ def validate_test_case_quality_smells(
                 path=display_path,
                 evidence=generic_titles[:20],
                 recommended_action="Rewrite titles so each one states one concrete positive, negative, boundary, dependency or gap check.",
+            )
+        )
+
+    if process_marker_titles:
+        findings.append(
+            Finding(
+                id="test-case-title-process-marker-smell",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case title contains process markers",
+                details=(
+                    "`Название` must describe the business check. Candidate/oracle/UI calibration status belongs "
+                    "in body metadata fields, not in the title taxonomy."
+                ),
+                path=display_path,
+                evidence=process_marker_titles[:20],
+                recommended_action=(
+                    "Remove process markers from `Название` and keep candidate status in `Статус oracle`, "
+                    "`Статус тест-кейса` and `Требуется подтверждение` fields."
+                ),
             )
         )
 
@@ -12586,6 +12720,23 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if overmerged_test_cases:
+        findings.append(
+            Finding(
+                id="test-case-overmerged-atoms-without-rationale",
+                severity="warning",
+                category="atomarity",
+                title="Test cases reference more than two atoms without scenario rationale",
+                details=(
+                    "More than two linked atoms usually means the TC is carrying independent checks. This is allowed "
+                    "only for an explicit scenario/use-case case with a scenario rationale and separate atomic coverage elsewhere."
+                ),
+                path=display_path,
+                evidence=overmerged_test_cases[:20],
+                recommended_action="Split the TC or add `Сценарное обоснование` and keep independent atomic TC/GAP coverage.",
+            )
+        )
+
     has_smells = bool(
         generic_atoms
         or compressed_atoms
@@ -12593,6 +12744,7 @@ def validate_test_case_quality_smells(
         or combined_atoms
         or table_residue_atoms
         or generic_titles
+        or process_marker_titles
         or generic_test_cases
         or value_type_list_selection_smells
         or dependency_placeholder_setup_smells
@@ -12637,6 +12789,7 @@ def validate_test_case_quality_smells(
         or ambiguous_precondition_setup
         or broad_scenario_test_cases
         or excessive_atom_fan_in
+        or overmerged_test_cases
     )
     checks.append(
         Check(

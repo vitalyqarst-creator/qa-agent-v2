@@ -104,7 +104,7 @@ The runner and reviewer/writer prompts must stay aligned with this matrix. A ses
 
 | scenario | allowed non-terminal post-session `stage_status` |
 | --- | --- |
-| `scope.session_gap_review` | `scope-gap-review-passed`; `scope-ready-for-writer` |
+| `reviewer.scope_gap_review` | `scope-gap-review-passed`; `scope-ready-for-writer` |
 | `writer.session_initial_draft` | `writer-draft-ready` |
 | `writer.remediation.structure_preflight` | `writer-draft-ready` |
 | `writer.session_semantic_revision` | `semantic-review-ready` |
@@ -208,7 +208,7 @@ UI automation prep can start only after `signed-off`; `round-cap-reached`, `bloc
 
 Writer sessions may create or modify test cases and writer artifacts.
 
-Reviewer sessions may create findings, matrices, summaries, prompts and self-checks, but must not edit the canonical test-case file.
+Reviewer sessions are read-only SDK turns or deterministic runner-owned checks. They return findings, matrices, summaries and routing decisions; the runner persists reviewer artifacts, prompts and state updates. Reviewer sessions must not edit the canonical test-case file.
 
 The SDK runner may update `cycle-state.yaml`, `codex-session-map.yaml` and snapshots, but must not invent review decisions.
 

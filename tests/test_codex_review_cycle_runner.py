@@ -198,6 +198,19 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         }
         return "```json\n" + json.dumps(payload, ensure_ascii=False) + "\n```"
 
+    def bounded_reviewer_response(
+        self,
+        *,
+        findings: list[dict[str, object]] | None = None,
+        recommended_stage_status: str,
+    ) -> str:
+        payload = {
+            "findings": findings or [],
+            "human_summary": "No blocking reviewer findings." if not findings else "Blocking reviewer findings found.",
+            "recommended_stage_status": recommended_stage_status,
+        }
+        return "```json\n" + json.dumps(payload, ensure_ascii=False) + "\n```"
+
     def install_fake_codex(
         self,
         runner,
@@ -308,7 +321,7 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertTrue(payload["valid"])
         self.assertEqual("reviewer.structure_preflight", payload["next"]["scenario"])
         self.assertEqual("structure-preflight-r1", payload["next"]["stage"])
-        self.assertEqual("workspace_write", payload["next"]["sandbox_policy"])
+        self.assertEqual("read_only", payload["next"]["sandbox_policy"])
         self.assertEqual(
             "reviewer.structure_preflight",
             payload["next"]["instruction_context"]["scenario"],
@@ -345,6 +358,89 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("semantic-review-r1", next_session.stage)
         self.assertEqual("reviewer.semantic_traceability_test_design", next_session.scenario)
         self.assertEqual("read_only", next_session.sandbox_policy)
+
+    def test_session_sandbox_policy_matrix_is_explicit(self) -> None:
+        runner = load_runner_module()
+
+        self.assertEqual(
+            {
+                "reviewer.scope_gap_review",
+                "reviewer.structure_preflight",
+                "reviewer.semantic_traceability_test_design",
+                "reviewer.structure_format_final",
+                "reviewer.semantic_regression",
+            },
+            runner.REVIEWER_READ_ONLY_SCENARIOS,
+        )
+        self.assertEqual(
+            {
+                "reviewer.scope_gap_review",
+                "reviewer.structure_format_final",
+                "reviewer.semantic_regression",
+            },
+            runner.BOUNDED_REVIEWER_SCENARIOS,
+        )
+
+        cases = [
+            ("scope-ready-for-gap-review", 0, "reviewer", "reviewer.scope_gap_review", "read_only"),
+            ("scope-gap-review-passed", 0, "writer", "writer.session_initial_draft", "workspace_write"),
+            ("scope-ready-for-writer", 0, "writer", "writer.session_initial_draft", "workspace_write"),
+            ("writer-draft-ready", 0, "reviewer", "reviewer.structure_preflight", "read_only"),
+            ("structure-preflight-blocked", 0, "writer", "writer.remediation.style", "workspace_write"),
+            ("semantic-review-ready", 1, "reviewer", "reviewer.semantic_traceability_test_design", "read_only"),
+            ("semantic-revision-needed", 1, "writer", "writer.session_semantic_revision", "workspace_write"),
+            ("semantic-review-passed", 1, "reviewer", "reviewer.structure_format_final", "read_only"),
+            ("format-review-ready", 1, "reviewer", "reviewer.structure_format_final", "read_only"),
+            ("format-revision-needed", 1, "writer", "writer.session_format_revision", "workspace_write"),
+            ("final-regression-ready", 1, "reviewer", "reviewer.semantic_regression", "read_only"),
+        ]
+
+        for status, semantic_round, role, scenario, sandbox_policy in cases:
+            with self.subTest(status=status):
+                self.write_state(status=status, semantic_round=semantic_round)
+                next_session = runner.next_session_for_state(runner.load_simple_yaml(self.state_path))
+                self.assertEqual(role, next_session.role)
+                self.assertEqual(scenario, next_session.scenario)
+                self.assertEqual(sandbox_policy, next_session.sandbox_policy)
+
+    def test_completion_manifest_marks_reviewer_read_only_without_write_exception(self) -> None:
+        self.write_state(status="final-regression-ready", semantic_round=1)
+        runner = load_runner_module()
+        state_before = runner.load_simple_yaml(self.state_path)
+        state_after = dict(state_before)
+        state_after["stage_status"] = "signed-off"
+        final_response = self.cycle_dir / "outputs" / "semantic-regression-final-response.md"
+        final_response.parent.mkdir(exist_ok=True)
+        final_response.write_text("No regression findings.", encoding="utf-8")
+        next_session = runner.NextSession(
+            stage="semantic-regression-final",
+            role="reviewer",
+            scenario="reviewer.semantic_regression",
+            prompt_path="work/review-cycles/section-scope/prompts/next.md",
+            sandbox_policy="read_only",
+        )
+
+        manifest_path = runner.write_completion_manifest(
+            self.state_path,
+            state_before=state_before,
+            state_after=state_after,
+            next_session=next_session,
+            thread_id="thread-legacy-reviewer",
+            turn_id="turn-legacy-reviewer",
+            turn_status="completed",
+            session_status="completed",
+            state_advanced=True,
+            input_snapshot="work/review-cycles/section-scope/versions/before",
+            output_snapshot="work/review-cycles/section-scope/versions/after",
+            final_response=final_response,
+            started_at_epoch=1,
+            completed_at_epoch=2,
+            duration_ms=1000,
+        )
+
+        manifest = runner.load_simple_yaml(manifest_path)
+        self.assertEqual("read_only", manifest["sandbox_policy"])
+        self.assertFalse(manifest["reviewer_write_exception"])
 
     def test_diagnose_sdk_turn_dry_run_exports_prompt_without_cycle_mutation(self) -> None:
         self.write_state()
@@ -388,6 +484,11 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("validator-report*.json", prompt_text)
         run_payload = json.loads((output_dir / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["prompt_sha256"], run_payload["prompt_sha256"])
+        self.assertEqual("reviewer", run_payload["role"])
+        self.assertEqual("structure-preflight-r1", run_payload["stage"])
+        self.assertEqual("section-scope", run_payload["scope_slug"])
+        self.assertEqual("0", str(run_payload["current_round"]))
+        self.assertIn("session_id", run_payload)
         events = (output_dir / "events.ndjson").read_text(encoding="utf-8")
         self.assertIn("prompt_rendered", events)
 
@@ -529,6 +630,7 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("reviewer", payload["role"])
         self.assertEqual("scope-gap-review", payload["stage"])
         self.assertEqual("reviewer.scope_gap_review", payload["scenario"])
+        self.assertEqual("read_only", payload["sandbox_policy"])
 
     def test_start_dry_run_selects_initial_writer_after_scope_gap_review_passed(self) -> None:
         self.test_case.unlink()
@@ -1072,6 +1174,11 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
             self.cycle_dir / "versions" / "after-semantic-review-r1" / "snapshot-manifest.yaml",
         ):
             self.assertTrue(artifact.exists(), str(artifact))
+        completion = runner.load_simple_yaml(
+            self.cycle_dir / "outputs" / "semantic-review-r1-completion.yaml"
+        )
+        self.assertEqual("read_only", completion["sandbox_policy"])
+        self.assertFalse(completion["reviewer_write_exception"])
         prompt_text = (self.prompt_dir / "prompt.semantic-review-r1.bounded.md").read_text(
             encoding="utf-8"
         )
@@ -1106,6 +1213,84 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
             "work/review-cycles/section-scope/outputs/semantic-review-r1-completion.yaml",
             updated_state["latest_artifacts"],
         )
+
+    def test_bounded_structure_format_pass_advances_to_final_regression(self) -> None:
+        self.write_state(status="format-review-ready", semantic_round=2)
+        self.write_valid_structure_preflight_artifacts()
+        runner = load_runner_module()
+        runner.run_agent_artifact_validator = lambda ft_root: {"findings": []}
+        previous_module = self.install_fake_codex(
+            runner,
+            final_response=self.bounded_reviewer_response(
+                recommended_stage_status="final-regression-ready",
+            ),
+            thread_id="fake-thread-format-review",
+            turn_id="fake-turn-format-review",
+        )
+        try:
+            payload = runner.run_real_session(
+                runner.load_simple_yaml(self.state_path),
+                self.state_path,
+                cwd=str(self.root),
+                approval_mode="auto_review",
+                model=None,
+                session_timeout_seconds=1,
+                process_supervised=False,
+            )
+        finally:
+            self.restore_openai_codex_module(previous_module)
+
+        updated_state = runner.load_simple_yaml(self.state_path)
+        completion = runner.load_simple_yaml(
+            self.cycle_dir / "outputs" / "format-review-final-completion.yaml"
+        )
+        self.assertEqual("completed-bounded-reviewer-session", payload["action"])
+        self.assertEqual("final-regression-ready", updated_state["stage_status"])
+        self.assertEqual("format-review-final", updated_state["current_stage"])
+        self.assertEqual("read_only", completion["sandbox_policy"])
+        self.assertFalse(completion["reviewer_write_exception"])
+        session_map = (self.cycle_dir / "codex-session-map.yaml").read_text(encoding="utf-8")
+        self.assertIn("thread_id: fake-thread-format-review", session_map)
+        self.assertIn("sandbox: read_only", session_map)
+
+    def test_bounded_semantic_regression_pass_signs_off_read_only(self) -> None:
+        self.write_state(status="final-regression-ready", semantic_round=2)
+        self.write_valid_structure_preflight_artifacts()
+        runner = load_runner_module()
+        runner.run_agent_artifact_validator = lambda ft_root: {"findings": []}
+        previous_module = self.install_fake_codex(
+            runner,
+            final_response=self.bounded_reviewer_response(
+                recommended_stage_status="signed-off",
+            ),
+            thread_id="fake-thread-regression-review",
+            turn_id="fake-turn-regression-review",
+        )
+        try:
+            payload = runner.run_real_session(
+                runner.load_simple_yaml(self.state_path),
+                self.state_path,
+                cwd=str(self.root),
+                approval_mode="auto_review",
+                model=None,
+                session_timeout_seconds=1,
+                process_supervised=False,
+            )
+        finally:
+            self.restore_openai_codex_module(previous_module)
+
+        updated_state = runner.load_simple_yaml(self.state_path)
+        completion = runner.load_simple_yaml(
+            self.cycle_dir / "outputs" / "semantic-regression-final-completion.yaml"
+        )
+        self.assertEqual("completed-bounded-reviewer-session", payload["action"])
+        self.assertEqual("signed-off", updated_state["stage_status"])
+        self.assertEqual("semantic-regression-final", updated_state["current_stage"])
+        self.assertEqual("read_only", completion["sandbox_policy"])
+        self.assertFalse(completion["reviewer_write_exception"])
+        session_map = (self.cycle_dir / "codex-session-map.yaml").read_text(encoding="utf-8")
+        self.assertIn("thread_id: fake-thread-regression-review", session_map)
+        self.assertIn("sandbox: read_only", session_map)
 
     def test_bounded_semantic_findings_force_semantic_revision(self) -> None:
         self.write_state(status="semantic-review-ready", semantic_round=1)

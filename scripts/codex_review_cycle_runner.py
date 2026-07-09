@@ -30,6 +30,18 @@ COMPLETION_MANIFEST_SUFFIX = "-completion.yaml"
 DEFAULT_STALE_LOCK_SECONDS = 1800
 HEARTBEAT_INTERVAL_SECONDS = 30
 TERMINAL_STATUSES = {"signed-off", "round-cap-reached", "blocked-input"}
+REVIEWER_READ_ONLY_SCENARIOS = {
+    "reviewer.scope_gap_review",
+    "reviewer.structure_preflight",
+    "reviewer.semantic_traceability_test_design",
+    "reviewer.structure_format_final",
+    "reviewer.semantic_regression",
+}
+BOUNDED_REVIEWER_SCENARIOS = {
+    "reviewer.scope_gap_review",
+    "reviewer.structure_format_final",
+    "reviewer.semantic_regression",
+}
 AUTO_SESSION_TIMEOUT_SENTINEL = -1
 DEFAULT_SESSION_TIMEOUT_SECONDS_BY_SCENARIO = {
     "scope.session_gap_review": 1800,
@@ -158,7 +170,7 @@ STATE_STRING_LIST_FIELDS = {
     "sessions",
 }
 POST_SESSION_ALLOWED_STAGE_STATUSES: dict[str, set[str]] = {
-    "scope.session_gap_review": {"scope-gap-review-passed", "scope-ready-for-writer"},
+    "reviewer.scope_gap_review": {"scope-gap-review-passed", "scope-ready-for-writer"},
     "writer.session_initial_draft": {"writer-draft-ready"},
     "writer.remediation.structure_preflight": {"writer-draft-ready"},
     "writer.session_semantic_revision": {"semantic-review-ready"},
@@ -217,6 +229,16 @@ class ValidatorWaiver:
 
 class RunnerError(RuntimeError):
     pass
+
+
+def sandbox_policy_for_role_scenario(role: str, scenario: str) -> str:
+    if role == "writer":
+        return "workspace_write"
+    if role != "reviewer":
+        raise RunnerError(f"Unsupported session role for sandbox policy: {role}")
+    if scenario in REVIEWER_READ_ONLY_SCENARIOS:
+        return "read_only"
+    raise RunnerError(f"Reviewer scenario has no explicit sandbox policy: {scenario}")
 
 
 def resolve_instruction_context_for_scenario(scenario: str) -> dict[str, Any]:
@@ -1492,7 +1514,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="reviewer",
             scenario="reviewer.scope_gap_review",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("reviewer", "reviewer.scope_gap_review"),
         )
     if status in {"scope-gap-review-passed", "scope-ready-for-writer"}:
         return NextSession(
@@ -1500,7 +1522,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="writer",
             scenario="writer.session_initial_draft",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("writer", "writer.session_initial_draft"),
         )
     if status == "writer-draft-ready":
         return NextSession(
@@ -1508,7 +1530,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="reviewer",
             scenario="reviewer.structure_preflight",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("reviewer", "reviewer.structure_preflight"),
         )
     if status == "structure-preflight-blocked":
         return NextSession(
@@ -1516,7 +1538,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="writer",
             scenario="writer.remediation.style",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("writer", "writer.remediation.style"),
         )
     if status == "semantic-review-ready":
         round_no = max(semantic_round, 1)
@@ -1525,7 +1547,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="reviewer",
             scenario="reviewer.semantic_traceability_test_design",
             prompt_path=prompt_path,
-            sandbox_policy="read_only",
+            sandbox_policy=sandbox_policy_for_role_scenario("reviewer", "reviewer.semantic_traceability_test_design"),
         )
     if status == "semantic-revision-needed":
         if semantic_round >= max_rounds:
@@ -1535,7 +1557,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="writer",
             scenario="writer.session_semantic_revision",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("writer", "writer.session_semantic_revision"),
         )
     if status in {"semantic-review-passed", "format-review-ready"}:
         return NextSession(
@@ -1543,7 +1565,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="reviewer",
             scenario="reviewer.structure_format_final",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("reviewer", "reviewer.structure_format_final"),
         )
     if status == "format-revision-needed":
         return NextSession(
@@ -1551,7 +1573,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="writer",
             scenario="writer.session_format_revision",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("writer", "writer.session_format_revision"),
         )
     if status == "final-regression-ready":
         return NextSession(
@@ -1559,7 +1581,7 @@ def next_session_for_state(state: dict[str, Any]) -> NextSession | None:
             role="reviewer",
             scenario="reviewer.semantic_regression",
             prompt_path=prompt_path,
-            sandbox_policy="workspace_write",
+            sandbox_policy=sandbox_policy_for_role_scenario("reviewer", "reviewer.semantic_regression"),
         )
     raise RunnerError(f"No transition defined for status: {status}")
 
@@ -1598,9 +1620,7 @@ def diagnostic_session_for_current_stage(state: dict[str, Any]) -> NextSession |
         role=role,
         scenario=scenario,
         prompt_path=prompt_path,
-        sandbox_policy="read_only"
-        if scenario == "reviewer.semantic_traceability_test_design"
-        else "workspace_write",
+        sandbox_policy=sandbox_policy_for_role_scenario(role, scenario),
     )
 
 
@@ -2862,6 +2882,238 @@ def render_structure_format_prompt(next_session: NextSession) -> str:
     )
 
 
+BOUNDED_REVIEWER_ALLOWED_STATUSES = {
+    "reviewer.scope_gap_review": {"scope-gap-review-passed", "scope-ready-for-writer", "blocked-input"},
+    "reviewer.structure_format_final": {"final-regression-ready", "format-revision-needed", "blocked-input"},
+    "reviewer.semantic_regression": {"signed-off", "round-cap-reached", "blocked-input"},
+}
+BOUNDED_REVIEWER_PASS_STATUS = {
+    "reviewer.scope_gap_review": "scope-ready-for-writer",
+    "reviewer.structure_format_final": "final-regression-ready",
+    "reviewer.semantic_regression": "signed-off",
+}
+BOUNDED_REVIEWER_FINDING_STATUS = {
+    "reviewer.scope_gap_review": "blocked-input",
+    "reviewer.structure_format_final": "format-revision-needed",
+    "reviewer.semantic_regression": "round-cap-reached",
+}
+
+
+def bounded_reviewer_artifact_paths(
+    state: dict[str, Any],
+    state_path: Path,
+    *,
+    cwd_base: Path | None = None,
+) -> list[str]:
+    ft_root = infer_ft_root(state_path)
+    path_base = cwd_base or ft_root.parent.parent
+    paths: list[str] = []
+    canonical = resolve_artifact_path(str(state.get("canonical_test_cases") or ""), ft_root)
+    if canonical is not None and canonical.exists():
+        paths.append(relative_or_name(canonical, path_base))
+    test_design_dir = resolve_artifact_path(str(state.get("test_design_dir") or ""), ft_root)
+    if test_design_dir is not None and test_design_dir.is_dir():
+        for path in sorted(test_design_dir.glob("*.md")):
+            paths.append(relative_or_name(path, path_base))
+    for artifact in unique_nonempty_strings(state.get("latest_artifacts")):
+        path = resolve_artifact_path(artifact, ft_root)
+        if path is not None and path.exists() and path.is_file():
+            paths.append(relative_or_name(path, path_base))
+    return unique_nonempty_strings(paths)
+
+
+def render_bounded_reviewer_prompt(
+    state: dict[str, Any],
+    state_path: Path,
+    next_session: NextSession,
+    *,
+    cwd_base: Path | None = None,
+) -> str:
+    allowed_files = bounded_reviewer_artifact_paths(state, state_path, cwd_base=cwd_base)
+    allowed_statuses = sorted(BOUNDED_REVIEWER_ALLOWED_STATUSES[next_session.scenario])
+    lines = [
+        "# Bounded reviewer stage",
+        "",
+        "This is a bounded read-only reviewer turn.",
+        "Do not edit files. Do not update cycle-state.yaml. Do not create reviewer artifacts.",
+        "Do not recursively read directories. Read only the exact files listed below.",
+        "",
+        "## Stage",
+        f"- stage: {next_session.stage}",
+        f"- scenario: {next_session.scenario}",
+        f"- cycle_id: {state.get('cycle_id') or ''}",
+        f"- scope_slug: {state.get('scope_slug') or ''}",
+        "",
+        "## Allowed Files",
+    ]
+    lines.extend(f"- {path}" for path in allowed_files) if allowed_files else lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Required Output",
+            "Return fenced JSON only. Do not include prose outside the JSON fence.",
+            "Use this exact top-level shape:",
+            "```json",
+            "{",
+            '  "findings": [',
+            '    {"id": "REV-001", "severity": "warning", "category": "review", "test_case_id": "TC-001", "problem": "", "evidence": "", "required_change": "", "source_reference": "", "status": "open"}',
+            "  ],",
+            '  "human_summary": "",',
+            f'  "recommended_stage_status": "{BOUNDED_REVIEWER_PASS_STATUS[next_session.scenario]}"',
+            "}",
+            "```",
+            "",
+            "Allowed recommended_stage_status values: " + ", ".join(allowed_statuses) + ".",
+            "Use severity error or warning only for findings that must block progress.",
+        ]
+    )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def normalize_bounded_reviewer_response(
+    payload: dict[str, Any],
+    next_session: NextSession,
+) -> dict[str, Any]:
+    findings = payload.get("findings")
+    if not isinstance(findings, list):
+        findings = []
+    normalized_findings = []
+    for finding in findings:
+        if not isinstance(finding, dict):
+            continue
+        normalized = dict(finding)
+        if not normalized.get("problem") and normalized.get("title"):
+            normalized["problem"] = normalized["title"]
+        if not normalized.get("required_change") and normalized.get("recommendation"):
+            normalized["required_change"] = normalized["recommendation"]
+        normalized_findings.append(normalized)
+
+    recommended = str(payload.get("recommended_stage_status") or "").strip()
+    allowed = BOUNDED_REVIEWER_ALLOWED_STATUSES[next_session.scenario]
+    blocking = any(
+        str(finding.get("severity") or "").lower() in BOUNDED_SEMANTIC_BLOCKING_SEVERITIES
+        for finding in normalized_findings
+    )
+    if recommended not in allowed:
+        recommended = (
+            BOUNDED_REVIEWER_FINDING_STATUS[next_session.scenario]
+            if normalized_findings
+            else BOUNDED_REVIEWER_PASS_STATUS[next_session.scenario]
+        )
+    if blocking and recommended == BOUNDED_REVIEWER_PASS_STATUS[next_session.scenario]:
+        recommended = BOUNDED_REVIEWER_FINDING_STATUS[next_session.scenario]
+    return {
+        "findings": normalized_findings,
+        "human_summary": str(payload.get("human_summary") or "").strip(),
+        "recommended_stage_status": recommended,
+    }
+
+
+def render_bounded_reviewer_findings(stage: str, response: dict[str, Any]) -> str:
+    lines = [
+        f"# {stage} findings",
+        "",
+        "## Human Summary",
+        response["human_summary"] or "No additional summary provided.",
+        "",
+        "## Findings",
+    ]
+    findings = response["findings"]
+    if not findings:
+        lines.append("- none")
+    for index, finding in enumerate(findings, start=1):
+        finding_id = str(finding.get("id") or f"REV-{index:03d}")
+        lines.extend(
+            [
+                f"### {finding_id}",
+                "",
+                f"- severity: `{finding.get('severity') or 'info'}`",
+                f"- category: `{finding.get('category') or 'review'}`",
+                f"- test_case_id: `{finding.get('test_case_id') or ''}`",
+                f"- problem: {finding.get('problem') or ''}",
+                f"- evidence: {finding.get('evidence') or ''}",
+                f"- required_change: {finding.get('required_change') or ''}",
+                f"- source_reference: `{finding.get('source_reference') or ''}`",
+                f"- status: `{finding.get('status') or 'open'}`",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def render_writer_initial_prompt_from_scope_review(next_session: NextSession, findings_path: str) -> str:
+    return "\n".join(
+        [
+            "# Writer initial draft",
+            "",
+            f"Scope gap review `{next_session.stage}` completed. Use `{findings_path}` as reviewer handoff evidence.",
+            "Create the initial FT-first test-case draft for the selected scope.",
+            "",
+        ]
+    )
+
+
+def render_writer_format_prompt(next_session: NextSession, findings_path: str) -> str:
+    return "\n".join(
+        [
+            "# Writer final format revision",
+            "",
+            f"Resolve structure/format findings from `{findings_path}`.",
+            "Do not make semantic redesign unless the finding explicitly routes back to semantic review.",
+            "",
+        ]
+    )
+
+
+def next_prompt_for_bounded_reviewer(
+    state: dict[str, Any],
+    state_path: Path,
+    next_session: NextSession,
+    status_after: str,
+    findings_path: Path,
+) -> Path:
+    ft_root = infer_ft_root(state_path)
+    prompt_dir = state_path.parent / "prompts"
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+    if next_session.scenario == "reviewer.scope_gap_review":
+        prompt = prompt_dir / "prompt.writer-r1.md"
+        prompt.write_text(
+            render_writer_initial_prompt_from_scope_review(
+                next_session,
+                relative_or_name(findings_path, ft_root),
+            ),
+            encoding="utf-8",
+        )
+        return prompt
+    if next_session.scenario == "reviewer.structure_format_final":
+        if status_after == "format-revision-needed":
+            prompt = prompt_dir / "prompt.writer-format-final.md"
+            prompt.write_text(
+                render_writer_format_prompt(next_session, relative_or_name(findings_path, ft_root)),
+                encoding="utf-8",
+            )
+            return prompt
+        prompt = prompt_dir / "prompt.semantic-regression-final.md"
+        prompt.write_text(
+            "\n".join(
+                [
+                    "# Final semantic regression",
+                    "",
+                    "Run semantic_regression after final structure/format review.",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        return prompt
+    existing = resolve_artifact_path(str(state.get("active_transition_prompt") or ""), ft_root)
+    if existing is not None and existing.exists():
+        return existing
+    prompt = prompt_dir / "prompt.terminal.md"
+    prompt.write_text("# Terminal reviewer stage\n\nNo next SDK prompt is required after terminal routing.\n", encoding="utf-8")
+    return prompt
+
+
 def write_bounded_semantic_invalid_response_artifact(
     output_dir: Path,
     stage: str,
@@ -2918,6 +3170,11 @@ def write_completion_manifest(
         "role": next_session.role,
         "scenario": next_session.scenario,
         "execution_mode": execution_mode,
+        "sandbox_policy": next_session.sandbox_policy,
+        "reviewer_write_exception": (
+            next_session.role == "reviewer"
+            and next_session.sandbox_policy == "workspace_write"
+        ),
         "thread_id": thread_id,
         "turn_id": turn_id,
         "turn_status": turn_status or "",
@@ -4162,6 +4419,356 @@ def run_bounded_semantic_review_session(
     }
 
 
+def run_bounded_reviewer_session(
+    state: dict[str, Any],
+    state_path: Path,
+    *,
+    cwd: str | None,
+    approval_mode: str,
+    model: str | None,
+    runner_lock: RunnerFileLock | None,
+    session_timeout_seconds: int | None,
+) -> dict[str, Any]:
+    next_session = next_session_for_state(state)
+    if next_session is None:
+        raise RunnerError(f"No runnable next session for status {state['stage_status']}")
+    if next_session.scenario not in BOUNDED_REVIEWER_SCENARIOS:
+        raise RunnerError(f"Bounded reviewer cannot run {next_session.scenario}")
+
+    effective_timeout = effective_session_timeout_seconds(next_session, session_timeout_seconds)
+    ft_root = infer_ft_root(state_path)
+    cycle_dir = state_path.parent
+    output_dir = cycle_dir / "outputs"
+    prompt_dir = cycle_dir / "prompts"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prompt_dir.mkdir(parents=True, exist_ok=True)
+
+    before_snapshot_id = f"before-{next_session.stage}"
+    after_snapshot_id = f"after-{next_session.stage}"
+    before_manifest = snapshot_state(state_path, before_snapshot_id)
+    input_snapshot = relative_or_name(cycle_dir / "versions" / before_snapshot_id, ft_root)
+    output_snapshot = relative_or_name(cycle_dir / "versions" / after_snapshot_id, ft_root)
+    sdk_cwd = Path(cwd or Path.cwd())
+    checked_paths = bounded_reviewer_artifact_paths(state, state_path, cwd_base=sdk_cwd)
+    prompt = render_bounded_reviewer_prompt(
+        state,
+        state_path,
+        next_session,
+        cwd_base=sdk_cwd,
+    )
+    prompt_path = prompt_dir / f"prompt.{next_session.stage}.bounded.md"
+    prompt_path.write_text(prompt, encoding="utf-8")
+    started_at = int(time.time())
+
+    append_runner_event(
+        cycle_dir,
+        "bounded_reviewer_stage_started",
+        stage=next_session.stage,
+        scenario=next_session.scenario,
+        execution_mode="bounded-sdk",
+        timeout_seconds=effective_timeout,
+    )
+    if runner_lock is not None:
+        runner_lock.update(
+            stage=next_session.stage,
+            scenario=next_session.scenario,
+            status="running-bounded-reviewer-session",
+        )
+
+    Codex = load_openai_codex_runtime(required=("Codex",)).Codex
+    codex = Codex()
+    thread = None
+    try:
+        thread = codex.thread_start(
+            cwd=cwd or str(Path.cwd()),
+            sandbox=sdk_sandbox("read_only"),
+            approval_mode=sdk_approval_mode(approval_mode),
+            model=model,
+        )
+        try:
+            thread.set_name(f"{state.get('cycle_id')}:{next_session.stage}:bounded")
+        except Exception:
+            pass
+        append_runner_event(
+            cycle_dir,
+            "thread_started",
+            stage=next_session.stage,
+            scenario=next_session.scenario,
+            thread_id=thread.id,
+            execution_mode="bounded-sdk",
+        )
+        if runner_lock is not None:
+            runner_lock.update(
+                stage=next_session.stage,
+                scenario=next_session.scenario,
+                thread_id=thread.id,
+                status="running-bounded-reviewer-turn",
+            )
+        append_session_record(
+            cycle_dir / "codex-session-map.yaml",
+            state,
+            {
+                "stage": next_session.stage,
+                "role": next_session.role,
+                "scenario": next_session.scenario,
+                "execution_mode": "bounded-sdk",
+                "thread_id": thread.id,
+                "turn_id": "",
+                "turn_status": "",
+                "sandbox": "read_only",
+                "approval_mode": approval_mode,
+                "model": model or "",
+                "prompt": relative_or_name(prompt_path, ft_root),
+                "input_snapshot": input_snapshot,
+                "output_snapshot": "",
+                "final_response": "",
+                "started_at_epoch": started_at,
+                "completed_at_epoch": "",
+                "duration_ms": "",
+                "status": "started",
+            },
+        )
+        append_runner_event(
+            cycle_dir,
+            "turn_started",
+            stage=next_session.stage,
+            thread_id=thread.id,
+            execution_mode="bounded-sdk",
+        )
+        try:
+            turn = run_codex_turn_with_timeout(
+                thread,
+                prompt,
+                cwd=cwd or str(Path.cwd()),
+                sandbox=sdk_sandbox("read_only"),
+                approval_mode=sdk_approval_mode(approval_mode),
+                model=model,
+                timeout_seconds=effective_timeout,
+            )
+        except concurrent.futures.TimeoutError:
+            append_runner_event(
+                cycle_dir,
+                "turn_timeout",
+                stage=next_session.stage,
+                thread_id=thread.id,
+                timeout_seconds=effective_timeout or "",
+                execution_mode="bounded-sdk",
+            )
+            if runner_lock is not None:
+                runner_lock.update(status="bounded-reviewer-timeout-recovered")
+            return recover_timed_out_session(
+                state_path,
+                state_before=state,
+                next_session=next_session,
+                thread_id=thread.id,
+                approval_mode=approval_mode,
+                model=model,
+                before_snapshot_id=before_snapshot_id,
+                after_snapshot_id=after_snapshot_id,
+                started_at_epoch=started_at,
+                timeout_seconds=effective_timeout,
+            )
+    finally:
+        codex.close()
+
+    completed_at = int(time.time())
+    raw_response_path = output_dir / f"{next_session.stage}-response.json"
+    final_response_text = str(getattr(turn, "final_response", "") or "")
+    try:
+        response_payload = normalize_bounded_reviewer_response(
+            extract_fenced_json(final_response_text),
+            next_session,
+        )
+        raw_response_path.write_text(
+            json.dumps(response_payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        status_after = response_payload["recommended_stage_status"]
+        findings_path = output_dir / f"{next_session.stage}-findings.md"
+        findings_path.write_text(
+            render_bounded_reviewer_findings(next_session.stage, response_payload),
+            encoding="utf-8",
+        )
+        next_prompt = next_prompt_for_bounded_reviewer(
+            state,
+            state_path,
+            next_session,
+            status_after,
+            findings_path,
+        )
+        session_log_path = output_dir / f"reviewer-session-log.{next_session.stage}.md"
+        decision_log_path = output_dir / f"agent-decision-log.{next_session.stage}.md"
+        session_log_path.write_text(
+            render_bounded_semantic_session_log(
+                next_session,
+                status_after=status_after,
+                response=response_payload,
+                checked_paths=checked_paths,
+                started_at_epoch=started_at,
+                completed_at_epoch=completed_at,
+                thread_id=thread.id,
+                turn_id=turn.id,
+            ),
+            encoding="utf-8",
+        )
+        decision_log_path.write_text(
+            render_bounded_semantic_decision_log(
+                next_session,
+                status_after=status_after,
+                response=response_payload,
+                prompt_path=relative_or_name(next_prompt, ft_root),
+            ),
+            encoding="utf-8",
+        )
+        state_after = dict(state)
+        state_after["current_stage"] = next_session.stage
+        state_after["stage_status"] = status_after
+        state_after["active_transition_prompt"] = relative_or_name(next_prompt, ft_root)
+        state_after["blocking_findings"] = [
+            str(finding.get("id") or "")
+            for finding in response_payload["findings"]
+            if str(finding.get("severity") or "").lower() in BOUNDED_SEMANTIC_BLOCKING_SEVERITIES
+        ]
+        state_after["blocking_reasons"] = (
+            [f"{next_session.stage}: bounded reviewer found blocking findings."]
+            if state_after["blocking_findings"] and status_after != "signed-off"
+            else []
+        )
+        reviewer_artifacts = [
+            relative_or_name(raw_response_path, ft_root),
+            relative_or_name(findings_path, ft_root),
+            relative_or_name(session_log_path, ft_root),
+            relative_or_name(decision_log_path, ft_root),
+            relative_or_name(prompt_path, ft_root),
+            relative_or_name(next_prompt, ft_root),
+            relative_or_name(output_dir / f"{next_session.stage}{COMPLETION_MANIFEST_SUFFIX}", ft_root),
+        ]
+        state_after["latest_artifacts"] = unique_nonempty_strings(
+            state.get("latest_artifacts"),
+            reviewer_artifacts,
+        )
+        state_after["sessions"] = []
+        final_output_path = write_session_output(
+            cycle_dir,
+            next_session.stage,
+            "\n".join(
+                [
+                    f"# {next_session.stage} bounded reviewer result",
+                    "",
+                    f"stage_status: {status_after}",
+                    f"finding_count: {len(response_payload['findings'])}",
+                    f"findings: {relative_or_name(findings_path, ft_root)}",
+                    "",
+                ]
+            ),
+        )
+    except Exception as exc:
+        invalid_path = write_bounded_semantic_invalid_response_artifact(
+            output_dir,
+            next_session.stage,
+            final_response_text,
+            exc,
+        )
+        state_after = dict(state)
+        state_after["current_stage"] = next_session.stage
+        state_after["stage_status"] = "blocked-input"
+        state_after["active_transition_prompt"] = next_session.prompt_path
+        state_after["blocking_reasons"] = [f"{next_session.stage}: bounded reviewer returned invalid JSON"]
+        state_after["blocking_findings"] = []
+        state_after["latest_artifacts"] = unique_nonempty_strings(
+            state.get("latest_artifacts"),
+            relative_or_name(invalid_path, ft_root),
+            relative_or_name(raw_response_path, ft_root),
+            relative_or_name(output_dir / f"{next_session.stage}{COMPLETION_MANIFEST_SUFFIX}", ft_root),
+        )
+        state_after["sessions"] = []
+        raw_response_path.write_text(final_response_text, encoding="utf-8")
+        final_output_path = invalid_path
+        status_after = "blocked-input"
+
+    write_simple_yaml(state_path, state_after)
+    validate_state(state_after, state_path)
+    validate_post_session_state_transition(state, state_after, next_session, state_path)
+    turn_status = enum_value(turn.status)
+    session_status = "completed" if status_after != "blocked-input" else "failed"
+    completion_manifest_path = write_completion_manifest(
+        state_path,
+        state_before=state,
+        state_after=state_after,
+        next_session=next_session,
+        thread_id=thread.id,
+        turn_id=turn.id,
+        turn_status=turn_status,
+        session_status=session_status,
+        state_advanced=True,
+        input_snapshot=input_snapshot,
+        output_snapshot=output_snapshot,
+        final_response=final_output_path,
+        started_at_epoch=started_at,
+        completed_at_epoch=completed_at,
+        duration_ms=getattr(turn, "duration_ms", "") or (completed_at - started_at) * 1000,
+        execution_mode="bounded-sdk",
+    )
+    after_manifest = snapshot_state(state_path, after_snapshot_id)
+    append_session_record(
+        cycle_dir / "codex-session-map.yaml",
+        state,
+        {
+            "stage": next_session.stage,
+            "role": next_session.role,
+            "scenario": next_session.scenario,
+            "execution_mode": "bounded-sdk",
+            "thread_id": thread.id,
+            "turn_id": turn.id,
+            "turn_status": turn_status,
+            "sandbox": "read_only",
+            "approval_mode": approval_mode,
+            "model": model or "",
+            "prompt": relative_or_name(prompt_path, ft_root),
+            "input_snapshot": input_snapshot,
+            "output_snapshot": output_snapshot,
+            "final_response": relative_or_name(final_output_path, ft_root),
+            "completion_manifest": relative_or_name(completion_manifest_path, ft_root),
+            "started_at_epoch": started_at,
+            "completed_at_epoch": completed_at,
+            "duration_ms": getattr(turn, "duration_ms", "") or (completed_at - started_at) * 1000,
+            "state_advanced": True,
+            "status": session_status,
+        },
+    )
+    append_runner_event(
+        cycle_dir,
+        "bounded_reviewer_stage_finished",
+        stage=next_session.stage,
+        scenario=next_session.scenario,
+        execution_mode="bounded-sdk",
+        stage_status=status_after,
+        thread_id=thread.id,
+        turn_id=turn.id,
+        completion_manifest=relative_or_name(completion_manifest_path, ft_root),
+    )
+    if runner_lock is not None:
+        runner_lock.update(status="bounded-reviewer-stage-completed")
+    return {
+        "action": "completed-bounded-reviewer-session",
+        "cycle_id": state["cycle_id"],
+        "stage": next_session.stage,
+        "role": next_session.role,
+        "scenario": next_session.scenario,
+        "execution_mode": "bounded-sdk",
+        "thread_id": thread.id,
+        "turn_id": turn.id,
+        "turn_status": turn_status,
+        "session_status": session_status,
+        "state_advanced": True,
+        "stage_status": status_after,
+        "final_response": str(final_output_path),
+        "completion_manifest": str(completion_manifest_path),
+        "input_snapshot": before_manifest["snapshot_id"],
+        "output_snapshot": after_manifest["snapshot_id"],
+    }
+
+
 def run_real_session_process_supervised(
     state: dict[str, Any],
     state_path: Path,
@@ -4400,6 +5007,16 @@ def run_real_session(
         )
     if next_session.scenario == "reviewer.semantic_traceability_test_design":
         return run_bounded_semantic_review_session(
+            state,
+            state_path,
+            cwd=cwd,
+            approval_mode=approval_mode,
+            model=model,
+            runner_lock=runner_lock,
+            session_timeout_seconds=session_timeout_seconds,
+        )
+    if next_session.scenario in BOUNDED_REVIEWER_SCENARIOS:
+        return run_bounded_reviewer_session(
             state,
             state_path,
             cwd=cwd,
@@ -5264,9 +5881,19 @@ def cmd_diagnose_sdk_turn(args: argparse.Namespace) -> int:
         payload = sdk_diag.run_diagnostic(**diagnostic_kwargs)
         payload["action"] = "diagnosed-sdk-turn"
     payload["cycle_id"] = state.get("cycle_id") or ""
+    payload["ft_slug"] = state.get("ft_slug") or ""
+    payload["scope_slug"] = state.get("scope_slug") or ""
+    payload["current_round"] = state.get("current_round") or 0
+    payload["semantic_round"] = state.get("semantic_round") or 0
     payload["stage"] = next_session.stage
     payload["scenario"] = next_session.scenario
     payload["role"] = next_session.role
+    payload["session_id"] = payload.get("thread_id") or ""
+    response_path = output_dir / "response.md"
+    if response_path.exists():
+        response_text = response_path.read_text(encoding="utf-8", errors="replace")
+        payload["final_response_summary"] = re.sub(r"\s+", " ", response_text).strip()[:500]
+    sdk_diag.write_run_json(output_dir, payload)
     print(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 

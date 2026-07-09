@@ -19,13 +19,22 @@ Do not collapse child obligations into one parent `GAP-*`; each child keeps `sco
 
 ## Candidate TC
 
+Candidate UI calibration is an oracle-status marker, not a title taxonomy. `**Название:**` must describe the business check and must not contain process markers such as `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения` or `требуется подтверждение`.
+
 Required fields:
 
 - `**Статус oracle:** ui-calibration-required`
 - `**Статус тест-кейса:** candidate-ui-calibration`
-- `**Что нужно зафиксировать при UI calibration:** ...`
+- `**Требуется подтверждение:** <specific missing oracle question>`
 
 Inventory row: `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, `planned_tc_or_gap`, `calibration_notes`.
+
+Candidate TC requirements:
+
+- contain a concrete representative invalid or empty-required value in `Тестовые данные` or in the action step;
+- preserve positive allowed-class TC for the same source-backed restriction;
+- do not replace a positive allowed-class TC with a negative candidate;
+- do not invent exact UI rejection mechanism, message, color, filtering, clearing, blocking or save/no-save effect.
 
 ## Expected Result
 

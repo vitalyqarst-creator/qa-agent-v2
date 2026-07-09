@@ -13,6 +13,7 @@ Reviewer обязан критически проверять заявления
 - Не требуй поведение, которого нет в ФТ, PDF, принятом уточнении или утвержденных материалах пакета.
 - Не снижай severity только потому, что дефект часто повторяется в наборе.
 - Не создавай findings из-за стилистических предпочтений, если кейс исполним, трассируем и семантически достаточен.
+- Не подписывай набор без semantic review layer. Instruction budget не является причиной удалить проверки покрытия, атомарности, observability, test data specificity или source-backed allowed/invalid classes.
 
 ## Минимальный split reviewer roles
 
@@ -84,6 +85,13 @@ Reviewer обязан критически проверять заявления
 - Closed dictionary/list TC checks active values but does not verify absence of extra values and does not record closed-set ambiguity as `GAP-*` / `unclear`.
 - Test-design-derived check (`v2 obligation`, exploratory, risk-derived, regression-derived) is presented as a direct FT/source atom without source/rule derivation.
 - Setup/recovery behavior вроде снятия всех чекбоксов или очистки списка представлено как source-backed baseline TC без source evidence; такое поведение должно быть помечено как derived setup/recovery или вынесено в `GAP-*`.
+- `Название` содержит process marker вместо бизнес-проверки: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
+- Candidate status leaked into title instead of body fields.
+- Candidate negative TC has no concrete representative invalid value.
+- Candidate negative TC invents a concrete rejection mechanism, message, highlight, filtering, clearing, transition block or save/no-save behavior.
+- Source-backed input restriction has negative/candidate-negative coverage but no sibling positive allowed-class TC.
+- Final TC uses generic test data placeholders instead of concrete values or a defined setup/fixture profile.
+- Numbered preconditions are passive states instead of action-oriented setup or a defined setup profile.
 
 ## Обязательный defect-class checklist
 

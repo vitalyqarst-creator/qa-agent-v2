@@ -2569,7 +2569,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "1. Enter `12A00` into `Postal index`.",
                         "2. Perform the current UI action that triggers field validation.",
                         "**Итоговый ожидаемый результат:** Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение.",
-                        "**Что нужно зафиксировать при UI calibration:** validation trigger, UI reaction, message if any, transition/save effect.",
+                        "**Требуется подтверждение:** Как UI отклоняет ввод букв в поле `Postal index`?",
                         "**Постусловия:** Не требуются.",
                     ]
                 ),
@@ -2581,7 +2581,77 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("test-case-ui-calibration-candidate-missing-marker", finding_ids)
+        self.assertNotIn("test-case-ui-calibration-candidate-missing-confirmation-question", finding_ids)
+        self.assertNotIn("test-case-ui-calibration-candidate-missing-concrete-invalid-value", finding_ids)
         self.assertNotIn("test-case-ui-calibration-candidate-invents-ui-reaction", finding_ids)
+
+    def test_candidate_marker_in_body_with_clean_title_passes_title_check(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "candidate-clean-title.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "## TC-CANDIDATE-001",
+                        "**Название:** Фамилия отклоняет цифру",
+                        "**Тип:** Negative",
+                        "**Приоритет:** Medium",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Трассировка:** `GSR 1`; `SO-NEG-001`; `GAP-001`",
+                        "**Предусловия:** Form is open.",
+                        "**Тестовые данные:** `Иванов1`",
+                        "**Шаги:**",
+                        "1. Ввести `Иванов1` в поле `Фамилия`.",
+                        "**Итоговый ожидаемый результат:** Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение.",
+                        "**Требуется подтверждение:** Как UI отклоняет цифру в поле `Фамилия`?",
+                        "**Постусловия:** Не требуются.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-title-process-marker-smell", finding_ids)
+        self.assertNotIn("test-case-ui-calibration-candidate-missing-concrete-invalid-value", finding_ids)
+
+    def test_candidate_ui_calibration_title_marker_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "candidate-title.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "## TC-CANDIDATE-001",
+                        "**Название:** UI calibration ограничения: Фамилия отклоняет цифру",
+                        "**Тип:** Negative",
+                        "**Приоритет:** Medium",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Трассировка:** `GSR 1`; `SO-NEG-001`; `GAP-001`",
+                        "**Предусловия:** Form is open.",
+                        "**Тестовые данные:** `Иванов1`",
+                        "**Шаги:**",
+                        "1. Ввести `Иванов1` в поле `Фамилия`.",
+                        "**Итоговый ожидаемый результат:** Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение.",
+                        "**Требуется подтверждение:** Как UI отклоняет цифру в поле `Фамилия`?",
+                        "**Постусловия:** Не требуются.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-title-process-marker-smell", finding_ids)
 
     def test_candidate_ui_calibration_tc_without_marker_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2634,7 +2704,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "**Шаги:**",
                         "1. Enter `12A00` into `Postal index`.",
                         "**Итоговый ожидаемый результат:** Отображается сообщение «Postal index must contain only digits».",
-                        "**Что нужно зафиксировать при UI calibration:** validation trigger, UI reaction, message if any.",
+                        "**Требуется подтверждение:** Как UI отклоняет буквы в поле `Postal index`?",
                         "**Постусловия:** Не требуются.",
                     ]
                 ),
@@ -2646,6 +2716,173 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-ui-calibration-candidate-invents-ui-reaction", finding_ids)
+
+    def test_candidate_ui_calibration_without_concrete_invalid_value_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "candidate-generic-value.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "## TC-CANDIDATE-001",
+                        "**Название:** Postal index rejects letters",
+                        "**Тип:** Negative",
+                        "**Приоритет:** Medium",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Трассировка:** `GSR 1`; `SO-NEG-001`",
+                        "**Предусловия:** Form is open.",
+                        "**Тестовые данные:** Invalid value from negative class.",
+                        "**Шаги:**",
+                        "1. Enter invalid value into `Postal index`.",
+                        "**Итоговый ожидаемый результат:** Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение.",
+                        "**Требуется подтверждение:** Как UI отклоняет буквы в поле `Postal index`?",
+                        "**Постусловия:** Не требуются.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-ui-calibration-candidate-missing-concrete-invalid-value", finding_ids)
+
+    def test_text_symbol_restriction_missing_positive_allowed_classes_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "text-symbol.md"
+            test_case_file.parent.mkdir(parents=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Text Symbol Restriction",
+                        "",
+                        "## Source Table Normalization",
+                        "",
+                        "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | SRC-001.P01 | WP-01 | Фамилия | text-symbol-restriction | always | Возможен ввод только текстовых символов и специальный символ `-`. | GSR 1 | Section 1 | high | - | ATOM-001 |",
+                        "",
+                        "## Coverage Obligation Table",
+                        "",
+                        "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| OBL-001 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | reject-digits | Digit is not allowed. | Section 1 | TC-TEXT-001 | covered | candidate negative |",
+                        "| OBL-002 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | reject-special-chars-other-than-hyphen | `@` is not allowed. | Section 1 | TC-TEXT-002 | covered | candidate negative |",
+                        "",
+                        "## TC-TEXT-001",
+                        "**Название:** Фамилия отклоняет цифру",
+                        "**Тип:** Negative",
+                        "**Приоритет:** Medium",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Трассировка:** ATOM-001; SRC-001.P01",
+                        "**Предусловия:** Form is open.",
+                        "**Тестовые данные:** `Иванов1`",
+                        "**Шаги:**",
+                        "1. Ввести `Иванов1` в поле `Фамилия`.",
+                        "**Итоговый ожидаемый результат:** Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение.",
+                        "**Требуется подтверждение:** Как UI отклоняет цифру в поле `Фамилия`?",
+                        "**Постусловия:** Не требуются.",
+                        "",
+                        "## TC-TEXT-002",
+                        "**Название:** Фамилия отклоняет специальный символ кроме дефиса",
+                        "**Тип:** Negative",
+                        "**Приоритет:** Medium",
+                        "**Статус oracle:** ui-calibration-required",
+                        "**Статус тест-кейса:** candidate-ui-calibration",
+                        "**Трассировка:** ATOM-001; SRC-001.P01",
+                        "**Предусловия:** Form is open.",
+                        "**Тестовые данные:** `Иванов@`",
+                        "**Шаги:**",
+                        "1. Ввести `Иванов@` в поле `Фамилия`.",
+                        "**Итоговый ожидаемый результат:** Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение.",
+                        "**Требуется подтверждение:** Как UI отклоняет символ `@` в поле `Фамилия`?",
+                        "**Постусловия:** Не требуются.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("coverage-obligation-table-missing-required-class", finding_ids)
+
+    def test_text_symbol_restriction_positive_and_candidate_negative_coverage_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "text-symbol.md"
+            test_case_file.parent.mkdir(parents=True)
+            base = [
+                "# Text Symbol Restriction",
+                "",
+                "## Source Table Normalization",
+                "",
+                "| source_row_id | source_property_id | package_id | field_or_block | property | condition | expected_behavior | requirement_code | source_ref | confidence | gap_id | linked_atoms |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| SRC-001 | SRC-001.P01 | WP-01 | Фамилия | text-symbol-restriction | always | Возможен ввод только текстовых символов и специальный символ `-`. | GSR 1 | Section 1 | high | - | ATOM-001 |",
+                "",
+                "## Coverage Obligation Table",
+                "",
+                "| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                "| OBL-001 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | valid-letters | Letters-only value is allowed. | Section 1 | TC-TEXT-001 | covered | positive |",
+                "| OBL-002 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | valid-letters-hyphen | Letters with hyphen are allowed. | Section 1 | TC-TEXT-002 | covered | positive |",
+                "| OBL-003 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | reject-digits | Digit is not allowed. | Section 1 | TC-TEXT-003 | covered | candidate negative |",
+                "| OBL-004 | WP-01 | SRC-001.P01 | ATOM-001 | text-symbol-restriction | reject-special-chars-other-than-hyphen | `@` is not allowed. | Section 1 | TC-TEXT-004 | covered | candidate negative |",
+                "",
+            ]
+            cases = [
+                ("TC-TEXT-001", "Фамилия принимает только буквы", "Positive", "`Иванов`", "1. Ввести `Иванов` в поле `Фамилия`.", "Значение `Иванов` отображается в поле `Фамилия`."),
+                ("TC-TEXT-002", "Фамилия принимает буквы с дефисом", "Positive", "`Иванов-Петров`", "1. Ввести `Иванов-Петров` в поле `Фамилия`.", "Значение `Иванов-Петров` отображается в поле `Фамилия`."),
+                ("TC-TEXT-003", "Фамилия отклоняет цифру", "Negative", "`Иванов1`", "1. Ввести `Иванов1` в поле `Фамилия`.", "Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение."),
+                ("TC-TEXT-004", "Фамилия отклоняет специальный символ кроме дефиса", "Negative", "`Иванов@`", "1. Ввести `Иванов@` в поле `Фамилия`.", "Недопустимое значение не должно быть принято как валидное. Конкретный наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: символ не вводится / значение очищается / отображается сообщение / поле подсвечивается / блокируется переход или сохранение / значение не сохраняется / другое фактическое поведение."),
+            ]
+            for tc_id, title, tc_type, data, step, expected in cases:
+                base.extend(
+                    [
+                        f"## {tc_id}",
+                        f"**Название:** {title}",
+                        f"**Тип:** {tc_type}",
+                        "**Приоритет:** Medium",
+                        *(
+                            [
+                                "**Статус oracle:** ui-calibration-required",
+                                "**Статус тест-кейса:** candidate-ui-calibration",
+                            ]
+                            if tc_type == "Negative"
+                            else []
+                        ),
+                        "**Трассировка:** ATOM-001; SRC-001.P01",
+                        "**Предусловия:** Form is open.",
+                        f"**Тестовые данные:** {data}",
+                        "**Шаги:**",
+                        step,
+                        f"**Итоговый ожидаемый результат:** {expected}",
+                        *(
+                            [f"**Требуется подтверждение:** Как UI отклоняет значение {data} в поле `Фамилия`?"]
+                            if tc_type == "Negative"
+                            else []
+                        ),
+                        "**Постусловия:** Не требуются.",
+                        "",
+                    ]
+                )
+            test_case_file.write_text("\n".join(base), encoding="utf-8")
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("coverage-obligation-table-missing-required-class", finding_ids)
+        self.assertNotIn("test-case-ui-calibration-candidate-missing-concrete-invalid-value", finding_ids)
 
     def test_parent_gap_without_child_oracle_obligations_fails_for_restriction_signals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2742,7 +2979,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
 
         self.assertIn("ui-calibration-required", combined)
         self.assertIn("candidate-ui-calibration", combined)
-        self.assertIn("calibration note", combined)
+        self.assertIn("Требуется подтверждение", combined)
 
     def test_scope_analyzer_ready_for_gap_review_accepts_scope_gap_prompt(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

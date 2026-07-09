@@ -28,6 +28,7 @@
 
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
+- `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
 - Не помещай проверяемое действие в предусловия. Для созданного/выбранного/настроенного UI-state укажи путь: setup-действие пользователя с кнопкой/полем/значением/блоком или fixture/setup artifact; если путь неизвестен, используй `GAP-*` / `unclear`.
 - `Предусловия`: numbered action setup или fixture/API/profile, not magic states or passive states. `Дождаться...` / `Убедиться...` допустимо только после setup; unknown path = `GAP-*` / `unclear`; vague setup (`выбрать или ввести`, `при необходимости`, `если нужно`) запрещен.
 - В шагах описывай действие пользователя, а не внутреннюю реализацию.
@@ -64,7 +65,7 @@
 
 Для input restrictions не додумывай механизм enforcement. `Только цифры`, length или mask задают класс допустимых значений, но не доказывают, что UI фильтрует ввод, очищает поле, показывает marker или блокирует переход. Используй field-state только с evidence, transition-state только с полным valid fixture остальных обязательных полей, иначе `GAP-*` / `unclear`.
 
-Если такой restriction пришел из oracle inventory с `decision = candidate_tc_required`, сохраняй проверку как candidate TC по `negative-ui-calibration-policy.md`.
+Если такой restriction пришел из oracle inventory с `decision = candidate_tc_required`, сохраняй проверку как candidate TC по `negative-ui-calibration-policy.md`: `Статус oracle`, `Статус тест-кейса` и `Требуется подтверждение` указываются только в теле TC, а `Тестовые данные` или шаг содержит concrete representative invalid value.
 
 Для numeric/input rejection не заменяй один unsupported oracle другим. Если validator или reviewer отклонил `значение не отображается`, `значение очищено`, `символы отфильтрованы` или `значение не принято` как неподтвержденный UI-механизм, writer не должен исправлять это на `поле подсвечено красным`, `появляется ошибка`, `Следующий шаг заблокирован` или `раздел не открыт`, если source прямо не задает такую реакцию именно для invalid numeric/input class. Разрешены только:
 

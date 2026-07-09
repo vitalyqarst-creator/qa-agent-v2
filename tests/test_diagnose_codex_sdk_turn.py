@@ -162,6 +162,32 @@ class DiagnoseCodexSdkTurnTests(unittest.TestCase):
             self.assertEqual(content, path.read_text(encoding="utf-8"))
         self.assertEqual("OK", (self.root / "diag-success" / "response.md").read_text(encoding="utf-8"))
 
+    def test_missing_sdk_runtime_reports_blocked_runtime_status(self) -> None:
+        output_dir = self.root / "diag-missing-runtime"
+
+        result = self.run_diagnostic(
+            "--cwd",
+            str(self.root),
+            "--prompt-text",
+            "Reply OK only",
+            "--sandbox-policy",
+            "read_only",
+            "--approval-mode",
+            "auto_review",
+            "--timeout-seconds",
+            "5",
+            "--output-dir",
+            str(output_dir),
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual("blocked-sdk-runtime", payload["status"])
+        self.assertEqual(2, payload["returncode"])
+        run_payload = json.loads((output_dir / "run.json").read_text(encoding="utf-8"))
+        self.assertEqual("blocked-sdk-runtime", run_payload["status"])
+        self.assertIn("openai-codex is not installed", run_payload["stderr_tail"])
+
 
 if __name__ == "__main__":
     unittest.main()
