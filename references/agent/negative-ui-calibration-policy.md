@@ -15,6 +15,8 @@ Contract for negative / requiredness obligations with unknown exact UI reaction.
 - `candidate_tc_required`: source defines value/format/length/date/mask/symbol/list/requiredness obligation, exact UI mechanism unknown.
 - `gap_required`: no stable source anchor, input class, condition, or executable user action exists.
 
+Visible source-backed input restriction with unknown UI rejection mechanism is `candidate_tc_required`, not gap-only. BA question/parent `GAP-*` may coexist, but cannot replace candidate-negative TC coverage.
+
 Do not collapse child obligations into one parent `GAP-*`; each child keeps `scope_obligation_id`.
 
 ## Candidate TC

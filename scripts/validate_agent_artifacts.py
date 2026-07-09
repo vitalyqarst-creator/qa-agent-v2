@@ -3259,6 +3259,29 @@ def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tup
             )
         )
 
+    gap_only_input_restrictions = gap_only_input_restriction_rows(coverage_gaps_section)
+    if gap_only_input_restrictions:
+        findings.append(
+            Finding(
+                id="source-backed-input-restriction-gap-only",
+                severity="warning",
+                category="coverage",
+                title="Source-backed input restriction is routed as gap-only",
+                details=(
+                    "A visible source-backed input restriction with an unknown exact UI rejection mechanism still "
+                    "requires candidate-negative TC coverage. A BA question or parent GAP may document the missing "
+                    "mechanism, but it must not replace the candidate TC."
+                ),
+                path=display_path,
+                evidence=gap_only_input_restrictions[:20],
+                recommended_action=(
+                    "Create candidate-negative TC coverage with a concrete representative invalid value, "
+                    "`Статус oracle: ui-calibration-required`, `Статус тест-кейса: candidate-ui-calibration`, "
+                    "`Требуется подтверждение`, and an optional linked GAP/BA question for the unknown UI mechanism."
+                ),
+            )
+        )
+
     checks = [
         Check(
             "coverage-gap-inventory",
@@ -3268,6 +3291,45 @@ def validate_coverage_gap_inventory(content: str, path: Path, root: Path) -> tup
         )
     ]
     return findings, checks
+
+
+def gap_only_input_restriction_rows(coverage_gaps_section: str) -> list[str]:
+    table_rows = markdown_table_rows_from_text(coverage_gaps_section)
+    if len(table_rows) < 2:
+        return []
+
+    header = normalize_table_header(table_rows[0])
+    if "gap_type" not in header:
+        return []
+
+    evidence: list[str] = []
+    for row_index, raw_row in enumerate(table_rows[1:], start=2):
+        if not any(cell.strip().strip("-:|`") for cell in raw_row):
+            continue
+        row = {
+            column_name: raw_row[column_index].strip().strip("`") if column_index < len(raw_row) else ""
+            for column_index, column_name in enumerate(header)
+        }
+        gap_type = normalize_markdown_field_value(row.get("gap_type", "")).lower()
+        if "missing-ui-oracle" not in gap_type:
+            continue
+
+        combined = " | ".join(row.values())
+        if GAP_ONLY_CANDIDATE_LINK_RE.search(combined):
+            continue
+        if not GAP_ONLY_INPUT_RESTRICTION_RE.search(combined):
+            continue
+        if not GAP_ONLY_UI_CALIBRATION_ROUTE_RE.search(combined):
+            continue
+
+        gap_id = row.get("gap_id", "").strip() or raw_row[0].strip() or f"row-{row_index}"
+        source_ref = row.get("source_ref", "").strip() or row.get("related_req", "").strip() or "-"
+        description = re.sub(r"\s+", " ", row.get("description", "").strip())
+        downstream = re.sub(r"\s+", " ", row.get("downstream_handling", "").strip())
+        evidence.append(
+            f"{gap_id}: source={source_ref}; description={description[:160]}; downstream={downstream[:160]}"
+        )
+    return evidence
 
 
 def markdown_section_is_empty(section: str) -> bool:
@@ -5720,6 +5782,29 @@ ALLOWED_ORACLE_INVENTORY_DECISIONS = {
 UI_CALIBRATION_REQUIRED_RE = re.compile(r"\bui-calibration-required\b", flags=re.IGNORECASE)
 CANDIDATE_UI_CALIBRATION_RE = re.compile(
     r"\b(?:candidate-ui-calibration|requires-ui-calibration)\b",
+    flags=re.IGNORECASE,
+)
+GAP_ONLY_INPUT_RESTRICTION_RE = re.compile(
+    (
+        r"\b(?:numeric|digits?|chars?|characters?|length|date|email|e-mail|mask|format|"
+        r"phone|postal|index|text|symbol|letters?|invalid|non-numeric|future-date|"
+        r"\u0446\u0438\u0444\u0440|\u0447\u0438\u0441\u043b|\u0441\u0438\u043c\u0432\u043e\u043b|\u043c\u0430\u0441\u043a|"
+        r"\u0444\u043e\u0440\u043c\u0430\u0442|\u0434\u043b\u0438\u043d|\u0434\u0430\u0442|"
+        r"\u0442\u0435\u043b\u0435\u0444\u043e\u043d|\u0438\u043d\u0434\u0435\u043a\u0441|\u043f\u043e\u0447\u0442)"
+    ),
+    flags=re.IGNORECASE,
+)
+GAP_ONLY_UI_CALIBRATION_ROUTE_RE = re.compile(
+    (
+        r"(?:positive\b.{0,120}\bonly|invalid\b.{0,120}\brequire.{0,80}ui calibration|"
+        r"invalid\b.{0,120}\bdefer.{0,80}ui calibration|require.{0,80}explicit validation oracle|"
+        r"\u043d\u0435\u0434\u043e\u043f\u0443\u0441\u0442.{0,120}ui calibration|"
+        r"\u0442\u0440\u0435\u0431\u0443.{0,80}\u043a\u0430\u043b\u0438\u0431\u0440)"
+    ),
+    flags=re.IGNORECASE | re.DOTALL,
+)
+GAP_ONLY_CANDIDATE_LINK_RE = re.compile(
+    r"\b(?:candidate_tc_required|candidate-ui-calibration|ui-calibration-required|SO-NEG-|SO-REQ-)\b",
     flags=re.IGNORECASE,
 )
 UI_CALIBRATION_NOTE_RE = re.compile(
@@ -17286,6 +17371,12 @@ def validate(
     source_normalization_diagnostics = iter_source_normalization_diagnostics(root)
     writer_process_diagnostics = iter_writer_process_diagnostics(root)
     writer_self_checks = iter_writer_self_checks(root)
+    coverage_gap_artifacts = dedupe_paths(
+        [
+            *iter_named_markdown(root, "coverage-gaps.md"),
+            *iter_named_markdown(root, "scope-coverage-gaps.md"),
+        ]
+    )
     session_logs = iter_session_logs(root)
     decision_logs = iter_decision_logs(root)
     active_text_artifacts = iter_active_text_artifacts(root)
@@ -17306,6 +17397,7 @@ def validate(
         source_normalization_diagnostics = [root]
         writer_process_diagnostics = []
         writer_self_checks = []
+        coverage_gap_artifacts = []
         session_logs = []
         decision_logs = []
         active_text_artifacts = []
@@ -17323,6 +17415,7 @@ def validate(
         source_normalization_diagnostics = []
         writer_process_diagnostics = []
         writer_self_checks = []
+        coverage_gap_artifacts = []
         session_logs = []
         decision_logs = []
         active_text_artifacts = []
@@ -17340,6 +17433,7 @@ def validate(
         source_table_normalizations = []
         writer_process_diagnostics = []
         writer_self_checks = []
+        coverage_gap_artifacts = []
         session_logs = []
         decision_logs = []
         active_text_artifacts = []
@@ -17528,6 +17622,28 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in coverage_gap_artifacts:
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError as exc:
+            findings.append(
+                Finding(
+                    id="coverage-gaps-not-utf8",
+                    severity="warning",
+                    category="coverage",
+                    title="Coverage gaps artifact is not valid UTF-8",
+                    details=str(exc),
+                    path=rel(path, root),
+                    evidence=[],
+                    recommended_action="Save coverage gaps artifacts as UTF-8 Markdown.",
+                )
+            )
+            checks.append(Check("coverage-gap-inventory", "warn", "Coverage gaps artifact is not UTF-8.", rel(path, root)))
+            continue
+        path_findings, path_checks = validate_coverage_gap_inventory(content, path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in session_logs:
         path_findings, path_checks = validate_session_log(
             path,
@@ -17581,6 +17697,7 @@ def validate(
             "dictionary_inventories_checked": len(dictionary_inventories),
             "writer_process_diagnostics_checked": len(writer_process_diagnostics),
             "writer_self_checks_checked": len(writer_self_checks),
+            "coverage_gap_artifacts_checked": len(coverage_gap_artifacts),
             "session_logs_checked": len(session_logs),
             "decision_logs_checked": len(decision_logs),
             "active_text_artifacts_checked": len(active_text_artifacts),
@@ -17617,6 +17734,7 @@ def text_report(report: dict[str, Any]) -> str:
         f"- dictionary inventories: {summary['dictionary_inventories_checked']}",
         f"- writer process diagnostics: {summary['writer_process_diagnostics_checked']}",
         f"- writer self-checks: {summary['writer_self_checks_checked']}",
+        f"- coverage gap artifacts: {summary['coverage_gap_artifacts_checked']}",
         f"- session logs: {summary['session_logs_checked']}",
         f"- decision logs: {summary['decision_logs_checked']}",
         f"- active text artifacts: {summary['active_text_artifacts_checked']}",

@@ -74,6 +74,7 @@ Reviewer обязан критически проверять заявления
 - Строка `Test-design Applicability Matrix` с `applicable = yes` ссылается на `TC-*`, который по шагам, данным и expected result проверяет другую dimension.
 - Обязательная зависимость, переход состояния, ветка условной видимости или правило закрытого списка из ФТ не покрыты и не зафиксированы как `gap` / `unclear`.
 - `GAP-*` или `gap_unclear` скрывает source-backed observable behavior: подсказку, сообщение, красную подсветку, подтверждение, переход, маску, справочник/теги, date-window boundary, отображаемое сохраненное/несохраненное значение после повторного открытия объекта/раздела или другой pass/fail oracle.
+- Visible source-backed input restriction with unknown UI rejection mechanism is false-gap if only `GAP-*`; require candidate-negative TC with concrete invalid value and calibration markers. BA question may coexist, not replace TC.
 - Один gap смешивает проверяемую UI-часть и недостающий blocker: fixture, справочник, catalog value, backend artifact, статус, test clock или boundary convention.
 - Исполнимый `TC-*` заявляет baseline pass/fail, но ключевой action/feedback/oracle остается unresolved через `GAP-*`; reviewer должен требовать split на проверяемую инвариантную часть и отдельный gap по механизму либо блокировать TC.
 - Расчетный тест-кейс не содержит formula/source reference, входные значения и вручную вычисленный expected result, хотя расчет является предметом проверки.

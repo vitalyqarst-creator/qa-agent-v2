@@ -3021,6 +3021,79 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-scope-analyzer-invalid-negative-oracle-inventory", finding_ids)
 
+    def test_gap_only_visible_input_restriction_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            coverage_gaps = fixture_root / "coverage-gaps.md"
+            coverage_gaps.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Gaps And BA Questions",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "| gap_id | source_ref | related_req | gap_type | description | downstream handling |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        "| GAP-001 | Table 7 row 35 | BSR 124 | missing-ui-oracle | Postal index restriction says only 6 numeric chars, but source does not define exact UI reaction for non-numeric, shorter, or longer input. | Positive valid-value TC only; invalid classes require UI calibration or explicit validation oracle. |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(coverage_gaps), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("source-backed-input-restriction-gap-only", finding_ids)
+
+    def test_gap_with_candidate_obligation_link_does_not_warn_as_gap_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            coverage_gaps = fixture_root / "coverage-gaps.md"
+            coverage_gaps.write_text(
+                "\n".join(
+                    [
+                        "# Coverage Gaps And BA Questions",
+                        "",
+                        "## Coverage Gaps",
+                        "",
+                        "| gap_id | source_ref | related_req | gap_type | description | downstream handling |",
+                        "| --- | --- | --- | --- | --- | --- |",
+                        "| GAP-001 | Table 7 row 35 | BSR 124 | missing-ui-oracle | Postal index restriction says only 6 numeric chars, but source does not define exact UI reaction for non-numeric input. | Candidate child obligation `SO-NEG-001` is routed as candidate TC; parent gap keeps the missing UI mechanism question. |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(coverage_gaps), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("source-backed-input-restriction-gap-only", finding_ids)
+
+    def test_independent_wide_canary_gap_only_restrictions_are_failure_fixture(self) -> None:
+        coverage_gaps = (
+            ROOT_DIR
+            / "fts"
+            / "AutoFin"
+            / "work"
+            / "canary-runs"
+            / "independent-wide-canary"
+            / "coverage-gaps.md"
+        )
+        self.assertTrue(coverage_gaps.exists(), str(coverage_gaps))
+
+        result = self.run_validator("--root", str(coverage_gaps), "--json")
+
+        payload = json.loads(result.stdout)
+        matching = [
+            finding
+            for finding in payload["findings"]
+            if finding["id"] == "source-backed-input-restriction-gap-only"
+        ]
+        self.assertTrue(matching, result.stdout + result.stderr)
+        self.assertIn("GAP-AW-002", "\n".join(matching[0]["evidence"]))
+
     def test_reviewer_rules_mention_candidate_ui_calibration_behavior(self) -> None:
         reviewer_skill = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")
         rubric = (ROOT_DIR / "references" / "qa" / "test-design-review-rubric.md").read_text(encoding="utf-8")
