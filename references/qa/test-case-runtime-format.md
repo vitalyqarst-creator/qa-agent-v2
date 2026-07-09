@@ -11,7 +11,7 @@
 - `Название`;
 - `Тип`: `Positive` или `Negative`;
 - `Приоритет`;
-- `Трассировка`: `ATOM-*`, `GSR-*` / `REQ-*` или source reference;
+- `Трассировка`: `ATOM-*`, exact requirement code such as `BSR 174` / `GSR 22` / `REQ-*`, or source reference;
 - `Предусловия`;
 - `Тестовые данные`;
 - numbered `Шаги`;
@@ -31,6 +31,8 @@
 - `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
 - Не помещай проверяемое действие в предусловия. Для созданного/выбранного/настроенного UI-state укажи путь: setup-действие пользователя с кнопкой/полем/значением/блоком или fixture/setup artifact; если путь неизвестен, используй `GAP-*` / `unclear`.
 - `Предусловия`: numbered action setup или fixture/API/profile, not magic states or passive states. `Дождаться...` / `Убедиться...` допустимо только после setup; unknown path = `GAP-*` / `unclear`; vague setup (`выбрать или ввести`, `при необходимости`, `если нужно`) запрещен.
+- Production files under `fts/**/test-cases/*.md` must be self-contained: no setup profile references, stand/environment wording, project/package leakage, or create-or-take alternatives; action-created fields must include the reveal action in preconditions, e.g. `Добавить контактное лицо` before `Фамилия`/`Имя`/`Отчество`.
+- Production runtime files must not embed internal diagnostic/design sections (`Artifact Write Strategy`, source inventory/normalization, TDDT, applicability matrix, ledger, coverage obligations, Writer Quality Gate); keep them in `fts/**/work/**`, `evals/**`, or diagnostic reports.
 - В шагах описывай действие пользователя, а не внутреннюю реализацию.
 - Expected result должен быть наблюдаемым: visible UI state, accepted/rejected value, saved/not saved state, navigation blocked/opened, generated document, message, API/log artifact only if source explicitly allows it.
 - Не используй invisible oracle: `считается невалидным`, `корректно обрабатывается`, `соответствует ФТ`, `по системному правилу`.

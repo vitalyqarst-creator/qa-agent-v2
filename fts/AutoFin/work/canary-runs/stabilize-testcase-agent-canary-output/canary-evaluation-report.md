@@ -51,6 +51,15 @@
 - Each candidate negative TC uses a concrete invalid value.
 - Expected results do not assert an exact UI rejection mechanism; they require UI calibration for the observed mechanism.
 
+## Production Readiness Checks
+
+- Production TC file is self-contained: each of 12 TC has full inline preconditions.
+- Setup profile references were removed from production TC content.
+- Internal diagnostic sections were removed from production TC content: `Artifact Write Strategy`, `Source Row Inventory`, `Source Table Normalization`, `Test Design Decision Table`, `Test-design Applicability Matrix`, `Atomic Requirements Ledger`, `Coverage Obligation Table`, `Writer Quality Gate`.
+- TC preconditions do not contain `AutoFin`, stand-specific wording, or create-or-take setup wording.
+- Each TC precondition includes pressing `Добавить контактное лицо`; each `Шаги` block contains only the checked value input.
+- TC count, positive/negative/candidate-negative counts, BSR mapping and concrete values are unchanged.
+
 ## BA Questions
 
 | id | linked source | question |
@@ -65,17 +74,19 @@
 | command | result |
 | --- | --- |
 | `python scripts/validate_agent_artifacts.py --root fts/AutoFin/test-cases/4.3-application-card-client-addresses-contacts-canary.md --json --test-case-policy strict --fail-on warning` | pass; 0 findings, 0 warnings |
-| Canary semantic check for required values, candidate metadata, title markers and BA questions | pass |
-| `python -m pytest tests/test_agent_artifact_validator.py -q -k "text_symbol_candidate_invalid_value_is_not_numeric_valid_data or text_symbol_tddt_can_group_required_equivalence_classes or text_symbol_restriction_positive_and_candidate_negative_coverage_passes or generated_test_case_quality_smells_are_reported"` | pass; 3 passed, 298 deselected |
+| Canary semantic check for required values, counts, candidate metadata, diagnostic-section absence, precondition wording and contact-person reveal action | pass |
+| `python -m pytest tests/test_agent_artifact_validator.py -q -k "production_test_case_with_setup_profile_reference_warns or production_test_case_with_inline_full_preconditions_passes or production_test_case_with_environment_specific_precondition_warns or production_test_case_with_project_name_in_preconditions_warns or production_test_case_with_ambiguous_create_or_take_setup_warns or contact_person_case_without_revealing_action_warns or contact_person_case_with_revealing_action_passes or production_test_case_with_internal_diagnostic_sections_warns or internal_diagnostic_sections_under_work_are_allowed or text_symbol_candidate_invalid_value_is_not_numeric_valid_data or text_symbol_tddt_can_group_required_equivalence_classes or text_symbol_restriction_positive_and_candidate_negative_coverage_passes"` | pass; 12 passed, 298 deselected |
 | `python scripts/run_tests.py --suite architecture` | pass; 0 findings |
 | `python scripts/run_tests.py --suite agent-layer-fast` | pass; 210 tests, 1 skipped |
-| `python scripts/run_tests.py --suite artifact-validator-sharded` | pass; 301 tests across 7 shards |
+| `python scripts/run_tests.py --suite artifact-validator-sharded` | pass; 310 tests across 7 shards |
 
 ## Validator Changes
 
 - Fixed a false positive where `VALID_TEST_DATA_VALUE_RE` matched `допустимое значение` inside `Недопустимое значение`.
 - Scoped merged numeric-class TDDT warning away from `text-symbol-restriction`, where one source property legitimately maps to the required text-symbol equivalence classes.
-- Added targeted regression tests for both cases.
+- Added production-runtime validator rules for setup profile references, stand/environment wording, project-name leakage in preconditions, ambiguous create-or-take setup, missing contact-person reveal action, and internal diagnostic sections in production test-case files.
+- Updated writer/reviewer/runtime references so production `fts/**/test-cases/*.md` files stay manual-ready and self-contained while diagnostic/design tables remain in work artifacts.
+- Added targeted regression tests for text-symbol and production-runtime cases.
 
 ## Remaining Risks
 

@@ -203,6 +203,10 @@ ANY_ATOM_ID_RE = re.compile(r"\b(?:[A-Z0-9-]+-)?ATOM-\d{3,}\b")
 GAP_ID_RE = re.compile(r"\b(?:GAP-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b")
 DICT_ID_RE = re.compile(r"\bDICT-\d{3,}\b")
 FINDING_ID_RE = re.compile(r"\b(?:USER-)?FINDING(?:-[A-Z]+)?-\d{3,}\b")
+TEST_CASE_TRACEABILITY_TOKEN_RE = re.compile(
+    r"\b(ATOM-\d{3,}|GSR\s+\d+|BSR\s+\d+|REQ[-\s]?\d+)\b|PDF",
+    flags=re.IGNORECASE,
+)
 REQUIREMENT_CODE_RANGE_RE = re.compile(
     r"\b([A-ZА-Я]{2,10})\s*[-:]?\s*(\d+)\b\s*`?\s*(?:-|–|—)\s*`?\s*(?:\1\s*[-:]?\s*)?(\d+)\b",
     flags=re.IGNORECASE,
@@ -3720,6 +3724,11 @@ def meaningful_matrix_value(value: str) -> bool:
     return bool(normalized and normalized not in {"-", "n/a", "na", "none", "null"})
 
 
+def is_production_test_case_path(path: Path) -> bool:
+    parts = {part.lower() for part in path.parts}
+    return path.suffix.lower() == ".md" and "fts" in parts and "test-cases" in parts and "work" not in parts
+
+
 def parsed_test_design_applicability_rows(content: str) -> list[dict[str, str]]:
     section = extract_test_design_applicability_section(content)
     if section is None:
@@ -3758,6 +3767,16 @@ def validate_test_design_applicability_matrix(
     section = extract_test_design_applicability_section(content)
 
     if section is None:
+        if is_production_test_case_path(path):
+            checks.append(
+                Check(
+                    "test-design-applicability-matrix",
+                    "pass",
+                    "Applicability matrix is not required inside production runtime test-case files.",
+                    display_path,
+                )
+            )
+            return findings, checks
         findings.append(
             Finding(
                 id="test-design-applicability-matrix-missing",
@@ -7498,6 +7517,10 @@ def validate_writer_quality_gate(
 
 
 def should_require_artifact_write_strategy(content: str, blocks: list[tuple[str, str]]) -> bool:
+    return should_require_artifact_write_strategy_for_content(content, blocks)
+
+
+def should_require_artifact_write_strategy_for_content(content: str, blocks: list[tuple[str, str]]) -> bool:
     atom_count = len(atomic_requirement_ledger_atom_ids(content))
     has_internal_work_packages = bool(re.search(r"\bWP-\d{2}\b|Internal Work Package Coverage", content))
     return (
@@ -7520,7 +7543,7 @@ def validate_artifact_write_strategy(
     checks: list[Check] = []
     display_path = rel(path, root)
     section = extract_markdown_section(content, "Artifact Write Strategy")
-    required = should_require_artifact_write_strategy(content, blocks)
+    required = should_require_artifact_write_strategy_for_content(content, blocks) and not is_production_test_case_path(path)
 
     if not required:
         checks.append(
@@ -10989,6 +11012,35 @@ AMBIGUOUS_PRECONDITION_SETUP_RE = re.compile(
     r"select\s+or\s+enter|enter\s+or\s+select|if\s+needed|when\s+needed|as\s+needed)",
     flags=re.IGNORECASE,
 )
+PRODUCTION_SETUP_PROFILE_REFERENCE_RE = re.compile(
+    r"Выполнить\s+setup\s+profile|setup\s+profile|SETUP-CANARY|SETUP-AUTOFIN",
+    flags=re.IGNORECASE,
+)
+ENVIRONMENT_SPECIFIC_PRECONDITION_RE = re.compile(
+    r"из\s+тестового\s+стенд|на\s+тестовом\s+стенд|в\s+тестовой\s+сред|"
+    r"test\s+stand|test\s+environment",
+    flags=re.IGNORECASE,
+)
+PROJECT_NAME_LEAK_RE = re.compile(r"\bAutoFin\b", flags=re.IGNORECASE)
+AMBIGUOUS_CREATE_OR_TAKE_SETUP_RE = re.compile(
+    r"создать\s+или\s+взять|создать\s*/\s*взять|взять\s+существующ",
+    flags=re.IGNORECASE,
+)
+CONTACT_PERSON_FIELD_RE = re.compile(
+    r"(?<![А-Яа-яЁё])(?:Фамилия|Имя|Отчество)(?![А-Яа-яЁё])",
+    flags=re.IGNORECASE,
+)
+CONTACT_PERSON_REVEAL_ACTION_RE = re.compile(r"Добавить\s+контактное\s+лицо", flags=re.IGNORECASE)
+PRODUCTION_DIAGNOSTIC_SECTIONS = (
+    "Artifact Write Strategy",
+    "Source Row Inventory",
+    "Source Table Normalization",
+    "Test Design Decision Table",
+    "Test-design Applicability Matrix",
+    "Atomic Requirements Ledger",
+    "Coverage Obligation Table",
+    "Writer Quality Gate",
+)
 
 
 def has_precondition_setup_path(preconditions: str) -> bool:
@@ -11179,6 +11231,7 @@ def validate_test_case_quality_smells(
     findings: list[Finding] = []
     checks: list[Check] = []
     display_path = rel(path, root)
+    production_test_case_file = is_production_test_case_path(path)
 
     _, ledger_rows = parsed_atomic_requirement_ledger_rows(content)
     mockup_usage_section = extract_markdown_section(content, "Mockup Usage") or ""
@@ -11188,6 +11241,19 @@ def validate_test_case_quality_smells(
         and MOCKUP_INTERACTION_HINT_RE.search(mockup_usage_section)
     )
     generic_atoms: list[str] = []
+    production_diagnostic_sections: list[str] = []
+    production_setup_profile_refs: list[str] = []
+    environment_specific_preconditions: list[str] = []
+    project_name_precondition_leaks: list[str] = []
+    ambiguous_create_or_take_preconditions: list[str] = []
+    missing_target_revealing_actions: list[str] = []
+    if production_test_case_file:
+        production_diagnostic_sections = [
+            section_title
+            for section_title in PRODUCTION_DIAGNOSTIC_SECTIONS
+            if extract_markdown_section(content, section_title) is not None
+        ]
+        production_setup_profile_refs = sorted(set(PRODUCTION_SETUP_PROFILE_REFERENCE_RE.findall(content)))
     compressed_atoms: list[str] = []
     covered_range_atoms: list[str] = []
     combined_atoms: list[str] = []
@@ -11304,6 +11370,15 @@ def validate_test_case_quality_smells(
             ],
         )
         status = extract_test_case_field_block(block, ["Status", "status", "Статус"]).lower()
+        if production_test_case_file:
+            if preconditions and ENVIRONMENT_SPECIFIC_PRECONDITION_RE.search(preconditions):
+                environment_specific_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
+            if preconditions and PROJECT_NAME_LEAK_RE.search(preconditions):
+                project_name_precondition_leaks.append(f"{test_case_id}:preconditions={preconditions[:180]}")
+            if preconditions and AMBIGUOUS_CREATE_OR_TAKE_SETUP_RE.search(preconditions):
+                ambiguous_create_or_take_preconditions.append(f"{test_case_id}:preconditions={preconditions[:180]}")
+            if CONTACT_PERSON_FIELD_RE.search(block) and not CONTACT_PERSON_REVEAL_ACTION_RE.search(preconditions):
+                missing_target_revealing_actions.append(f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}")
         traceability_tokens = normalize_test_case_ref_tokens(traceability)
         ft_reference_tokens = normalize_test_case_ref_tokens(ft_reference)
         requirement_source_tokens = normalize_test_case_ref_tokens(requirement_source)
@@ -11708,6 +11783,102 @@ def validate_test_case_quality_smells(
                 f"{record['test_case_id']} vs {other['test_case_id']}: same expected result; "
                 f"{record['evidence']} | {other['evidence']}"
             )
+
+    if production_diagnostic_sections:
+        findings.append(
+            Finding(
+                id="internal-diagnostic-section-in-production-testcases",
+                severity="warning",
+                category="test-case-format",
+                title="Production test-case file contains internal diagnostic sections",
+                details=(
+                    "Files under fts/**/test-cases/*.md must be manual-ready runtime artifacts. "
+                    "Design/debug sections belong under fts/**/work/**, evals/**, or dedicated diagnostic reports."
+                ),
+                path=display_path,
+                evidence=production_diagnostic_sections[:20],
+                recommended_action="Move diagnostic sections to a work/canary report and keep only test cases in the production file.",
+            )
+        )
+
+    if production_setup_profile_refs:
+        findings.append(
+            Finding(
+                id="production-setup-profile-reference",
+                severity="warning",
+                category="preconditions",
+                title="Production test cases reference setup profiles",
+                details=(
+                    "Production test-case files must be self-contained for manual execution and automation. "
+                    "Do not replace inline preconditions with reusable setup profile references."
+                ),
+                path=display_path,
+                evidence=production_setup_profile_refs[:20],
+                recommended_action="Expand setup profile references into numbered inline precondition steps in each TC.",
+            )
+        )
+
+    if environment_specific_preconditions:
+        findings.append(
+            Finding(
+                id="environment-specific-precondition",
+                severity="warning",
+                category="preconditions",
+                title="Production preconditions contain environment-specific wording",
+                details=(
+                    "Production TC preconditions should be environment-agnostic unless a specific stand or environment "
+                    "is source-backed execution context."
+                ),
+                path=display_path,
+                evidence=environment_specific_preconditions[:20],
+                recommended_action="Replace stand/environment wording with action-oriented setup steps.",
+            )
+        )
+
+    if project_name_precondition_leaks:
+        findings.append(
+            Finding(
+                id="project-name-leak-in-preconditions",
+                severity="warning",
+                category="preconditions",
+                title="Production preconditions leak project/package names",
+                details="Preconditions must not mention project/package names such as AutoFin unless explicitly source-backed as UI or business text.",
+                path=display_path,
+                evidence=project_name_precondition_leaks[:20],
+                recommended_action="Remove project/package names from preconditions or document a source-backed allowlist.",
+            )
+        )
+
+    if ambiguous_create_or_take_preconditions:
+        findings.append(
+            Finding(
+                id="ambiguous-create-or-take-setup",
+                severity="warning",
+                category="preconditions",
+                title="Production preconditions use ambiguous create-or-take setup",
+                details="Manual-ready preconditions must define one reproducible setup path, not alternatives such as create or take an existing record.",
+                path=display_path,
+                evidence=ambiguous_create_or_take_preconditions[:20],
+                recommended_action="Choose one setup path and write it as deterministic numbered steps.",
+            )
+        )
+
+    if missing_target_revealing_actions:
+        findings.append(
+            Finding(
+                id="missing-target-revealing-action",
+                severity="warning",
+                category="preconditions",
+                title="Contact-person field checks miss the action that reveals the target fields",
+                details=(
+                    "When a checked field is inside a dynamically created contact-person block, preconditions must "
+                    "include the action that creates or reveals that block."
+                ),
+                path=display_path,
+                evidence=missing_target_revealing_actions[:20],
+                recommended_action="Add `Нажать кнопку «Добавить контактное лицо»` to preconditions before field input steps.",
+            )
+        )
 
     if non_reproducible_preconditions:
         findings.append(
@@ -13333,7 +13504,7 @@ def validate_test_case_file(
             sparse_fields.append(f"{test_case_id}:fields={field_count}")
         if not re.search(r"(?m)^\d+\.\s+\S", block):
             missing_steps.append(test_case_id)
-        if not re.search(r"\b(ATOM-\d{3,}|GSR\s+\d+|REQ[-\s]?\d+)\b|PDF", block):
+        if not TEST_CASE_TRACEABILITY_TOKEN_RE.search(block):
             missing_traceability.append(test_case_id)
 
     if sparse_fields:
@@ -13369,7 +13540,7 @@ def validate_test_case_file(
                 severity=structural_severity,
                 category="test-case-format",
                 title="Some test cases lack an obvious requirement traceability token",
-                details="Each test case should reference an ATOM-*, GSR, REQ, PDF page, or another explicit source locator.",
+                details="Each test case should reference an ATOM-*, BSR/GSR/REQ, PDF page, or another explicit source locator.",
                 path=display_path,
                 evidence=missing_traceability[:20],
                 recommended_action="Add concrete FT/source references to the affected test cases.",

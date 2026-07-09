@@ -44,6 +44,7 @@ Runtime rules:
 - keep exact requirement codes such as `GSR 22` when present;
 - use concrete user intent in steps, not mouse mechanics, unless the mechanism itself is the tested behavior.
 - keep setup inside `Предусловия` as numbered action setup steps, fixture/API setup or reusable setup profile. Do not add a separate `Подготовительные шаги` section unless the current TC format already uses it. Avoid magic/passive states and ambiguous setup alternatives such as `выбрать или ввести`, `при необходимости` or `если нужно`; put `Дождаться...` / `Убедиться...` only after the action that creates the setup state.
+- for production `fts/**/test-cases/*.md`, inline full preconditions in every TC: no setup profile references, stand/environment wording, package-name leakage, or missing reveal action for action-created fields such as contact-person `Фамилия`/`Имя`/`Отчество`.
 
 ## Coverage Rules
 

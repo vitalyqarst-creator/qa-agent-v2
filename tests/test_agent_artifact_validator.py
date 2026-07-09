@@ -62,6 +62,55 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_production_contact_test_case(
+        self,
+        path: Path,
+        *,
+        preconditions: list[str] | None = None,
+        steps: list[str] | None = None,
+        extra_sections: list[str] | None = None,
+    ) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        precondition_lines = preconditions or [
+            "1. Открыть карточку заявки, доступную для редактирования.",
+            "2. Перейти в раздел «Контакты клиента».",
+            "3. В секции «Контактные лица» нажать кнопку «Добавить контактное лицо».",
+            "4. Убедиться, что отображается блок добавления контактного лица с полями «Фамилия», «Имя», «Отчество».",
+        ]
+        step_lines = steps or ["1. В поле «Фамилия» ввести `Иванов`."]
+        sections = extra_sections or []
+        path.write_text(
+            "\n".join(
+                [
+                    "# Production Contact Test",
+                    "",
+                    *sections,
+                    "## TC-PROD-001",
+                    "**Название:** Поле «Фамилия» контактного лица принимает значение только из букв",
+                    "**Тип:** Positive",
+                    "**Приоритет:** High",
+                    "**Трассировка:** BSR 174",
+                    "",
+                    "**Предусловия:**",
+                    *precondition_lines,
+                    "",
+                    "**Тестовые данные:**",
+                    "- Поле: «Фамилия».",
+                    "- Значение: `Иванов`.",
+                    "",
+                    "**Шаги:**",
+                    *step_lines,
+                    "",
+                    "**Итоговый ожидаемый результат:**",
+                    "Поле «Фамилия» содержит значение `Иванов`.",
+                    "",
+                    "**Постусловия:**",
+                    "Закрыть карточку заявки без сохранения изменений или удалить созданный блок контактного лица.",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
     def write_valid_source_selection(
         self,
         path: Path,
@@ -5717,12 +5766,14 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         payload = json.loads(result.stdout)
         findings = {finding["id"]: finding for finding in payload["findings"]}
-        self.assertEqual("info", findings["test-design-applicability-matrix-missing"]["severity"])
+        self.assertNotIn("test-design-applicability-matrix-missing", findings)
+        checks = [check for check in payload["checks"] if check["name"] == "test-design-applicability-matrix"]
+        self.assertEqual("pass", checks[0]["status"])
 
     def test_strict_test_case_policy_reports_missing_applicability_matrix_as_warning(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
-            test_case_path = fixture_root / "fts" / "sample-ft" / "test-cases" / "sample.md"
+            test_case_path = fixture_root / "test-cases" / "sample.md"
             self.write_minimal_test_case_file(test_case_path)
 
             result = self.run_validator(
@@ -12554,6 +12605,163 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("test-case-non-reproducible-precondition", finding_ids)
+
+    def test_production_test_case_with_setup_profile_reference_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "setup-profile.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                preconditions=["1. Выполнить setup profile `SETUP-CANARY-AUTOFIN-EDITABLE-DRAFT`."],
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("production-setup-profile-reference", finding_ids)
+
+    def test_production_test_case_with_inline_full_preconditions_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "inline-preconditions.md"
+            self.write_production_contact_test_case(test_case_file)
+
+            result = self.run_validator("--root", str(test_case_file), "--json", "--fail-on", "warning")
+
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_production_test_case_with_environment_specific_precondition_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "test-stand.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                preconditions=[
+                    "1. Создать заявку из тестового стенда.",
+                    "2. В секции «Контактные лица» нажать кнопку «Добавить контактное лицо».",
+                ],
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("environment-specific-precondition", finding_ids)
+
+    def test_production_test_case_with_project_name_in_preconditions_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "project-name.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                preconditions=[
+                    "1. Открыть карточку заявки AutoFin, доступную для редактирования.",
+                    "2. В секции «Контактные лица» нажать кнопку «Добавить контактное лицо».",
+                ],
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("project-name-leak-in-preconditions", finding_ids)
+
+    def test_production_test_case_with_ambiguous_create_or_take_setup_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "create-or-take.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                preconditions=[
+                    "1. Создать или взять редактируемую карточку заявки.",
+                    "2. В секции «Контактные лица» нажать кнопку «Добавить контактное лицо».",
+                ],
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("ambiguous-create-or-take-setup", finding_ids)
+
+    def test_contact_person_case_without_revealing_action_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "missing-contact-action.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                preconditions=[
+                    "1. Открыть карточку заявки, доступную для редактирования.",
+                    "2. Перейти в раздел «Контакты клиента».",
+                ],
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("missing-target-revealing-action", finding_ids)
+
+    def test_contact_person_case_with_revealing_action_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "contact-action.md"
+            self.write_production_contact_test_case(test_case_file)
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("missing-target-revealing-action", finding_ids)
+
+    def test_production_test_case_with_internal_diagnostic_sections_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "diagnostics.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                extra_sections=[
+                    "## Source Row Inventory",
+                    "",
+                    "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                    "| --- | --- | --- | --- | --- | --- | --- |",
+                    "| SRC-001 | WP-01 | Фамилия | Section 1 | BSR 174 | yes | ATOM-001 |",
+                    "",
+                ],
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("internal-diagnostic-section-in-production-testcases", finding_ids)
+
+    def test_internal_diagnostic_sections_under_work_are_allowed(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            diagnostic_file = fixture_root / "fts" / "Demo" / "work" / "canary-runs" / "diagnostics.md"
+            diagnostic_file.parent.mkdir(parents=True)
+            diagnostic_file.write_text(
+                "\n".join(
+                    [
+                        "# Diagnostic Report",
+                        "",
+                        "## Source Row Inventory",
+                        "",
+                        "| source_row_id | package_id | field_or_action | source_ref | requirement_codes | in_scope | mapped_atom_or_gap |",
+                        "| --- | --- | --- | --- | --- | --- | --- |",
+                        "| SRC-001 | WP-01 | Фамилия | Section 1 | BSR 174 | yes | ATOM-001 |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(diagnostic_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("internal-diagnostic-section-in-production-testcases", finding_ids)
 
     def test_fixture_api_preconditions_pass_reproducibility_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

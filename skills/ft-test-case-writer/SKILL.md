@@ -72,6 +72,7 @@ Minimum runtime rules:
 4. Requirement codes, например `GSR 22`, сохраняй буквально.
 5. Не превращай gaps или unclear notes в `TC-*`.
 6. Если source/support задает справочник, создай/обнови `dictionary-inventory.md` и ссылайся на `DICT-*`; branch examples из ФТ не заменяют полный справочник.
+6a. Production files under `fts/**/test-cases/*.md` must be self-contained runtime TC artifacts: no setup profile references in `Предусловия`, no stand/environment wording, no package-name leakage such as `AutoFin`, and no embedded diagnostic/design sections. Use split/work artifacts for diagnostics.
 7. Не ставь `stage_status: ready-for-review`, пока source/parity/mockup/table/dictionary inputs, Writer Quality Gate и validator blockers не закрыты.
 8. Перед `ready-for-review` проверь canonical TC на unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. Такие формулировки допустимы только если рядом есть конкретный воспроизводимый baseline, literal/параметр или linked fixture artifact; иначе исправь TC или оформи `GAP-*` / `unclear`.
 8a. `Предусловия`: воспроизводимые setup steps = numbered action setup или fixture/API/profile; passive state только после action, который его создает.
