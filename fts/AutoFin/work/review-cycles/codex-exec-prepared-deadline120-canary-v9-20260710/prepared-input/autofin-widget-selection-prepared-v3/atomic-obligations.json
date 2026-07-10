@@ -1,0 +1,106 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-PREP-001",
+      "handling": "Сохранить как gap; добавить DICT-* inventory и отдельные source-origin test cases, когда справочник и ожидаемый состав будут подтверждены.",
+      "problem": "Выбранный scope не идентифицирует конкретные справочники и не содержит независимого inventory oracle для сравнения состава значений.",
+      "source_refs": [
+        "SRC-001",
+        "SRC-002"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-PREP-002",
+      "handling": "Сохранить как gap и запросить отдельный API/DB/persistence scope, если внутреннее представление нужно проверять.",
+      "problem": "Внутренняя интерпретация пустого значения как NULL не имеет наблюдаемого артефакта в подтверждённом UI scope.",
+      "source_refs": [
+        "SRC-003"
+      ]
+    }
+  ],
+  "digest": "dec36827caf04826c10da47584152331addf3b9b06da36c113aee53bbeabb30c",
+  "obligations": [
+    {
+      "atomic_statement": "В виджете типа «Список» одновременно можно выбрать только одно значение.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Конкретный экран и значения являются параметрами runtime fixture; RISK-001 запрещает придумывать их.",
+      "obligation_id": "ATOM-PREP-001",
+      "observable_oracle": "После последовательного выбора двух разных доступных значений виджет содержит ровно одно выбранное значение.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить ограничение одиночного выбора без предположений о конкретном справочнике или поле."
+    },
+    {
+      "atomic_statement": "В виджете типа «Список с множественным выбором» можно одновременно выбрать несколько значений.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Конкретный экран и значения являются параметрами runtime fixture; RISK-001 запрещает придумывать их.",
+      "obligation_id": "ATOM-PREP-002",
+      "observable_oracle": "После выбора двух разных доступных значений оба значения одновременно отображаются как выбранные.",
+      "source_refs": [
+        "SRC-002"
+      ],
+      "test_intent": "Проверить возможность множественного выбора без предположений о конкретном справочнике или поле."
+    },
+    {
+      "atomic_statement": "По умолчанию значение виджета отсутствует.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Проверка не подтверждает внутреннее представление NULL.",
+      "obligation_id": "ATOM-PREP-003",
+      "observable_oracle": "До первого взаимодействия с новым виджетом в нём отсутствует выбранное значение.",
+      "source_refs": [
+        "SRC-003"
+      ],
+      "test_intent": "Проверить видимое начальное пустое состояние подходящего виджета."
+    },
+    {
+      "atomic_statement": "Значения виджета типа «Список» происходят из справочника.",
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-PREP-001",
+      "notes": "Selected scope does not identify the dictionary or its expected contents.",
+      "obligation_id": "ATOM-PREP-004",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Не заявлять проверку происхождения значений без идентифицированного справочника и независимого inventory oracle."
+    },
+    {
+      "atomic_statement": "Значения виджета типа «Список с множественным выбором» происходят из справочника.",
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-PREP-001",
+      "notes": "Selected scope does not identify the dictionary or its expected contents.",
+      "obligation_id": "ATOM-PREP-005",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-002"
+      ],
+      "test_intent": "Не заявлять проверку происхождения значений без идентифицированного справочника и независимого inventory oracle."
+    },
+    {
+      "atomic_statement": "Отсутствующее значение интерпретируется системой как NULL.",
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-PREP-002",
+      "notes": "Save-flow, persistence, database and API behavior are out of scope.",
+      "obligation_id": "ATOM-PREP-006",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-003"
+      ],
+      "test_intent": "Не создавать UI-тест без наблюдаемого API, DB или иного persistence evidence."
+    }
+  ],
+  "package_id": "autofin-widget-selection-prepared-v3",
+  "package_version": 3
+}

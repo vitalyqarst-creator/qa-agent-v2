@@ -1,0 +1,129 @@
+{
+  "allowed_write_roots": [
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/stage-output"
+  ],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/3-iteration-smoke-widget-selection-types.md",
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-deadline120-benchmark-03-20260710",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "producer": "stage",
+      "required": true
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "producer": "stage",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/prepared-input/autofin-widget-selection-prepared-v3/stage-package.json",
+      "sha256": "318bb2855e925ef5ca5ef8e78f2b8ed7026d2fedd24c8240c0583359e9cb496b"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/prepared-input/autofin-widget-selection-prepared-v3/atomic-obligations.json",
+      "sha256": "f1f111163e752775ce4f245466f9500547c3e3f71d1f296dbed98fc72e9aaba8"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/runner-input/draft-seed.md",
+      "sha256": "f69c77e891e29928cab150119004442f47c05ab795c1a2781ef17d5bc6dcd7bb"
+    }
+  ],
+  "input_digest": "d78f8598669f790ad2b5b5815760b243f63e34491aced5145895624e1117a5ee",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "2514e3e5166408ec2741cc87a6d335d6d00208033df961519e05127f89b07cf3"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/prepared-input/autofin-widget-selection-prepared-v3/stage-instructions.md",
+      "sha256": "cf62dd4d945cebca2e08a634f854d734abfa74bb3acda398c7ac20952fe8db2b"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-writer-runtime-profile.md",
+      "sha256": "304e9353add7e747c6949d6cd7d1cc35544159d6b25e1cf967f7b86e08133492"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/prompt.md",
+    "sha256": "3ee3c282758e3a7fbced193f1a1dce0a60c00f91a3d68bfb35c02e7a9beac48d"
+  },
+  "role": "writer",
+  "sandbox_policy": "workspace_write",
+  "scenario": "writer.session_prepared_initial_draft",
+  "semantic_round": 0,
+  "session_id": "session-writer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/prepared-input/autofin-widget-selection-prepared-v3/source-evidence.md",
+      "sha256": "1ebf94aa0b91ee859232e2c12aeba2d7fd95562fdd530aa274ea903dafcefabf"
+    }
+  ],
+  "stage_id": "writer-r1",
+  "timeout_seconds": 180
+}

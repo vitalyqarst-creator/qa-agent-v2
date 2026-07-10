@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 11008,
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-deadline120-canary-v9-20260710",
+  "duration_ms": 35469,
+  "input_artifact_bytes": 85848,
+  "input_artifact_count": 13,
+  "input_tokens": 21574,
+  "outcome": "accepted",
+  "output_artifact_bytes": 10871,
+  "output_artifact_count": 6,
+  "output_tokens": 819,
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_semantic",
+  "stage_id": "reviewer-r1",
+  "total_tokens": 22393
+}

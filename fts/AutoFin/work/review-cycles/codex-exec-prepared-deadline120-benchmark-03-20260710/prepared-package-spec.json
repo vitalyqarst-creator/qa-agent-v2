@@ -1,0 +1,240 @@
+{
+    "package_id":  "autofin-widget-selection-prepared-v3",
+    "ft_slug":  "AutoFin",
+    "scope_slug":  "iteration-smoke-widget-selection-types",
+    "section_id":  "3",
+    "output_root":  "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/prepared-input/autofin-widget-selection-prepared-v3",
+    "max_package_bytes":  128000,
+    "source_registry":  [
+                            {
+                                "path":  "fts/AutoFin/source/FT4AutoFinFinal.docx",
+                                "role":  "source-of-truth",
+                                "locator":  "section 3, data type restrictions table and following paragraph"
+                            },
+                            {
+                                "path":  "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+                                "role":  "machine-readable",
+                                "locator":  "SRC-001..SRC-003"
+                            },
+                            {
+                                "path":  "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+                                "role":  "structural-cross-check",
+                                "locator":  "page 5, section 3"
+                            }
+                        ],
+    "evidence_inputs":  [
+                            {
+                                "path":  "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-contract.md",
+                                "title":  "Confirmed scope boundaries",
+                                "selectors":  [
+                                                  "## Что Входит В Scope",
+                                                  "## Что Не Входит В Scope",
+                                                  "## Внутренние Рабочие Пакеты"
+                                              ],
+                                "max_bytes":  5000
+                            },
+                            {
+                                "path":  "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-row-inventory.md",
+                                "title":  "Selected source rows",
+                                "selectors":  [
+                                                  "## Source Row Inventory"
+                                              ],
+                                "max_bytes":  5000
+                            },
+                            {
+                                "path":  "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-parity-check.md",
+                                "title":  "Parity decision and limitations",
+                                "selectors":  [
+                                                  "## Structure Parity",
+                                                  "## Limitations"
+                                              ],
+                                "max_bytes":  5000
+                            },
+                            {
+                                "path":  "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-coverage-gaps.md",
+                                "title":  "Preserved scope risk",
+                                "selectors":  [
+                                                  "RISK-001"
+                                              ],
+                                "max_bytes":  3000
+                            },
+                            {
+                                "path":  "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/negative-oracle-inventory.md",
+                                "title":  "Negative oracle boundary",
+                                "selectors":  [
+                                                  "SO-NEG-NA-001"
+                                              ],
+                                "max_bytes":  4000
+                            },
+                            {
+                                "path":  "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/requiredness-oracle-inventory.md",
+                                "title":  "Requiredness oracle boundary",
+                                "selectors":  [
+                                                  "SO-REQ-NA-001"
+                                              ],
+                                "max_bytes":  4000
+                            },
+                            {
+                                "path":  "fts/AutoFin/AGENT-NOTES.md",
+                                "title":  "Mandatory AutoFin package notes",
+                                "selectors":  [
+                                                  "# Package Notes: AutoFin"
+                                              ],
+                                "max_bytes":  8000
+                            }
+                        ],
+    "obligations":  {
+                        "package_version":  3,
+                        "package_id":  "autofin-widget-selection-prepared-v3",
+                        "obligations":  [
+                                            {
+                                                "obligation_id":  "ATOM-PREP-001",
+                                                "source_refs":  [
+                                                                    "SRC-001"
+                                                                ],
+                                                "atomic_statement":  "В виджете типа «Список» одновременно можно выбрать только одно значение.",
+                                                "observable_oracle":  "После последовательного выбора двух разных доступных значений виджет содержит ровно одно выбранное значение.",
+                                                "test_intent":  "Проверить ограничение одиночного выбора без предположений о конкретном справочнике или поле.",
+                                                "coverage_status":  "testable",
+                                                "gap_id":  "",
+                                                "dictionary_refs":  [
+
+                                                                    ],
+                                                "notes":  "Конкретный экран и значения являются параметрами runtime fixture; RISK-001 запрещает придумывать их."
+                                            },
+                                            {
+                                                "obligation_id":  "ATOM-PREP-002",
+                                                "source_refs":  [
+                                                                    "SRC-002"
+                                                                ],
+                                                "atomic_statement":  "В виджете типа «Список с множественным выбором» можно одновременно выбрать несколько значений.",
+                                                "observable_oracle":  "После выбора двух разных доступных значений оба значения одновременно отображаются как выбранные.",
+                                                "test_intent":  "Проверить возможность множественного выбора без предположений о конкретном справочнике или поле.",
+                                                "coverage_status":  "testable",
+                                                "gap_id":  "",
+                                                "dictionary_refs":  [
+
+                                                                    ],
+                                                "notes":  "Конкретный экран и значения являются параметрами runtime fixture; RISK-001 запрещает придумывать их."
+                                            },
+                                            {
+                                                "obligation_id":  "ATOM-PREP-003",
+                                                "source_refs":  [
+                                                                    "SRC-003"
+                                                                ],
+                                                "atomic_statement":  "По умолчанию значение виджета отсутствует.",
+                                                "observable_oracle":  "До первого взаимодействия с новым виджетом в нём отсутствует выбранное значение.",
+                                                "test_intent":  "Проверить видимое начальное пустое состояние подходящего виджета.",
+                                                "coverage_status":  "testable",
+                                                "gap_id":  "",
+                                                "dictionary_refs":  [
+
+                                                                    ],
+                                                "notes":  "Проверка не подтверждает внутреннее представление NULL."
+                                            },
+                                            {
+                                                "obligation_id":  "ATOM-PREP-004",
+                                                "source_refs":  [
+                                                                    "SRC-001"
+                                                                ],
+                                                "atomic_statement":  "Значения виджета типа «Список» происходят из справочника.",
+                                                "observable_oracle":  "",
+                                                "test_intent":  "Не заявлять проверку происхождения значений без идентифицированного справочника и независимого inventory oracle.",
+                                                "coverage_status":  "gap",
+                                                "gap_id":  "GAP-PREP-001",
+                                                "dictionary_refs":  [
+
+                                                                    ],
+                                                "notes":  "Selected scope does not identify the dictionary or its expected contents."
+                                            },
+                                            {
+                                                "obligation_id":  "ATOM-PREP-005",
+                                                "source_refs":  [
+                                                                    "SRC-002"
+                                                                ],
+                                                "atomic_statement":  "Значения виджета типа «Список с множественным выбором» происходят из справочника.",
+                                                "observable_oracle":  "",
+                                                "test_intent":  "Не заявлять проверку происхождения значений без идентифицированного справочника и независимого inventory oracle.",
+                                                "coverage_status":  "gap",
+                                                "gap_id":  "GAP-PREP-001",
+                                                "dictionary_refs":  [
+
+                                                                    ],
+                                                "notes":  "Selected scope does not identify the dictionary or its expected contents."
+                                            },
+                                            {
+                                                "obligation_id":  "ATOM-PREP-006",
+                                                "source_refs":  [
+                                                                    "SRC-003"
+                                                                ],
+                                                "atomic_statement":  "Отсутствующее значение интерпретируется системой как NULL.",
+                                                "observable_oracle":  "",
+                                                "test_intent":  "Не создавать UI-тест без наблюдаемого API, DB или иного persistence evidence.",
+                                                "coverage_status":  "gap",
+                                                "gap_id":  "GAP-PREP-002",
+                                                "dictionary_refs":  [
+
+                                                                    ],
+                                                "notes":  "Save-flow, persistence, database and API behavior are out of scope."
+                                            }
+                                        ],
+                        "coverage_gaps":  [
+                                              {
+                                                  "gap_id":  "GAP-PREP-001",
+                                                  "source_refs":  [
+                                                                      "SRC-001",
+                                                                      "SRC-002"
+                                                                  ],
+                                                  "problem":  "Выбранный scope не идентифицирует конкретные справочники и не содержит независимого inventory oracle для сравнения состава значений.",
+                                                  "handling":  "Сохранить как gap; добавить DICT-* inventory и отдельные source-origin test cases, когда справочник и ожидаемый состав будут подтверждены.",
+                                                  "blocking":  false
+                                              },
+                                              {
+                                                  "gap_id":  "GAP-PREP-002",
+                                                  "source_refs":  [
+                                                                      "SRC-003"
+                                                                  ],
+                                                  "problem":  "Внутренняя интерпретация пустого значения как NULL не имеет наблюдаемого артефакта в подтверждённом UI scope.",
+                                                  "handling":  "Сохранить как gap и запросить отдельный API/DB/persistence scope, если внутреннее представление нужно проверять.",
+                                                  "blocking":  false
+                                              }
+                                          ],
+                        "digest":  "dec36827caf04826c10da47584152331addf3b9b06da36c113aee53bbeabb30c"
+                    },
+    "instructions":  {
+                         "role":  "writer",
+                         "scenario":  "writer.session_prepared_initial_draft",
+                         "output_path":  "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+                         "attempt_root":  "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001",
+                         "sandbox_policy":  "workspace_write",
+                         "timeout_seconds":  180,
+                         "idle_timeout_seconds":  60,
+                         "command_budget":  8
+                     },
+    "execution_profile":  "simple-field-property",
+    "unsupported_dimensions":  [
+
+                               ],
+    "forbidden_evidence_roots":  [
+                                     "fts/AutoFin/test-cases",
+                                     "fts/AutoFin/work/canary-runs",
+                                     "fts/AutoFin/work/iteration-smoke",
+                                     "fts/AutoFin/work/iteration-smoke-rerun",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v4-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v6-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-create-canary-v8-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-create-benchmark-01-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-create-benchmark-02-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-canary-v9-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-01-20260710",
+                                     "fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-02-20260710"
+                                 ]
+}

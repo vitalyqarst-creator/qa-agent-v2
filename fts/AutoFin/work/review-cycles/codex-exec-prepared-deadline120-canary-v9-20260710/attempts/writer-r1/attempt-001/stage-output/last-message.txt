@@ -1,0 +1,3 @@
+Создан полный unsigned draft: [draft.md](<C:\Users\Пользователь\Documents\Виталя\GitProjects\qa-agent-v2\fts\AutoFin\work\review-cycles\codex-exec-prepared-deadline120-canary-v9-20260710\attempts\writer-r1\attempt-001\stage-output\draft.md>).
+
+Production test cases и прочие артефакты не изменялись. Targeted source fallback не использовался.

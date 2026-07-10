@@ -1,0 +1,3 @@
+Создан unsigned draft: [draft.md](C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-03-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md).
+
+Включены 3 тест-кейса для testable obligations; gaps сохранены без создания исполнимых тестов. Targeted fallback не использовался. Seed/TODO-сентинелы отсутствуют.

@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 123392,
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-deadline120-benchmark-03-20260710",
+  "duration_ms": 131484,
+  "input_artifact_bytes": 70983,
+  "input_artifact_count": 8,
+  "input_tokens": 145314,
+  "outcome": "draft-ready",
+  "output_artifact_bytes": 31819,
+  "output_artifact_count": 10,
+  "output_tokens": 5960,
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "stage_id": "writer-r1",
+  "total_tokens": 151274
+}

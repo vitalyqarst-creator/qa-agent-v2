@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 29184,
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-deadline120-canary-v9-20260710",
+  "duration_ms": 56437,
+  "input_artifact_bytes": 70683,
+  "input_artifact_count": 8,
+  "input_tokens": 43971,
+  "outcome": "draft-ready",
+  "output_artifact_bytes": 16270,
+  "output_artifact_count": 10,
+  "output_tokens": 2457,
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "stage_id": "writer-r1",
+  "total_tokens": 46428
+}

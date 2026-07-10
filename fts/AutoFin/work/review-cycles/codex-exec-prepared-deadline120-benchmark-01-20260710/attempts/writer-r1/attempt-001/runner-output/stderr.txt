@@ -1,0 +1,22 @@
+2026-07-10T14:19:28.809965Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-10T14:20:30.423698Z  WARN codex_analytics::client: failed to send events request: error sending request for url (https://chatgpt.com/backend-api/codex/analytics-events/events)
+2026-07-10T14:20:36.228354Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.8 seconds
+Output:
+fatal: detected dubious ownership in repository at 'C:/Users/袩芯谢褜蟹芯胁邪褌械谢褜/Documents/袙懈褌邪谢褟/GitProjects/qa-agent-v2'
+'C:/Users/袩芯谢褜蟹芯胁邪褌械谢褜/Documents/袙懈褌邪谢褟/GitProjects/qa-agent-v2' is owned by:
+	VITALY/项朦珙忄蝈朦 (S-1-5-21-2437574174-3743853401-812327379-1001)
+but the current user is:
+	VITALY/CodexSandboxOffline (S-1-5-21-2437574174-3743853401-812327379-1006)
+To add an exception for this directory, call:
+
+	git config --global --add safe.directory 'C:/Users/袩芯谢褜蟹芯胁邪褌械谢褜/Documents/袙懈褌邪谢褟/GitProjects/qa-agent-v2'
+
+2026-07-10T14:20:43.900093Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+  File "<string>", line 1
+    from pathlib import Path; p=Path(r'fts/AutoFin/work/review-cycles/codex-exec-prepared-deadline120-benchmark-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md'); s=p.read_text(encoding='utf-8'); assert s.count('## TC-PREP-') == 3; assert 'SEED:' not in s; assert 'targeted_source_fallback:** 
+                                                                                                                                                                                                                                                                                         ^
+SyntaxError: unterminated string literal (detected at line 1)
+

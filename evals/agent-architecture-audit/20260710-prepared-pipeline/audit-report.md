@@ -84,8 +84,8 @@
 - Evidence: после исправления create contract canary создал draft на `51.844 s`, benchmark 1 — на `79.015 s`, а benchmark 2 был остановлен на `90.079 s` без update/file-state ошибки. Writer успел выполнить probe и объявить следующий `Add File`, но draft ещё формировался.
 - Риск: корректный run блокируется как input/process failure из-за малого запаса между наблюдаемым верхним latency tail и абсолютным deadline `90 s`.
 - Recommended move: отдельным bounded experiment увеличить first-artifact deadline до `120 s`, сохранив hard timeout `180 s`, post-write idle `60 s` и stage ownership.
-- Remediation: отложено по live stop-condition; benchmark 3 не запускался.
-- Paths: `scripts/codex_exec_review_cycle_runner.py`, `evals/prepared-create-benchmark/20260710/benchmark-report.md`.
+- Remediation: завершено bounded experiment. Deadline увеличен только до `120 s`; hard timeout `180 s` и post-write idle `60 s` сохранены. Canary и benchmark 3/3 завершились `accepted-not-promoted`, максимальный first-artifact latency составил `73.734 s`.
+- Paths: `scripts/codex_exec_review_cycle_runner.py`, `evals/prepared-create-benchmark/20260710/benchmark-report.md`, `evals/prepared-deadline120-benchmark/20260710/benchmark-report.md`.
 
 ## Duplication map
 
@@ -100,7 +100,6 @@
 ## Remediation plan
 
 1. Create-vs-update remediation и regression завершены; immutable canary принят с promotion off.
-2. Перезапущенный benchmark дал один accepted run и один `blocked-first-artifact-deadline`; третий run отменён по stop-condition.
-3. Следующей узкой итерацией проверить deadline `120 s` при неизменных hard timeout `180 s` и post-write idle `60 s`.
-4. После успешного canary заново выполнить три независимых benchmark cycles.
-5. Сохранить residual P2 как отдельную архитектурную задачу после стабильного benchmark.
+2. Deadline `120 s` проверен при неизменных hard timeout `180 s` и post-write idle `60 s`.
+3. Canary и три независимых benchmark cycles приняты без promotion; ARCH-PREP-009 remediated.
+4. Сохранить residual P2 как отдельную архитектурную задачу после prototype readiness.
