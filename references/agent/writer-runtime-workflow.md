@@ -16,6 +16,10 @@ Required runtime inputs:
 
 Do not expand the scope while writing. New source ambiguity, missing mandatory handoff artifacts or unresolved coverage gaps must become `blocked-input` or explicit `coverage gap`, not assumed behavior.
 
+## Prepared Package Fast Path
+
+When the stage input contains a verified `stage-package.json`, follow `prepared-stage-package-format.md` instead of rebuilding source-selection, parity, scope or atomic ledgers. Read `stage-package.json`, `source-evidence.md`, `atomic-obligations.json` and `stage-instructions.md`; write a structurally complete minimum draft first. Do not scan DOCX/XHTML/PDF or earlier handoffs. A registered full source may be opened only for one unresolved `ATOM-*` locator, with a `targeted_source_fallback` event; unresolved evidence blocks the stage.
+
 ## Common Flow
 
 1. Confirm the selected package, source files, scope boundary and mode.

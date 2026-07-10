@@ -29,6 +29,11 @@ from test_case_agent.review_cycle.runtime import (
     StageAttemptPaths,
     StageRuntimeError,
     artifact_ref,
+    resolve_repository_path,
+)
+from test_case_agent.review_cycle.prepared_package import (
+    PreparedStagePackage,
+    load_prepared_package,
 )
 from test_case_agent.review_cycle.attempts import format_attempt_id
 from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
@@ -316,6 +321,7 @@ class CodexExecReviewCycleRunner:
     source_files: Sequence[Path]
     handoff_files: Sequence[Path]
     command_config: ExecCommandConfig
+    prepared_package_path: Path | None = None
     instruction_files: Sequence[Path] = ()
     executor: ProcessExecutor = field(default_factory=SubprocessExecutor)
     validator: DraftValidator = field(default_factory=ProjectDraftStructureValidator)
@@ -324,6 +330,7 @@ class CodexExecReviewCycleRunner:
     allow_overwrite_final: bool = False
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
     _backend_session_ids: list[str] = field(default_factory=list, init=False)
+    _prepared_package: PreparedStagePackage | None = field(default=None, init=False)
 
     def __post_init__(self) -> None:
         self.repo_root = self.repo_root.resolve()
@@ -332,6 +339,8 @@ class CodexExecReviewCycleRunner:
         self.final_path = self.final_path.resolve()
         self.source_files = tuple(path.resolve() for path in self.source_files)
         self.handoff_files = tuple(path.resolve() for path in self.handoff_files)
+        if self.prepared_package_path is not None:
+            self.prepared_package_path = self.prepared_package_path.resolve()
         configured_instructions = tuple(path.resolve() for path in self.instruction_files)
         self.instruction_files = configured_instructions or ((self.repo_root / "AGENTS.md").resolve(),)
 
@@ -395,11 +404,33 @@ class CodexExecReviewCycleRunner:
             raise RunnerError(f"Final artifact must be a Markdown file directly under {production_dir}")
         if self.final_path.name.lower() == "readme.md":
             raise RunnerError("README.md cannot be used as the promoted final artifact")
-        if not self.source_files:
-            raise RunnerError("At least one explicit source file is required")
-        if not self.handoff_files:
-            raise RunnerError("At least one explicit handoff file is required")
-        for input_path in (*self.instruction_files, *self.source_files, *self.handoff_files):
+        if self.prepared_package_path is not None:
+            if self.source_files or self.handoff_files:
+                raise RunnerError(
+                    "Prepared fast path must not mix full source/handoff lists into the stage context"
+                )
+            if not is_relative_to(self.prepared_package_path, self.ft_root):
+                raise RunnerError("Prepared stage package must be under the FT package")
+            try:
+                self._prepared_package = load_prepared_package(
+                    self.prepared_package_path, self.repo_root
+                )
+            except StageRuntimeError as exc:
+                raise RunnerError(f"Prepared stage package is invalid: {exc}") from exc
+            if self._prepared_package.ft_slug != self.ft_root.name:
+                raise RunnerError("Prepared stage package ft_slug does not match FT root")
+        else:
+            if not self.source_files:
+                raise RunnerError("At least one explicit source file is required")
+            if not self.handoff_files:
+                raise RunnerError("At least one explicit handoff file is required")
+        prepared_inputs = self._prepared_input_paths()
+        for input_path in (
+            *self.instruction_files,
+            *self.source_files,
+            *self.handoff_files,
+            *prepared_inputs,
+        ):
             if not input_path.is_file():
                 raise RunnerError(f"Stage input does not exist: {input_path}")
             if not is_relative_to(input_path, self.repo_root):
@@ -415,6 +446,36 @@ class CodexExecReviewCycleRunner:
                 "use a new cycle directory or an explicit recovery path instead of reusing stale outputs: "
                 + joined
             )
+
+    def _prepared_input_paths(self) -> tuple[Path, ...]:
+        if self._prepared_package is None or self.prepared_package_path is None:
+            return ()
+        artifacts = tuple(
+            resolve_repository_path(item.path, self.repo_root)
+            for item in self._prepared_package.package_artifacts
+        )
+        return (self.prepared_package_path, *artifacts)
+
+    def _prepared_artifact(self, kind: str) -> Path:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        reference = next(
+            (item for item in self._prepared_package.package_artifacts if item.kind == kind),
+            None,
+        )
+        if reference is None:
+            raise RunnerError(f"Prepared package does not contain {kind}")
+        return resolve_repository_path(reference.path, self.repo_root)
+
+    def _verify_prepared_package(self) -> None:
+        if self.prepared_package_path is None:
+            return
+        try:
+            self._prepared_package = load_prepared_package(
+                self.prepared_package_path, self.repo_root
+            )
+        except StageRuntimeError as exc:
+            raise RunnerError(f"Prepared stage package changed or became invalid: {exc}") from exc
 
     def run(self) -> CycleResult:
         self.validate_configuration()
@@ -802,6 +863,26 @@ class CodexExecReviewCycleRunner:
         )
 
     def _writer_prompt(self) -> str:
+        if self._prepared_package is not None and self.prepared_package_path is not None:
+            package_files = self._prepared_input_paths()
+            return "\n".join(
+                [
+                    "# Codex exec prepared writer fast path",
+                    "",
+                    "Use the ft-test-case-writer prepared-package fast path.",
+                    "Read only the four verified package files below; do not rerun source locator, scope analysis, DOCX/XHTML extraction, PDF rendering or parity checks.",
+                    "Do not read existing/generated test cases or earlier cycle artifacts as evidence.",
+                    f"Write a structurally complete unsigned draft first and only to `{relative_path(self.draft_path, self.repo_root)}`.",
+                    "Do not write under a production test-cases directory and do not promote the draft.",
+                    "Use registered full sources only for a single unresolved ATOM locator and record targeted_source_fallback.",
+                    "",
+                    "## Verified prepared package",
+                    *[f"- `{relative_path(path, self.repo_root)}`" for path in package_files],
+                    "",
+                    "Exit only after the draft file is fully written. A chat response without the file is a failed stage.",
+                    "",
+                ]
+            )
         return "\n".join(
             [
                 "# Codex exec writer stage contract",
@@ -824,6 +905,24 @@ class CodexExecReviewCycleRunner:
         )
 
     def _reviewer_prompt(self) -> str:
+        if self._prepared_package is not None and self.prepared_package_path is not None:
+            package_files = self._prepared_input_paths()
+            return "\n".join(
+                [
+                    "# Codex exec prepared reviewer fast path",
+                    "",
+                    "This stage is read-only. Do not modify any workspace file.",
+                    "Review only the verified package, draft and deterministic validator report listed below.",
+                    *[f"- `{relative_path(path, self.repo_root)}`" for path in package_files],
+                    f"- writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
+                    f"- validator: `{relative_path(self.validator_path, self.repo_root)}`",
+                    "",
+                    "Return one JSON object in the final message and write no files:",
+                    '{"decision":"accepted|changes-required","findings_markdown":"# Review findings\\n..."}',
+                    "Use `accepted` only when every testable ATOM is correctly covered and no blocking finding remains.",
+                    "",
+                ]
+            )
         return "\n".join(
             [
                 "# Codex exec reviewer stage contract",
@@ -854,6 +953,7 @@ class CodexExecReviewCycleRunner:
         prompt: str,
         last_message_path: Path | None,
     ) -> tuple[ProcessResult, dict[str, Any]]:
+        self._verify_prepared_package()
         attempt_root = self.attempt_root(stage)
         if attempt_root.exists():
             raise RunnerError(
@@ -977,7 +1077,17 @@ class CodexExecReviewCycleRunner:
                 producer="runner",
             ),
         ]
-        handoff_paths = list(self.handoff_files)
+        if self._prepared_package is not None and self.prepared_package_path is not None:
+            instruction_paths = [*self.instruction_files, self._prepared_artifact("stage-instructions")]
+            source_paths = [self._prepared_artifact("source-evidence")]
+            handoff_paths = [
+                self.prepared_package_path,
+                self._prepared_artifact("atomic-obligations"),
+            ]
+        else:
+            instruction_paths = list(self.instruction_files)
+            source_paths = list(self.source_files)
+            handoff_paths = list(self.handoff_files)
         allowed_write_roots: list[str] = []
         if role == "writer":
             expected_outputs.extend(
@@ -1019,7 +1129,11 @@ class CodexExecReviewCycleRunner:
             session_id=f"session-{stage}-{ATTEMPT_ID}",
             role=role,
             scenario=(
-                "writer.session_initial_draft"
+                (
+                    "writer.session_prepared_initial_draft"
+                    if self._prepared_package is not None
+                    else "writer.session_initial_draft"
+                )
                 if role == "writer"
                 else "reviewer.semantic_traceability_test_design"
             ),
@@ -1031,10 +1145,10 @@ class CodexExecReviewCycleRunner:
             prompt_artifact=artifact_ref(prompt_path, self.repo_root, kind="prompt"),
             instruction_artifacts=[
                 artifact_ref(path, self.repo_root, kind="instruction")
-                for path in self.instruction_files
+                for path in instruction_paths
             ],
             source_artifacts=[
-                artifact_ref(path, self.repo_root, kind="source") for path in self.source_files
+                artifact_ref(path, self.repo_root, kind="source") for path in source_paths
             ],
             handoff_artifacts=[
                 artifact_ref(path, self.repo_root, kind="handoff") for path in handoff_paths
@@ -1345,6 +1459,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-file", action="append", default=[])
     parser.add_argument("--handoff-file", action="append", default=[])
     parser.add_argument("--instruction-file", action="append", default=[])
+    parser.add_argument("--prepared-package")
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--sandbox-flag", required=True)
     parser.add_argument("--writer-sandbox", required=True)
@@ -1370,6 +1485,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         final_path=(repo_root / args.final_artifact),
         source_files=[repo_root / item for item in args.source_file],
         handoff_files=[repo_root / item for item in args.handoff_file],
+        prepared_package_path=(repo_root / args.prepared_package if args.prepared_package else None),
         instruction_files=[repo_root / item for item in args.instruction_file],
         command_config=ExecCommandConfig(
             executable=args.codex_command,

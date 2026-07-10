@@ -7,6 +7,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from test_case_agent.review_cycle.prepared_package import (
+    EvidenceInput,
+    PreparedObligation,
+    PreparedObligationSet,
+    PreparedPackageBuilder,
+    StageInstructionConfig,
+)
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT_DIR / "scripts" / "codex_exec_review_cycle_runner.py"
@@ -206,6 +214,104 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             promote_final=promote_final,
             allow_overwrite_final=allow_overwrite_final,
         )
+
+    def build_prepared_package(self) -> Path:
+        self.handoff_path.write_text("# Scope contract\n\nSRC-1: observable requirement.\n", encoding="utf-8")
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-exec-001",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="ATOM-001",
+                    source_refs=("SRC-1",),
+                    atomic_statement="The requirement is observable.",
+                    observable_oracle="The visible result matches the requirement.",
+                    test_intent="Verify the visible result.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        package_root = self.cycle_dir / "prepared-input" / "pkg-exec-001"
+        PreparedPackageBuilder(self.repo_root).build(
+            output_root=package_root,
+            package_id="pkg-exec-001",
+            ft_slug="demo-ft",
+            scope_slug="demo-scope",
+            section_id="1",
+            source_registry=((self.source_path, "machine-readable", "SRC-1"),),
+            evidence_inputs=(EvidenceInput(self.handoff_path, "Confirmed scope"),),
+            obligations=obligations,
+            instructions=StageInstructionConfig(
+                role="writer",
+                scenario="writer.session_prepared_initial_draft",
+                output_path=self.draft_path.relative_to(self.repo_root).as_posix(),
+                attempt_root=self.writer_attempt.relative_to(self.repo_root).as_posix(),
+                sandbox_policy="workspace_write",
+                timeout_seconds=180,
+                idle_timeout_seconds=60,
+                command_budget=12,
+            ),
+            forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+        )
+        return package_root / "stage-package.json"
+
+    def make_prepared_runner(self, executor, package_path: Path):
+        return runner_module.CodexExecReviewCycleRunner(
+            repo_root=self.repo_root,
+            ft_root=self.ft_root,
+            cycle_dir=self.cycle_dir,
+            final_path=self.final_path,
+            source_files=[],
+            handoff_files=[],
+            prepared_package_path=package_path,
+            command_config=runner_module.ExecCommandConfig(
+                executable="codex-test",
+                sandbox_flag="--sandbox-contract",
+                writer_sandbox="writer-workspace-write",
+                reviewer_sandbox="reviewer-read-only",
+                working_directory_flag="--working-directory-contract",
+                json_flag="--jsonl-contract",
+                output_last_message_flag="--last-message-contract",
+                cli_contract_verified=True,
+            ),
+            executor=executor,
+            validator=self.validator,
+            timeout_seconds=5,
+        )
+
+    def test_prepared_fast_path_uses_only_compact_package_artifacts(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.writer_step(), self.reviewer_step(decision="changes-required")
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("changes-required", result.status)
+        writer_prompt = executor.requests[0].prompt
+        self.assertIn("prepared writer fast path", writer_prompt)
+        self.assertIn("stage-package.json", writer_prompt)
+        self.assertIn("source-evidence.md", writer_prompt)
+        self.assertIn("atomic-obligations.json", writer_prompt)
+        self.assertIn("stage-instructions.md", writer_prompt)
+        self.assertNotIn("source/main.xhtml", writer_prompt)
+        manifest = json.loads((self.writer_attempt / "stage-input.json").read_text(encoding="utf-8"))
+        self.assertEqual("writer.session_prepared_initial_draft", manifest["scenario"])
+        self.assertEqual(1, len(manifest["source_artifacts"]))
+        self.assertTrue(manifest["source_artifacts"][0]["path"].endswith("source-evidence.md"))
+        self.assertFalse(any(item["path"].endswith("main.xhtml") for item in manifest["source_artifacts"]))
+
+    def test_prepared_fast_path_rejects_tampered_package_before_exec(self) -> None:
+        package_path = self.build_prepared_package()
+        (package_path.parent / "source-evidence.md").write_text("tampered\n", encoding="utf-8")
+        executor = ScriptedExecutor()
+
+        with self.assertRaisesRegex(runner_module.RunnerError, "Prepared stage package is invalid"):
+            self.make_prepared_runner(executor, package_path).run()
+        self.assertEqual([], executor.requests)
 
     def test_writer_command_uses_configured_workspace_write_sandbox(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="changes-required"))

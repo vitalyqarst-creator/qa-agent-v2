@@ -75,6 +75,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["test-case file exists", "writer quality gate passes"]
     },
     {
+      "id": "writer.prepared_session_initial",
+      "task_type": "Write an initial draft in a fresh session from a verified compact prepared stage package.",
+      "skill_chain": ["ft-test-case-writer"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-writer", "scenario": "writer.session_prepared_initial_draft"}
+      ],
+      "verification_gates": ["prepared package hashes pass", "atomic obligation gate passes", "writer quality gate passes"]
+    },
+    {
       "id": "writer.initial_table",
       "task_type": "Write new test cases for a confirmed table-heavy or row-level parity scope.",
       "skill_chain": ["ft-test-case-writer"],
@@ -249,6 +258,12 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "expected_route_id": "writer.initial_simple",
       "expected_skill_chain": ["ft-test-case-writer"],
       "expected_instruction_scenarios": ["writer.initial_draft.simple"]
+    },
+    {
+      "prompt": "Создай draft в новой сессии из проверенного prepared stage-package.",
+      "expected_route_id": "writer.prepared_session_initial",
+      "expected_skill_chain": ["ft-test-case-writer"],
+      "expected_instruction_scenarios": ["writer.session_prepared_initial_draft"]
     },
     {
       "prompt": "Напиши тест-кейсы по таблице с построчной трассировкой.",

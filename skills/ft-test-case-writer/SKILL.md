@@ -29,6 +29,8 @@ description: Пишет новые ручные тест-кейсы по уже 
 - mode: `initial_draft`, `revision_from_findings` или remediation;
 - при `revision_from_findings`: существующий набор тест-кейсов, structured findings artifact, номер review round, `review_mode` и traceability matrix при наличии.
 
+Если передан проверенный `stage-package.json`, используй prepared fast path: читай только четыре package-файла, не повторяй source discovery/extraction и обращайся к полному источнику только адресно по fallback-контракту из [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
+
 ## Выходы
 
 - canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
@@ -87,11 +89,6 @@ Minimum runtime rules:
 16. Не используй неканонические status aliases в writer-side artifacts: `Writer Quality Gate` и `Test Design Review` принимают только `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` принимает только `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed` и локальные варианты являются validator defects.
 17. `writer-self-check.md` не должен содержать пустые секции. Каждая heading-секция, включая `Artifact Write Evidence`, должна иметь evidence, таблицу/список, ссылку на session log / split artifact или явное `not-applicable` с причиной.
 18. `placeholder-sentinel-normalization`: в traceability-bearing таблицах split artifacts и reviewer matrices не используй placeholder `-` / `N/A` в колонках связей и трассировки. Пиши явный sentinel: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>` или `none_required:<reason>`.
-
-## Runtime Format Clarifications
-
-- Slim runtime `TC-*` is valid when `Название`, `Тип`, `Приоритет`, `package_id`, `Трассировка`, `Предусловия`, `Тестовые данные`, numbered `Шаги`, `Итоговый ожидаемый результат`, and `Постусловия` are present and parseable. Do not force optional source fields when `Трассировка` plus split artifacts already provide source evidence.
-- `artifact-shape-preflight` accepts one split artifact heading at `# Section` or `## Section`. Missing/wrong headings and adjacent duplicates like `# Section` + `## Section` must be fixed or block writer-ready handoff.
 
 ## Test-design Applicability Matrix Rule
 

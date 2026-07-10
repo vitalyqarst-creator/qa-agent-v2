@@ -25,6 +25,7 @@ REQUIRED_SCENARIOS = {
     "writer.remediation.validator_failure",
     "writer.remediation.validator_failure.deep_debug",
     "writer.session_initial_draft",
+    "writer.session_prepared_initial_draft",
     "writer.session_semantic_revision",
     "writer.session_format_revision",
     "reviewer.full_existing_cases",
@@ -204,6 +205,18 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/qa/test-case-format.md", paths)
         self.assertIn("references/agent/style-remediation-checklist.md", paths)
         self.assertNotIn("references/qa/test-case-style-examples.md", paths)
+
+    def test_prepared_writer_context_stays_compact_and_excludes_source_workflows(self) -> None:
+        payload = self.resolve_json("--scenario", "writer.session_prepared_initial_draft")
+        paths = {item["path"] for item in payload["files"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("references/agent/prepared-stage-package-format.md", paths)
+        self.assertIn("references/agent/writer-runtime-workflow.md", paths)
+        self.assertNotIn("references/agent/source-row-inventory-format.md", paths)
+        self.assertNotIn("references/agent/writer-process-workflow.md", paths)
+        self.assertNotIn("references/agent/writer-table-workflow.md", paths)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 20.0)
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 
     def test_validator_failure_loads_compact_remediation_map_by_default(self) -> None:
