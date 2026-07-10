@@ -534,10 +534,12 @@ class CodexExecReviewCycleRunner:
     timeout_seconds: int = 1800
     writer_timeout_seconds: int | None = None
     reviewer_timeout_seconds: int | None = None
+    prepared_reviewer_timeout_seconds: int = 90
     writer_idle_timeout_seconds: int = 60
     reviewer_idle_timeout_seconds: int = 45
     writer_command_budget: int = 12
     reviewer_command_budget: int = 8
+    prepared_reviewer_command_budget: int = 1
     writer_first_artifact_deadline_seconds: int = 90
     prepared_reviewer_prompt_max_bytes: int = DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES
     promote_final: bool = False
@@ -614,6 +616,10 @@ class CodexExecReviewCycleRunner:
     def reviewer_schema_path(self) -> Path:
         return self.attempt_root(REVIEWER_STAGE) / "review-contract.schema.json"
 
+    @property
+    def reviewer_evidence_access_path(self) -> Path:
+        return self.runner_output_dir(REVIEWER_STAGE) / "evidence-access-report.json"
+
     def _runner_owned_paths(self) -> tuple[Path, ...]:
         paths = [
             self.state_path,
@@ -634,12 +640,17 @@ class CodexExecReviewCycleRunner:
             "reviewer_idle_timeout_seconds",
             "writer_command_budget",
             "reviewer_command_budget",
+            "prepared_reviewer_command_budget",
             "writer_first_artifact_deadline_seconds",
             "prepared_reviewer_prompt_max_bytes",
         ):
             if getattr(self, name) < 1:
                 raise RunnerError(f"{name} must be >= 1")
-        for name in ("writer_timeout_seconds", "reviewer_timeout_seconds"):
+        for name in (
+            "writer_timeout_seconds",
+            "reviewer_timeout_seconds",
+            "prepared_reviewer_timeout_seconds",
+        ):
             value = getattr(self, name)
             if value is not None and value < 1:
                 raise RunnerError(f"{name} must be >= 1 when set")
@@ -966,9 +977,17 @@ class CodexExecReviewCycleRunner:
             idle_timeout = self.writer_idle_timeout_seconds
             command_budget = self.writer_command_budget
         else:
-            timeout = self.reviewer_timeout_seconds or self.timeout_seconds
+            timeout = (
+                self.prepared_reviewer_timeout_seconds
+                if self._prepared_package is not None
+                else (self.reviewer_timeout_seconds or self.timeout_seconds)
+            )
             idle_timeout = self.reviewer_idle_timeout_seconds
-            command_budget = self.reviewer_command_budget
+            command_budget = (
+                self.prepared_reviewer_command_budget
+                if self._prepared_package is not None
+                else self.reviewer_command_budget
+            )
         return timeout, min(idle_timeout, timeout), command_budget
 
     def run(self) -> CycleResult:
@@ -1200,6 +1219,34 @@ class CodexExecReviewCycleRunner:
             prompt=reviewer_prompt,
             last_message_path=None,
         )
+        if self._prepared_package is not None:
+            reviewer_access = validate_evidence_access(
+                events_text=reviewer_result.stdout,
+                forbidden_roots=(
+                    *self._prepared_package.forbidden_evidence_roots,
+                    "skills",
+                    "references",
+                    "prepared-input",
+                    "attempts/writer-r1",
+                ),
+                source_registry=self._prepared_package.source_registry,
+                allowed_command_fragments=("python scripts/probe_environment.py",),
+                reject_unlisted_commands=True,
+            )
+            write_json(self.reviewer_evidence_access_path, reviewer_access.as_dict())
+            if not reviewer_access.passed:
+                return self._block_stage(
+                    state,
+                    stage=REVIEWER_STAGE,
+                    role="reviewer",
+                    result=reviewer_result,
+                    artifacts=reviewer_artifacts,
+                    status="blocked-evidence-access",
+                    reasons=[
+                        "prepared reviewer evidence-access gate reported findings",
+                        relative_path(self.reviewer_evidence_access_path, self.repo_root),
+                    ],
+                )
         production_changes = self._production_changes(production_before)
         if production_changes:
             return self._block_stage(
@@ -1802,6 +1849,17 @@ class CodexExecReviewCycleRunner:
                     producer="runner",
                 )
             )
+            if self._prepared_package is not None:
+                expected_outputs.append(
+                    ExpectedOutput(
+                        path=relative_path(
+                            self.reviewer_evidence_access_path, self.repo_root
+                        ),
+                        kind="evidence-access-report",
+                        producer="runner",
+                        required=False,
+                    )
+                )
         return StageInputManifest.create(
             cycle_id=self.cycle_dir.name,
             stage_id=stage,
@@ -2501,10 +2559,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     parser.add_argument("--writer-timeout-seconds", type=int, default=180)
     parser.add_argument("--reviewer-timeout-seconds", type=int, default=120)
+    parser.add_argument("--prepared-reviewer-timeout-seconds", type=int, default=90)
     parser.add_argument("--writer-idle-timeout-seconds", type=int, default=60)
     parser.add_argument("--reviewer-idle-timeout-seconds", type=int, default=45)
     parser.add_argument("--writer-command-budget", type=int, default=12)
     parser.add_argument("--reviewer-command-budget", type=int, default=8)
+    parser.add_argument("--prepared-reviewer-command-budget", type=int, default=1)
     parser.add_argument("--writer-first-artifact-deadline-seconds", type=int, default=90)
     parser.add_argument(
         "--prepared-reviewer-prompt-max-bytes",
@@ -2543,10 +2603,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         timeout_seconds=args.timeout_seconds,
         writer_timeout_seconds=args.writer_timeout_seconds,
         reviewer_timeout_seconds=args.reviewer_timeout_seconds,
+        prepared_reviewer_timeout_seconds=args.prepared_reviewer_timeout_seconds,
         writer_idle_timeout_seconds=args.writer_idle_timeout_seconds,
         reviewer_idle_timeout_seconds=args.reviewer_idle_timeout_seconds,
         writer_command_budget=args.writer_command_budget,
         reviewer_command_budget=args.reviewer_command_budget,
+        prepared_reviewer_command_budget=args.prepared_reviewer_command_budget,
         writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
         prepared_reviewer_prompt_max_bytes=args.prepared_reviewer_prompt_max_bytes,
         promote_final=args.promote_final,

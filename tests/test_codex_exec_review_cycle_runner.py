@@ -287,6 +287,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         timed_out: bool = False,
         mutate_production: bool = False,
         mutate_draft: bool = False,
+        commands=(),
     ):
         def step(_request):
             if mutate_production:
@@ -330,12 +331,24 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             else:
                 payload = {"decision": decision, "findings_markdown": findings}
             contract = json.dumps(payload, ensure_ascii=False)
+            generated_stdout = self.json_event(contract, session_id="reviewer-session")
+            for index, command in enumerate(commands, start=1):
+                generated_stdout += json.dumps(
+                    {
+                        "type": "item.started",
+                        "item": {
+                            "id": f"reviewer-command-{index}",
+                            "type": "command_execution",
+                            "command": command,
+                        },
+                    }
+                ) + "\n"
             return self.process_result(
                 exit_code=exit_code,
                 stdout=(
                     stdout
                     if stdout is not None
-                    else self.json_event(contract, session_id="reviewer-session")
+                    else generated_stdout
                 ),
                 stderr=stderr,
                 timed_out=timed_out,
@@ -516,6 +529,46 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             runner.run()
 
         self.assertEqual(1, len(executor.requests))
+
+    def test_prepared_reviewer_uses_dedicated_runtime_limits_and_probe_allowlist(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(commands=("python scripts/probe_environment.py",)),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        request = executor.requests[1]
+        self.assertEqual(90, request.timeout_seconds)
+        self.assertEqual(1, request.command_budget)
+        report = json.loads(
+            (self.reviewer_attempt / "runner-output" / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(report["passed"])
+
+    def test_prepared_reviewer_blocks_skill_read(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(
+                commands=("Get-Content skills/ft-test-case-reviewer/SKILL.md",)
+            ),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-evidence-access", result.status)
+        report = json.loads(
+            (self.reviewer_attempt / "runner-output" / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        ids = {finding["id"] for finding in report["findings"]}
+        self.assertIn("unapproved-prepared-stage-command", ids)
 
     def test_prepared_fast_path_blocks_before_reviewer_when_atom_is_uncovered(self) -> None:
         package_path = self.build_prepared_package()

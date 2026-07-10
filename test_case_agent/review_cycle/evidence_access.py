@@ -35,6 +35,8 @@ def validate_evidence_access(
     events_text: str,
     forbidden_roots: Sequence[str],
     source_registry: Sequence[SourceRegistryEntry],
+    allowed_command_fragments: Sequence[str] = (),
+    reject_unlisted_commands: bool = False,
 ) -> EvidenceAccessResult:
     fallback_messages: list[str] = []
     commands: list[tuple[str, str, tuple[str, ...]]] = []
@@ -69,9 +71,21 @@ def validate_evidence_access(
     findings: list[dict[str, Any]] = []
     accesses: list[dict[str, Any]] = []
     normalized_forbidden = [(_normalized(path), path) for path in forbidden_roots]
+    normalized_allowed = tuple(_normalized(item) for item in allowed_command_fragments)
 
     for command_id, command, command_fallbacks in commands:
         normalized_command = _normalized(command)
+        if reject_unlisted_commands and not any(
+            allowed in normalized_command for allowed in normalized_allowed
+        ):
+            findings.append(
+                {
+                    "id": "unapproved-prepared-stage-command",
+                    "severity": "error",
+                    "command_id": command_id,
+                    "message": "Prepared stage executed a command outside its explicit allowlist.",
+                }
+            )
         for root, original_root in normalized_forbidden:
             if root in normalized_command:
                 findings.append(

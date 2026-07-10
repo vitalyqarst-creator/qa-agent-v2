@@ -82,6 +82,36 @@ class PreparedEvidenceAccessTests(unittest.TestCase):
         )
         self.assertFalse(result.passed)
 
+    def test_reviewer_policy_allows_only_explicit_environment_probe(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command="powershell -Command python scripts/probe_environment.py",
+            ),
+            forbidden_roots=("skills", "references", "prepared-input"),
+            source_registry=(self.source,),
+            allowed_command_fragments=("python scripts/probe_environment.py",),
+            reject_unlisted_commands=True,
+        )
+        self.assertTrue(result.passed)
+
+    def test_reviewer_policy_blocks_skill_read_even_when_narrow(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command="Get-Content skills/ft-test-case-reviewer/SKILL.md",
+            ),
+            forbidden_roots=("skills", "references", "prepared-input"),
+            source_registry=(self.source,),
+            allowed_command_fragments=("python scripts/probe_environment.py",),
+            reject_unlisted_commands=True,
+        )
+        ids = {finding["id"] for finding in result.findings}
+        self.assertIn("unapproved-prepared-stage-command", ids)
+        self.assertIn("forbidden-evidence-root-access", ids)
+
 
 if __name__ == "__main__":
     unittest.main()

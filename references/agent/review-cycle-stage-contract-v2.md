@@ -58,6 +58,8 @@ Prepared writer attempts may include a runner-owned draft seed under `runner-inp
 
 Prepared reviewer attempts receive a runner-built inline projection containing eligible package metadata, the compact reviewer profile, selected evidence, atomic obligations, deterministic gate summaries, the immutable draft and its SHA-256. The prompt must not direct the stage to reread package/reference/source files, and its UTF-8 size is capped at `64 KiB`; oversized handoffs route out of the fast path instead of silently expanding context. Artifact paths and hashes remain in `stage-input.json` for auditability even when their verified contents are embedded.
 
+The prepared reviewer has a `90 s` terminal deadline and a one-command budget separate from the standard reviewer. The only allowlisted command is the environment probe when no confirmed probe is available. Its JSONL stream is audited after execution; any other command, skill/reference/package/source reread or broad scan is a blocking evidence-access violation even when the model returned a syntactically valid review contract.
+
 ## Stage Result
 
 `stage-result.json` contains:
@@ -92,7 +94,7 @@ Only the runner may produce `signed-off`, and only after the reviewer returns `a
 - `test_case_agent/review_cycle/backends.py`: fresh-thread SDK boundary and backend adapter without resume context.
 - `test_case_agent/review_cycle/attempts.py`: deterministic attempt inspection, retry gating and fresh attempt allocation.
 - `test_case_agent/review_cycle/metrics.py`: attempt/cycle latency, artifact-volume, outcome and optional token evidence.
-- `test_case_agent/review_cycle/evidence_access.py`: deterministic JSONL command audit for forbidden evidence roots, broad scans and exact targeted fallback authorization.
+- `test_case_agent/review_cycle/evidence_access.py`: deterministic JSONL command audit for forbidden evidence roots, broad scans, exact targeted fallback authorization and optional prepared-stage command allowlists.
 - `test_case_agent/review_cycle/orchestration.py`: one completion path from backend evidence to immutable result and metrics.
 - `tests/test_review_cycle_stage_contract.py`: focused contract, failure and transition coverage.
 
