@@ -37,6 +37,7 @@ REQUIRED_AGENT_REFS = {
     "writer-handoff-format.md",
     "writer-revision-output-format.md",
     "session-based-review-cycle-format.md",
+    "review-cycle-stage-contract-v2.md",
     "codex-sdk-orchestration-format.md",
 }
 
@@ -179,7 +180,11 @@ class AgentArchitectureTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("Session-based review cycle and Codex SDK orchestration", index)
+        self.assertIn("Session-based review cycle, backend-independent stage contract", index)
+        self.assertIn("test_case_agent/review_cycle/contracts.py", index)
+        self.assertIn("test_case_agent/review_cycle/transitions.py", index)
+        self.assertIn("tests/test_review_cycle_stage_contract.py", index)
+        self.assertIn("review-cycle-stage-contract-v2.md", index)
         self.assertIn("review_cycle.session_based", routing)
         self.assertIn("writer.session_initial_draft", manifest)
         self.assertIn("reviewer.scope_gap_review", manifest)

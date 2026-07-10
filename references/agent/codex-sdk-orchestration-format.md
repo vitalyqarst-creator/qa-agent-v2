@@ -4,6 +4,8 @@ This reference defines how local Codex SDK sessions are used by the session-base
 
 The SDK layer is an orchestrator, not a domain-rule source. The SDK runner is not a domain-rule source and must not decide whether reviewer findings are correct. Domain behavior remains in `AGENTS.md`, `skills/` and canonical references.
 
+The current SDK implementation uses the v1 stage-updated-state contract described in `session-based-review-cycle-format.md`. The backend-independent `contract_version: 2` and runner-owned transition model are additive in Phase 1; they do not change SDK execution or recovery until a dedicated fresh-thread SDK adapter is implemented and tested.
+
 ## Responsibilities
 
 The SDK runner:

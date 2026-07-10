@@ -64,6 +64,10 @@ class SessionBasedReviewCycleContractTests(unittest.TestCase):
             "versions/<snapshot-id>/",
             "compatibility-only",
             "scope_gap_review",
+            "contract_version: 2",
+            "runner-owned transitions",
+            "must not edit `cycle-state.yaml`",
+            "must never report `signed-off`",
         ):
             self.assertIn(token, content)
 

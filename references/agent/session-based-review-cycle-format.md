@@ -12,9 +12,13 @@ The writer never starts the reviewer directly. The SDK runner reads state, verif
 
 Each stage receives only the active prompt, resolved instruction-loading scenario context and required artifacts for that stage. It must not rely on previous chat history. The runner injects the selected instruction files from `resolve_instruction_context.py`; the stage must read them before writer/reviewer decisions and record the resolver command, budget status and selected files in its session log.
 
-Each stage must update `cycle-state.yaml` before ending. If a session completes without advancing `current_stage`, `stage_status`, `semantic_round` or `active_transition_prompt`, the runner must stop instead of starting another copy of the same stage.
+## Stage Contract Versions
 
-SDK `turn_status = interrupted` is not automatically a failed stage. If the stage already advanced `cycle-state.yaml` and the updated state validates, the runner may classify it as `completed-with-progress`. Without state advancement and validation, interruption remains a failed stage and the chain stops.
+The existing SDK runner remains a `v1` compatibility path: each v1 stage updates `cycle-state.yaml` before ending. If such a session completes without advancing `current_stage`, `stage_status`, `semantic_round` or `active_transition_prompt`, the v1 runner must stop instead of starting another copy of the same stage.
+
+`contract_version: 2` is defined in `review-cycle-stage-contract-v2.md`. A v2 stage must not edit `cycle-state.yaml` or production test cases; it returns a strict artifact-backed outcome, and the runner applies runner-owned transitions. It must never report `signed-off`. Introducing v2 does not silently change v1 recovery behavior.
+
+For v1, SDK `turn_status = interrupted` is not automatically a failed stage. If the stage already advanced `cycle-state.yaml` and the updated state validates, the runner may classify it as `completed-with-progress`. Without state advancement and validation, interruption remains a failed stage and the chain stops. V2 completion is classified from the runner-owned manifest/result/artifact evidence instead of a stage-written state transition.
 
 The runner writes process evidence separately from writer/reviewer artifacts:
 
@@ -210,6 +214,6 @@ Writer sessions may create or modify test cases and writer artifacts.
 
 Reviewer sessions are read-only SDK turns or deterministic runner-owned checks. They return findings, matrices, summaries and routing decisions; the runner persists reviewer artifacts, prompts and state updates. Reviewer sessions must not edit the canonical test-case file.
 
-The SDK runner may update `cycle-state.yaml`, `codex-session-map.yaml` and snapshots, but must not invent review decisions.
+The v1 SDK runner may update `cycle-state.yaml`, `codex-session-map.yaml` and snapshots, but must not invent review decisions. Under v2, only the runner updates those orchestration artifacts; stage sessions return structured outcomes and cannot write orchestration state.
 
-The SDK runner may also start the next session automatically after a completed stage, but only after it reloads and validates the stage-updated `cycle-state.yaml`.
+The SDK runner may also start the next session automatically after a completed v1 stage, but only after it reloads and validates the stage-updated `cycle-state.yaml`. A future v2 backend adapter may start the next session only after validating `stage-result.json`, required output hashes and the runner-applied next state.
