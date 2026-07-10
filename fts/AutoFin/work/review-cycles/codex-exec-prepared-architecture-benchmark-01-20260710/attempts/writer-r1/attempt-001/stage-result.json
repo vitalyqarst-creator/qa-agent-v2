@@ -1,0 +1,49 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4c43-b614-7c33-8aa4-f2ca45900f93",
+  "blocking_reasons": [
+    "writer did not create a meaningful draft before the first-artifact deadline",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-architecture-benchmark-01-20260710",
+  "duration_ms": 90078,
+  "exit_code": null,
+  "finished_at": "2026-07-10T13:43:43.653989+00:00",
+  "input_digest": "2a7a9a2ed16281b41d55a9c05254a36943f9a9ba6e94c5a86d704f01a1be7226",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "59e3d1faec2cf0f006e86532e872e37761b9fdfef546b49bd54b7c0ff330543a"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "b4c7182f9288effc7ae00d9fafec263a727a2f999c1de1434a955f5718503a43"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "59e3d1faec2cf0f006e86532e872e37761b9fdfef546b49bd54b7c0ff330543a"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "3600c72edaa226ceb929d030e8fdb48a0de4656662cf720284642e2039c37eb9"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "ed6e9913632866e07b4d7e210ed86b5ee1059a1bd6768ed20904675c96a197bc"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-10T13:42:13.576960+00:00",
+  "status": "blocked",
+  "timed_out": true
+}

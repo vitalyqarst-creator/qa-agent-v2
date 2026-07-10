@@ -69,6 +69,15 @@
 - Remediation: не включено в P0/P1 patch; version `3` закрывает доказанные deterministic failure classes, а semantic reviewer остаётся обязательным terminal gate.
 - Paths: `fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-contract.md`, `references/qa/test-design-review-rubric.md`.
 
+### ARCH-PREP-008 — error / P0 live blocker — prompt требует replace отсутствующего output
+
+- Категория: `scripts`.
+- Evidence: benchmark cycle 1 сохранил `apply_patch verification failed` для отсутствующего `stage-output/draft.md`; runner создаёт seed только в `runner-input/draft-seed.md`, а profile/prompt говорит replace seed at output path.
+- Риск: корректно запущенный writer может выбрать update вместо create, потерять почти весь first-artifact budget и быть остановлен до первого draft.
+- Recommended move: явно закрепить, что output изначально отсутствует и должен создаваться первым `Add File`/atomic write; seed остаётся отдельным immutable template. Не создавать runner-owned output-заглушку.
+- Remediation: отложено из-за live stop-condition; benchmark cycles 2–3 не запускались.
+- Paths: `references/agent/prepared-writer-runtime-profile.md`, `scripts/codex_exec_review_cycle_runner.py`, `fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/benchmark-blocker-report.md`.
+
 ## Duplication map
 
 - Confirmed duplicates: отсутствуют.
@@ -81,8 +90,8 @@
 
 ## Remediation plan
 
-1. Прогнать focused и полные local gates.
-2. Собрать новый version `3` package с раздельными obligations: cardinality/default-empty как `testable`, dictionary origin/NULL как linked gaps.
-3. Выполнить immutable canary с promotion off.
-4. Только после accepted canary выполнить три независимых benchmark cycles.
-5. Сохранить residual P2 как отдельную следующую архитектурную задачу, если benchmark подтвердит стабильность P0/P1 patch.
+1. P0/P1 package v3 remediation и accepted canary v7 завершены.
+2. Исправить create-vs-update wording для первого writer output и добавить regression-тест.
+3. Повторить immutable canary с promotion off.
+4. Только после accepted canary заново начать три независимых benchmark cycles.
+5. Сохранить residual P2 как отдельную архитектурную задачу после стабильного benchmark.
