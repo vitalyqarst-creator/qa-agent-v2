@@ -17,6 +17,7 @@ AGENT_LAYER_MODULES = [
     "tests.test_agent_architecture",
     "tests.test_agent_audit_script",
     "tests.test_agent_artifact_validator",
+    "tests.test_codex_exec_review_cycle_runner",
     "tests.test_codex_review_cycle_runner",
     "tests.test_instruction_context_resolver",
     "tests.test_iteration_contracts",

@@ -76,6 +76,12 @@ all_sections = load_sections(source)
 Практический сценарий: найти нужное ФТ, сузить scope, написать тест-кейсы отдельным skill-ом и сохранить их в папку пакета.
 Для воспроизводимого pipeline между этапами используй `workflow-state.yaml` и handoff prompt-файлы из `work/stage-handoffs/<scope-slug>/`.
 
+## Review-cycle runners
+
+`scripts/codex_review_cycle_runner.py` остаётся основным SDK/app-server runner и fallback-путём для диагностики. Отдельный `scripts/codex_exec_review_cycle_runner.py` — экспериментальный stage-per-process backend: он принимает явные source/handoff-файлы, хранит writer draft только в cycle outputs, запускает reviewer с отдельно настроенным read-only sandbox и разрешает promotion лишь после валидного accepted contract.
+
+Exec runner не предполагает имена CLI flags. Перед live-запуском нужно получить их из локального `codex exec --help` и передать вместе с `--cli-contract-verified`; promotion дополнительно требует `--promote-final`. Если help/auth/sandbox contract не проверены, используй только mocked tests и не создавай final artifact. Полный список параметров доступен через `python scripts/codex_exec_review_cycle_runner.py --help`.
+
 ## Как запускать тесты
 
 Канонический способ запуска тестов в репозитории:
