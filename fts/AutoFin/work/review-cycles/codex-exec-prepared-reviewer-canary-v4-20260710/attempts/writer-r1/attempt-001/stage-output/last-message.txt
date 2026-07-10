@@ -1,0 +1,3 @@
+Unsigned draft записан: [draft.md](C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v4-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md).
+
+Содержит 3 тест-кейса и сохранённый `GAP-PREP-001`. Seed-сентинелы отсутствуют, targeted fallback не использовался. Production test-cases не изменялись.
