@@ -97,9 +97,9 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 | hard timeout seconds | 180 | 90 |
 | idle timeout seconds | 60 | disabled; hard deadline applies |
 | command executions | 12 | 8 |
-| first meaningful draft deadline seconds | 90 | n/a |
+| first meaningful draft deadline seconds | 120 (experimental) | n/a |
 
-Before the first meaningful draft write, the writer is governed by the first-artifact deadline rather than the post-write idle timeout. After a meaningful write, draft changes and JSONL events refresh the idle clock. Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-command-budget`, `blocked-first-artifact-deadline`, `blocked-idle-timeout` or `blocked-timeout`. Increasing a budget is an explicit experiment decision, not automatic recovery.
+Before the first meaningful draft write, the writer is governed by the experimental `120 s` first-artifact deadline rather than the post-write idle timeout. The separate writer hard timeout remains `180 s`; after a meaningful write, draft changes and JSONL events refresh the `60 s` idle clock. Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-command-budget`, `blocked-first-artifact-deadline`, `blocked-idle-timeout` or `blocked-timeout`. Increasing a budget is an explicit experiment decision, not automatic recovery.
 
 ## Fast Path And Fallback
 

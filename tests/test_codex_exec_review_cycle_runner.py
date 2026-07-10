@@ -484,6 +484,22 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             timeout_seconds=5,
         )
 
+    def test_first_artifact_experiment_preserves_independent_writer_budgets(self) -> None:
+        parser = runner_module.build_parser()
+
+        self.assertEqual(180, parser.get_default("writer_timeout_seconds"))
+        self.assertEqual(60, parser.get_default("writer_idle_timeout_seconds"))
+        self.assertEqual(
+            120,
+            parser.get_default("writer_first_artifact_deadline_seconds"),
+        )
+        self.assertEqual(
+            120,
+            runner_module.CodexExecReviewCycleRunner.__dataclass_fields__[
+                "writer_first_artifact_deadline_seconds"
+            ].default,
+        )
+
     def test_prepared_fast_path_uses_only_compact_package_artifacts(self) -> None:
         package_path = self.build_prepared_package()
         executor = ScriptedExecutor(

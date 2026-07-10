@@ -545,7 +545,7 @@ class CodexExecReviewCycleRunner:
     writer_command_budget: int = 12
     reviewer_command_budget: int = 8
     prepared_reviewer_command_budget: int = 1
-    writer_first_artifact_deadline_seconds: int = 90
+    writer_first_artifact_deadline_seconds: int = 120
     prepared_reviewer_prompt_max_bytes: int = DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES
     promote_final: bool = False
     allow_overwrite_final: bool = False
@@ -2574,7 +2574,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer-command-budget", type=int, default=12)
     parser.add_argument("--reviewer-command-budget", type=int, default=8)
     parser.add_argument("--prepared-reviewer-command-budget", type=int, default=1)
-    parser.add_argument("--writer-first-artifact-deadline-seconds", type=int, default=90)
+    parser.add_argument("--writer-first-artifact-deadline-seconds", type=int, default=120)
     parser.add_argument(
         "--prepared-reviewer-prompt-max-bytes",
         type=int,
