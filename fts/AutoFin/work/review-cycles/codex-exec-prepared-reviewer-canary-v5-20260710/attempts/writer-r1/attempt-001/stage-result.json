@@ -1,0 +1,71 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4c12-9ac4-72b2-8818-cc4537a29b08",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-reviewer-canary-v5-20260710",
+  "duration_ms": 86344,
+  "exit_code": 0,
+  "finished_at": "2026-07-10T12:50:01.227131+00:00",
+  "input_digest": "470f4159bede4f7a2e86534fccde8a5593e1287d145f784cc0d9e069b13a0945",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "d1b3c6a5c96061ad61e25bd068deb1b696227db8a80794f7efba07e8071f42c0"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "f281d11ec6da3b12b8b5d10435ae879331511704b3a7d768a24c731eca363e5a"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "d1b3c6a5c96061ad61e25bd068deb1b696227db8a80794f7efba07e8071f42c0"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "6f3825f2342373330eed18a1663ff87e790651a7e8a4826a0c94abb6f64f2185"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "9049ef12b3c90c0cf84f87775d54db5fd84c93037cdc25b2159811bb37bc2ec7"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "6985fce0b9beab3586d7ee46fad75dc071ea1afd524bbaf6ab90b69484776056"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "2f15a42bf18d65558f6f64d543d1a801d074d199df837c4fc4e221f27fc7d649"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "a51ce182c735f4d5ac810a936454acacc33cf2ff6bdca55f0e768e59a7f09786"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "dcf84424901cc8b82577fdfbfe82381c85f4d362b0ec0f0fe8dbab03fe5a982a"
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "sha256": "02e7d81c7c026e92f753a56abda5d0b069615099090a297722079b33f652912b"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-10T12:48:34.871903+00:00",
+  "status": "completed",
+  "timed_out": false
+}
