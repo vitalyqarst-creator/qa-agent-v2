@@ -14,11 +14,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
+from test_case_agent.review_cycle.contracts import (
+    CONTRACT_VERSION,
+    ExpectedOutput,
+    StageInputManifest,
+    StageResult,
+)
+from test_case_agent.review_cycle.runtime import (
+    BackendStageExecution,
+    StageArtifactStore,
+    StageAttemptPaths,
+    StageRuntimeError,
+    artifact_ref,
+)
+
 
 WRITER_STAGE = "writer-r1"
 REVIEWER_STAGE = "reviewer-r1"
 RUNNER_EVENTS = "runner-events.ndjson"
 REVIEW_DECISIONS = {"accepted", "changes-required"}
+ATTEMPT_ID = "attempt-001"
 
 
 class RunnerError(RuntimeError):
@@ -296,11 +311,14 @@ class CodexExecReviewCycleRunner:
     source_files: Sequence[Path]
     handoff_files: Sequence[Path]
     command_config: ExecCommandConfig
+    instruction_files: Sequence[Path] = ()
     executor: ProcessExecutor = field(default_factory=SubprocessExecutor)
     validator: DraftValidator = field(default_factory=ProjectDraftStructureValidator)
     timeout_seconds: int = 1800
     promote_final: bool = False
     allow_overwrite_final: bool = False
+    _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
+    _backend_session_ids: list[str] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
         self.repo_root = self.repo_root.resolve()
@@ -309,14 +327,27 @@ class CodexExecReviewCycleRunner:
         self.final_path = self.final_path.resolve()
         self.source_files = tuple(path.resolve() for path in self.source_files)
         self.handoff_files = tuple(path.resolve() for path in self.handoff_files)
+        configured_instructions = tuple(path.resolve() for path in self.instruction_files)
+        self.instruction_files = configured_instructions or ((self.repo_root / "AGENTS.md").resolve(),)
 
     @property
-    def outputs_dir(self) -> Path:
-        return self.cycle_dir / "outputs"
+    def attempts_dir(self) -> Path:
+        return self.cycle_dir / "attempts"
 
-    @property
-    def stage_inputs_dir(self) -> Path:
-        return self.cycle_dir / "stage-inputs"
+    def attempt_root(self, stage: str) -> Path:
+        return self.attempts_dir / stage / ATTEMPT_ID
+
+    def stage_output_dir(self, stage: str) -> Path:
+        return self.attempt_root(stage) / "stage-output"
+
+    def runner_output_dir(self, stage: str) -> Path:
+        return self.attempt_root(stage) / "runner-output"
+
+    def prompt_path(self, stage: str) -> Path:
+        return self.attempt_root(stage) / "prompt.md"
+
+    def stage_status_path(self, stage: str) -> Path:
+        return self.runner_output_dir(stage) / "stage-status.json"
 
     @property
     def state_path(self) -> Path:
@@ -324,37 +355,25 @@ class CodexExecReviewCycleRunner:
 
     @property
     def draft_path(self) -> Path:
-        return self.outputs_dir / f"{WRITER_STAGE}-draft.md"
+        return self.stage_output_dir(WRITER_STAGE) / "draft.md"
 
     @property
     def validator_path(self) -> Path:
-        return self.outputs_dir / f"validator-{WRITER_STAGE}.json"
+        return self.runner_output_dir(WRITER_STAGE) / "validator.json"
 
     @property
     def reviewer_findings_path(self) -> Path:
-        return self.outputs_dir / f"{REVIEWER_STAGE}-findings.md"
+        return self.runner_output_dir(REVIEWER_STAGE) / "findings.md"
 
     def _runner_owned_paths(self) -> tuple[Path, ...]:
         paths = [
             self.state_path,
             self.cycle_dir / RUNNER_EVENTS,
-            self.stage_inputs_dir / f"{WRITER_STAGE}-prompt.md",
-            self.stage_inputs_dir / f"{REVIEWER_STAGE}-prompt.md",
-            self.draft_path,
-            self.validator_path,
-            self.reviewer_findings_path,
-            self.outputs_dir / f"{WRITER_STAGE}-last-message.txt",
+            self.attempt_root(WRITER_STAGE),
+            self.attempt_root(REVIEWER_STAGE),
+            self.cycle_dir / "outputs",
+            self.cycle_dir / "stage-inputs",
         ]
-        for stage in (WRITER_STAGE, REVIEWER_STAGE):
-            paths.extend(
-                self.outputs_dir / f"{stage}-{suffix}"
-                for suffix in (
-                    "stdout.txt",
-                    "stderr.txt",
-                    "events.ndjson",
-                    "stage-status.json",
-                )
-            )
         return tuple(paths)
 
     def validate_configuration(self) -> None:
@@ -375,11 +394,14 @@ class CodexExecReviewCycleRunner:
             raise RunnerError("At least one explicit source file is required")
         if not self.handoff_files:
             raise RunnerError("At least one explicit handoff file is required")
-        for input_path in (*self.source_files, *self.handoff_files):
+        for input_path in (*self.instruction_files, *self.source_files, *self.handoff_files):
             if not input_path.is_file():
                 raise RunnerError(f"Stage input does not exist: {input_path}")
+            if not is_relative_to(input_path, self.repo_root):
+                raise RunnerError(f"Stage input must be under the repository root: {input_path}")
+        for input_path in (*self.source_files, *self.handoff_files):
             if not is_relative_to(input_path, self.ft_root):
-                raise RunnerError(f"Stage input must be under the FT package: {input_path}")
+                raise RunnerError(f"Source/handoff input must be under the FT package: {input_path}")
         existing_runner_artifacts = [path for path in self._runner_owned_paths() if path.exists()]
         if existing_runner_artifacts:
             joined = ", ".join(relative_path(path, self.repo_root) for path in existing_runner_artifacts)
@@ -391,12 +413,8 @@ class CodexExecReviewCycleRunner:
 
     def run(self) -> CycleResult:
         self.validate_configuration()
-        self.outputs_dir.mkdir(parents=True, exist_ok=True)
-        self.stage_inputs_dir.mkdir(parents=True, exist_ok=True)
         production_before = self._production_snapshot()
         writer_prompt = self._writer_prompt()
-        writer_prompt_path = self.stage_inputs_dir / f"{WRITER_STAGE}-prompt.md"
-        writer_prompt_path.write_text(writer_prompt, encoding="utf-8")
         state = self._initial_state()
         self._write_state(state)
         append_event(self.cycle_dir, "cycle_started", backend="codex-exec")
@@ -405,7 +423,7 @@ class CodexExecReviewCycleRunner:
             stage=WRITER_STAGE,
             role="writer",
             prompt=writer_prompt,
-            last_message_path=self.outputs_dir / f"{WRITER_STAGE}-last-message.txt",
+            last_message_path=self.stage_output_dir(WRITER_STAGE) / "last-message.txt",
         )
         production_changes = self._production_changes(production_before)
         if production_changes:
@@ -475,6 +493,19 @@ class CodexExecReviewCycleRunner:
                 validation=validation,
             )
 
+        writer_session_issue = self._backend_session_issue(writer_artifacts)
+        if writer_session_issue:
+            return self._block_stage(
+                state,
+                stage=WRITER_STAGE,
+                role="writer",
+                result=writer_result,
+                artifacts=writer_artifacts,
+                status="blocked-contract",
+                reasons=[writer_session_issue],
+                validation=validation,
+            )
+
         draft_sha256 = sha256_file(self.draft_path)
         writer_status = "completed-with-progress" if writer_result.timed_out else "completed"
         self._write_stage_status(
@@ -491,9 +522,14 @@ class CodexExecReviewCycleRunner:
             validation=validation,
             draft_sha256=draft_sha256,
         )
+        self._write_contract_result(
+            stage=WRITER_STAGE,
+            role="writer",
+            outcome="draft-ready",
+            result=writer_result,
+            artifacts=writer_artifacts,
+        )
         reviewer_prompt = self._reviewer_prompt()
-        reviewer_prompt_path = self.stage_inputs_dir / f"{REVIEWER_STAGE}-prompt.md"
-        reviewer_prompt_path.write_text(reviewer_prompt, encoding="utf-8")
         state.update(
             {
                 "workflow_status": "reviewer-ready",
@@ -503,7 +539,7 @@ class CodexExecReviewCycleRunner:
                 "writer_draft_sha256": draft_sha256,
                 "validator_report": relative_path(self.validator_path, self.ft_root),
                 "active_transition_prompt": relative_path(
-                    self.stage_inputs_dir / f"{REVIEWER_STAGE}-prompt.md", self.ft_root
+                    self.prompt_path(REVIEWER_STAGE), self.ft_root
                 ),
             }
         )
@@ -607,6 +643,18 @@ class CodexExecReviewCycleRunner:
                 reasons=[str(exc)],
             )
 
+        reviewer_session_issue = self._backend_session_issue(reviewer_artifacts)
+        if reviewer_session_issue:
+            return self._block_stage(
+                state,
+                stage=REVIEWER_STAGE,
+                role="reviewer",
+                result=reviewer_result,
+                artifacts=reviewer_artifacts,
+                status="blocked-contract",
+                reasons=[reviewer_session_issue],
+            )
+
         self.reviewer_findings_path.write_text(review.findings_markdown.rstrip() + "\n", encoding="utf-8")
         if review.decision == "changes-required":
             self._write_stage_status(
@@ -616,6 +664,13 @@ class CodexExecReviewCycleRunner:
                 result=reviewer_result,
                 artifacts=reviewer_artifacts,
                 reason="reviewer returned actionable findings; no automatic writer retry is started",
+            )
+            self._write_contract_result(
+                stage=REVIEWER_STAGE,
+                role="reviewer",
+                outcome="changes-required",
+                result=reviewer_result,
+                artifacts=reviewer_artifacts,
             )
             state.update(
                 {
@@ -638,6 +693,13 @@ class CodexExecReviewCycleRunner:
             result=reviewer_result,
             artifacts=reviewer_artifacts,
             reason="reviewer returned a valid accepted terminal contract",
+        )
+        self._write_contract_result(
+            stage=REVIEWER_STAGE,
+            role="reviewer",
+            outcome="accepted",
+            result=reviewer_result,
+            artifacts=reviewer_artifacts,
         )
         state.update(
             {
@@ -715,7 +777,7 @@ class CodexExecReviewCycleRunner:
             "draft_or_unsigned": True,
             "promotion_status": "pending",
             "active_transition_prompt": relative_path(
-                self.stage_inputs_dir / f"{WRITER_STAGE}-prompt.md", self.ft_root
+                self.prompt_path(WRITER_STAGE), self.ft_root
             ),
             "blocking_reasons": [],
         }
@@ -787,9 +849,28 @@ class CodexExecReviewCycleRunner:
         prompt: str,
         last_message_path: Path | None,
     ) -> tuple[ProcessResult, dict[str, Any]]:
-        stdout_path = self.outputs_dir / f"{stage}-stdout.txt"
-        stderr_path = self.outputs_dir / f"{stage}-stderr.txt"
-        events_path = self.outputs_dir / f"{stage}-events.ndjson"
+        attempt_root = self.attempt_root(stage)
+        if attempt_root.exists():
+            raise RunnerError(
+                f"attempt root already exists; recovery must be explicit: {relative_path(attempt_root, self.repo_root)}"
+            )
+        attempt_root.mkdir(parents=True)
+        prompt_path = self.prompt_path(stage)
+        prompt_path.write_text(prompt, encoding="utf-8")
+        self.runner_output_dir(stage).mkdir(parents=True)
+        if role == "writer":
+            self.stage_output_dir(stage).mkdir(parents=True)
+        manifest = self._build_stage_manifest(stage=stage, role=role, prompt_path=prompt_path)
+        store = StageArtifactStore(self.repo_root)
+        try:
+            store.write_manifest(StageAttemptPaths.from_manifest(self.repo_root, manifest), manifest)
+        except StageRuntimeError as exc:
+            raise RunnerError(f"cannot persist v2 stage manifest: {exc}") from exc
+        self._manifests[stage] = manifest
+
+        stdout_path = self.runner_output_dir(stage) / "stdout.txt"
+        stderr_path = self.runner_output_dir(stage) / "stderr.txt"
+        events_path = self.runner_output_dir(stage) / "events.ndjson"
         command = self.command_config.build(
             role=role,
             cwd=self.repo_root,
@@ -809,12 +890,31 @@ class CodexExecReviewCycleRunner:
             stage=stage,
             role=role,
             command=list(command),
+            contract_version=CONTRACT_VERSION,
+            attempt_id=ATTEMPT_ID,
+            manifest=relative_path(attempt_root / "stage-input.json", self.repo_root),
         )
+        started_at = utc_now()
         result = self.executor.execute(request)
+        finished_at = utc_now()
         stdout_path.write_text(result.stdout, encoding="utf-8")
         stderr_path.write_text(result.stderr, encoding="utf-8")
-        if self.command_config.json_flag:
-            events_path.write_text(result.stdout, encoding="utf-8")
+        events_path.write_text(result.stdout if self.command_config.json_flag else "", encoding="utf-8")
+        backend_session_id = backend_session_id_from_events(result.stdout)
+        execution = BackendStageExecution(
+            backend="codex-exec",
+            backend_session_id=backend_session_id,
+            started_at=started_at,
+            finished_at=finished_at,
+            duration_ms=max(0, round(result.duration_seconds * 1000)),
+            exit_code=result.exit_code,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            events=result.stdout if self.command_config.json_flag else "",
+            timed_out=result.timed_out,
+            launch_error=result.launch_error,
+        )
+        execution.validate()
         artifacts = {
             "command": list(command),
             "stdout": relative_path(stdout_path, self.repo_root),
@@ -823,6 +923,7 @@ class CodexExecReviewCycleRunner:
             "last_message": (
                 relative_path(last_message_path, self.repo_root) if last_message_path is not None else ""
             ),
+            "_execution": execution,
         }
         append_event(
             self.cycle_dir,
@@ -835,8 +936,107 @@ class CodexExecReviewCycleRunner:
             stdout=artifacts["stdout"],
             stderr=artifacts["stderr"],
             events=artifacts["events"],
+            backend_session_id=backend_session_id,
         )
         return result, artifacts
+
+    def _build_stage_manifest(
+        self,
+        *,
+        stage: str,
+        role: str,
+        prompt_path: Path,
+    ) -> StageInputManifest:
+        attempt_root = self.attempt_root(stage)
+        runner_output = self.runner_output_dir(stage)
+        expected_outputs = [
+            ExpectedOutput(
+                path=relative_path(runner_output / "stdout.txt", self.repo_root),
+                kind="stdout",
+                producer="runner",
+            ),
+            ExpectedOutput(
+                path=relative_path(runner_output / "stderr.txt", self.repo_root),
+                kind="stderr",
+                producer="runner",
+            ),
+            ExpectedOutput(
+                path=relative_path(runner_output / "events.ndjson", self.repo_root),
+                kind="events",
+                producer="runner",
+            ),
+            ExpectedOutput(
+                path=relative_path(runner_output / "stage-status.json", self.repo_root),
+                kind="stage-status",
+                producer="runner",
+            ),
+        ]
+        handoff_paths = list(self.handoff_files)
+        allowed_write_roots: list[str] = []
+        if role == "writer":
+            expected_outputs.extend(
+                [
+                    ExpectedOutput(
+                        path=relative_path(self.draft_path, self.repo_root),
+                        kind="test-case-draft",
+                        producer="stage",
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(self.validator_path, self.repo_root),
+                        kind="validator-report",
+                        producer="runner",
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(
+                            self.stage_output_dir(stage) / "last-message.txt", self.repo_root
+                        ),
+                        kind="last-message",
+                        producer="stage",
+                        required=False,
+                    ),
+                ]
+            )
+            allowed_write_roots.append(relative_path(self.stage_output_dir(stage), self.repo_root))
+        else:
+            handoff_paths.extend((self.draft_path, self.validator_path))
+            expected_outputs.append(
+                ExpectedOutput(
+                    path=relative_path(self.reviewer_findings_path, self.repo_root),
+                    kind="review-findings",
+                    producer="runner",
+                )
+            )
+        return StageInputManifest.create(
+            cycle_id=self.cycle_dir.name,
+            stage_id=stage,
+            attempt_id=ATTEMPT_ID,
+            session_id=f"session-{stage}-{ATTEMPT_ID}",
+            role=role,
+            scenario=(
+                "writer.session_initial_draft"
+                if role == "writer"
+                else "reviewer.semantic_traceability_test_design"
+            ),
+            semantic_round=0,
+            sandbox_policy="workspace_write" if role == "writer" else "read_only",
+            timeout_seconds=self.timeout_seconds,
+            attempt_root=relative_path(attempt_root, self.repo_root),
+            canonical_test_cases=relative_path(self.final_path, self.repo_root),
+            prompt_artifact=artifact_ref(prompt_path, self.repo_root, kind="prompt"),
+            instruction_artifacts=[
+                artifact_ref(path, self.repo_root, kind="instruction")
+                for path in self.instruction_files
+            ],
+            source_artifacts=[
+                artifact_ref(path, self.repo_root, kind="source") for path in self.source_files
+            ],
+            handoff_artifacts=[
+                artifact_ref(path, self.repo_root, kind="handoff") for path in handoff_paths
+            ],
+            expected_outputs=expected_outputs,
+            allowed_write_roots=allowed_write_roots,
+            forbidden_write_roots=[relative_path(self.ft_root / "test-cases", self.repo_root)],
+        )
 
     def _write_stage_status(
         self,
@@ -851,7 +1051,7 @@ class CodexExecReviewCycleRunner:
         blocking_reasons: Sequence[str] = (),
         draft_sha256: str = "",
     ) -> Path:
-        status_path = self.outputs_dir / f"{stage}-stage-status.json"
+        status_path = self.stage_status_path(stage)
         payload: dict[str, Any] = {
             "stage": stage,
             "role": role,
@@ -876,6 +1076,79 @@ class CodexExecReviewCycleRunner:
         write_json(status_path, payload)
         return status_path
 
+    def _write_contract_result(
+        self,
+        *,
+        stage: str,
+        role: str,
+        outcome: str,
+        result: ProcessResult,
+        artifacts: dict[str, Any],
+        blocking_reasons: Sequence[str] = (),
+    ) -> Path:
+        manifest = self._manifests[stage]
+        execution = artifacts.get("_execution")
+        if not isinstance(execution, BackendStageExecution):
+            raise RunnerError(f"missing backend execution evidence for {stage}")
+        store = StageArtifactStore(self.repo_root)
+        try:
+            outputs = store.collect_declared_outputs(
+                manifest,
+                require_all=outcome != "blocked",
+            )
+            backend_session_id = execution.backend_session_id
+            if outcome == "blocked" and backend_session_id in self._backend_session_ids:
+                backend_session_id = ""
+            contract_result = StageResult(
+                contract_version=CONTRACT_VERSION,
+                cycle_id=manifest.cycle_id,
+                stage_id=manifest.stage_id,
+                attempt_id=manifest.attempt_id,
+                session_id=manifest.session_id,
+                backend_session_id=backend_session_id,
+                role=role,
+                scenario=manifest.scenario,
+                input_digest=manifest.input_digest,
+                status={
+                    "draft-ready": "completed",
+                    "accepted": "completed",
+                    "changes-required": "changes-required",
+                    "blocked": "blocked",
+                }[outcome],
+                outcome=outcome,
+                output_artifacts=outputs,
+                started_at=execution.started_at,
+                finished_at=execution.finished_at,
+                duration_ms=execution.duration_ms,
+                exit_code=result.exit_code,
+                timed_out=result.timed_out,
+                blocking_reasons=tuple(blocking_reasons),
+            )
+            result_path = store.write_result(
+                StageAttemptPaths.from_manifest(self.repo_root, manifest),
+                manifest,
+                contract_result,
+                prior_backend_session_ids=tuple(self._backend_session_ids),
+            )
+        except (StageRuntimeError, ValueError) as exc:
+            raise RunnerError(f"invalid v2 stage result for {stage}: {exc}") from exc
+        if outcome != "blocked" and execution.backend_session_id:
+            self._backend_session_ids.append(execution.backend_session_id)
+        return result_path
+
+    def _backend_session_issue(self, artifacts: dict[str, Any]) -> str:
+        execution = artifacts.get("_execution")
+        if not isinstance(execution, BackendStageExecution):
+            return "stage has no backend execution evidence"
+        if not execution.backend_session_id:
+            return "codex exec JSON events did not expose a backend session/thread id"
+        if execution.backend_session_id in self._backend_session_ids:
+            return (
+                "codex exec reused a backend session/thread id across stages: "
+                + execution.backend_session_id
+            )
+        return ""
+
     def _block_stage(
         self,
         state: dict[str, Any],
@@ -896,6 +1169,14 @@ class CodexExecReviewCycleRunner:
             artifacts=artifacts,
             reason=reasons[0],
             validation=validation,
+            blocking_reasons=reasons,
+        )
+        self._write_contract_result(
+            stage=stage,
+            role=role,
+            outcome="blocked",
+            result=result,
+            artifacts=artifacts,
             blocking_reasons=reasons,
         )
         state["workflow_status"] = status
@@ -970,6 +1251,36 @@ class CodexExecReviewCycleRunner:
         return messages[-1] if messages else ""
 
 
+def backend_session_id_from_events(text: str) -> str:
+    for raw_line in text.splitlines():
+        if not raw_line.strip():
+            continue
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        event_type = str(event.get("type") or event.get("event") or "").lower()
+        if event_type not in {
+            "thread.started",
+            "thread_started",
+            "session.started",
+            "session_started",
+        }:
+            continue
+        for key in ("thread_id", "session_id", "id"):
+            value = event.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        thread = event.get("thread")
+        if isinstance(thread, dict):
+            value = thread.get("id")
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return ""
+
+
 def agent_message_from_event(event: Any) -> str:
     if not isinstance(event, dict):
         return ""
@@ -1023,6 +1334,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--final-artifact", required=True)
     parser.add_argument("--source-file", action="append", default=[])
     parser.add_argument("--handoff-file", action="append", default=[])
+    parser.add_argument("--instruction-file", action="append", default=[])
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--sandbox-flag", required=True)
     parser.add_argument("--writer-sandbox", required=True)
@@ -1048,6 +1360,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         final_path=(repo_root / args.final_artifact),
         source_files=[repo_root / item for item in args.source_file],
         handoff_files=[repo_root / item for item in args.handoff_file],
+        instruction_files=[repo_root / item for item in args.instruction_file],
         command_config=ExecCommandConfig(
             executable=args.codex_command,
             sandbox_flag=args.sandbox_flag,

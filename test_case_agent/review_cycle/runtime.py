@@ -218,12 +218,17 @@ class StageArtifactStore:
         write_json_atomic(paths.manifest, manifest.to_dict())
         return paths.manifest
 
-    def collect_declared_outputs(self, manifest: StageInputManifest) -> tuple[ArtifactRef, ...]:
+    def collect_declared_outputs(
+        self,
+        manifest: StageInputManifest,
+        *,
+        require_all: bool = True,
+    ) -> tuple[ArtifactRef, ...]:
         references: list[ArtifactRef] = []
         for output in manifest.expected_outputs:
             path = resolve_repository_path(output.path, self.repo_root)
             if not path.is_file():
-                if output.required:
+                if output.required and require_all:
                     raise StageRuntimeError(f"required stage output is missing: {output.path}")
                 continue
             references.append(artifact_ref(path, self.repo_root, kind=output.kind))

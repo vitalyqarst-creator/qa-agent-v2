@@ -20,11 +20,11 @@ cycle-state.yaml + runner-events.ndjson
 
 `codex exec` и его final message не являются source of truth. Runner записывает каждое решение в `cycle-state.yaml`, status JSON и `runner-events.ndjson`. Повторный writer process автоматически не запускается.
 
-Prototype не переиспользует runner-owned artifacts из прежней попытки. Наличие старого state, prompt, draft, stream capture, validator report или stage status блокирует запуск до subprocess; recovery должен использовать отдельный явный путь или новый cycle directory. Поэтому старый draft не может ошибочно удовлетворить expected-output check нового writer process.
+Prototype не переиспользует runner-owned artifacts из прежней попытки. Каждый process использует Stage Contract v2 и отдельный `attempts/<stage-id>/attempt-001/`; наличие старого attempt-root блокирует запуск до subprocess. Поэтому старый draft не может ошибочно удовлетворить expected-output check нового writer process.
 
 ## Stage contracts
 
-Writer получает только явно переданные source и handoff paths. Runner создаёт `stage-inputs/writer-r1-prompt.md`; единственный допустимый draft path — `outputs/writer-r1-draft.md`. Writer не промотирует artifact и не должен менять `test-cases/`.
+Writer получает только явно переданные instruction, source и handoff paths. Runner создаёт неизменяемый `stage-input.json`; prompt и draft находятся в writer attempt-root, а единственный stage-write root — `stage-output/`. Writer не промотирует artifact и не должен менять `test-cases/`.
 
 Reviewer получает те же source/handoff paths, writer draft и validator report. Команда строится с отдельным reviewer sandbox value, без output-last-message file. Reviewer возвращает в final stdout/message один JSON contract:
 
@@ -32,7 +32,9 @@ Reviewer получает те же source/handoff paths, writer draft и valida
 {"decision":"accepted|changes-required","findings_markdown":"# Review findings\n..."}
 ```
 
-Runner извлекает final agent message из JSONL events, если JSON flag подтверждён, либо использует plain stdout. Затем runner сам пишет `outputs/reviewer-r1-findings.md`; reviewer не получает write contract для findings или production artifact.
+Runner извлекает final agent message из JSONL events, если JSON flag подтверждён, либо использует plain stdout. Затем runner сам пишет findings в reviewer `runner-output/`; reviewer manifest не содержит allowed write roots. Для каждого успешного stage JSON events обязаны раскрыть новый backend session/thread id, иначе stage блокируется контрактом.
+
+Фактические captures, hashes и outcome фиксируются в неизменяемом `stage-result.json`. Result сверяется с input digest, declared outputs и ранее использованными backend session ids до перехода состояния.
 
 ## CLI capability contract
 
@@ -40,7 +42,7 @@ Runner извлекает final agent message из JSONL events, если JSON f
 
 ## Deterministic validation
 
-После появления draft runner вызывает `ProjectDraftStructureValidator`. Он повторно использует существующий deterministic Markdown structure evaluator из SDK runner, не запускает SDK и не меняет test-design/validator rules. Validator report сохраняется в `outputs/validator-writer-r1.json`.
+После появления draft runner вызывает `ProjectDraftStructureValidator`. Он повторно использует существующий deterministic Markdown structure evaluator из SDK runner, не запускает SDK и не меняет test-design/validator rules. Validator report сохраняется в writer attempt `runner-output/validator.json`.
 
 Ограничение: этот gate проверяет структуру исполнимых TC, но не заменяет полный `validate_agent_artifacts.py` и semantic reviewer. До выбора exec backend по умолчанию нужен staging-compatible full validator adapter, который проверяет work draft без преждевременного помещения в production `test-cases/`.
 

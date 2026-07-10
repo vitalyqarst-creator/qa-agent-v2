@@ -59,15 +59,19 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.repo_root = Path(self.tmp.name)
         self.ft_root = self.repo_root / "fts" / "demo-ft"
         self.cycle_dir = self.ft_root / "work" / "review-cycles" / "exec-prototype"
-        self.draft_path = self.cycle_dir / "outputs" / "writer-r1-draft.md"
+        self.writer_attempt = self.cycle_dir / "attempts" / "writer-r1" / "attempt-001"
+        self.reviewer_attempt = self.cycle_dir / "attempts" / "reviewer-r1" / "attempt-001"
+        self.draft_path = self.writer_attempt / "stage-output" / "draft.md"
         self.final_path = self.ft_root / "test-cases" / "1-demo-scope.md"
         self.source_path = self.ft_root / "source" / "main.xhtml"
         self.handoff_path = self.ft_root / "work" / "stage-handoffs" / "01-demo" / "scope-contract.md"
+        self.instruction_path = self.repo_root / "AGENTS.md"
         self.source_path.parent.mkdir(parents=True)
         self.handoff_path.parent.mkdir(parents=True)
         self.final_path.parent.mkdir(parents=True)
         self.source_path.write_text("<html><body>Source</body></html>\n", encoding="utf-8")
         self.handoff_path.write_text("# Scope contract\n", encoding="utf-8")
+        self.instruction_path.write_text("# Test instructions\n", encoding="utf-8")
         self.validator = FakeValidator()
 
     def tearDown(self) -> None:
@@ -92,11 +96,21 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
 
     @staticmethod
-    def json_event(message: str) -> str:
-        return json.dumps(
-            {"type": "item.completed", "item": {"type": "agent_message", "text": message}},
-            ensure_ascii=False,
-        ) + "\n"
+    def json_event(message: str, *, session_id: str = "test-session") -> str:
+        return "".join(
+            (
+                json.dumps(
+                    {"type": "thread.started", "thread_id": session_id},
+                    ensure_ascii=False,
+                )
+                + "\n",
+                json.dumps(
+                    {"type": "item.completed", "item": {"type": "agent_message", "text": message}},
+                    ensure_ascii=False,
+                )
+                + "\n",
+            )
+        )
 
     def writer_step(
         self,
@@ -113,7 +127,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 self.draft_path.write_text("# Test cases\n\n## TC-DEMO-001\n\nDraft body.\n", encoding="utf-8")
             return self.process_result(
                 exit_code=exit_code,
-                stdout=stdout if stdout is not None else self.json_event("writer completed"),
+                stdout=(
+                    stdout
+                    if stdout is not None
+                    else self.json_event("writer completed", session_id="writer-session")
+                ),
                 stderr=stderr,
                 timed_out=timed_out,
             )
@@ -144,7 +162,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             )
             return self.process_result(
                 exit_code=exit_code,
-                stdout=stdout if stdout is not None else self.json_event(contract),
+                stdout=(
+                    stdout
+                    if stdout is not None
+                    else self.json_event(contract, session_id="reviewer-session")
+                ),
                 stderr=stderr,
                 timed_out=timed_out,
             )
@@ -216,23 +238,23 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         self.make_runner(executor).run()
 
-        outputs = self.cycle_dir / "outputs"
-        self.assertEqual(writer_stdout, (outputs / "writer-r1-stdout.txt").read_text(encoding="utf-8"))
-        self.assertEqual("writer diagnostic\n", (outputs / "writer-r1-stderr.txt").read_text(encoding="utf-8"))
-        self.assertEqual(writer_stdout, (outputs / "writer-r1-events.ndjson").read_text(encoding="utf-8"))
-        status = json.loads((outputs / "writer-r1-stage-status.json").read_text(encoding="utf-8"))
+        outputs = self.writer_attempt / "runner-output"
+        self.assertEqual(writer_stdout, (outputs / "stdout.txt").read_text(encoding="utf-8"))
+        self.assertEqual("writer diagnostic\n", (outputs / "stderr.txt").read_text(encoding="utf-8"))
+        self.assertEqual(writer_stdout, (outputs / "events.ndjson").read_text(encoding="utf-8"))
+        status = json.loads((outputs / "stage-status.json").read_text(encoding="utf-8"))
         self.assertEqual("codex-test", status["command"][0])
-        self.assertTrue(status["last_message"].endswith("writer-r1-last-message.txt"))
+        self.assertTrue(status["last_message"].endswith("stage-output/last-message.txt"))
 
     def test_reviewer_stdout_is_captured_and_runner_writes_findings(self) -> None:
         findings = "# Review findings\n\n- FINDING-001"
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="changes-required", findings=findings))
         result = self.make_runner(executor).run()
 
-        outputs = self.cycle_dir / "outputs"
+        outputs = self.reviewer_attempt / "runner-output"
         self.assertEqual("changes-required", result.status)
-        self.assertTrue((outputs / "reviewer-r1-stdout.txt").read_text(encoding="utf-8").strip())
-        self.assertEqual(findings + "\n", (outputs / "reviewer-r1-findings.md").read_text(encoding="utf-8"))
+        self.assertTrue((outputs / "stdout.txt").read_text(encoding="utf-8").strip())
+        self.assertEqual(findings + "\n", (outputs / "findings.md").read_text(encoding="utf-8"))
 
     def test_writer_draft_stays_in_work_outputs_when_review_requires_changes(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="changes-required"))
@@ -271,7 +293,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("blocked-timeout", result.status)
         self.assertEqual(1, len(executor.requests))
         status = json.loads(
-            (self.cycle_dir / "outputs" / "writer-r1-stage-status.json").read_text(encoding="utf-8")
+            (self.writer_attempt / "runner-output" / "stage-status.json").read_text(encoding="utf-8")
         )
         self.assertTrue(status["timed_out"])
         self.assertIn("required draft is missing", status["reason"])
@@ -285,7 +307,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual("changes-required", result.status)
         writer_status = json.loads(
-            (self.cycle_dir / "outputs" / "writer-r1-stage-status.json").read_text(encoding="utf-8")
+            (self.writer_attempt / "runner-output" / "stage-status.json").read_text(encoding="utf-8")
         )
         self.assertEqual("completed-with-progress", writer_status["status"])
         self.assertTrue(writer_status["validator_passed"])
@@ -296,10 +318,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual("blocked-missing-output", result.status)
         status = json.loads(
-            (self.cycle_dir / "outputs" / "writer-r1-stage-status.json").read_text(encoding="utf-8")
+            (self.writer_attempt / "runner-output" / "stage-status.json").read_text(encoding="utf-8")
         )
         self.assertIn("required draft", status["reason"])
-        self.assertIn("writer-r1-draft.md", " ".join(status["blocking_reasons"]))
+        self.assertIn("stage-output/draft.md", " ".join(status["blocking_reasons"]))
 
     def test_nonzero_writer_exit_blocks_and_references_captured_streams(self) -> None:
         executor = ScriptedExecutor(
@@ -309,11 +331,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual("blocked-process-exit", result.status)
         status = json.loads(
-            (self.cycle_dir / "outputs" / "writer-r1-stage-status.json").read_text(encoding="utf-8")
+            (self.writer_attempt / "runner-output" / "stage-status.json").read_text(encoding="utf-8")
         )
         self.assertEqual(7, status["exit_code"])
-        self.assertTrue(status["stdout"].endswith("writer-r1-stdout.txt"))
-        self.assertTrue(status["stderr"].endswith("writer-r1-stderr.txt"))
+        self.assertTrue(status["stdout"].endswith("runner-output/stdout.txt"))
+        self.assertTrue(status["stderr"].endswith("runner-output/stderr.txt"))
 
     def test_reviewer_production_mutation_blocks_promotion(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(mutate_production=True))
@@ -348,7 +370,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("blocked-validator", result.status)
         self.assertEqual(1, len(executor.requests))
         self.assertFalse(self.final_path.exists())
-        report = json.loads((self.cycle_dir / "outputs" / "validator-writer-r1.json").read_text(encoding="utf-8"))
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "validator.json").read_text(encoding="utf-8")
+        )
         self.assertFalse(report["passed"])
 
     def test_default_validator_reuses_existing_deterministic_structure_gate(self) -> None:
@@ -423,6 +447,74 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             "stale draft from an earlier attempt\n",
             self.draft_path.read_text(encoding="utf-8"),
         )
+
+    def test_each_stage_persists_v2_manifest_and_result_under_its_attempt(self) -> None:
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(decision="changes-required"),
+        )
+
+        self.make_runner(executor).run()
+
+        writer_manifest = json.loads(
+            (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        writer_result = json.loads(
+            (self.writer_attempt / "stage-result.json").read_text(encoding="utf-8")
+        )
+        reviewer_manifest = json.loads(
+            (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        reviewer_result = json.loads(
+            (self.reviewer_attempt / "stage-result.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, writer_manifest["contract_version"])
+        self.assertEqual("workspace_write", writer_manifest["sandbox_policy"])
+        self.assertEqual("draft-ready", writer_result["outcome"])
+        self.assertEqual("writer-session", writer_result["backend_session_id"])
+        self.assertEqual([], reviewer_manifest["allowed_write_roots"])
+        self.assertTrue(
+            any(item["path"].endswith("stage-output/draft.md") for item in reviewer_manifest["handoff_artifacts"])
+        )
+        self.assertEqual("changes-required", reviewer_result["outcome"])
+        self.assertEqual("reviewer-session", reviewer_result["backend_session_id"])
+
+    def test_success_without_backend_session_id_is_blocked_by_v2_contract(self) -> None:
+        stdout_without_thread = json.dumps(
+            {"type": "item.completed", "item": {"type": "agent_message", "text": "done"}}
+        ) + "\n"
+        executor = ScriptedExecutor(self.writer_step(stdout=stdout_without_thread))
+
+        result = self.make_runner(executor).run()
+
+        self.assertEqual("blocked-contract", result.status)
+        contract = json.loads(
+            (self.writer_attempt / "stage-result.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("blocked", contract["outcome"])
+        self.assertEqual("", contract["backend_session_id"])
+
+    def test_reviewer_backend_session_must_differ_from_writer(self) -> None:
+        same_session_review = self.json_event(
+            json.dumps(
+                {"decision": "accepted", "findings_markdown": "# Review\n\nNo findings."}
+            ),
+            session_id="writer-session",
+        )
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(stdout=same_session_review),
+        )
+
+        result = self.make_runner(executor).run()
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertFalse(self.final_path.exists())
+        contract = json.loads(
+            (self.reviewer_attempt / "stage-result.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("blocked", contract["outcome"])
+        self.assertEqual("", contract["backend_session_id"])
 
 
 if __name__ == "__main__":
