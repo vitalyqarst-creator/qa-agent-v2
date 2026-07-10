@@ -67,6 +67,7 @@ REVIEW_FINDING_CATEGORIES = {
 }
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
+DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
 
 
 class RunnerError(RuntimeError):
@@ -538,6 +539,7 @@ class CodexExecReviewCycleRunner:
     writer_command_budget: int = 12
     reviewer_command_budget: int = 8
     writer_first_artifact_deadline_seconds: int = 90
+    prepared_reviewer_prompt_max_bytes: int = DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES
     promote_final: bool = False
     allow_overwrite_final: bool = False
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
@@ -633,6 +635,7 @@ class CodexExecReviewCycleRunner:
             "writer_command_budget",
             "reviewer_command_budget",
             "writer_first_artifact_deadline_seconds",
+            "prepared_reviewer_prompt_max_bytes",
         ):
             if getattr(self, name) < 1:
                 raise RunnerError(f"{name} must be >= 1")
@@ -731,6 +734,10 @@ class CodexExecReviewCycleRunner:
     def prepared_writer_profile_path(self) -> Path:
         return self.repo_root / "references" / "agent" / "prepared-writer-runtime-profile.md"
 
+    @property
+    def prepared_reviewer_profile_path(self) -> Path:
+        return self.repo_root / "references" / "agent" / "prepared-reviewer-runtime-profile.md"
+
     def _prepared_writer_payload(self) -> str:
         if self._prepared_package is None:
             raise RunnerError("Prepared package is not loaded")
@@ -822,6 +829,92 @@ class CodexExecReviewCycleRunner:
                 ]
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    def _prepared_gate_summary(self, label: str, path: Path) -> dict[str, Any]:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RunnerError(f"cannot load prepared reviewer gate {label}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise RunnerError(f"prepared reviewer gate {label} must be a JSON object")
+        summary: dict[str, Any] = {
+            "gate": label,
+            "passed": payload.get("passed") is True,
+            "validator": str(payload.get("validator") or ""),
+            "findings_count": len(payload.get("findings") or []),
+        }
+        for key in (
+            "test_case_count",
+            "testable_obligations",
+            "covered_obligations",
+            "commands_checked",
+            "fallback_authorizations",
+        ):
+            if key in payload:
+                summary[key] = payload[key]
+        return summary
+
+    def _prepared_reviewer_payload(self) -> str:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        if not self.prepared_reviewer_profile_path.is_file():
+            raise RunnerError("Prepared reviewer runtime profile is missing")
+        draft_text = self.draft_path.read_text(encoding="utf-8")
+        metadata = {
+            "package_version": self._prepared_package.package_version,
+            "package_id": self._prepared_package.package_id,
+            "ft_slug": self._prepared_package.ft_slug,
+            "scope_slug": self._prepared_package.scope_slug,
+            "section_id": self._prepared_package.section_id,
+            "execution_profile": self._prepared_package.execution_profile,
+            "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
+            "reviewed_draft_sha256": sha256_file(self.draft_path),
+        }
+        gates = [
+            self._prepared_gate_summary("structure", self.validator_path),
+            self._prepared_gate_summary("seed", self.seed_gate_path),
+            self._prepared_gate_summary("obligation", self.obligation_gate_path),
+            self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
+        ]
+        return "\n".join(
+            [
+                "<!-- PREPARED-REVIEW-PAYLOAD:BEGIN -->",
+                "## Verified review metadata",
+                "",
+                "```json",
+                json.dumps(metadata, ensure_ascii=False, indent=2),
+                "```",
+                "",
+                self.prepared_reviewer_profile_path.read_text(encoding="utf-8").strip(),
+                "",
+                "## Selected source evidence",
+                "",
+                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                "",
+                "## Atomic obligations",
+                "",
+                "```json",
+                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                "```",
+                "",
+                "## Deterministic gate summaries",
+                "",
+                "```json",
+                json.dumps(gates, ensure_ascii=False, indent=2),
+                "```",
+                "",
+                "## Immutable writer draft",
+                "",
+                "```markdown",
+                draft_text.strip(),
+                "```",
+                "",
+                "## Required final contract",
+                "",
+                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied atom, structured findings and a non-empty summary. Use only schema enum values. Do not emit commentary outside the final JSON object.",
+                "<!-- PREPARED-REVIEW-PAYLOAD:END -->",
+            ]
+        )
 
     def _validate_draft_seed(self) -> ValidationResult:
         findings: list[dict[str, Any]] = []
@@ -1421,27 +1514,27 @@ class CodexExecReviewCycleRunner:
 
     def _reviewer_prompt(self) -> str:
         if self._prepared_package is not None and self.prepared_package_path is not None:
-            package_files = self._prepared_input_paths()
-            return "\n".join(
+            prompt = "\n".join(
                 [
                     "# Codex exec prepared reviewer fast path",
                     "",
-                    "This stage is read-only. Do not modify any workspace file.",
-                    "Review only the verified package, draft and deterministic validator report listed below.",
-                    *[f"- `{relative_path(path, self.repo_root)}`" for path in package_files],
-                    f"- writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
-                    f"- validator: `{relative_path(self.validator_path, self.repo_root)}`",
-                    f"- obligation gate: `{relative_path(self.obligation_gate_path, self.repo_root)}`",
-                    f"- seed gate: `{relative_path(self.seed_gate_path, self.repo_root)}`",
-                    f"- evidence access gate: `{relative_path(self.evidence_access_path, self.repo_root)}`",
-                    f"- response schema: `{relative_path(self.reviewer_schema_path, self.repo_root)}`",
+                    "The upstream package and runner already applied the full source, scope, reviewer-routing and deterministic validation contracts.",
+                    "Use only the embedded Prepared Reviewer Runtime Profile and verified payload below. Do not load the full ft-test-case-reviewer skill, instruction manifest, package files, project references, prior cycles, production test cases or full sources.",
+                    "This stage is read-only. Do not modify or create any workspace file.",
+                    "No shell command is needed. If the runtime environment is not already confirmed, only `python scripts/probe_environment.py` is allowed.",
                     "",
-                    "Return one JSON object in the final message and write no files:",
-                    '{"decision":"accepted|changes-required","findings_markdown":"# Review findings\\n..."}',
-                    "Use `accepted` only when every testable ATOM is correctly covered and no blocking finding remains.",
+                    self._prepared_reviewer_payload(),
                     "",
                 ]
             )
+            prompt_bytes = len(prompt.encode("utf-8"))
+            if prompt_bytes > self.prepared_reviewer_prompt_max_bytes:
+                raise RunnerError(
+                    "blocked-prepared-reviewer-prompt-budget: "
+                    f"prompt bytes {prompt_bytes} exceed {self.prepared_reviewer_prompt_max_bytes}; "
+                    "route to standard reviewer or reduce the eligible scope"
+                )
+            return prompt
         return "\n".join(
             [
                 "# Codex exec reviewer stage contract",
@@ -1639,6 +1732,8 @@ class CodexExecReviewCycleRunner:
             instruction_paths = [*self.instruction_files, self._prepared_artifact("stage-instructions")]
             if role == "writer":
                 instruction_paths.append(self.prepared_writer_profile_path)
+            else:
+                instruction_paths.append(self.prepared_reviewer_profile_path)
             source_paths = [self._prepared_artifact("source-evidence")]
             handoff_paths = [
                 self.prepared_package_path,
@@ -2411,6 +2506,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer-command-budget", type=int, default=12)
     parser.add_argument("--reviewer-command-budget", type=int, default=8)
     parser.add_argument("--writer-first-artifact-deadline-seconds", type=int, default=90)
+    parser.add_argument(
+        "--prepared-reviewer-prompt-max-bytes",
+        type=int,
+        default=DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES,
+    )
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--allow-overwrite-final", action="store_true")
     return parser
@@ -2448,6 +2548,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         writer_command_budget=args.writer_command_budget,
         reviewer_command_budget=args.reviewer_command_budget,
         writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
+        prepared_reviewer_prompt_max_bytes=args.prepared_reviewer_prompt_max_bytes,
         promote_final=args.promote_final,
         allow_overwrite_final=args.allow_overwrite_final,
     )

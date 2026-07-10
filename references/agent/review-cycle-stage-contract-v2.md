@@ -56,6 +56,8 @@ Writer stage-produced outputs must stay under both `attempt_root` and an allowed
 
 Prepared writer attempts may include a runner-owned draft seed under `runner-input/`. The seed is an immutable handoff artifact outside allowed write roots. A non-blocked result requires a distinct draft, no seed sentinels, a recorded first meaningful write, and the normal structure/obligation gates.
 
+Prepared reviewer attempts receive a runner-built inline projection containing eligible package metadata, the compact reviewer profile, selected evidence, atomic obligations, deterministic gate summaries, the immutable draft and its SHA-256. The prompt must not direct the stage to reread package/reference/source files, and its UTF-8 size is capped at `64 KiB`; oversized handoffs route out of the fast path instead of silently expanding context. Artifact paths and hashes remain in `stage-input.json` for auditability even when their verified contents are embedded.
+
 ## Stage Result
 
 `stage-result.json` contains:

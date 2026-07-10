@@ -189,6 +189,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.prepared_profile_path = (
             self.repo_root / "references" / "agent" / "prepared-writer-runtime-profile.md"
         )
+        self.prepared_reviewer_profile_path = (
+            self.repo_root / "references" / "agent" / "prepared-reviewer-runtime-profile.md"
+        )
         self.source_path.parent.mkdir(parents=True)
         self.handoff_path.parent.mkdir(parents=True)
         self.final_path.parent.mkdir(parents=True)
@@ -198,6 +201,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.prepared_profile_path.parent.mkdir(parents=True)
         self.prepared_profile_path.write_text(
             "# Prepared Writer Runtime Profile\n\nWrite the embedded seed immediately.\n",
+            encoding="utf-8",
+        )
+        self.prepared_reviewer_profile_path.write_text(
+            "# Prepared Reviewer Runtime Profile\n\nReview only the embedded payload.\n",
             encoding="utf-8",
         )
         self.validator = FakeValidator()
@@ -483,6 +490,32 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
         )
         self.assertEqual("reviewer.session_prepared_semantic", reviewer_manifest["scenario"])
+        reviewer_prompt = executor.requests[1].prompt
+        self.assertIn("PREPARED-REVIEW-PAYLOAD:BEGIN", reviewer_prompt)
+        self.assertIn("Prepared Reviewer Runtime Profile", reviewer_prompt)
+        self.assertIn("Immutable writer draft", reviewer_prompt)
+        self.assertIn("reviewed_draft_sha256", reviewer_prompt)
+        self.assertIn(
+            "do not load the full ft-test-case-reviewer skill", reviewer_prompt.lower()
+        )
+        self.assertNotIn("stage-package.json`", reviewer_prompt)
+        self.assertLessEqual(
+            len(reviewer_prompt.encode("utf-8")),
+            runner_module.DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES,
+        )
+
+    def test_prepared_reviewer_prompt_budget_blocks_oversized_inline_handoff(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(self.writer_step())
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_reviewer_prompt_max_bytes = 32
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError, "blocked-prepared-reviewer-prompt-budget"
+        ):
+            runner.run()
+
+        self.assertEqual(1, len(executor.requests))
 
     def test_prepared_fast_path_blocks_before_reviewer_when_atom_is_uncovered(self) -> None:
         package_path = self.build_prepared_package()
