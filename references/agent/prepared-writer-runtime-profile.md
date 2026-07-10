@@ -6,7 +6,7 @@ This is a technical execution profile inside the `ft-test-case-writer` phase. It
 
 Continue only when the embedded payload confirms:
 
-- package version `2`;
+- package version `3`;
 - `execution_profile = simple-field-property`;
 - empty `unsupported_dimensions`;
 - exact output path and attempt root;

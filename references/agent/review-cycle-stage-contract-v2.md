@@ -4,7 +4,7 @@ This reference is the canonical backend-independent contract for one writer or r
 
 Fresh sessions may use the compact prepared-input capsule defined in `prepared-stage-package-format.md`. The capsule keeps full binary sources in a verified fallback registry instead of declaring them as default stage inputs.
 
-The optimized prepared writer and reviewer are allowlisted only for package version 2 with `execution_profile = simple-field-property` and no unsupported dimensions. All legacy, table-parity, numeric-boundary, integration/persistence and dependency/state packages route to the standard writer/reviewer contracts. Prepared execution uses the compact technical projections in `prepared-writer-runtime-profile.md` and `prepared-reviewer-runtime-profile.md`; the full skills and deep reviewer rubric remain authoritative outside this narrow allowlist.
+The optimized prepared writer and reviewer are allowlisted only for package version 3 with `execution_profile = simple-field-property`, no unsupported dimensions and no blocking coverage gaps. Versions 1 and 2 remain readable as immutable legacy evidence but route out of the fast path. All table-parity, numeric-boundary, integration/persistence and dependency/state packages route to the standard writer/reviewer contracts. Prepared execution uses the compact technical projections in `prepared-writer-runtime-profile.md` and `prepared-reviewer-runtime-profile.md`; the full skills and deep reviewer rubric remain authoritative outside this narrow allowlist.
 
 ## Compatibility
 

@@ -164,6 +164,102 @@ class PreparedStagePackageTests(unittest.TestCase):
                 package_id="pkg-001", obligations=(invalid,), coverage_gaps=()
             )
 
+    def test_rejects_dictionary_backed_testable_obligation_without_inventory_ref(self) -> None:
+        invalid = PreparedObligation(
+            obligation_id="ATOM-003",
+            source_refs=("SRC-1",),
+            atomic_statement="Значения берутся из справочника и допускают одиночный выбор.",
+            observable_oracle="В поле остается одно выбранное значение.",
+            test_intent="Проверить одиночный выбор.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "dictionary-backed.*dictionary_refs"):
+            PreparedObligationSet.create(
+                package_id="pkg-001", obligations=(invalid,), coverage_gaps=()
+            )
+
+    def test_dictionary_ref_must_be_present_as_exact_evidence_anchor(self) -> None:
+        obligation = PreparedObligation(
+            obligation_id="ATOM-003",
+            source_refs=("SRC-1",),
+            atomic_statement="Значения берутся из справочника.",
+            observable_oracle="Отображается подтвержденный закрытый набор значений.",
+            test_intent="Сравнить значения с инвентарем.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=("DICT-001",),
+            notes="",
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-001", obligations=(obligation,), coverage_gaps=()
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "DICT-001"):
+            obligations.validate(evidence_text="SRC-1 and DICT-0010 are not the requested anchor.")
+
+    def test_rejects_orphan_and_fast_path_blocking_gaps(self) -> None:
+        orphan = PreparedGap(
+            gap_id="GAP-002",
+            source_refs=("SRC-2",),
+            problem="Unlinked gap.",
+            handling="Link it to an obligation.",
+            blocking=False,
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "coverage gaps must be linked"):
+            PreparedObligationSet.create(
+                package_id="pkg-001",
+                obligations=(self._obligations().obligations[0],),
+                coverage_gaps=(orphan,),
+            )
+
+        blocking = PreparedGap(
+            gap_id="GAP-001",
+            source_refs=("SRC-2",),
+            problem="Required fixture is unavailable.",
+            handling="Block the fast path.",
+            blocking=True,
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-001",
+            obligations=(self._obligations().obligations[0], self._obligations().obligations[1]),
+            coverage_gaps=(blocking,),
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "blocking coverage gaps"):
+            PreparedPackageBuilder(self.root).build(
+                output_root=self.root / "work" / "blocking-gap",
+                package_id="pkg-001",
+                ft_slug="demo-ft",
+                scope_slug="field-selection",
+                section_id="4.3",
+                source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+                evidence_inputs=(
+                    EvidenceInput(self.evidence, "Confirmed scope", selectors=("SRC-1", "SRC-2")),
+                ),
+                obligations=obligations,
+                instructions=StageInstructionConfig(
+                    role="writer",
+                    scenario="writer.session_prepared_initial_draft",
+                    output_path="work/output.md",
+                    attempt_root="work/attempt-001",
+                    sandbox_policy="workspace_write",
+                    timeout_seconds=180,
+                    idle_timeout_seconds=60,
+                    command_budget=12,
+                ),
+                execution_profile="simple-field-property",
+                unsupported_dimensions=(),
+                forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            )
+
+    def test_reference_selector_does_not_match_longer_anchor(self) -> None:
+        self.evidence.write_text("# Evidence\n\nSRC-10: different row.\n", encoding="utf-8")
+        with self.assertRaisesRegex(StageRuntimeError, "selector not found"):
+            self._build()
+
     def test_rejects_unknown_gap_and_package_budget_overflow(self) -> None:
         unknown = PreparedObligation(
             obligation_id="ATOM-004",
@@ -214,6 +310,44 @@ class PreparedStagePackageTests(unittest.TestCase):
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
             )
 
+    def test_fast_profile_requires_docx_and_xhtml_source_roles(self) -> None:
+        common = {
+            "package_id": "pkg-001",
+            "ft_slug": "demo-ft",
+            "scope_slug": "field-selection",
+            "section_id": "4.3",
+            "evidence_inputs": (
+                EvidenceInput(self.evidence, "Confirmed scope", selectors=("SRC-1", "SRC-2")),
+            ),
+            "obligations": self._obligations(),
+            "instructions": StageInstructionConfig(
+                role="writer",
+                scenario="writer.session_prepared_initial_draft",
+                output_path="work/output.md",
+                attempt_root="work/attempt-001",
+                sandbox_policy="workspace_write",
+                timeout_seconds=180,
+                idle_timeout_seconds=60,
+                command_budget=12,
+            ),
+            "execution_profile": "simple-field-property",
+            "unsupported_dimensions": (),
+            "forbidden_evidence_roots": ("fts/demo-ft/test-cases",),
+        }
+
+        with self.assertRaisesRegex(StageRuntimeError, "DOCX.*XHTML"):
+            PreparedPackageBuilder(self.root).build(
+                output_root=self.root / "work" / "missing-xhtml",
+                source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+                **common,
+            )
+        with self.assertRaisesRegex(StageRuntimeError, "DOCX.*XHTML"):
+            PreparedPackageBuilder(self.root).build(
+                output_root=self.root / "work" / "missing-docx",
+                source_registry=((self.xhtml, "machine-readable", "SRC-1..SRC-2"),),
+                **common,
+            )
+
     def test_version_one_package_remains_readable_but_is_unclassified(self) -> None:
         self._build()
         manifest = self.root / "work" / "prepared" / "stage-package.json"
@@ -236,6 +370,62 @@ class PreparedStagePackageTests(unittest.TestCase):
         self.assertEqual("legacy-unclassified", loaded.execution_profile)
         self.assertEqual(("legacy-unclassified",), loaded.unsupported_dimensions)
 
+    def test_version_two_obligations_remain_readable_but_cannot_build_fast_path(self) -> None:
+        dictionary_claim = PreparedObligation(
+            obligation_id="ATOM-LEGACY-001",
+            source_refs=("SRC-1",),
+            atomic_statement="Значения берутся из справочника и допускают одиночный выбор.",
+            observable_oracle="В поле остается одно выбранное значение.",
+            test_intent="Проверить одиночный выбор.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="Historical v2 evidence.",
+        )
+        payload = {
+            "package_version": 2,
+            "package_id": "pkg-001",
+            "obligations": [dictionary_claim.to_dict()],
+            "coverage_gaps": [],
+        }
+        payload["digest"] = hashlib.sha256(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        legacy = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual(2, legacy.package_version)
+        with self.assertRaisesRegex(StageRuntimeError, "requires package version 3"):
+            PreparedPackageBuilder(self.root).build(
+                output_root=self.root / "work" / "legacy-fast",
+                package_id="pkg-001",
+                ft_slug="demo-ft",
+                scope_slug="field-selection",
+                section_id="4.3",
+                source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+                evidence_inputs=(
+                    EvidenceInput(self.evidence, "Confirmed scope", selectors=("SRC-1",)),
+                ),
+                obligations=legacy,
+                instructions=StageInstructionConfig(
+                    role="writer",
+                    scenario="writer.session_prepared_initial_draft",
+                    output_path="work/output.md",
+                    attempt_root="work/attempt-001",
+                    sandbox_policy="workspace_write",
+                    timeout_seconds=180,
+                    idle_timeout_seconds=60,
+                    command_budget=12,
+                ),
+                execution_profile="simple-field-property",
+                unsupported_dimensions=(),
+                forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            )
+
     def test_scope_local_selector_excludes_unrelated_markdown_sections(self) -> None:
         self.evidence.write_text(
             "# Scope\n\n## Selected\nSRC-1: required evidence.\n\n"
@@ -248,7 +438,10 @@ class PreparedStagePackageTests(unittest.TestCase):
             ft_slug="demo-ft",
             scope_slug="field-selection",
             section_id="4.3",
-            source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+            source_registry=(
+                (self.docx, "source-of-truth", "section 4.3"),
+                (self.xhtml, "machine-readable", "SRC-1"),
+            ),
             evidence_inputs=(
                 EvidenceInput(self.evidence, "Selected evidence", selectors=("SRC-1",)),
             ),

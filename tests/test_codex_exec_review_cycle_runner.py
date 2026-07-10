@@ -196,6 +196,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.draft_path = self.writer_attempt / "stage-output" / "draft.md"
         self.final_path = self.ft_root / "test-cases" / "1-demo-scope.md"
         self.source_path = self.ft_root / "source" / "main.xhtml"
+        self.docx_path = self.ft_root / "source" / "main.docx"
         self.handoff_path = self.ft_root / "work" / "stage-handoffs" / "01-demo" / "scope-contract.md"
         self.instruction_path = self.repo_root / "AGENTS.md"
         self.prepared_profile_path = (
@@ -208,6 +209,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.handoff_path.parent.mkdir(parents=True)
         self.final_path.parent.mkdir(parents=True)
         self.source_path.write_text("<html><body>Source</body></html>\n", encoding="utf-8")
+        self.docx_path.write_bytes(b"docx-source")
         self.handoff_path.write_text("# Scope contract\n", encoding="utf-8")
         self.instruction_path.write_text("# Test instructions\n", encoding="utf-8")
         self.prepared_profile_path.parent.mkdir(parents=True)
@@ -433,7 +435,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             ft_slug="demo-ft",
             scope_slug="demo-scope",
             section_id="1",
-            source_registry=((self.source_path, "machine-readable", "SRC-1"),),
+            source_registry=(
+                (self.docx_path, "source-of-truth", "section 1"),
+                (self.source_path, "machine-readable", "SRC-1"),
+            ),
             evidence_inputs=(
                 EvidenceInput(self.handoff_path, "Confirmed scope", selectors=("SRC-1",)),
             ),

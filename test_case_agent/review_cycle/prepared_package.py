@@ -20,8 +20,8 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 2
-SUPPORTED_PACKAGE_VERSIONS = {1, PACKAGE_VERSION}
+PACKAGE_VERSION = 3
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
@@ -29,6 +29,14 @@ IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 ATOM_ID = re.compile(r"ATOM-[A-Za-z0-9._-]+")
 GAP_ID = re.compile(r"GAP-[A-Za-z0-9._-]+")
+DICT_ID = re.compile(r"DICT-[A-Za-z0-9._-]+")
+REFERENCE_SELECTOR = re.compile(
+    r"(?i)(?:(?:SRC|GAP|RISK|DICT|ATOM)-[A-Za-z0-9._-]+|(?:GSR|BSR|DIT)\s+\d+(?:\.\d+)*)"
+)
+DICTIONARY_CLAIM = re.compile(
+    r"(?i)\b(?:справочник\w*|dictionary|reference\s+list|fixed\s+list|closed\s+list)\b"
+)
+REFERENCE_BOUNDARY_CHARS = "A-Za-z0-9._-"
 
 
 def _exact_fields(payload: Mapping[str, Any], expected: set[str], label: str) -> None:
@@ -89,6 +97,22 @@ def _canonical_digest(payload: Mapping[str, Any]) -> str:
         separators=(",", ":"),
     ).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _names_reference(text: str, reference: str) -> bool:
+    return bool(
+        re.search(
+            rf"(?<![{REFERENCE_BOUNDARY_CHARS}]){re.escape(reference)}"
+            rf"(?![{REFERENCE_BOUNDARY_CHARS}])",
+            text,
+        )
+    )
+
+
+def _selector_matches(line: str, selector: str) -> bool:
+    if REFERENCE_SELECTOR.fullmatch(selector):
+        return _names_reference(line, selector)
+    return selector in line
 
 
 @dataclass(frozen=True)
@@ -297,16 +321,43 @@ class PreparedObligationSet:
         for item in self.coverage_gaps:
             item.validate()
         known_gaps = set(gap_ids)
+        linked_gaps: set[str] = set()
         all_refs: set[str] = set()
         for item in self.obligations:
             item.validate()
             all_refs.update(item.source_refs)
             if item.gap_id and item.gap_id not in known_gaps:
                 raise StageRuntimeError(f"{item.obligation_id} references unknown gap {item.gap_id}")
+            if item.gap_id:
+                linked_gaps.add(item.gap_id)
+            if self.package_version >= 3:
+                for value in item.dictionary_refs:
+                    _identifier(value, f"{item.obligation_id}.dictionary_refs[]", DICT_ID)
+                claim_text = " ".join(
+                    (item.atomic_statement, item.test_intent, item.observable_oracle)
+                )
+                if (
+                    item.coverage_status == "testable"
+                    and DICTIONARY_CLAIM.search(claim_text)
+                    and not item.dictionary_refs
+                ):
+                    raise StageRuntimeError(
+                        f"{item.obligation_id} dictionary-backed testable obligation must link "
+                        "dictionary_refs or be preserved as a gap"
+                    )
+                all_refs.update(item.dictionary_refs)
         for item in self.coverage_gaps:
             all_refs.update(item.source_refs)
+        if self.package_version >= 3:
+            orphan_gaps = sorted(known_gaps - linked_gaps)
+            if orphan_gaps:
+                raise StageRuntimeError(
+                    "coverage gaps must be linked from obligations: " + ", ".join(orphan_gaps)
+                )
         if evidence_text is not None:
-            missing_refs = sorted(ref for ref in all_refs if ref not in evidence_text)
+            missing_refs = sorted(
+                ref for ref in all_refs if not _names_reference(evidence_text, ref)
+            )
             if missing_refs:
                 raise StageRuntimeError(
                     "source evidence does not name obligation/gap refs: " + ", ".join(missing_refs)
@@ -430,6 +481,22 @@ class PreparedStagePackage:
                 raise StageRuntimeError(
                     "simple-field-property package cannot declare unsupported dimensions"
                 )
+            if self.package_version >= 3 and self.execution_profile == FAST_EXECUTION_PROFILE:
+                has_docx_truth = any(
+                    item.role == "source-of-truth"
+                    and PurePosixPath(item.path).suffix.lower() == ".docx"
+                    for item in self.source_registry
+                )
+                has_xhtml_machine_source = any(
+                    item.role == "machine-readable"
+                    and PurePosixPath(item.path).suffix.lower() in {".xhtml", ".html"}
+                    for item in self.source_registry
+                )
+                if not has_docx_truth or not has_xhtml_machine_source:
+                    raise StageRuntimeError(
+                        "package version 3 fast path requires DOCX source-of-truth and "
+                        "XHTML machine-readable source registry entries"
+                    )
         if not self.forbidden_evidence_roots:
             raise StageRuntimeError("forbidden_evidence_roots must not be empty")
         for root in self.forbidden_evidence_roots:
@@ -459,7 +526,7 @@ class PreparedStagePackage:
             "package_digest",
         }
         package_version = payload.get("package_version")
-        if package_version == 2:
+        if package_version in {2, 3}:
             expected.update({"execution_profile", "unsupported_dimensions"})
         _exact_fields(payload, expected, "prepared stage package")
         if not isinstance(payload["source_registry"], list) or not isinstance(payload["package_artifacts"], list):
@@ -474,7 +541,7 @@ class PreparedStagePackage:
             source_registry=tuple(SourceRegistryEntry.from_dict(item) for item in payload["source_registry"]),
             package_artifacts=tuple(PackageArtifact.from_dict(item) for item in payload["package_artifacts"]),
             execution_profile=(
-                payload["execution_profile"] if package_version == 2 else "legacy-unclassified"
+                payload["execution_profile"] if package_version in {2, 3} else "legacy-unclassified"
             ),
             unsupported_dimensions=(
                 _string_list(
@@ -482,7 +549,7 @@ class PreparedStagePackage:
                     "unsupported_dimensions",
                     allow_empty=True,
                 )
-                if package_version == 2
+                if package_version in {2, 3}
                 else ("legacy-unclassified",)
             ),
             forbidden_evidence_roots=_string_list(
@@ -568,6 +635,19 @@ class PreparedPackageBuilder:
             raise StageRuntimeError(
                 "simple-field-property package cannot declare unsupported dimensions"
             )
+        if execution_profile == FAST_EXECUTION_PROFILE:
+            if obligations.package_version != PACKAGE_VERSION:
+                raise StageRuntimeError(
+                    f"simple-field-property fast path requires package version {PACKAGE_VERSION}"
+                )
+            blocking_gaps = sorted(
+                item.gap_id for item in obligations.coverage_gaps if item.blocking
+            )
+            if blocking_gaps:
+                raise StageRuntimeError(
+                    "simple-field-property fast path cannot contain blocking coverage gaps: "
+                    + ", ".join(blocking_gaps)
+                )
         if obligations.package_id != package_id:
             raise StageRuntimeError("obligations package_id does not match package_id")
         resolved_output = output_root.resolve()
@@ -700,7 +780,11 @@ class PreparedPackageBuilder:
             ranges: list[tuple[int, int]] = []
             for selector in item.selectors:
                 _text(selector, "evidence selector")
-                matches = [index for index, line in enumerate(lines) if selector in line]
+                matches = [
+                    index
+                    for index, line in enumerate(lines)
+                    if _selector_matches(line, selector)
+                ]
                 if not matches:
                     raise StageRuntimeError(
                         f"evidence selector not found in {relative}: {selector}"

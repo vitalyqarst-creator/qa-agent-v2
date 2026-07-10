@@ -35,6 +35,7 @@ from test_case_agent.review_cycle.runtime import (
 )
 from test_case_agent.review_cycle.prepared_package import (
     FAST_EXECUTION_PROFILE,
+    PACKAGE_VERSION,
     PreparedStagePackage,
     load_obligations,
     load_prepared_package,
@@ -688,12 +689,15 @@ class CodexExecReviewCycleRunner:
             if self._prepared_package.ft_slug != self.ft_root.name:
                 raise RunnerError("Prepared stage package ft_slug does not match FT root")
             if (
-                self._prepared_package.execution_profile != FAST_EXECUTION_PROFILE
+                self._prepared_package.package_version != PACKAGE_VERSION
+                or self._prepared_package.execution_profile != FAST_EXECUTION_PROFILE
                 or self._prepared_package.unsupported_dimensions
             ):
                 dimensions = ", ".join(self._prepared_package.unsupported_dimensions) or "none"
                 raise RunnerError(
                     "Prepared fast path is ineligible; route to standard writer: "
+                    f"package_version={self._prepared_package.package_version}, "
+                    f"required_package_version={PACKAGE_VERSION}, "
                     f"profile={self._prepared_package.execution_profile}, "
                     f"unsupported_dimensions={dimensions}"
                 )

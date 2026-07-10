@@ -27,7 +27,7 @@ The four files are the default writer/reviewer input capsule. Package-local path
 
 Required fields:
 
-- `package_version`: currently `2`; version `1` remains readable as legacy but is not eligible for the optimized writer fast path;
+- `package_version`: currently `3`; versions `1` and `2` remain readable as legacy evidence but are not eligible for the optimized writer fast path;
 - stable `package_id`, `ft_slug`, `scope_slug` and `section_id`;
 - `created_at` with timezone;
 - `source_registry`: full source path, role, SHA-256 and scope locator;
@@ -39,6 +39,8 @@ Required fields:
 - `package_digest`: SHA-256 over the canonical payload without this field.
 
 The package is rejected when registered full sources changed after preparation. Full source files are not copied into `prepared-input/`.
+
+Version `3` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
 
 The runner must route to the standard writer when the package is legacy/unclassified, its profile is not `simple-field-property`, or `unsupported_dimensions` is non-empty. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
@@ -54,7 +56,7 @@ Each obligation contains:
 - `observable_oracle` or an explicit linked gap;
 - `test_intent`;
 - `coverage_status`: `testable | gap | unclear | not-applicable`;
-- optional `dictionary_refs` and `notes`.
+- optional `dictionary_refs` and `notes`. In version `3`, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 
@@ -90,8 +92,8 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 | budget | writer | reviewer |
 | --- | ---: | ---: |
 | package artifact bytes | 512000 | 512000 |
-| hard timeout seconds | 180 | 120 |
-| idle timeout seconds | 60 | 45 |
+| hard timeout seconds | 180 | 90 |
+| idle timeout seconds | 60 | disabled; hard deadline applies |
 | command executions | 12 | 8 |
 | first meaningful draft deadline seconds | 90 | n/a |
 
