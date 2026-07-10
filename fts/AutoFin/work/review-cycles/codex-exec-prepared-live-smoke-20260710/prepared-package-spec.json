@@ -1,0 +1,131 @@
+{
+  "package_id": "autofin-widget-selection-prepared-v1",
+  "ft_slug": "AutoFin",
+  "scope_slug": "iteration-smoke-widget-selection-types",
+  "section_id": "3",
+  "output_root": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1",
+  "max_package_bytes": 512000,
+  "source_registry": [
+    {
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "locator": "section 3, data type restrictions table and following paragraph"
+    },
+    {
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "locator": "SRC-001..SRC-003"
+    },
+    {
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "locator": "page 5, section 3"
+    }
+  ],
+  "evidence_inputs": [
+    {
+      "path": "fts/AutoFin/AGENT-NOTES.md",
+      "title": "Package-specific notes"
+    },
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-contract.md",
+      "title": "Confirmed scope contract"
+    },
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-row-inventory.md",
+      "title": "Selected source rows"
+    },
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-parity-check.md",
+      "title": "DOCX XHTML PDF parity decision"
+    },
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-coverage-gaps.md",
+      "title": "Scope gaps and preserved risk"
+    },
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/negative-oracle-inventory.md",
+      "title": "Negative oracle boundary"
+    },
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/requiredness-oracle-inventory.md",
+      "title": "Requiredness oracle boundary"
+    }
+  ],
+  "obligations": {
+    "package_version": 1,
+    "package_id": "autofin-widget-selection-prepared-v1",
+    "obligations": [
+      {
+        "obligation_id": "ATOM-PREP-001",
+        "source_refs": ["SRC-001"],
+        "atomic_statement": "В виджете типа «Список» значения берутся из справочника и одновременно можно выбрать только одно значение.",
+        "observable_oracle": "После последовательного выбора двух разных доступных значений виджет содержит ровно одно выбранное значение.",
+        "test_intent": "Проверить ограничение одиночного выбора без предположений о конкретном справочнике или поле.",
+        "coverage_status": "testable",
+        "gap_id": "",
+        "dictionary_refs": [],
+        "notes": "Конкретный экран и два значения должны быть параметрами воспроизводимого runtime fixture; RISK-001 запрещает придумывать их."
+      },
+      {
+        "obligation_id": "ATOM-PREP-002",
+        "source_refs": ["SRC-002"],
+        "atomic_statement": "В виджете типа «Список с множественным выбором» значения берутся из справочника и можно выбрать несколько значений.",
+        "observable_oracle": "После выбора двух разных доступных значений оба значения одновременно отображаются как выбранные.",
+        "test_intent": "Проверить возможность множественного выбора без предположений о конкретном справочнике или поле.",
+        "coverage_status": "testable",
+        "gap_id": "",
+        "dictionary_refs": [],
+        "notes": "Конкретный экран и два значения должны быть параметрами воспроизводимого runtime fixture; RISK-001 запрещает придумывать их."
+      },
+      {
+        "obligation_id": "ATOM-PREP-003",
+        "source_refs": ["SRC-003"],
+        "atomic_statement": "По умолчанию значение виджета отсутствует.",
+        "observable_oracle": "До первого взаимодействия с новым виджетом в нём отсутствует выбранное значение.",
+        "test_intent": "Проверить видимое начальное пустое состояние подходящего виджета.",
+        "coverage_status": "testable",
+        "gap_id": "",
+        "dictionary_refs": [],
+        "notes": "Проверка не подтверждает внутреннее представление NULL."
+      },
+      {
+        "obligation_id": "ATOM-PREP-004",
+        "source_refs": ["SRC-003"],
+        "atomic_statement": "Отсутствующее значение интерпретируется системой как NULL.",
+        "observable_oracle": "",
+        "test_intent": "Не создавать UI-тест без наблюдаемого API, DB или иного persistence evidence.",
+        "coverage_status": "gap",
+        "gap_id": "GAP-PREP-001",
+        "dictionary_refs": [],
+        "notes": "Save-flow, persistence, database and API behavior are explicitly out of scope."
+      }
+    ],
+    "coverage_gaps": [
+      {
+        "gap_id": "GAP-PREP-001",
+        "source_refs": ["SRC-003"],
+        "problem": "Внутренняя интерпретация пустого значения как NULL не имеет наблюдаемого артефакта в подтверждённом UI scope.",
+        "handling": "Сохранить как gap и запросить отдельный API/DB/persistence scope, если внутреннее представление нужно проверять.",
+        "blocking": false
+      }
+    ],
+    "digest": "866fcdc34e7cc5896d534e66e2ba7d3bdc3cf2f69c9696edabece65686b644bc"
+  },
+  "instructions": {
+    "role": "writer",
+    "scenario": "writer.session_prepared_initial_draft",
+    "output_path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+    "attempt_root": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001",
+    "sandbox_policy": "workspace_write",
+    "timeout_seconds": 180,
+    "idle_timeout_seconds": 60,
+    "command_budget": 12
+  },
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/canary-runs",
+    "fts/AutoFin/work/iteration-smoke",
+    "fts/AutoFin/work/iteration-smoke-rerun"
+  ]
+}

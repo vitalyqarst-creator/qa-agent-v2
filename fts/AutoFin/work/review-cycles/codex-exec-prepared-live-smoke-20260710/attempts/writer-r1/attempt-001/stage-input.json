@@ -1,0 +1,107 @@
+{
+  "allowed_write_roots": [
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/stage-output"
+  ],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/3-iteration-smoke-widget-selection-types.md",
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-live-smoke-20260710",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "producer": "stage",
+      "required": true
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "producer": "stage",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/stage-package.json",
+      "sha256": "f6efedffadee02198c4f2ab0f234b0e5a047c61930abbb206e4e53620f1c87af"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/atomic-obligations.json",
+      "sha256": "2d1e83b7986f1c086f44125c4f02d8f79f19a340d8f7213b89e065d34dfff8d7"
+    }
+  ],
+  "input_digest": "bded56ff024d5065cfe8e28f45d71f53d5541d0e33da0c5b3fffdddea3ab1b3d",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "4c5e14b243ac529bc2aac1c0f9cebe3b9c6feee224c2cc8cd6ab38a951c5a2c5"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/stage-instructions.md",
+      "sha256": "7c3a1ed2703ea802683ca352232347631d00d25c8f622e5b71e898216126640a"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/prompt.md",
+    "sha256": "c9c793dd91283f629a122c2d6e36a72400953e2033c6d9045c8746e1cec0e3fb"
+  },
+  "role": "writer",
+  "sandbox_policy": "workspace_write",
+  "scenario": "writer.session_prepared_initial_draft",
+  "semantic_round": 0,
+  "session_id": "session-writer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/source-evidence.md",
+      "sha256": "b704af4900cc1a52f09c3a3ce4fde32651ad0aebeb7126b473061fc9411ddd06"
+    }
+  ],
+  "stage_id": "writer-r1",
+  "timeout_seconds": 180
+}

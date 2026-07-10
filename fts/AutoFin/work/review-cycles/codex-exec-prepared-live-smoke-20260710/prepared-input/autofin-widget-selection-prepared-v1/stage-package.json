@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-07-10T11:11:33.867254+00:00",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/canary-runs",
+    "fts/AutoFin/work/iteration-smoke",
+    "fts/AutoFin/work/iteration-smoke-rerun"
+  ],
+  "ft_slug": "AutoFin",
+  "package_artifacts": [
+    {
+      "bytes": 19268,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/source-evidence.md",
+      "sha256": "b704af4900cc1a52f09c3a3ce4fde32651ad0aebeb7126b473061fc9411ddd06"
+    },
+    {
+      "bytes": 4319,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/atomic-obligations.json",
+      "sha256": "2d1e83b7986f1c086f44125c4f02d8f79f19a340d8f7213b89e065d34dfff8d7"
+    },
+    {
+      "bytes": 1282,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/prepared-input/autofin-widget-selection-prepared-v1/stage-instructions.md",
+      "sha256": "7c3a1ed2703ea802683ca352232347631d00d25c8f622e5b71e898216126640a"
+    }
+  ],
+  "package_digest": "2d6ca518cb88b4d74bbb1dba4334080b8054b8ad4c5e9a08581c1ef6c5d9f427",
+  "package_id": "autofin-widget-selection-prepared-v1",
+  "package_version": 1,
+  "scope_slug": "iteration-smoke-widget-selection-types",
+  "section_id": "3",
+  "source_registry": [
+    {
+      "locator": "section 3, data type restrictions table and following paragraph",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "locator": "SRC-001..SRC-003",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "locator": "page 5, section 3",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ]
+}

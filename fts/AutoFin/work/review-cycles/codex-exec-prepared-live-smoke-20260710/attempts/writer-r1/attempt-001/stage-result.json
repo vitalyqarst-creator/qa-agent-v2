@@ -1,0 +1,44 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4bba-0daf-74b2-bb82-5f8974c39bac",
+  "blocking_reasons": [
+    "writer produced no events within the idle budget and the required draft is missing",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-live-smoke-20260710",
+  "duration_ms": 108812,
+  "exit_code": null,
+  "finished_at": "2026-07-10T11:13:39.381925+00:00",
+  "input_digest": "bded56ff024d5065cfe8e28f45d71f53d5541d0e33da0c5b3fffdddea3ab1b3d",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "fd3935d2845d963671cf119a8f90123f6639d9bed7dcccf37fdfd72d07f5792c"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "7253f49e5da901dac3c2fc282108ad4dd13342379f73fcdd47c320bafe231d79"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "fd3935d2845d963671cf119a8f90123f6639d9bed7dcccf37fdfd72d07f5792c"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "98f4229c8701c4004b164052a7818bc1b6876c0ec1f072af311decad531f84fe"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-10T11:11:50.567363+00:00",
+  "status": "blocked",
+  "timed_out": true
+}

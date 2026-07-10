@@ -1,0 +1,2 @@
+2026-07-10T11:11:52.173959Z  WARN sqlx::query: slow statement: execution time exceeded alert threshold summary="DELETE FROM logs WHERE …" db.statement="\n\nDELETE FROM logs WHERE ts < ?\n" rows_affected=8509 rows_returned=0 elapsed=1.0726973s elapsed_secs=1.0726973 slow_threshold=1s
+2026-07-10T11:11:52.270176Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
