@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019f4bf8-cd93-7052-bc25-83da5e38b0e8"}
+{"type":"turn.started"}
+{"type":"error","message":"{\n  \"type\": \"error\",\n  \"error\": {\n    \"type\": \"invalid_request_error\",\n    \"code\": \"invalid_json_schema\",\n    \"message\": \"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'obligation_reviews', 'items', 'properties', 'test_case_ids'), 'uniqueItems' is not permitted.\",\n    \"param\": \"text.format.schema\"\n  },\n  \"status\": 400\n}"}
+{"type":"turn.failed","error":{"message":"{\n  \"type\": \"error\",\n  \"error\": {\n    \"type\": \"invalid_request_error\",\n    \"code\": \"invalid_json_schema\",\n    \"message\": \"Invalid schema for response_format 'codex_output_schema': In context=('properties', 'obligation_reviews', 'items', 'properties', 'test_case_ids'), 'uniqueItems' is not permitted.\",\n    \"param\": \"text.format.schema\"\n  },\n  \"status\": 400\n}"}}

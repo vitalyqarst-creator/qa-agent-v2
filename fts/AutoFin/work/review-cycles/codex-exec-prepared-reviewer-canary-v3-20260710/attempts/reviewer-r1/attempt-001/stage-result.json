@@ -1,0 +1,48 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4bf8-cd93-7052-bc25-83da5e38b0e8",
+  "blocking_reasons": [
+    "reviewer process exited with code 1"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-reviewer-canary-v3-20260710",
+  "duration_ms": 4375,
+  "exit_code": 1,
+  "finished_at": "2026-07-10T12:20:28.791724+00:00",
+  "input_digest": "0e2597e4fb53e63bcb6fbf0ca9d0f41c26fd4aa319366d37fd27919d09343b2f",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "4f0c0c029b6470888a2609563298bfcedc40abd840583dd7bea20924753c37e0"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "1d9749048541c5f4c8da2a1a3a42941fb78ec72eef371b3a1ef5ee56ee12834a"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "4f0c0c029b6470888a2609563298bfcedc40abd840583dd7bea20924753c37e0"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "f7f02ab6f68600a7bbf02ed2bd59267674068f339d6512d4596b202655041a8e"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-10T12:20:24.424747+00:00",
+  "status": "blocked",
+  "timed_out": false
+}

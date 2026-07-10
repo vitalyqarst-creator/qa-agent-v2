@@ -1,0 +1,128 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/3-iteration-smoke-widget-selection-types.md",
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-reviewer-canary-v3-20260710",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/prepared-input/autofin-widget-selection-prepared-v2/stage-package.json",
+      "sha256": "9c6fa5c12351c498a18299068057c4676ca64423b531b682cc3f53269c275bff"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/prepared-input/autofin-widget-selection-prepared-v2/atomic-obligations.json",
+      "sha256": "af98598a32b1a207c660f2d7e544aa2c5bfdc9e49737b3eb4d8a668c120f065a"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "3f7fe6f82dac80384bf4eb54fdb764e59954fe06888375c83e5380f77c4048aa"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "f595dd9ed9ec503d44a7cc8641093457f1e4d2c46daaaea28c2b85eef003f889"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "427e389716e7efa8b1bea491abab54e14d24b02fb9680823c35eff65b9211a60"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "42e480a66036a874d6bb1dd5729c7716774b42aa2a5b4895508aa7aaf9a6431e"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "b36cb764127f31aede66f70088987a5733f43655228e68ec6b5a86aca7bd79bb"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "52ae2f8507a7568df6e3642fe951c5c3a245cc1fd397a9e6de946d5b5a4a596c"
+    }
+  ],
+  "input_digest": "0e2597e4fb53e63bcb6fbf0ca9d0f41c26fd4aa319366d37fd27919d09343b2f",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "2514e3e5166408ec2741cc87a6d335d6d00208033df961519e05127f89b07cf3"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/prepared-input/autofin-widget-selection-prepared-v2/stage-instructions.md",
+      "sha256": "8c8342fffe1be91d067c0aca3e1c04e3a63ca6285f69fd99543d55f480840483"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "e4eab71bc6670d8c8325bc9723056025905329de3d6f30a3ff0172a2bfdc1a8e"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/attempts/reviewer-r1/attempt-001/prompt.md",
+    "sha256": "33ec936e15ae70ae1ba313bda991c9803dc909e072ca6cffc3091b82798efc31"
+  },
+  "role": "reviewer",
+  "sandbox_policy": "read_only",
+  "scenario": "reviewer.session_prepared_semantic",
+  "semantic_round": 0,
+  "session_id": "session-reviewer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710/prepared-input/autofin-widget-selection-prepared-v2/source-evidence.md",
+      "sha256": "bddf8b0478a9433cf8deb7fe0baf376fd6bd33388436c37fe29cb396e7f0c965"
+    }
+  ],
+  "stage_id": "reviewer-r1",
+  "timeout_seconds": 90
+}
