@@ -128,6 +128,15 @@ class PreparedReviewerContractTests(unittest.TestCase):
         with self.assertRaisesRegex(runner.RunnerError, "unknown test-case ids"):
             self.parse(payload)
 
+    def test_runner_rejects_duplicate_test_case_ids_without_transport_unique_items(self) -> None:
+        payload = copy.deepcopy(self.payload)
+        payload["obligation_reviews"][0]["test_case_ids"] = [
+            "TC-PREP-001",
+            "TC-PREP-001",
+        ]
+        with self.assertRaisesRegex(runner.RunnerError, "must not contain duplicates"):
+            self.parse(payload)
+
     def test_rejects_executable_test_case_for_preserved_gap(self) -> None:
         payload = copy.deepcopy(self.payload)
         payload["obligation_reviews"][1]["test_case_ids"] = ["TC-PREP-001"]

@@ -78,6 +78,8 @@ Allowed outcomes:
 
 An eligible prepared reviewer returns structured review contract version `2`: the exact reviewed draft SHA-256, one verdict for every supplied atomic obligation, referenced `TC-*`, structured findings and a summary. The runner rejects missing/duplicate/unknown atoms, unknown test-case ids, hash mismatch, verdicts incompatible with `coverage_status`, blocking verdicts without an `error` finding, and `accepted` with an error or incomplete obligation result. The runner, not the read-only reviewer, renders `findings.md`. Standard reviewer scenarios retain their existing compatibility contract.
 
+The API response-format schema intentionally uses only the verified transport-compatible subset and does not rely on `uniqueItems`. Array uniqueness and all semantic cross-field invariants remain mandatory runner-side checks after transport parsing; removing an unsupported transport keyword must not weaken sign-off integrity.
+
 A stage must never return `signed-off`. Required outputs must exist for non-blocked results, undeclared outputs are rejected, output kinds must match the manifest, and a backend session id must not have been used by an earlier stage.
 
 ## Runner-Owned Transitions

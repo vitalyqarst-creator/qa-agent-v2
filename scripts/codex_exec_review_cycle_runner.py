@@ -1936,7 +1936,6 @@ class CodexExecReviewCycleRunner:
                                 },
                                 "test_case_ids": {
                                     "type": "array",
-                                    "uniqueItems": True,
                                     "items": {"type": "string", "minLength": 1},
                                 },
                                 "note": {"type": "string", "minLength": 1},
@@ -1969,12 +1968,10 @@ class CodexExecReviewCycleRunner:
                                 },
                                 "atom_ids": {
                                     "type": "array",
-                                    "uniqueItems": True,
                                     "items": {"type": "string", "minLength": 1},
                                 },
                                 "test_case_ids": {
                                     "type": "array",
-                                    "uniqueItems": True,
                                     "items": {"type": "string", "minLength": 1},
                                 },
                                 "problem": {"type": "string", "minLength": 1},

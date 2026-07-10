@@ -499,6 +499,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(2, schema["properties"]["contract_version"]["const"])
         self.assertIn("obligation_reviews", schema["required"])
+        serialized_schema = json.dumps(schema, sort_keys=True)
+        self.assertNotIn("uniqueItems", serialized_schema)
         reviewer_manifest = json.loads(
             (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
         )
