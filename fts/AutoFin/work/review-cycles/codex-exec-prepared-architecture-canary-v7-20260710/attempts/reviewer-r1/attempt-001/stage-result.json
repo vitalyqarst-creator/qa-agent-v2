@@ -1,0 +1,51 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4c42-4905-7711-a0cd-ae865ed9e23c",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-architecture-canary-v7-20260710",
+  "duration_ms": 21250,
+  "exit_code": 0,
+  "finished_at": "2026-07-10T13:41:01.389608+00:00",
+  "input_digest": "4bb0369e59bf62607ad98655305a547fd8e98cbeed9c00a036edc1b461bb5f0f",
+  "outcome": "accepted",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "945b5c9ac87a6fe1d8636a42ce05dad2cb7fd91951d4e8304200caa734b68e29"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "c5b71be4719fe0ae7cd0096c2b0c153d6f78dc1d0ac21ffa32571381ee56c14f"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "945b5c9ac87a6fe1d8636a42ce05dad2cb7fd91951d4e8304200caa734b68e29"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "d2e40f5c0d7e63f658eb89be08598a30f118ea7c9f871cc7b8ba950ac8c44350"
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "sha256": "68a94932111acd6fd9ed79872f19bf13ac17b120402fd7362c15e7fa2325435f"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-canary-v7-20260710/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-10T13:40:40.148779+00:00",
+  "status": "completed",
+  "timed_out": false
+}
