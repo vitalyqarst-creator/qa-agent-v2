@@ -47,6 +47,10 @@ from test_case_agent.review_cycle.prepared_package import (
     load_prepared_package,
     verify_prepared_package,
 )
+from test_case_agent.review_cycle.obligation_gate import (
+    ObligationGateResult,
+    validate_draft_obligation_coverage,
+)
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -59,6 +63,7 @@ __all__ = [
     "ExpectedOutput",
     "EvidenceInput",
     "FreshThreadSdkBackend",
+    "ObligationGateResult",
     "PreparedGap",
     "PreparedObligation",
     "PreparedObligationSet",
@@ -89,4 +94,5 @@ __all__ = [
     "start_fresh_sdk_thread",
     "summarize_metrics",
     "verify_prepared_package",
+    "validate_draft_obligation_coverage",
 ]

@@ -132,7 +132,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         def step(_request):
             if create_draft:
                 self.draft_path.parent.mkdir(parents=True, exist_ok=True)
-                self.draft_path.write_text("# Test cases\n\n## TC-DEMO-001\n\nDraft body.\n", encoding="utf-8")
+                self.draft_path.write_text(
+                    "# Test cases\n\n## TC-DEMO-001\n\n**Трассировка:** ATOM-001\n\nDraft body.\n",
+                    encoding="utf-8",
+                )
             return self.process_result(
                 exit_code=exit_code,
                 stdout=(
@@ -303,6 +306,27 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(1, len(manifest["source_artifacts"]))
         self.assertTrue(manifest["source_artifacts"][0]["path"].endswith("source-evidence.md"))
         self.assertFalse(any(item["path"].endswith("main.xhtml") for item in manifest["source_artifacts"]))
+        gate = json.loads((self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(encoding="utf-8"))
+        self.assertTrue(gate["passed"])
+
+    def test_prepared_fast_path_blocks_before_reviewer_when_atom_is_uncovered(self) -> None:
+        package_path = self.build_prepared_package()
+
+        def uncovered_writer(_request):
+            self.draft_path.parent.mkdir(parents=True, exist_ok=True)
+            self.draft_path.write_text("# Cases\n\n## TC-DEMO-001\nNo traceability.\n", encoding="utf-8")
+            return self.process_result(
+                stdout=self.json_event("writer completed", session_id="writer-session")
+            )
+
+        executor = ScriptedExecutor(uncovered_writer)
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-obligation-gate", result.status)
+        self.assertEqual(1, len(executor.requests))
+        gate = json.loads((self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(encoding="utf-8"))
+        self.assertFalse(gate["passed"])
+        self.assertEqual("missing-testable-obligation-coverage", gate["findings"][0]["id"])
 
     def test_prepared_fast_path_rejects_tampered_package_before_exec(self) -> None:
         package_path = self.build_prepared_package()

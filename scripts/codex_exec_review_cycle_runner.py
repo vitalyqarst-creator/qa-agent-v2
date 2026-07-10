@@ -35,6 +35,7 @@ from test_case_agent.review_cycle.prepared_package import (
     PreparedStagePackage,
     load_prepared_package,
 )
+from test_case_agent.review_cycle.obligation_gate import validate_draft_obligation_coverage
 from test_case_agent.review_cycle.attempts import format_attempt_id
 from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
 
@@ -376,6 +377,10 @@ class CodexExecReviewCycleRunner:
         return self.runner_output_dir(WRITER_STAGE) / "validator.json"
 
     @property
+    def obligation_gate_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "obligation-gate.json"
+
+    @property
     def reviewer_findings_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "findings.md"
 
@@ -559,6 +564,27 @@ class CodexExecReviewCycleRunner:
                 validation=validation,
             )
 
+        if self._prepared_package is not None:
+            obligation_gate = validate_draft_obligation_coverage(
+                draft_path=self.draft_path,
+                obligations_path=self._prepared_artifact("atomic-obligations"),
+            )
+            write_json(self.obligation_gate_path, obligation_gate.as_dict())
+            if not obligation_gate.passed:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-obligation-gate",
+                    reasons=[
+                        "prepared atomic obligation gate reported findings",
+                        relative_path(self.obligation_gate_path, self.repo_root),
+                    ],
+                    validation=validation,
+                )
+
         writer_session_issue = self._backend_session_issue(writer_artifacts)
         if writer_session_issue:
             return self._block_stage(
@@ -604,6 +630,11 @@ class CodexExecReviewCycleRunner:
                 "writer_stage_status": writer_status,
                 "writer_draft_sha256": draft_sha256,
                 "validator_report": relative_path(self.validator_path, self.ft_root),
+                "obligation_gate_report": (
+                    relative_path(self.obligation_gate_path, self.ft_root)
+                    if self._prepared_package is not None
+                    else ""
+                ),
                 "active_transition_prompt": relative_path(
                     self.prompt_path(REVIEWER_STAGE), self.ft_root
                 ),
@@ -836,6 +867,7 @@ class CodexExecReviewCycleRunner:
             "draft_test_cases": relative_path(self.draft_path, self.ft_root),
             "canonical_test_cases": relative_path(self.final_path, self.ft_root),
             "validator_report": "",
+            "obligation_gate_report": "",
             "writer_draft_sha256": "",
             "reviewer_findings": "",
             "accepted_terminal_state": False,
@@ -916,6 +948,7 @@ class CodexExecReviewCycleRunner:
                     *[f"- `{relative_path(path, self.repo_root)}`" for path in package_files],
                     f"- writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
                     f"- validator: `{relative_path(self.validator_path, self.repo_root)}`",
+                    f"- obligation gate: `{relative_path(self.obligation_gate_path, self.repo_root)}`",
                     "",
                     "Return one JSON object in the final message and write no files:",
                     '{"decision":"accepted|changes-required","findings_markdown":"# Review findings\\n..."}',
@@ -1103,6 +1136,12 @@ class CodexExecReviewCycleRunner:
                         producer="runner",
                     ),
                     ExpectedOutput(
+                        path=relative_path(self.obligation_gate_path, self.repo_root),
+                        kind="obligation-gate",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
                         path=relative_path(
                             self.stage_output_dir(stage) / "last-message.txt", self.repo_root
                         ),
@@ -1115,6 +1154,8 @@ class CodexExecReviewCycleRunner:
             allowed_write_roots.append(relative_path(self.stage_output_dir(stage), self.repo_root))
         else:
             handoff_paths.extend((self.draft_path, self.validator_path))
+            if self._prepared_package is not None:
+                handoff_paths.append(self.obligation_gate_path)
             expected_outputs.append(
                 ExpectedOutput(
                     path=relative_path(self.reviewer_findings_path, self.repo_root),
