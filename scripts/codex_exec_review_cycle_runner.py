@@ -150,7 +150,7 @@ class ProcessRequest:
     cwd: Path
     prompt: str
     timeout_seconds: int
-    idle_timeout_seconds: int
+    idle_timeout_seconds: int | None
     command_budget: int
     stdout_path: Path | None = None
     stderr_path: Path | None = None
@@ -263,7 +263,11 @@ class SubprocessExecutor:
                             termination_reason = "first-artifact-deadline"
                             break
                         if (
-                            (request.progress_path is None or first_artifact_seconds is not None)
+                            request.idle_timeout_seconds is not None
+                            and (
+                                request.progress_path is None
+                                or first_artifact_seconds is not None
+                            )
                             and now - last_output_at >= request.idle_timeout_seconds
                         ):
                             termination_reason = "idle-timeout"
@@ -971,24 +975,25 @@ class CodexExecReviewCycleRunner:
         except StageRuntimeError as exc:
             raise RunnerError(f"Prepared stage package changed or became invalid: {exc}") from exc
 
-    def _stage_limits(self, role: str) -> tuple[int, int, int]:
+    def _stage_limits(self, role: str) -> tuple[int, int | None, int]:
         if role == "writer":
             timeout = self.writer_timeout_seconds or self.timeout_seconds
             idle_timeout = self.writer_idle_timeout_seconds
             command_budget = self.writer_command_budget
         else:
-            timeout = (
-                self.prepared_reviewer_timeout_seconds
-                if self._prepared_package is not None
-                else (self.reviewer_timeout_seconds or self.timeout_seconds)
-            )
-            idle_timeout = self.reviewer_idle_timeout_seconds
-            command_budget = (
-                self.prepared_reviewer_command_budget
-                if self._prepared_package is not None
-                else self.reviewer_command_budget
-            )
-        return timeout, min(idle_timeout, timeout), command_budget
+            if self._prepared_package is not None:
+                timeout = self.prepared_reviewer_timeout_seconds
+                idle_timeout = None
+                command_budget = self.prepared_reviewer_command_budget
+            else:
+                timeout = self.reviewer_timeout_seconds or self.timeout_seconds
+                idle_timeout = self.reviewer_idle_timeout_seconds
+                command_budget = self.reviewer_command_budget
+        return (
+            timeout,
+            min(idle_timeout, timeout) if idle_timeout is not None else None,
+            command_budget,
+        )
 
     def run(self) -> CycleResult:
         self.validate_configuration()

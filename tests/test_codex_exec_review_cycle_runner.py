@@ -58,7 +58,7 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         code: str,
         *,
         timeout_seconds: int = 5,
-        idle_timeout_seconds: int = 2,
+        idle_timeout_seconds: int | None = 2,
         command_budget: int = 5,
         progress_path: Path | None = None,
         first_artifact_deadline_seconds: int | None = None,
@@ -120,6 +120,18 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         self.assertTrue(result.idle_timed_out)
         self.assertFalse(result.timed_out)
         self.assertEqual("idle-timeout", result.termination_reason)
+        self.assertLess(time.monotonic() - started, 4)
+
+    def test_disabled_idle_timeout_waits_for_hard_timeout(self) -> None:
+        code = "import time; print('started',flush=True); time.sleep(5)"
+        started = time.monotonic()
+        result = runner_module.SubprocessExecutor().execute(
+            self.request(code, timeout_seconds=1, idle_timeout_seconds=None)
+        )
+
+        self.assertTrue(result.timed_out)
+        self.assertFalse(result.idle_timed_out)
+        self.assertEqual("hard-timeout", result.termination_reason)
         self.assertLess(time.monotonic() - started, 4)
 
     def test_stops_when_first_meaningful_artifact_deadline_is_missed(self) -> None:
@@ -544,6 +556,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("accepted-not-promoted", result.status)
         request = executor.requests[1]
         self.assertEqual(90, request.timeout_seconds)
+        self.assertIsNone(request.idle_timeout_seconds)
         self.assertEqual(1, request.command_budget)
         report = json.loads(
             (self.reviewer_attempt / "runner-output" / "evidence-access-report.json").read_text(
