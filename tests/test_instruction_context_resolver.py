@@ -212,12 +212,16 @@ class InstructionContextResolverTests(unittest.TestCase):
         paths = {item["path"] for item in payload["files"]}
 
         self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("references/agent/prepared-writer-runtime-profile.md", paths)
+        self.assertNotIn("skills/ft-test-case-writer/SKILL.md", paths)
         self.assertIn("references/agent/prepared-stage-package-format.md", paths)
-        self.assertIn("references/agent/writer-runtime-workflow.md", paths)
+        self.assertNotIn("references/agent/writer-runtime-workflow.md", paths)
         self.assertNotIn("references/agent/source-row-inventory-format.md", paths)
         self.assertNotIn("references/agent/writer-process-workflow.md", paths)
         self.assertNotIn("references/agent/writer-table-workflow.md", paths)
-        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 20.0)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
+        profile = ROOT_DIR / "references" / "agent" / "prepared-writer-runtime-profile.md"
+        self.assertLess(len(profile.read_bytes()), 8 * 1024)
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 
     def test_validator_failure_loads_compact_remediation_map_by_default(self) -> None:

@@ -127,6 +127,10 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             ],
         )
         self.assertEqual(
+            ["ft-test-case-writer"],
+            self.route_by_id["writer.prepared_session_initial"]["skill_chain"],
+        )
+        self.assertEqual(
             ["architecture.audit"],
             [
                 item["scenario"]
