@@ -35,6 +35,18 @@ from test_case_agent.review_cycle.metrics import (
     summarize_metrics,
 )
 from test_case_agent.review_cycle.orchestration import CompletedStage, StageCompletionCoordinator
+from test_case_agent.review_cycle.prepared_package import (
+    EvidenceInput,
+    PreparedGap,
+    PreparedObligation,
+    PreparedObligationSet,
+    PreparedPackageBuilder,
+    PreparedStagePackage,
+    StageInstructionConfig,
+    load_obligations,
+    load_prepared_package,
+    verify_prepared_package,
+)
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -45,8 +57,15 @@ __all__ = [
     "ContractValidationError",
     "CompletedStage",
     "ExpectedOutput",
+    "EvidenceInput",
     "FreshThreadSdkBackend",
+    "PreparedGap",
+    "PreparedObligation",
+    "PreparedObligationSet",
+    "PreparedPackageBuilder",
+    "PreparedStagePackage",
     "StageInputManifest",
+    "StageInstructionConfig",
     "StageResult",
     "TransitionDecision",
     "BackendStageExecution",
@@ -63,8 +82,11 @@ __all__ = [
     "ensure_new_session_id",
     "format_attempt_id",
     "load_manifest",
+    "load_obligations",
+    "load_prepared_package",
     "load_result",
     "resolve_transition",
     "start_fresh_sdk_thread",
     "summarize_metrics",
+    "verify_prepared_package",
 ]

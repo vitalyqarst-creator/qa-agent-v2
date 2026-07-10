@@ -1,0 +1,714 @@
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import re
+import shutil
+from dataclasses import dataclass, replace
+from datetime import datetime
+from pathlib import Path, PurePosixPath
+from typing import Any, Mapping, Sequence
+
+from test_case_agent.review_cycle.runtime import (
+    StageRuntimeError,
+    repository_relative,
+    resolve_repository_path,
+    sha256_path,
+    utc_timestamp,
+    write_json_atomic,
+)
+
+
+PACKAGE_VERSION = 1
+PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
+COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
+IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+SHA256 = re.compile(r"[0-9a-f]{64}")
+ATOM_ID = re.compile(r"ATOM-[A-Za-z0-9._-]+")
+GAP_ID = re.compile(r"GAP-[A-Za-z0-9._-]+")
+
+
+def _exact_fields(payload: Mapping[str, Any], expected: set[str], label: str) -> None:
+    if not isinstance(payload, Mapping):
+        raise StageRuntimeError(f"{label} must be a JSON object")
+    missing = sorted(expected - set(payload))
+    unknown = sorted(set(payload) - expected)
+    if missing or unknown:
+        raise StageRuntimeError(
+            f"invalid {label} fields: missing={missing or 'none'}, unknown={unknown or 'none'}"
+        )
+
+
+def _identifier(value: Any, field_name: str, pattern: re.Pattern[str] = IDENTIFIER) -> str:
+    if not isinstance(value, str) or not pattern.fullmatch(value):
+        raise StageRuntimeError(f"{field_name} must be a stable identifier")
+    return value
+
+
+def _text(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise StageRuntimeError(f"{field_name} must be non-empty text")
+    return value.strip()
+
+
+def _path(value: Any, field_name: str) -> str:
+    value = _text(value, field_name)
+    if "\\" in value or value.startswith("/") or re.match(r"^[A-Za-z]:", value):
+        raise StageRuntimeError(f"{field_name} must be repository-relative POSIX path")
+    parsed = PurePosixPath(value)
+    if parsed.as_posix() != value or any(part in {"", ".", ".."} for part in parsed.parts):
+        raise StageRuntimeError(f"{field_name} must be normalized without traversal")
+    return value
+
+
+def _sha(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not SHA256.fullmatch(value):
+        raise StageRuntimeError(f"{field_name} must be lowercase SHA-256")
+    return value
+
+
+def _string_list(value: Any, field_name: str, *, allow_empty: bool = False) -> tuple[str, ...]:
+    if not isinstance(value, list):
+        raise StageRuntimeError(f"{field_name} must be a JSON array")
+    result = tuple(_text(item, f"{field_name}[]") for item in value)
+    if not allow_empty and not result:
+        raise StageRuntimeError(f"{field_name} must not be empty")
+    if len(set(result)) != len(result):
+        raise StageRuntimeError(f"{field_name} must not contain duplicates")
+    return result
+
+
+def _canonical_digest(payload: Mapping[str, Any]) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+@dataclass(frozen=True)
+class SourceRegistryEntry:
+    path: str
+    sha256: str
+    role: str
+    locator: str
+
+    def validate(self) -> None:
+        _path(self.path, "source.path")
+        _sha(self.sha256, "source.sha256")
+        _identifier(self.role, "source.role")
+        _text(self.locator, "source.locator")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"path": self.path, "sha256": self.sha256, "role": self.role, "locator": self.locator}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> SourceRegistryEntry:
+        _exact_fields(payload, {"path", "sha256", "role", "locator"}, "source registry entry")
+        item = cls(**payload)
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PackageArtifact:
+    path: str
+    sha256: str
+    kind: str
+    bytes: int
+
+    def validate(self) -> None:
+        _path(self.path, "package_artifact.path")
+        _sha(self.sha256, "package_artifact.sha256")
+        if self.kind not in PACKAGE_KINDS:
+            raise StageRuntimeError(f"unsupported package artifact kind: {self.kind}")
+        if not isinstance(self.bytes, int) or isinstance(self.bytes, bool) or self.bytes < 0:
+            raise StageRuntimeError("package_artifact.bytes must be a non-negative integer")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"path": self.path, "sha256": self.sha256, "kind": self.kind, "bytes": self.bytes}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PackageArtifact:
+        _exact_fields(payload, {"path", "sha256", "kind", "bytes"}, "package artifact")
+        item = cls(**payload)
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PreparedGap:
+    gap_id: str
+    source_refs: tuple[str, ...]
+    problem: str
+    handling: str
+    blocking: bool
+
+    def validate(self) -> None:
+        _identifier(self.gap_id, "gap_id", GAP_ID)
+        if not self.source_refs:
+            raise StageRuntimeError(f"{self.gap_id}.source_refs must not be empty")
+        for value in self.source_refs:
+            _text(value, f"{self.gap_id}.source_refs[]")
+        _text(self.problem, f"{self.gap_id}.problem")
+        _text(self.handling, f"{self.gap_id}.handling")
+        if not isinstance(self.blocking, bool):
+            raise StageRuntimeError(f"{self.gap_id}.blocking must be boolean")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "gap_id": self.gap_id,
+            "source_refs": list(self.source_refs),
+            "problem": self.problem,
+            "handling": self.handling,
+            "blocking": self.blocking,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedGap:
+        _exact_fields(payload, {"gap_id", "source_refs", "problem", "handling", "blocking"}, "gap")
+        item = cls(
+            gap_id=payload["gap_id"],
+            source_refs=_string_list(payload["source_refs"], "gap.source_refs"),
+            problem=payload["problem"],
+            handling=payload["handling"],
+            blocking=payload["blocking"],
+        )
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PreparedObligation:
+    obligation_id: str
+    source_refs: tuple[str, ...]
+    atomic_statement: str
+    observable_oracle: str
+    test_intent: str
+    coverage_status: str
+    gap_id: str
+    dictionary_refs: tuple[str, ...]
+    notes: str
+
+    def validate(self) -> None:
+        _identifier(self.obligation_id, "obligation_id", ATOM_ID)
+        if not self.source_refs:
+            raise StageRuntimeError(f"{self.obligation_id}.source_refs must not be empty")
+        for value in self.source_refs:
+            _text(value, f"{self.obligation_id}.source_refs[]")
+        _text(self.atomic_statement, f"{self.obligation_id}.atomic_statement")
+        _text(self.test_intent, f"{self.obligation_id}.test_intent")
+        if self.coverage_status not in COVERAGE_STATUSES:
+            raise StageRuntimeError(
+                f"{self.obligation_id}.coverage_status must be one of {sorted(COVERAGE_STATUSES)}"
+            )
+        if self.coverage_status == "testable":
+            _text(self.observable_oracle, f"{self.obligation_id}.observable_oracle")
+            if self.gap_id:
+                raise StageRuntimeError(f"{self.obligation_id} testable obligation cannot link a gap")
+        elif self.coverage_status in {"gap", "unclear"}:
+            _identifier(self.gap_id, f"{self.obligation_id}.gap_id", GAP_ID)
+        elif self.gap_id:
+            raise StageRuntimeError(f"{self.obligation_id} not-applicable obligation cannot link a gap")
+        for value in self.dictionary_refs:
+            _identifier(value, f"{self.obligation_id}.dictionary_refs[]")
+        if not isinstance(self.notes, str):
+            raise StageRuntimeError(f"{self.obligation_id}.notes must be text")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "obligation_id": self.obligation_id,
+            "source_refs": list(self.source_refs),
+            "atomic_statement": self.atomic_statement,
+            "observable_oracle": self.observable_oracle,
+            "test_intent": self.test_intent,
+            "coverage_status": self.coverage_status,
+            "gap_id": self.gap_id,
+            "dictionary_refs": list(self.dictionary_refs),
+            "notes": self.notes,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedObligation:
+        expected = {
+            "obligation_id",
+            "source_refs",
+            "atomic_statement",
+            "observable_oracle",
+            "test_intent",
+            "coverage_status",
+            "gap_id",
+            "dictionary_refs",
+            "notes",
+        }
+        _exact_fields(payload, expected, "obligation")
+        item = cls(
+            obligation_id=payload["obligation_id"],
+            source_refs=_string_list(payload["source_refs"], "obligation.source_refs"),
+            atomic_statement=payload["atomic_statement"],
+            observable_oracle=payload["observable_oracle"],
+            test_intent=payload["test_intent"],
+            coverage_status=payload["coverage_status"],
+            gap_id=payload["gap_id"],
+            dictionary_refs=_string_list(
+                payload["dictionary_refs"], "obligation.dictionary_refs", allow_empty=True
+            ),
+            notes=payload["notes"],
+        )
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PreparedObligationSet:
+    package_version: int
+    package_id: str
+    obligations: tuple[PreparedObligation, ...]
+    coverage_gaps: tuple[PreparedGap, ...]
+    digest: str
+
+    def _without_digest(self) -> dict[str, Any]:
+        return {
+            "package_version": self.package_version,
+            "package_id": self.package_id,
+            "obligations": [item.to_dict() for item in self.obligations],
+            "coverage_gaps": [item.to_dict() for item in self.coverage_gaps],
+        }
+
+    def validate(self, *, evidence_text: str | None = None) -> None:
+        if self.package_version != PACKAGE_VERSION:
+            raise StageRuntimeError(f"package_version must be {PACKAGE_VERSION}")
+        _identifier(self.package_id, "package_id")
+        if not self.obligations:
+            raise StageRuntimeError("obligations must not be empty")
+        ids = [item.obligation_id for item in self.obligations]
+        if len(ids) != len(set(ids)):
+            raise StageRuntimeError("obligation ids must be unique")
+        gap_ids = [item.gap_id for item in self.coverage_gaps]
+        if len(gap_ids) != len(set(gap_ids)):
+            raise StageRuntimeError("gap ids must be unique")
+        for item in self.coverage_gaps:
+            item.validate()
+        known_gaps = set(gap_ids)
+        all_refs: set[str] = set()
+        for item in self.obligations:
+            item.validate()
+            all_refs.update(item.source_refs)
+            if item.gap_id and item.gap_id not in known_gaps:
+                raise StageRuntimeError(f"{item.obligation_id} references unknown gap {item.gap_id}")
+        for item in self.coverage_gaps:
+            all_refs.update(item.source_refs)
+        if evidence_text is not None:
+            missing_refs = sorted(ref for ref in all_refs if ref not in evidence_text)
+            if missing_refs:
+                raise StageRuntimeError(
+                    "source evidence does not name obligation/gap refs: " + ", ".join(missing_refs)
+                )
+        _sha(self.digest, "obligation digest")
+        if self.digest != _canonical_digest(self._without_digest()):
+            raise StageRuntimeError("atomic obligations digest mismatch")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**self._without_digest(), "digest": self.digest}
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        package_id: str,
+        obligations: Sequence[PreparedObligation],
+        coverage_gaps: Sequence[PreparedGap],
+        evidence_text: str | None = None,
+    ) -> PreparedObligationSet:
+        value = cls(PACKAGE_VERSION, package_id, tuple(obligations), tuple(coverage_gaps), "")
+        completed = replace(value, digest=_canonical_digest(value._without_digest()))
+        completed.validate(evidence_text=evidence_text)
+        return completed
+
+    @classmethod
+    def from_dict(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        evidence_text: str | None = None,
+    ) -> PreparedObligationSet:
+        _exact_fields(
+            payload,
+            {"package_version", "package_id", "obligations", "coverage_gaps", "digest"},
+            "atomic obligations",
+        )
+        if not isinstance(payload["obligations"], list) or not isinstance(payload["coverage_gaps"], list):
+            raise StageRuntimeError("obligations and coverage_gaps must be JSON arrays")
+        value = cls(
+            package_version=payload["package_version"],
+            package_id=payload["package_id"],
+            obligations=tuple(PreparedObligation.from_dict(item) for item in payload["obligations"]),
+            coverage_gaps=tuple(PreparedGap.from_dict(item) for item in payload["coverage_gaps"]),
+            digest=payload["digest"],
+        )
+        value.validate(evidence_text=evidence_text)
+        return value
+
+
+@dataclass(frozen=True)
+class PreparedStagePackage:
+    package_version: int
+    package_id: str
+    ft_slug: str
+    scope_slug: str
+    section_id: str
+    created_at: str
+    source_registry: tuple[SourceRegistryEntry, ...]
+    package_artifacts: tuple[PackageArtifact, ...]
+    forbidden_evidence_roots: tuple[str, ...]
+    fallback_policy: str
+    package_digest: str
+
+    def _without_digest(self) -> dict[str, Any]:
+        return {
+            "package_version": self.package_version,
+            "package_id": self.package_id,
+            "ft_slug": self.ft_slug,
+            "scope_slug": self.scope_slug,
+            "section_id": self.section_id,
+            "created_at": self.created_at,
+            "source_registry": [item.to_dict() for item in self.source_registry],
+            "package_artifacts": [item.to_dict() for item in self.package_artifacts],
+            "forbidden_evidence_roots": list(self.forbidden_evidence_roots),
+            "fallback_policy": self.fallback_policy,
+        }
+
+    def validate(self) -> None:
+        if self.package_version != PACKAGE_VERSION:
+            raise StageRuntimeError(f"package_version must be {PACKAGE_VERSION}")
+        for name in ("package_id", "ft_slug", "scope_slug"):
+            _identifier(getattr(self, name), name)
+        _text(self.section_id, "section_id")
+        try:
+            timestamp = datetime.fromisoformat(self.created_at.replace("Z", "+00:00"))
+        except (AttributeError, ValueError) as exc:
+            raise StageRuntimeError("created_at must be ISO-8601 timestamp") from exc
+        if timestamp.tzinfo is None:
+            raise StageRuntimeError("created_at must include timezone")
+        if not self.source_registry:
+            raise StageRuntimeError("source_registry must not be empty")
+        source_paths = [item.path for item in self.source_registry]
+        if len(source_paths) != len(set(source_paths)):
+            raise StageRuntimeError("source_registry paths must be unique")
+        for item in self.source_registry:
+            item.validate()
+        kinds = [item.kind for item in self.package_artifacts]
+        if set(kinds) != PACKAGE_KINDS or len(kinds) != len(PACKAGE_KINDS):
+            raise StageRuntimeError("package_artifacts must contain exactly the three package kinds")
+        artifact_paths = [item.path for item in self.package_artifacts]
+        if len(artifact_paths) != len(set(artifact_paths)):
+            raise StageRuntimeError("package artifact paths must be unique")
+        for item in self.package_artifacts:
+            item.validate()
+        if not self.forbidden_evidence_roots:
+            raise StageRuntimeError("forbidden_evidence_roots must not be empty")
+        for root in self.forbidden_evidence_roots:
+            _path(root, "forbidden_evidence_roots[]")
+        if self.fallback_policy != "targeted-only":
+            raise StageRuntimeError("fallback_policy must be targeted-only")
+        _sha(self.package_digest, "package_digest")
+        if self.package_digest != _canonical_digest(self._without_digest()):
+            raise StageRuntimeError("stage package digest mismatch")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**self._without_digest(), "package_digest": self.package_digest}
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedStagePackage:
+        expected = {
+            "package_version",
+            "package_id",
+            "ft_slug",
+            "scope_slug",
+            "section_id",
+            "created_at",
+            "source_registry",
+            "package_artifacts",
+            "forbidden_evidence_roots",
+            "fallback_policy",
+            "package_digest",
+        }
+        _exact_fields(payload, expected, "prepared stage package")
+        if not isinstance(payload["source_registry"], list) or not isinstance(payload["package_artifacts"], list):
+            raise StageRuntimeError("source_registry and package_artifacts must be JSON arrays")
+        value = cls(
+            package_version=payload["package_version"],
+            package_id=payload["package_id"],
+            ft_slug=payload["ft_slug"],
+            scope_slug=payload["scope_slug"],
+            section_id=payload["section_id"],
+            created_at=payload["created_at"],
+            source_registry=tuple(SourceRegistryEntry.from_dict(item) for item in payload["source_registry"]),
+            package_artifacts=tuple(PackageArtifact.from_dict(item) for item in payload["package_artifacts"]),
+            forbidden_evidence_roots=_string_list(
+                payload["forbidden_evidence_roots"], "forbidden_evidence_roots"
+            ),
+            fallback_policy=payload["fallback_policy"],
+            package_digest=payload["package_digest"],
+        )
+        value.validate()
+        return value
+
+
+@dataclass(frozen=True)
+class EvidenceInput:
+    path: Path
+    title: str
+
+
+@dataclass(frozen=True)
+class StageInstructionConfig:
+    role: str
+    scenario: str
+    output_path: str
+    attempt_root: str
+    sandbox_policy: str
+    timeout_seconds: int
+    idle_timeout_seconds: int
+    command_budget: int
+
+    def validate(self) -> None:
+        if self.role not in {"writer", "reviewer"}:
+            raise StageRuntimeError("instruction role must be writer or reviewer")
+        _identifier(self.scenario, "instruction scenario")
+        _path(self.output_path, "instruction output_path")
+        _path(self.attempt_root, "instruction attempt_root")
+        expected_sandbox = "workspace_write" if self.role == "writer" else "read_only"
+        if self.sandbox_policy != expected_sandbox:
+            raise StageRuntimeError(f"{self.role} prepared stage requires {expected_sandbox}")
+        for name in ("timeout_seconds", "idle_timeout_seconds", "command_budget"):
+            value = getattr(self, name)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise StageRuntimeError(f"{name} must be a positive integer")
+        if self.idle_timeout_seconds >= self.timeout_seconds:
+            raise StageRuntimeError("idle_timeout_seconds must be lower than timeout_seconds")
+
+
+class PreparedPackageBuilder:
+    def __init__(self, repo_root: Path, *, max_package_bytes: int = 512000):
+        self.repo_root = repo_root.resolve()
+        if not isinstance(max_package_bytes, int) or isinstance(max_package_bytes, bool) or max_package_bytes < 1:
+            raise StageRuntimeError("max_package_bytes must be a positive integer")
+        self.max_package_bytes = max_package_bytes
+
+    def build(
+        self,
+        *,
+        output_root: Path,
+        package_id: str,
+        ft_slug: str,
+        scope_slug: str,
+        section_id: str,
+        source_registry: Sequence[tuple[Path, str, str]],
+        evidence_inputs: Sequence[EvidenceInput],
+        obligations: PreparedObligationSet,
+        instructions: StageInstructionConfig,
+        forbidden_evidence_roots: Sequence[str],
+    ) -> PreparedStagePackage:
+        _identifier(package_id, "package_id")
+        _identifier(ft_slug, "ft_slug")
+        _identifier(scope_slug, "scope_slug")
+        _text(section_id, "section_id")
+        instructions.validate()
+        if obligations.package_id != package_id:
+            raise StageRuntimeError("obligations package_id does not match package_id")
+        resolved_output = output_root.resolve()
+        try:
+            resolved_output.relative_to(self.repo_root)
+        except ValueError as exc:
+            raise StageRuntimeError("prepared package output must be inside repository") from exc
+        if resolved_output.exists():
+            raise StageRuntimeError("prepared package output already exists and is immutable")
+        if not evidence_inputs:
+            raise StageRuntimeError("at least one evidence input is required")
+        registry = tuple(
+            SourceRegistryEntry(
+                path=repository_relative(path, self.repo_root),
+                sha256=sha256_path(path),
+                role=role,
+                locator=locator,
+            )
+            for path, role, locator in source_registry
+        )
+        if not registry:
+            raise StageRuntimeError("at least one full source registry entry is required")
+        for item in registry:
+            item.validate()
+        temporary = resolved_output.with_name(f".{resolved_output.name}.building-{os.getpid()}")
+        if temporary.exists():
+            raise StageRuntimeError(f"prepared package temporary path already exists: {temporary}")
+        try:
+            temporary.mkdir(parents=True)
+            evidence_text = self._render_evidence(package_id, evidence_inputs)
+            obligations.validate(evidence_text=evidence_text)
+            evidence_path = temporary / "source-evidence.md"
+            obligations_path = temporary / "atomic-obligations.json"
+            instructions_path = temporary / "stage-instructions.md"
+            evidence_path.write_text(evidence_text, encoding="utf-8")
+            write_json_atomic(obligations_path, obligations.to_dict())
+            instructions_path.write_text(
+                self._render_instructions(package_id, instructions), encoding="utf-8"
+            )
+            artifacts = tuple(
+                PackageArtifact(
+                    path=repository_relative(resolved_output / path.name, self.repo_root),
+                    sha256=sha256_path(path),
+                    kind=kind,
+                    bytes=path.stat().st_size,
+                )
+                for path, kind in (
+                    (evidence_path, "source-evidence"),
+                    (obligations_path, "atomic-obligations"),
+                    (instructions_path, "stage-instructions"),
+                )
+            )
+            package = PreparedStagePackage(
+                package_version=PACKAGE_VERSION,
+                package_id=package_id,
+                ft_slug=ft_slug,
+                scope_slug=scope_slug,
+                section_id=section_id,
+                created_at=utc_timestamp(),
+                source_registry=registry,
+                package_artifacts=artifacts,
+                forbidden_evidence_roots=tuple(forbidden_evidence_roots),
+                fallback_policy="targeted-only",
+                package_digest="",
+            )
+            package = replace(package, package_digest=_canonical_digest(package._without_digest()))
+            package.validate()
+            write_json_atomic(temporary / "stage-package.json", package.to_dict())
+            total_bytes = sum(path.stat().st_size for path in temporary.iterdir() if path.is_file())
+            if total_bytes > self.max_package_bytes:
+                raise StageRuntimeError(
+                    f"blocked-package-budget: package bytes {total_bytes} exceed {self.max_package_bytes}"
+                )
+            resolved_output.parent.mkdir(parents=True, exist_ok=True)
+            temporary.replace(resolved_output)
+            return load_prepared_package(resolved_output / "stage-package.json", self.repo_root)
+        finally:
+            if temporary.exists():
+                shutil.rmtree(temporary)
+
+    def _render_evidence(
+        self,
+        package_id: str,
+        evidence_inputs: Sequence[EvidenceInput],
+    ) -> str:
+        lines = ["# Prepared Source Evidence", "", f"- package_id: `{package_id}`", ""]
+        seen: set[Path] = set()
+        for item in evidence_inputs:
+            path = item.path.resolve()
+            if path in seen:
+                raise StageRuntimeError(f"duplicate evidence input: {path}")
+            seen.add(path)
+            if not path.is_file():
+                raise StageRuntimeError(f"evidence input is missing: {path}")
+            relative = repository_relative(path, self.repo_root)
+            content = path.read_text(encoding="utf-8")
+            lines.extend(
+                [
+                    f"## {item.title}",
+                    "",
+                    f"- source_path: `{relative}`",
+                    f"- source_sha256: `{sha256_path(path)}`",
+                    "",
+                    content.rstrip(),
+                    "",
+                ]
+            )
+        return "\n".join(lines).rstrip() + "\n"
+
+    @staticmethod
+    def _render_instructions(package_id: str, config: StageInstructionConfig) -> str:
+        return "\n".join(
+            [
+                "# Prepared Stage Instructions",
+                "",
+                f"- package_id: `{package_id}`",
+                f"- role: `{config.role}`",
+                f"- scenario: `{config.scenario}`",
+                f"- output_path: `{config.output_path}`",
+                f"- attempt_root: `{config.attempt_root}`",
+                f"- sandbox_policy: `{config.sandbox_policy}`",
+                f"- hard_timeout_seconds: `{config.timeout_seconds}`",
+                f"- idle_timeout_seconds: `{config.idle_timeout_seconds}`",
+                f"- command_budget: `{config.command_budget}`",
+                "",
+                "## Fast Path",
+                "",
+                "1. Read only stage-package.json, source-evidence.md, atomic-obligations.json and this file.",
+                "2. Do not rerun source locator, scope analyzer, source parity, DOCX extraction or PDF rendering.",
+                "3. Write a structurally complete minimum output before optional refinement.",
+                "4. Keep output and scratch inside attempt_root.",
+                "5. Do not read generated test cases, earlier cycles or canary artifacts as evidence.",
+                "",
+                "## Targeted Fallback",
+                "",
+                "Use a registered full source only when one named ATOM/source locator is unresolved by the package.",
+                "Record targeted_source_fallback with the reason, source path and exact locator.",
+                "Do not scan a complete document or use external scratch paths. Return blocked if evidence stays insufficient.",
+                "",
+            ]
+        )
+
+
+def load_obligations(path: Path, *, evidence_text: str | None = None) -> PreparedObligationSet:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StageRuntimeError(f"cannot load prepared obligations: {path}") from exc
+    return PreparedObligationSet.from_dict(payload, evidence_text=evidence_text)
+
+
+def load_prepared_package(path: Path, repo_root: Path) -> PreparedStagePackage:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StageRuntimeError(f"cannot load prepared stage package: {path}") from exc
+    package = PreparedStagePackage.from_dict(payload)
+    verify_prepared_package(package, repo_root, manifest_path=path)
+    return package
+
+
+def verify_prepared_package(
+    package: PreparedStagePackage,
+    repo_root: Path,
+    *,
+    manifest_path: Path | None = None,
+) -> None:
+    package.validate()
+    for source in package.source_registry:
+        path = resolve_repository_path(source.path, repo_root)
+        actual = sha256_path(path)
+        if actual != source.sha256:
+            raise StageRuntimeError(f"registered full source hash mismatch: {source.path}")
+    package_root = manifest_path.resolve().parent if manifest_path is not None else None
+    for artifact in package.package_artifacts:
+        path = resolve_repository_path(artifact.path, repo_root)
+        if package_root is not None and path.parent != package_root:
+            raise StageRuntimeError("package artifacts must be siblings of stage-package.json")
+        actual = sha256_path(path)
+        if actual != artifact.sha256:
+            raise StageRuntimeError(f"prepared package artifact hash mismatch: {artifact.path}")
+        if path.stat().st_size != artifact.bytes:
+            raise StageRuntimeError(f"prepared package artifact byte size mismatch: {artifact.path}")
+    obligations_artifact = next(
+        item for item in package.package_artifacts if item.kind == "atomic-obligations"
+    )
+    evidence_artifact = next(item for item in package.package_artifacts if item.kind == "source-evidence")
+    evidence_text = resolve_repository_path(evidence_artifact.path, repo_root).read_text(encoding="utf-8")
+    obligations = load_obligations(
+        resolve_repository_path(obligations_artifact.path, repo_root),
+        evidence_text=evidence_text,
+    )
+    if obligations.package_id != package.package_id:
+        raise StageRuntimeError("prepared obligations package_id does not match stage package")
