@@ -28,6 +28,12 @@ from test_case_agent.review_cycle.attempts import (
     StageAttemptLedger,
     format_attempt_id,
 )
+from test_case_agent.review_cycle.metrics import (
+    StageMetrics,
+    StageMetricsRecorder,
+    build_stage_metrics,
+    summarize_metrics,
+)
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -47,11 +53,15 @@ __all__ = [
     "StageAttemptPaths",
     "StageBackend",
     "StageRuntimeError",
+    "StageMetrics",
+    "StageMetricsRecorder",
     "artifact_ref",
+    "build_stage_metrics",
     "ensure_new_session_id",
     "format_attempt_id",
     "load_manifest",
     "load_result",
     "resolve_transition",
     "start_fresh_sdk_thread",
+    "summarize_metrics",
 ]

@@ -32,6 +32,7 @@ from test_case_agent.review_cycle.runtime import (
     artifact_ref,
 )
 from test_case_agent.review_cycle.attempts import format_attempt_id
+from test_case_agent.review_cycle.metrics import StageMetricsRecorder, build_stage_metrics
 
 
 WRITER_STAGE = "writer-r1"
@@ -918,6 +919,7 @@ class CodexExecReviewCycleRunner:
             events=result.stdout if self.command_config.json_flag else "",
             timed_out=result.timed_out,
             launch_error=result.launch_error,
+            usage=usage_from_events(result.stdout),
         )
         execution.validate()
         artifacts = {
@@ -1135,6 +1137,13 @@ class CodexExecReviewCycleRunner:
                 contract_result,
                 prior_backend_session_ids=tuple(self._backend_session_ids),
             )
+            metrics = build_stage_metrics(
+                manifest,
+                contract_result,
+                execution,
+                repo_root=self.repo_root,
+            )
+            StageMetricsRecorder(self.cycle_dir).record(self.attempt_root(stage), metrics)
         except (StageRuntimeError, ValueError) as exc:
             raise RunnerError(f"invalid v2 stage result for {stage}: {exc}") from exc
         if outcome != "blocked" and execution.backend_session_id:
@@ -1284,6 +1293,41 @@ def backend_session_id_from_events(text: str) -> str:
             if isinstance(value, str) and value.strip():
                 return value.strip()
     return ""
+
+
+def usage_from_events(text: str) -> dict[str, int] | None:
+    aliases = {
+        "input_tokens": ("input_tokens", "prompt_tokens"),
+        "cached_input_tokens": ("cached_input_tokens", "cached_prompt_tokens"),
+        "output_tokens": ("output_tokens", "completion_tokens"),
+        "total_tokens": ("total_tokens",),
+    }
+    collected: dict[str, int] = {}
+    for raw_line in text.splitlines():
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        usage = event.get("usage")
+        if not isinstance(usage, dict):
+            item = event.get("item")
+            usage = item.get("usage") if isinstance(item, dict) else None
+        if not isinstance(usage, dict):
+            continue
+        for canonical, candidates in aliases.items():
+            for candidate in candidates:
+                value = usage.get(candidate)
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                    collected[canonical] = value
+                    break
+    if "total_tokens" not in collected:
+        input_tokens = collected.get("input_tokens")
+        output_tokens = collected.get("output_tokens")
+        if input_tokens is not None and output_tokens is not None:
+            collected["total_tokens"] = input_tokens + output_tokens
+    return collected or None
 
 
 def agent_message_from_event(event: Any) -> str:

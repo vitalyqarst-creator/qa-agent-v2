@@ -516,6 +516,31 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("blocked", contract["outcome"])
         self.assertEqual("", contract["backend_session_id"])
 
+    def test_exec_stages_write_latency_handoff_and_token_metrics(self) -> None:
+        writer_stdout = self.json_event("writer complete", session_id="writer-metrics")
+        writer_stdout += json.dumps(
+            {
+                "type": "turn.completed",
+                "usage": {"input_tokens": 11, "output_tokens": 5, "total_tokens": 16},
+            }
+        ) + "\n"
+        executor = ScriptedExecutor(
+            self.writer_step(stdout=writer_stdout),
+            self.reviewer_step(decision="changes-required"),
+        )
+
+        self.make_runner(executor).run()
+
+        writer_metrics = json.loads(
+            (self.writer_attempt / "metrics.json").read_text(encoding="utf-8")
+        )
+        ledger = (self.cycle_dir / "stage-metrics.ndjson").read_text(encoding="utf-8").splitlines()
+        self.assertEqual("codex-exec", writer_metrics["backend"])
+        self.assertEqual(16, writer_metrics["total_tokens"])
+        self.assertGreater(writer_metrics["input_artifact_bytes"], 0)
+        self.assertGreater(writer_metrics["output_artifact_bytes"], 0)
+        self.assertEqual(2, len(ledger))
+
 
 if __name__ == "__main__":
     unittest.main()
