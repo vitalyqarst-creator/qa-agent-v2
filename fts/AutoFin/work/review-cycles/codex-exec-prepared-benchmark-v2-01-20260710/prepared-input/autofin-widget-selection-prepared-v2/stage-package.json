@@ -1,0 +1,65 @@
+{
+  "created_at": "2026-07-10T13:07:15.525479+00:00",
+  "execution_profile": "simple-field-property",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/canary-runs",
+    "fts/AutoFin/work/iteration-smoke",
+    "fts/AutoFin/work/iteration-smoke-rerun",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-smoke-20260710",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v3-20260710",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v4-20260710",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v5-20260710",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-reviewer-canary-v6-20260710"
+  ],
+  "ft_slug": "AutoFin",
+  "package_artifacts": [
+    {
+      "bytes": 7091,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/source-evidence.md",
+      "sha256": "bddf8b0478a9433cf8deb7fe0baf376fd6bd33388436c37fe29cb396e7f0c965"
+    },
+    {
+      "bytes": 4218,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/atomic-obligations.json",
+      "sha256": "af98598a32b1a207c660f2d7e544aa2c5bfdc9e49737b3eb4d8a668c120f065a"
+    },
+    {
+      "bytes": 1289,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/stage-instructions.md",
+      "sha256": "cb8fb6781f7211a76c73197c41786e12d7e98f7618a651eaf5d8713630c6b9c7"
+    }
+  ],
+  "package_digest": "a9658e6225b4e4aa6166e79ce274dbae082435e575458b6aaa2b5fe6bb81f0ac",
+  "package_id": "autofin-widget-selection-prepared-v2",
+  "package_version": 2,
+  "scope_slug": "iteration-smoke-widget-selection-types",
+  "section_id": "3",
+  "source_registry": [
+    {
+      "locator": "section 3, data type restrictions table and following paragraph",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "locator": "SRC-001..SRC-003",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "locator": "page 5, section 3",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ],
+  "unsupported_dimensions": []
+}

@@ -1,0 +1,128 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/3-iteration-smoke-widget-selection-types.md",
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-benchmark-v2-01-20260710",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/stage-package.json",
+      "sha256": "ab815b06f76b86e9870b7cf757515519d4679e47145e04a469932808cb72394e"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/atomic-obligations.json",
+      "sha256": "af98598a32b1a207c660f2d7e544aa2c5bfdc9e49737b3eb4d8a668c120f065a"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "f9a4001166507ad6801872ead72d9fd85c55881bfdcf3a14ac8fbc5a514c62b5"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "023b6b32772629d3b7d3d5096f1ffd4f8ec2e4b2907ea9c77619c2ff0f657019"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "e012491eb5685a5a17792bad6e931821d7f52ff94e3c8edc34d7c42471a2ba14"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "bb0d2a74d5655bb40b78d61ca64eafe4563067748de690ed66deb4df86a07578"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "b36cb764127f31aede66f70088987a5733f43655228e68ec6b5a86aca7bd79bb"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "c26ae598e4f39435ffbf6a83e1ca8d406e2b727ecf29b4a3478e21503ce074ae"
+    }
+  ],
+  "input_digest": "abed6085af7bbb0e6499e1e5155d62c66ab09fa8cd77c1f511c3fd6b0f4adccf",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "2514e3e5166408ec2741cc87a6d335d6d00208033df961519e05127f89b07cf3"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/stage-instructions.md",
+      "sha256": "cb8fb6781f7211a76c73197c41786e12d7e98f7618a651eaf5d8713630c6b9c7"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "e4eab71bc6670d8c8325bc9723056025905329de3d6f30a3ff0172a2bfdc1a8e"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/reviewer-r1/attempt-001/prompt.md",
+    "sha256": "43e962b488b9d3fd5236e03e4e4e8b83406d061b93c75125fcac0f773eb684c1"
+  },
+  "role": "reviewer",
+  "sandbox_policy": "read_only",
+  "scenario": "reviewer.session_prepared_semantic",
+  "semantic_round": 0,
+  "session_id": "session-reviewer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/prepared-input/autofin-widget-selection-prepared-v2/source-evidence.md",
+      "sha256": "bddf8b0478a9433cf8deb7fe0baf376fd6bd33388436c37fe29cb396e7f0c965"
+    }
+  ],
+  "stage_id": "reviewer-r1",
+  "timeout_seconds": 90
+}

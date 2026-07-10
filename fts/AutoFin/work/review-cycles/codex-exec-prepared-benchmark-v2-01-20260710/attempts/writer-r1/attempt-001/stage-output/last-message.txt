@@ -1,0 +1,3 @@
+Unsigned draft создан и проверен: 3 полных `TC-*`, seed-сентинелов нет, `ATOM-PREP-004` сохранён как gap. Targeted source fallback не использовался.
+
+[Открыть draft.md](C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md)

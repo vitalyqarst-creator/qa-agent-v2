@@ -1,0 +1,71 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4c23-dacd-73b3-a39d-cbd71a60cd18",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-benchmark-v2-01-20260710",
+  "duration_ms": 114250,
+  "exit_code": 0,
+  "finished_at": "2026-07-10T13:09:20.083098+00:00",
+  "input_digest": "7dac80dd6f8bb7cad2bf944e8c2b62ef3636b724e6e42d7fc6fcd4cc8047e2ea",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "71c21cab8ea8430ea608f52bca1cfbf3c876a5d44644536b7e50ac6082dded3d"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "5be69ad59af92c78969485491d618c76a5733158cc53ae7cf417e8f2ce07b51b"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "71c21cab8ea8430ea608f52bca1cfbf3c876a5d44644536b7e50ac6082dded3d"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "2a56ff2647d530abc8c54155272eb39942dc762d63d32ace39d452a9d6105ae0"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "f9a4001166507ad6801872ead72d9fd85c55881bfdcf3a14ac8fbc5a514c62b5"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "023b6b32772629d3b7d3d5096f1ffd4f8ec2e4b2907ea9c77619c2ff0f657019"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "e012491eb5685a5a17792bad6e931821d7f52ff94e3c8edc34d7c42471a2ba14"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "bb0d2a74d5655bb40b78d61ca64eafe4563067748de690ed66deb4df86a07578"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "b36cb764127f31aede66f70088987a5733f43655228e68ec6b5a86aca7bd79bb"
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-v2-01-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "sha256": "e35d6a6ea80b2a99c3b82cc35a197d372b33b479b7a8a1ce5cc2a8acc4ebcbb0"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-10T13:07:25.833628+00:00",
+  "status": "completed",
+  "timed_out": false
+}
