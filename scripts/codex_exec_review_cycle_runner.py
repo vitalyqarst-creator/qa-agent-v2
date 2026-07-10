@@ -40,6 +40,7 @@ from test_case_agent.review_cycle.prepared_package import (
     load_prepared_package,
 )
 from test_case_agent.review_cycle.obligation_gate import validate_draft_obligation_coverage
+from test_case_agent.review_cycle.evidence_access import validate_evidence_access
 from test_case_agent.review_cycle.attempts import format_attempt_id
 from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
 
@@ -556,6 +557,10 @@ class CodexExecReviewCycleRunner:
         return self.runner_output_dir(WRITER_STAGE) / "seed-gate.json"
 
     @property
+    def evidence_access_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "evidence-access-report.json"
+
+    @property
     def draft_seed_path(self) -> Path:
         return self.attempt_root(WRITER_STAGE) / "runner-input" / "draft-seed.md"
 
@@ -847,6 +852,26 @@ class CodexExecReviewCycleRunner:
             prompt=writer_prompt,
             last_message_path=self.stage_output_dir(WRITER_STAGE) / "last-message.txt",
         )
+        if self._prepared_package is not None:
+            evidence_access = validate_evidence_access(
+                events_text=writer_result.stdout,
+                forbidden_roots=self._prepared_package.forbidden_evidence_roots,
+                source_registry=self._prepared_package.source_registry,
+            )
+            write_json(self.evidence_access_path, evidence_access.as_dict())
+            if not evidence_access.passed:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-evidence-access",
+                    reasons=[
+                        "prepared evidence-access gate reported findings",
+                        relative_path(self.evidence_access_path, self.repo_root),
+                    ],
+                )
         production_changes = self._production_changes(production_before)
         if production_changes:
             return self._block_stage(
@@ -1020,6 +1045,11 @@ class CodexExecReviewCycleRunner:
                 ),
                 "seed_gate_report": (
                     relative_path(self.seed_gate_path, self.ft_root)
+                    if self._prepared_package is not None
+                    else ""
+                ),
+                "evidence_access_report": (
+                    relative_path(self.evidence_access_path, self.ft_root)
                     if self._prepared_package is not None
                     else ""
                 ),
@@ -1267,6 +1297,7 @@ class CodexExecReviewCycleRunner:
             "validator_report": "",
             "obligation_gate_report": "",
             "seed_gate_report": "",
+            "evidence_access_report": "",
             "writer_draft_sha256": "",
             "reviewer_findings": "",
             "accepted_terminal_state": False,
@@ -1347,6 +1378,7 @@ class CodexExecReviewCycleRunner:
                     f"- validator: `{relative_path(self.validator_path, self.repo_root)}`",
                     f"- obligation gate: `{relative_path(self.obligation_gate_path, self.repo_root)}`",
                     f"- seed gate: `{relative_path(self.seed_gate_path, self.repo_root)}`",
+                    f"- evidence access gate: `{relative_path(self.evidence_access_path, self.repo_root)}`",
                     f"- response schema: `{relative_path(self.reviewer_schema_path, self.repo_root)}`",
                     "",
                     "Return one JSON object in the final message and write no files:",
@@ -1590,6 +1622,12 @@ class CodexExecReviewCycleRunner:
                         required=False,
                     ),
                     ExpectedOutput(
+                        path=relative_path(self.evidence_access_path, self.repo_root),
+                        kind="evidence-access-report",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
                         path=relative_path(
                             self.stage_output_dir(stage) / "last-message.txt", self.repo_root
                         ),
@@ -1603,7 +1641,9 @@ class CodexExecReviewCycleRunner:
         else:
             handoff_paths.extend((self.draft_path, self.validator_path))
             if self._prepared_package is not None:
-                handoff_paths.extend((self.obligation_gate_path, self.seed_gate_path))
+                handoff_paths.extend(
+                    (self.obligation_gate_path, self.seed_gate_path, self.evidence_access_path)
+                )
             handoff_paths.append(self.reviewer_schema_path)
             expected_outputs.append(
                 ExpectedOutput(

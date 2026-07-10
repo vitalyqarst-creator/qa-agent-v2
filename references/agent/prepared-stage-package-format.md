@@ -115,6 +115,9 @@ Before writer output can reach reviewer:
 - `gap` and `unclear` obligations are not represented as executable coverage;
 - source/package/input hashes remain unchanged;
 - no forbidden evidence root was used;
+- JSONL command evidence contains no broad repository scan or registered full-source access without a prior exact `targeted_source_fallback` authorization;
 - command, idle and hard-time budgets were respected or the explicit timeout-with-progress policy passed all deterministic gates.
 
 Reviewer fast path receives the same package, writer output and deterministic gate report. It remains read-only and returns a structured outcome; only the runner persists findings and applies transitions.
+
+The runner persists `evidence-access-report.json` before reviewer handoff. A late fallback declaration cannot authorize an earlier source access.

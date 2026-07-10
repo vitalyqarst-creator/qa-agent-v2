@@ -88,6 +88,7 @@ Only the runner may produce `signed-off`, and only after the reviewer returns `a
 - `test_case_agent/review_cycle/backends.py`: fresh-thread SDK boundary and backend adapter without resume context.
 - `test_case_agent/review_cycle/attempts.py`: deterministic attempt inspection, retry gating and fresh attempt allocation.
 - `test_case_agent/review_cycle/metrics.py`: attempt/cycle latency, artifact-volume, outcome and optional token evidence.
+- `test_case_agent/review_cycle/evidence_access.py`: deterministic JSONL command audit for forbidden evidence roots, broad scans and exact targeted fallback authorization.
 - `test_case_agent/review_cycle/orchestration.py`: one completion path from backend evidence to immutable result and metrics.
 - `tests/test_review_cycle_stage_contract.py`: focused contract, failure and transition coverage.
 

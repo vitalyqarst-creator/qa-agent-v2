@@ -51,6 +51,10 @@ from test_case_agent.review_cycle.obligation_gate import (
     ObligationGateResult,
     validate_draft_obligation_coverage,
 )
+from test_case_agent.review_cycle.evidence_access import (
+    EvidenceAccessResult,
+    validate_evidence_access,
+)
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -62,6 +66,7 @@ __all__ = [
     "CompletedStage",
     "ExpectedOutput",
     "EvidenceInput",
+    "EvidenceAccessResult",
     "FreshThreadSdkBackend",
     "ObligationGateResult",
     "PreparedGap",
@@ -95,4 +100,5 @@ __all__ = [
     "summarize_metrics",
     "verify_prepared_package",
     "validate_draft_obligation_coverage",
+    "validate_evidence_access",
 ]

@@ -487,6 +487,32 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(gate["passed"])
         self.assertIn("draft-seed-placeholder-remains", {item["id"] for item in gate["findings"]})
 
+    def test_prepared_fast_path_blocks_forbidden_evidence_access(self) -> None:
+        package_path = self.build_prepared_package()
+        stdout = self.json_event("writer started", session_id="writer-session")
+        stdout += json.dumps(
+            {
+                "type": "item.started",
+                "item": {
+                    "id": "forbidden-command",
+                    "type": "command_execution",
+                    "command": "Get-Content fts/demo-ft/test-cases/old.md",
+                },
+            }
+        ) + "\n"
+        executor = ScriptedExecutor(self.writer_step(stdout=stdout))
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-evidence-access", result.status)
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(report["passed"])
+        self.assertEqual("forbidden-evidence-root-access", report["findings"][0]["id"])
+
     def test_prepared_fast_path_rejects_tampered_package_before_exec(self) -> None:
         package_path = self.build_prepared_package()
         (package_path.parent / "source-evidence.md").write_text("tampered\n", encoding="utf-8")
