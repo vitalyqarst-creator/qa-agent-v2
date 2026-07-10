@@ -337,7 +337,12 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             allow_overwrite_final=allow_overwrite_final,
         )
 
-    def build_prepared_package(self) -> Path:
+    def build_prepared_package(
+        self,
+        *,
+        execution_profile: str = "simple-field-property",
+        unsupported_dimensions=(),
+    ) -> Path:
         self.handoff_path.write_text("# Scope contract\n\nSRC-1: observable requirement.\n", encoding="utf-8")
         obligations = PreparedObligationSet.create(
             package_id="pkg-exec-001",
@@ -378,8 +383,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 idle_timeout_seconds=60,
                 command_budget=12,
             ),
-            execution_profile="simple-field-property",
-            unsupported_dimensions=(),
+            execution_profile=execution_profile,
+            unsupported_dimensions=unsupported_dimensions,
             forbidden_evidence_roots=("fts/demo-ft/test-cases",),
         )
         return package_root / "stage-package.json"
@@ -519,6 +524,17 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         executor = ScriptedExecutor()
 
         with self.assertRaisesRegex(runner_module.RunnerError, "Prepared stage package is invalid"):
+            self.make_prepared_runner(executor, package_path).run()
+        self.assertEqual([], executor.requests)
+
+    def test_ineligible_prepared_profile_routes_to_standard_writer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-writer-required",
+            unsupported_dimensions=("numeric-boundaries",),
+        )
+        executor = ScriptedExecutor()
+
+        with self.assertRaisesRegex(runner_module.RunnerError, "route to standard writer"):
             self.make_prepared_runner(executor, package_path).run()
         self.assertEqual([], executor.requests)
 

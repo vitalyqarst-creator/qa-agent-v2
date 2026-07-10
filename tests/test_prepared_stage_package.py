@@ -121,6 +121,7 @@ class PreparedStagePackageTests(unittest.TestCase):
             },
         )
         self.assertFalse((package_root / self.docx.name).exists())
+        self.assertLess(sum(path.stat().st_size for path in package_root.iterdir()), 16 * 1024)
         self.assertTrue(all(item.path.startswith("work/prepared/") for item in loaded.package_artifacts))
         instructions = (package_root / "stage-instructions.md").read_text(encoding="utf-8")
         self.assertIn("Do not rerun source locator", instructions)

@@ -97,6 +97,7 @@ class InstructionContextResolverTests(unittest.TestCase):
         writer_skill = ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md"
         self.assertLess(len(writer_skill.read_bytes()), 20 * 1024)
         self.assertEqual(len(paths), len(payload["files"]))
+        self.assertNotIn("references/agent/prepared-writer-runtime-profile.md", paths)
 
     def test_conditional_references_are_not_loaded_for_simple_writer(self) -> None:
         payload = self.resolve_json("--scenario", "writer.initial_draft.simple")
