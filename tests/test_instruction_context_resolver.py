@@ -292,12 +292,15 @@ class InstructionContextResolverTests(unittest.TestCase):
         paths = {item["path"] for item in payload["files"]}
 
         self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("references/agent/prepared-reviewer-runtime-profile.md", paths)
         self.assertIn("references/agent/prepared-stage-package-format.md", paths)
-        self.assertIn("references/qa/test-design-review-rubric.md", paths)
-        self.assertIn("references/qa/test-case-runtime-format.md", paths)
+        self.assertNotIn("skills/ft-test-case-reviewer/SKILL.md", paths)
+        self.assertNotIn("references/qa/test-design-review-rubric.md", paths)
+        self.assertNotIn("references/qa/test-case-runtime-format.md", paths)
         self.assertNotIn("references/agent/reviewer-output-format.md", paths)
         self.assertNotIn("references/agent/session-log-format.md", paths)
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 20.0)
+        self.assertLessEqual(payload["budget"]["total_kib"], 75.0)
 
     def test_session_reviewer_contexts_are_split_by_review_purpose(self) -> None:
         structure = self.resolve_json("--scenario", "reviewer.structure_preflight")

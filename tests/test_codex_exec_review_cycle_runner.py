@@ -681,6 +681,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("reviewer-read-only", command[command.index("--sandbox-contract") + 1])
         self.assertNotIn("--last-message-contract", command)
         self.assertIn("write no files", executor.requests[1].prompt)
+        self.assertNotIn("Prepared Reviewer Runtime Profile", executor.requests[1].prompt)
 
     def test_writer_stdout_stderr_and_json_events_are_captured(self) -> None:
         writer_stdout = self.json_event("writer trace")

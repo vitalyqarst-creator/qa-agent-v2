@@ -25,6 +25,7 @@ AGENT_LAYER_MODULES = [
     "tests.test_prepared_stage_package",
     "tests.test_prepared_obligation_gate",
     "tests.test_prepared_evidence_access",
+    "tests.test_prepared_reviewer_contract",
     "tests.test_qa_rules",
     "tests.test_review_cycle_stage_contract",
     "tests.test_review_cycle_runtime",
