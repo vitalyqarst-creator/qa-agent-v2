@@ -1,0 +1,43 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4bde-7dfa-7ca0-92f2-4425af7cb4b3",
+  "blocking_reasons": [
+    "reviewer exceeded the command budget; partial review is not accepted"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-live-canary-v2-20260710",
+  "duration_ms": 51438,
+  "exit_code": null,
+  "finished_at": "2026-07-10T11:52:31.534335+00:00",
+  "input_digest": "fd87ec92c1006d29dc088ca5a40c4acc2946cac22667f253820f283e809c3801",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "aae6e788af79776dc8d9989abdc408a536970cd039e27c7dbb226cc812f580c0"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "2a83d75a476c31b013bc8d9ae42fda88145358fa15ffe7004d7c44e453c3d964"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "aae6e788af79776dc8d9989abdc408a536970cd039e27c7dbb226cc812f580c0"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "a19afb1aafddd435274c26a4aa91bf91845fecfda0e27abaa859a9a189f91a5e"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-10T11:51:40.098639+00:00",
+  "status": "blocked",
+  "timed_out": false
+}

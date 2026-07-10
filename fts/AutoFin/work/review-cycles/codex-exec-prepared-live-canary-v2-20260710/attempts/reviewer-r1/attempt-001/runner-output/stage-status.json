@@ -1,0 +1,37 @@
+{
+  "stage": "reviewer-r1",
+  "role": "reviewer",
+  "status": "blocked-command-budget",
+  "reason": "reviewer exceeded the command budget; partial review is not accepted",
+  "exit_code": null,
+  "timed_out": false,
+  "idle_timed_out": false,
+  "command_budget_exceeded": true,
+  "first_artifact_deadline_exceeded": false,
+  "launch_error": false,
+  "duration_seconds": 51.438,
+  "command_count": 9,
+  "first_output_seconds": 0.2190000000409782,
+  "first_artifact_seconds": null,
+  "termination_reason": "command-budget-exceeded",
+  "command": [
+    "C:\\Users\\Пользователь\\.codex\\plugins\\.plugin-appserver\\codex.exe",
+    "exec",
+    "--ephemeral",
+    "--sandbox",
+    "read-only",
+    "--cd",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+    "--json",
+    "--output-schema",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\codex-exec-prepared-live-canary-v2-20260710\\attempts\\reviewer-r1\\attempt-001\\review-contract.schema.json",
+    "-"
+  ],
+  "stdout": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+  "stderr": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+  "events": "fts/AutoFin/work/review-cycles/codex-exec-prepared-live-canary-v2-20260710/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+  "last_message": "",
+  "blocking_reasons": [
+    "reviewer exceeded the command budget; partial review is not accepted"
+  ]
+}
