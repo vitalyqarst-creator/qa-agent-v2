@@ -77,6 +77,7 @@ Only the runner may produce `signed-off`, and only after the reviewer returns `a
 
 - `test_case_agent/review_cycle/contracts.py`: strict manifest/result models, digests, path/write boundaries and fresh-session checks.
 - `test_case_agent/review_cycle/transitions.py`: allowlisted runner-owned transition decisions.
+- `test_case_agent/review_cycle/runtime.py`: shared backend protocol, immutable attempt persistence and filesystem evidence verification.
 - `tests/test_review_cycle_stage_contract.py`: focused contract, failure and transition coverage.
 
 Phase 1 does not connect these contracts to SDK or exec runners, implement retries, change production promotion or perform live Codex execution.
