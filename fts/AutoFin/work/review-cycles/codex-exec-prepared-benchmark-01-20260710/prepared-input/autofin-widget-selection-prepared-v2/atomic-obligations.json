@@ -1,0 +1,70 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-PREP-001",
+      "handling": "Сохранить как gap и запросить отдельный API/DB/persistence scope, если внутреннее представление нужно проверять.",
+      "problem": "Внутренняя интерпретация пустого значения как NULL не имеет наблюдаемого артефакта в подтверждённом UI scope.",
+      "source_refs": [
+        "SRC-003"
+      ]
+    }
+  ],
+  "digest": "f3b031ddd4e3e468945532667e2283135f34e02cbb28a5fbaad4fb7697d3fd58",
+  "obligations": [
+    {
+      "atomic_statement": "В виджете типа «Список» значения берутся из справочника и одновременно можно выбрать только одно значение.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Конкретный экран и значения являются параметрами runtime fixture; RISK-001 запрещает придумывать их.",
+      "obligation_id": "ATOM-PREP-001",
+      "observable_oracle": "После последовательного выбора двух разных доступных значений виджет содержит ровно одно выбранное значение.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить ограничение одиночного выбора без предположений о конкретном справочнике или поле."
+    },
+    {
+      "atomic_statement": "В виджете типа «Список с множественным выбором» значения берутся из справочника и можно выбрать несколько значений.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Конкретный экран и значения являются параметрами runtime fixture; RISK-001 запрещает придумывать их.",
+      "obligation_id": "ATOM-PREP-002",
+      "observable_oracle": "После выбора двух разных доступных значений оба значения одновременно отображаются как выбранные.",
+      "source_refs": [
+        "SRC-002"
+      ],
+      "test_intent": "Проверить возможность множественного выбора без предположений о конкретном справочнике или поле."
+    },
+    {
+      "atomic_statement": "По умолчанию значение виджета отсутствует.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Проверка не подтверждает внутреннее представление NULL.",
+      "obligation_id": "ATOM-PREP-003",
+      "observable_oracle": "До первого взаимодействия с новым виджетом в нём отсутствует выбранное значение.",
+      "source_refs": [
+        "SRC-003"
+      ],
+      "test_intent": "Проверить видимое начальное пустое состояние подходящего виджета."
+    },
+    {
+      "atomic_statement": "Отсутствующее значение интерпретируется системой как NULL.",
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-PREP-001",
+      "notes": "Save-flow, persistence, database and API behavior are out of scope.",
+      "obligation_id": "ATOM-PREP-004",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-003"
+      ],
+      "test_intent": "Не создавать UI-тест без наблюдаемого API, DB или иного persistence evidence."
+    }
+  ],
+  "package_id": "autofin-widget-selection-prepared-v2",
+  "package_version": 2
+}

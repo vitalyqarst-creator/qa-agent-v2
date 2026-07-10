@@ -1,0 +1,74 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4c08-7ac8-72b3-a15d-fdad08420cbc",
+  "blocking_reasons": [
+    "prepared atomic obligation gate reported findings",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-benchmark-01-20260710",
+  "duration_ms": 99093,
+  "exit_code": 0,
+  "finished_at": "2026-07-10T12:39:10.857849+00:00",
+  "input_digest": "3f1fcaf08b1fe876a5e95525bf3942a763e8ab53f8de0b7d6f9586ae7956d764",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "f70c6c37d6e8467e2e1e7a7485cb54042ac17f40bc046e0fb99360076a4b99b1"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "95a1ae9fc36c2869a04283b4b08c7c2821745c7965929d3fab9a6abb3eeb239b"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "f70c6c37d6e8467e2e1e7a7485cb54042ac17f40bc046e0fb99360076a4b99b1"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "540fdf31408947f3c904f023d17848288d6e1fdd802629aaa88acfc6c9a90800"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "a7721991ddfeebe7a3070a685cc7f634f403edb0353df48fdfeed78f19ec76e3"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "040a8a93d685fb8b2c7cbfa14d61b907434b04774d6e7912d63c41def5e8532e"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "cc9d56e2c9f8fe5ad4693c59288446b05ab5904f5b47dcc1d09f210676a42208"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "881c7502840fb0b11e278f50b81d6b84efa49ce1ecd5231b56cba41a5678590a"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "b36cb764127f31aede66f70088987a5733f43655228e68ec6b5a86aca7bd79bb"
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-benchmark-01-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "sha256": "7e24347370ed3bd703d908c44791d19f7aa174f769d9c43364022ba04753009b"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-10T12:37:31.773046+00:00",
+  "status": "blocked",
+  "timed_out": false
+}
