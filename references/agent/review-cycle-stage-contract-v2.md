@@ -54,6 +54,8 @@ The schema is strict. Unknown fields, absolute/traversing paths, duplicate paths
 
 Writer stage-produced outputs must stay under both `attempt_root` and an allowed write root. Reviewer manifests declare no allowed write roots and no stage-produced files. All expected outputs, including runner-produced captures/status, stay under the attempt root. The canonical test-case path must be under a forbidden write root.
 
+Prepared writer attempts may include a runner-owned draft seed under `runner-input/`. The seed is an immutable handoff artifact outside allowed write roots. A non-blocked result requires a distinct draft, no seed sentinels, a recorded first meaningful write, and the normal structure/obligation gates.
+
 ## Stage Result
 
 `stage-result.json` contains:

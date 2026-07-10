@@ -36,6 +36,7 @@ from test_case_agent.review_cycle.runtime import (
 from test_case_agent.review_cycle.prepared_package import (
     FAST_EXECUTION_PROFILE,
     PreparedStagePackage,
+    load_obligations,
     load_prepared_package,
 )
 from test_case_agent.review_cycle.obligation_gate import validate_draft_obligation_coverage
@@ -48,6 +49,7 @@ REVIEWER_STAGE = "reviewer-r1"
 RUNNER_EVENTS = "runner-events.ndjson"
 REVIEW_DECISIONS = {"accepted", "changes-required"}
 ATTEMPT_ID = format_attempt_id(1)
+SEED_MARKER = "PREPARED-DRAFT-SEED"
 
 
 class RunnerError(RuntimeError):
@@ -134,6 +136,9 @@ class ProcessRequest:
     command_budget: int
     stdout_path: Path | None = None
     stderr_path: Path | None = None
+    progress_path: Path | None = None
+    progress_forbidden_marker: str = ""
+    first_artifact_deadline_seconds: int | None = None
 
 
 @dataclass(frozen=True)
@@ -144,10 +149,12 @@ class ProcessResult:
     timed_out: bool = False
     idle_timed_out: bool = False
     command_budget_exceeded: bool = False
+    first_artifact_deadline_exceeded: bool = False
     launch_error: bool = False
     duration_seconds: float = 0.0
     command_count: int = 0
     first_output_seconds: float | None = None
+    first_artifact_seconds: float | None = None
     termination_reason: str = "completed"
 
 
@@ -166,7 +173,9 @@ class SubprocessExecutor:
         termination_reason = "completed"
         command_count = 0
         first_output_seconds: float | None = None
+        first_artifact_seconds: float | None = None
         last_output_at = started
+        last_progress_signature: tuple[int, int] | None = None
         try:
             process = subprocess.Popen(
                 list(request.command),
@@ -209,11 +218,36 @@ class SubprocessExecutor:
             try:
                 while active_streams:
                     now = time.monotonic()
+                    if request.progress_path is not None and request.progress_path.is_file():
+                        stat = request.progress_path.stat()
+                        signature = (stat.st_mtime_ns, stat.st_size)
+                        if signature != last_progress_signature:
+                            last_progress_signature = signature
+                            last_output_at = now
+                        if first_artifact_seconds is None and stat.st_size > 0:
+                            content = request.progress_path.read_text(
+                                encoding="utf-8", errors="replace"
+                            )
+                            if (
+                                not request.progress_forbidden_marker
+                                or request.progress_forbidden_marker not in content
+                            ):
+                                first_artifact_seconds = now - started
                     if process.poll() is None:
                         if now - started >= request.timeout_seconds:
                             termination_reason = "hard-timeout"
                             break
-                        if now - last_output_at >= request.idle_timeout_seconds:
+                        if (
+                            request.first_artifact_deadline_seconds is not None
+                            and first_artifact_seconds is None
+                            and now - started >= request.first_artifact_deadline_seconds
+                        ):
+                            termination_reason = "first-artifact-deadline"
+                            break
+                        if (
+                            (request.progress_path is None or first_artifact_seconds is not None)
+                            and now - last_output_at >= request.idle_timeout_seconds
+                        ):
                             termination_reason = "idle-timeout"
                             break
                     try:
@@ -262,9 +296,13 @@ class SubprocessExecutor:
                 timed_out=termination_reason == "hard-timeout",
                 idle_timed_out=termination_reason == "idle-timeout",
                 command_budget_exceeded=termination_reason == "command-budget-exceeded",
+                first_artifact_deadline_exceeded=(
+                    termination_reason == "first-artifact-deadline"
+                ),
                 duration_seconds=time.monotonic() - started,
                 command_count=command_count,
                 first_output_seconds=first_output_seconds,
+                first_artifact_seconds=first_artifact_seconds,
                 termination_reason=termination_reason,
             )
         except OSError as exc:
@@ -458,11 +496,13 @@ class CodexExecReviewCycleRunner:
     reviewer_idle_timeout_seconds: int = 45
     writer_command_budget: int = 12
     reviewer_command_budget: int = 8
+    writer_first_artifact_deadline_seconds: int = 90
     promote_final: bool = False
     allow_overwrite_final: bool = False
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
     _backend_session_ids: list[str] = field(default_factory=list, init=False)
     _prepared_package: PreparedStagePackage | None = field(default=None, init=False)
+    _draft_seed_sha256: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
         self.repo_root = self.repo_root.resolve()
@@ -512,6 +552,14 @@ class CodexExecReviewCycleRunner:
         return self.runner_output_dir(WRITER_STAGE) / "obligation-gate.json"
 
     @property
+    def seed_gate_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "seed-gate.json"
+
+    @property
+    def draft_seed_path(self) -> Path:
+        return self.attempt_root(WRITER_STAGE) / "runner-input" / "draft-seed.md"
+
+    @property
     def reviewer_findings_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "findings.md"
 
@@ -539,6 +587,7 @@ class CodexExecReviewCycleRunner:
             "reviewer_idle_timeout_seconds",
             "writer_command_budget",
             "reviewer_command_budget",
+            "writer_first_artifact_deadline_seconds",
         ):
             if getattr(self, name) < 1:
                 raise RunnerError(f"{name} must be >= 1")
@@ -672,8 +721,95 @@ class CodexExecReviewCycleRunner:
                 "```json",
                 self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
                 "```",
+                "",
+                "## Draft seed",
+                "",
+                "Replace every seed sentinel and write the result to the declared output path.",
+                "",
+                "```markdown",
+                self._draft_seed_text().strip(),
+                "```",
                 "<!-- PREPARED-STAGE-PAYLOAD:END -->",
             ]
+        )
+
+    def _draft_seed_text(self) -> str:
+        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+        testable = [item for item in obligations.obligations if item.coverage_status == "testable"]
+        lines = [
+            "# Тест-кейсы",
+            "",
+            f"<!-- {SEED_MARKER}: replace all [SEED:*] values before completion -->",
+            "",
+        ]
+        for index, obligation in enumerate(testable, start=1):
+            tc_id = f"TC-PREP-{index:03d}"
+            lines.extend(
+                [
+                    f"## {tc_id}",
+                    "",
+                    f"**Название:** [SEED:title:{obligation.obligation_id}]",
+                    "**Тип:** позитивный",
+                    "**Приоритет:** средний",
+                    "**package_id:** [SEED:package_id]",
+                    f"**Трассировка:** {obligation.obligation_id}",
+                    "",
+                    "### Предусловия",
+                    "",
+                    "1. [SEED:reproducible setup]",
+                    "",
+                    "### Тестовые данные",
+                    "",
+                    "- [SEED:concrete permitted data or parameter]",
+                    "",
+                    "### Шаги",
+                    "",
+                    "1. [SEED:user action]",
+                    "",
+                    "### Итоговый ожидаемый результат",
+                    "",
+                    f"[SEED:observable oracle] {obligation.observable_oracle}",
+                    "",
+                    "### Постусловия",
+                    "",
+                    "- [SEED:postcondition or explicit not-applicable reason]",
+                    "",
+                ]
+            )
+        return "\n".join(lines).rstrip() + "\n"
+
+    def _validate_draft_seed(self) -> ValidationResult:
+        findings: list[dict[str, Any]] = []
+        if not self.draft_seed_path.is_file() or sha256_file(self.draft_seed_path) != self._draft_seed_sha256:
+            findings.append(
+                {
+                    "id": "draft-seed-input-changed",
+                    "severity": "error",
+                    "message": "Runner-owned draft seed changed during the writer stage.",
+                }
+            )
+        draft = self.draft_path.read_text(encoding="utf-8")
+        if SEED_MARKER in draft or "[SEED:" in draft:
+            findings.append(
+                {
+                    "id": "draft-seed-placeholder-remains",
+                    "severity": "error",
+                    "message": "Draft still contains runner seed sentinels/placeholders.",
+                }
+            )
+        if self.draft_path.read_bytes() == self.draft_seed_path.read_bytes():
+            findings.append(
+                {
+                    "id": "draft-equals-seed",
+                    "severity": "error",
+                    "message": "Writer did not make a meaningful change to the draft seed.",
+                }
+            )
+        return ValidationResult(
+            passed=not findings,
+            findings=tuple(findings),
+            checked_paths=(str(self.draft_seed_path), str(self.draft_path)),
+            validator="prepared-draft-seed-gate-v1",
         )
 
     def _verify_prepared_package(self) -> None:
@@ -750,6 +886,9 @@ class CodexExecReviewCycleRunner:
             elif writer_result.idle_timed_out:
                 status = "blocked-idle-timeout"
                 reason = "writer produced no events within the idle budget and the required draft is missing"
+            elif writer_result.first_artifact_deadline_exceeded:
+                status = "blocked-first-artifact-deadline"
+                reason = "writer did not create a meaningful draft before the first-artifact deadline"
             elif writer_result.timed_out:
                 status = "blocked-timeout"
                 reason = "writer timed out and the required draft is missing"
@@ -765,6 +904,23 @@ class CodexExecReviewCycleRunner:
                 status=status,
                 reasons=[reason, relative_path(self.draft_path, self.repo_root)],
             )
+
+        if self._prepared_package is not None:
+            seed_validation = self._validate_draft_seed()
+            write_json(self.seed_gate_path, seed_validation.as_dict())
+            if not seed_validation.passed:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-seed-gate",
+                    reasons=[
+                        "prepared draft seed gate reported findings",
+                        relative_path(self.seed_gate_path, self.repo_root),
+                    ],
+                )
 
         validation = self.validator.validate(
             draft_path=self.draft_path,
@@ -824,6 +980,7 @@ class CodexExecReviewCycleRunner:
             writer_result.timed_out
             or writer_result.idle_timed_out
             or writer_result.command_budget_exceeded
+            or writer_result.first_artifact_deadline_exceeded
         )
         writer_status = "completed-with-progress" if writer_interrupted else "completed"
         self._write_stage_status(
@@ -858,6 +1015,11 @@ class CodexExecReviewCycleRunner:
                 "validator_report": relative_path(self.validator_path, self.ft_root),
                 "obligation_gate_report": (
                     relative_path(self.obligation_gate_path, self.ft_root)
+                    if self._prepared_package is not None
+                    else ""
+                ),
+                "seed_gate_report": (
+                    relative_path(self.seed_gate_path, self.ft_root)
                     if self._prepared_package is not None
                     else ""
                 ),
@@ -1104,6 +1266,7 @@ class CodexExecReviewCycleRunner:
             "canonical_test_cases": relative_path(self.final_path, self.ft_root),
             "validator_report": "",
             "obligation_gate_report": "",
+            "seed_gate_report": "",
             "writer_draft_sha256": "",
             "reviewer_findings": "",
             "accepted_terminal_state": False,
@@ -1183,6 +1346,7 @@ class CodexExecReviewCycleRunner:
                     f"- writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
                     f"- validator: `{relative_path(self.validator_path, self.repo_root)}`",
                     f"- obligation gate: `{relative_path(self.obligation_gate_path, self.repo_root)}`",
+                    f"- seed gate: `{relative_path(self.seed_gate_path, self.repo_root)}`",
                     f"- response schema: `{relative_path(self.reviewer_schema_path, self.repo_root)}`",
                     "",
                     "Return one JSON object in the final message and write no files:",
@@ -1233,6 +1397,10 @@ class CodexExecReviewCycleRunner:
         self.runner_output_dir(stage).mkdir(parents=True)
         if role == "writer":
             self.stage_output_dir(stage).mkdir(parents=True)
+            if self._prepared_package is not None:
+                self.draft_seed_path.parent.mkdir(parents=True, exist_ok=True)
+                self.draft_seed_path.write_text(self._draft_seed_text(), encoding="utf-8")
+                self._draft_seed_sha256 = sha256_file(self.draft_seed_path)
         else:
             write_json(self.reviewer_schema_path, self._review_contract_schema())
         manifest = self._build_stage_manifest(stage=stage, role=role, prompt_path=prompt_path)
@@ -1264,6 +1432,13 @@ class CodexExecReviewCycleRunner:
             command_budget=command_budget,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
+            progress_path=(self.draft_path if role == "writer" and self._prepared_package else None),
+            progress_forbidden_marker=(SEED_MARKER if role == "writer" else ""),
+            first_artifact_deadline_seconds=(
+                self.writer_first_artifact_deadline_seconds
+                if role == "writer" and self._prepared_package
+                else None
+            ),
         )
         append_event(
             self.cycle_dir,
@@ -1277,6 +1452,11 @@ class CodexExecReviewCycleRunner:
             timeout_seconds=timeout_seconds,
             idle_timeout_seconds=idle_timeout_seconds,
             command_budget=command_budget,
+            first_artifact_deadline_seconds=(
+                self.writer_first_artifact_deadline_seconds
+                if role == "writer" and self._prepared_package
+                else None
+            ),
         )
         started_at = utc_now()
         result = self.executor.execute(request)
@@ -1295,7 +1475,11 @@ class CodexExecReviewCycleRunner:
             stdout=result.stdout,
             stderr=result.stderr,
             events=result.stdout if self.command_config.json_flag else "",
-            timed_out=result.timed_out or result.idle_timed_out,
+            timed_out=(
+                result.timed_out
+                or result.idle_timed_out
+                or result.first_artifact_deadline_exceeded
+            ),
             launch_error=result.launch_error,
             usage=usage_from_events(result.stdout),
         )
@@ -1319,8 +1503,10 @@ class CodexExecReviewCycleRunner:
             timed_out=result.timed_out,
             idle_timed_out=result.idle_timed_out,
             command_budget_exceeded=result.command_budget_exceeded,
+            first_artifact_deadline_exceeded=result.first_artifact_deadline_exceeded,
             command_count=result.command_count,
             first_output_seconds=result.first_output_seconds,
+            first_artifact_seconds=result.first_artifact_seconds,
             termination_reason=result.termination_reason,
             launch_error=result.launch_error,
             stdout=artifacts["stdout"],
@@ -1371,6 +1557,8 @@ class CodexExecReviewCycleRunner:
                 self.prepared_package_path,
                 self._prepared_artifact("atomic-obligations"),
             ]
+            if role == "writer":
+                handoff_paths.append(self.draft_seed_path)
         else:
             instruction_paths = list(self.instruction_files)
             source_paths = list(self.source_files)
@@ -1396,6 +1584,12 @@ class CodexExecReviewCycleRunner:
                         required=False,
                     ),
                     ExpectedOutput(
+                        path=relative_path(self.seed_gate_path, self.repo_root),
+                        kind="seed-gate",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
                         path=relative_path(
                             self.stage_output_dir(stage) / "last-message.txt", self.repo_root
                         ),
@@ -1409,7 +1603,7 @@ class CodexExecReviewCycleRunner:
         else:
             handoff_paths.extend((self.draft_path, self.validator_path))
             if self._prepared_package is not None:
-                handoff_paths.append(self.obligation_gate_path)
+                handoff_paths.extend((self.obligation_gate_path, self.seed_gate_path))
             handoff_paths.append(self.reviewer_schema_path)
             expected_outputs.append(
                 ExpectedOutput(
@@ -1494,10 +1688,12 @@ class CodexExecReviewCycleRunner:
             "timed_out": result.timed_out,
             "idle_timed_out": result.idle_timed_out,
             "command_budget_exceeded": result.command_budget_exceeded,
+            "first_artifact_deadline_exceeded": result.first_artifact_deadline_exceeded,
             "launch_error": result.launch_error,
             "duration_seconds": round(result.duration_seconds, 3),
             "command_count": result.command_count,
             "first_output_seconds": result.first_output_seconds,
+            "first_artifact_seconds": result.first_artifact_seconds,
             "termination_reason": result.termination_reason,
             "command": artifacts["command"],
             "stdout": artifacts["stdout"],
@@ -1797,6 +1993,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--reviewer-idle-timeout-seconds", type=int, default=45)
     parser.add_argument("--writer-command-budget", type=int, default=12)
     parser.add_argument("--reviewer-command-budget", type=int, default=8)
+    parser.add_argument("--writer-first-artifact-deadline-seconds", type=int, default=90)
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--allow-overwrite-final", action="store_true")
     return parser
@@ -1833,6 +2030,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         reviewer_idle_timeout_seconds=args.reviewer_idle_timeout_seconds,
         writer_command_budget=args.writer_command_budget,
         reviewer_command_budget=args.reviewer_command_budget,
+        writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
         promote_final=args.promote_final,
         allow_overwrite_final=args.allow_overwrite_final,
     )

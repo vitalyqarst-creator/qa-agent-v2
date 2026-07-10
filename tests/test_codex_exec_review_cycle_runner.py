@@ -59,6 +59,8 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         timeout_seconds: int = 5,
         idle_timeout_seconds: int = 2,
         command_budget: int = 5,
+        progress_path: Path | None = None,
+        first_artifact_deadline_seconds: int | None = None,
     ):
         return runner_module.ProcessRequest(
             stage="writer-r1",
@@ -71,6 +73,9 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
             command_budget=command_budget,
             stdout_path=self.root / "stdout.txt",
             stderr_path=self.root / "stderr.txt",
+            progress_path=progress_path,
+            progress_forbidden_marker=runner_module.SEED_MARKER,
+            first_artifact_deadline_seconds=first_artifact_deadline_seconds,
         )
 
     def test_streams_jsonl_and_counts_started_commands(self) -> None:
@@ -115,6 +120,40 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         self.assertFalse(result.timed_out)
         self.assertEqual("idle-timeout", result.termination_reason)
         self.assertLess(time.monotonic() - started, 4)
+
+    def test_stops_when_first_meaningful_artifact_deadline_is_missed(self) -> None:
+        code = "import time; print('started',flush=True); time.sleep(5)"
+        result = runner_module.SubprocessExecutor().execute(
+            self.request(
+                code,
+                timeout_seconds=5,
+                idle_timeout_seconds=1,
+                progress_path=self.root / "draft.md",
+                first_artifact_deadline_seconds=1,
+            )
+        )
+
+        self.assertTrue(result.first_artifact_deadline_exceeded)
+        self.assertFalse(result.idle_timed_out)
+        self.assertEqual("first-artifact-deadline", result.termination_reason)
+
+    def test_records_first_meaningful_artifact_write(self) -> None:
+        code = (
+            "import pathlib,time; time.sleep(.2); "
+            "pathlib.Path('draft.md').write_text('complete draft',encoding='utf-8'); "
+            "print('written',flush=True)"
+        )
+        result = runner_module.SubprocessExecutor().execute(
+            self.request(
+                code,
+                progress_path=self.root / "draft.md",
+                first_artifact_deadline_seconds=2,
+            )
+        )
+
+        self.assertEqual(0, result.exit_code)
+        self.assertIsNotNone(result.first_artifact_seconds)
+        self.assertLess(result.first_artifact_seconds, 2)
 
 
 class FakeValidator:
@@ -423,6 +462,30 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         gate = json.loads((self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(encoding="utf-8"))
         self.assertFalse(gate["passed"])
         self.assertEqual("missing-testable-obligation-coverage", gate["findings"][0]["id"])
+
+    def test_prepared_fast_path_rejects_unchanged_seed(self) -> None:
+        package_path = self.build_prepared_package()
+
+        def seed_only_writer(_request):
+            self.draft_path.parent.mkdir(parents=True, exist_ok=True)
+            seed = self.writer_attempt / "runner-input" / "draft-seed.md"
+            self.draft_path.write_bytes(seed.read_bytes())
+            return self.process_result(
+                stdout=self.json_event("writer completed", session_id="writer-session")
+            )
+
+        executor = ScriptedExecutor(seed_only_writer)
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-seed-gate", result.status)
+        self.assertEqual(1, len(executor.requests))
+        gate = json.loads(
+            (self.writer_attempt / "runner-output" / "seed-gate.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(gate["passed"])
+        self.assertIn("draft-seed-placeholder-remains", {item["id"] for item in gate["findings"]})
 
     def test_prepared_fast_path_rejects_tampered_package_before_exec(self) -> None:
         package_path = self.build_prepared_package()

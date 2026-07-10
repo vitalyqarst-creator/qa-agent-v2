@@ -93,9 +93,9 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 | hard timeout seconds | 180 | 120 |
 | idle timeout seconds | 60 | 45 |
 | command executions | 12 | 8 |
-| first complete output target seconds | 90 | n/a |
+| first meaningful draft deadline seconds | 90 | n/a |
 
-Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-command-budget`, `blocked-idle-timeout` or `blocked-timeout`. Increasing a budget is an explicit experiment decision, not automatic recovery.
+Before the first meaningful draft write, the writer is governed by the first-artifact deadline rather than the post-write idle timeout. After a meaningful write, draft changes and JSONL events refresh the idle clock. Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-command-budget`, `blocked-first-artifact-deadline`, `blocked-idle-timeout` or `blocked-timeout`. Increasing a budget is an explicit experiment decision, not automatic recovery.
 
 ## Fast Path And Fallback
 
@@ -108,6 +108,7 @@ Targeted fallback is allowed only when a named obligation cannot be resolved fro
 Before writer output can reach reviewer:
 
 - required output exists under the attempt root;
+- draft differs from the runner-owned seed and contains no seed sentinel/placeholders;
 - structural validator passes;
 - every testable obligation is referenced by at least one `TC-*`;
 - every TC traceability id exists in the package;
