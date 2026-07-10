@@ -49,6 +49,22 @@ WRITER_STAGE = "writer-r1"
 REVIEWER_STAGE = "reviewer-r1"
 RUNNER_EVENTS = "runner-events.ndjson"
 REVIEW_DECISIONS = {"accepted", "changes-required"}
+PREPARED_REVIEW_VERDICTS = {
+    "covered",
+    "missing",
+    "incorrect",
+    "gap-preserved",
+    "invented-coverage",
+}
+REVIEW_FINDING_SEVERITIES = {"error", "warning", "info"}
+REVIEW_FINDING_CATEGORIES = {
+    "test-design",
+    "expected-result",
+    "coverage",
+    "atomarity",
+    "duplication",
+    "scope",
+}
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
 
@@ -462,9 +478,33 @@ class ProjectDraftStructureValidator:
 
 
 @dataclass(frozen=True)
+class ObligationReview:
+    atom_id: str
+    verdict: str
+    test_case_ids: tuple[str, ...]
+    note: str
+
+
+@dataclass(frozen=True)
+class ReviewFinding:
+    finding_id: str
+    severity: str
+    category: str
+    atom_ids: tuple[str, ...]
+    test_case_ids: tuple[str, ...]
+    problem: str
+    required_change: str
+
+
+@dataclass(frozen=True)
 class ReviewContract:
     decision: str
-    findings_markdown: str
+    findings_markdown: str = ""
+    contract_version: int = 1
+    reviewed_draft_sha256: str = ""
+    obligation_reviews: tuple[ObligationReview, ...] = ()
+    findings: tuple[ReviewFinding, ...] = ()
+    summary: str = ""
 
 
 @dataclass(frozen=True)
@@ -1156,7 +1196,17 @@ class CodexExecReviewCycleRunner:
                 reasons=["reviewer completed without a final review contract in stdout/events"],
             )
         try:
-            review = parse_review_contract(reviewer_message)
+            if self._prepared_package is not None:
+                review = parse_prepared_review_contract(
+                    reviewer_message,
+                    expected_obligations=load_obligations(
+                        self._prepared_artifact("atomic-obligations")
+                    ).obligations,
+                    expected_draft_sha256=draft_sha256,
+                    draft_text=self.draft_path.read_text(encoding="utf-8"),
+                )
+            else:
+                review = parse_review_contract(reviewer_message)
         except RunnerError as exc:
             return self._block_stage(
                 state,
@@ -1180,7 +1230,12 @@ class CodexExecReviewCycleRunner:
                 reasons=[reviewer_session_issue],
             )
 
-        self.reviewer_findings_path.write_text(review.findings_markdown.rstrip() + "\n", encoding="utf-8")
+        findings_markdown = (
+            render_prepared_review_findings(review)
+            if review.contract_version == 2
+            else review.findings_markdown
+        )
+        self.reviewer_findings_path.write_text(findings_markdown.rstrip() + "\n", encoding="utf-8")
         if review.decision == "changes-required":
             self._write_stage_status(
                 stage=REVIEWER_STAGE,
@@ -1692,8 +1747,91 @@ class CodexExecReviewCycleRunner:
             forbidden_write_roots=[relative_path(self.ft_root / "test-cases", self.repo_root)],
         )
 
-    @staticmethod
-    def _review_contract_schema() -> dict[str, Any]:
+    def _review_contract_schema(self) -> dict[str, Any]:
+        if self._prepared_package is not None:
+            return {
+                "$schema": "https://json-schema.org/draft/2020-12/schema",
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "contract_version",
+                    "decision",
+                    "reviewed_draft_sha256",
+                    "obligation_reviews",
+                    "findings",
+                    "summary",
+                ],
+                "properties": {
+                    "contract_version": {"type": "integer", "const": 2},
+                    "decision": {"type": "string", "enum": sorted(REVIEW_DECISIONS)},
+                    "reviewed_draft_sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$",
+                    },
+                    "obligation_reviews": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["atom_id", "verdict", "test_case_ids", "note"],
+                            "properties": {
+                                "atom_id": {"type": "string", "minLength": 1},
+                                "verdict": {
+                                    "type": "string",
+                                    "enum": sorted(PREPARED_REVIEW_VERDICTS),
+                                },
+                                "test_case_ids": {
+                                    "type": "array",
+                                    "uniqueItems": True,
+                                    "items": {"type": "string", "minLength": 1},
+                                },
+                                "note": {"type": "string", "minLength": 1},
+                            },
+                        },
+                    },
+                    "findings": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "id",
+                                "severity",
+                                "category",
+                                "atom_ids",
+                                "test_case_ids",
+                                "problem",
+                                "required_change",
+                            ],
+                            "properties": {
+                                "id": {"type": "string", "minLength": 1},
+                                "severity": {
+                                    "type": "string",
+                                    "enum": sorted(REVIEW_FINDING_SEVERITIES),
+                                },
+                                "category": {
+                                    "type": "string",
+                                    "enum": sorted(REVIEW_FINDING_CATEGORIES),
+                                },
+                                "atom_ids": {
+                                    "type": "array",
+                                    "uniqueItems": True,
+                                    "items": {"type": "string", "minLength": 1},
+                                },
+                                "test_case_ids": {
+                                    "type": "array",
+                                    "uniqueItems": True,
+                                    "items": {"type": "string", "minLength": 1},
+                                },
+                                "problem": {"type": "string", "minLength": 1},
+                                "required_change": {"type": "string", "minLength": 1},
+                            },
+                        },
+                    },
+                    "summary": {"type": "string", "minLength": 1},
+                },
+            }
         return {
             "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "object",
@@ -1981,6 +2119,19 @@ def agent_message_from_event(event: Any) -> str:
 
 
 def parse_review_contract(text: str) -> ReviewContract:
+    payload = _review_contract_payload(text)
+    if set(payload) != {"decision", "findings_markdown"}:
+        raise RunnerError("reviewer final output must contain exactly decision and findings_markdown")
+    decision = str(payload.get("decision") or "").strip()
+    findings = payload.get("findings_markdown")
+    if decision not in REVIEW_DECISIONS:
+        raise RunnerError(f"reviewer decision must be one of {sorted(REVIEW_DECISIONS)}")
+    if not isinstance(findings, str) or not findings.strip():
+        raise RunnerError("reviewer findings_markdown must be a non-empty string")
+    return ReviewContract(decision=decision, findings_markdown=findings)
+
+
+def _review_contract_payload(text: str) -> dict[str, Any]:
     candidate = text.strip()
     fenced = re.fullmatch(r"```(?:json)?\s*(\{.*\})\s*```", candidate, flags=re.DOTALL | re.IGNORECASE)
     if fenced:
@@ -1991,15 +2142,241 @@ def parse_review_contract(text: str) -> ReviewContract:
         raise RunnerError(f"reviewer final output is not a valid JSON contract: {exc.msg}") from exc
     if not isinstance(payload, dict):
         raise RunnerError("reviewer final output must be one JSON object")
-    if set(payload) != {"decision", "findings_markdown"}:
-        raise RunnerError("reviewer final output must contain exactly decision and findings_markdown")
-    decision = str(payload.get("decision") or "").strip()
-    findings = payload.get("findings_markdown")
+    return payload
+
+
+def _required_text(payload: dict[str, Any], key: str, context: str) -> str:
+    value = payload.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise RunnerError(f"{context}.{key} must be a non-empty string")
+    return value.strip()
+
+
+def _string_list(payload: dict[str, Any], key: str, context: str) -> tuple[str, ...]:
+    value = payload.get(key)
+    if not isinstance(value, list) or any(
+        not isinstance(item, str) or not item.strip() for item in value
+    ):
+        raise RunnerError(f"{context}.{key} must be an array of non-empty strings")
+    normalized = tuple(item.strip() for item in value)
+    if len(normalized) != len(set(normalized)):
+        raise RunnerError(f"{context}.{key} must not contain duplicates")
+    return normalized
+
+
+def parse_prepared_review_contract(
+    text: str,
+    *,
+    expected_obligations: Sequence[Any],
+    expected_draft_sha256: str,
+    draft_text: str,
+) -> ReviewContract:
+    payload = _review_contract_payload(text)
+    expected_fields = {
+        "contract_version",
+        "decision",
+        "reviewed_draft_sha256",
+        "obligation_reviews",
+        "findings",
+        "summary",
+    }
+    if set(payload) != expected_fields:
+        raise RunnerError(
+            "prepared reviewer final output must contain exactly contract_version, decision, "
+            "reviewed_draft_sha256, obligation_reviews, findings and summary"
+        )
+    if payload.get("contract_version") != 2:
+        raise RunnerError("prepared reviewer contract_version must equal 2")
+    decision = _required_text(payload, "decision", "review")
     if decision not in REVIEW_DECISIONS:
         raise RunnerError(f"reviewer decision must be one of {sorted(REVIEW_DECISIONS)}")
-    if not isinstance(findings, str) or not findings.strip():
-        raise RunnerError("reviewer findings_markdown must be a non-empty string")
-    return ReviewContract(decision=decision, findings_markdown=findings)
+    reviewed_hash = _required_text(payload, "reviewed_draft_sha256", "review")
+    if reviewed_hash != expected_draft_sha256:
+        raise RunnerError(
+            "prepared reviewer draft hash mismatch: "
+            f"expected {expected_draft_sha256}, got {reviewed_hash}"
+        )
+
+    raw_reviews = payload.get("obligation_reviews")
+    if not isinstance(raw_reviews, list) or not raw_reviews:
+        raise RunnerError("prepared reviewer obligation_reviews must be a non-empty array")
+    reviews: list[ObligationReview] = []
+    for index, item in enumerate(raw_reviews):
+        context = f"obligation_reviews[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "atom_id",
+            "verdict",
+            "test_case_ids",
+            "note",
+        }:
+            raise RunnerError(f"{context} has invalid fields")
+        verdict = _required_text(item, "verdict", context)
+        if verdict not in PREPARED_REVIEW_VERDICTS:
+            raise RunnerError(f"{context}.verdict is not allowed: {verdict}")
+        reviews.append(
+            ObligationReview(
+                atom_id=_required_text(item, "atom_id", context),
+                verdict=verdict,
+                test_case_ids=_string_list(item, "test_case_ids", context),
+                note=_required_text(item, "note", context),
+            )
+        )
+
+    expected_by_id = {item.obligation_id: item for item in expected_obligations}
+    review_ids = [item.atom_id for item in reviews]
+    if len(review_ids) != len(set(review_ids)):
+        raise RunnerError("prepared reviewer obligation_reviews contain duplicate atom ids")
+    if set(review_ids) != set(expected_by_id):
+        missing = sorted(set(expected_by_id) - set(review_ids))
+        unknown = sorted(set(review_ids) - set(expected_by_id))
+        raise RunnerError(
+            f"prepared reviewer atom set mismatch: missing={missing}, unknown={unknown}"
+        )
+
+    known_tc_ids = set(
+        re.findall(r"^##\s+(TC-[A-Za-z0-9][A-Za-z0-9_.-]*)\b", draft_text, flags=re.MULTILINE)
+    )
+    findings_payload = payload.get("findings")
+    if not isinstance(findings_payload, list):
+        raise RunnerError("prepared reviewer findings must be an array")
+    findings: list[ReviewFinding] = []
+    finding_ids: set[str] = set()
+    for index, item in enumerate(findings_payload):
+        context = f"findings[{index}]"
+        required = {
+            "id",
+            "severity",
+            "category",
+            "atom_ids",
+            "test_case_ids",
+            "problem",
+            "required_change",
+        }
+        if not isinstance(item, dict) or set(item) != required:
+            raise RunnerError(f"{context} has invalid fields")
+        finding_id = _required_text(item, "id", context)
+        if finding_id in finding_ids:
+            raise RunnerError("prepared reviewer findings contain duplicate ids")
+        finding_ids.add(finding_id)
+        severity = _required_text(item, "severity", context)
+        category = _required_text(item, "category", context)
+        if severity not in REVIEW_FINDING_SEVERITIES:
+            raise RunnerError(f"{context}.severity is not allowed: {severity}")
+        if category not in REVIEW_FINDING_CATEGORIES:
+            raise RunnerError(f"{context}.category is not allowed: {category}")
+        atom_ids = _string_list(item, "atom_ids", context)
+        test_case_ids = _string_list(item, "test_case_ids", context)
+        if set(atom_ids) - set(expected_by_id):
+            raise RunnerError(f"{context} references unknown atom ids")
+        if set(test_case_ids) - known_tc_ids:
+            raise RunnerError(f"{context} references unknown test-case ids")
+        findings.append(
+            ReviewFinding(
+                finding_id=finding_id,
+                severity=severity,
+                category=category,
+                atom_ids=atom_ids,
+                test_case_ids=test_case_ids,
+                problem=_required_text(item, "problem", context),
+                required_change=_required_text(item, "required_change", context),
+            )
+        )
+
+    blocking_atoms = {
+        atom_id
+        for finding in findings
+        if finding.severity == "error"
+        for atom_id in finding.atom_ids
+    }
+    for review in reviews:
+        obligation = expected_by_id[review.atom_id]
+        if set(review.test_case_ids) - known_tc_ids:
+            raise RunnerError(
+                f"obligation review {review.atom_id} references unknown test-case ids"
+            )
+        if obligation.coverage_status == "testable":
+            if review.verdict not in {"covered", "missing", "incorrect"}:
+                raise RunnerError(
+                    f"testable obligation {review.atom_id} has incompatible verdict {review.verdict}"
+                )
+            if review.verdict == "covered" and not review.test_case_ids:
+                raise RunnerError(
+                    f"covered obligation {review.atom_id} must reference at least one test case"
+                )
+        else:
+            if review.verdict not in {"gap-preserved", "invented-coverage"}:
+                raise RunnerError(
+                    f"non-testable obligation {review.atom_id} has incompatible verdict {review.verdict}"
+                )
+            if review.verdict == "gap-preserved" and review.test_case_ids:
+                raise RunnerError(
+                    f"gap-preserved obligation {review.atom_id} must not reference executable test cases"
+                )
+        if review.verdict in {"missing", "incorrect", "invented-coverage"} and (
+            review.atom_id not in blocking_atoms
+        ):
+            raise RunnerError(
+                f"blocking verdict for {review.atom_id} requires an error finding linked to the atom"
+            )
+
+    has_error = any(item.severity == "error" for item in findings)
+    all_terminal_pass = all(
+        review.verdict in {"covered", "gap-preserved"} for review in reviews
+    )
+    if decision == "accepted" and (has_error or not all_terminal_pass):
+        raise RunnerError(
+            "accepted prepared review requires only covered/gap-preserved verdicts and no error findings"
+        )
+    if decision == "changes-required" and not findings:
+        raise RunnerError("changes-required prepared review requires at least one finding")
+
+    return ReviewContract(
+        decision=decision,
+        contract_version=2,
+        reviewed_draft_sha256=reviewed_hash,
+        obligation_reviews=tuple(reviews),
+        findings=tuple(findings),
+        summary=_required_text(payload, "summary", "review"),
+    )
+
+
+def render_prepared_review_findings(review: ReviewContract) -> str:
+    lines = [
+        "# Результат prepared reviewer",
+        "",
+        f"- Решение: `{review.decision}`",
+        f"- SHA-256 проверенного draft: `{review.reviewed_draft_sha256}`",
+        "",
+        "## Проверка обязательств",
+        "",
+    ]
+    for item in review.obligation_reviews:
+        tc_ids = ", ".join(f"`{value}`" for value in item.test_case_ids) or "нет"
+        lines.append(
+            f"- `{item.atom_id}` — `{item.verdict}`; test cases: {tc_ids}; {item.note}"
+        )
+    lines.extend(["", "## Findings", ""])
+    if review.findings:
+        for finding in review.findings:
+            atom_ids = ", ".join(f"`{value}`" for value in finding.atom_ids) or "set-level"
+            tc_ids = ", ".join(f"`{value}`" for value in finding.test_case_ids) or "нет"
+            lines.extend(
+                [
+                    f"### {finding.finding_id}",
+                    "",
+                    f"- Severity: `{finding.severity}`",
+                    f"- Category: `{finding.category}`",
+                    f"- ATOM: {atom_ids}",
+                    f"- Test cases: {tc_ids}",
+                    f"- Проблема: {finding.problem}",
+                    f"- Требуемое изменение: {finding.required_change}",
+                    "",
+                ]
+            )
+    else:
+        lines.extend(["Blocking findings отсутствуют.", ""])
+    lines.extend(["## Резюме", "", review.summary])
+    return "\n".join(lines)
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import sys
 import tempfile
@@ -286,10 +287,42 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 guard_path.write_text("reviewer mutation\n", encoding="utf-8")
             if mutate_draft:
                 self.draft_path.write_text("reviewer changed the validated draft\n", encoding="utf-8")
-            contract = json.dumps(
-                {"decision": decision, "findings_markdown": findings},
-                ensure_ascii=False,
-            )
+            if "prepared reviewer fast path" in _request.prompt:
+                prepared_findings = []
+                verdict = "covered"
+                if decision == "changes-required":
+                    verdict = "incorrect"
+                    prepared_findings = [
+                        {
+                            "id": "REV-001",
+                            "severity": "error",
+                            "category": "test-design",
+                            "atom_ids": ["ATOM-001"],
+                            "test_case_ids": ["TC-DEMO-001"],
+                            "problem": findings,
+                            "required_change": "Correct the affected test case.",
+                        }
+                    ]
+                payload = {
+                    "contract_version": 2,
+                    "decision": decision,
+                    "reviewed_draft_sha256": hashlib.sha256(
+                        self.draft_path.read_bytes()
+                    ).hexdigest(),
+                    "obligation_reviews": [
+                        {
+                            "atom_id": "ATOM-001",
+                            "verdict": verdict,
+                            "test_case_ids": ["TC-DEMO-001"],
+                            "note": "The supplied draft was reviewed against the atom.",
+                        }
+                    ],
+                    "findings": prepared_findings,
+                    "summary": findings,
+                }
+            else:
+                payload = {"decision": decision, "findings_markdown": findings}
+            contract = json.dumps(payload, ensure_ascii=False)
             return self.process_result(
                 exit_code=exit_code,
                 stdout=(
@@ -444,6 +477,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         schema = json.loads(schema_path.read_text(encoding="utf-8"))
         self.assertFalse(schema["additionalProperties"])
+        self.assertEqual(2, schema["properties"]["contract_version"]["const"])
+        self.assertIn("obligation_reviews", schema["required"])
         reviewer_manifest = json.loads(
             (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
         )
@@ -703,6 +738,76 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                         "extra": "not allowed",
                     }
                 )
+            )
+
+    def test_prepared_reviewer_contract_binds_hash_atoms_and_test_cases(self) -> None:
+        draft = "# Cases\n\n## TC-PREP-001\n\n**Трассировка:** ATOM-001\n"
+        digest = hashlib.sha256(draft.encode("utf-8")).hexdigest()
+        obligation = PreparedObligation(
+            obligation_id="ATOM-001",
+            source_refs=("SRC-1",),
+            atomic_statement="Statement",
+            observable_oracle="Observable result",
+            test_intent="Verify result",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+        )
+        payload = {
+            "contract_version": 2,
+            "decision": "accepted",
+            "reviewed_draft_sha256": digest,
+            "obligation_reviews": [
+                {
+                    "atom_id": "ATOM-001",
+                    "verdict": "covered",
+                    "test_case_ids": ["TC-PREP-001"],
+                    "note": "Condition and oracle are covered.",
+                }
+            ],
+            "findings": [],
+            "summary": "No blocking findings.",
+        }
+
+        review = runner_module.parse_prepared_review_contract(
+            json.dumps(payload),
+            expected_obligations=(obligation,),
+            expected_draft_sha256=digest,
+            draft_text=draft,
+        )
+
+        self.assertEqual(2, review.contract_version)
+        self.assertEqual("accepted", review.decision)
+        self.assertEqual("ATOM-001", review.obligation_reviews[0].atom_id)
+
+    def test_prepared_reviewer_contract_rejects_hash_mismatch(self) -> None:
+        obligation = PreparedObligation(
+            obligation_id="ATOM-001",
+            source_refs=("SRC-1",),
+            atomic_statement="Statement",
+            observable_oracle="Observable result",
+            test_intent="Verify result",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+        )
+        payload = {
+            "contract_version": 2,
+            "decision": "accepted",
+            "reviewed_draft_sha256": "0" * 64,
+            "obligation_reviews": [],
+            "findings": [],
+            "summary": "No findings.",
+        }
+
+        with self.assertRaisesRegex(runner_module.RunnerError, "draft hash mismatch"):
+            runner_module.parse_prepared_review_contract(
+                json.dumps(payload),
+                expected_obligations=(obligation,),
+                expected_draft_sha256="1" * 64,
+                draft_text="## TC-PREP-001\n",
             )
 
     def test_validator_failure_blocks_before_reviewer(self) -> None:
