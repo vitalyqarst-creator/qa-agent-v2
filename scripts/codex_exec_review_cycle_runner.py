@@ -4,10 +4,12 @@ import argparse
 import hashlib
 import json
 import os
+import queue
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -127,6 +129,10 @@ class ProcessRequest:
     cwd: Path
     prompt: str
     timeout_seconds: int
+    idle_timeout_seconds: int
+    command_budget: int
+    stdout_path: Path | None = None
+    stderr_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -135,8 +141,13 @@ class ProcessResult:
     stdout: str = ""
     stderr: str = ""
     timed_out: bool = False
+    idle_timed_out: bool = False
+    command_budget_exceeded: bool = False
     launch_error: bool = False
     duration_seconds: float = 0.0
+    command_count: int = 0
+    first_output_seconds: float | None = None
+    termination_reason: str = "completed"
 
 
 class ProcessExecutor(Protocol):
@@ -147,40 +158,143 @@ class ProcessExecutor(Protocol):
 class SubprocessExecutor:
     def execute(self, request: ProcessRequest) -> ProcessResult:
         started = time.monotonic()
+        stdout_lines: list[str] = []
+        stderr_lines: list[str] = []
+        output_queue: queue.Queue[tuple[str, str | None]] = queue.Queue()
+        process: subprocess.Popen[str] | None = None
+        termination_reason = "completed"
+        command_count = 0
+        first_output_seconds: float | None = None
+        last_output_at = started
         try:
-            completed = subprocess.run(
+            process = subprocess.Popen(
                 list(request.command),
                 cwd=request.cwd,
-                input=request.prompt,
-                capture_output=True,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=request.timeout_seconds,
-                check=False,
                 env=self._utf8_environment(),
+                bufsize=1,
             )
+            assert process.stdin is not None
+            assert process.stdout is not None
+            assert process.stderr is not None
+            try:
+                process.stdin.write(request.prompt)
+                process.stdin.close()
+            except BrokenPipeError:
+                pass
+
+            def read_stream(name: str, handle) -> None:
+                try:
+                    for line in iter(handle.readline, ""):
+                        output_queue.put((name, line))
+                finally:
+                    output_queue.put((name, None))
+
+            threads = [
+                threading.Thread(target=read_stream, args=("stdout", process.stdout), daemon=True),
+                threading.Thread(target=read_stream, args=("stderr", process.stderr), daemon=True),
+            ]
+            for thread in threads:
+                thread.start()
+
+            stdout_handle = self._stream_file(request.stdout_path)
+            stderr_handle = self._stream_file(request.stderr_path)
+            active_streams = 2
+            try:
+                while active_streams:
+                    now = time.monotonic()
+                    if process.poll() is None:
+                        if now - started >= request.timeout_seconds:
+                            termination_reason = "hard-timeout"
+                            break
+                        if now - last_output_at >= request.idle_timeout_seconds:
+                            termination_reason = "idle-timeout"
+                            break
+                    try:
+                        stream_name, line = output_queue.get(timeout=0.05)
+                    except queue.Empty:
+                        continue
+                    if line is None:
+                        active_streams -= 1
+                        continue
+                    now = time.monotonic()
+                    last_output_at = now
+                    if first_output_seconds is None:
+                        first_output_seconds = now - started
+                    target = stdout_lines if stream_name == "stdout" else stderr_lines
+                    target.append(line)
+                    stream_handle = stdout_handle if stream_name == "stdout" else stderr_handle
+                    if stream_handle is not None:
+                        stream_handle.write(line)
+                        stream_handle.flush()
+                    if stream_name == "stdout" and self._is_command_started(line):
+                        command_count += 1
+                        if command_count > request.command_budget:
+                            termination_reason = "command-budget-exceeded"
+                            break
+            finally:
+                if stdout_handle is not None:
+                    stdout_handle.close()
+                if stderr_handle is not None:
+                    stderr_handle.close()
+
+            if termination_reason != "completed" and process.poll() is None:
+                process.kill()
+            process.wait(timeout=5)
+            for thread in threads:
+                thread.join(timeout=1)
+            process.stdout.close()
+            process.stderr.close()
+            while not output_queue.empty():
+                stream_name, line = output_queue.get_nowait()
+                if line is not None:
+                    (stdout_lines if stream_name == "stdout" else stderr_lines).append(line)
             return ProcessResult(
-                exit_code=completed.returncode,
-                stdout=completed.stdout,
-                stderr=completed.stderr,
+                exit_code=(process.returncode if termination_reason == "completed" else None),
+                stdout="".join(stdout_lines),
+                stderr="".join(stderr_lines),
+                timed_out=termination_reason == "hard-timeout",
+                idle_timed_out=termination_reason == "idle-timeout",
+                command_budget_exceeded=termination_reason == "command-budget-exceeded",
                 duration_seconds=time.monotonic() - started,
-            )
-        except subprocess.TimeoutExpired as exc:
-            return ProcessResult(
-                exit_code=None,
-                stdout=normalized_text(exc.stdout),
-                stderr=normalized_text(exc.stderr),
-                timed_out=True,
-                duration_seconds=time.monotonic() - started,
+                command_count=command_count,
+                first_output_seconds=first_output_seconds,
+                termination_reason=termination_reason,
             )
         except OSError as exc:
+            if process is not None and process.poll() is None:
+                process.kill()
             return ProcessResult(
                 exit_code=None,
                 stderr=f"{type(exc).__name__}: {exc}",
                 launch_error=True,
                 duration_seconds=time.monotonic() - started,
+                termination_reason="launch-error",
             )
+
+    @staticmethod
+    def _stream_file(path: Path | None):
+        if path is None:
+            return None
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path.open("w", encoding="utf-8")
+
+    @staticmethod
+    def _is_command_started(line: str) -> bool:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            return False
+        return (
+            payload.get("type") == "item.started"
+            and isinstance(payload.get("item"), dict)
+            and payload["item"].get("type") == "command_execution"
+        )
 
     @staticmethod
     def _utf8_environment() -> dict[str, str]:
@@ -327,6 +441,12 @@ class CodexExecReviewCycleRunner:
     executor: ProcessExecutor = field(default_factory=SubprocessExecutor)
     validator: DraftValidator = field(default_factory=ProjectDraftStructureValidator)
     timeout_seconds: int = 1800
+    writer_timeout_seconds: int | None = None
+    reviewer_timeout_seconds: int | None = None
+    writer_idle_timeout_seconds: int = 60
+    reviewer_idle_timeout_seconds: int = 45
+    writer_command_budget: int = 12
+    reviewer_command_budget: int = 8
     promote_final: bool = False
     allow_overwrite_final: bool = False
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
@@ -399,6 +519,18 @@ class CodexExecReviewCycleRunner:
         self.command_config.validate()
         if self.timeout_seconds < 1:
             raise RunnerError("timeout_seconds must be >= 1")
+        for name in (
+            "writer_idle_timeout_seconds",
+            "reviewer_idle_timeout_seconds",
+            "writer_command_budget",
+            "reviewer_command_budget",
+        ):
+            if getattr(self, name) < 1:
+                raise RunnerError(f"{name} must be >= 1")
+        for name in ("writer_timeout_seconds", "reviewer_timeout_seconds"):
+            value = getattr(self, name)
+            if value is not None and value < 1:
+                raise RunnerError(f"{name} must be >= 1 when set")
         if not self.ft_root.is_dir():
             raise RunnerError(f"FT root does not exist: {self.ft_root}")
         expected_work_root = self.ft_root / "work"
@@ -482,6 +614,17 @@ class CodexExecReviewCycleRunner:
         except StageRuntimeError as exc:
             raise RunnerError(f"Prepared stage package changed or became invalid: {exc}") from exc
 
+    def _stage_limits(self, role: str) -> tuple[int, int, int]:
+        if role == "writer":
+            timeout = self.writer_timeout_seconds or self.timeout_seconds
+            idle_timeout = self.writer_idle_timeout_seconds
+            command_budget = self.writer_command_budget
+        else:
+            timeout = self.reviewer_timeout_seconds or self.timeout_seconds
+            idle_timeout = self.reviewer_idle_timeout_seconds
+            command_budget = self.reviewer_command_budget
+        return timeout, min(idle_timeout, timeout), command_budget
+
     def run(self) -> CycleResult:
         self.validate_configuration()
         production_before = self._production_snapshot()
@@ -529,12 +672,18 @@ class CodexExecReviewCycleRunner:
                 reasons=[f"writer process exited with code {writer_result.exit_code}"],
             )
         if not self.draft_path.is_file():
-            status = "blocked-timeout" if writer_result.timed_out else "blocked-missing-output"
-            reason = (
-                "writer timed out and the required draft is missing"
-                if writer_result.timed_out
-                else "writer exited without the required draft"
-            )
+            if writer_result.command_budget_exceeded:
+                status = "blocked-command-budget"
+                reason = "writer exceeded the command budget and the required draft is missing"
+            elif writer_result.idle_timed_out:
+                status = "blocked-idle-timeout"
+                reason = "writer produced no events within the idle budget and the required draft is missing"
+            elif writer_result.timed_out:
+                status = "blocked-timeout"
+                reason = "writer timed out and the required draft is missing"
+            else:
+                status = "blocked-missing-output"
+                reason = "writer exited without the required draft"
             return self._block_stage(
                 state,
                 stage=WRITER_STAGE,
@@ -599,7 +748,12 @@ class CodexExecReviewCycleRunner:
             )
 
         draft_sha256 = sha256_file(self.draft_path)
-        writer_status = "completed-with-progress" if writer_result.timed_out else "completed"
+        writer_interrupted = (
+            writer_result.timed_out
+            or writer_result.idle_timed_out
+            or writer_result.command_budget_exceeded
+        )
+        writer_status = "completed-with-progress" if writer_interrupted else "completed"
         self._write_stage_status(
             stage=WRITER_STAGE,
             role="writer",
@@ -607,8 +761,8 @@ class CodexExecReviewCycleRunner:
             result=writer_result,
             artifacts=writer_artifacts,
             reason=(
-                "process timed out, but the required draft exists and deterministic validation passed"
-                if writer_result.timed_out
+                "process was stopped by a runtime budget, but the required draft exists and deterministic validation passed"
+                if writer_interrupted
                 else "required draft exists and deterministic validation passed"
             ),
             validation=validation,
@@ -695,7 +849,7 @@ class CodexExecReviewCycleRunner:
                 status="blocked-process-launch",
                 reasons=["reviewer process could not be started"],
             )
-        if reviewer_result.timed_out:
+        if reviewer_result.timed_out or reviewer_result.idle_timed_out:
             return self._block_stage(
                 state,
                 stage=REVIEWER_STAGE,
@@ -703,7 +857,17 @@ class CodexExecReviewCycleRunner:
                 result=reviewer_result,
                 artifacts=reviewer_artifacts,
                 status="blocked-timeout",
-                reasons=["reviewer timed out; a partial review is not accepted as terminal sign-off"],
+                reasons=["reviewer timed out or became idle; a partial review is not accepted as terminal sign-off"],
+            )
+        if reviewer_result.command_budget_exceeded:
+            return self._block_stage(
+                state,
+                stage=REVIEWER_STAGE,
+                role="reviewer",
+                result=reviewer_result,
+                artifacts=reviewer_artifacts,
+                status="blocked-command-budget",
+                reasons=["reviewer exceeded the command budget; partial review is not accepted"],
             )
         if reviewer_result.exit_code != 0:
             return self._block_stage(
@@ -1014,13 +1178,18 @@ class CodexExecReviewCycleRunner:
             cwd=self.repo_root,
             last_message_path=last_message_path,
         )
+        timeout_seconds, idle_timeout_seconds, command_budget = self._stage_limits(role)
         request = ProcessRequest(
             stage=stage,
             role=role,
             command=command,
             cwd=self.repo_root,
             prompt=prompt,
-            timeout_seconds=self.timeout_seconds,
+            timeout_seconds=timeout_seconds,
+            idle_timeout_seconds=idle_timeout_seconds,
+            command_budget=command_budget,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
         )
         append_event(
             self.cycle_dir,
@@ -1031,6 +1200,9 @@ class CodexExecReviewCycleRunner:
             contract_version=CONTRACT_VERSION,
             attempt_id=ATTEMPT_ID,
             manifest=relative_path(attempt_root / "stage-input.json", self.repo_root),
+            timeout_seconds=timeout_seconds,
+            idle_timeout_seconds=idle_timeout_seconds,
+            command_budget=command_budget,
         )
         started_at = utc_now()
         result = self.executor.execute(request)
@@ -1049,7 +1221,7 @@ class CodexExecReviewCycleRunner:
             stdout=result.stdout,
             stderr=result.stderr,
             events=result.stdout if self.command_config.json_flag else "",
-            timed_out=result.timed_out,
+            timed_out=result.timed_out or result.idle_timed_out,
             launch_error=result.launch_error,
             usage=usage_from_events(result.stdout),
         )
@@ -1071,6 +1243,11 @@ class CodexExecReviewCycleRunner:
             role=role,
             exit_code=result.exit_code,
             timed_out=result.timed_out,
+            idle_timed_out=result.idle_timed_out,
+            command_budget_exceeded=result.command_budget_exceeded,
+            command_count=result.command_count,
+            first_output_seconds=result.first_output_seconds,
+            termination_reason=result.termination_reason,
             launch_error=result.launch_error,
             stdout=artifacts["stdout"],
             stderr=artifacts["stderr"],
@@ -1088,6 +1265,7 @@ class CodexExecReviewCycleRunner:
     ) -> StageInputManifest:
         attempt_root = self.attempt_root(stage)
         runner_output = self.runner_output_dir(stage)
+        timeout_seconds, _, _ = self._stage_limits(role)
         expected_outputs = [
             ExpectedOutput(
                 path=relative_path(runner_output / "stdout.txt", self.repo_root),
@@ -1180,7 +1358,7 @@ class CodexExecReviewCycleRunner:
             ),
             semantic_round=0,
             sandbox_policy="workspace_write" if role == "writer" else "read_only",
-            timeout_seconds=self.timeout_seconds,
+            timeout_seconds=timeout_seconds,
             attempt_root=relative_path(attempt_root, self.repo_root),
             canonical_test_cases=relative_path(self.final_path, self.repo_root),
             prompt_artifact=artifact_ref(prompt_path, self.repo_root, kind="prompt"),
@@ -1220,8 +1398,13 @@ class CodexExecReviewCycleRunner:
             "reason": reason,
             "exit_code": result.exit_code,
             "timed_out": result.timed_out,
+            "idle_timed_out": result.idle_timed_out,
+            "command_budget_exceeded": result.command_budget_exceeded,
             "launch_error": result.launch_error,
             "duration_seconds": round(result.duration_seconds, 3),
+            "command_count": result.command_count,
+            "first_output_seconds": result.first_output_seconds,
+            "termination_reason": result.termination_reason,
             "command": artifacts["command"],
             "stdout": artifacts["stdout"],
             "stderr": artifacts["stderr"],
@@ -1511,6 +1694,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--extra-arg", action="append", default=[])
     parser.add_argument("--cli-contract-verified", action="store_true")
     parser.add_argument("--timeout-seconds", type=int, default=1800)
+    parser.add_argument("--writer-timeout-seconds", type=int, default=180)
+    parser.add_argument("--reviewer-timeout-seconds", type=int, default=120)
+    parser.add_argument("--writer-idle-timeout-seconds", type=int, default=60)
+    parser.add_argument("--reviewer-idle-timeout-seconds", type=int, default=45)
+    parser.add_argument("--writer-command-budget", type=int, default=12)
+    parser.add_argument("--reviewer-command-budget", type=int, default=8)
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--allow-overwrite-final", action="store_true")
     return parser
@@ -1540,6 +1729,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             cli_contract_verified=args.cli_contract_verified,
         ),
         timeout_seconds=args.timeout_seconds,
+        writer_timeout_seconds=args.writer_timeout_seconds,
+        reviewer_timeout_seconds=args.reviewer_timeout_seconds,
+        writer_idle_timeout_seconds=args.writer_idle_timeout_seconds,
+        reviewer_idle_timeout_seconds=args.reviewer_idle_timeout_seconds,
+        writer_command_budget=args.writer_command_budget,
+        reviewer_command_budget=args.reviewer_command_budget,
         promote_final=args.promote_final,
         allow_overwrite_final=args.allow_overwrite_final,
     )

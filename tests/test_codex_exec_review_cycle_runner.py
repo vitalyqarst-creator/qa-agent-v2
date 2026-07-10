@@ -4,6 +4,7 @@ import importlib.util
 import json
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -43,6 +44,77 @@ class ScriptedExecutor:
         if not self.steps:
             raise AssertionError("Unexpected process execution")
         return self.steps.pop(0)(request)
+
+
+class StreamingSubprocessExecutorTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+
+    def request(
+        self,
+        code: str,
+        *,
+        timeout_seconds: int = 5,
+        idle_timeout_seconds: int = 2,
+        command_budget: int = 5,
+    ):
+        return runner_module.ProcessRequest(
+            stage="writer-r1",
+            role="writer",
+            command=(sys.executable, "-c", code),
+            cwd=self.root,
+            prompt="test prompt",
+            timeout_seconds=timeout_seconds,
+            idle_timeout_seconds=idle_timeout_seconds,
+            command_budget=command_budget,
+            stdout_path=self.root / "stdout.txt",
+            stderr_path=self.root / "stderr.txt",
+        )
+
+    def test_streams_jsonl_and_counts_started_commands(self) -> None:
+        code = (
+            "import json,sys; "
+            "print(json.dumps({'type':'item.started','item':{'type':'command_execution'}}),flush=True); "
+            "sys.stderr.write('diagnostic\\n'); sys.stderr.flush()"
+        )
+        result = runner_module.SubprocessExecutor().execute(self.request(code))
+
+        self.assertEqual(0, result.exit_code)
+        self.assertEqual(1, result.command_count)
+        self.assertEqual("completed", result.termination_reason)
+        self.assertIsNotNone(result.first_output_seconds)
+        self.assertEqual(result.stdout, (self.root / "stdout.txt").read_text(encoding="utf-8"))
+        self.assertEqual("diagnostic\n", (self.root / "stderr.txt").read_text(encoding="utf-8"))
+
+    def test_stops_process_when_command_budget_is_exceeded(self) -> None:
+        event = "{'type':'item.started','item':{'type':'command_execution'}}"
+        code = (
+            f"import json,time; print(json.dumps({event}),flush=True); "
+            f"print(json.dumps({event}),flush=True); time.sleep(5)"
+        )
+        started = time.monotonic()
+        result = runner_module.SubprocessExecutor().execute(
+            self.request(code, command_budget=1)
+        )
+
+        self.assertTrue(result.command_budget_exceeded)
+        self.assertEqual("command-budget-exceeded", result.termination_reason)
+        self.assertEqual(2, result.command_count)
+        self.assertLess(time.monotonic() - started, 4)
+
+    def test_stops_idle_process_without_waiting_for_hard_timeout(self) -> None:
+        code = "import time; print('started',flush=True); time.sleep(5)"
+        started = time.monotonic()
+        result = runner_module.SubprocessExecutor().execute(
+            self.request(code, timeout_seconds=5, idle_timeout_seconds=1)
+        )
+
+        self.assertTrue(result.idle_timed_out)
+        self.assertFalse(result.timed_out)
+        self.assertEqual("idle-timeout", result.termination_reason)
+        self.assertLess(time.monotonic() - started, 4)
 
 
 class FakeValidator:
