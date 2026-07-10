@@ -43,6 +43,8 @@ def build_from_spec(spec_path: Path, repo_root: Path) -> Path:
         "evidence_inputs",
         "obligations",
         "instructions",
+        "execution_profile",
+        "unsupported_dimensions",
         "forbidden_evidence_roots",
     }
     if set(spec) != required:
@@ -80,6 +82,8 @@ def build_from_spec(spec_path: Path, repo_root: Path) -> Path:
         evidence_inputs=evidence,
         obligations=obligations,
         instructions=instructions,
+        execution_profile=spec["execution_profile"],
+        unsupported_dimensions=spec["unsupported_dimensions"],
         forbidden_evidence_roots=spec["forbidden_evidence_roots"],
     )
     return repo_root / spec["output_root"] / "stage-package.json"

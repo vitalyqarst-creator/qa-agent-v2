@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import tempfile
+import hashlib
+import json
 import unittest
 from pathlib import Path
 
@@ -96,6 +98,8 @@ class PreparedStagePackageTests(unittest.TestCase):
                 idle_timeout_seconds=60,
                 command_budget=12,
             ),
+            execution_profile="simple-field-property",
+            unsupported_dimensions=(),
             forbidden_evidence_roots=("fts/demo-ft/test-cases", "work/previous-cycle"),
         )
 
@@ -177,6 +181,55 @@ class PreparedStagePackageTests(unittest.TestCase):
         with self.assertRaisesRegex(StageRuntimeError, "blocked-package-budget"):
             self._build(max_package_bytes=32, output_name="too-large")
         self.assertFalse((self.root / "work" / "too-large").exists())
+
+    def test_fast_profile_rejects_unsupported_dimensions(self) -> None:
+        builder = PreparedPackageBuilder(self.root)
+        with self.assertRaisesRegex(StageRuntimeError, "cannot declare unsupported"):
+            builder.build(
+                output_root=self.root / "work" / "ineligible",
+                package_id="pkg-001",
+                ft_slug="demo-ft",
+                scope_slug="field-selection",
+                section_id="4.3",
+                source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+                evidence_inputs=(EvidenceInput(self.evidence, "Confirmed scope"),),
+                obligations=self._obligations(),
+                instructions=StageInstructionConfig(
+                    role="writer",
+                    scenario="writer.session_prepared_initial_draft",
+                    output_path="work/output.md",
+                    attempt_root="work/attempt-001",
+                    sandbox_policy="workspace_write",
+                    timeout_seconds=180,
+                    idle_timeout_seconds=60,
+                    command_budget=12,
+                ),
+                execution_profile="simple-field-property",
+                unsupported_dimensions=("integration-persistence",),
+                forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            )
+
+    def test_version_one_package_remains_readable_but_is_unclassified(self) -> None:
+        self._build()
+        manifest = self.root / "work" / "prepared" / "stage-package.json"
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        payload["package_version"] = 1
+        payload.pop("execution_profile")
+        payload.pop("unsupported_dimensions")
+        without_digest = {key: value for key, value in payload.items() if key != "package_digest"}
+        payload["package_digest"] = hashlib.sha256(
+            json.dumps(
+                without_digest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+        loaded = load_prepared_package(manifest, self.root)
+        self.assertEqual("legacy-unclassified", loaded.execution_profile)
+        self.assertEqual(("legacy-unclassified",), loaded.unsupported_dimensions)
 
 
 if __name__ == "__main__":

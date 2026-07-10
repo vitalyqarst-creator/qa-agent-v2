@@ -20,7 +20,9 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 1
+PACKAGE_VERSION = 2
+SUPPORTED_PACKAGE_VERSIONS = {1, PACKAGE_VERSION}
+FAST_EXECUTION_PROFILE = "simple-field-property"
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -279,8 +281,10 @@ class PreparedObligationSet:
         }
 
     def validate(self, *, evidence_text: str | None = None) -> None:
-        if self.package_version != PACKAGE_VERSION:
-            raise StageRuntimeError(f"package_version must be {PACKAGE_VERSION}")
+        if self.package_version not in SUPPORTED_PACKAGE_VERSIONS:
+            raise StageRuntimeError(
+                f"package_version must be one of {sorted(SUPPORTED_PACKAGE_VERSIONS)}"
+            )
         _identifier(self.package_id, "package_id")
         if not self.obligations:
             raise StageRuntimeError("obligations must not be empty")
@@ -363,12 +367,14 @@ class PreparedStagePackage:
     created_at: str
     source_registry: tuple[SourceRegistryEntry, ...]
     package_artifacts: tuple[PackageArtifact, ...]
+    execution_profile: str
+    unsupported_dimensions: tuple[str, ...]
     forbidden_evidence_roots: tuple[str, ...]
     fallback_policy: str
     package_digest: str
 
     def _without_digest(self) -> dict[str, Any]:
-        return {
+        payload = {
             "package_version": self.package_version,
             "package_id": self.package_id,
             "ft_slug": self.ft_slug,
@@ -377,13 +383,19 @@ class PreparedStagePackage:
             "created_at": self.created_at,
             "source_registry": [item.to_dict() for item in self.source_registry],
             "package_artifacts": [item.to_dict() for item in self.package_artifacts],
-            "forbidden_evidence_roots": list(self.forbidden_evidence_roots),
-            "fallback_policy": self.fallback_policy,
         }
+        if self.package_version >= 2:
+            payload["execution_profile"] = self.execution_profile
+            payload["unsupported_dimensions"] = list(self.unsupported_dimensions)
+        payload["forbidden_evidence_roots"] = list(self.forbidden_evidence_roots)
+        payload["fallback_policy"] = self.fallback_policy
+        return payload
 
     def validate(self) -> None:
-        if self.package_version != PACKAGE_VERSION:
-            raise StageRuntimeError(f"package_version must be {PACKAGE_VERSION}")
+        if self.package_version not in SUPPORTED_PACKAGE_VERSIONS:
+            raise StageRuntimeError(
+                f"package_version must be one of {sorted(SUPPORTED_PACKAGE_VERSIONS)}"
+            )
         for name in ("package_id", "ft_slug", "scope_slug"):
             _identifier(getattr(self, name), name)
         _text(self.section_id, "section_id")
@@ -408,6 +420,16 @@ class PreparedStagePackage:
             raise StageRuntimeError("package artifact paths must be unique")
         for item in self.package_artifacts:
             item.validate()
+        if self.package_version >= 2:
+            _identifier(self.execution_profile, "execution_profile")
+            for dimension in self.unsupported_dimensions:
+                _identifier(dimension, "unsupported_dimensions[]")
+            if len(set(self.unsupported_dimensions)) != len(self.unsupported_dimensions):
+                raise StageRuntimeError("unsupported_dimensions must not contain duplicates")
+            if self.execution_profile == FAST_EXECUTION_PROFILE and self.unsupported_dimensions:
+                raise StageRuntimeError(
+                    "simple-field-property package cannot declare unsupported dimensions"
+                )
         if not self.forbidden_evidence_roots:
             raise StageRuntimeError("forbidden_evidence_roots must not be empty")
         for root in self.forbidden_evidence_roots:
@@ -436,6 +458,9 @@ class PreparedStagePackage:
             "fallback_policy",
             "package_digest",
         }
+        package_version = payload.get("package_version")
+        if package_version == 2:
+            expected.update({"execution_profile", "unsupported_dimensions"})
         _exact_fields(payload, expected, "prepared stage package")
         if not isinstance(payload["source_registry"], list) or not isinstance(payload["package_artifacts"], list):
             raise StageRuntimeError("source_registry and package_artifacts must be JSON arrays")
@@ -448,6 +473,18 @@ class PreparedStagePackage:
             created_at=payload["created_at"],
             source_registry=tuple(SourceRegistryEntry.from_dict(item) for item in payload["source_registry"]),
             package_artifacts=tuple(PackageArtifact.from_dict(item) for item in payload["package_artifacts"]),
+            execution_profile=(
+                payload["execution_profile"] if package_version == 2 else "legacy-unclassified"
+            ),
+            unsupported_dimensions=(
+                _string_list(
+                    payload["unsupported_dimensions"],
+                    "unsupported_dimensions",
+                    allow_empty=True,
+                )
+                if package_version == 2
+                else ("legacy-unclassified",)
+            ),
             forbidden_evidence_roots=_string_list(
                 payload["forbidden_evidence_roots"], "forbidden_evidence_roots"
             ),
@@ -511,6 +548,8 @@ class PreparedPackageBuilder:
         evidence_inputs: Sequence[EvidenceInput],
         obligations: PreparedObligationSet,
         instructions: StageInstructionConfig,
+        execution_profile: str,
+        unsupported_dimensions: Sequence[str],
         forbidden_evidence_roots: Sequence[str],
     ) -> PreparedStagePackage:
         _identifier(package_id, "package_id")
@@ -518,6 +557,14 @@ class PreparedPackageBuilder:
         _identifier(scope_slug, "scope_slug")
         _text(section_id, "section_id")
         instructions.validate()
+        _identifier(execution_profile, "execution_profile")
+        normalized_unsupported = tuple(unsupported_dimensions)
+        for dimension in normalized_unsupported:
+            _identifier(dimension, "unsupported_dimensions[]")
+        if execution_profile == FAST_EXECUTION_PROFILE and normalized_unsupported:
+            raise StageRuntimeError(
+                "simple-field-property package cannot declare unsupported dimensions"
+            )
         if obligations.package_id != package_id:
             raise StageRuntimeError("obligations package_id does not match package_id")
         resolved_output = output_root.resolve()
@@ -579,6 +626,8 @@ class PreparedPackageBuilder:
                 created_at=utc_timestamp(),
                 source_registry=registry,
                 package_artifacts=artifacts,
+                execution_profile=execution_profile,
+                unsupported_dimensions=normalized_unsupported,
                 forbidden_evidence_roots=tuple(forbidden_evidence_roots),
                 fallback_policy="targeted-only",
                 package_digest="",

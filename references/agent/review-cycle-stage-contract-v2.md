@@ -4,6 +4,8 @@ This reference is the canonical backend-independent contract for one writer or r
 
 Fresh sessions may use the compact prepared-input capsule defined in `prepared-stage-package-format.md`. The capsule keeps full binary sources in a verified fallback registry instead of declaring them as default stage inputs.
 
+The optimized prepared writer is allowlisted only for package version 2 with `execution_profile = simple-field-property` and no unsupported dimensions. All legacy, table-parity, numeric-boundary, integration/persistence and dependency/state packages route to the standard writer contract.
+
 ## Compatibility
 
 The existing SDK runner remains on the v1 stage-updated-state contract until a dedicated adapter is implemented. V2 is additive: introducing its models must not change v1 execution, timeout recovery or session routing.

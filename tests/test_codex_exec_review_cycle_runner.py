@@ -329,6 +329,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 idle_timeout_seconds=60,
                 command_budget=12,
             ),
+            execution_profile="simple-field-property",
+            unsupported_dimensions=(),
             forbidden_evidence_roots=("fts/demo-ft/test-cases",),
         )
         return package_root / "stage-package.json"

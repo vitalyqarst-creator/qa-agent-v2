@@ -27,16 +27,20 @@ The four files are the default writer/reviewer input capsule. Package-local path
 
 Required fields:
 
-- `package_version`: currently `1`;
+- `package_version`: currently `2`; version `1` remains readable as legacy but is not eligible for the optimized writer fast path;
 - stable `package_id`, `ft_slug`, `scope_slug` and `section_id`;
 - `created_at` with timezone;
 - `source_registry`: full source path, role, SHA-256 and scope locator;
 - `package_artifacts`: the other three package files with path, kind, SHA-256 and byte size;
+- `execution_profile`: initially only `simple-field-property` is eligible for the optimized writer fast path;
+- `unsupported_dimensions`: explicit dimensions that require the standard writer, for example table parity, numeric boundaries, integration/persistence or dependency/state design;
 - `forbidden_evidence_roots`: generated TC, old cycle and canary roots that must not be read as source evidence;
 - `fallback_policy`: `targeted-only`;
 - `package_digest`: SHA-256 over the canonical payload without this field.
 
 The package is rejected when registered full sources changed after preparation. Full source files are not copied into `prepared-input/`.
+
+The runner must route to the standard writer when the package is legacy/unclassified, its profile is not `simple-field-property`, or `unsupported_dimensions` is non-empty. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
 ## `atomic-obligations.json`
 
