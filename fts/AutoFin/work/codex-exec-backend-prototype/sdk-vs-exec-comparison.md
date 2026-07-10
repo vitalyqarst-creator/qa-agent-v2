@@ -3,7 +3,7 @@
 ## Evidence base
 
 - Capability probe: packaged `codex` обнаружен, но не исполняется (`Access is denied`), поэтому live evidence отсутствует.
-- Mocked exec backend suite: `17 passed`; command construction, isolation values, captures, timeout, missing outputs, reuse deterministic structure gate и promotion safety проверяются детерминированно.
+- Mocked exec backend suite: `19 passed`; command construction, isolation values, captures, timeout, missing/stale outputs, reuse deterministic structure gate, draft hash pinning и promotion safety проверяются детерминированно.
 - Существующий SDK runner сохраняется без удаления и проверяется прежней test suite.
 
 ## Сравнение
@@ -11,7 +11,7 @@
 | Критерий | SDK runner | Exec prototype |
 |---|---|---|
 | Lifecycle | Long-lived SDK thread/turn, completion manifest, lock и resume recovery. | Один OS process на stage; следующий stage стартует только после filesystem validation. |
-| Completion contract | Зависит от SDK turn status, completion evidence и state advancement. | Exit code недостаточен: обязательны ожидаемые файлы/status/validator result. |
+| Completion contract | Зависит от SDK turn status, completion evidence и state advancement. | Exit code недостаточен: обязательны свежий cycle directory, ожидаемые файлы/status/validator result; stale outputs блокируют новый process. |
 | Timeout/recovery | Поддерживает thread-aware recovery и stale locks, но логика сложная. | Timeout даёт явный blocked status; writer progress принимается только при наличии draft и validator pass; auto retry отсутствует. |
 | Artifact passing | Prompt/session context плюс cycle artifacts. | Только explicit source/handoff/draft/validator paths. |
 | Reviewer isolation | SDK sandbox policy и runner contracts. | Отдельное configured read-only sandbox value; findings возвращаются через stdout; production hash guard. Live enforcement ещё не подтверждён. |

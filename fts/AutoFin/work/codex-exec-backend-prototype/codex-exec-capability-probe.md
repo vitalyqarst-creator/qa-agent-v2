@@ -12,7 +12,7 @@
 
 | Проверка | Результат |
 |---|---|
-| `Get-Command codex -All` | Найдены `codex` и `codex.exe` в `C:\Program Files\WindowsApps\OpenAI.Codex_26.707.3563.0_x64__2p2nqsd0c76g0\app\resources`. |
+| `Get-Command codex -All` | Найдены `codex` и `codex.exe` в `C:\Program Files\WindowsApps\OpenAI.Codex_26.707.3748.0_x64__2p2nqsd0c76g0\app\resources`. |
 | Второй CLI в `PATH` | Не найден. В локальном Codex bin присутствует только `rg.exe`; временный arg0-каталог содержит только apply-patch wrappers. |
 | `codex --version` | Exit code `1`; PowerShell сообщает `Access is denied` / `NativeCommandFailed`. Версия CLI не получена. |
 | `codex --help` | Exit code `1`; тот же executable-access blocker. |

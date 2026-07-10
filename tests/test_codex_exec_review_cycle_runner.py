@@ -130,11 +130,14 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         stderr: str = "",
         timed_out: bool = False,
         mutate_production: bool = False,
+        mutate_draft: bool = False,
     ):
         def step(_request):
             if mutate_production:
                 guard_path = self.ft_root / "test-cases" / "guard.md"
                 guard_path.write_text("reviewer mutation\n", encoding="utf-8")
+            if mutate_draft:
+                self.draft_path.write_text("reviewer changed the validated draft\n", encoding="utf-8")
             contract = json.dumps(
                 {"decision": decision, "findings_markdown": findings},
                 ensure_ascii=False,
@@ -321,6 +324,15 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(self.final_path.exists())
         self.assertIn("guard.md", " ".join(result.blocking_reasons))
 
+    def test_reviewer_draft_mutation_blocks_promotion(self) -> None:
+        executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(mutate_draft=True))
+        result = self.make_runner(executor, promote_final=True).run()
+
+        self.assertEqual("blocked-forbidden-input-change", result.status)
+        self.assertFalse(result.final_promoted)
+        self.assertFalse(self.final_path.exists())
+        self.assertIn("draft changed", " ".join(result.blocking_reasons))
+
     def test_reviewer_missing_final_contract_blocks(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(stdout=""))
         result = self.make_runner(executor, promote_final=True).run()
@@ -397,6 +409,20 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(runner_module.RunnerError, "CLI contract is unverified"):
             self.make_runner(executor, verified=False).run()
         self.assertEqual([], executor.requests)
+
+    def test_stale_runner_artifact_is_rejected_before_process_execution(self) -> None:
+        self.draft_path.parent.mkdir(parents=True, exist_ok=True)
+        self.draft_path.write_text("stale draft from an earlier attempt\n", encoding="utf-8")
+        executor = ScriptedExecutor()
+
+        with self.assertRaisesRegex(runner_module.RunnerError, "runner-owned artifacts"):
+            self.make_runner(executor).run()
+
+        self.assertEqual([], executor.requests)
+        self.assertEqual(
+            "stale draft from an earlier attempt\n",
+            self.draft_path.read_text(encoding="utf-8"),
+        )
 
 
 if __name__ == "__main__":

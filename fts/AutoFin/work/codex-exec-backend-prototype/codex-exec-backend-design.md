@@ -20,6 +20,8 @@ cycle-state.yaml + runner-events.ndjson
 
 `codex exec` и его final message не являются source of truth. Runner записывает каждое решение в `cycle-state.yaml`, status JSON и `runner-events.ndjson`. Повторный writer process автоматически не запускается.
 
+Prototype не переиспользует runner-owned artifacts из прежней попытки. Наличие старого state, prompt, draft, stream capture, validator report или stage status блокирует запуск до subprocess; recovery должен использовать отдельный явный путь или новый cycle directory. Поэтому старый draft не может ошибочно удовлетворить expected-output check нового writer process.
+
 ## Stage contracts
 
 Writer получает только явно переданные source и handoff paths. Runner создаёт `stage-inputs/writer-r1-prompt.md`; единственный допустимый draft path — `outputs/writer-r1-draft.md`. Writer не промотирует artifact и не должен менять `test-cases/`.
@@ -50,10 +52,13 @@ Runner извлекает final agent message из JSONL events, если JSON f
 - Non-zero exit: `blocked-process-exit` с путями stdout/stderr/events.
 - Missing/invalid output: `blocked-missing-output` или `blocked-invalid-output`.
 - Automatic retry отсутствует. Следующий процесс требует явного recovery decision вне этого prototype.
+- Повторное использование cycle directory со stale runner outputs блокируется до запуска process.
 
 ## Production safety и promotion
 
 Runner хеширует всё дерево `fts/<ft>/test-cases/**/*.md` до writer и сравнивает его после writer и reviewer. Любое изменение до runner promotion даёт `blocked-forbidden-production-change`. Read-only sandbox остаётся первичным enforcement, hash comparison — detection/defense-in-depth.
+
+После writer validation runner фиксирует SHA-256 draft. Изменение или удаление draft во время read-only reviewer stage даёт `blocked-forbidden-input-change`; promotion повторно сверяет тот же hash до и после atomic copy. Это связывает validator/reviewer evidence с фактически продвигаемыми байтами.
 
 Promotion выключена по умолчанию. При явном разрешении она возможна только после:
 

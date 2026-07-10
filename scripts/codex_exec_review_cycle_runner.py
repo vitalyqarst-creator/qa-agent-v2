@@ -52,6 +52,10 @@ def relative_path(path: Path, root: Path) -> str:
         return str(path.resolve())
 
 
+def sha256_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
 def format_yaml_scalar(value: Any) -> str:
     if value is None:
         return "null"
@@ -330,6 +334,29 @@ class CodexExecReviewCycleRunner:
     def reviewer_findings_path(self) -> Path:
         return self.outputs_dir / f"{REVIEWER_STAGE}-findings.md"
 
+    def _runner_owned_paths(self) -> tuple[Path, ...]:
+        paths = [
+            self.state_path,
+            self.cycle_dir / RUNNER_EVENTS,
+            self.stage_inputs_dir / f"{WRITER_STAGE}-prompt.md",
+            self.stage_inputs_dir / f"{REVIEWER_STAGE}-prompt.md",
+            self.draft_path,
+            self.validator_path,
+            self.reviewer_findings_path,
+            self.outputs_dir / f"{WRITER_STAGE}-last-message.txt",
+        ]
+        for stage in (WRITER_STAGE, REVIEWER_STAGE):
+            paths.extend(
+                self.outputs_dir / f"{stage}-{suffix}"
+                for suffix in (
+                    "stdout.txt",
+                    "stderr.txt",
+                    "events.ndjson",
+                    "stage-status.json",
+                )
+            )
+        return tuple(paths)
+
     def validate_configuration(self) -> None:
         self.command_config.validate()
         if self.timeout_seconds < 1:
@@ -353,6 +380,14 @@ class CodexExecReviewCycleRunner:
                 raise RunnerError(f"Stage input does not exist: {input_path}")
             if not is_relative_to(input_path, self.ft_root):
                 raise RunnerError(f"Stage input must be under the FT package: {input_path}")
+        existing_runner_artifacts = [path for path in self._runner_owned_paths() if path.exists()]
+        if existing_runner_artifacts:
+            joined = ", ".join(relative_path(path, self.repo_root) for path in existing_runner_artifacts)
+            raise RunnerError(
+                "Cycle directory contains runner-owned artifacts from an earlier attempt; "
+                "use a new cycle directory or an explicit recovery path instead of reusing stale outputs: "
+                + joined
+            )
 
     def run(self) -> CycleResult:
         self.validate_configuration()
@@ -440,6 +475,7 @@ class CodexExecReviewCycleRunner:
                 validation=validation,
             )
 
+        draft_sha256 = sha256_file(self.draft_path)
         writer_status = "completed-with-progress" if writer_result.timed_out else "completed"
         self._write_stage_status(
             stage=WRITER_STAGE,
@@ -453,6 +489,7 @@ class CodexExecReviewCycleRunner:
                 else "required draft exists and deterministic validation passed"
             ),
             validation=validation,
+            draft_sha256=draft_sha256,
         )
         reviewer_prompt = self._reviewer_prompt()
         reviewer_prompt_path = self.stage_inputs_dir / f"{REVIEWER_STAGE}-prompt.md"
@@ -463,6 +500,7 @@ class CodexExecReviewCycleRunner:
                 "stage_status": "writer-draft-ready",
                 "current_stage": REVIEWER_STAGE,
                 "writer_stage_status": writer_status,
+                "writer_draft_sha256": draft_sha256,
                 "validator_report": relative_path(self.validator_path, self.ft_root),
                 "active_transition_prompt": relative_path(
                     self.stage_inputs_dir / f"{REVIEWER_STAGE}-prompt.md", self.ft_root
@@ -488,6 +526,31 @@ class CodexExecReviewCycleRunner:
                 artifacts=reviewer_artifacts,
                 status="blocked-forbidden-production-change",
                 reasons=["reviewer modified production test-cases", *production_changes],
+            )
+        if not self.draft_path.is_file():
+            return self._block_stage(
+                state,
+                stage=REVIEWER_STAGE,
+                role="reviewer",
+                result=reviewer_result,
+                artifacts=reviewer_artifacts,
+                status="blocked-forbidden-input-change",
+                reasons=["writer draft disappeared during the read-only reviewer stage"],
+            )
+        reviewer_observed_draft_sha256 = sha256_file(self.draft_path)
+        if reviewer_observed_draft_sha256 != draft_sha256:
+            return self._block_stage(
+                state,
+                stage=REVIEWER_STAGE,
+                role="reviewer",
+                result=reviewer_result,
+                artifacts=reviewer_artifacts,
+                status="blocked-forbidden-input-change",
+                reasons=[
+                    "writer draft changed during the read-only reviewer stage",
+                    f"expected sha256={draft_sha256}",
+                    f"actual sha256={reviewer_observed_draft_sha256}",
+                ],
             )
         if reviewer_result.launch_error:
             return self._block_stage(
@@ -593,13 +656,15 @@ class CodexExecReviewCycleRunner:
         if not self.promote_final:
             state["workflow_status"] = "accepted-not-promoted"
             state["stage_status"] = "accepted-not-promoted"
-            state["blocking_reasons"] = ["promotion is disabled; rerun with explicit promotion enabled"]
+            state["blocking_reasons"] = [
+                "promotion is disabled; use a new cycle with explicit promotion enabled after reviewing this result"
+            ]
             self._write_state(state)
             append_event(self.cycle_dir, "promotion_skipped")
             return self._result(state)
 
         try:
-            self._promote(production_before)
+            self._promote(production_before, expected_draft_sha256=draft_sha256)
         except RunnerError as exc:
             state["workflow_status"] = "blocked-promotion"
             state["stage_status"] = "blocked-input"
@@ -615,6 +680,7 @@ class CodexExecReviewCycleRunner:
                 "final_promoted": True,
                 "promotion_status": "completed",
                 "draft_or_unsigned": False,
+                "final_sha256": draft_sha256,
                 "blocking_reasons": [],
             }
         )
@@ -642,6 +708,7 @@ class CodexExecReviewCycleRunner:
             "draft_test_cases": relative_path(self.draft_path, self.ft_root),
             "canonical_test_cases": relative_path(self.final_path, self.ft_root),
             "validator_report": "",
+            "writer_draft_sha256": "",
             "reviewer_findings": "",
             "accepted_terminal_state": False,
             "final_promoted": False,
@@ -782,6 +849,7 @@ class CodexExecReviewCycleRunner:
         reason: str,
         validation: ValidationResult | None = None,
         blocking_reasons: Sequence[str] = (),
+        draft_sha256: str = "",
     ) -> Path:
         status_path = self.outputs_dir / f"{stage}-stage-status.json"
         payload: dict[str, Any] = {
@@ -803,6 +871,8 @@ class CodexExecReviewCycleRunner:
         if validation is not None:
             payload["validator_report"] = relative_path(self.validator_path, self.repo_root)
             payload["validator_passed"] = validation.passed
+        if draft_sha256:
+            payload["draft_sha256"] = draft_sha256
         write_json(status_path, payload)
         return status_path
 
@@ -857,7 +927,7 @@ class CodexExecReviewCycleRunner:
             if before.get(path) != after.get(path)
         )
 
-    def _promote(self, production_before: dict[str, str]) -> None:
+    def _promote(self, production_before: dict[str, str], *, expected_draft_sha256: str) -> None:
         changes = self._production_changes(production_before)
         if changes:
             raise RunnerError(
@@ -865,14 +935,20 @@ class CodexExecReviewCycleRunner:
             )
         if self.final_path.exists() and not self.allow_overwrite_final:
             raise RunnerError(f"final artifact already exists and overwrite is disabled: {self.final_path}")
+        if not self.draft_path.is_file():
+            raise RunnerError("writer draft is missing before promotion")
+        actual_draft_sha256 = sha256_file(self.draft_path)
+        if actual_draft_sha256 != expected_draft_sha256:
+            raise RunnerError(
+                "writer draft changed after validation/review and cannot be promoted: "
+                f"expected sha256={expected_draft_sha256}, actual sha256={actual_draft_sha256}"
+            )
         self.final_path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = self.final_path.with_suffix(self.final_path.suffix + ".promotion-tmp")
         try:
             shutil.copyfile(self.draft_path, temporary_path)
-            if hashlib.sha256(temporary_path.read_bytes()).digest() != hashlib.sha256(
-                self.draft_path.read_bytes()
-            ).digest():
-                raise RunnerError("promotion copy hash differs from writer draft")
+            if sha256_file(temporary_path) != expected_draft_sha256:
+                raise RunnerError("promotion copy hash differs from the validated writer draft")
             temporary_path.replace(self.final_path)
         finally:
             temporary_path.unlink(missing_ok=True)
