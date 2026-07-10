@@ -20,7 +20,7 @@ Legacy/unclassified, table-parity, numeric-boundary, integration/persistence and
 
 1. Run the required environment probe only when no saved probe is confirmed.
 2. Do not reread package files or general writer references: the runner embeds their verified prepared projection in the prompt.
-3. Immediately replace the draft seed at the declared output path; do not postpone the first write for additional design.
+3. The declared output file does not exist at stage start and is stage-owned. Create it as the first file write with `Add File` or an equivalent atomic create; use the inline draft seed only as a template. Do not use an update-only patch against the absent output and do not postpone the first write for additional design.
 4. Create executable `TC-*` only for `coverage_status = testable` and implement the provided `test_intent` and `observable_oracle`.
 5. Never turn `gap`, `unclear` or `not-applicable` into executable coverage.
 6. Do not invent screens, fields, dictionaries, values, UI reactions, setup, API/DB effects or persistence.

@@ -85,6 +85,8 @@ This is a short operational contract. It states role, scenario, allowed inputs, 
 5. record a `targeted_source_fallback` event with reason, source path and locator;
 6. stop as `blocked` rather than invent evidence.
 
+Prepared writer output is absent at stage start. `runner-input/draft-seed.md` is a template, not an output placeholder. The first mutation must create output (`Add File` or equivalent); update-only patch is invalid.
+
 ## Prototype Budgets
 
 Defaults for a small prepared-package smoke are configurable technical guardrails:

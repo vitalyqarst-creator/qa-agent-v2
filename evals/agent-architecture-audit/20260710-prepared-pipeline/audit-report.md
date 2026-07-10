@@ -75,7 +75,7 @@
 - Evidence: benchmark cycle 1 сохранил `apply_patch verification failed` для отсутствующего `stage-output/draft.md`; runner создаёт seed только в `runner-input/draft-seed.md`, а profile/prompt говорит replace seed at output path.
 - Риск: корректно запущенный writer может выбрать update вместо create, потерять почти весь first-artifact budget и быть остановлен до первого draft.
 - Recommended move: явно закрепить, что output изначально отсутствует и должен создаваться первым `Add File`/atomic write; seed остаётся отдельным immutable template. Не создавать runner-owned output-заглушку.
-- Remediation: отложено из-за live stop-condition; benchmark cycles 2–3 не запускались.
+- Remediation: исправлено в следующей узкой итерации. Runtime profile и generated prompt теперь явно фиксируют absent initial output, stage ownership и обязательный первый `Add File`/atomic create; regression проверяет, что seed существует отдельно, а output отсутствует до входа writer executor.
 - Paths: `references/agent/prepared-writer-runtime-profile.md`, `scripts/codex_exec_review_cycle_runner.py`, `fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/benchmark-blocker-report.md`.
 
 ## Duplication map
@@ -90,8 +90,7 @@
 
 ## Remediation plan
 
-1. P0/P1 package v3 remediation и accepted canary v7 завершены.
-2. Исправить create-vs-update wording для первого writer output и добавить regression-тест.
-3. Повторить immutable canary с promotion off.
-4. Только после accepted canary заново начать три независимых benchmark cycles.
-5. Сохранить residual P2 как отдельную архитектурную задачу после стабильного benchmark.
+1. P0/P1 package v3 remediation и create-vs-update regression завершены.
+2. Повторить immutable canary с promotion off.
+3. Только после accepted canary заново начать три независимых benchmark cycles.
+4. Сохранить residual P2 как отдельную архитектурную задачу после стабильного benchmark.

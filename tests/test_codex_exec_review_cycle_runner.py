@@ -536,6 +536,29 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             runner_module.DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES,
         )
 
+    def test_prepared_writer_creates_absent_stage_owned_output_from_template(self) -> None:
+        package_path = self.build_prepared_package()
+
+        def assert_initial_file_state_and_write(request):
+            seed = self.writer_attempt / "runner-input" / "draft-seed.md"
+            self.assertTrue(seed.is_file())
+            self.assertFalse(self.draft_path.exists())
+            self.assertIn("output file does not exist", request.prompt)
+            self.assertIn("Create it as the first file write", request.prompt)
+            self.assertIn("do not use an update-only patch", request.prompt)
+            return self.writer_step()(request)
+
+        executor = ScriptedExecutor(
+            assert_initial_file_state_and_write,
+            self.reviewer_step(decision="accepted"),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertTrue(self.draft_path.is_file())
+        self.assertTrue((self.writer_attempt / "runner-input" / "draft-seed.md").is_file())
+
     def test_prepared_reviewer_prompt_budget_blocks_oversized_inline_handoff(self) -> None:
         package_path = self.build_prepared_package()
         executor = ScriptedExecutor(self.writer_step())

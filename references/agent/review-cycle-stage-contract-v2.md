@@ -54,7 +54,7 @@ The schema is strict. Unknown fields, absolute/traversing paths, duplicate paths
 
 Writer stage-produced outputs must stay under both `attempt_root` and an allowed write root. Reviewer manifests declare no allowed write roots and no stage-produced files. All expected outputs, including runner-produced captures/status, stay under the attempt root. The canonical test-case path must be under a forbidden write root.
 
-Prepared writer attempts may include a runner-owned draft seed under `runner-input/`. The seed is an immutable handoff artifact outside allowed write roots. A non-blocked result requires a distinct draft, no seed sentinels, a recorded first meaningful write, and the normal structure/obligation gates.
+Prepared writer attempts may include a runner-owned draft seed under `runner-input/`. The seed is an immutable template artifact outside allowed write roots; it is not pre-created at the declared stage output path. The output file is absent at stage start and remains stage-owned, so the writer must create it on the first file write rather than issue an update-only patch. A non-blocked result requires a distinct draft, no seed sentinels, a recorded first meaningful write, and the normal structure/obligation gates.
 
 Prepared obligation gate version `2` scopes traceability to Markdown TC sections. A TC ends at the next `TC-*` heading or the next heading of the same/higher level; nested headings remain inside the case and fenced code blocks are ignored. Set-level coverage gaps and other sections after the last TC must not be attributed to that TC. Bulleted and unbulleted bold traceability fields are equivalent inside the scoped case.
 
