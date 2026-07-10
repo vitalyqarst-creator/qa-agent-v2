@@ -14,6 +14,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Protocol, Sequence
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
 from test_case_agent.review_cycle.contracts import (
     CONTRACT_VERSION,
     ExpectedOutput,

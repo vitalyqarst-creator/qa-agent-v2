@@ -25,6 +25,7 @@ AGENT_LAYER_MODULES = [
     "tests.test_qa_rules",
     "tests.test_review_cycle_stage_contract",
     "tests.test_review_cycle_runtime",
+    "tests.test_review_cycle_backends",
     "tests.test_reviewer_contracts",
     "tests.test_session_based_review_cycle_contracts",
     "tests.test_source_parsing_quality",

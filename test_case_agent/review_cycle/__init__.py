@@ -20,12 +20,14 @@ from test_case_agent.review_cycle.runtime import (
     load_manifest,
     load_result,
 )
+from test_case_agent.review_cycle.backends import FreshThreadSdkBackend, start_fresh_sdk_thread
 
 __all__ = [
     "CONTRACT_VERSION",
     "ArtifactRef",
     "ContractValidationError",
     "ExpectedOutput",
+    "FreshThreadSdkBackend",
     "StageInputManifest",
     "StageResult",
     "TransitionDecision",
@@ -39,4 +41,5 @@ __all__ = [
     "load_manifest",
     "load_result",
     "resolve_transition",
+    "start_fresh_sdk_thread",
 ]

@@ -78,6 +78,7 @@ Only the runner may produce `signed-off`, and only after the reviewer returns `a
 - `test_case_agent/review_cycle/contracts.py`: strict manifest/result models, digests, path/write boundaries and fresh-session checks.
 - `test_case_agent/review_cycle/transitions.py`: allowlisted runner-owned transition decisions.
 - `test_case_agent/review_cycle/runtime.py`: shared backend protocol, immutable attempt persistence and filesystem evidence verification.
+- `test_case_agent/review_cycle/backends.py`: fresh-thread SDK boundary and backend adapter without resume context.
 - `tests/test_review_cycle_stage_contract.py`: focused contract, failure and transition coverage.
 
 The exec prototype persists this contract for each writer/reviewer process. The SDK runner remains on v1 until its dedicated adapter is enabled. Retry/recovery, metrics and live execution remain separately gated capabilities.

@@ -23,6 +23,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from test_case_agent.review_cycle.backends import start_fresh_sdk_thread
+
 
 RUNNER_LOCK_FILE = "runner.lock.yaml"
 RUNNER_EVENTS_FILE = "runner-events.ndjson"
@@ -4566,7 +4572,8 @@ def run_bounded_semantic_review_session(
     codex = Codex()
     thread = None
     try:
-        thread = codex.thread_start(
+        thread = start_fresh_sdk_thread(
+            codex,
             cwd=cwd or str(Path.cwd()),
             sandbox=sdk_sandbox("read_only"),
             approval_mode=sdk_approval_mode(approval_mode),
@@ -4926,7 +4933,8 @@ def run_bounded_reviewer_session(
     codex = Codex()
     thread = None
     try:
-        thread = codex.thread_start(
+        thread = start_fresh_sdk_thread(
+            codex,
             cwd=cwd or str(Path.cwd()),
             sandbox=sdk_sandbox("read_only"),
             approval_mode=sdk_approval_mode(approval_mode),
@@ -5521,7 +5529,8 @@ def run_real_session(
     codex = Codex()
     thread = None
     try:
-        thread = codex.thread_start(
+        thread = start_fresh_sdk_thread(
+            codex,
             cwd=run_cwd,
             sandbox=sdk_sandbox(next_session.sandbox_policy),
             approval_mode=sdk_approval_mode(approval_mode),
