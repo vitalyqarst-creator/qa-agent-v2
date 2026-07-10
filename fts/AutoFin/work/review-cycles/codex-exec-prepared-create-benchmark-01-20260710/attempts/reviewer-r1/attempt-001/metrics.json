@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 0,
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-create-benchmark-01-20260710",
+  "duration_ms": 20219,
+  "input_artifact_bytes": 89002,
+  "input_artifact_count": 13,
+  "input_tokens": 21782,
+  "outcome": "accepted",
+  "output_artifact_bytes": 10708,
+  "output_artifact_count": 6,
+  "output_tokens": 758,
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_semantic",
+  "stage_id": "reviewer-r1",
+  "total_tokens": 22540
+}

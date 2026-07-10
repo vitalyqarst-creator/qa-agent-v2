@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "validator": "prepared-evidence-access-gate-v1",
+  "commands_checked": 1,
+  "fallback_authorizations": 0,
+  "accesses": [],
+  "findings": []
+}

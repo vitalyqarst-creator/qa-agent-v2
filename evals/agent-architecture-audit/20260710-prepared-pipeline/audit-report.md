@@ -78,6 +78,15 @@
 - Remediation: исправлено в следующей узкой итерации. Runtime profile и generated prompt теперь явно фиксируют absent initial output, stage ownership и обязательный первый `Add File`/atomic create; regression проверяет, что seed существует отдельно, а output отсутствует до входа writer executor.
 - Paths: `references/agent/prepared-writer-runtime-profile.md`, `scripts/codex_exec_review_cycle_runner.py`, `fts/AutoFin/work/review-cycles/codex-exec-prepared-architecture-benchmark-01-20260710/benchmark-blocker-report.md`.
 
+### ARCH-PREP-009 — warning / P1 live blocker — first-artifact SLO пересекается с нормальным latency tail
+
+- Категория: `scripts`.
+- Evidence: после исправления create contract canary создал draft на `51.844 s`, benchmark 1 — на `79.015 s`, а benchmark 2 был остановлен на `90.079 s` без update/file-state ошибки. Writer успел выполнить probe и объявить следующий `Add File`, но draft ещё формировался.
+- Риск: корректный run блокируется как input/process failure из-за малого запаса между наблюдаемым верхним latency tail и абсолютным deadline `90 s`.
+- Recommended move: отдельным bounded experiment увеличить first-artifact deadline до `120 s`, сохранив hard timeout `180 s`, post-write idle `60 s` и stage ownership.
+- Remediation: отложено по live stop-condition; benchmark 3 не запускался.
+- Paths: `scripts/codex_exec_review_cycle_runner.py`, `evals/prepared-create-benchmark/20260710/benchmark-report.md`.
+
 ## Duplication map
 
 - Confirmed duplicates: отсутствуют.
@@ -90,7 +99,8 @@
 
 ## Remediation plan
 
-1. P0/P1 package v3 remediation и create-vs-update regression завершены.
-2. Повторить immutable canary с promotion off.
-3. Только после accepted canary заново начать три независимых benchmark cycles.
-4. Сохранить residual P2 как отдельную архитектурную задачу после стабильного benchmark.
+1. Create-vs-update remediation и regression завершены; immutable canary принят с promotion off.
+2. Перезапущенный benchmark дал один accepted run и один `blocked-first-artifact-deadline`; третий run отменён по stop-condition.
+3. Следующей узкой итерацией проверить deadline `120 s` при неизменных hard timeout `180 s` и post-write idle `60 s`.
+4. После успешного canary заново выполнить три независимых benchmark cycles.
+5. Сохранить residual P2 как отдельную архитектурную задачу после стабильного benchmark.

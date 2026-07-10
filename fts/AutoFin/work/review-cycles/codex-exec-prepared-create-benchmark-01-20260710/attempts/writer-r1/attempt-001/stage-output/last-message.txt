@@ -1,0 +1,3 @@
+Unsigned draft created and validated: 3 test cases, 3 ATOM traces, no seed sentinels, and both coverage gaps preserved. Targeted source fallback was not used.
+
+[Открыть draft.md](</C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/work/review-cycles/codex-exec-prepared-create-benchmark-01-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md>)
