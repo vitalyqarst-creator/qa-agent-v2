@@ -31,13 +31,14 @@ from test_case_agent.review_cycle.runtime import (
     StageRuntimeError,
     artifact_ref,
 )
+from test_case_agent.review_cycle.attempts import format_attempt_id
 
 
 WRITER_STAGE = "writer-r1"
 REVIEWER_STAGE = "reviewer-r1"
 RUNNER_EVENTS = "runner-events.ndjson"
 REVIEW_DECISIONS = {"accepted", "changes-required"}
-ATTEMPT_ID = "attempt-001"
+ATTEMPT_ID = format_attempt_id(1)
 
 
 class RunnerError(RuntimeError):

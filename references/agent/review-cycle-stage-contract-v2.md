@@ -29,7 +29,7 @@ work/review-cycles/<scope-slug>/attempts/<stage-id>/<attempt-id>/
   <declared stage artifacts>
 ```
 
-An attempt must not reuse runner-owned outputs from an earlier attempt. Retry/recovery policy is outside Phase 1 and must remain explicit.
+An attempt must not reuse runner-owned outputs from an earlier attempt. `StageAttemptLedger` classifies prior attempts from immutable evidence. Incomplete or corrupt attempts require manual reconciliation; a blocked attempt may create a new numbered root only after an explicit `retry_blocked` decision; successful or changes-required attempts cannot be repeated.
 
 ## Stage Input Manifest
 
@@ -79,6 +79,7 @@ Only the runner may produce `signed-off`, and only after the reviewer returns `a
 - `test_case_agent/review_cycle/transitions.py`: allowlisted runner-owned transition decisions.
 - `test_case_agent/review_cycle/runtime.py`: shared backend protocol, immutable attempt persistence and filesystem evidence verification.
 - `test_case_agent/review_cycle/backends.py`: fresh-thread SDK boundary and backend adapter without resume context.
+- `test_case_agent/review_cycle/attempts.py`: deterministic attempt inspection, retry gating and fresh attempt allocation.
 - `tests/test_review_cycle_stage_contract.py`: focused contract, failure and transition coverage.
 
 The exec prototype persists this contract for each writer/reviewer process. The SDK runner remains on v1 until its dedicated adapter is enabled. Retry/recovery, metrics and live execution remain separately gated capabilities.
