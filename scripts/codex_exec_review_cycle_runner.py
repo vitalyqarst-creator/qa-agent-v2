@@ -633,6 +633,49 @@ class CodexExecReviewCycleRunner:
             raise RunnerError(f"Prepared package does not contain {kind}")
         return resolve_repository_path(reference.path, self.repo_root)
 
+    @property
+    def prepared_writer_profile_path(self) -> Path:
+        return self.repo_root / "references" / "agent" / "prepared-writer-runtime-profile.md"
+
+    def _prepared_writer_payload(self) -> str:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        if not self.prepared_writer_profile_path.is_file():
+            raise RunnerError("Prepared writer runtime profile is missing")
+        metadata = {
+            "package_version": self._prepared_package.package_version,
+            "package_id": self._prepared_package.package_id,
+            "ft_slug": self._prepared_package.ft_slug,
+            "scope_slug": self._prepared_package.scope_slug,
+            "section_id": self._prepared_package.section_id,
+            "execution_profile": self._prepared_package.execution_profile,
+            "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
+            "fallback_policy": self._prepared_package.fallback_policy,
+        }
+        return "\n".join(
+            [
+                "<!-- PREPARED-STAGE-PAYLOAD:BEGIN -->",
+                "## Verified package metadata",
+                "",
+                "```json",
+                json.dumps(metadata, ensure_ascii=False, indent=2),
+                "```",
+                "",
+                self.prepared_writer_profile_path.read_text(encoding="utf-8").strip(),
+                "",
+                self._prepared_artifact("stage-instructions").read_text(encoding="utf-8").strip(),
+                "",
+                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                "",
+                "## Atomic obligations",
+                "",
+                "```json",
+                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                "```",
+                "<!-- PREPARED-STAGE-PAYLOAD:END -->",
+            ]
+        )
+
     def _verify_prepared_package(self) -> None:
         if self.prepared_package_path is None:
             return
@@ -1089,20 +1132,18 @@ class CodexExecReviewCycleRunner:
 
     def _writer_prompt(self) -> str:
         if self._prepared_package is not None and self.prepared_package_path is not None:
-            package_files = self._prepared_input_paths()
             return "\n".join(
                 [
                     "# Codex exec prepared writer fast path",
                     "",
-                    "Use the ft-test-case-writer prepared-package fast path.",
-                    "Read only the four verified package files below; do not rerun source locator, scope analysis, DOCX/XHTML extraction, PDF rendering or parity checks.",
+                    "The upstream package already applied the full source, scope and writer policy.",
+                    "Use only the embedded Prepared Writer Runtime Profile below; do not load the full ft-test-case-writer skill or reread package/project reference files.",
                     "Do not read existing/generated test cases or earlier cycle artifacts as evidence.",
                     f"Write a structurally complete unsigned draft first and only to `{relative_path(self.draft_path, self.repo_root)}`.",
                     "Do not write under a production test-cases directory and do not promote the draft.",
                     "Use registered full sources only for a single unresolved ATOM locator and record targeted_source_fallback.",
                     "",
-                    "## Verified prepared package",
-                    *[f"- `{relative_path(path, self.repo_root)}`" for path in package_files],
+                    self._prepared_writer_payload(),
                     "",
                     "Exit only after the draft file is fully written. A chat response without the file is a failed stage.",
                     "",
@@ -1323,6 +1364,8 @@ class CodexExecReviewCycleRunner:
         ]
         if self._prepared_package is not None and self.prepared_package_path is not None:
             instruction_paths = [*self.instruction_files, self._prepared_artifact("stage-instructions")]
+            if role == "writer":
+                instruction_paths.append(self.prepared_writer_profile_path)
             source_paths = [self._prepared_artifact("source-evidence")]
             handoff_paths = [
                 self.prepared_package_path,

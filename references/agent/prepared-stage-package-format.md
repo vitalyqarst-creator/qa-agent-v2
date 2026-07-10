@@ -68,6 +68,8 @@ Keep only scope-local evidence needed to understand the obligations:
 - dictionary/oracle statements;
 - coverage gaps and accepted risks.
 
+Builder inputs use explicit selectors. Each selector must resolve to a Markdown heading block or a narrow line window; missing selectors block the package. Full-file inclusion is explicit and byte-capped. One evidence slice is capped by its declared `max_bytes`, and combined `source-evidence.md` is capped at 32768 bytes.
+
 Do not copy whole DOCX/PDF documents, unrelated sections, historical reports or generated TC. The file must name every `SRC-*`, requirement code and `GAP-*` used by `atomic-obligations.json`.
 
 ## `stage-instructions.md`
@@ -97,7 +99,7 @@ Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-co
 
 ## Fast Path And Fallback
 
-Fast path reads only the four package files plus package-level `AGENT-NOTES.md` when declared. A stage must not load document/PDF processing skills or scan full sources by default.
+The runner verifies the four package files and embeds a compact projection into the starting prompt. The optimized writer must not spend stage commands rereading package files, the full writer skill or general references. Package-level notes are included only through applicable scope-local selectors. A stage must not load document/PDF processing skills or scan full sources by default.
 
 Targeted fallback is allowed only when a named obligation cannot be resolved from the capsule. It must be limited to an exact XHTML/DOCX locator. PDF remains structural evidence only. An unbounded source scan, full document re-analysis or external scratch path blocks the prepared-package run.
 

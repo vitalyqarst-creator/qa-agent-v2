@@ -86,7 +86,9 @@ class PreparedStagePackageTests(unittest.TestCase):
                 (self.docx, "source-of-truth", "section 4.3"),
                 (self.xhtml, "machine-readable", "SRC-1..SRC-2"),
             ),
-            evidence_inputs=(EvidenceInput(self.evidence, "Confirmed scope"),),
+            evidence_inputs=(
+                EvidenceInput(self.evidence, "Confirmed scope", selectors=("SRC-1", "SRC-2")),
+            ),
             obligations=self._obligations(),
             instructions=StageInstructionConfig(
                 role="writer",
@@ -140,7 +142,7 @@ class PreparedStagePackageTests(unittest.TestCase):
 
     def test_rejects_missing_evidence_reference(self) -> None:
         self.evidence.write_text("# no anchors\n", encoding="utf-8")
-        with self.assertRaisesRegex(StageRuntimeError, "does not name"):
+        with self.assertRaisesRegex(StageRuntimeError, "selector not found|does not name"):
             self._build()
         self.assertFalse((self.root / "work" / "prepared").exists())
 
@@ -192,7 +194,9 @@ class PreparedStagePackageTests(unittest.TestCase):
                 scope_slug="field-selection",
                 section_id="4.3",
                 source_registry=((self.docx, "source-of-truth", "section 4.3"),),
-                evidence_inputs=(EvidenceInput(self.evidence, "Confirmed scope"),),
+                evidence_inputs=(
+                    EvidenceInput(self.evidence, "Confirmed scope", selectors=("SRC-1",)),
+                ),
                 obligations=self._obligations(),
                 instructions=StageInstructionConfig(
                     role="writer",
@@ -230,6 +234,76 @@ class PreparedStagePackageTests(unittest.TestCase):
         loaded = load_prepared_package(manifest, self.root)
         self.assertEqual("legacy-unclassified", loaded.execution_profile)
         self.assertEqual(("legacy-unclassified",), loaded.unsupported_dimensions)
+
+    def test_scope_local_selector_excludes_unrelated_markdown_sections(self) -> None:
+        self.evidence.write_text(
+            "# Scope\n\n## Selected\nSRC-1: required evidence.\n\n"
+            "## Unrelated\nSECRET-UNRELATED-CONTENT\nSRC-2: second evidence.\n",
+            encoding="utf-8",
+        )
+        package = PreparedPackageBuilder(self.root).build(
+            output_root=self.root / "work" / "sliced",
+            package_id="pkg-001",
+            ft_slug="demo-ft",
+            scope_slug="field-selection",
+            section_id="4.3",
+            source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+            evidence_inputs=(
+                EvidenceInput(self.evidence, "Selected evidence", selectors=("SRC-1",)),
+            ),
+            obligations=PreparedObligationSet.create(
+                package_id="pkg-001",
+                obligations=(self._obligations().obligations[0],),
+                coverage_gaps=(),
+            ),
+            instructions=StageInstructionConfig(
+                role="writer",
+                scenario="writer.session_prepared_initial_draft",
+                output_path="work/output.md",
+                attempt_root="work/attempt-001",
+                sandbox_policy="workspace_write",
+                timeout_seconds=180,
+                idle_timeout_seconds=60,
+                command_budget=12,
+            ),
+            execution_profile="simple-field-property",
+            unsupported_dimensions=(),
+            forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+        )
+        evidence_path = next(
+            item.path for item in package.package_artifacts if item.kind == "source-evidence"
+        )
+        text = (self.root / evidence_path).read_text(encoding="utf-8")
+        self.assertIn("required evidence", text)
+        self.assertNotIn("SECRET-UNRELATED-CONTENT", text)
+
+    def test_missing_evidence_selector_blocks_package(self) -> None:
+        with self.assertRaisesRegex(StageRuntimeError, "selector not found"):
+            PreparedPackageBuilder(self.root).build(
+                output_root=self.root / "work" / "missing-selector",
+                package_id="pkg-001",
+                ft_slug="demo-ft",
+                scope_slug="field-selection",
+                section_id="4.3",
+                source_registry=((self.docx, "source-of-truth", "section 4.3"),),
+                evidence_inputs=(
+                    EvidenceInput(self.evidence, "Evidence", selectors=("SRC-404",)),
+                ),
+                obligations=self._obligations(),
+                instructions=StageInstructionConfig(
+                    role="writer",
+                    scenario="writer.session_prepared_initial_draft",
+                    output_path="work/output.md",
+                    attempt_root="work/attempt-001",
+                    sandbox_policy="workspace_write",
+                    timeout_seconds=180,
+                    idle_timeout_seconds=60,
+                    command_budget=12,
+                ),
+                execution_profile="simple-field-property",
+                unsupported_dimensions=(),
+                forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            )
 
 
 if __name__ == "__main__":

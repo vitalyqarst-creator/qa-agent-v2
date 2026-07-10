@@ -499,6 +499,9 @@ class PreparedStagePackage:
 class EvidenceInput:
     path: Path
     title: str
+    selectors: tuple[str, ...] = ()
+    include_full: bool = False
+    max_bytes: int = 8192
 
 
 @dataclass(frozen=True)
@@ -595,6 +598,10 @@ class PreparedPackageBuilder:
         try:
             temporary.mkdir(parents=True)
             evidence_text = self._render_evidence(package_id, evidence_inputs)
+            if len(evidence_text.encode("utf-8")) > 32768:
+                raise StageRuntimeError(
+                    "blocked-package-budget: source evidence exceeds 32768 bytes"
+                )
             obligations.validate(evidence_text=evidence_text)
             evidence_path = temporary / "source-evidence.md"
             obligations_path = temporary / "atomic-obligations.json"
@@ -663,18 +670,72 @@ class PreparedPackageBuilder:
                 raise StageRuntimeError(f"evidence input is missing: {path}")
             relative = repository_relative(path, self.repo_root)
             content = path.read_text(encoding="utf-8")
+            selected = self._select_evidence(item, content, relative)
             lines.extend(
                 [
                     f"## {item.title}",
                     "",
                     f"- source_path: `{relative}`",
                     f"- source_sha256: `{sha256_path(path)}`",
+                    f"- selectors: `{', '.join(item.selectors) if item.selectors else 'full-explicit'}`",
                     "",
-                    content.rstrip(),
+                    selected.rstrip(),
                     "",
                 ]
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    @staticmethod
+    def _select_evidence(item: EvidenceInput, content: str, relative: str) -> str:
+        if not isinstance(item.max_bytes, int) or isinstance(item.max_bytes, bool) or item.max_bytes < 1:
+            raise StageRuntimeError(f"evidence max_bytes must be positive: {relative}")
+        if item.include_full:
+            selected = content
+        else:
+            if not item.selectors:
+                raise StageRuntimeError(
+                    f"scope-local evidence requires selectors or include_full=true: {relative}"
+                )
+            lines = content.splitlines()
+            ranges: list[tuple[int, int]] = []
+            for selector in item.selectors:
+                _text(selector, "evidence selector")
+                matches = [index for index, line in enumerate(lines) if selector in line]
+                if not matches:
+                    raise StageRuntimeError(
+                        f"evidence selector not found in {relative}: {selector}"
+                    )
+                for match in matches:
+                    start = match
+                    heading_level: int | None = None
+                    for index in range(match, -1, -1):
+                        heading = re.match(r"^(#{1,6})\s+", lines[index])
+                        if heading:
+                            start = index
+                            heading_level = len(heading.group(1))
+                            break
+                    if heading_level is None:
+                        ranges.append((max(0, match - 2), min(len(lines), match + 3)))
+                        continue
+                    end = len(lines)
+                    for index in range(start + 1, len(lines)):
+                        heading = re.match(r"^(#{1,6})\s+", lines[index])
+                        if heading and len(heading.group(1)) <= heading_level:
+                            end = index
+                            break
+                    ranges.append((start, end))
+            merged: list[tuple[int, int]] = []
+            for start, end in sorted(ranges):
+                if merged and start <= merged[-1][1]:
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                else:
+                    merged.append((start, end))
+            selected = "\n\n".join("\n".join(lines[start:end]).strip() for start, end in merged)
+        if len(selected.encode("utf-8")) > item.max_bytes:
+            raise StageRuntimeError(
+                f"evidence slice exceeds max_bytes for {relative}: {len(selected.encode('utf-8'))}"
+            )
+        return selected
 
     @staticmethod
     def _render_instructions(package_id: str, config: StageInstructionConfig) -> str:
@@ -694,7 +755,7 @@ class PreparedPackageBuilder:
                 "",
                 "## Fast Path",
                 "",
-                "1. Read only stage-package.json, source-evidence.md, atomic-obligations.json and this file.",
+                "1. Use the runner-embedded verified projection; do not reread package files in the stage.",
                 "2. Do not rerun source locator, scope analyzer, source parity, DOCX extraction or PDF rendering.",
                 "3. Write a structurally complete minimum output before optional refinement.",
                 "4. Keep output and scratch inside attempt_root.",

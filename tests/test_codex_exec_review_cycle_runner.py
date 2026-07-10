@@ -146,12 +146,20 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.source_path = self.ft_root / "source" / "main.xhtml"
         self.handoff_path = self.ft_root / "work" / "stage-handoffs" / "01-demo" / "scope-contract.md"
         self.instruction_path = self.repo_root / "AGENTS.md"
+        self.prepared_profile_path = (
+            self.repo_root / "references" / "agent" / "prepared-writer-runtime-profile.md"
+        )
         self.source_path.parent.mkdir(parents=True)
         self.handoff_path.parent.mkdir(parents=True)
         self.final_path.parent.mkdir(parents=True)
         self.source_path.write_text("<html><body>Source</body></html>\n", encoding="utf-8")
         self.handoff_path.write_text("# Scope contract\n", encoding="utf-8")
         self.instruction_path.write_text("# Test instructions\n", encoding="utf-8")
+        self.prepared_profile_path.parent.mkdir(parents=True)
+        self.prepared_profile_path.write_text(
+            "# Prepared Writer Runtime Profile\n\nWrite the embedded seed immediately.\n",
+            encoding="utf-8",
+        )
         self.validator = FakeValidator()
 
     def tearDown(self) -> None:
@@ -317,7 +325,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             scope_slug="demo-scope",
             section_id="1",
             source_registry=((self.source_path, "machine-readable", "SRC-1"),),
-            evidence_inputs=(EvidenceInput(self.handoff_path, "Confirmed scope"),),
+            evidence_inputs=(
+                EvidenceInput(self.handoff_path, "Confirmed scope", selectors=("SRC-1",)),
+            ),
             obligations=obligations,
             instructions=StageInstructionConfig(
                 role="writer",
@@ -371,11 +381,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("changes-required", result.status)
         writer_prompt = executor.requests[0].prompt
         self.assertIn("prepared writer fast path", writer_prompt)
-        self.assertIn("stage-package.json", writer_prompt)
-        self.assertIn("source-evidence.md", writer_prompt)
-        self.assertIn("atomic-obligations.json", writer_prompt)
-        self.assertIn("stage-instructions.md", writer_prompt)
-        self.assertNotIn("source/main.xhtml", writer_prompt)
+        self.assertIn("PREPARED-STAGE-PAYLOAD:BEGIN", writer_prompt)
+        self.assertIn("Prepared Writer Runtime Profile", writer_prompt)
+        self.assertIn("ATOM-001", writer_prompt)
+        self.assertIn("observable requirement", writer_prompt)
+        self.assertIn("do not load the full ft-test-case-writer skill", writer_prompt)
         manifest = json.loads((self.writer_attempt / "stage-input.json").read_text(encoding="utf-8"))
         self.assertEqual("writer.session_prepared_initial_draft", manifest["scenario"])
         self.assertEqual(1, len(manifest["source_artifacts"]))

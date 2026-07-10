@@ -66,7 +66,13 @@ def build_from_spec(spec_path: Path, repo_root: Path) -> Path:
             for item in spec["source_registry"]
         ]
         evidence = [
-            EvidenceInput(repo_root / item["path"], item["title"])
+            EvidenceInput(
+                repo_root / item["path"],
+                item["title"],
+                selectors=tuple(item.get("selectors", ())),
+                include_full=item.get("include_full", False),
+                max_bytes=item.get("max_bytes", 8192),
+            )
             for item in spec["evidence_inputs"]
         ]
     except (KeyError, TypeError) as exc:
