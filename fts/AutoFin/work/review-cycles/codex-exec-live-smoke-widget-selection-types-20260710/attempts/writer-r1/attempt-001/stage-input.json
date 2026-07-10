@@ -1,0 +1,141 @@
+{
+  "allowed_write_roots": [
+    "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/stage-output"
+  ],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/3-codex-exec-live-smoke-widget-selection-types.md",
+  "contract_version": 2,
+  "cycle_id": "codex-exec-live-smoke-widget-selection-types-20260710",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "producer": "stage",
+      "required": true
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "producer": "stage",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-selection.md",
+      "sha256": "e6a79cb499d8760ca32ab270331cf578e45a35ca29cd98d27d5a953476b492d3"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-contract.md",
+      "sha256": "ad3637a95782f72d4a410d49439ea1a2d74aedc75bd350a12324282554c60022"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-row-inventory.md",
+      "sha256": "766b9ae812bbe0acb59bdc8faa7c6e39e46d4b82abdba710abf7bd4983003b9d"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/source-parity-check.md",
+      "sha256": "65e3c7df70694598c2cca004c09bb008395bbf8f26d43336d1805e2e433cb43d"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/scope-coverage-gaps.md",
+      "sha256": "12ad20415578f0363bfcf377c531874edb113c6123312d63dbc599d92980e65c"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/negative-oracle-inventory.md",
+      "sha256": "f199143a0e668f05aad5e3f6b07938e198e753040a7a928bfdeb1ac3bd9ff8f6"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/requiredness-oracle-inventory.md",
+      "sha256": "a35f1c41817890c86c8e1666d3ffb717c3042ef2da20384c855a03f66260a729"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/stage-handoffs/18-iteration-smoke-widget-selection-types/prompt.scope-to-iteration.md",
+      "sha256": "1fe1ffcc1f9fd90d21b5b4c26be0c6fae52e3c3de9dd0bc2db1d0aaae8c9c806"
+    }
+  ],
+  "input_digest": "9e7ba8d7ceb33479602d8df132d8d0cc6a13b2ec7a2919b5503ff7efbef31f11",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "4c5e14b243ac529bc2aac1c0f9cebe3b9c6feee224c2cc8cd6ab38a951c5a2c5"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/AGENT-NOTES.md",
+      "sha256": "a79deafdfce98e3156dc4cacaf518031c248983c3dadaa1c72544903420bdca8"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/prompt.md",
+    "sha256": "1ab2cb5b1fba77d22d03eee1b2ad242f2bf5cfd2b3bcf9b7c4e9704d85116118"
+  },
+  "role": "writer",
+  "sandbox_policy": "workspace_write",
+  "scenario": "writer.session_initial_draft",
+  "semantic_round": 0,
+  "session_id": "session-writer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ],
+  "stage_id": "writer-r1",
+  "timeout_seconds": 600
+}

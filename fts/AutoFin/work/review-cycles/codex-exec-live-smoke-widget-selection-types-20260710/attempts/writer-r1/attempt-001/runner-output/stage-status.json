@@ -1,0 +1,31 @@
+{
+  "stage": "writer-r1",
+  "role": "writer",
+  "status": "blocked-timeout",
+  "reason": "writer timed out and the required draft is missing",
+  "exit_code": null,
+  "timed_out": true,
+  "launch_error": false,
+  "duration_seconds": 600.453,
+  "command": [
+    "C:\\Users\\Пользователь\\.codex\\plugins\\.plugin-appserver\\codex.exe",
+    "exec",
+    "--ephemeral",
+    "--sandbox",
+    "workspace-write",
+    "--cd",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+    "--json",
+    "--output-last-message",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\codex-exec-live-smoke-widget-selection-types-20260710\\attempts\\writer-r1\\attempt-001\\stage-output\\last-message.txt",
+    "-"
+  ],
+  "stdout": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+  "stderr": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+  "events": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+  "last_message": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+  "blocking_reasons": [
+    "writer timed out and the required draft is missing",
+    "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md"
+  ]
+}

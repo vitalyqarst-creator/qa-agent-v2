@@ -1,0 +1,44 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4b84-a767-72f3-bf2b-14240b28f05e",
+  "blocking_reasons": [
+    "writer timed out and the required draft is missing",
+    "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/stage-output/draft.md"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-live-smoke-widget-selection-types-20260710",
+  "duration_ms": 600453,
+  "exit_code": null,
+  "finished_at": "2026-07-10T10:23:32.460579+00:00",
+  "input_digest": "9e7ba8d7ceb33479602d8df132d8d0cc6a13b2ec7a2919b5503ff7efbef31f11",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "4fcf69a179d0de52d3eff2b487e77cd46f9d6f61c5e3cd6f569d39ca4c66d62b"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "26cf886f868347b889ec5605138838ca47a1929788d5a3241f6921134541d5db"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "4fcf69a179d0de52d3eff2b487e77cd46f9d6f61c5e3cd6f569d39ca4c66d62b"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-live-smoke-widget-selection-types-20260710/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "39963d780e37b90edbfa0445565b5c77c59e80eb1ca6525eb0fd8aa807147085"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-10T10:13:32.002455+00:00",
+  "status": "blocked",
+  "timed_out": true
+}

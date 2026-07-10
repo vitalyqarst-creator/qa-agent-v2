@@ -50,6 +50,13 @@ class StageCompletionCoordinator:
         execution.validate()
         if outcome not in RESULT_STATUS:
             raise StageRuntimeError(f"unsupported stage outcome: {outcome}")
+        try:
+            self.store.verify_manifest_inputs(manifest)
+        except StageRuntimeError:
+            if outcome != "blocked":
+                raise
+            # Preserve immutable failure evidence when the blocker itself is an input mutation.
+            # A blocked result cannot advance state or authorize promotion.
         backend_session_id = execution.backend_session_id
         if outcome == "blocked" and backend_session_id in prior_backend_session_ids:
             backend_session_id = ""

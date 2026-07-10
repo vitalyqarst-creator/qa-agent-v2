@@ -1,0 +1,27 @@
+2026-07-10T10:13:32.688936Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-10T10:15:01.898017Z  WARN codex_analytics::client: failed to send events request: error sending request for url (https://chatgpt.com/backend-api/codex/analytics-events/events)
+2026-07-10T10:15:46.484848Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 2.9 seconds
+Output:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+IndexError: list index out of range
+
+2026-07-10T10:16:52.004112Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 2.7 seconds
+Output:
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+  File "C:\Users\Пользователь\AppData\Roaming\Python\Python311\site-packages\pymupdf\__init__.py", line 13880, in save
+    return self._writeIMG(filename, idx, jpg_quality)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Пользователь\AppData\Roaming\Python\Python311\site-packages\pymupdf\__init__.py", line 13559, in _writeIMG
+    if   format_ == 1:  mupdf.fz_save_pixmap_as_png(pm, filename)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Пользователь\AppData\Roaming\Python\Python311\site-packages\pymupdf\mupdf.py", line 52842, in fz_save_pixmap_as_png
+    return _mupdf.fz_save_pixmap_as_png(pixmap, filename)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pymupdf.mupdf.FzErrorSystem: code=2: cannot open file 'C:\tmp\autofin_ft4_page5_writer_smoke.png': Permission denied
+
+2026-07-10T10:17:07.870992Z  WARN codex_analytics::client: failed to send events request: error sending request for url (https://chatgpt.com/backend-api/codex/analytics-events/events)
+2026-07-10T10:18:16.292140Z  WARN codex_analytics::client: failed to send events request: error sending request for url (https://chatgpt.com/backend-api/codex/analytics-events/events)

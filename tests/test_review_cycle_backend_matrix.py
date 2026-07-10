@@ -140,6 +140,17 @@ class ReviewCycleBackendMatrixTests(unittest.TestCase):
         with self.assertRaisesRegex(StageRuntimeError, "immutable"):
             coordinator.complete(manifest, execution, outcome="draft-ready")
 
+    def test_backend_cannot_mutate_a_declared_input_before_completion(self) -> None:
+        cycle, _, manifest, execution = self.prepare("codex-exec")
+        self.source.write_text("mutated source\n", encoding="utf-8")
+        with self.assertRaisesRegex(StageRuntimeError, "hash mismatch"):
+            StageCompletionCoordinator(self.root, cycle).complete(
+                manifest,
+                execution,
+                outcome="draft-ready",
+            )
+        self.assertFalse((Path(self.root) / manifest.attempt_root / "stage-result.json").exists())
+
 
 if __name__ == "__main__":
     unittest.main()
