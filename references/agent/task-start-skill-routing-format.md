@@ -183,6 +183,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["findings artifact exists", "traceability matrix exists when coverage review is required", "direct full review does not create lifecycle sign-off without session-based gates"]
     },
     {
+      "id": "reviewer.prepared_session_semantic",
+      "task_type": "Review a validated draft in a fresh read-only session from a verified prepared package.",
+      "skill_chain": ["ft-test-case-reviewer"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.session_prepared_semantic"}
+      ],
+      "verification_gates": ["prepared package hashes pass", "deterministic gate reports pass", "reviewer JSON Schema contract passes", "fresh backend session id differs from writer"]
+    },
+    {
       "id": "scope.review_gaps",
       "task_type": "Review scope coverage gaps and clarification requests before writer starts.",
       "skill_chain": ["ft-test-case-reviewer"],
@@ -276,6 +285,12 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "expected_route_id": "reviewer.full_existing_cases",
       "expected_skill_chain": ["ft-test-case-reviewer"],
       "expected_instruction_scenarios": ["reviewer.full_existing_cases"]
+    },
+    {
+      "prompt": "Проверь prepared draft в новой read-only сессии и верни JSON verdict.",
+      "expected_route_id": "reviewer.prepared_session_semantic",
+      "expected_skill_chain": ["ft-test-case-reviewer"],
+      "expected_instruction_scenarios": ["reviewer.session_prepared_semantic"]
     },
     {
       "prompt": "Run writer and reviewer in separate Codex sessions with two semantic review rounds and snapshots.",

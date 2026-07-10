@@ -29,6 +29,7 @@ REQUIRED_SCENARIOS = {
     "writer.session_semantic_revision",
     "writer.session_format_revision",
     "reviewer.full_existing_cases",
+    "reviewer.session_prepared_semantic",
     "reviewer.scope_gap_review",
     "reviewer.structure_preflight",
     "reviewer.semantic_traceability_test_design",
@@ -280,6 +281,18 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/agent/session-log-format.md", paths)
         self.assertNotIn("references/agent/package-test-design-plan-format.md", paths)
         self.assertNotIn("references/agent/dictionary-inventory-format.md", paths)
+
+    def test_prepared_reviewer_context_is_semantic_but_compact(self) -> None:
+        payload = self.resolve_json("--scenario", "reviewer.session_prepared_semantic")
+        paths = {item["path"] for item in payload["files"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("references/agent/prepared-stage-package-format.md", paths)
+        self.assertIn("references/qa/test-design-review-rubric.md", paths)
+        self.assertIn("references/qa/test-case-runtime-format.md", paths)
+        self.assertNotIn("references/agent/reviewer-output-format.md", paths)
+        self.assertNotIn("references/agent/session-log-format.md", paths)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 20.0)
 
     def test_session_reviewer_contexts_are_split_by_review_purpose(self) -> None:
         structure = self.resolve_json("--scenario", "reviewer.structure_preflight")

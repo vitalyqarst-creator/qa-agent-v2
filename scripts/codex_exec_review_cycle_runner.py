@@ -313,6 +313,7 @@ class ExecCommandConfig:
     working_directory_flag: str
     json_flag: str | None = None
     output_last_message_flag: str | None = None
+    output_schema_flag: str | None = None
     extra_args: tuple[str, ...] = ()
     cli_contract_verified: bool = False
 
@@ -334,7 +335,14 @@ class ExecCommandConfig:
         if self.writer_sandbox == self.reviewer_sandbox:
             raise RunnerError("Writer and reviewer sandbox values must be distinct")
 
-    def build(self, *, role: str, cwd: Path, last_message_path: Path | None = None) -> tuple[str, ...]:
+    def build(
+        self,
+        *,
+        role: str,
+        cwd: Path,
+        last_message_path: Path | None = None,
+        output_schema_path: Path | None = None,
+    ) -> tuple[str, ...]:
         sandbox = self.writer_sandbox if role == "writer" else self.reviewer_sandbox
         command = [
             self.executable,
@@ -349,6 +357,8 @@ class ExecCommandConfig:
             command.append(self.json_flag)
         if self.output_last_message_flag and last_message_path is not None:
             command.extend((self.output_last_message_flag, str(last_message_path)))
+        if self.output_schema_flag and output_schema_path is not None:
+            command.extend((self.output_schema_flag, str(output_schema_path)))
         command.append("-")
         return tuple(command)
 
@@ -504,6 +514,10 @@ class CodexExecReviewCycleRunner:
     def reviewer_findings_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "findings.md"
 
+    @property
+    def reviewer_schema_path(self) -> Path:
+        return self.attempt_root(REVIEWER_STAGE) / "review-contract.schema.json"
+
     def _runner_owned_paths(self) -> tuple[Path, ...]:
         paths = [
             self.state_path,
@@ -542,6 +556,10 @@ class CodexExecReviewCycleRunner:
         if self.final_path.name.lower() == "readme.md":
             raise RunnerError("README.md cannot be used as the promoted final artifact")
         if self.prepared_package_path is not None:
+            if not self.command_config.output_schema_flag:
+                raise RunnerError(
+                    "Prepared reviewer fast path requires a verified output-schema flag"
+                )
             if self.source_files or self.handoff_files:
                 raise RunnerError(
                     "Prepared fast path must not mix full source/handoff lists into the stage context"
@@ -1113,6 +1131,7 @@ class CodexExecReviewCycleRunner:
                     f"- writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
                     f"- validator: `{relative_path(self.validator_path, self.repo_root)}`",
                     f"- obligation gate: `{relative_path(self.obligation_gate_path, self.repo_root)}`",
+                    f"- response schema: `{relative_path(self.reviewer_schema_path, self.repo_root)}`",
                     "",
                     "Return one JSON object in the final message and write no files:",
                     '{"decision":"accepted|changes-required","findings_markdown":"# Review findings\\n..."}',
@@ -1162,6 +1181,8 @@ class CodexExecReviewCycleRunner:
         self.runner_output_dir(stage).mkdir(parents=True)
         if role == "writer":
             self.stage_output_dir(stage).mkdir(parents=True)
+        else:
+            write_json(self.reviewer_schema_path, self._review_contract_schema())
         manifest = self._build_stage_manifest(stage=stage, role=role, prompt_path=prompt_path)
         store = StageArtifactStore(self.repo_root)
         try:
@@ -1177,6 +1198,7 @@ class CodexExecReviewCycleRunner:
             role=role,
             cwd=self.repo_root,
             last_message_path=last_message_path,
+            output_schema_path=(self.reviewer_schema_path if role == "reviewer" else None),
         )
         timeout_seconds, idle_timeout_seconds, command_budget = self._stage_limits(role)
         request = ProcessRequest(
@@ -1334,6 +1356,7 @@ class CodexExecReviewCycleRunner:
             handoff_paths.extend((self.draft_path, self.validator_path))
             if self._prepared_package is not None:
                 handoff_paths.append(self.obligation_gate_path)
+            handoff_paths.append(self.reviewer_schema_path)
             expected_outputs.append(
                 ExpectedOutput(
                     path=relative_path(self.reviewer_findings_path, self.repo_root),
@@ -1354,7 +1377,11 @@ class CodexExecReviewCycleRunner:
                     else "writer.session_initial_draft"
                 )
                 if role == "writer"
-                else "reviewer.semantic_traceability_test_design"
+                else (
+                    "reviewer.session_prepared_semantic"
+                    if self._prepared_package is not None
+                    else "reviewer.semantic_traceability_test_design"
+                )
             ),
             semantic_round=0,
             sandbox_policy="workspace_write" if role == "writer" else "read_only",
@@ -1376,6 +1403,19 @@ class CodexExecReviewCycleRunner:
             allowed_write_roots=allowed_write_roots,
             forbidden_write_roots=[relative_path(self.ft_root / "test-cases", self.repo_root)],
         )
+
+    @staticmethod
+    def _review_contract_schema() -> dict[str, Any]:
+        return {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["decision", "findings_markdown"],
+            "properties": {
+                "decision": {"type": "string", "enum": sorted(REVIEW_DECISIONS)},
+                "findings_markdown": {"type": "string", "minLength": 1},
+            },
+        }
 
     def _write_stage_status(
         self,
@@ -1661,6 +1701,8 @@ def parse_review_contract(text: str) -> ReviewContract:
         raise RunnerError(f"reviewer final output is not a valid JSON contract: {exc.msg}") from exc
     if not isinstance(payload, dict):
         raise RunnerError("reviewer final output must be one JSON object")
+    if set(payload) != {"decision", "findings_markdown"}:
+        raise RunnerError("reviewer final output must contain exactly decision and findings_markdown")
     decision = str(payload.get("decision") or "").strip()
     findings = payload.get("findings_markdown")
     if decision not in REVIEW_DECISIONS:
@@ -1691,6 +1733,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--working-directory-flag", required=True)
     parser.add_argument("--json-flag")
     parser.add_argument("--output-last-message-flag")
+    parser.add_argument("--output-schema-flag")
     parser.add_argument("--extra-arg", action="append", default=[])
     parser.add_argument("--cli-contract-verified", action="store_true")
     parser.add_argument("--timeout-seconds", type=int, default=1800)
@@ -1725,6 +1768,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             working_directory_flag=args.working_directory_flag,
             json_flag=args.json_flag,
             output_last_message_flag=args.output_last_message_flag,
+            output_schema_flag=args.output_schema_flag,
             extra_args=tuple(args.extra_arg),
             cli_contract_verified=args.cli_contract_verified,
         ),

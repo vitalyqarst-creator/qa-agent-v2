@@ -350,6 +350,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 working_directory_flag="--working-directory-contract",
                 json_flag="--jsonl-contract",
                 output_last_message_flag="--last-message-contract",
+                output_schema_flag="--output-schema-contract",
                 cli_contract_verified=True,
             ),
             executor=executor,
@@ -380,6 +381,17 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(any(item["path"].endswith("main.xhtml") for item in manifest["source_artifacts"]))
         gate = json.loads((self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(encoding="utf-8"))
         self.assertTrue(gate["passed"])
+        reviewer_command = executor.requests[1].command
+        self.assertIn("--output-schema-contract", reviewer_command)
+        schema_path = Path(
+            reviewer_command[reviewer_command.index("--output-schema-contract") + 1]
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        self.assertFalse(schema["additionalProperties"])
+        reviewer_manifest = json.loads(
+            (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("reviewer.session_prepared_semantic", reviewer_manifest["scenario"])
 
     def test_prepared_fast_path_blocks_before_reviewer_when_atom_is_uncovered(self) -> None:
         package_path = self.build_prepared_package()
@@ -563,6 +575,18 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual("blocked-missing-output", result.status)
         self.assertFalse(self.final_path.exists())
+
+    def test_reviewer_contract_rejects_unknown_fields(self) -> None:
+        with self.assertRaisesRegex(runner_module.RunnerError, "exactly decision"):
+            runner_module.parse_review_contract(
+                json.dumps(
+                    {
+                        "decision": "accepted",
+                        "findings_markdown": "# Review\n\nNo findings.",
+                        "extra": "not allowed",
+                    }
+                )
+            )
 
     def test_validator_failure_blocks_before_reviewer(self) -> None:
         executor = ScriptedExecutor(self.writer_step())
