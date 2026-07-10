@@ -182,6 +182,24 @@ class PreparedStagePackageTests(unittest.TestCase):
                 package_id="pkg-001", obligations=(invalid,), coverage_gaps=()
             )
 
+    def test_dictionary_word_in_limiting_test_intent_does_not_change_claim_class(self) -> None:
+        obligation = PreparedObligation(
+            obligation_id="ATOM-003",
+            source_refs=("SRC-1",),
+            atomic_statement="Поле допускает одиночный выбор.",
+            observable_oracle="В поле остается одно выбранное значение.",
+            test_intent="Проверить кратность без предположений о конкретном справочнике.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+        )
+
+        value = PreparedObligationSet.create(
+            package_id="pkg-001", obligations=(obligation,), coverage_gaps=()
+        )
+        self.assertEqual("ATOM-003", value.obligations[0].obligation_id)
+
     def test_dictionary_ref_must_be_present_as_exact_evidence_anchor(self) -> None:
         obligation = PreparedObligation(
             obligation_id="ATOM-003",

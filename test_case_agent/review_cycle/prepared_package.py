@@ -333,9 +333,7 @@ class PreparedObligationSet:
             if self.package_version >= 3:
                 for value in item.dictionary_refs:
                     _identifier(value, f"{item.obligation_id}.dictionary_refs[]", DICT_ID)
-                claim_text = " ".join(
-                    (item.atomic_statement, item.test_intent, item.observable_oracle)
-                )
+                claim_text = " ".join((item.atomic_statement, item.observable_oracle))
                 if (
                     item.coverage_status == "testable"
                     and DICTIONARY_CLAIM.search(claim_text)
