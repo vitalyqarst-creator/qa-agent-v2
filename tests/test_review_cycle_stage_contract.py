@@ -145,7 +145,7 @@ class ReviewCycleStageContractTests(unittest.TestCase):
             "must never return `signed-off`",
             "test_case_agent/review_cycle/contracts.py",
             "test_case_agent/review_cycle/transitions.py",
-            "Phase 1 does not connect these contracts to SDK or exec runners",
+            "The exec prototype persists this contract",
         ):
             self.assertIn(token, content)
 

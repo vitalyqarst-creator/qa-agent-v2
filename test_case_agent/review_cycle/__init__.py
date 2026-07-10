@@ -34,6 +34,7 @@ from test_case_agent.review_cycle.metrics import (
     build_stage_metrics,
     summarize_metrics,
 )
+from test_case_agent.review_cycle.orchestration import CompletedStage, StageCompletionCoordinator
 
 __all__ = [
     "CONTRACT_VERSION",
@@ -42,6 +43,7 @@ __all__ = [
     "AttemptRecord",
     "AttemptRecoveryError",
     "ContractValidationError",
+    "CompletedStage",
     "ExpectedOutput",
     "FreshThreadSdkBackend",
     "StageInputManifest",
@@ -49,6 +51,7 @@ __all__ = [
     "TransitionDecision",
     "BackendStageExecution",
     "StageArtifactStore",
+    "StageCompletionCoordinator",
     "StageAttemptLedger",
     "StageAttemptPaths",
     "StageBackend",

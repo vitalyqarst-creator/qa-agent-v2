@@ -22,7 +22,6 @@ from test_case_agent.review_cycle.contracts import (
     CONTRACT_VERSION,
     ExpectedOutput,
     StageInputManifest,
-    StageResult,
 )
 from test_case_agent.review_cycle.runtime import (
     BackendStageExecution,
@@ -32,7 +31,7 @@ from test_case_agent.review_cycle.runtime import (
     artifact_ref,
 )
 from test_case_agent.review_cycle.attempts import format_attempt_id
-from test_case_agent.review_cycle.metrics import StageMetricsRecorder, build_stage_metrics
+from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
 
 
 WRITER_STAGE = "writer-r1"
@@ -1097,53 +1096,15 @@ class CodexExecReviewCycleRunner:
         execution = artifacts.get("_execution")
         if not isinstance(execution, BackendStageExecution):
             raise RunnerError(f"missing backend execution evidence for {stage}")
-        store = StageArtifactStore(self.repo_root)
         try:
-            outputs = store.collect_declared_outputs(
+            completed = StageCompletionCoordinator(self.repo_root, self.cycle_dir).complete(
                 manifest,
-                require_all=outcome != "blocked",
-            )
-            backend_session_id = execution.backend_session_id
-            if outcome == "blocked" and backend_session_id in self._backend_session_ids:
-                backend_session_id = ""
-            contract_result = StageResult(
-                contract_version=CONTRACT_VERSION,
-                cycle_id=manifest.cycle_id,
-                stage_id=manifest.stage_id,
-                attempt_id=manifest.attempt_id,
-                session_id=manifest.session_id,
-                backend_session_id=backend_session_id,
-                role=role,
-                scenario=manifest.scenario,
-                input_digest=manifest.input_digest,
-                status={
-                    "draft-ready": "completed",
-                    "accepted": "completed",
-                    "changes-required": "changes-required",
-                    "blocked": "blocked",
-                }[outcome],
-                outcome=outcome,
-                output_artifacts=outputs,
-                started_at=execution.started_at,
-                finished_at=execution.finished_at,
-                duration_ms=execution.duration_ms,
-                exit_code=result.exit_code,
-                timed_out=result.timed_out,
-                blocking_reasons=tuple(blocking_reasons),
-            )
-            result_path = store.write_result(
-                StageAttemptPaths.from_manifest(self.repo_root, manifest),
-                manifest,
-                contract_result,
-                prior_backend_session_ids=tuple(self._backend_session_ids),
-            )
-            metrics = build_stage_metrics(
-                manifest,
-                contract_result,
                 execution,
-                repo_root=self.repo_root,
+                outcome=outcome,
+                blocking_reasons=blocking_reasons,
+                prior_backend_session_ids=self._backend_session_ids,
             )
-            StageMetricsRecorder(self.cycle_dir).record(self.attempt_root(stage), metrics)
+            result_path = completed.result_path
         except (StageRuntimeError, ValueError) as exc:
             raise RunnerError(f"invalid v2 stage result for {stage}: {exc}") from exc
         if outcome != "blocked" and execution.backend_session_id:

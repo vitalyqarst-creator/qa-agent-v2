@@ -183,6 +183,8 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("Session-based review cycle, backend-independent stage contract", index)
         self.assertIn("test_case_agent/review_cycle/contracts.py", index)
         self.assertIn("test_case_agent/review_cycle/transitions.py", index)
+        self.assertIn("test_case_agent/review_cycle/orchestration.py", index)
+        self.assertIn("tests/test_review_cycle_backend_matrix.py", index)
         self.assertIn("tests/test_review_cycle_stage_contract.py", index)
         self.assertIn("review-cycle-stage-contract-v2.md", index)
         self.assertIn("review_cycle.session_based", routing)
