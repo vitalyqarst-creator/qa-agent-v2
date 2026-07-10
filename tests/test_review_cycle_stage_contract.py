@@ -149,6 +149,20 @@ class ReviewCycleStageContractTests(unittest.TestCase):
         ):
             self.assertIn(token, content)
 
+    def test_prepared_package_reference_pins_fast_path_and_budgets(self) -> None:
+        content = (
+            ROOT_DIR / "references" / "agent" / "prepared-stage-package-format.md"
+        ).read_text(encoding="utf-8")
+        for token in (
+            "source-evidence.md",
+            "atomic-obligations.json",
+            "targeted_source_fallback",
+            "blocked-command-budget",
+            "must not assume that one row equals one atom",
+            "Full DOCX/XHTML/PDF files",
+        ):
+            self.assertIn(token, content)
+
     def test_manifest_rejects_digest_mismatch(self) -> None:
         payload = self.writer_manifest().to_dict()
         payload["timeout_seconds"] = 1

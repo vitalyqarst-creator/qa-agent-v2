@@ -38,6 +38,7 @@ REQUIRED_AGENT_REFS = {
     "writer-revision-output-format.md",
     "session-based-review-cycle-format.md",
     "review-cycle-stage-contract-v2.md",
+    "prepared-stage-package-format.md",
     "codex-sdk-orchestration-format.md",
 }
 
@@ -180,7 +181,10 @@ class AgentArchitectureTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("Session-based review cycle, backend-independent stage contract", index)
+        self.assertIn(
+            "Session-based review cycle, prepared stage packages, backend-independent stage contract",
+            index,
+        )
         self.assertIn("test_case_agent/review_cycle/contracts.py", index)
         self.assertIn("test_case_agent/review_cycle/transitions.py", index)
         self.assertIn("test_case_agent/review_cycle/orchestration.py", index)
