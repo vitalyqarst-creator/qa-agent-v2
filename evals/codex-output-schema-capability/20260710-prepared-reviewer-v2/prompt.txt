@@ -1,0 +1,4 @@
+Return exactly one JSON object matching the supplied response schema.
+Use contract_version 2, decision accepted, reviewed_draft_sha256 as 64 zero characters,
+one obligation review for ATOM-PROBE-001 with verdict covered and TC-PROBE-001,
+an empty findings array, and a short non-empty summary. Do not run commands or read files.

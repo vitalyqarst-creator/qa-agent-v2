@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019f4c04-1e16-75c2-930f-a7e03cc7e1ef"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\"contract_version\":2,\"decision\":\"accepted\",\"reviewed_draft_sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\",\"obligation_reviews\":[{\"atom_id\":\"ATOM-PROBE-001\",\"verdict\":\"covered\",\"test_case_ids\":[\"TC-PROBE-001\"],\"note\":\"Обязательство покрыто.\"}],\"findings\":[],\"summary\":\"Проверка успешно пройдена.\"}"}}
+{"type":"turn.completed","usage":{"input_tokens":15126,"cached_input_tokens":0,"output_tokens":107,"reasoning_output_tokens":0}}

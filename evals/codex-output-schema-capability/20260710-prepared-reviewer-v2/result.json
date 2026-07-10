@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "codex_version": "codex-cli 0.144.0-alpha.4",
+  "schema_sha256": "3a1d290711ba08683d809cb04263b09885c5b132f20147f49d490845ebba29e5",
+  "schema_bytes": 2980,
+  "exit_code": 0,
+  "duration_seconds": 9.687,
+  "response_fields": [
+    "contract_version",
+    "decision",
+    "findings",
+    "obligation_reviews",
+    "reviewed_draft_sha256",
+    "summary"
+  ],
+  "invalid_json_schema": false
+}
