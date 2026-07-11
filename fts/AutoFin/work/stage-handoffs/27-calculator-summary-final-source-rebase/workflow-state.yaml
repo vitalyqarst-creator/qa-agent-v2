@@ -1,0 +1,41 @@
+ft_slug: AutoFin
+scope_slug: application-card-calculator-summary-entrypoints
+current_stage: ft-scope-analyzer
+stage_status: ready-for-gap-review
+current_round: 0
+next_skill: ft-test-case-reviewer
+review_mode: scope_gap_review
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-contract.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/source-parity-check.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/source-row-inventory.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/mockup-visual-inventory.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/negative-oracle-inventory.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/requiredness-oracle-inventory.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/prompt.scope-gaps-to-reviewer.md
+  - work/stage-handoffs/27-calculator-summary-final-source-rebase/final-bsr-evidence.json
+  - AGENT-NOTES.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  scope_contract: work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-contract.md
+  source_parity_check: work/stage-handoffs/27-calculator-summary-final-source-rebase/source-parity-check.md
+  source_row_inventory: work/stage-handoffs/27-calculator-summary-final-source-rebase/source-row-inventory.md
+  mockup_visual_inventory: work/stage-handoffs/27-calculator-summary-final-source-rebase/mockup-visual-inventory.md
+  negative_oracle_inventory: work/stage-handoffs/27-calculator-summary-final-source-rebase/negative-oracle-inventory.md
+  requiredness_oracle_inventory: work/stage-handoffs/27-calculator-summary-final-source-rebase/requiredness-oracle-inventory.md
+  scope_coverage_gaps: work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-coverage-gaps.md
+  scope_clarification_requests: work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-clarification-requests.md
+  active_transition_prompt: work/stage-handoffs/27-calculator-summary-final-source-rebase/prompt.scope-gaps-to-reviewer.md
+  scope_to_iteration_prompt: work/stage-handoffs/27-calculator-summary-final-source-rebase/prompt.scope-to-iteration.md
+  scope_analyzer_session_log: work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-analyzer-session-log.md
+  session_log: work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-analyzer-session-log.md
+  decision_log: work/stage-handoffs/27-calculator-summary-final-source-rebase/agent-decision-log.md
+open_questions: []
+blocking_reasons: []
+accepted_risks: []
+notes:
+  - Handoff 05 remains historical and is superseded for active Final-source work.
+  - GAP-001 is non-blocking but requires scope_gap_review before writer.
