@@ -1,0 +1,18 @@
+ft_slug: AutoFin
+scope_slug: prepared-autofin-cross-scope
+current_stage: ft-source-locator
+stage_status: ready-for-next-stage
+current_round: 0
+next_skill: ft-scope-analyzer
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/scope-matrix.md
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-locator-session-log.md
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/agent-decision-log.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  scope_matrix: work/stage-handoffs/20-prepared-autofin-cross-scope/scope-matrix.md
+  session_log: work/stage-handoffs/20-prepared-autofin-cross-scope/source-locator-session-log.md
+  decision_log: work/stage-handoffs/20-prepared-autofin-cross-scope/agent-decision-log.md
+blocking_reasons: []
+open_questions: []

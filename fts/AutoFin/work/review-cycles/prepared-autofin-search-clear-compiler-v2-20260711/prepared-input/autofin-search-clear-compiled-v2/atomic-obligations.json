@@ -1,0 +1,60 @@
+{
+  "coverage_gaps": [],
+  "digest": "130574c9843b1ee6f22144a72e63a4f915e070c579b841bc215aa6033e821c25",
+  "obligations": [
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает примененные фильтры поиска.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-001",
+      "observable_oracle": "Фильтр сброшен к initial/default state.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить возврат измененного фильтра к initial/default state после `Очистить`."
+    },
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает примененные сортировки.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-002",
+      "observable_oracle": "Сортировка сброшена к initial/default state.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить возврат примененной сортировки к initial/default state после `Очистить`."
+    },
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает постраничность.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-003",
+      "observable_oracle": "Постраничность сброшена к initial/default state.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить возврат измененной постраничности к initial/default state после `Очистить`."
+    },
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает состояние выделения строк.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-004",
+      "observable_oracle": "Выделение строк сброшено к initial/default state.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить возврат выделения строк к initial/default state после `Очистить`."
+    }
+  ],
+  "package_id": "autofin-search-clear-compiled-v2",
+  "package_version": 3
+}

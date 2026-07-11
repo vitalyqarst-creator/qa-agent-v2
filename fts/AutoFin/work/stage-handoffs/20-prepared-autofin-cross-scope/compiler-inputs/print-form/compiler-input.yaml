@@ -1,0 +1,11 @@
+ft_slug: AutoFin
+scope_slug: print-form-generation
+canonical_test_cases: test-cases/section-16-print-form-generation.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  atomic_requirements_ledger: work/test-design/section-16-print-form-generation/atomic-requirements-ledger.md
+  package_test_design_plan: work/test-design/section-16-print-form-generation/package-test-design-plan.md
+  test_design_applicability_matrix: work/test-design/section-16-print-form-generation/test-design-applicability-matrix.md
+  dictionary_inventory: work/test-design/section-16-print-form-generation/dictionary-inventory.md
+  coverage_gaps: work/test-design/section-16-print-form-generation/coverage-gaps.md
+blocking_reasons: []

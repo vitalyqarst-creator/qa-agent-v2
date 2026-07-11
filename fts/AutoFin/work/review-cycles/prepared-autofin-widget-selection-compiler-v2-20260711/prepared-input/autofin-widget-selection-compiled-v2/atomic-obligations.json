@@ -1,0 +1,109 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-001",
+      "handling": "Preserve for reviewer and future scope expansion; do not assert internal `NULL` in UI-only TC.",
+      "problem": "The selected sources state that absent widget values are interpreted as `NULL`, but the confirmed scope excludes persistence, database, API and async artifacts that could observe internal null semantics.",
+      "source_refs": [
+        "SRC-003",
+        "ATOM-006"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-002",
+      "handling": "Preserve dictionary provenance as a gap; cardinality remains executable with two distinct fixture values.",
+      "problem": "The selected scope does not identify concrete dictionaries or provide an independent complete inventory for source-origin assertions.",
+      "source_refs": [
+        "SRC-001",
+        "SRC-002",
+        "ATOM-001",
+        "ATOM-003"
+      ]
+    }
+  ],
+  "digest": "a6b999ae3a40079aa2ce202ae9c430e72a296dfce58cef037e1ae00141356a63",
+  "obligations": [
+    {
+      "atomic_statement": "Виджет типа `Список` использует значения из справочника.",
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-002",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-001",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Не заявлять происхождение значений без идентифицированного справочника и полного inventory."
+    },
+    {
+      "atomic_statement": "В виджете типа `Список` возможно выбрать только одно значение.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-002",
+      "observable_oracle": "После второго выбора в виджете отображается ровно одно выбранное значение.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Последовательно выбрать два разных доступных значения в single-select fixture."
+    },
+    {
+      "atomic_statement": "Виджет типа `Список с множественным выбором` использует значения из справочника.",
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-002",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-003",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-002"
+      ],
+      "test_intent": "Не заявлять происхождение значений без идентифицированного справочника и полного inventory."
+    },
+    {
+      "atomic_statement": "В виджете типа `Список с множественным выбором` возможно выбрать несколько значений.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-004",
+      "observable_oracle": "Оба выбранных значения одновременно отображаются в виджете.",
+      "source_refs": [
+        "SRC-002"
+      ],
+      "test_intent": "Выбрать два разных доступных значения в multi-select fixture."
+    },
+    {
+      "atomic_statement": "По умолчанию значения в виджетах отсутствуют.",
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-005",
+      "observable_oracle": "В виджете отсутствует выбранное или заполненное значение.",
+      "source_refs": [
+        "SRC-003"
+      ],
+      "test_intent": "Проверить новый fixture-виджет до первого пользовательского ввода."
+    },
+    {
+      "atomic_statement": "Отсутствующие значения в виджетах интерпретируются как `NULL`.",
+      "coverage_status": "unclear",
+      "dictionary_refs": [],
+      "gap_id": "GAP-001",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "ATOM-006",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-003"
+      ],
+      "test_intent": "Не заявлять внутреннее представление `NULL` без API/DB/persistence evidence."
+    }
+  ],
+  "package_id": "autofin-widget-selection-compiled-v2",
+  "package_version": 3
+}

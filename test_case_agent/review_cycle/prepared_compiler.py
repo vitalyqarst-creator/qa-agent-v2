@@ -172,20 +172,53 @@ def _gap_sections(path: Path | None) -> dict[str, PreparedGap]:
     if path is None:
         return {}
     text = path.read_text(encoding="utf-8")
-    matches = list(re.finditer(r"^#{2,4}\s+(GAP-[A-Za-z0-9_.-]+)\s*$", text, re.MULTILINE))
+    matches = list(
+        re.finditer(
+            r"^#{2,4}\s+(GAP-[A-Za-z0-9_.-]+)(?:\s+[-—].*)?$",
+            text,
+            re.MULTILINE,
+        )
+    )
     result: dict[str, PreparedGap] = {}
     for pos, match in enumerate(matches):
         block = text[match.end() : matches[pos + 1].start() if pos + 1 < len(matches) else len(text)]
         refs = tuple(dict.fromkeys(token for token in TOKEN.findall(block) if not token.startswith("GAP-")))
+        field_values: dict[str, str] = {}
+        for line in block.splitlines():
+            if not line.strip().startswith("|"):
+                continue
+            cells = [_clean_cell(item) for item in line.strip().strip("|").split("|")]
+            if len(cells) == 2 and cells[0].lower() not in {"field", "---"}:
+                field_values[cells[0].lower()] = cells[1]
         impact = re.search(r"\*\*Impact:\*\*\s*`?([^`\n]+)", block, re.IGNORECASE)
         handling = re.search(r"\*\*Handling:\*\*\s*([^\n]+)", block, re.IGNORECASE)
         problem = re.search(r"\*\*(?:Problem|FT Reference):\*\*\s*([^\n]+)", block, re.IGNORECASE)
+        source_ref = field_values.get("source") or field_values.get("source_ref")
+        if not refs and source_ref:
+            refs = (source_ref,)
+        problem_text = (
+            _clean_cell(problem.group(1))
+            if problem
+            else field_values.get("statement")
+            or field_values.get("missing_artifact")
+            or "Неопределённость зафиксирована в coverage gaps."
+        )
+        handling_text = (
+            _clean_cell(handling.group(1))
+            if handling
+            else field_values.get("handling")
+            or "Сохранить как coverage gap."
+        )
+        status_text = field_values.get("status", "").lower()
         result[match.group(1)] = PreparedGap(
             gap_id=match.group(1),
             source_refs=refs or (match.group(1),),
-            problem=_clean_cell(problem.group(1)) if problem else "Неопределённость зафиксирована в coverage gaps.",
-            handling=_clean_cell(handling.group(1)) if handling else "Сохранить как coverage gap.",
-            blocking=bool(impact and "non-blocking" not in impact.group(1).lower()),
+            problem=problem_text,
+            handling=handling_text,
+            blocking=(
+                bool(impact and "non-blocking" not in impact.group(1).lower())
+                or status_text in {"blocking", "blocked"}
+            ),
         )
     for table in markdown_tables(path):
         if not table or "gap_id" not in table[0]:
@@ -312,7 +345,7 @@ def _execution_route(applicability_matrix: Path) -> tuple[str, tuple[str, ...]]:
         applicability = row["applicable"].lower()
         if applicability == "no":
             continue
-        if applicability not in {"yes", "unclear"}:
+        if applicability not in {"yes", "unclear", "unclear-limited"}:
             raise StageRuntimeError(
                 "test-design applicability must be yes, no or unclear: "
                 f"{row['dimension']}={row['applicable']}"
@@ -323,6 +356,9 @@ def _execution_route(applicability_matrix: Path) -> tuple[str, tuple[str, ...]]:
                 raise StageRuntimeError(
                     f"unclear test-design dimension must link a GAP id: {row['dimension']}"
                 )
+            continue
+        if applicability == "unclear-limited":
+            unsupported.add("limited-default-oracle")
             continue
         if dimension in FAST_DIMENSIONS:
             continue

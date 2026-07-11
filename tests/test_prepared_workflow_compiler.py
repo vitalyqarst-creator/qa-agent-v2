@@ -254,6 +254,37 @@ coverage_gaps:
 
         self.assertEqual(result.gap_count, 1)
 
+    def test_routes_unclear_limited_dimension_to_standard(self) -> None:
+        matrix = self.design / "test-design-applicability-matrix.md"
+        matrix.write_text(
+            "| dimension | applicable |\n| --- | --- |\n| `default value` | `unclear-limited` |\n",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.execution_profile, "standard-required")
+        self.assertEqual(result.unsupported_dimensions, ("limited-default-oracle",))
+
+    def test_loads_titled_gap_heading_with_field_value_table(self) -> None:
+        gaps = self.design / "coverage-gaps.md"
+        gaps.write_text(
+            """## GAP-001 - Неизвестен Текст Ошибки
+
+| field | value |
+| --- | --- |
+| source | `SRC-001; GSR 2` |
+| statement | Неизвестен текст ошибки. |
+| handling | Не создавать негативный кейс. |
+| status | `non-blocking` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.gap_count, 1)
+
     def test_blocks_duplicate_workflow_key(self) -> None:
         self.state.write_text(
             self.state.read_text(encoding="utf-8") + "ft_slug: demo\n",
