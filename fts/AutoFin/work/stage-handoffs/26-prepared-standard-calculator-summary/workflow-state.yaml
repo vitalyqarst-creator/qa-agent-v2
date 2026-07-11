@@ -1,0 +1,32 @@
+ft_slug: AutoFin
+scope_slug: prepared-standard-calculator-summary
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 0
+next_skill: ft-scope-analyzer
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/05-application-card-calculator-summary-entrypoints/scope-contract.md
+  - work/stage-handoffs/05-application-card-calculator-summary-entrypoints/source-parity-check.md
+  - work/stage-handoffs/05-application-card-calculator-summary-entrypoints/source-row-inventory.md
+  - work/stage-handoffs/05-application-card-calculator-summary-entrypoints/scope-coverage-gaps.md
+  - work/stage-handoffs/26-prepared-standard-calculator-summary/iteration-summary.md
+  - work/stage-handoffs/26-prepared-standard-calculator-summary/iteration-session-log.md
+  - work/stage-handoffs/26-prepared-standard-calculator-summary/agent-decision-log.md
+  - work/stage-handoffs/26-prepared-standard-calculator-summary/prompt.iteration-to-scope-rebase.md
+  - work/review-cycles/codex-exec-prepared-standard-calculator-summary-live-v5-20260711/cycle-state.yaml
+  - work/review-cycles/codex-exec-prepared-standard-calculator-summary-preflight-v7-20260711/cycle-state.yaml
+latest_artifacts:
+  iteration_summary: work/stage-handoffs/26-prepared-standard-calculator-summary/iteration-summary.md
+  session_log: work/stage-handoffs/26-prepared-standard-calculator-summary/iteration-session-log.md
+  decision_log: work/stage-handoffs/26-prepared-standard-calculator-summary/agent-decision-log.md
+  scope_rebase_prompt: work/stage-handoffs/26-prepared-standard-calculator-summary/prompt.iteration-to-scope-rebase.md
+  v5_cycle_state: work/review-cycles/codex-exec-prepared-standard-calculator-summary-live-v5-20260711/cycle-state.yaml
+  accepted_cycle_state: work/review-cycles/codex-exec-prepared-standard-calculator-summary-preflight-v7-20260711/cycle-state.yaml
+  final_findings: work/review-cycles/codex-exec-prepared-standard-calculator-summary-preflight-v7-20260711/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+open_questions: []
+blocking_reasons: []
+accepted_risks: []
+notes:
+  - Prepared-standard v7 was accepted without promotion.
+  - Canonical handoff 05 still requires source/parity rebase from PreFinal to Final before broader reuse.
