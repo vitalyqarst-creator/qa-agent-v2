@@ -1,0 +1,10 @@
+# Package Test Design Plan
+
+| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `WP-01` | `field-property` | `SRC-001`; `DOCX row 032` | `ATOM-001` | Проверить отображение блока `Адреса клиента`. | `positive` | `visibility-always` | `application-card-open` | Блок `Адреса клиента` отображается. | `DOCX row 032` | `TC-CASP-001` | `covered` |
+| `PLAN-002` | `WP-01` | `field-property` | `BSR 107`; `DOCX row 033` | `ATOM-002` | Проверить видимость поля `Адрес регистрации`. | `positive` | `visibility-always` | `application-card-open` | Поле `Адрес регистрации` отображается. | `BSR 107` | `TC-CASP-002` | `covered` |
+| `PLAN-003` | `WP-01` | `field-property` | `BSR 113`; `DOCX row 034` | `ATOM-003` | Проверить видимость переключателя ручного ввода адреса регистрации. | `positive` | `visibility-always` | `application-card-open` | Переключатель ручного ввода адреса регистрации отображается. | `BSR 113` | `TC-CASP-003` | `covered` |
+| `PLAN-004` | `WP-01` | `default-state` | `BSR 114`; `DOCX row 034` | `ATOM-004` | Проверить исходное значение переключателя ручного ввода адреса регистрации. | `positive` | `default-value` | `application-card-open` | В переключателе выбрано `Нет`. | `BSR 114` | `TC-CASP-004` | `covered` |
+| `PLAN-005` | `WP-01` | `field-property` | `BSR 130`; `DOCX row 045` | `ATOM-005` | Проверить видимость признака совпадения фактического адреса с адресом регистрации. | `positive` | `visibility-always` | `application-card-open` | Признак совпадения адресов отображается. | `BSR 130` | `TC-CASP-005` | `covered` |
+| `PLAN-006` | `WP-01` | `default-state` | `BSR 131`; `DOCX row 045` | `ATOM-006` | Проверить исходное значение признака совпадения адресов. | `positive` | `default-value` | `application-card-open` | В признаке совпадения адресов выбрано `Да`. | `BSR 131` | `TC-CASP-006` | `covered` |
