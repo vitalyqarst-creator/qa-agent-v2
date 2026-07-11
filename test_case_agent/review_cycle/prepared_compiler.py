@@ -514,6 +514,7 @@ def compile_workflow_package(
     execution_profile, unsupported_dimensions = _route_obligation_dimensions(
         obligation_rows, unsupported_dimensions
     )
+    routed_unsupported_dimensions = set(unsupported_dimensions)
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
     ledger_by_atom: dict[str, dict[str, str]] = {}
     for row in ledger:
@@ -547,6 +548,7 @@ def compile_workflow_package(
     used_dicts: set[str] = set()
     used_atoms: set[str] = set()
     seen_obligation_ids: set[str] = set()
+    emitted_atom_evidence: set[str] = set()
     evidence_rows: list[str] = ["# Compiled Prepared Evidence", ""]
     package_notes_path = ft_root / "AGENT-NOTES.md"
     if package_notes_path.is_file():
@@ -624,8 +626,11 @@ def compile_workflow_package(
             for item in TOKEN.findall(" ".join(row.values()) + " " + " ".join(obligation_row.values()))
             if item.startswith("SRC-") or item.startswith("GSR")
         ]
-        if status_raw in {"covered", "testable"}:
+        if status_raw in {"covered", "testable"} or status_raw.startswith("covered_with_"):
             atom_coverage_status = "testable"
+            if status_raw.startswith("covered_with_"):
+                qualifier = status_raw.removeprefix("covered_with_").replace("_", "-")
+                routed_unsupported_dimensions.add(f"evidence-qualified-{qualifier}")
         elif status_raw in {"unclear", "gap", "not-applicable"}:
             atom_coverage_status = status_raw
         else:
@@ -642,7 +647,13 @@ def compile_workflow_package(
                 raise StageRuntimeError(
                     f"semantic degradation: {obligation_id} covered row must link a TC id"
                 )
-            viable = [item for item in linked if item.get("status", "covered").lower() in {"covered", "testable", "planned"}]
+            viable = [
+                item
+                for item in linked
+                if item.get("status", "covered").lower()
+                in {"covered", "testable", "planned"}
+                or item.get("status", "").lower().startswith("covered_with_")
+            ]
             if not viable:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no testable design-plan row")
             if not any(
@@ -742,19 +753,82 @@ def compile_workflow_package(
             [
                 f"## {obligation_id}",
                 "",
-                "- obligation: " + " | ".join(obligation_row.values()),
-                "- atom: " + " | ".join(row.values()),
+                "- obligation: "
+                + " | ".join(
+                    (
+                        obligation_id,
+                        f"property={obligation_row['source_property_id']}",
+                        f"source={obligation_row['source_ref']}",
+                        "required="
+                        + (
+                            "same-as-atom"
+                            if obligation_row["required_behavior"] == row["atomic_statement"]
+                            else obligation_row["required_behavior"]
+                        ),
+                        f"planned={obligation_row['planned_tc_or_gap']}",
+                        f"status={obligation_row['status']}",
+                    )
+                ),
                 "",
             ]
         )
-        for item in linked:
-            evidence_rows.extend([f"- plan: {' | '.join(item.values())}", ""])
+        if atom_id not in emitted_atom_evidence:
+            emitted_atom_evidence.add(atom_id)
+            atom_source = "; ".join(
+                dict.fromkeys(
+                    value
+                    for key in (
+                        "source_refs",
+                        "source_property_id",
+                        "req_id",
+                        "source_row_id",
+                    )
+                    if (value := row.get(key, ""))
+                )
+            )
+            evidence_rows.extend(
+                [
+                    "- atom: "
+                    + " | ".join(
+                        (
+                            atom_id,
+                            f"source={atom_source}",
+                            f"statement={row['atomic_statement']}",
+                            f"coverage={row['coverage_status']}",
+                        )
+                    ),
+                    "",
+                ]
+            )
+            for item in linked:
+                evidence_rows.extend(
+                    [
+                        "- plan: "
+                        + " | ".join(
+                            (
+                                item.get("design_item_id", "design-item"),
+                                f"check={item['planned_check']}",
+                                "expected="
+                                + (
+                                    "same-as-check"
+                                    if item["single_expected_behavior"] == item["planned_check"]
+                                    else item["single_expected_behavior"]
+                                ),
+                                f"planned={item.get('planned_tc_or_gap', '')}",
+                                f"status={item.get('status', '')}",
+                            )
+                        ),
+                        "",
+                    ]
+                )
     missing_obligation_atoms = sorted(set(ledger_by_atom) - used_atoms)
     if missing_obligation_atoms:
         raise StageRuntimeError(
             "semantic degradation: atomic ledger rows have no coverage obligation: "
             + ", ".join(missing_obligation_atoms)
         )
+    unsupported_dimensions = tuple(sorted(routed_unsupported_dimensions))
+    execution_profile = STANDARD_PROFILE if unsupported_dimensions else FAST_PROFILE
     gaps: list[PreparedGap] = []
     orphan_gaps = sorted(set(known_gaps) - used_gaps)
     if orphan_gaps:
@@ -802,10 +876,11 @@ def compile_workflow_package(
         if execution_profile == FAST_PROFILE
         else STANDARD_ROUTING_EVIDENCE_MAX_BYTES
     )
-    if len(evidence_text.encode("utf-8")) > evidence_max_bytes:
+    evidence_bytes = len(evidence_text.encode("utf-8"))
+    if evidence_bytes > evidence_max_bytes:
         raise StageRuntimeError(
             "blocked-package-budget: compiled evidence exceeds "
-            f"{evidence_max_bytes} bytes for {execution_profile}"
+            f"{evidence_max_bytes} bytes for {execution_profile}: actual={evidence_bytes}"
         )
     temp_evidence = output_root.parent / f".{output_root.name}.compiled-evidence.md"
     if temp_evidence.exists():

@@ -447,6 +447,45 @@ coverage_gaps:
         with self.assertRaisesRegex(StageRuntimeError, "rows have no coverage obligation: ATOM-002"):
             self.compile()
 
+    def test_evidence_qualified_atom_status_routes_standard(self) -> None:
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "| `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered` | `TC-001` |",
+                "| `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered_with_fixture_evidence` | `TC-001` |",
+            ),
+            encoding="utf-8",
+        )
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace(
+                "| `PLAN-001` | `ATOM-001` | Проверить полный список значений. | Отображены все активные значения. | `TC-001` | `covered` |",
+                "| `PLAN-001` | `ATOM-001` | Проверить полный список значений. | Отображены все активные значения. | `TC-001` | `covered_with_fixture_evidence` |",
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.execution_profile, "standard-required")
+        self.assertIn("evidence-qualified-fixture-evidence", result.unsupported_dimensions)
+
+    def test_compiled_evidence_deduplicates_atom_and_plan_rows(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        lines = obligations.read_text(encoding="utf-8").splitlines()
+        first = next(line for line in lines if "`OBL-001`" in line)
+        lines.append(first.replace("`OBL-001`", "`OBL-003`"))
+        obligations.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        result = self.compile()
+        evidence = (result.stage_package.parent / "source-evidence.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertEqual(evidence.count("## OBL-001"), 1)
+        self.assertEqual(evidence.count("## OBL-003"), 1)
+        self.assertEqual(evidence.count("- atom: ATOM-001"), 1)
+
     def test_blocks_atom_and_obligation_gap_mismatch(self) -> None:
         obligations = self.design / "coverage-obligation-table.md"
         obligations.write_text(

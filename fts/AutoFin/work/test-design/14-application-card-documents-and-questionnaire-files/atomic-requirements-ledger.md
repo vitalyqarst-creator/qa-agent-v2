@@ -1,0 +1,51 @@
+## Atomic Requirements Ledger
+
+| atom_id | package_id | source_property_id | req_id | source_row_id | atomic_statement | coverage_status | covered_by_tc | planned_tc_or_gap | gap_id |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| ATOM-001 | WP-01 | SP-001 | no_requirement_code:SRC-001 | SRC-001 | Блок «Документы по заявке» присутствует в карточке заявки. | covered | TC-AF-DOC-001 | TC-AF-DOC-001 | none_required:covered |
+| ATOM-002 | WP-01 | SP-002 | BSR 198 | SRC-002 | Информационное поле анкеты клиента видно всегда. | covered | TC-AF-DOC-001 | TC-AF-DOC-001 | none_required:covered |
+| ATOM-003 | WP-01 | SP-003 | BSR 199 | SRC-002 | Поле «Анкета клиента. Распечатайте, подпишите с клиентом и загрузите скан в заявку» является информационным. | covered | TC-AF-DOC-001 | TC-AF-DOC-001 | none_required:covered |
+| ATOM-004 | WP-01 | SP-004 | BSR 200 | SRC-003 | Поле добавления файла «Анкета клиента» видно всегда. | covered | TC-AF-DOC-002; TC-AF-DOC-003; TC-AF-DOC-004 | TC-AF-DOC-002; TC-AF-DOC-003; TC-AF-DOC-004 | none_required:covered |
+| ATOM-005 | WP-01 | SP-005 | BSR 201 | SRC-003 | Для «Анкета клиента» доступно добавление документа через открытие проводника. | covered | TC-AF-DOC-002 | TC-AF-DOC-002 | none_required:covered |
+| ATOM-006 | WP-01 | SP-006 | BSR 201 | SRC-003 | Для «Анкета клиента» доступно добавление документа путем Drag and Drop. | covered | TC-AF-DOC-003 | TC-AF-DOC-003 | none_required:covered |
+| ATOM-007 | WP-01 | SP-007 | BSR 201 | SRC-003 | Для «Анкета клиента» доступен способ добавления через «Прикрепить с телефона» с QR-кодом. | covered | TC-AF-DOC-021 | TC-AF-DOC-021 | none_required:covered |
+| ATOM-008 | WP-01 | SP-008 | BSR 202 | SRC-003 | Для «Анкета клиента» разрешены форматы jpg, png, pdf. | covered | TC-AF-DOC-002; TC-AF-DOC-003 | TC-AF-DOC-002; TC-AF-DOC-003 | none_required:covered |
+| ATOM-009 | WP-01 | SP-009 | BSR 202 | SRC-003 | Для «Анкета клиента» размер файла должен быть не более 40 МБ. | covered | TC-AF-DOC-004 | TC-AF-DOC-004 | none_required:covered |
+| ATOM-010 | WP-01 | SP-010 | BSR 202 | SRC-003 | Если загружаемый файл анкеты клиента не соответствует требованиям, система выводит текст ошибки о формате jpg/png/pdf и размере не более 40 МБ. | covered | TC-AF-DOC-005; TC-AF-DOC-026 | TC-AF-DOC-005; TC-AF-DOC-026 | none_required:covered |
+| ATOM-011 | WP-01 | SP-011 | BSR 203 | SRC-003 | После добавления анкеты клиента в поле отображается название прикрепленного бинарного файла. | covered | TC-AF-DOC-002; TC-AF-DOC-003; TC-AF-DOC-004 | TC-AF-DOC-002; TC-AF-DOC-003; TC-AF-DOC-004 | none_required:covered |
+| ATOM-012 | WP-01 | SP-012 | BSR 212 | SRC-003 | После добавления анкеты клиента система сохраняет документ в электронном архиве Банка. | covered_with_evidence | TC-AF-DOC-029 | TC-AF-DOC-029 | none_required:covered |
+| ATOM-013 | WP-01 | SP-013 | BSR 205 | SRC-004 | Поле добавления файла «Паспорт клиента» видно всегда. | covered | TC-AF-DOC-006; TC-AF-DOC-007; TC-AF-DOC-008 | TC-AF-DOC-006; TC-AF-DOC-007; TC-AF-DOC-008 | none_required:covered |
+| ATOM-014 | WP-01 | SP-014 | BSR 206 | SRC-004 | Для «Паспорт клиента» доступно добавление документа через открытие проводника. | covered | TC-AF-DOC-006 | TC-AF-DOC-006 | none_required:covered |
+| ATOM-015 | WP-01 | SP-015 | BSR 206 | SRC-004 | Для «Паспорт клиента» доступно добавление документа путем Drag and Drop. | covered | TC-AF-DOC-007 | TC-AF-DOC-007 | none_required:covered |
+| ATOM-016 | WP-01 | SP-016 | BSR 206 | SRC-004 | Для «Паспорт клиента» доступен способ добавления через «Прикрепить с телефона» с QR-кодом. | covered | TC-AF-DOC-021 | TC-AF-DOC-021 | none_required:covered |
+| ATOM-017 | WP-01 | SP-017 | BSR 207 | SRC-004 | Для «Паспорт клиента» разрешены форматы jpg, png, pdf и размер файла не более 40 МБ; при несоответствии показывается текст ошибки. | covered | TC-AF-DOC-006; TC-AF-DOC-007; TC-AF-DOC-008; TC-AF-DOC-009 | TC-AF-DOC-006; TC-AF-DOC-007; TC-AF-DOC-008; TC-AF-DOC-009 | none_required:covered |
+| ATOM-018 | WP-01 | SP-018 | BSR 208 | SRC-004 | После добавления паспорта клиента в поле отображается название прикрепленного бинарного файла. | covered | TC-AF-DOC-006; TC-AF-DOC-007; TC-AF-DOC-008 | TC-AF-DOC-006; TC-AF-DOC-007; TC-AF-DOC-008 | none_required:covered |
+| ATOM-019 | WP-01 | SP-019 | BSR 217 | SRC-004 | После добавления паспорта клиента система сохраняет документ в электронном архиве Банка. | covered_with_evidence | TC-AF-DOC-030 | TC-AF-DOC-030 | none_required:covered |
+| ATOM-020 | WP-01 | SP-020 | BSR 210 | SRC-005 | Поле «Тип документа» видно всегда. | covered | TC-AF-DOC-010 | TC-AF-DOC-010 | none_required:covered |
+| ATOM-021 | WP-01 | SP-021 | BSR 211 | SRC-005 | Значение по умолчанию для «Тип документа» не выбрано. | covered | TC-AF-DOC-010 | TC-AF-DOC-010 | none_required:covered |
+| ATOM-022 | WP-01 | SP-022 | BSR 210 | SRC-005 | Перечень значений для «Тип документа»: ВУ, СНИЛС, Загран. паспорт. | covered | TC-AF-DOC-010 | TC-AF-DOC-010 | none_required:covered |
+| ATOM-023 | WP-01 | SP-023 | BSR 212 | SRC-006 | Поле «Второй документ» видно всегда. | covered | TC-AF-DOC-011 | TC-AF-DOC-011 | none_required:covered |
+| ATOM-024 | WP-01 | SP-024 | BSR 213 | SRC-006 | «Второй документ» доступен для загрузки файла только если в поле «Тип документа» выбран документ. | covered | TC-AF-DOC-011; TC-AF-DOC-012; TC-AF-DOC-013 | TC-AF-DOC-011; TC-AF-DOC-012; TC-AF-DOC-013 | none_required:covered |
+| ATOM-025 | WP-01 | SP-025 | BSR 214 | SRC-006 | Для «Второй документ» доступно добавление через проводник и drag and drop. | covered | TC-AF-DOC-012; TC-AF-DOC-013 | TC-AF-DOC-012; TC-AF-DOC-013 | none_required:covered |
+| ATOM-026 | WP-01 | SP-026 | BSR 215 | SRC-006 | Для «Второй документ» разрешены форматы jpg, png, pdf и размер файла не более 40 МБ; при несоответствии показывается текст ошибки. | covered | TC-AF-DOC-012; TC-AF-DOC-013; TC-AF-DOC-014; TC-AF-DOC-027 | TC-AF-DOC-012; TC-AF-DOC-013; TC-AF-DOC-014; TC-AF-DOC-027 | none_required:covered |
+| ATOM-027 | WP-01 | SP-027 | BSR 216 | SRC-006 | После добавления второго документа в поле отображается название прикрепленного бинарного файла. | covered | TC-AF-DOC-012; TC-AF-DOC-013 | TC-AF-DOC-012; TC-AF-DOC-013 | none_required:covered |
+| ATOM-028 | WP-01 | SP-028 | BSR 225 | SRC-006 | Для не ГОС программы второй документ необязательный; для ГОС второй документ обязателен ВУ, для инвалидов ВУ или СНИЛС. | covered | TC-AF-DOC-028 | TC-AF-DOC-028 | none_required:covered |
+| ATOM-029 | WP-01 | SP-029 | BSR 226 | SRC-006 | После добавления второго документа система сохраняет документ в электронном архиве Банка. | covered_with_evidence | TC-AF-DOC-031 | TC-AF-DOC-031 | none_required:covered |
+| ATOM-030 | WP-01 | SP-030 | BSR 215 | SRC-006 | Для каждого типа документа действует правило не более одного файла; точное поведение при повторной загрузке не уточнено. | gap | none_required:gap | GAP-001 | GAP-001 |
+| ATOM-031 | WP-01 | SP-031 | BSR 219 | SRC-007 | Поле «Серия» видимо для «Тип документа» = ВУ или Загран. паспорт. | covered | TC-AF-DOC-015; TC-AF-DOC-016 | TC-AF-DOC-015; TC-AF-DOC-016 | none_required:covered |
+| ATOM-032 | WP-01 | SP-032 | BSR 220 | SRC-008 | Поле «Номер» видно всегда. | covered | TC-AF-DOC-017 | TC-AF-DOC-017 | none_required:covered |
+| ATOM-033 | WP-01 | SP-033 | BSR 221 | SRC-009 | Поле «Дата выдачи» видно всегда. | covered | TC-AF-DOC-017 | TC-AF-DOC-017 | none_required:covered |
+| ATOM-034 | WP-01 | SP-034 | BSR 222 | SRC-009 | Дата выдачи не должна быть больше текущей даты; точный текст/механизм сообщения не определен. | covered | TC-AF-DOC-018 | TC-AF-DOC-018; GAP-WR-006 | GAP-WR-006 |
+| ATOM-035 | WP-01 | SP-035 | BSR 223 | SRC-010 | Поле «Кем выдан» видно всегда. | covered | TC-AF-DOC-017 | TC-AF-DOC-017 | none_required:covered |
+| ATOM-036 | WP-01 | SP-036 | BSR 224 | SRC-011 | Пиктограмма «глаз» видна, если вложен документ. | covered | TC-AF-DOC-019 | TC-AF-DOC-019 | none_required:covered |
+| ATOM-037 | WP-01 | SP-037 | BSR 225 | SRC-011 | Пиктограмма «глаз» открывает всплывающее окно просмотра документа. | covered | TC-AF-DOC-019 | TC-AF-DOC-019 | none_required:covered |
+| ATOM-038 | WP-01 | SP-038 | BSR 226 | SRC-012 | Пиктограмма «корзина» видна, если вложен документ. | covered | TC-AF-DOC-020 | TC-AF-DOC-020 | none_required:covered |
+| ATOM-039 | WP-01 | SP-039 | BSR 227 | SRC-012 | Удаление выполняется через скрытие: документ помечается как архивный, перестает быть видимым в интерфейсе, но фактически не удаляется и доступен для просмотра определенным ролям. | covered | TC-AF-DOC-020 | TC-AF-DOC-020; GAP-WR-007 | GAP-WR-007 |
+| ATOM-040 | WP-02 | SP-040 | BSR 228 | SRC-013 | Кнопка «Прикрепить с телефона» видна всегда. | covered | TC-AF-DOC-021 | TC-AF-DOC-021 | none_required:covered |
+| ATOM-041 | WP-02 | SP-041 | BSR 229 | SRC-013 | При нажатии «Прикрепить с телефона» система показывает всплывающее окно со сгенерированным QR-кодом; QR содержит ссылку для прикрепления файлов с мобильного телефона. | covered | TC-AF-DOC-021 | TC-AF-DOC-021; GAP-002 | GAP-002 |
+| ATOM-042 | WP-02 | SP-042 | BSR 230 | SRC-014 | Кнопка «Скачать (документ)» видна всегда. | covered | TC-AF-DOC-022 | TC-AF-DOC-022 | none_required:covered |
+| ATOM-043 | WP-02 | SP-043 | BSR 231 | SRC-014 | При скачивании система выгружает сформированное заявление-анкету в формате PDF на локальное рабочее место пользователя. | covered | TC-AF-DOC-022 | TC-AF-DOC-022 | none_required:covered |
+| ATOM-044 | WP-02 | SP-044 | BSR 232 | SRC-014 | Проверка шаблона, состава данных анкеты и согласий требует подключения требований к печатным формам документов. | gap | none_required:gap | GAP-003 | GAP-003 |
+| ATOM-045 | WP-01 | SP-045 | BSR 203 | SRC-003 | Если файлов анкеты клиента несколько, названия отображаются через запятую. | covered | TC-AF-DOC-023 | TC-AF-DOC-023 | none_required:covered |
+| ATOM-046 | WP-01 | SP-046 | BSR 208 | SRC-004 | Если файлов паспорта клиента несколько, названия отображаются через запятую. | covered | TC-AF-DOC-024 | TC-AF-DOC-024 | none_required:covered |
+| ATOM-047 | WP-01 | SP-047 | BSR 216 | SRC-006 | Если файлов второго документа несколько, названия отображаются через запятую. | covered | TC-AF-DOC-025 | TC-AF-DOC-025 | none_required:covered |
