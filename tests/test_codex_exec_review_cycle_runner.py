@@ -882,6 +882,38 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             )
         )
 
+    def test_standard_path_automatically_routes_existing_package_notes_to_both_roles(self) -> None:
+        package_notes = self.ft_root / "AGENT-NOTES.md"
+        package_notes.write_text("# Mandatory package context\n", encoding="utf-8")
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(decision="changes-required"),
+        )
+
+        cycle = self.make_runner(executor)
+        cycle.run()
+
+        self.assertIn("fts/demo-ft/AGENT-NOTES.md", executor.requests[0].prompt)
+        self.assertIn("fts/demo-ft/AGENT-NOTES.md", executor.requests[1].prompt)
+        writer_manifest = json.loads(
+            (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        reviewer_manifest = json.loads(
+            (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(
+            any(
+                item["path"].endswith("AGENT-NOTES.md")
+                for item in writer_manifest["handoff_artifacts"]
+            )
+        )
+        self.assertTrue(
+            any(
+                item["path"].endswith("AGENT-NOTES.md")
+                for item in reviewer_manifest["handoff_artifacts"]
+            )
+        )
+
     def test_standard_path_blocks_before_session_when_instruction_budget_does_not_pass(self) -> None:
         executor = ScriptedExecutor()
         cycle = self.make_runner(executor)

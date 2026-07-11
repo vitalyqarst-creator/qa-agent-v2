@@ -158,6 +158,23 @@ coverage_gaps:
         self.assertEqual(obligations.obligations[0].dictionary_refs, ("DICT-001",))
         self.assertEqual(obligations.obligations[1].gap_id, "GAP-001")
 
+    def test_embeds_mandatory_package_notes_in_prepared_evidence(self) -> None:
+        (self.ft / "AGENT-NOTES.md").write_text(
+            "# Package notes\n\nPACKAGE-NOTE-SENTINEL\n",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        package = load_prepared_package(result.stage_package, self.root)
+        evidence_path = self.root / next(
+            item.path for item in package.package_artifacts if item.kind == "source-evidence"
+        )
+        evidence = evidence_path.read_text(encoding="utf-8")
+        self.assertIn("## Mandatory package context", evidence)
+        self.assertIn("fts/demo/AGENT-NOTES.md", evidence)
+        self.assertIn("PACKAGE-NOTE-SENTINEL", evidence)
+
     def test_blocks_testable_atom_without_plan_oracle(self) -> None:
         obligations = self.design / "coverage-obligation-table.md"
         obligations.write_text(

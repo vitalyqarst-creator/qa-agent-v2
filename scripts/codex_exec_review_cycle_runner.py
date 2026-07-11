@@ -70,7 +70,7 @@ REVIEW_FINDING_CATEGORIES = {
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
-DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 64
+DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 80
 DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET = 48
 DEFAULT_STANDARD_WRITER_TIMEOUT_SECONDS = 900
 DEFAULT_STANDARD_REVIEWER_TIMEOUT_SECONDS = 450
@@ -597,6 +597,14 @@ class CodexExecReviewCycleRunner:
             self.prepared_package_path = self.prepared_package_path.resolve()
         configured_instructions = tuple(path.resolve() for path in self.instruction_files)
         self.instruction_files = configured_instructions or ((self.repo_root / "AGENTS.md").resolve(),)
+        package_notes = (self.ft_root / "AGENT-NOTES.md").resolve()
+        if (
+            self.prepared_package_path is None
+            and package_notes.is_file()
+            and package_notes not in self.handoff_files
+            and package_notes not in self.source_files
+        ):
+            self.handoff_files = (*self.handoff_files, package_notes)
 
     @property
     def attempts_dir(self) -> Path:

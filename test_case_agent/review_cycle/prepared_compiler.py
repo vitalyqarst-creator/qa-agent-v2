@@ -546,6 +546,19 @@ def compile_workflow_package(
     used_atoms: set[str] = set()
     seen_obligation_ids: set[str] = set()
     evidence_rows: list[str] = ["# Compiled Prepared Evidence", ""]
+    package_notes_path = ft_root / "AGENT-NOTES.md"
+    if package_notes_path.is_file():
+        package_notes = package_notes_path.read_text(encoding="utf-8").strip()
+        evidence_rows.extend(
+            [
+                "## Mandatory package context",
+                "",
+                f"source_path: {package_notes_path.relative_to(repo_root).as_posix()}",
+                "",
+                package_notes,
+                "",
+            ]
+        )
     for obligation_row in obligation_rows:
         obligation_id = obligation_row["obligation_id"]
         if not re.fullmatch(r"OBL-[A-Za-z0-9_.-]+", obligation_id):
