@@ -471,6 +471,53 @@ class DraftValidator(Protocol):
 class ProjectDraftStructureValidator:
     """Reuse the SDK runner's deterministic Markdown structure checks without starting the SDK."""
 
+    @staticmethod
+    def _execution_readiness_findings(text: str) -> tuple[dict[str, Any], ...]:
+        findings: list[dict[str, Any]] = []
+        if re.search(r"\brequires-binding\b", text, flags=re.IGNORECASE):
+            findings.append(
+                {
+                    "id": "unresolved-execution-binding",
+                    "severity": "error",
+                    "message": (
+                        "Draft contains requires-binding fixture or dictionary values and is not "
+                        "execution-ready. Bind concrete routes, fields and literals or preserve the "
+                        "obligation as GAP/unclear before semantic review."
+                    ),
+                }
+            )
+        if re.search(
+            r"(?:Итог\s+)?Writer\s+Quality\s+Gate\s*:\s*`?(?:blocked|fail)\b",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            findings.append(
+                {
+                    "id": "writer-quality-gate-self-blocked",
+                    "severity": "error",
+                    "message": (
+                        "Draft explicitly reports a blocked Writer Quality Gate and cannot advance "
+                        "to semantic review."
+                    ),
+                }
+            )
+        if re.search(
+            r"execution-ready\s+test\s+cases\s*:\s*`?0\s*/\s*[1-9]\d*",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            findings.append(
+                {
+                    "id": "no-execution-ready-test-cases",
+                    "severity": "error",
+                    "message": (
+                        "Draft explicitly reports zero execution-ready test cases and cannot claim "
+                        "executable coverage."
+                    ),
+                }
+            )
+        return tuple(findings)
+
     def validate(
         self,
         *,
@@ -490,6 +537,7 @@ class ProjectDraftStructureValidator:
             "canonical_test_cases": relative_path(final_path, ft_root),
         }
         findings, checked_paths = existing_runner.evaluate_test_case_markdown_structure(state, state_path)
+        findings.extend(self._execution_readiness_findings(draft_path.read_text(encoding="utf-8")))
         return ValidationResult(
             passed=not findings,
             findings=tuple(findings),

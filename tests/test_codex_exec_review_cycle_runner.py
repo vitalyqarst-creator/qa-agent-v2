@@ -1335,6 +1335,66 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual((), validation.findings)
         self.assertIn("evaluate_test_case_markdown_structure", validation.validator)
 
+    def test_default_validator_rejects_unresolved_fixture_bindings(self) -> None:
+        self.draft_path.parent.mkdir(parents=True, exist_ok=True)
+        self.draft_path.write_text(
+            """# Test cases
+
+## Fixture Binding Catalog
+
+| fixture_id | binding_field | status |
+| --- | --- | --- |
+| FIX-001 | screen_route | requires-binding |
+
+## TC-DEMO-001 Create document
+
+**Title:** Create document
+**Type:** positive
+**Priority:** high
+**package_id:** WP-01
+**Traceability:** REQ-001
+
+### Preconditions
+- Open the bound route.
+
+### Test Data
+- Bound fixture.
+
+### Steps
+1. Create the document.
+
+### Expected Result
+Document is created.
+
+### Postconditions
+- Document can be removed.
+""",
+            encoding="utf-8",
+        )
+
+        validation = runner_module.ProjectDraftStructureValidator().validate(
+            draft_path=self.draft_path,
+            final_path=self.final_path,
+            ft_root=self.ft_root,
+            state_path=self.cycle_dir / "cycle-state.yaml",
+        )
+
+        self.assertFalse(validation.passed)
+        self.assertIn(
+            "unresolved-execution-binding",
+            {item["id"] for item in validation.findings},
+        )
+
+    def test_default_validator_rejects_self_blocked_writer_gate(self) -> None:
+        findings = runner_module.ProjectDraftStructureValidator._execution_readiness_findings(
+            "Итог Writer Quality Gate: `blocked`.\nExecution-ready test cases: `0/6`.\n"
+        )
+
+        self.assertEqual(
+            {"writer-quality-gate-self-blocked", "no-execution-ready-test-cases"},
+            {item["id"] for item in findings},
+        )
+
     def test_existing_final_is_not_overwritten_by_default(self) -> None:
         self.final_path.write_text("existing final\n", encoding="utf-8")
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="accepted"))
