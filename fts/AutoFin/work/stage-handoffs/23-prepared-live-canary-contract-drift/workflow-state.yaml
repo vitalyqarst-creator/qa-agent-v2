@@ -1,0 +1,22 @@
+ft_slug: AutoFin
+scope_slug: prepared-widget-selection-live-canary-v11
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 0
+next_skill: none
+required_inputs:
+  - work/review-cycles/codex-exec-prepared-widget-selection-live-v11-20260711/cycle-state.yaml
+  - work/review-cycles/codex-exec-prepared-widget-selection-live-v11-20260711/attempts/writer-r1/attempt-001/stage-output/last-message.txt
+  - work/stage-handoffs/23-prepared-live-canary-contract-drift/live-canary-report.md
+  - work/stage-handoffs/23-prepared-live-canary-contract-drift/iteration-session-log.md
+  - work/stage-handoffs/23-prepared-live-canary-contract-drift/agent-decision-log.md
+latest_artifacts:
+  cycle_state: work/review-cycles/codex-exec-prepared-widget-selection-live-v11-20260711/cycle-state.yaml
+  writer_final_message: work/review-cycles/codex-exec-prepared-widget-selection-live-v11-20260711/attempts/writer-r1/attempt-001/stage-output/last-message.txt
+  live_canary_report: work/stage-handoffs/23-prepared-live-canary-contract-drift/live-canary-report.md
+  session_log: work/stage-handoffs/23-prepared-live-canary-contract-drift/iteration-session-log.md
+  decision_log: work/stage-handoffs/23-prepared-live-canary-contract-drift/agent-decision-log.md
+open_questions: []
+blocking_reasons:
+  - prepared writer runtime profile requires legacy package v3 while the eligible package is v4
+  - immutable package stage instructions point to a different compiler-cycle attempt/output path

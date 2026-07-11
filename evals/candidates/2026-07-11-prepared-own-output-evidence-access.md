@@ -7,7 +7,7 @@
 - `source_signal`: live prepared widget-selection canary v10
 - `affected_skill`: `ft-test-case-iteration`
 - `failure_class`: `prepared-own-output-evidence-access`
-- `status`: `candidate`
+- `status`: `implemented`
 
 ## Failure Signal
 
@@ -51,6 +51,6 @@
 
 ## Routing Decision
 
-- `decision`: accepted as next bounded fix candidate
-- `reason`: the defect blocks reviewer handoff despite a valid writer artifact and has an exact regression oracle.
-- `next_action`: implement scoped current-attempt read allowance, then rerun fast and standard promotion-off arms in new cycle directories.
+- `decision`: implemented in `eb31864`
+- `reason`: the gate now allows only the exact current stage-output root while sibling-cycle and traversal tests remain blocking.
+- `next_action`: retain the regression tests; live v11 stopped earlier on a separate prepared runtime/package-binding contract drift.

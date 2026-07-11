@@ -1,0 +1,5 @@
+{"type":"thread.started","thread_id":"019f4f94-14fe-7061-9019-fe79b87914ff"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"Маршрутизация: использую только встроенный Prepared Writer Runtime Profile фазы `ft-test-case-writer`, как указано в запросе; полный skill и project references не загружаю. До первой записи проверяю обязательные eligibility-поля и точный stage-owned output path."}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"`route-to-standard-writer`.\n\nЗапись не выполнена: пакет имеет `package_version: 4`, а встроенный профиль разрешает продолжение только для версии `3`. Кроме того, запрос содержит два разных обязательных `output_path`. Создание draft при этих противоречиях нарушило бы fast-path guardrails."}}
+{"type":"turn.completed","usage":{"input_tokens":19403,"cached_input_tokens":8960,"output_tokens":581,"reasoning_output_tokens":441}}
