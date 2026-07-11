@@ -79,6 +79,7 @@ DEFAULT_STANDARD_WRITER_TIMEOUT_SECONDS = 900
 DEFAULT_STANDARD_REVIEWER_TIMEOUT_SECONDS = 450
 DEFAULT_STANDARD_WRITER_IDLE_TIMEOUT_SECONDS = 180
 DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS = 120
+DEFAULT_PREPARED_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS = 300
 DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS = 600
 STANDARD_COMMAND_BUDGET_RESERVE = 5
 STANDARD_STAGE_SCENARIOS = {
@@ -611,6 +612,9 @@ class CodexExecReviewCycleRunner:
     prepared_reviewer_timeout_seconds: int = 90
     writer_idle_timeout_seconds: int = DEFAULT_STANDARD_WRITER_IDLE_TIMEOUT_SECONDS
     reviewer_idle_timeout_seconds: int = DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS
+    prepared_standard_reviewer_idle_timeout_seconds: int = (
+        DEFAULT_PREPARED_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS
+    )
     writer_command_budget: int = DEFAULT_STANDARD_WRITER_COMMAND_BUDGET
     reviewer_command_budget: int = DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET
     prepared_reviewer_command_budget: int = 1
@@ -856,6 +860,7 @@ class CodexExecReviewCycleRunner:
         for name in (
             "writer_idle_timeout_seconds",
             "reviewer_idle_timeout_seconds",
+            "prepared_standard_reviewer_idle_timeout_seconds",
             "writer_command_budget",
             "reviewer_command_budget",
             "prepared_reviewer_command_budget",
@@ -1439,7 +1444,11 @@ class CodexExecReviewCycleRunner:
                 command_budget = self.prepared_reviewer_command_budget
             else:
                 timeout = self.reviewer_timeout_seconds or self.timeout_seconds
-                idle_timeout = self.reviewer_idle_timeout_seconds
+                idle_timeout = (
+                    self.prepared_standard_reviewer_idle_timeout_seconds
+                    if self._is_prepared_standard()
+                    else self.reviewer_idle_timeout_seconds
+                )
                 command_budget = self.reviewer_command_budget
         return (
             timeout,
@@ -1681,15 +1690,24 @@ class CodexExecReviewCycleRunner:
             last_message_path=None,
         )
         if self._prepared_package is not None:
-            reviewer_access = validate_evidence_access(
-                events_text=reviewer_result.stdout,
-                forbidden_roots=(
+            reviewer_forbidden_roots = (
+                (
                     *self._prepared_package.forbidden_evidence_roots,
                     "skills",
                     "references",
                     "prepared-input",
                     "attempts/writer-r1",
-                ),
+                )
+                if self._is_prepared_fast()
+                else (
+                    *self._prepared_package.forbidden_evidence_roots,
+                    "prepared-input",
+                    "attempts/writer-r1",
+                )
+            )
+            reviewer_access = validate_evidence_access(
+                events_text=reviewer_result.stdout,
+                forbidden_roots=reviewer_forbidden_roots,
                 source_registry=self._prepared_package.source_registry,
                 allowed_command_fragments=("python scripts/probe_environment.py",),
                 reject_unlisted_commands=self._is_prepared_fast(),
@@ -3244,6 +3262,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS,
     )
     parser.add_argument(
+        "--prepared-standard-reviewer-idle-timeout-seconds",
+        type=int,
+        default=DEFAULT_PREPARED_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS,
+    )
+    parser.add_argument(
         "--writer-command-budget",
         type=int,
         default=DEFAULT_STANDARD_WRITER_COMMAND_BUDGET,
@@ -3317,6 +3340,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         prepared_reviewer_timeout_seconds=args.prepared_reviewer_timeout_seconds,
         writer_idle_timeout_seconds=args.writer_idle_timeout_seconds,
         reviewer_idle_timeout_seconds=args.reviewer_idle_timeout_seconds,
+        prepared_standard_reviewer_idle_timeout_seconds=(
+            args.prepared_standard_reviewer_idle_timeout_seconds
+        ),
         writer_command_budget=args.writer_command_budget,
         reviewer_command_budget=args.reviewer_command_budget,
         prepared_reviewer_command_budget=args.prepared_reviewer_command_budget,

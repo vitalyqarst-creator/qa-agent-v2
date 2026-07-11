@@ -957,7 +957,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             self.reviewer_step(decision="changes-required"),
         )
 
-        result = self.make_prepared_runner(executor, package_path).run()
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.reviewer_timeout_seconds = 450
+        result = runner.run()
 
         self.assertEqual("changes-required", result.status)
         writer_prompt = executor.requests[0].prompt
@@ -970,6 +972,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("reviewer.semantic_traceability_test_design", reviewer_prompt)
         self.assertIn("reviewer-runtime.md", reviewer_prompt)
         self.assertNotIn("Prepared Reviewer Runtime Profile", reviewer_prompt)
+        self.assertEqual(300, executor.requests[1].idle_timeout_seconds)
 
         writer_manifest = json.loads(
             (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
