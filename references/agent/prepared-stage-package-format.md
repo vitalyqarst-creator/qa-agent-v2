@@ -39,7 +39,7 @@ Required fields:
 - `created_at` with timezone;
 - `source_registry`: full source path, role, SHA-256 and scope locator;
 - `package_artifacts`: the other three package files with path, kind, SHA-256 and byte size;
-- `execution_profile`: initially only `simple-field-property` is eligible for the optimized writer fast path;
+- `execution_profile`: `simple-field-property` selects the optimized fast path; `standard-required` selects compact prepared transport with the full standard writer/reviewer instruction scenarios;
 - `unsupported_dimensions`: explicit dimensions that require the standard writer, for example table parity, numeric boundaries, integration/persistence or dependency/state design;
 - `forbidden_evidence_roots`: generated TC, old cycle and canary roots that must not be read as source evidence;
 - `fallback_policy`: `targeted-only`;
@@ -49,7 +49,7 @@ The package is rejected when registered full sources changed after preparation. 
 
 Version `5` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
 
-The runner must route to the standard writer when the package is legacy/unclassified, its profile is not `simple-field-property`, or `unsupported_dimensions` is non-empty. Fast-path rejection is a quality guard, not a reason to weaken the source package.
+The runner must route `standard-required` packages with explicit `unsupported_dimensions` through the prepared-standard writer/reviewer path. Legacy/unclassified profiles remain blocked. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
 ## `atomic-obligations.json`
 
@@ -84,9 +84,9 @@ Do not copy whole DOCX/PDF documents, unrelated sections, historical reports or 
 
 ## `stage-instructions.md`
 
-This is a short operational contract. It states role, scenario, allowed inputs, output path, sandbox, timeout, command budget, idle timeout and fallback rules. It must require the stage to:
+This is a short operational contract. It states role, scenario, allowed inputs, output path, sandbox, timeout, command budget, idle timeout and fallback rules. `simple-field-property` uses `writer.session_prepared_initial_draft`; `standard-required` uses `writer.session_initial_draft`. It must require the stage to:
 
-1. use the prepared package fast path without rerunning source locator, scope analyzer or full source parity;
+1. use the prepared projection without rerunning source locator, scope analyzer or full source parity; fast packages use the compact fast runtime profile, while standard packages load the full standard instruction scenario;
 2. write a structurally complete minimum output before optional refinement;
 3. keep scratch and outputs inside the attempt root;
 4. access a registered full source only for one named obligation/source locator when package evidence is insufficient;
@@ -122,6 +122,12 @@ The runner verifies the four package files and embeds a compact projection into 
 - Re-running a terminal or blocked cycle directory is rejected before LLM launch; existing state and evidence remain unchanged.
 
 Targeted fallback is allowed only when a named obligation cannot be resolved from the capsule. It must be limited to an exact XHTML/DOCX locator. PDF remains structural evidence only. An unbounded source scan, full document re-analysis or external scratch path blocks the prepared-package run.
+
+## Prepared Standard Route
+
+A `standard-required` package keeps the same immutable package, obligation, seed, structure and production-mutation gates, but does not use the reduced fast writer/reviewer profiles. The runner loads `writer.session_initial_draft` and `reviewer.semantic_traceability_test_design`, supplies the compact projection as primary evidence and records registered full-source access. Standard semantic review remains mandatory; compact transport does not make an unsupported dimension fast-eligible.
+
+Role-specific `stage-input.json` manifests must list the selected standard instruction files, compact source evidence, obligations and runner-owned gate artifacts. The runner enforces separate primary-context budgets before each LLM stage and writes `context-budget.json`; registered DOCX/XHTML/PDF sources are excluded from primary-context byte totals and remain fallback evidence.
 
 ## Completion Gates
 

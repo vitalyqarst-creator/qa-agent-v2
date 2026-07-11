@@ -36,6 +36,7 @@ from test_case_agent.review_cycle.runtime import (
 from test_case_agent.review_cycle.prepared_package import (
     FAST_EXECUTION_PROFILE,
     PACKAGE_VERSION,
+    STANDARD_EXECUTION_PROFILE,
     PreparedStagePackage,
     load_obligations,
     load_prepared_package,
@@ -70,6 +71,8 @@ REVIEW_FINDING_CATEGORIES = {
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
+DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES = 512 * 1024
+DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES = 768 * 1024
 DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 80
 DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET = 48
 DEFAULT_STANDARD_WRITER_TIMEOUT_SECONDS = 900
@@ -615,6 +618,12 @@ class CodexExecReviewCycleRunner:
         DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS
     )
     prepared_reviewer_prompt_max_bytes: int = DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES
+    prepared_standard_writer_context_max_bytes: int = (
+        DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES
+    )
+    prepared_standard_reviewer_context_max_bytes: int = (
+        DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES
+    )
     promote_final: bool = False
     promotion_dry_run: bool = False
     allow_overwrite_final: bool = False
@@ -624,6 +633,9 @@ class CodexExecReviewCycleRunner:
     _prepared_package: PreparedStagePackage | None = field(default=None, init=False)
     _draft_seed_sha256: str = field(default="", init=False)
     _standard_instruction_contexts: dict[str, tuple[Path, ...]] = field(
+        default_factory=dict, init=False
+    )
+    _context_budget_reports: dict[str, dict[str, Any]] = field(
         default_factory=dict, init=False
     )
 
@@ -717,6 +729,9 @@ class CodexExecReviewCycleRunner:
     def reviewer_evidence_access_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "evidence-access-report.json"
 
+    def context_budget_path(self, stage: str) -> Path:
+        return self.runner_output_dir(stage) / "context-budget.json"
+
     def _runner_owned_paths(self) -> tuple[Path, ...]:
         paths = [
             self.state_path,
@@ -733,6 +748,18 @@ class CodexExecReviewCycleRunner:
             return STANDARD_STAGE_SCENARIOS[role]
         except KeyError as exc:
             raise RunnerError(f"Unsupported standard stage role: {role}") from exc
+
+    def _is_prepared_fast(self) -> bool:
+        return (
+            self._prepared_package is not None
+            and self._prepared_package.execution_profile == FAST_EXECUTION_PROFILE
+        )
+
+    def _is_prepared_standard(self) -> bool:
+        return (
+            self._prepared_package is not None
+            and self._prepared_package.execution_profile == STANDARD_EXECUTION_PROFILE
+        )
 
     def _standard_instruction_paths(self, role: str) -> tuple[Path, ...]:
         cached = self._standard_instruction_contexts.get(role)
@@ -791,16 +818,19 @@ class CodexExecReviewCycleRunner:
         return result
 
     def _validate_standard_command_budgets(self) -> None:
+        prepared_input_count = 3 if self._is_prepared_standard() else 0
         writer_minimum = (
             len(self._standard_instruction_paths("writer"))
             + len(self.source_files)
             + len(self.handoff_files)
+            + prepared_input_count
             + STANDARD_COMMAND_BUDGET_RESERVE
         )
         reviewer_minimum = (
             len(self._standard_instruction_paths("reviewer"))
             + len(self.source_files)
             + len(self.handoff_files)
+            + prepared_input_count
             + 2  # validated draft and deterministic validator report
             + STANDARD_COMMAND_BUDGET_RESERVE
         )
@@ -831,6 +861,8 @@ class CodexExecReviewCycleRunner:
             "prepared_reviewer_command_budget",
             "writer_first_artifact_deadline_seconds",
             "prepared_reviewer_prompt_max_bytes",
+            "prepared_standard_writer_context_max_bytes",
+            "prepared_standard_reviewer_context_max_bytes",
         ):
             if getattr(self, name) < 1:
                 raise RunnerError(f"{name} must be >= 1")
@@ -855,15 +887,15 @@ class CodexExecReviewCycleRunner:
         if self.prepared_package_path is not None:
             if not self.command_config.output_schema_flag:
                 raise RunnerError(
-                    "Prepared reviewer fast path requires a verified output-schema flag"
+                    "Prepared reviewer requires a verified output-schema flag"
                 )
             if self.source_files or self.handoff_files:
                 raise RunnerError(
-                    "Prepared fast path must not mix full source/handoff lists into the stage context"
+                    "Prepared routes must not mix raw source/handoff lists into the primary stage context"
                 )
             if self.writer_instruction_files or self.reviewer_instruction_files:
                 raise RunnerError(
-                    "Prepared fast path must use only its embedded role profiles"
+                    "Prepared routes use runner-selected role instruction contexts"
                 )
             if not is_relative_to(self.prepared_package_path, self.ft_root):
                 raise RunnerError("Prepared stage package must be under the FT package")
@@ -875,16 +907,37 @@ class CodexExecReviewCycleRunner:
                 raise RunnerError(f"Prepared stage package is invalid: {exc}") from exc
             if self._prepared_package.ft_slug != self.ft_root.name:
                 raise RunnerError("Prepared stage package ft_slug does not match FT root")
-            if (
-                self._prepared_package.package_version != PACKAGE_VERSION
-                or self._prepared_package.execution_profile != FAST_EXECUTION_PROFILE
-                or self._prepared_package.unsupported_dimensions
-            ):
+            if self._prepared_package.package_version != PACKAGE_VERSION:
                 dimensions = ", ".join(self._prepared_package.unsupported_dimensions) or "none"
                 raise RunnerError(
-                    "Prepared fast path is ineligible; route to standard writer: "
+                    "Prepared route requires the current package contract: "
                     f"package_version={self._prepared_package.package_version}, "
                     f"required_package_version={PACKAGE_VERSION}, "
+                    f"profile={self._prepared_package.execution_profile}, "
+                    f"unsupported_dimensions={dimensions}"
+                )
+            if self._is_prepared_fast() and self._prepared_package.unsupported_dimensions:
+                raise RunnerError(
+                    "Prepared fast path cannot declare unsupported dimensions"
+                )
+            if self._is_prepared_standard():
+                if not self._prepared_package.unsupported_dimensions:
+                    raise RunnerError(
+                        "Prepared standard route requires explicit unsupported dimensions"
+                    )
+                declared_scenario = self._prepared_instruction_field("scenario")
+                if declared_scenario != self._standard_scenario("writer"):
+                    raise RunnerError(
+                        "Prepared standard stage instructions must declare the standard writer scenario: "
+                        f"declared={declared_scenario}, expected={self._standard_scenario('writer')}"
+                    )
+                self._standard_instruction_paths("writer")
+                self._standard_instruction_paths("reviewer")
+                self._validate_standard_command_budgets()
+            elif not self._is_prepared_fast():
+                dimensions = ", ".join(self._prepared_package.unsupported_dimensions) or "none"
+                raise RunnerError(
+                    "Prepared package execution profile is unsupported; route to standard writer: "
                     f"profile={self._prepared_package.execution_profile}, "
                     f"unsupported_dimensions={dimensions}"
                 )
@@ -899,11 +952,14 @@ class CodexExecReviewCycleRunner:
             self._validate_standard_command_budgets()
         prepared_inputs = self._prepared_input_paths()
         instruction_inputs = (
-            (*self.instruction_files, *self.writer_instruction_files, *self.reviewer_instruction_files)
-            if self._prepared_package is not None
-            else (
+            (
                 *self._standard_instruction_paths("writer"),
                 *self._standard_instruction_paths("reviewer"),
+            )
+            if self._prepared_package is None or self._is_prepared_standard()
+            else (
+                self.prepared_writer_profile_path,
+                self.prepared_reviewer_profile_path,
             )
         )
         for input_path in (
@@ -1004,6 +1060,143 @@ class CodexExecReviewCycleRunner:
     @property
     def prepared_reviewer_profile_path(self) -> Path:
         return self.repo_root / "references" / "agent" / "prepared-reviewer-runtime-profile.md"
+
+    def _prepared_standard_metadata(self, *, draft_sha256: str = "") -> dict[str, Any]:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        metadata: dict[str, Any] = {
+            "package_version": self._prepared_package.package_version,
+            "package_id": self._prepared_package.package_id,
+            "ft_slug": self._prepared_package.ft_slug,
+            "scope_slug": self._prepared_package.scope_slug,
+            "section_id": self._prepared_package.section_id,
+            "execution_profile": self._prepared_package.execution_profile,
+            "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
+            "fallback_policy": self._prepared_package.fallback_policy,
+            "source_registry": [
+                {
+                    "path": item.path,
+                    "role": item.role,
+                    "locator": item.locator,
+                    "sha256": item.sha256,
+                }
+                for item in self._prepared_package.source_registry
+            ],
+        }
+        if draft_sha256:
+            metadata["reviewed_draft_sha256"] = draft_sha256
+        return metadata
+
+    def _prepared_standard_writer_payload(self) -> str:
+        return "\n".join(
+            [
+                "<!-- PREPARED-STANDARD-WRITER-PAYLOAD:BEGIN -->",
+                "## Verified prepared-standard metadata",
+                "",
+                "```json",
+                json.dumps(self._prepared_standard_metadata(), ensure_ascii=False, indent=2),
+                "```",
+                "",
+                "## Selected source evidence",
+                "",
+                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                "",
+                "## Atomic obligations",
+                "",
+                "```json",
+                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                "```",
+                "",
+                "## Draft seed template (not an existing output file)",
+                "",
+                "Create the declared output as the first meaningful artifact. Replace every seed sentinel.",
+                "",
+                "```markdown",
+                self._draft_seed_text().strip(),
+                "```",
+                "<!-- PREPARED-STANDARD-WRITER-PAYLOAD:END -->",
+            ]
+        )
+
+    def _prepared_standard_reviewer_payload(self) -> str:
+        draft_sha256 = sha256_file(self.draft_path)
+        gates = [
+            self._prepared_gate_summary("structure", self.validator_path),
+            self._prepared_gate_summary("seed", self.seed_gate_path),
+            self._prepared_gate_summary("obligation", self.obligation_gate_path),
+            self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
+        ]
+        return "\n".join(
+            [
+                "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:BEGIN -->",
+                "## Verified prepared-standard review metadata",
+                "",
+                "```json",
+                json.dumps(
+                    self._prepared_standard_metadata(draft_sha256=draft_sha256),
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+                "```",
+                "",
+                "## Selected source evidence",
+                "",
+                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                "",
+                "## Atomic obligations",
+                "",
+                "```json",
+                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                "```",
+                "",
+                "## Deterministic gate summaries",
+                "",
+                "```json",
+                json.dumps(gates, ensure_ascii=False, indent=2),
+                "```",
+                "",
+                "## Immutable writer draft",
+                "",
+                "```markdown",
+                self.draft_path.read_text(encoding="utf-8").strip(),
+                "```",
+                "",
+                "## Required final contract",
+                "",
+                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation, structured findings and a non-empty summary. Do not emit commentary outside the final JSON object.",
+                "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:END -->",
+            ]
+        )
+
+    def _enforce_prepared_standard_context_budget(self, *, role: str, prompt: str) -> None:
+        instruction_paths = self._standard_instruction_paths(role)
+        instruction_bytes = sum(path.stat().st_size for path in instruction_paths)
+        prompt_bytes = len(prompt.encode("utf-8"))
+        total_bytes = prompt_bytes + instruction_bytes
+        limit_bytes = (
+            self.prepared_standard_writer_context_max_bytes
+            if role == "writer"
+            else self.prepared_standard_reviewer_context_max_bytes
+        )
+        stage = WRITER_STAGE if role == "writer" else REVIEWER_STAGE
+        report = {
+            "passed": total_bytes <= limit_bytes,
+            "validator": "prepared-standard-context-budget-v1",
+            "error_code": "" if total_bytes <= limit_bytes else "prepared-standard-context-budget-exceeded",
+            "role": role,
+            "scenario": self._standard_scenario(role),
+            "prompt_bytes": prompt_bytes,
+            "instruction_bytes": instruction_bytes,
+            "primary_context_bytes": total_bytes,
+            "limit_bytes": limit_bytes,
+            "instruction_artifact_count": len(instruction_paths),
+        }
+        self._context_budget_reports[stage] = report
+        if not report["passed"]:
+            raise RunnerError(
+                "blocked-prepared-standard-context-budget: "
+                f"role={role}, primary_context_bytes={total_bytes}, limit_bytes={limit_bytes}"
+            )
 
     def _prepared_writer_payload(self) -> str:
         if self._prepared_package is None:
@@ -1231,7 +1424,7 @@ class CodexExecReviewCycleRunner:
 
     def _stage_limits(self, role: str) -> tuple[int, int | None, int]:
         if role == "writer":
-            if self._prepared_package is not None:
+            if self._is_prepared_fast():
                 timeout = self._prepared_instruction_int("hard_timeout_seconds")
                 idle_timeout = self._prepared_instruction_int("idle_timeout_seconds")
                 command_budget = self._prepared_instruction_int("command_budget")
@@ -1240,7 +1433,7 @@ class CodexExecReviewCycleRunner:
                 idle_timeout = self.writer_idle_timeout_seconds
                 command_budget = self.writer_command_budget
         else:
-            if self._prepared_package is not None:
+            if self._is_prepared_fast():
                 timeout = self.prepared_reviewer_timeout_seconds
                 idle_timeout = None
                 command_budget = self.prepared_reviewer_command_budget
@@ -1276,6 +1469,7 @@ class CodexExecReviewCycleRunner:
                 allowed_stage_roots=(
                     relative_path(self.stage_output_dir(WRITER_STAGE), self.repo_root),
                 ),
+                require_source_fallback_authorization=self._is_prepared_fast(),
             )
             write_json(self.evidence_access_path, evidence_access.as_dict())
             if not evidence_access.passed:
@@ -1498,7 +1692,8 @@ class CodexExecReviewCycleRunner:
                 ),
                 source_registry=self._prepared_package.source_registry,
                 allowed_command_fragments=("python scripts/probe_environment.py",),
-                reject_unlisted_commands=True,
+                reject_unlisted_commands=self._is_prepared_fast(),
+                require_source_fallback_authorization=self._is_prepared_fast(),
             )
             write_json(self.reviewer_evidence_access_path, reviewer_access.as_dict())
             if not reviewer_access.passed:
@@ -1815,7 +2010,7 @@ class CodexExecReviewCycleRunner:
         )
 
     def _writer_prompt(self) -> str:
-        if self._prepared_package is not None and self.prepared_package_path is not None:
+        if self._is_prepared_fast() and self.prepared_package_path is not None:
             return "\n".join(
                 [
                     "# Codex exec prepared writer fast path",
@@ -1834,6 +2029,35 @@ class CodexExecReviewCycleRunner:
                     "",
                 ]
             )
+        if self._is_prepared_standard() and self.prepared_package_path is not None:
+            prompt = "\n".join(
+                [
+                    "# Codex exec prepared-standard writer stage contract",
+                    "",
+                    f"Instruction-loading scenario: `{self._standard_scenario('writer')}`.",
+                    f"Run `python scripts/resolve_instruction_context.py --scenario {self._standard_scenario('writer')} --budget-report --fail-on-budget` and verify it matches the runner-selected files below.",
+                    "Read every selected standard instruction file before making domain decisions.",
+                    "The prepared package is a compact source-backed transport, not a fast semantic profile.",
+                    "Use the verified inline projection as primary evidence. Do not repeat source discovery or broad document analysis.",
+                    "A registered full source may be inspected only for a named OBL/ATOM whose inline evidence is insufficient; record the source path, locator and reason in the final summary.",
+                    "Do not use generated test cases, previous cycles or canary artifacts as requirement evidence.",
+                    "Do not write under any production test-cases directory.",
+                    f"Write the complete unsigned draft only to `{relative_path(self.draft_path, self.repo_root)}`.",
+                    "",
+                    "## Standard instruction files",
+                    *[
+                        f"- `{relative_path(path, self.repo_root)}`"
+                        for path in self._standard_instruction_paths("writer")
+                    ],
+                    "",
+                    self._prepared_standard_writer_payload(),
+                    "",
+                    "Exit only after the complete draft is written. A chat response without the file is a failed stage.",
+                    "",
+                ]
+            )
+            self._enforce_prepared_standard_context_budget(role="writer", prompt=prompt)
+            return prompt
         return "\n".join(
             [
                 "# Codex exec writer stage contract",
@@ -1867,7 +2091,7 @@ class CodexExecReviewCycleRunner:
         )
 
     def _reviewer_prompt(self) -> str:
-        if self._prepared_package is not None and self.prepared_package_path is not None:
+        if self._is_prepared_fast() and self.prepared_package_path is not None:
             prompt = "\n".join(
                 [
                     "# Codex exec prepared reviewer fast path",
@@ -1888,6 +2112,31 @@ class CodexExecReviewCycleRunner:
                     f"prompt bytes {prompt_bytes} exceed {self.prepared_reviewer_prompt_max_bytes}; "
                     "route to standard reviewer or reduce the eligible scope"
                 )
+            return prompt
+        if self._is_prepared_standard() and self.prepared_package_path is not None:
+            prompt = "\n".join(
+                [
+                    "# Codex exec prepared-standard reviewer stage contract",
+                    "",
+                    f"Instruction-loading scenario: `{self._standard_scenario('reviewer')}`.",
+                    f"Run `python scripts/resolve_instruction_context.py --scenario {self._standard_scenario('reviewer')} --budget-report --fail-on-budget` and verify it matches the runner-selected files below.",
+                    "Read every selected standard reviewer instruction file before making domain decisions.",
+                    "This is a full standard semantic review over compact verified inputs, not the prepared fast reviewer profile.",
+                    "This stage is read-only. Do not modify or create workspace files.",
+                    "Use the inline source evidence first. Inspect a registered full source only for a named disputed OBL/ATOM and record the path, locator and reason in the final summary.",
+                    "Do not read production test cases, previous cycles or generated artifacts as requirement evidence.",
+                    "",
+                    "## Standard instruction files",
+                    *[
+                        f"- `{relative_path(path, self.repo_root)}`"
+                        for path in self._standard_instruction_paths("reviewer")
+                    ],
+                    "",
+                    self._prepared_standard_reviewer_payload(),
+                    "",
+                ]
+            )
+            self._enforce_prepared_standard_context_budget(role="reviewer", prompt=prompt)
             return prompt
         return "\n".join(
             [
@@ -1940,6 +2189,9 @@ class CodexExecReviewCycleRunner:
         prompt_path = self.prompt_path(stage)
         prompt_path.write_text(prompt, encoding="utf-8")
         self.runner_output_dir(stage).mkdir(parents=True)
+        context_budget = self._context_budget_reports.get(stage)
+        if context_budget is not None:
+            write_json(self.context_budget_path(stage), context_budget)
         if role == "writer":
             self.stage_output_dir(stage).mkdir(parents=True)
             if self._prepared_package is not None:
@@ -2094,16 +2346,24 @@ class CodexExecReviewCycleRunner:
             ),
         ]
         if self._prepared_package is not None and self.prepared_package_path is not None:
-            instruction_paths = [*self.instruction_files, self._prepared_artifact("stage-instructions")]
-            if role == "writer":
-                instruction_paths.append(self.prepared_writer_profile_path)
+            if self._is_prepared_fast():
+                instruction_paths = [
+                    *self.instruction_files,
+                    self._prepared_artifact("stage-instructions"),
+                ]
+                if role == "writer":
+                    instruction_paths.append(self.prepared_writer_profile_path)
+                else:
+                    instruction_paths.append(self.prepared_reviewer_profile_path)
             else:
-                instruction_paths.append(self.prepared_reviewer_profile_path)
+                instruction_paths = list(self._standard_instruction_paths(role))
             source_paths = [self._prepared_artifact("source-evidence")]
             handoff_paths = [
                 self.prepared_package_path,
                 self._prepared_artifact("atomic-obligations"),
             ]
+            if self._is_prepared_standard():
+                handoff_paths.append(self._prepared_artifact("stage-instructions"))
             if role == "writer":
                 handoff_paths.append(self.draft_seed_path)
         else:
@@ -2178,6 +2438,14 @@ class CodexExecReviewCycleRunner:
                         required=False,
                     )
                 )
+        if self._is_prepared_standard():
+            expected_outputs.append(
+                ExpectedOutput(
+                    path=relative_path(self.context_budget_path(stage), self.repo_root),
+                    kind="context-budget",
+                    producer="runner",
+                )
+            )
         return StageInputManifest.create(
             cycle_id=self.cycle_dir.name,
             stage_id=stage,
@@ -2187,13 +2455,13 @@ class CodexExecReviewCycleRunner:
             scenario=(
                 (
                     "writer.session_prepared_initial_draft"
-                    if self._prepared_package is not None
+                    if self._is_prepared_fast()
                     else self._standard_scenario("writer")
                 )
                 if role == "writer"
                 else (
                     "reviewer.session_prepared_semantic"
-                    if self._prepared_package is not None
+                    if self._is_prepared_fast()
                     else self._standard_scenario("reviewer")
                 )
             ),
@@ -2953,6 +3221,16 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES,
     )
+    parser.add_argument(
+        "--prepared-standard-writer-context-max-bytes",
+        type=int,
+        default=DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES,
+    )
+    parser.add_argument(
+        "--prepared-standard-reviewer-context-max-bytes",
+        type=int,
+        default=DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES,
+    )
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--promotion-dry-run", action="store_true")
     parser.add_argument("--allow-overwrite-final", action="store_true")
@@ -3000,6 +3278,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         prepared_reviewer_command_budget=args.prepared_reviewer_command_budget,
         writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
         prepared_reviewer_prompt_max_bytes=args.prepared_reviewer_prompt_max_bytes,
+        prepared_standard_writer_context_max_bytes=(
+            args.prepared_standard_writer_context_max_bytes
+        ),
+        prepared_standard_reviewer_context_max_bytes=(
+            args.prepared_standard_reviewer_context_max_bytes
+        ),
         promote_final=args.promote_final,
         promotion_dry_run=args.promotion_dry_run,
         allow_overwrite_final=args.allow_overwrite_final,

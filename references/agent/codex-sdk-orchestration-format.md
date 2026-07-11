@@ -6,6 +6,8 @@ The SDK layer is an orchestrator, not a domain-rule source. The SDK runner is no
 
 The current SDK implementation uses the v1 stage-updated-state contract described in `session-based-review-cycle-format.md`. The backend-independent `contract_version: 2` and runner-owned transition model are additive; they do not change v1 state execution or recovery until the v2 adapter is explicitly enabled.
 
+The `codex exec` prototype may use an immutable prepared package as a transport for either route. `simple-field-property` uses the compact fast role profiles. `standard-required` uses the full standard writer and semantic-reviewer instruction scenarios over the compact package, with registered full sources retained as fallback evidence. Prepared transport must never be treated as evidence that a standard-only scope is fast-eligible.
+
 SDK launch points use the shared `start_fresh_sdk_thread` boundary. It exposes only `thread_start`; resume or previous-thread inputs are intentionally absent, so every LLM stage receives a new SDK thread even while the surrounding runner remains on the v1 state contract.
 
 ## Responsibilities

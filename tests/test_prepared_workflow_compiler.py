@@ -210,6 +210,12 @@ coverage_gaps:
 
         self.assertEqual("standard-required", result.execution_profile)
         self.assertIn("dependency-state", result.unsupported_dimensions)
+        instructions = (result.stage_package.parent / "stage-instructions.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scenario: `writer.session_initial_draft`", instructions)
+        self.assertIn("## Prepared Standard Context", instructions)
+        self.assertNotIn("## Fast Path", instructions)
 
     def test_blocks_testable_atom_without_plan_oracle(self) -> None:
         obligations = self.design / "coverage-obligation-table.md"

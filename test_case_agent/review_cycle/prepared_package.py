@@ -23,6 +23,7 @@ from test_case_agent.review_cycle.runtime import (
 PACKAGE_VERSION = 5
 SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
+STANDARD_EXECUTION_PROFILE = "standard-required"
 FAST_EVIDENCE_MAX_BYTES = 32768
 STANDARD_ROUTING_EVIDENCE_MAX_BYTES = 49152
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
@@ -899,6 +900,25 @@ class PreparedPackageBuilder:
 
     @staticmethod
     def _render_instructions(package_id: str, config: StageInstructionConfig) -> str:
+        fast_path = config.scenario == "writer.session_prepared_initial_draft"
+        section_title = "Fast Path" if fast_path else "Prepared Standard Context"
+        execution_rules = (
+            [
+                "1. Use the runner-embedded verified projection; do not reread package files in the stage.",
+                "2. Do not rerun source locator, scope analyzer, source parity, DOCX extraction or PDF rendering.",
+                "3. Write a structurally complete minimum output before optional refinement.",
+                "4. Keep output and scratch inside attempt_root.",
+                "5. Do not read generated test cases, earlier cycles or canary artifacts as evidence.",
+            ]
+            if fast_path
+            else [
+                "1. Load the full standard writer instruction scenario selected by the runner.",
+                "2. Use the runner-embedded verified projection as the primary scope evidence.",
+                "3. Do not rerun source locator, scope analyzer or broad full-document discovery.",
+                "4. Keep output and scratch inside attempt_root.",
+                "5. Do not read generated test cases, earlier cycles or canary artifacts as evidence.",
+            ]
+        )
         return "\n".join(
             [
                 "# Prepared Stage Instructions",
@@ -913,13 +933,9 @@ class PreparedPackageBuilder:
                 f"- idle_timeout_seconds: `{config.idle_timeout_seconds}`",
                 f"- command_budget: `{config.command_budget}`",
                 "",
-                "## Fast Path",
+                f"## {section_title}",
                 "",
-                "1. Use the runner-embedded verified projection; do not reread package files in the stage.",
-                "2. Do not rerun source locator, scope analyzer, source parity, DOCX extraction or PDF rendering.",
-                "3. Write a structurally complete minimum output before optional refinement.",
-                "4. Keep output and scratch inside attempt_root.",
-                "5. Do not read generated test cases, earlier cycles or canary artifacts as evidence.",
+                *execution_rules,
                 "",
                 "## Targeted Fallback",
                 "",

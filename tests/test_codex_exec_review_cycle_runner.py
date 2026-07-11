@@ -340,7 +340,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 guard_path.write_text("reviewer mutation\n", encoding="utf-8")
             if mutate_draft:
                 self.draft_path.write_text("reviewer changed the validated draft\n", encoding="utf-8")
-            if "prepared reviewer fast path" in _request.prompt:
+            if (
+                "prepared reviewer fast path" in _request.prompt
+                or "prepared-standard reviewer" in _request.prompt
+            ):
                 prepared_findings = []
                 verdict = "covered"
                 if decision == "changes-required":
@@ -467,6 +470,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         package_root = self.cycle_dir / "prepared-input" / "pkg-exec-001"
         bound_attempt = instruction_attempt_root or self.writer_attempt
+        standard_route = execution_profile == "standard-required"
         PreparedPackageBuilder(self.repo_root).build(
             output_root=package_root,
             package_id="pkg-exec-001",
@@ -483,15 +487,19 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             obligations=obligations,
             instructions=StageInstructionConfig(
                 role="writer",
-                scenario="writer.session_prepared_initial_draft",
+                scenario=(
+                    "writer.session_initial_draft"
+                    if standard_route
+                    else "writer.session_prepared_initial_draft"
+                ),
                 output_path=(bound_attempt / "stage-output" / "draft.md")
                 .relative_to(self.repo_root)
                 .as_posix(),
                 attempt_root=bound_attempt.relative_to(self.repo_root).as_posix(),
                 sandbox_policy="workspace_write",
-                timeout_seconds=180,
-                idle_timeout_seconds=60,
-                command_budget=12,
+                timeout_seconds=900 if standard_route else 180,
+                idle_timeout_seconds=180 if standard_route else 60,
+                command_budget=80 if standard_route else 12,
             ),
             execution_profile=execution_profile,
             unsupported_dimensions=unsupported_dimensions,
@@ -522,6 +530,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             executor=executor,
             validator=self.validator,
             timeout_seconds=5,
+            instruction_context_resolver=self.resolve_instruction_context,
         )
 
     def test_first_artifact_experiment_preserves_independent_writer_budgets(self) -> None:
@@ -934,6 +943,69 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             "Instruction context budget failed",
         ):
             cycle.run()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
+
+    def test_prepared_standard_route_uses_compact_package_with_full_standard_context(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+        )
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(decision="changes-required"),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("changes-required", result.status)
+        writer_prompt = executor.requests[0].prompt
+        reviewer_prompt = executor.requests[1].prompt
+        self.assertIn("prepared-standard writer", writer_prompt)
+        self.assertIn("writer.session_initial_draft", writer_prompt)
+        self.assertIn("writer-runtime.md", writer_prompt)
+        self.assertNotIn("Prepared Writer Runtime Profile", writer_prompt)
+        self.assertIn("prepared-standard reviewer", reviewer_prompt)
+        self.assertIn("reviewer.semantic_traceability_test_design", reviewer_prompt)
+        self.assertIn("reviewer-runtime.md", reviewer_prompt)
+        self.assertNotIn("Prepared Reviewer Runtime Profile", reviewer_prompt)
+
+        writer_manifest = json.loads(
+            (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        reviewer_manifest = json.loads(
+            (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("writer.session_initial_draft", writer_manifest["scenario"])
+        self.assertEqual(
+            "reviewer.semantic_traceability_test_design",
+            reviewer_manifest["scenario"],
+        )
+        self.assertTrue(
+            all(not item["path"].endswith("main.docx") for item in writer_manifest["source_artifacts"])
+        )
+        self.assertTrue(
+            (self.writer_attempt / "runner-output" / "context-budget.json").is_file()
+        )
+        self.assertTrue(
+            (self.reviewer_attempt / "runner-output" / "context-budget.json").is_file()
+        )
+
+    def test_prepared_standard_context_budget_blocks_before_writer_session(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_standard_writer_context_max_bytes = 1
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "blocked-prepared-standard-context-budget",
+        ):
+            runner.run()
 
         self.assertEqual([], executor.requests)
         self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())

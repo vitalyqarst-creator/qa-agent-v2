@@ -116,6 +116,22 @@ class PreparedEvidenceAccessTests(unittest.TestCase):
         self.assertTrue(result.passed)
         self.assertTrue(result.accesses[0]["authorized"])
 
+    def test_standard_route_records_registered_source_access_without_fast_authorization_gate(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command="Get-Content fts/demo/source/main.xhtml",
+            ),
+            forbidden_roots=("fts/demo/test-cases",),
+            source_registry=(self.source,),
+            require_source_fallback_authorization=False,
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual("fts/demo/source/main.xhtml", result.accesses[0]["path"])
+        self.assertFalse(result.accesses[0]["authorized"])
+
     def test_late_fallback_message_cannot_authorize_prior_access(self) -> None:
         result = self.validate(
             event("cmd-1", "command_execution", command="Get-Content fts/demo/source/main.xhtml")

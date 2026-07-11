@@ -974,6 +974,7 @@ def compile_workflow_package(
                 raise StageRuntimeError("section_id cannot be derived from workflow canonical_test_cases")
             section_id = match.group("section").removeprefix("section-").replace("-", ".")
         builder = PreparedPackageBuilder(repo_root)
+        standard_route = execution_profile == STANDARD_PROFILE
         builder.build(
             output_root=output_root,
             package_id=package_id,
@@ -992,13 +993,17 @@ def compile_workflow_package(
             obligations=obligation_set,
             instructions=StageInstructionConfig(
                 role="writer",
-                scenario="writer.session_prepared_initial_draft",
+                scenario=(
+                    "writer.session_initial_draft"
+                    if standard_route
+                    else "writer.session_prepared_initial_draft"
+                ),
                 output_path=(attempt_root / "stage-output" / "draft.md").relative_to(repo_root).as_posix(),
                 attempt_root=attempt_root.relative_to(repo_root).as_posix(),
                 sandbox_policy="workspace_write",
-                timeout_seconds=180,
-                idle_timeout_seconds=60,
-                command_budget=12,
+                timeout_seconds=900 if standard_route else 180,
+                idle_timeout_seconds=180 if standard_route else 60,
+                command_budget=80 if standard_route else 12,
             ),
             execution_profile=execution_profile,
             unsupported_dimensions=unsupported_dimensions,

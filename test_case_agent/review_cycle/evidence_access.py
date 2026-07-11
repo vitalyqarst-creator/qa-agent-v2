@@ -39,6 +39,7 @@ def validate_evidence_access(
     allowed_stage_roots: Sequence[str] = (),
     allowed_command_fragments: Sequence[str] = (),
     reject_unlisted_commands: bool = False,
+    require_source_fallback_authorization: bool = True,
 ) -> EvidenceAccessResult:
     fallback_messages: list[str] = []
     commands: list[tuple[str, str, tuple[str, ...]]] = []
@@ -146,7 +147,7 @@ def validate_evidence_access(
                     "authorized": authorized,
                 }
             )
-            if not authorized:
+            if require_source_fallback_authorization and not authorized:
                 findings.append(
                     {
                         "id": "unapproved-full-source-access",

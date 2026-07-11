@@ -36,6 +36,8 @@ from test_case_agent.review_cycle.metrics import (
 )
 from test_case_agent.review_cycle.orchestration import CompletedStage, StageCompletionCoordinator
 from test_case_agent.review_cycle.prepared_package import (
+    FAST_EXECUTION_PROFILE,
+    STANDARD_EXECUTION_PROFILE,
     EvidenceInput,
     PreparedGap,
     PreparedObligation,
@@ -67,6 +69,7 @@ __all__ = [
     "ExpectedOutput",
     "EvidenceInput",
     "EvidenceAccessResult",
+    "FAST_EXECUTION_PROFILE",
     "FreshThreadSdkBackend",
     "ObligationGateResult",
     "PreparedGap",
@@ -85,6 +88,7 @@ __all__ = [
     "StageAttemptPaths",
     "StageBackend",
     "StageRuntimeError",
+    "STANDARD_EXECUTION_PROFILE",
     "StageMetrics",
     "StageMetricsRecorder",
     "artifact_ref",
