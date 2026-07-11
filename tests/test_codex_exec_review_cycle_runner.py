@@ -1093,6 +1093,14 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             ["gap-preserved", "invented-coverage"],
             variants[1]["properties"]["verdict"]["enum"],
         )
+        self.assertEqual(
+            0,
+            variants[1]["properties"]["test_case_ids"]["maxItems"],
+        )
+        self.assertEqual(
+            r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
+            variants[0]["properties"]["test_case_ids"]["items"]["pattern"],
+        )
 
     def test_standard_path_blocks_before_writer_when_reviewer_command_budget_cannot_read_inputs(self) -> None:
         executor = ScriptedExecutor()

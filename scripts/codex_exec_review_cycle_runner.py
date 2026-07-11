@@ -1187,6 +1187,7 @@ class CodexExecReviewCycleRunner:
                 "",
                 "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation, structured findings and a non-empty summary. Do not emit commentary outside the final JSON object.",
                 "Verdict compatibility is strict: testable obligations use covered, missing or incorrect; gap/unclear obligations use gap-preserved or invented-coverage. Preserve non-blocking constraint gaps in the note without changing a testable obligation to gap-preserved.",
+                "For every gap/unclear obligation, test_case_ids must be an empty array. Put its GAP-* identifier in note; GAP-* is not a test-case id.",
                 "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:END -->",
             ]
         )
@@ -2585,11 +2586,23 @@ class CodexExecReviewCycleRunner:
             )
             obligation_review_variants = []
             for obligation in obligations:
+                is_testable = obligation.coverage_status == "testable"
                 allowed_verdicts = (
                     ["covered", "incorrect", "missing"]
-                    if obligation.coverage_status == "testable"
+                    if is_testable
                     else ["gap-preserved", "invented-coverage"]
                 )
+                test_case_ids_schema: dict[str, Any] = {
+                    "type": "array",
+                    "items": {
+                        "type": "string",
+                        "pattern": r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
+                    },
+                }
+                if not is_testable:
+                    # Gap identifiers belong in the obligation note. A
+                    # non-testable obligation never references executable TCs.
+                    test_case_ids_schema["maxItems"] = 0
                 obligation_review_variants.append(
                     {
                         "type": "object",
@@ -2614,10 +2627,7 @@ class CodexExecReviewCycleRunner:
                                 "type": "string",
                                 "enum": allowed_verdicts,
                             },
-                            "test_case_ids": {
-                                "type": "array",
-                                "items": {"type": "string", "minLength": 1},
-                            },
+                            "test_case_ids": test_case_ids_schema,
                             "note": {"type": "string", "minLength": 1},
                         },
                     }
