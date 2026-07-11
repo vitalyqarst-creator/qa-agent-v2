@@ -4,7 +4,10 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_case_agent.review_cycle.prepared_compiler import compile_workflow_package
+from test_case_agent.review_cycle.prepared_compiler import (
+    PreparedCompilerDiagnostic,
+    compile_workflow_package,
+)
 from test_case_agent.review_cycle.prepared_package import load_prepared_package, load_obligations
 from test_case_agent.review_cycle.runtime import StageRuntimeError
 
@@ -444,8 +447,20 @@ coverage_gaps:
             encoding="utf-8",
         )
 
-        with self.assertRaisesRegex(StageRuntimeError, "rows have no coverage obligation: ATOM-002"):
+        with self.assertRaisesRegex(
+            PreparedCompilerDiagnostic,
+            "rows have no coverage obligation: ATOM-002",
+        ) as caught:
             self.compile()
+
+        self.assertEqual(caught.exception.code, "atom-without-obligation")
+        self.assertEqual(caught.exception.details[0]["id"], "ATOM-002")
+        self.assertEqual(caught.exception.details[0]["line"], 6)
+        self.assertTrue(
+            str(caught.exception.details[0]["artifact"]).endswith(
+                "atomic-requirements-ledger.md"
+            )
+        )
 
     def test_evidence_qualified_atom_status_routes_standard(self) -> None:
         ledger = self.design / "atomic-requirements-ledger.md"

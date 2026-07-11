@@ -11,7 +11,10 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from test_case_agent.review_cycle.prepared_compiler import compile_workflow_package  # noqa: E402
+from test_case_agent.review_cycle.prepared_compiler import (  # noqa: E402
+    PreparedCompilerDiagnostic,
+    compile_workflow_package,
+)
 from test_case_agent.review_cycle.runtime import StageRuntimeError  # noqa: E402
 
 
@@ -43,7 +46,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             section_id=args.section_id,
         )
     except (OSError, StageRuntimeError, ValueError) as exc:
-        print(json.dumps({"status": "blocked", "reason": str(exc)}, ensure_ascii=False))
+        payload: dict[str, object] = {"status": "blocked", "reason": str(exc)}
+        if isinstance(exc, PreparedCompilerDiagnostic):
+            payload["error_code"] = exc.code
+            payload["details"] = list(exc.details)
+        print(json.dumps(payload, ensure_ascii=False))
         return 2
     print(
         json.dumps(

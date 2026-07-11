@@ -68,6 +68,39 @@ OBLIGATION_DIMENSION_GROUPS = {
 }
 
 
+class PreparedCompilerDiagnostic(StageRuntimeError):
+    """Machine-readable compiler failure with bounded artifact anchors."""
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        details: Sequence[Mapping[str, object]] = (),
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.details = tuple(dict(item) for item in details)
+
+
+def _artifact_anchor(path: Path, token: str, repo_root: Path) -> dict[str, object]:
+    line = next(
+        (
+            line_no
+            for line_no, text in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), 1
+            )
+            if token in text
+        ),
+        None,
+    )
+    try:
+        artifact = path.relative_to(repo_root).as_posix()
+    except ValueError:
+        artifact = path.as_posix()
+    return {"id": token, "artifact": artifact, "line": line}
+
+
 def _scalar(value: str) -> Any:
     value = value.strip()
     if value in {"true", "false"}:
@@ -566,12 +599,26 @@ def compile_workflow_package(
     for obligation_row in obligation_rows:
         obligation_id = obligation_row["obligation_id"]
         if not re.fullmatch(r"OBL-[A-Za-z0-9_.-]+", obligation_id):
-            raise StageRuntimeError(
-                f"semantic degradation: invalid coverage obligation id {obligation_id}"
+            raise PreparedCompilerDiagnostic(
+                "invalid-obligation-id",
+                f"semantic degradation: invalid coverage obligation id {obligation_id}",
+                details=(
+                    {
+                        "kind": "invalid-obligation-id",
+                        **_artifact_anchor(obligations_path, obligation_id, repo_root),
+                    },
+                ),
             )
         if obligation_id in seen_obligation_ids:
-            raise StageRuntimeError(
-                f"semantic degradation: duplicate coverage obligation {obligation_id}"
+            raise PreparedCompilerDiagnostic(
+                "duplicate-obligation-id",
+                f"semantic degradation: duplicate coverage obligation {obligation_id}",
+                details=(
+                    {
+                        "kind": "duplicate-obligation-id",
+                        **_artifact_anchor(obligations_path, obligation_id, repo_root),
+                    },
+                ),
             )
         seen_obligation_ids.add(obligation_id)
         atom_tokens = [
@@ -585,8 +632,16 @@ def compile_workflow_package(
             )
         atom_id = atom_tokens[0]
         if atom_id not in ledger_by_atom:
-            raise StageRuntimeError(
-                f"semantic degradation: {obligation_id} references unknown atom {atom_id}"
+            raise PreparedCompilerDiagnostic(
+                "obligation-references-unknown-atom",
+                f"semantic degradation: {obligation_id} references unknown atom {atom_id}",
+                details=(
+                    {
+                        "kind": "obligation-references-unknown-atom",
+                        "obligation_id": obligation_id,
+                        **_artifact_anchor(obligations_path, atom_id, repo_root),
+                    },
+                ),
             )
         used_atoms.add(atom_id)
         row = ledger_by_atom[atom_id]
@@ -823,18 +878,36 @@ def compile_workflow_package(
                 )
     missing_obligation_atoms = sorted(set(ledger_by_atom) - used_atoms)
     if missing_obligation_atoms:
-        raise StageRuntimeError(
+        raise PreparedCompilerDiagnostic(
+            "atom-without-obligation",
             "semantic degradation: atomic ledger rows have no coverage obligation: "
-            + ", ".join(missing_obligation_atoms)
+            + ", ".join(missing_obligation_atoms),
+            details=tuple(
+                {
+                    "kind": "atom-without-obligation",
+                    **_artifact_anchor(ledger_path, atom_id, repo_root),
+                }
+                for atom_id in missing_obligation_atoms
+            ),
         )
     unsupported_dimensions = tuple(sorted(routed_unsupported_dimensions))
     execution_profile = STANDARD_PROFILE if unsupported_dimensions else FAST_PROFILE
     gaps: list[PreparedGap] = []
     orphan_gaps = sorted(set(known_gaps) - used_gaps)
     if orphan_gaps:
-        raise StageRuntimeError(
+        raise PreparedCompilerDiagnostic(
+            "gap-without-obligation",
             "semantic degradation: coverage gaps are not linked from the atomic ledger: "
-            + ", ".join(orphan_gaps)
+            + ", ".join(orphan_gaps),
+            details=tuple(
+                {
+                    "kind": "gap-without-obligation",
+                    **_artifact_anchor(gaps_path, gap_id, repo_root),
+                }
+                for gap_id in orphan_gaps
+            )
+            if gaps_path is not None
+            else (),
         )
     for gap_id in sorted(used_gaps):
         if gap_id not in known_gaps:
