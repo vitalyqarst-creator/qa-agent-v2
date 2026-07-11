@@ -129,6 +129,8 @@ A `standard-required` package keeps the same immutable package, obligation, seed
 
 Role-specific `stage-input.json` manifests must list the selected standard instruction files, compact source evidence, obligations and runner-owned gate artifacts. The runner enforces separate primary-context budgets before each LLM stage and writes `context-budget.json`; registered DOCX/XHTML/PDF sources are excluded from primary-context byte totals and remain fallback evidence.
 
+For prepared reviewer turns, the output schema binds every allowed `obligation_id -> atom_id` pair and its verdict enum to the obligation coverage status. Testable obligations may return only `covered | missing | incorrect`; `gap | unclear` obligations may return only `gap-preserved | invented-coverage`. The parser still verifies exact once-only coverage, draft hash, known TC ids and finding linkage after schema validation.
+
 ## Completion Gates
 
 Before writer output can reach reviewer:

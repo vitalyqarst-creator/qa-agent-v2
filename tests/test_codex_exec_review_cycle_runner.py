@@ -11,6 +11,7 @@ from pathlib import Path
 
 from test_case_agent.review_cycle.prepared_package import (
     EvidenceInput,
+    PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
     PreparedPackageBuilder,
@@ -449,24 +450,55 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         unsupported_dimensions=(),
         forbidden_evidence_roots=("fts/demo-ft/test-cases",),
         instruction_attempt_root: Path | None = None,
+        include_gap: bool = False,
     ) -> Path:
-        self.handoff_path.write_text("# Scope contract\n\nSRC-1: observable requirement.\n", encoding="utf-8")
-        obligations = PreparedObligationSet.create(
-            package_id="pkg-exec-001",
-            obligations=(
+        gap_evidence = "\nGAP-001: exact mapping is unresolved.\n" if include_gap else ""
+        self.handoff_path.write_text(
+            "# Scope contract\n\nSRC-1: observable requirement.\n" + gap_evidence,
+            encoding="utf-8",
+        )
+        prepared_obligations = [
+            PreparedObligation(
+                obligation_id="ATOM-001",
+                source_refs=("SRC-1",),
+                atomic_statement="The requirement is observable.",
+                observable_oracle="The visible result matches the requirement.",
+                test_intent="Verify the visible result.",
+                coverage_status="testable",
+                gap_id="",
+                dictionary_refs=(),
+                notes="",
+            )
+        ]
+        prepared_gaps = []
+        if include_gap:
+            prepared_obligations.append(
                 PreparedObligation(
-                    obligation_id="ATOM-001",
-                    source_refs=("SRC-1",),
-                    atomic_statement="The requirement is observable.",
-                    observable_oracle="The visible result matches the requirement.",
-                    test_intent="Verify the visible result.",
-                    coverage_status="testable",
-                    gap_id="",
+                    obligation_id="OBL-002",
+                    atom_id="ATOM-002",
+                    source_refs=("SRC-1", "GAP-001"),
+                    atomic_statement="Exact mapping is unresolved.",
+                    observable_oracle="",
+                    test_intent="Preserve the unresolved mapping as a gap.",
+                    coverage_status="gap",
+                    gap_id="GAP-001",
                     dictionary_refs=(),
                     notes="",
-                ),
-            ),
-            coverage_gaps=(),
+                )
+            )
+            prepared_gaps.append(
+                PreparedGap(
+                    gap_id="GAP-001",
+                    source_refs=("SRC-1",),
+                    problem="Exact mapping is unresolved.",
+                    handling="Do not invent executable coverage.",
+                    blocking=False,
+                )
+            )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-exec-001",
+            obligations=tuple(prepared_obligations),
+            coverage_gaps=tuple(prepared_gaps),
         )
         package_root = self.cycle_dir / "prepared-input" / "pkg-exec-001"
         bound_attempt = instruction_attempt_root or self.writer_attempt
@@ -589,6 +621,16 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(2, schema["properties"]["contract_version"]["const"])
         self.assertIn("obligation_reviews", schema["required"])
+        variants = schema["properties"]["obligation_reviews"]["items"]["anyOf"]
+        self.assertEqual(1, len(variants))
+        self.assertEqual(
+            "ATOM-001",
+            variants[0]["properties"]["obligation_id"]["const"],
+        )
+        self.assertEqual(
+            ["covered", "incorrect", "missing"],
+            variants[0]["properties"]["verdict"]["enum"],
+        )
         serialized_schema = json.dumps(schema, sort_keys=True)
         self.assertNotIn("uniqueItems", serialized_schema)
         reviewer_manifest = json.loads(
@@ -1033,6 +1075,24 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(report["cycle_artifacts_created"])
         self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
         self.assertFalse(self.writer_attempt.exists())
+
+    def test_prepared_review_schema_binds_verdict_enums_to_obligation_status(self) -> None:
+        package_path = self.build_prepared_package(include_gap=True)
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        schema = runner._review_contract_schema()
+        variants = schema["properties"]["obligation_reviews"]["items"]["anyOf"]
+
+        self.assertEqual(2, len(variants))
+        self.assertEqual(
+            ["covered", "incorrect", "missing"],
+            variants[0]["properties"]["verdict"]["enum"],
+        )
+        self.assertEqual(
+            ["gap-preserved", "invented-coverage"],
+            variants[1]["properties"]["verdict"]["enum"],
+        )
 
     def test_standard_path_blocks_before_writer_when_reviewer_command_budget_cannot_read_inputs(self) -> None:
         executor = ScriptedExecutor()

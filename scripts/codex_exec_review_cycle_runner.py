@@ -1186,7 +1186,7 @@ class CodexExecReviewCycleRunner:
                 "## Required final contract",
                 "",
                 "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation, structured findings and a non-empty summary. Do not emit commentary outside the final JSON object.",
-                "Verdict compatibility is strict: testable obligations use covered, missing, incorrect or invented-coverage; gap-preserved is reserved for gap/unclear obligations. Preserve non-blocking constraint gaps in the note without changing a testable obligation to gap-preserved.",
+                "Verdict compatibility is strict: testable obligations use covered, missing or incorrect; gap/unclear obligations use gap-preserved or invented-coverage. Preserve non-blocking constraint gaps in the note without changing a testable obligation to gap-preserved.",
                 "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:END -->",
             ]
         )
@@ -2572,6 +2572,48 @@ class CodexExecReviewCycleRunner:
 
     def _review_contract_schema(self) -> dict[str, Any]:
         if self._prepared_package is not None:
+            obligations = load_obligations(
+                self._prepared_artifact("atomic-obligations")
+            ).obligations
+            obligation_review_variants = []
+            for obligation in obligations:
+                allowed_verdicts = (
+                    ["covered", "incorrect", "missing"]
+                    if obligation.coverage_status == "testable"
+                    else ["gap-preserved", "invented-coverage"]
+                )
+                obligation_review_variants.append(
+                    {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "obligation_id",
+                            "atom_id",
+                            "verdict",
+                            "test_case_ids",
+                            "note",
+                        ],
+                        "properties": {
+                            "obligation_id": {
+                                "type": "string",
+                                "const": obligation.obligation_id,
+                            },
+                            "atom_id": {
+                                "type": "string",
+                                "const": obligation.traceability_atom_id,
+                            },
+                            "verdict": {
+                                "type": "string",
+                                "enum": allowed_verdicts,
+                            },
+                            "test_case_ids": {
+                                "type": "array",
+                                "items": {"type": "string", "minLength": 1},
+                            },
+                            "note": {"type": "string", "minLength": 1},
+                        },
+                    }
+                )
             return {
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -2593,31 +2635,9 @@ class CodexExecReviewCycleRunner:
                     },
                     "obligation_reviews": {
                         "type": "array",
-                        "minItems": 1,
-                        "items": {
-                            "type": "object",
-                            "additionalProperties": False,
-                            "required": [
-                                "obligation_id",
-                                "atom_id",
-                                "verdict",
-                                "test_case_ids",
-                                "note",
-                            ],
-                            "properties": {
-                                "obligation_id": {"type": "string", "minLength": 1},
-                                "atom_id": {"type": "string", "minLength": 1},
-                                "verdict": {
-                                    "type": "string",
-                                    "enum": sorted(PREPARED_REVIEW_VERDICTS),
-                                },
-                                "test_case_ids": {
-                                    "type": "array",
-                                    "items": {"type": "string", "minLength": 1},
-                                },
-                                "note": {"type": "string", "minLength": 1},
-                            },
-                        },
+                        "minItems": len(obligations),
+                        "maxItems": len(obligations),
+                        "items": {"anyOf": obligation_review_variants},
                     },
                     "findings": {
                         "type": "array",
