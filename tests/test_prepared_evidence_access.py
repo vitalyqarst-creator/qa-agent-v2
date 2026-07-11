@@ -167,6 +167,34 @@ class PreparedEvidenceAccessTests(unittest.TestCase):
 
         self.assertFalse(result.passed)
 
+    def test_standard_route_allows_exact_bounded_scripts_inventory(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command='rg --files scripts | rg "valid|prepared|stage"',
+            ),
+            forbidden_roots=("fts/demo/test-cases",),
+            source_registry=(self.source,),
+            allowed_bounded_scan_roots=("scripts",),
+        )
+
+        self.assertTrue(result.passed)
+
+    def test_bounded_scripts_allowance_does_not_allow_multiple_scan_roots(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command="rg --files scripts fts",
+            ),
+            forbidden_roots=("fts/demo/test-cases",),
+            source_registry=(self.source,),
+            allowed_bounded_scan_roots=("scripts",),
+        )
+
+        self.assertFalse(result.passed)
+
     def test_late_fallback_message_cannot_authorize_prior_access(self) -> None:
         result = self.validate(
             event("cmd-1", "command_execution", command="Get-Content fts/demo/source/main.xhtml")

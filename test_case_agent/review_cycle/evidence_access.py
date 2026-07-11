@@ -41,6 +41,7 @@ def validate_evidence_access(
     reject_unlisted_commands: bool = False,
     require_source_fallback_authorization: bool = True,
     allow_read_only_git_status_checks: bool = False,
+    allowed_bounded_scan_roots: Sequence[str] = (),
 ) -> EvidenceAccessResult:
     fallback_messages: list[str] = []
     commands: list[tuple[str, str, tuple[str, ...]]] = []
@@ -132,7 +133,15 @@ def validate_evidence_access(
             and "-recurse" in normalized_command
             and not any(scope in normalized_command for scope in ("prepared-input", "runner-input"))
         )
-        if broad_scan:
+        bounded_scan_allowed = any(
+            re.search(
+                rf"\brg\s+--files\s+{re.escape(_normalized(root).strip('/'))}(?:\s*\||\s*$)",
+                normalized_command,
+            )
+            is not None
+            for root in allowed_bounded_scan_roots
+        )
+        if broad_scan and not bounded_scan_allowed:
             findings.append(
                 {
                     "id": "unbounded-prepared-stage-scan",
