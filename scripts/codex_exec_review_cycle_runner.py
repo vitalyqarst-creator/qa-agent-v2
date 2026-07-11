@@ -520,6 +520,23 @@ class ProjectDraftStructureValidator:
                     ),
                 }
             )
+        placeholder_match = re.search(
+            r"<\s*(?:ID|идентификатор|значение|данные|fixture|test[- ]?data)\b[^>\r\n]*>",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if placeholder_match:
+            findings.append(
+                {
+                    "id": "unresolved-test-data-placeholder",
+                    "severity": "error",
+                    "message": (
+                        "Draft contains an unresolved angle-bracket test-data placeholder "
+                        f"{placeholder_match.group(0)!r}. Bind a concrete value or a named "
+                        "reproducible fixture before semantic review."
+                    ),
+                }
+            )
         return tuple(findings)
 
     def validate(
@@ -1169,6 +1186,7 @@ class CodexExecReviewCycleRunner:
                 "## Required final contract",
                 "",
                 "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation, structured findings and a non-empty summary. Do not emit commentary outside the final JSON object.",
+                "Verdict compatibility is strict: testable obligations use covered, missing, incorrect or invented-coverage; gap-preserved is reserved for gap/unclear obligations. Preserve non-blocking constraint gaps in the note without changing a testable obligation to gap-preserved.",
                 "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:END -->",
             ]
         )
@@ -2103,6 +2121,7 @@ class CodexExecReviewCycleRunner:
                     "The prepared package is a compact source-backed transport, not a fast semantic profile.",
                     "Use the verified inline projection as primary evidence. Do not repeat source discovery or broad document analysis.",
                     "A registered full source may be inspected only for a named OBL/ATOM whose inline evidence is insufficient; record the source path, locator and reason in the final summary.",
+                    "Angle-bracket test-data placeholders are forbidden. Bind concrete values or a named reproducible fixture with explicit selection/setup conditions; return blocked if neither is source-safe.",
                     "Do not use generated test cases, previous cycles or canary artifacts as requirement evidence.",
                     "Do not write under any production test-cases directory.",
                     f"Write the complete unsigned draft only to `{relative_path(self.draft_path, self.repo_root)}`.",

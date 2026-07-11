@@ -1491,6 +1491,23 @@ Document is created.
             {item["id"] for item in findings},
         )
 
+    def test_default_validator_rejects_unresolved_angle_bracket_test_data(self) -> None:
+        findings = runner_module.ProjectDraftStructureValidator._execution_readiness_findings(
+            "### Тестовые данные\n\n- Идентификатор заявки: `<ID заявки>`.\n"
+        )
+
+        self.assertEqual(
+            {"unresolved-test-data-placeholder"},
+            {item["id"] for item in findings},
+        )
+
+    def test_default_validator_allows_named_reproducible_fixture(self) -> None:
+        findings = runner_module.ProjectDraftStructureValidator._execution_readiness_findings(
+            "### Тестовые данные\n\n- Fixture: `CALC-SUMMARY-01`, подготовленная по описанным условиям.\n"
+        )
+
+        self.assertEqual((), findings)
+
     def test_existing_final_is_not_overwritten_by_default(self) -> None:
         self.final_path.write_text("existing final\n", encoding="utf-8")
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="accepted"))
