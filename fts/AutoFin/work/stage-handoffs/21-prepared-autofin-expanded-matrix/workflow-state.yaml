@@ -1,0 +1,21 @@
+ft_slug: AutoFin
+scope_slug: prepared-autofin-expanded-matrix
+current_stage: ft-scope-analyzer
+stage_status: blocked-input
+current_round: 0
+next_skill: none
+required_inputs:
+  - work/stage-handoffs/21-prepared-autofin-expanded-matrix/source-selection.md
+  - work/stage-handoffs/21-prepared-autofin-expanded-matrix/expanded-matrix-report.md
+  - work/stage-handoffs/21-prepared-autofin-expanded-matrix/scope-analyzer-session-log.md
+  - work/stage-handoffs/21-prepared-autofin-expanded-matrix/agent-decision-log.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/21-prepared-autofin-expanded-matrix/source-selection.md
+  expanded_matrix_report: work/stage-handoffs/21-prepared-autofin-expanded-matrix/expanded-matrix-report.md
+  session_log: work/stage-handoffs/21-prepared-autofin-expanded-matrix/scope-analyzer-session-log.md
+  decision_log: work/stage-handoffs/21-prepared-autofin-expanded-matrix/agent-decision-log.md
+open_questions: []
+blocking_reasons:
+  - client-addresses legacy obligation table does not cover 27 atomic rows
+  - document-files legacy obligation table does not cover 46 atomic rows
+  - document-recognition uses a placeholder obligation without an atom

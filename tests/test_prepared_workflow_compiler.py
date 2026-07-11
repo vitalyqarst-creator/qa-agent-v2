@@ -405,6 +405,86 @@ coverage_gaps:
         with self.assertRaisesRegex(StageRuntimeError, "link different GAP ids"):
             self.compile()
 
+    def test_ignores_closed_gap_rows(self) -> None:
+        gaps = self.design / "coverage-gaps.md"
+        gaps.write_text(
+            gaps.read_text(encoding="utf-8")
+            + """
+
+| gap_id | status | source_ref | gap_statement | downstream_handling |
+| --- | --- | --- | --- | --- |
+| `GAP-002` | `closed-by-tc` | `SRC-001` | Historical limitation. | No action. |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.gap_count, 1)
+
+    def test_expands_dictionary_child_hierarchy_into_evidence(self) -> None:
+        inventory = self.design / "dictionary-inventory.md"
+        inventory.write_text(
+            """| dictionary_id | active_values |
+| --- | --- |
+| `DICT-001` | `DICT-001.CAT-001` |
+| `DICT-001.CAT-001` | `A`; `B` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.dictionary_ref_count, 2)
+
+    def test_routes_evidence_qualified_dimension_to_standard(self) -> None:
+        matrix = self.design / "test-design-applicability-matrix.md"
+        matrix.write_text(
+            "| dimension | applicable |\n| --- | --- |\n| integration | yes_with_evidence |\n",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.execution_profile, "standard-required")
+        self.assertIn("evidence-qualified-evidence", result.unsupported_dimensions)
+        self.assertIn("integration-persistence", result.unsupported_dimensions)
+
+    def test_routes_navigation_obligation_to_standard_even_when_matrix_says_other(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
+                "`dictionary-source` | `dictionary-values-shown`",
+                "`action-navigation` | `navigation-target-opened`",
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.execution_profile, "standard-required")
+        self.assertIn("state-transition-or-navigation", result.unsupported_dimensions)
+
+    def test_preserves_gap_child_of_covered_atom(self) -> None:
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "`GSR 1; DICT-001`", "`GSR 1; DICT-001; GAP-001`"
+            ),
+            encoding="utf-8",
+        )
+        obligations = self.design / "coverage-obligation-table.md"
+        lines = obligations.read_text(encoding="utf-8").splitlines()
+        lines.append(
+            "| `OBL-003` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `dictionary-source` | `dictionary-closed-set` | Закрытость списка не доказана. | `GSR 1; SRC-001.P01` | `GAP-001` | `unclear` | `-` |"
+        )
+        obligations.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        result = self.compile()
+
+        self.assertEqual(result.obligation_count, 3)
+        self.assertEqual(result.gap_count, 1)
+
 
 if __name__ == "__main__":
     unittest.main()

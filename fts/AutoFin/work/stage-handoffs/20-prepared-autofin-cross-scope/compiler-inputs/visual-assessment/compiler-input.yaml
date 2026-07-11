@@ -1,0 +1,13 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: visual-assessment-criteria
+canonical_test_cases: test-cases/section-18-visual-assessment-criteria.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  atomic_requirements_ledger: work/test-design/section-18-visual-assessment-criteria/atomic-requirements-ledger.md
+  coverage_obligation_table: work/test-design/section-18-visual-assessment-criteria/coverage-obligation-table.md
+  package_test_design_plan: work/test-design/section-18-visual-assessment-criteria/package-test-design-plan.md
+  test_design_applicability_matrix: work/test-design/section-18-visual-assessment-criteria/test-design-applicability-matrix.md
+  dictionary_inventory: work/test-design/section-18-visual-assessment-criteria/dictionary-inventory.md
+  coverage_gaps: work/test-design/section-18-visual-assessment-criteria/coverage-gaps.md
+blocking_reasons: []

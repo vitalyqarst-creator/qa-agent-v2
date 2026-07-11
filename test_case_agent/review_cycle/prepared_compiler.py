@@ -47,6 +47,23 @@ DIMENSION_GROUPS = {
     "state": "dependency-state",
     "table-parity": "table-parity",
 }
+OBLIGATION_DIMENSION_GROUPS = {
+    "action-confirmation": "dependency-state",
+    "action-navigation": "state-transition-or-navigation",
+    "async": "integration-persistence",
+    "calculation": "numeric-boundaries",
+    "conditional-visibility": "dependency-state",
+    "dependency": "dependency-state",
+    "exact-length": "numeric-boundaries",
+    "file-upload": "file-upload",
+    "format-mask": "numeric-boundaries",
+    "generated-document": "generated-document",
+    "integration": "integration-persistence",
+    "numeric-format": "numeric-boundaries",
+    "persistence": "integration-persistence",
+    "print-form-output": "generated-document",
+    "repeatable-block": "repeatable-lifecycle",
+}
 
 
 def _scalar(value: str) -> Any:
@@ -211,6 +228,8 @@ def _gap_sections(path: Path | None) -> dict[str, PreparedGap]:
             or "Сохранить как coverage gap."
         )
         status_text = field_values.get("status", "").lower()
+        if status_text.startswith(("closed", "resolved", "not-applicable")):
+            continue
         result[match.group(1)] = PreparedGap(
             gap_id=match.group(1),
             source_refs=refs or (match.group(1),),
@@ -228,7 +247,9 @@ def _gap_sections(path: Path | None) -> dict[str, PreparedGap]:
             gap_id = row.get("gap_id", "")
             if not gap_id.startswith("GAP-") or gap_id in result:
                 continue
-            if row.get("status", "").lower() in {"closed", "resolved", "not-applicable"}:
+            if row.get("status", "").lower().startswith(
+                ("closed", "resolved", "not-applicable")
+            ):
                 continue
             refs = tuple(
                 dict.fromkeys(
@@ -346,9 +367,10 @@ def _execution_route(applicability_matrix: Path) -> tuple[str, tuple[str, ...]]:
         applicability = row["applicable"].lower()
         if applicability == "no":
             continue
-        if applicability not in {"yes", "unclear", "unclear-limited"}:
+        evidence_qualified = applicability.startswith("yes_with_")
+        if applicability not in {"yes", "unclear", "unclear-limited"} and not evidence_qualified:
             raise StageRuntimeError(
-                "test-design applicability must be yes, no or unclear: "
+                "test-design applicability must be yes, no, unclear or yes_with_*: "
                 f"{row['dimension']}={row['applicable']}"
             )
         dimension = re.sub(r"[^a-z0-9_.-]+", "-", row["dimension"].lower()).strip("-")
@@ -361,12 +383,34 @@ def _execution_route(applicability_matrix: Path) -> tuple[str, tuple[str, ...]]:
         if applicability == "unclear-limited":
             unsupported.add("limited-default-oracle")
             continue
+        if evidence_qualified:
+            qualifier = applicability.removeprefix("yes_with_").replace("_", "-")
+            unsupported.add(f"evidence-qualified-{qualifier}")
         if dimension in FAST_DIMENSIONS:
             continue
         normalized = DIMENSION_GROUPS.get(
             dimension, re.sub(r"[^a-z0-9_.-]+", "-", dimension).strip("-")
         )
         unsupported.add(normalized or "unclassified-dimension")
+    if unsupported:
+        return STANDARD_PROFILE, tuple(sorted(unsupported))
+    return FAST_PROFILE, ()
+
+
+def _route_obligation_dimensions(
+    rows: Sequence[Mapping[str, str]],
+    unsupported_dimensions: Sequence[str],
+) -> tuple[str, tuple[str, ...]]:
+    unsupported = set(unsupported_dimensions)
+    for row in rows:
+        if row.get("status", "").lower() != "covered":
+            continue
+        property_type = re.sub(
+            r"[^a-z0-9_.-]+", "-", row.get("property_type", "").lower()
+        ).strip("-")
+        mapped = OBLIGATION_DIMENSION_GROUPS.get(property_type)
+        if mapped:
+            unsupported.add(mapped)
     if unsupported:
         return STANDARD_PROFILE, tuple(sorted(unsupported))
     return FAST_PROFILE, ()
@@ -464,6 +508,9 @@ def compile_workflow_package(
             "status",
             "review_notes",
         },
+    )
+    execution_profile, unsupported_dimensions = _route_obligation_dimensions(
+        obligation_rows, unsupported_dimensions
     )
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
     ledger_by_atom: dict[str, dict[str, str]] = {}
@@ -563,18 +610,19 @@ def compile_workflow_package(
             if item.startswith("SRC-") or item.startswith("GSR")
         ]
         if status_raw in {"covered", "testable"}:
-            coverage_status = "testable"
+            atom_coverage_status = "testable"
         elif status_raw in {"unclear", "gap", "not-applicable"}:
-            coverage_status = status_raw
+            atom_coverage_status = status_raw
         else:
             raise StageRuntimeError(
                 f"semantic degradation: {atom_id} has unsupported coverage_status {status_raw}"
             )
-        if coverage_status == "testable":
-            if obligation_status != "covered":
+        if obligation_status == "covered":
+            if atom_coverage_status in {"gap", "unclear", "not-applicable"}:
                 raise StageRuntimeError(
-                    f"semantic degradation: {obligation_id} for testable {atom_id} must be covered"
+                    f"semantic degradation: {obligation_id} cannot cover {atom_coverage_status} {atom_id}"
                 )
+            coverage_status = "testable"
             if not obligation_row["planned_tc_or_gap"].startswith("TC-"):
                 raise StageRuntimeError(
                     f"semantic degradation: {obligation_id} covered row must link a TC id"
@@ -601,20 +649,28 @@ def compile_workflow_package(
                     )
                 used_gaps.add(constraint_gap_id)
             gap_id = ""
-        elif coverage_status in {"gap", "unclear"}:
-            if obligation_status not in {"gap", "unclear", "blocked"}:
+        elif obligation_status in {"gap", "unclear", "blocked"}:
+            coverage_status = "gap" if obligation_status == "gap" else "unclear"
+            if atom_coverage_status == "not-applicable":
                 raise StageRuntimeError(
-                    f"semantic degradation: {obligation_id} must preserve {atom_id} as gap/unclear"
+                    f"semantic degradation: {obligation_id} cannot attach a gap to not-applicable {atom_id}"
                 )
-            if len(set(atom_gap_tokens)) != 1 or len(set(obligation_gap_tokens)) != 1:
+            if len(set(obligation_gap_tokens)) != 1:
                 raise StageRuntimeError(
-                    f"semantic degradation: {obligation_id}/{atom_id} must link exactly one GAP id"
+                    f"semantic degradation: {obligation_id} must link exactly one GAP id"
                 )
-            if atom_gap_tokens[0] != obligation_gap_tokens[0]:
+            if atom_coverage_status in {"gap", "unclear"} and (
+                len(set(atom_gap_tokens)) != 1
+                or atom_gap_tokens[0] != obligation_gap_tokens[0]
+            ):
                 raise StageRuntimeError(
                     f"semantic degradation: {obligation_id} and {atom_id} link different GAP ids"
                 )
             gap_id = obligation_gap_tokens[0]
+            if atom_coverage_status == "testable" and gap_id not in atom_gap_tokens:
+                raise StageRuntimeError(
+                    f"semantic degradation: partial {obligation_id} gap is absent from {atom_id}"
+                )
             used_gaps.add(gap_id)
             if gap_id in known_gaps and known_gaps[gap_id].source_refs == (gap_id,):
                 raise StageRuntimeError(
@@ -625,8 +681,13 @@ def compile_workflow_package(
         else:
             if obligation_status not in {"not-applicable", "n/a"}:
                 raise StageRuntimeError(
-                    f"semantic degradation: {obligation_id} must be not-applicable"
+                    f"semantic degradation: {obligation_id} has unsupported status {obligation_status}"
                 )
+            if atom_coverage_status != "not-applicable":
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} cannot skip applicable {atom_id}"
+                )
+            coverage_status = "not-applicable"
             gap_id = ""
             oracle = ""
             intent = obligation_row["required_behavior"]
@@ -699,6 +760,21 @@ def compile_workflow_package(
                 "",
             ]
         )
+    pending_dictionary_ids = list(used_dicts)
+    while pending_dictionary_ids:
+        parent_id = pending_dictionary_ids.pop()
+        for child_id in (
+            token
+            for token in TOKEN.findall(dictionary_rows[parent_id]["active_values"])
+            if token.startswith("DICT-")
+        ):
+            if child_id not in dictionary_rows:
+                raise StageRuntimeError(
+                    f"semantic degradation: {parent_id} references missing child {child_id}"
+                )
+            if child_id not in used_dicts:
+                used_dicts.add(child_id)
+                pending_dictionary_ids.append(child_id)
     for dictionary_id in sorted(used_dicts):
         evidence_rows.extend(
             [f"## {dictionary_id}", "", " | ".join(dictionary_rows[dictionary_id].values()), ""]

@@ -1,0 +1,79 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-001",
+      "handling": "Do not test calculator screen, calculations, offer selection or exact prefill mapping without external FT `Калькулятор`.",
+      "problem": "Неопределённость зафиксирована в coverage gaps.",
+      "source_refs": [
+        "ATOM-003",
+        "ATOM-004"
+      ]
+    }
+  ],
+  "digest": "7cbc069da12be7a95500d399848366370d4e4bc6b6174c5143703a41614e9576",
+  "obligations": [
+    {
+      "atomic_statement": "Виджет `Краткая информация с калькулятора` виден в карточке заявки всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Виджет `Краткая информация с калькулятора` отображается в карточке заявки.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить наличие виджета."
+    },
+    {
+      "atomic_statement": "Виджет отображает краткую информацию с этапа `Кредитный калькулятор`: `Сумма кредита, Р`, `VIN`, `Ставка, %`, `Платеж в месяц, Р`, `Срок, мес.`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "Виджет отображает пять перечисленных параметров калькулятора.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Проверить состав краткой информации по тестовой заявке."
+    },
+    {
+      "atomic_statement": "При нажатии на виджет выполняется переход на этап `Кредитный калькулятор`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "Нажатие виджета открывает этап `Кредитный калькулятор`.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Нажать на виджет."
+    },
+    {
+      "atomic_statement": "При нажатии на кнопку `Кредитный калькулятор` открывается окно `Кредитный калькулятор` с предзаполненными данными по заявке.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "Кнопка `Кредитный калькулятор` открывает окно с предзаполненными данными заявки.",
+      "source_refs": [
+        "SRC-002"
+      ],
+      "test_intent": "Нажать кнопку `Кредитный калькулятор`."
+    }
+  ],
+  "package_id": "autofin-calculator-summary-expanded-v1",
+  "package_version": 4
+}

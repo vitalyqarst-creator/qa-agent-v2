@@ -1,0 +1,22 @@
+{
+  "coverage_gaps": [],
+  "digest": "12fa07bfe0f0d5de618fbc039d34ba31236e3e4fdc2c7b27affcd13627001e6b",
+  "obligations": [
+    {
+      "atomic_statement": "Действие `История заявки` открывает окно просмотра истории заявки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "При нажатии `История заявки` открывается окно просмотра истории заявки.",
+      "source_refs": [
+        "SRC-001"
+      ],
+      "test_intent": "Выбрать действие `История заявки` в карточке Универсальной заявки."
+    }
+  ],
+  "package_id": "autofin-common-actions-expanded-v1",
+  "package_version": 4
+}

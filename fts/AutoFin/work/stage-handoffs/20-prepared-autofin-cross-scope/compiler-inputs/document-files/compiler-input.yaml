@@ -1,0 +1,13 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: application-card-documents-and-questionnaire-files
+canonical_test_cases: test-cases/14-application-card-documents-and-questionnaire-files.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  atomic_requirements_ledger: work/test-design/14-application-card-documents-and-questionnaire-files/atomic-requirements-ledger.md
+  coverage_obligation_table: work/test-design/14-application-card-documents-and-questionnaire-files/coverage-obligation-table.md
+  package_test_design_plan: work/test-design/14-application-card-documents-and-questionnaire-files/package-test-design-plan.md
+  test_design_applicability_matrix: work/test-design/14-application-card-documents-and-questionnaire-files/test-design-applicability-matrix.md
+  dictionary_inventory: work/test-design/14-application-card-documents-and-questionnaire-files/dictionary-inventory.md
+  coverage_gaps: work/test-design/14-application-card-documents-and-questionnaire-files/coverage-gaps.md
+blocking_reasons: []

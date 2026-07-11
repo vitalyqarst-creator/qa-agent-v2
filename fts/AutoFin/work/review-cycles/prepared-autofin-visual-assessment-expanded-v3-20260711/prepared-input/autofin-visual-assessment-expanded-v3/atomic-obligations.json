@@ -1,0 +1,240 @@
+{
+  "coverage_gaps": [],
+  "digest": "356faf4ac42cf98f117b7e60f29130a14ce58e74a145cc661c8ad452cff23aa9",
+  "obligations": [
+    {
+      "atomic_statement": "Поле `Визуальная информация` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Поле `Визуальная информация` отображается всегда.",
+      "source_refs": [
+        "SRC-002.P01",
+        "SRC-001",
+        "SRC-002"
+      ],
+      "test_intent": "Поле `Визуальная информация` отображается всегда."
+    },
+    {
+      "atomic_statement": "Для поля `Визуальная информация` значение по умолчанию равно `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "Значение по умолчанию равно `Нет`.",
+      "source_refs": [
+        "SRC-002.P02",
+        "SRC-002"
+      ],
+      "test_intent": "Для поля `Визуальная информация` значение по умолчанию равно `Нет`."
+    },
+    {
+      "atomic_statement": "Выбор `Да` в поле `Визуальная информация` является условием показа параметров визуальной оценки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "Выбор `Да` является условием показа параметров визуальной оценки.",
+      "source_refs": [
+        "SRC-002.P03",
+        "SRC-002"
+      ],
+      "test_intent": "Выбор `Да` в поле `Визуальная информация` является условием показа параметров визуальной оценки."
+    },
+    {
+      "atomic_statement": "При `Визуальная информация = Да` отображается список `Параметры визуальной оценки`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "При `Визуальная информация = Да` отображается список параметров.",
+      "source_refs": [
+        "SRC-003.P01",
+        "SRC-003"
+      ],
+      "test_intent": "При `Визуальная информация = Да` отображается список `Параметры визуальной оценки`."
+    },
+    {
+      "atomic_statement": "Когда `Визуальная информация` не равна `Да`, список `Параметры визуальной оценки` не отображается.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-005",
+      "observable_oracle": "Когда значение не равно `Да`, список параметров не отображается.",
+      "source_refs": [
+        "SRC-003.P02",
+        "SRC-003"
+      ],
+      "test_intent": "Когда `Визуальная информация` не равна `Да`, список `Параметры визуальной оценки` не отображается."
+    },
+    {
+      "atomic_statement": "`Параметры визуальной оценки` использует активные группы и значения из `DICT-001`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-006",
+      "observable_oracle": "Список использует восемь категорий и их значения из `DICT-001`.",
+      "source_refs": [
+        "SRC-003.P03",
+        "SRC-003-SRC-052",
+        "DICT-001"
+      ],
+      "test_intent": "`Параметры визуальной оценки` использует активные группы и значения из `DICT-001`."
+    },
+    {
+      "atomic_statement": "Каждое обычное значение критерия из `DICT-001` доступно как checkbox value.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-007",
+      "observable_oracle": "Каждое обычное значение `DICT-001` доступно как checkbox.",
+      "source_refs": [
+        "SRC-003.P04",
+        "SRC-005-SRC-050",
+        "DICT-001"
+      ],
+      "test_intent": "Каждое обычное значение критерия из `DICT-001` доступно как checkbox value."
+    },
+    {
+      "atomic_statement": "Для `Параметры визуальной оценки` требуется минимум одно выбранное значение.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-008",
+      "observable_oracle": "Для параметров визуальной оценки требуется минимум одно выбранное значение.",
+      "source_refs": [
+        "SRC-003.P05",
+        "SRC-003"
+      ],
+      "test_intent": "Для `Параметры визуальной оценки` требуется минимум одно выбранное значение."
+    },
+    {
+      "atomic_statement": "Выбор checkbox `Другое` в блоке отображает текстовое поле комментария.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-009",
+      "observable_oracle": "Checkbox `Другое` отображает текстовое поле комментария.",
+      "source_refs": [
+        "SRC-003.P06",
+        "SRC-009",
+        "SRC-019",
+        "SRC-024",
+        "SRC-030",
+        "SRC-036",
+        "SRC-043",
+        "SRC-050",
+        "DICT-001"
+      ],
+      "test_intent": "Выбор checkbox `Другое` в блоке отображает текстовое поле комментария."
+    },
+    {
+      "atomic_statement": "Комментарий для выбранного `Другое` обязателен.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-010",
+      "observable_oracle": "Комментарий для выбранного `Другое` обязателен.",
+      "source_refs": [
+        "SRC-003.P07",
+        "SRC-009",
+        "SRC-019",
+        "SRC-024",
+        "SRC-030",
+        "SRC-036",
+        "SRC-043",
+        "SRC-050",
+        "DICT-001"
+      ],
+      "test_intent": "Комментарий для выбранного `Другое` обязателен."
+    },
+    {
+      "atomic_statement": "Standalone rows `Комментарий` являются отдельными полями ввода и не смешиваются с checkbox `Другое`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-011",
+      "observable_oracle": "Standalone-строки `Комментарий` являются отдельными полями ввода и не смешиваются с `Другое`.",
+      "source_refs": [
+        "SRC-010.P01",
+        "SRC-010",
+        "SRC-020",
+        "SRC-051",
+        "SRC-052"
+      ],
+      "test_intent": "Standalone rows `Комментарий` являются отдельными полями ввода и не смешиваются с checkbox `Другое`."
+    },
+    {
+      "atomic_statement": "Standalone поле `Комментарий` принимает введенный текст.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-012",
+      "observable_oracle": "Standalone-поле `Комментарий` принимает введённый текст.",
+      "source_refs": [
+        "SRC-010.P02",
+        "SRC-010",
+        "SRC-020",
+        "SRC-051",
+        "SRC-052"
+      ],
+      "test_intent": "Standalone поле `Комментарий` принимает введенный текст."
+    },
+    {
+      "atomic_statement": "В checkbox list можно выбрать несколько обычных значений критериев.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-013",
+      "observable_oracle": "В checkbox list можно одновременно выбрать несколько обычных значений.",
+      "source_refs": [
+        "SRC-002.P04",
+        "SRC-003.P08",
+        "SRC-002",
+        "SRC-003",
+        "SRC-005-SRC-050",
+        "DICT-001"
+      ],
+      "test_intent": "В checkbox list можно выбрать несколько обычных значений критериев."
+    }
+  ],
+  "package_id": "autofin-visual-assessment-expanded-v3",
+  "package_version": 4
+}
