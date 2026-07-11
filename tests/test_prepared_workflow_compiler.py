@@ -35,10 +35,20 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
         (self.design / "package-test-design-plan.md").write_text(
             """# Package Test Design Plan
 
-| linked_atoms | planned_check | single_expected_behavior | status |
-| --- | --- | --- | --- |
-| `ATOM-001` | Проверить все значения. | Отображаются все и только значения DICT-001. | `covered` |
-| `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `gap` |
+| linked_atoms | planned_check | single_expected_behavior | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- |
+| `ATOM-001` | Проверить все значения. | Отображаются все и только значения DICT-001. | `TC-001` | `covered` |
+| `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "coverage-obligation-table.md").write_text(
+            """# Coverage Obligation Table
+
+| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `dictionary-source` | `dictionary-values-shown` | Отображаются все и только значения DICT-001. | `GSR 1; SRC-001.P01; DICT-001` | `TC-001` | `covered` | `-` |
+| `OBL-002` | `WP-01` | `SRC-001.P02` | `ATOM-002` | `expected-result` | `unknown-error-text` | Не создавать негативный кейс до уточнения. | `GSR 2; SRC-001.P02` | `GAP-001` | `gap` | `-` |
 """,
             encoding="utf-8",
         )
@@ -90,11 +100,13 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
         )
         self.state.write_text(
             """ft_slug: demo
+prepared_compiler_contract_version: 2
 scope_slug: demo-scope
 canonical_test_cases: test-cases/4.2-demo-scope.md
 latest_artifacts:
   source_selection: work/stage-handoffs/01-demo/source-selection.md
   atomic_requirements_ledger: work/test-design/demo-scope/atomic-requirements-ledger.md
+  coverage_obligation_table: work/test-design/demo-scope/coverage-obligation-table.md
   package_test_design_plan: work/test-design/demo-scope/package-test-design-plan.md
   test_design_applicability_matrix: work/test-design/demo-scope/test-design-applicability-matrix.md
   dictionary_inventory: work/test-design/demo-scope/dictionary-inventory.md
@@ -143,9 +155,9 @@ coverage_gaps:
         self.assertEqual(obligations.obligations[1].gap_id, "GAP-001")
 
     def test_blocks_testable_atom_without_plan_oracle(self) -> None:
-        plan = self.design / "package-test-design-plan.md"
-        plan.write_text(
-            plan.read_text(encoding="utf-8").replace(
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
                 "Отображаются все и только значения DICT-001.", "none_required:blocked"
             ),
             encoding="utf-8",
@@ -338,6 +350,59 @@ coverage_gaps:
             encoding="utf-8",
         )
         with self.assertRaisesRegex(StageRuntimeError, "duplicate workflow YAML key"):
+            self.compile()
+
+    def test_blocks_missing_compiler_contract_version(self) -> None:
+        self.state.write_text(
+            self.state.read_text(encoding="utf-8").replace(
+                "prepared_compiler_contract_version: 2\n", ""
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "migrate_prepared_compiler_contract"):
+            self.compile()
+
+    def test_blocks_duplicate_coverage_obligation(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        lines = obligations.read_text(encoding="utf-8").splitlines()
+        lines.append(lines[-1])
+        obligations.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        with self.assertRaisesRegex(StageRuntimeError, "duplicate coverage obligation OBL-002"):
+            self.compile()
+
+    def test_blocks_obligation_link_to_unknown_atom(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace("`ATOM-002`", "`ATOM-999`"),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "references unknown atom ATOM-999"):
+            self.compile()
+
+    def test_blocks_atom_without_coverage_obligation(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        lines = obligations.read_text(encoding="utf-8").splitlines()
+        obligations.write_text(
+            "\n".join(line for line in lines if "`OBL-002`" not in line) + "\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "rows have no coverage obligation: ATOM-002"):
+            self.compile()
+
+    def test_blocks_atom_and_obligation_gap_mismatch(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
+                "| `GAP-001` | `gap` |", "| `GAP-999` | `gap` |"
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "link different GAP ids"):
             self.compile()
 
 

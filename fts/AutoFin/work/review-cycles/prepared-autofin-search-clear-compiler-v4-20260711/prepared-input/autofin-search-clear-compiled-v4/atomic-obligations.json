@@ -1,0 +1,68 @@
+{
+  "coverage_gaps": [],
+  "digest": "e8b7accec21b0f99af8f26edc80179df7150a0729b020fc3308ab5d903f6ca2e",
+  "obligations": [
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает примененные фильтры поиска.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Нажатие `Очистить` очищает примененное значение фильтра.",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P01"
+      ],
+      "test_intent": "Проверить возврат измененного фильтра к initial/default state после `Очистить`."
+    },
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает примененные сортировки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "Нажатие `Очистить` очищает примененную сортировку.",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P02"
+      ],
+      "test_intent": "Проверить возврат примененной сортировки к initial/default state после `Очистить`."
+    },
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает постраничность.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "Нажатие `Очистить` очищает постраничность.",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P03"
+      ],
+      "test_intent": "Проверить возврат измененной постраничности к initial/default state после `Очистить`."
+    },
+    {
+      "atomic_statement": "Нажатие `Очистить` очищает состояние выделения строк.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "Нажатие `Очистить` очищает состояние выделения строк.",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P04"
+      ],
+      "test_intent": "Проверить возврат выделения строк к initial/default state после `Очистить`."
+    }
+  ],
+  "package_id": "autofin-search-clear-compiled-v4",
+  "package_version": 4
+}

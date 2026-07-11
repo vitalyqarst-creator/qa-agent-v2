@@ -27,7 +27,7 @@ PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
-ATOM_ID = re.compile(r"ATOM-[A-Za-z0-9._-]+")
+OBLIGATION_ID = re.compile(r"(?:ATOM|OBL)-[A-Za-z0-9._-]+")
 GAP_ID = re.compile(r"GAP-[A-Za-z0-9._-]+")
 DICT_ID = re.compile(r"DICT-[A-Za-z0-9._-]+")
 REFERENCE_SELECTOR = re.compile(
@@ -221,7 +221,7 @@ class PreparedObligation:
     constraint_gap_ids: tuple[str, ...] = ()
 
     def validate(self) -> None:
-        _identifier(self.obligation_id, "obligation_id", ATOM_ID)
+        _identifier(self.obligation_id, "obligation_id", OBLIGATION_ID)
         if not self.source_refs:
             raise StageRuntimeError(f"{self.obligation_id}.source_refs must not be empty")
         for value in self.source_refs:
@@ -533,7 +533,7 @@ class PreparedStagePackage:
                 )
                 if not has_docx_truth or not has_xhtml_machine_source:
                     raise StageRuntimeError(
-                        "package version 3 fast path requires DOCX source-of-truth and "
+                        "package version 4 fast path requires DOCX source-of-truth and "
                         "XHTML machine-readable source registry entries"
                     )
         if not self.forbidden_evidence_roots:

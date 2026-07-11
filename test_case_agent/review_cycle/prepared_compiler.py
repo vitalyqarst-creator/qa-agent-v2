@@ -16,7 +16,8 @@ from .prepared_package import (
 from .runtime import StageRuntimeError
 
 
-TOKEN = re.compile(r"\b(?:ATOM|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\bGSR\s+\d+\b")
+TOKEN = re.compile(r"\b(?:ATOM|OBL|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\bGSR\s+\d+\b")
+COMPILER_CONTRACT_VERSION = 2
 SECTION_PREFIX = re.compile(r"^(?P<section>(?:section-)?\d+(?:[-.]\d+)*)-")
 FAST_PROFILE = "simple-field-property"
 STANDARD_PROFILE = "standard-required"
@@ -401,6 +402,12 @@ def compile_workflow_package(
         raise StageRuntimeError(f"expected FT package is missing: fts/{expected_ft_slug}")
     _within(workflow_state, expected_ft_root, "workflow-state")
     state = load_workflow_state(workflow_state)
+    contract_version = state.get("prepared_compiler_contract_version")
+    if contract_version != COMPILER_CONTRACT_VERSION:
+        raise StageRuntimeError(
+            "workflow-state prepared_compiler_contract_version must be "
+            f"{COMPILER_CONTRACT_VERSION}; run scripts/migrate_prepared_compiler_contract.py"
+        )
     ft_slug = str(state.get("ft_slug", ""))
     scope_slug = str(state.get("scope_slug", ""))
     if not ft_slug or not scope_slug:
@@ -428,6 +435,7 @@ def compile_workflow_package(
 
     source_selection_path = _artifact(ft_root, state, "source_selection")
     ledger_path = _artifact(ft_root, state, "atomic_requirements_ledger")
+    obligations_path = _artifact(ft_root, state, "coverage_obligation_table")
     plan_path = _artifact(ft_root, state, "package_test_design_plan")
     applicability_path = _artifact(ft_root, state, "test_design_applicability_matrix")
     gaps_path = _artifact(ft_root, state, "coverage_gaps", required=False)
@@ -435,12 +443,37 @@ def compile_workflow_package(
     assert (
         source_selection_path is not None
         and ledger_path is not None
+        and obligations_path is not None
         and plan_path is not None
         and applicability_path is not None
     )
     execution_profile, unsupported_dimensions = _execution_route(applicability_path)
     ledger = _table_with(ledger_path, {"atom_id", "atomic_statement", "coverage_status"})
+    obligation_rows = _table_with(
+        obligations_path,
+        {
+            "obligation_id",
+            "package_id",
+            "source_property_id",
+            "linked_atom_id",
+            "property_type",
+            "obligation_class",
+            "required_behavior",
+            "source_ref",
+            "planned_tc_or_gap",
+            "status",
+            "review_notes",
+        },
+    )
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
+    ledger_by_atom: dict[str, dict[str, str]] = {}
+    for row in ledger:
+        atom_id = row["atom_id"]
+        if not re.fullmatch(r"ATOM-[A-Za-z0-9_.-]+", atom_id):
+            raise StageRuntimeError(f"semantic degradation: invalid atom id {atom_id}")
+        if atom_id in ledger_by_atom:
+            raise StageRuntimeError(f"semantic degradation: duplicate atom {atom_id}")
+        ledger_by_atom[atom_id] = row
     plan_by_atom: dict[str, list[dict[str, str]]] = {}
     for row in plan:
         for atom in TOKEN.findall(row.get("linked_atoms", "")):
@@ -463,10 +496,38 @@ def compile_workflow_package(
     obligations: list[PreparedObligation] = []
     used_gaps: set[str] = set()
     used_dicts: set[str] = set()
+    used_atoms: set[str] = set()
+    seen_obligation_ids: set[str] = set()
     evidence_rows: list[str] = ["# Compiled Prepared Evidence", ""]
-    for row in ledger:
-        atom_id = row["atom_id"]
+    for obligation_row in obligation_rows:
+        obligation_id = obligation_row["obligation_id"]
+        if not re.fullmatch(r"OBL-[A-Za-z0-9_.-]+", obligation_id):
+            raise StageRuntimeError(
+                f"semantic degradation: invalid coverage obligation id {obligation_id}"
+            )
+        if obligation_id in seen_obligation_ids:
+            raise StageRuntimeError(
+                f"semantic degradation: duplicate coverage obligation {obligation_id}"
+            )
+        seen_obligation_ids.add(obligation_id)
+        atom_tokens = [
+            token
+            for token in TOKEN.findall(obligation_row["linked_atom_id"])
+            if token.startswith("ATOM-")
+        ]
+        if len(set(atom_tokens)) != 1:
+            raise StageRuntimeError(
+                f"semantic degradation: {obligation_id} must link exactly one ATOM id"
+            )
+        atom_id = atom_tokens[0]
+        if atom_id not in ledger_by_atom:
+            raise StageRuntimeError(
+                f"semantic degradation: {obligation_id} references unknown atom {atom_id}"
+            )
+        used_atoms.add(atom_id)
+        row = ledger_by_atom[atom_id]
         status_raw = row["coverage_status"].lower()
+        obligation_status = obligation_row["status"].lower()
         linked = plan_by_atom.get(atom_id, [])
         constraint_gap_tokens = list(
             dict.fromkeys(TOKEN.findall(row.get("constraint_gap_ids", "")))
@@ -475,15 +536,30 @@ def compile_workflow_package(
             raise StageRuntimeError(
                 f"semantic degradation: {atom_id} constraint_gap_ids must contain only GAP ids"
             )
-        gap_tokens = list(
-            dict.fromkeys(item for item in TOKEN.findall(" ".join(row.values())) if item.startswith("GAP-"))
+        atom_gap_tokens = list(
+            dict.fromkeys(
+                item
+                for item in TOKEN.findall(" ".join(row.values()))
+                if item.startswith("GAP-") and item not in constraint_gap_tokens
+            )
+        )
+        obligation_gap_tokens = list(
+            dict.fromkeys(
+                item
+                for item in TOKEN.findall(" ".join(obligation_row.values()))
+                if item.startswith("GAP-")
+            )
         )
         dict_tokens = list(
-            dict.fromkeys(item for item in TOKEN.findall(" ".join(row.values())) if item.startswith("DICT-"))
+            dict.fromkeys(
+                item
+                for item in TOKEN.findall(" ".join(row.values()) + " " + " ".join(obligation_row.values()))
+                if item.startswith("DICT-")
+            )
         )
         source_tokens = [
             item
-            for item in TOKEN.findall(" ".join(row.values()))
+            for item in TOKEN.findall(" ".join(row.values()) + " " + " ".join(obligation_row.values()))
             if item.startswith("SRC-") or item.startswith("GSR")
         ]
         if status_raw in {"covered", "testable"}:
@@ -495,10 +571,25 @@ def compile_workflow_package(
                 f"semantic degradation: {atom_id} has unsupported coverage_status {status_raw}"
             )
         if coverage_status == "testable":
+            if obligation_status != "covered":
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} for testable {atom_id} must be covered"
+                )
+            if not obligation_row["planned_tc_or_gap"].startswith("TC-"):
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} covered row must link a TC id"
+                )
             viable = [item for item in linked if item.get("status", "covered").lower() in {"covered", "testable", "planned"}]
             if not viable:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no testable design-plan row")
-            oracle = "; ".join(dict.fromkeys(item["single_expected_behavior"] for item in viable))
+            if not any(
+                obligation_row["planned_tc_or_gap"] in item.get("planned_tc_or_gap", "")
+                for item in viable
+            ):
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} TC link is absent from the design plan"
+                )
+            oracle = obligation_row["required_behavior"]
             intent = "; ".join(dict.fromkeys(item["planned_check"] for item in viable))
             if not oracle or "none_required" in oracle.lower():
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no observable plan oracle")
@@ -511,33 +602,47 @@ def compile_workflow_package(
                 used_gaps.add(constraint_gap_id)
             gap_id = ""
         elif coverage_status in {"gap", "unclear"}:
-            if len(set(gap_tokens)) != 1:
-                raise StageRuntimeError(f"semantic degradation: {atom_id} must link exactly one GAP id")
-            gap_id = gap_tokens[0]
+            if obligation_status not in {"gap", "unclear", "blocked"}:
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} must preserve {atom_id} as gap/unclear"
+                )
+            if len(set(atom_gap_tokens)) != 1 or len(set(obligation_gap_tokens)) != 1:
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id}/{atom_id} must link exactly one GAP id"
+                )
+            if atom_gap_tokens[0] != obligation_gap_tokens[0]:
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} and {atom_id} link different GAP ids"
+                )
+            gap_id = obligation_gap_tokens[0]
             used_gaps.add(gap_id)
             if gap_id in known_gaps and known_gaps[gap_id].source_refs == (gap_id,):
                 raise StageRuntimeError(
                     f"semantic degradation: {gap_id} has no exact source reference"
                 )
             oracle = ""
-            intent = linked[0]["planned_check"] if linked else "Не создавать исполнимое покрытие до закрытия gap."
+            intent = obligation_row["required_behavior"]
         else:
+            if obligation_status not in {"not-applicable", "n/a"}:
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} must be not-applicable"
+                )
             gap_id = ""
             oracle = ""
-            intent = "Не создавать отдельный тест-кейс для metadata-only утверждения."
+            intent = obligation_row["required_behavior"]
         for dictionary_id in dict_tokens:
             if dictionary_id not in dictionary_rows:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} references missing {dictionary_id}")
             used_dicts.add(dictionary_id)
         source_refs = tuple(dict.fromkeys(source_tokens + dict_tokens))
         if not source_refs:
-            source_ref = row.get("source_ref") or row.get("source_property_id")
+            source_ref = obligation_row.get("source_ref") or row.get("source_ref") or row.get("source_property_id")
             if not source_ref:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no source reference")
             source_refs = (source_ref,)
         obligations.append(
             PreparedObligation(
-                obligation_id=atom_id,
+                obligation_id=obligation_id,
                 source_refs=source_refs,
                 atomic_statement=row["atomic_statement"],
                 observable_oracle=oracle,
@@ -556,9 +661,23 @@ def compile_workflow_package(
                 constraint_gap_ids=tuple(constraint_gap_tokens),
             )
         )
-        evidence_rows.extend([f"## {atom_id}", "", " | ".join(row.values()), ""])
+        evidence_rows.extend(
+            [
+                f"## {obligation_id}",
+                "",
+                "- obligation: " + " | ".join(obligation_row.values()),
+                "- atom: " + " | ".join(row.values()),
+                "",
+            ]
+        )
         for item in linked:
             evidence_rows.extend([f"- plan: {' | '.join(item.values())}", ""])
+    missing_obligation_atoms = sorted(set(ledger_by_atom) - used_atoms)
+    if missing_obligation_atoms:
+        raise StageRuntimeError(
+            "semantic degradation: atomic ledger rows have no coverage obligation: "
+            + ", ".join(missing_obligation_atoms)
+        )
     gaps: list[PreparedGap] = []
     orphan_gaps = sorted(set(known_gaps) - used_gaps)
     if orphan_gaps:

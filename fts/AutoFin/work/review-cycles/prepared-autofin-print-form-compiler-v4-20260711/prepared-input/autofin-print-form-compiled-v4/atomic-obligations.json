@@ -1,0 +1,375 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-001",
+      "handling": "В тест-кейсах используется значение из PDF, потому что PDF явно содержит шаблон, а прежняя scope-clarification уже закрывала это как ожидаемое значение.",
+      "problem": "В XHTML значение шаблона пустое, в PDF указано `Анкета клиента 04.02.2026.pdf`.",
+      "source_refs": [
+        "FT4AutoFinFinal.xhtml`, section `4.4`, document table row `Заявление-анкета на получение потребительского кредита`, column `Шаблон"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-002",
+      "handling": "Точное написание тегов для oracle берется из `FT4AutoFinFinal.docx`, table 9, column `Тег`; XHTML остается приоритетным источником структуры и требований.",
+      "problem": "XHTML и PDF содержат визуальные/конвертационные пробелы внутри части тегов, например `<last_ n ame>`, `<code_ word >`, `< d ividends>`, `<serial_number _1 >`.",
+      "source_refs": [
+        "`FT4AutoFinFinal.xhtml`, tag table; `FT4AutoFinFinal.pdf`, pages 36-39"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-003",
+      "handling": "В шагах используется формулировка `сформировать печатную форму доступным в системе способом`; проверка UI entrypoint остается вне scope.",
+      "problem": "Раздел описывает формирование печатной формы и маппинг, но не задает UI-кнопку, API, роль, статус заявки или точку запуска генерации.",
+      "source_refs": [
+        "FT4AutoFinFinal.xhtml`, section `4.4"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-004",
+      "handling": "`<job_start>` исключен из executable TC до появления расчетного oracle или раскрытого справочника `Стаж работы`. Остальные строки блока доходов покрыты `TC-AF-PFG-015`.",
+      "problem": "Краткое описание указывает расчет `Дата (сегодня (Месяц.год)) - значение из справочника «Стаж работы»`, но раздел `4.4` не раскрывает справочник и oracle расчета.",
+      "source_refs": [
+        "FT4AutoFinFinal.xhtml`, section `4.4`, tag row `<job_start>"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-005",
+      "handling": "Фикстуры задают требуемое состояние заявки; способ подготовки данных не проверяется в этом scope.",
+      "problem": "Раздел `4.4` называет исходные поля анкеты, но не описывает, как создать все исходные состояния через UI.",
+      "source_refs": [
+        "`FT4AutoFinFinal.xhtml`, section `4.4`, all mapping rows"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-006",
+      "handling": "Executable TC на конфигурационную привязку шаблона удален. Black-box риск неправильных тегов покрывается `TC-AF-PFG-002` через отсутствие незаполненных/неизвестных плейсхолдеров в сформированном PDF.",
+      "problem": "ФТ требует, чтобы шаблон был привязан к типу, собранному на основе тегов, и настроен на основе этого типа.",
+      "source_refs": [
+        "`FT4AutoFinFinal.xhtml`, section `4.4`, paragraph before tag table"
+      ]
+    }
+  ],
+  "digest": "beaadbbd508dba2374d375ae05f36aaa2956968b27da0f2d98ea138ab6f63941",
+  "obligations": [
+    {
+      "atomic_statement": "Система автоматически формирует печатную форму `Заявление-анкета на получение потребительского кредита` на основании данных о Клиенте из Системы.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Система формирует PDF заявления-анкеты на основании данных Клиента.",
+      "source_refs": [
+        "4.4 paragraph; PDF p.36"
+      ],
+      "test_intent": "Сформировать заявление-анкету и проверить используемый шаблон"
+    },
+    {
+      "atomic_statement": "Для печатной формы используется шаблон `Анкета клиента 04.02.2026.pdf`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "PDF сформирован по шаблону `Анкета клиента 04.02.2026.pdf`.",
+      "source_refs": [
+        "4.4 document table; PDF p.36"
+      ],
+      "test_intent": "Сформировать заявление-анкету и проверить используемый шаблон"
+    },
+    {
+      "atomic_statement": "Шаблон привязан к типу, собранному на основе тегов из таблицы раздела `4.4`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-006",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "",
+      "source_refs": [
+        "4.4 paragraph before tag table"
+      ],
+      "test_intent": "Не создавать executable check без наблюдаемого артефакта конфигурации."
+    },
+    {
+      "atomic_statement": "Теги в шаблоне называются так же, как в колонке `Тег`.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "В сформированном PDF нет остаточных плейсхолдеров `<...>`.",
+      "source_refs": [
+        "4.4 paragraph before tag table"
+      ],
+      "test_intent": "Проверить отсутствие незаполненных и неизвестных плейсхолдеров после генерации"
+    },
+    {
+      "atomic_statement": "Теги блока `Параметры о кредите` заполняются данными автомобиля и кредита.",
+      "constraint_gap_ids": [
+        "GAP-005"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-005.",
+      "obligation_id": "OBL-005",
+      "observable_oracle": "Параметры кредита и автомобиля в PDF соответствуют заявке.",
+      "source_refs": [
+        "4.4 tag rows 1-4"
+      ],
+      "test_intent": "Проверить заполнение параметров кредита и автомобиля"
+    },
+    {
+      "atomic_statement": "Теги персональных, паспортных данных и прежних ФИО заполняются согласно описанию строк таблицы.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-006",
+      "observable_oracle": "Персональные и паспортные данные в PDF соответствуют заявке.",
+      "source_refs": [
+        "4.4 tag rows 5-19"
+      ],
+      "test_intent": "Проверить заполнение персональных, паспортных данных и прежних ФИО"
+    },
+    {
+      "atomic_statement": "Чек-бокс `Зарегистрированный брак` зависит от значения `Семейное положение`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-002"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-007",
+      "observable_oracle": "Для каждой ветки выставлен только ожидаемый чек-бокс брака.",
+      "source_refs": [
+        "DICT-002"
+      ],
+      "test_intent": "Проверить ветки чек-бокса зарегистрированного брака"
+    },
+    {
+      "atomic_statement": "Чек-бокс социального статуса выставляется для выбранного значения социального статуса.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-003"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-008",
+      "observable_oracle": "Для выбранного социального статуса выставлен соответствующий чек-бокс.",
+      "source_refs": [
+        "DICT-003"
+      ],
+      "test_intent": "Проверить чек-боксы социального статуса по значениям справочника"
+    },
+    {
+      "atomic_statement": "Блок фактического адреса заполняется адресными тегами и чек-боксом совпадения с адресом регистрации.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-009",
+      "observable_oracle": "При совпадении адресов теги и чек-бокс соответствуют equal-branch.",
+      "source_refs": [
+        "4.4 tag rows 21-29"
+      ],
+      "test_intent": "Проверить ветку совпадения фактического адреса с адресом регистрации; Проверить ветку отличия фактического адреса от адреса регистрации"
+    },
+    {
+      "atomic_statement": "Блок фактического адреса заполняется адресными тегами и чек-боксом совпадения с адресом регистрации.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-010",
+      "observable_oracle": "При различии адресов теги и чек-бокс соответствуют different-branch.",
+      "source_refs": [
+        "4.4 tag rows 21-29"
+      ],
+      "test_intent": "Проверить ветку совпадения фактического адреса с адресом регистрации; Проверить ветку отличия фактического адреса от адреса регистрации"
+    },
+    {
+      "atomic_statement": "Контактные теги мобильного телефона, email и домашнего телефона заполняются данными заявки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-011",
+      "observable_oracle": "Мобильный телефон, email и домашний телефон в PDF соответствуют заявке.",
+      "source_refs": [
+        "4.4 tag rows 30-31, 33"
+      ],
+      "test_intent": "Проверить прямой маппинг мобильного телефона, email и домашнего телефона"
+    },
+    {
+      "atomic_statement": "`<work_phone>` заполняется только если клиент не является неработающим пенсионером.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-012",
+      "observable_oracle": "Для работающего клиента `<work_phone>` заполнен значением из заявки.",
+      "source_refs": [
+        "4.4 tag row 32"
+      ],
+      "test_intent": "Проверить вывод рабочего телефона для работающего клиента; Проверить отсутствие заполненного рабочего телефона для неработающего пенсионера"
+    },
+    {
+      "atomic_statement": "`<work_phone>` заполняется только если клиент не является неработающим пенсионером.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-013",
+      "observable_oracle": "Для неработающего пенсионера `<work_phone>` не выводится как заполненное значение.",
+      "source_refs": [
+        "4.4 tag row 32"
+      ],
+      "test_intent": "Проверить вывод рабочего телефона для работающего клиента; Проверить отсутствие заполненного рабочего телефона для неработающего пенсионера"
+    },
+    {
+      "atomic_statement": "Блок контактного лица заполняется ФИО, датой рождения, телефоном и чек-боксом отношения к заявителю.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-004"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-014",
+      "observable_oracle": "Данные контактного лица и чек-бокс отношения соответствуют заявке.",
+      "source_refs": [
+        "DICT-004"
+      ],
+      "test_intent": "Проверить чек-боксы отношения контактного лица к заявителю"
+    },
+    {
+      "atomic_statement": "Блок работодателя заполняет чек-бокс ОПФ, наименование и ИНН работодателя.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-005"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-015",
+      "observable_oracle": "ОПФ, наименование и ИНН работодателя отражены в PDF.",
+      "source_refs": [
+        "DICT-005"
+      ],
+      "test_intent": "Проверить чек-боксы ОПФ и данные работодателя"
+    },
+    {
+      "atomic_statement": "Адрес местонахождения работодателя заполняется тегами адреса работы.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-016",
+      "observable_oracle": "Адрес работодателя в PDF соответствует заявке.",
+      "source_refs": [
+        "4.4 tag rows 44-51"
+      ],
+      "test_intent": "Проверить заполнение адреса местонахождения работодателя"
+    },
+    {
+      "atomic_statement": "Должность, дата начала работы, основной доход и общий доход выводятся по правилам таблицы.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-017",
+      "observable_oracle": "Должность, дата нача работы, основной и общий доход в PDF соответствуют правилам таблицы.",
+      "source_refs": [
+        "4.4 tag rows 52-54, 56"
+      ],
+      "test_intent": "Проверить должность, дату начала работы, основной и общий доход"
+    },
+    {
+      "atomic_statement": "`<job_start>` выводит начало общего трудового стажа по расчету через справочник `Стаж работы`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-004",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-018",
+      "observable_oracle": "",
+      "source_refs": [
+        "4.4 tag row 55"
+      ],
+      "test_intent": "Не создавать executable calculation без раскрытого справочника и oracle."
+    },
+    {
+      "atomic_statement": "Чек-боксы и суммы других регулярных доходов зависят от типов дополнительных доходов.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-006"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-019",
+      "observable_oracle": "Тип дополнительного дохода определяет чек-бокс и сумму в PDF.",
+      "source_refs": [
+        "DICT-006"
+      ],
+      "test_intent": "Проверить чек-боксы и суммы дополнительных доходов"
+    },
+    {
+      "atomic_statement": "Блок согласий заполняет адрес регистрации по правилу tag1/tag2, код подразделения действующего паспорта и данные ранее выданных паспортов 1-5.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-020",
+      "observable_oracle": "Блок согласий использует правильный адрес и данные действующего паспорта.",
+      "source_refs": [
+        "4.4 tag rows 61-87"
+      ],
+      "test_intent": "Проверить адрес регистрации, код подразделения и блок согласий; Проверить пять наборов ранее выданных паспортов"
+    },
+    {
+      "atomic_statement": "Блок согласий заполняет адрес регистрации по правилу tag1/tag2, код подразделения действующего паспорта и данные ранее выданных паспортов 1-5.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-021",
+      "observable_oracle": "Каждый из пяти наборов ранее выданных паспортов заполнен в своём блоке.",
+      "source_refs": [
+        "4.4 tag rows 62-87"
+      ],
+      "test_intent": "Проверить адрес регистрации, код подразделения и блок согласий; Проверить пять наборов ранее выданных паспортов"
+    }
+  ],
+  "package_id": "autofin-print-form-compiled-v4",
+  "package_version": 4
+}

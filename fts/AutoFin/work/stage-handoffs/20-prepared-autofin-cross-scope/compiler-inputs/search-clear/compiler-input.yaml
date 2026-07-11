@@ -1,9 +1,11 @@
 ft_slug: AutoFin
+prepared_compiler_contract_version: 2
 scope_slug: iteration-smoke-search-clear-context
 canonical_test_cases: test-cases/4.2-iteration-smoke-rerun-search-clear-context.md
 latest_artifacts:
   source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
   atomic_requirements_ledger: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/atomic-requirements-ledger.md
+  coverage_obligation_table: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-obligation-table.md
   package_test_design_plan: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/package-test-design-plan.md
   test_design_applicability_matrix: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/test-design-applicability-matrix.md
   coverage_gaps: work/test-design/4.2-iteration-smoke-rerun-search-clear-context/coverage-gaps.md
