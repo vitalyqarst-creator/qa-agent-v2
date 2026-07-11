@@ -25,7 +25,7 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
         (self.design / "atomic-requirements-ledger.md").write_text(
             """# Atomic Requirements Ledger
 
-| atom_id | source_property_id | source_ref | statement | coverage_status | covered_by_tc |
+| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc |
 | --- | --- | --- | --- | --- | --- |
 | `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered` | `TC-001` |
 | `ATOM-002` | `SRC-001.P02` | `GSR 2` | Неизвестен текст ошибки. | `gap` | `GAP-001` |
@@ -223,6 +223,36 @@ coverage_gaps:
         package = load_prepared_package(result.stage_package, self.root)
         self.assertEqual(package.execution_profile, "standard-required")
         self.assertEqual(package.unsupported_dimensions, ("numeric-boundaries",))
+
+    def test_keeps_gap_linked_unclear_dimension_out_of_unsupported_route(self) -> None:
+        matrix = self.design / "test-design-applicability-matrix.md"
+        matrix.write_text(
+            """| dimension | applicable | linked_atom_or_gap |
+| --- | --- | --- |
+| `default value` | `yes` | `ATOM-001` |
+| `integration/API/internal effects` | `unclear` | `ATOM-002; GAP-001` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.execution_profile, "simple-field-property")
+        self.assertEqual(result.unsupported_dimensions, ())
+
+    def test_loads_table_shaped_coverage_gap(self) -> None:
+        gaps = self.design / "coverage-gaps.md"
+        gaps.write_text(
+            """| gap_id | source_ref | gap_statement | severity | downstream_handling |
+| --- | --- | --- | --- | --- |
+| `GAP-001` | `SRC-001; GSR 2` | Неизвестен текст ошибки. | `non-blocking` | Не создавать негативный кейс. |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.gap_count, 1)
 
     def test_blocks_duplicate_workflow_key(self) -> None:
         self.state.write_text(

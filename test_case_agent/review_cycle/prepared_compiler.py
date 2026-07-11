@@ -22,10 +22,13 @@ FAST_PROFILE = "simple-field-property"
 STANDARD_PROFILE = "standard-required"
 FAST_DIMENSIONS = {
     "default-state",
+    "default-value",
     "dictionary",
     "editability",
     "field-property",
+    "list-or-dictionary-composition",
     "other",
+    "positive-acceptance",
     "requiredness",
     "selection-cardinality",
     "table-list",
@@ -184,6 +187,64 @@ def _gap_sections(path: Path | None) -> dict[str, PreparedGap]:
             handling=_clean_cell(handling.group(1)) if handling else "Сохранить как coverage gap.",
             blocking=bool(impact and "non-blocking" not in impact.group(1).lower()),
         )
+    for table in markdown_tables(path):
+        if not table or "gap_id" not in table[0]:
+            continue
+        for row in table:
+            gap_id = row.get("gap_id", "")
+            if not gap_id.startswith("GAP-") or gap_id in result:
+                continue
+            if row.get("status", "").lower() in {"closed", "resolved", "not-applicable"}:
+                continue
+            refs = tuple(
+                dict.fromkeys(
+                    token
+                    for token in TOKEN.findall(" ".join(row.values()))
+                    if not token.startswith("GAP-")
+                )
+            )
+            blocking_text = " ".join(
+                row.get(key, "")
+                for key in (
+                    "impact",
+                    "severity",
+                    "blocking_ready_for_review",
+                    "blocks_ready_for_review",
+                    "blocks_writer_draft",
+                )
+            ).lower()
+            problem = next(
+                (
+                    row[key]
+                    for key in (
+                        "gap_statement",
+                        "description",
+                        "missing_behavior",
+                        "reason",
+                    )
+                    if row.get(key)
+                ),
+                "Неопределённость зафиксирована в coverage gaps.",
+            )
+            handling = next(
+                (
+                    row[key]
+                    for key in ("downstream_handling", "temporary_handling", "handling")
+                    if row.get(key)
+                ),
+                "Сохранить как coverage gap.",
+            )
+            result[gap_id] = PreparedGap(
+                gap_id=gap_id,
+                source_refs=refs or (gap_id,),
+                problem=problem,
+                handling=handling,
+                blocking=(
+                    "blocking" in blocking_text
+                    and "non-blocking" not in blocking_text
+                    or re.search(r"\byes\b", blocking_text) is not None
+                ),
+            )
     return result
 
 
@@ -256,7 +317,13 @@ def _execution_route(applicability_matrix: Path) -> tuple[str, tuple[str, ...]]:
                 "test-design applicability must be yes, no or unclear: "
                 f"{row['dimension']}={row['applicable']}"
             )
-        dimension = row["dimension"].lower()
+        dimension = re.sub(r"[^a-z0-9_.-]+", "-", row["dimension"].lower()).strip("-")
+        if applicability == "unclear":
+            if not any(token.startswith("GAP-") for token in TOKEN.findall(" ".join(row.values()))):
+                raise StageRuntimeError(
+                    f"unclear test-design dimension must link a GAP id: {row['dimension']}"
+                )
+            continue
         if dimension in FAST_DIMENSIONS:
             continue
         normalized = DIMENSION_GROUPS.get(
@@ -336,7 +403,7 @@ def compile_workflow_package(
         and applicability_path is not None
     )
     execution_profile, unsupported_dimensions = _execution_route(applicability_path)
-    ledger = _table_with(ledger_path, {"atom_id", "statement", "coverage_status"})
+    ledger = _table_with(ledger_path, {"atom_id", "atomic_statement", "coverage_status"})
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
     plan_by_atom: dict[str, list[dict[str, str]]] = {}
     for row in plan:
@@ -422,7 +489,7 @@ def compile_workflow_package(
             PreparedObligation(
                 obligation_id=atom_id,
                 source_refs=source_refs,
-                atomic_statement=row["statement"],
+                atomic_statement=row["atomic_statement"],
                 observable_oracle=oracle,
                 test_intent=intent,
                 coverage_status=coverage_status,
@@ -445,7 +512,16 @@ def compile_workflow_package(
         if gap_id not in known_gaps:
             raise StageRuntimeError(f"semantic degradation: linked gap is missing from coverage-gaps.md: {gap_id}")
         gaps.append(known_gaps[gap_id])
-        evidence_rows.extend([f"## {gap_id}", "", known_gaps[gap_id].problem, known_gaps[gap_id].handling, ""])
+        evidence_rows.extend(
+            [
+                f"## {gap_id}",
+                "",
+                "source_refs: " + "; ".join(known_gaps[gap_id].source_refs),
+                known_gaps[gap_id].problem,
+                known_gaps[gap_id].handling,
+                "",
+            ]
+        )
     for dictionary_id in sorted(used_dicts):
         evidence_rows.extend(
             [f"## {dictionary_id}", "", " | ".join(dictionary_rows[dictionary_id].values()), ""]
