@@ -1,0 +1,26 @@
+ft_slug: AutoFin
+scope_slug: prepared-fast-standard-comparison
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 0
+next_skill: none
+required_inputs:
+  - work/stage-handoffs/24-prepared-fast-standard-comparison/iteration-summary.md
+  - work/stage-handoffs/24-prepared-fast-standard-comparison/iteration-session-log.md
+  - work/stage-handoffs/24-prepared-fast-standard-comparison/agent-decision-log.md
+  - work/review-cycles/codex-exec-prepared-widget-selection-live-v15-20260711/cycle-state.yaml
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/compiler-inputs/client-addresses/compiler-input.yaml
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/compiler-inputs/document-files/compiler-input.yaml
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/compiler-inputs/document-recognition/compiler-input.yaml
+latest_artifacts:
+  iteration_summary: work/stage-handoffs/24-prepared-fast-standard-comparison/iteration-summary.md
+  session_log: work/stage-handoffs/24-prepared-fast-standard-comparison/iteration-session-log.md
+  decision_log: work/stage-handoffs/24-prepared-fast-standard-comparison/agent-decision-log.md
+  accepted_cycle_state: work/review-cycles/codex-exec-prepared-widget-selection-live-v15-20260711/cycle-state.yaml
+  promotion_dry_run: work/review-cycles/codex-exec-prepared-widget-selection-live-v15-20260711/promotion-dry-run.json
+open_questions: []
+blocking_reasons:
+  - client-addresses compiler input has 27 atomic ledger rows without coverage obligations
+  - document-files compiler input has 47 atomic ledger rows without coverage obligations
+  - document-recognition compiler input contains invalid obligation id OBL-N/A-001
+accepted_risks: []
