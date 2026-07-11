@@ -535,6 +535,8 @@ class CodexExecReviewCycleRunner:
     command_config: ExecCommandConfig
     prepared_package_path: Path | None = None
     instruction_files: Sequence[Path] = ()
+    writer_instruction_files: Sequence[Path] = ()
+    reviewer_instruction_files: Sequence[Path] = ()
     executor: ProcessExecutor = field(default_factory=SubprocessExecutor)
     validator: DraftValidator = field(default_factory=ProjectDraftStructureValidator)
     timeout_seconds: int = 1800
@@ -563,6 +565,13 @@ class CodexExecReviewCycleRunner:
         self.final_path = self.final_path.resolve()
         self.source_files = tuple(path.resolve() for path in self.source_files)
         self.handoff_files = tuple(path.resolve() for path in self.handoff_files)
+        self.instruction_files = tuple(path.resolve() for path in self.instruction_files)
+        self.writer_instruction_files = tuple(
+            path.resolve() for path in self.writer_instruction_files
+        )
+        self.reviewer_instruction_files = tuple(
+            path.resolve() for path in self.reviewer_instruction_files
+        )
         if self.prepared_package_path is not None:
             self.prepared_package_path = self.prepared_package_path.resolve()
         configured_instructions = tuple(path.resolve() for path in self.instruction_files)
@@ -688,6 +697,10 @@ class CodexExecReviewCycleRunner:
                 raise RunnerError(
                     "Prepared fast path must not mix full source/handoff lists into the stage context"
                 )
+            if self.writer_instruction_files or self.reviewer_instruction_files:
+                raise RunnerError(
+                    "Prepared fast path must use only its embedded role profiles"
+                )
             if not is_relative_to(self.prepared_package_path, self.ft_root):
                 raise RunnerError("Prepared stage package must be under the FT package")
             try:
@@ -720,6 +733,8 @@ class CodexExecReviewCycleRunner:
         prepared_inputs = self._prepared_input_paths()
         for input_path in (
             *self.instruction_files,
+            *self.writer_instruction_files,
+            *self.reviewer_instruction_files,
             *self.source_files,
             *self.handoff_files,
             *prepared_inputs,
@@ -1636,6 +1651,12 @@ class CodexExecReviewCycleRunner:
                 f"Write the complete unsigned draft only to `{relative_path(self.draft_path, self.repo_root)}`.",
                 "Do not promote or rename the draft to a final artifact.",
                 "",
+                "## Instruction files",
+                *[
+                    f"- `{relative_path(path, self.repo_root)}`"
+                    for path in (*self.instruction_files, *self.writer_instruction_files)
+                ],
+                "",
                 "## Source files",
                 *[f"- `{relative_path(path, self.repo_root)}`" for path in self.source_files],
                 "",
@@ -1678,6 +1699,12 @@ class CodexExecReviewCycleRunner:
                 "Review only the explicit inputs listed below.",
                 f"Writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
                 f"Deterministic validator report: `{relative_path(self.validator_path, self.repo_root)}`",
+                "",
+                "## Instruction files",
+                *[
+                    f"- `{relative_path(path, self.repo_root)}`"
+                    for path in (*self.instruction_files, *self.reviewer_instruction_files)
+                ],
                 "",
                 "## Source files",
                 *[f"- `{relative_path(path, self.repo_root)}`" for path in self.source_files],
@@ -1877,7 +1904,12 @@ class CodexExecReviewCycleRunner:
             if role == "writer":
                 handoff_paths.append(self.draft_seed_path)
         else:
-            instruction_paths = list(self.instruction_files)
+            role_instruction_paths = (
+                self.writer_instruction_files
+                if role == "writer"
+                else self.reviewer_instruction_files
+            )
+            instruction_paths = [*self.instruction_files, *role_instruction_paths]
             source_paths = list(self.source_files)
             handoff_paths = list(self.handoff_files)
         allowed_write_roots: list[str] = []
@@ -2667,6 +2699,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-file", action="append", default=[])
     parser.add_argument("--handoff-file", action="append", default=[])
     parser.add_argument("--instruction-file", action="append", default=[])
+    parser.add_argument("--writer-instruction-file", action="append", default=[])
+    parser.add_argument("--reviewer-instruction-file", action="append", default=[])
     parser.add_argument("--prepared-package")
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--sandbox-flag", required=True)
@@ -2711,6 +2745,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         handoff_files=[repo_root / item for item in args.handoff_file],
         prepared_package_path=(repo_root / args.prepared_package if args.prepared_package else None),
         instruction_files=[repo_root / item for item in args.instruction_file],
+        writer_instruction_files=[
+            repo_root / item for item in args.writer_instruction_file
+        ],
+        reviewer_instruction_files=[
+            repo_root / item for item in args.reviewer_instruction_file
+        ],
         command_config=ExecCommandConfig(
             executable=args.codex_command,
             sandbox_flag=args.sandbox_flag,

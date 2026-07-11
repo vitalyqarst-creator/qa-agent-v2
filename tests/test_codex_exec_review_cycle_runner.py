@@ -794,6 +794,46 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("--last-message-contract", command)
         self.assertEqual("-", command[-1])
 
+    def test_standard_path_routes_role_specific_instruction_files(self) -> None:
+        writer_instruction = self.repo_root / "writer-instructions.md"
+        reviewer_instruction = self.repo_root / "reviewer-instructions.md"
+        writer_instruction.write_text("# Writer only\n", encoding="utf-8")
+        reviewer_instruction.write_text("# Reviewer only\n", encoding="utf-8")
+        executor = ScriptedExecutor(
+            self.writer_step(),
+            self.reviewer_step(decision="changes-required"),
+        )
+        cycle = self.make_runner(executor)
+        cycle.writer_instruction_files = (writer_instruction,)
+        cycle.reviewer_instruction_files = (reviewer_instruction,)
+
+        cycle.run()
+
+        writer_prompt = executor.requests[0].prompt
+        reviewer_prompt = executor.requests[1].prompt
+        self.assertIn("writer-instructions.md", writer_prompt)
+        self.assertNotIn("reviewer-instructions.md", writer_prompt)
+        self.assertIn("reviewer-instructions.md", reviewer_prompt)
+        self.assertNotIn("writer-instructions.md", reviewer_prompt)
+        writer_manifest = json.loads(
+            (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        reviewer_manifest = json.loads(
+            (self.reviewer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(
+            any(
+                item["path"].endswith("writer-instructions.md")
+                for item in writer_manifest["instruction_artifacts"]
+            )
+        )
+        self.assertTrue(
+            any(
+                item["path"].endswith("reviewer-instructions.md")
+                for item in reviewer_manifest["instruction_artifacts"]
+            )
+        )
+
     def test_reviewer_command_uses_configured_read_only_sandbox_without_output_file(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="changes-required"))
         self.make_runner(executor).run()
