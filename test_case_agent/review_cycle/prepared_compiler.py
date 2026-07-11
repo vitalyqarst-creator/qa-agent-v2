@@ -18,6 +18,31 @@ from .runtime import StageRuntimeError
 
 TOKEN = re.compile(r"\b(?:ATOM|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\bGSR\s+\d+\b")
 SECTION_PREFIX = re.compile(r"^(?P<section>(?:section-)?\d+(?:[-.]\d+)*)-")
+FAST_PROFILE = "simple-field-property"
+STANDARD_PROFILE = "standard-required"
+FAST_DIMENSIONS = {
+    "default-state",
+    "dictionary",
+    "editability",
+    "field-property",
+    "other",
+    "requiredness",
+    "selection-cardinality",
+    "table-list",
+}
+DIMENSION_GROUPS = {
+    "conditional-visibility": "dependency-state",
+    "date-time": "numeric-boundaries",
+    "dependency": "dependency-state",
+    "equivalence": "input-boundaries",
+    "format": "input-boundaries",
+    "integration": "integration-persistence",
+    "length": "numeric-boundaries",
+    "numeric": "numeric-boundaries",
+    "persistence": "integration-persistence",
+    "state": "dependency-state",
+    "table-parity": "table-parity",
+}
 
 
 def _scalar(value: str) -> Any:
@@ -54,6 +79,8 @@ def load_workflow_state(path: Path) -> dict[str, Any]:
             if ":" not in stripped:
                 raise StageRuntimeError(f"unsupported workflow YAML at {path}:{line_no}")
             key, value = stripped.split(":", 1)
+            if key in result:
+                raise StageRuntimeError(f"duplicate workflow YAML key at {path}:{line_no}: {key}")
             if value.strip():
                 result[key] = _scalar(value)
             else:
@@ -75,6 +102,10 @@ def load_workflow_state(path: Path) -> dict[str, Any]:
         if ":" not in stripped or not isinstance(result[parent], dict):
             raise StageRuntimeError(f"unsupported nested workflow YAML at {path}:{line_no}")
         key, value = stripped.split(":", 1)
+        if key in result[parent]:
+            raise StageRuntimeError(
+                f"duplicate workflow YAML key at {path}:{line_no}: {parent}.{key}"
+            )
         if not value.strip():
             raise StageRuntimeError(f"nested workflow maps must be scalar at {path}:{line_no}")
         result[parent][key] = _scalar(value)
@@ -195,6 +226,11 @@ def _source_registry(ft_root: Path, source_selection: Path) -> list[tuple[Path, 
             raise StageRuntimeError(f"source-selection requires exactly one {required} source")
     if selected["main-ft-docx"].stem != selected["main-ft-xhtml"].stem:
         raise StageRuntimeError("selected DOCX and XHTML/HTML must have the same base name")
+    if (
+        "main-ft-pdf" in selected
+        and selected["main-ft-docx"].stem != selected["main-ft-pdf"].stem
+    ):
+        raise StageRuntimeError("selected DOCX and PDF must have the same base name")
     text = source_selection.read_text(encoding="utf-8")
     if not re.search(r"xhtml_available:\s*`?yes`?", text, re.IGNORECASE):
         raise StageRuntimeError("source-selection does not confirm xhtml_available: yes")
@@ -208,6 +244,30 @@ def _source_registry(ft_root: Path, source_selection: Path) -> list[tuple[Path, 
     return registry
 
 
+def _execution_route(applicability_matrix: Path) -> tuple[str, tuple[str, ...]]:
+    rows = _table_with(applicability_matrix, {"dimension", "applicable"})
+    unsupported: set[str] = set()
+    for row in rows:
+        applicability = row["applicable"].lower()
+        if applicability == "no":
+            continue
+        if applicability not in {"yes", "unclear"}:
+            raise StageRuntimeError(
+                "test-design applicability must be yes, no or unclear: "
+                f"{row['dimension']}={row['applicable']}"
+            )
+        dimension = row["dimension"].lower()
+        if dimension in FAST_DIMENSIONS:
+            continue
+        normalized = DIMENSION_GROUPS.get(
+            dimension, re.sub(r"[^a-z0-9_.-]+", "-", dimension).strip("-")
+        )
+        unsupported.add(normalized or "unclassified-dimension")
+    if unsupported:
+        return STANDARD_PROFILE, tuple(sorted(unsupported))
+    return FAST_PROFILE, ()
+
+
 @dataclass(frozen=True)
 class CompileResult:
     stage_package: Path
@@ -215,6 +275,8 @@ class CompileResult:
     gap_count: int
     dictionary_ref_count: int
     section_id: str
+    execution_profile: str
+    unsupported_dimensions: tuple[str, ...]
 
 
 def compile_workflow_package(
@@ -264,9 +326,16 @@ def compile_workflow_package(
     source_selection_path = _artifact(ft_root, state, "source_selection")
     ledger_path = _artifact(ft_root, state, "atomic_requirements_ledger")
     plan_path = _artifact(ft_root, state, "package_test_design_plan")
+    applicability_path = _artifact(ft_root, state, "test_design_applicability_matrix")
     gaps_path = _artifact(ft_root, state, "coverage_gaps", required=False)
     dictionary_path = _artifact(ft_root, state, "dictionary_inventory", required=False)
-    assert source_selection_path is not None and ledger_path is not None and plan_path is not None
+    assert (
+        source_selection_path is not None
+        and ledger_path is not None
+        and plan_path is not None
+        and applicability_path is not None
+    )
+    execution_profile, unsupported_dimensions = _execution_route(applicability_path)
     ledger = _table_with(ledger_path, {"atom_id", "statement", "coverage_status"})
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
     plan_by_atom: dict[str, list[dict[str, str]]] = {}
@@ -281,6 +350,10 @@ def compile_workflow_package(
             if not row["active_values"].strip():
                 raise StageRuntimeError(
                     f"semantic degradation: {row['dictionary_id']} has no active values"
+                )
+            if row["dictionary_id"] in dictionary_rows:
+                raise StageRuntimeError(
+                    f"semantic degradation: duplicate dictionary {row['dictionary_id']}"
                 )
             dictionary_rows[row["dictionary_id"]] = row
 
@@ -362,6 +435,12 @@ def compile_workflow_package(
         for item in linked:
             evidence_rows.extend([f"- plan: {' | '.join(item.values())}", ""])
     gaps: list[PreparedGap] = []
+    orphan_gaps = sorted(set(known_gaps) - used_gaps)
+    if orphan_gaps:
+        raise StageRuntimeError(
+            "semantic degradation: coverage gaps are not linked from the atomic ledger: "
+            + ", ".join(orphan_gaps)
+        )
     for gap_id in sorted(used_gaps):
         if gap_id not in known_gaps:
             raise StageRuntimeError(f"semantic degradation: linked gap is missing from coverage-gaps.md: {gap_id}")
@@ -413,8 +492,8 @@ def compile_workflow_package(
                 idle_timeout_seconds=60,
                 command_budget=12,
             ),
-            execution_profile="simple-field-property",
-            unsupported_dimensions=(),
+            execution_profile=execution_profile,
+            unsupported_dimensions=unsupported_dimensions,
             forbidden_evidence_roots=(
                 (ft_root / "test-cases").relative_to(repo_root).as_posix(),
                 (ft_root / "work" / "review-cycles").relative_to(repo_root).as_posix(),
@@ -428,4 +507,6 @@ def compile_workflow_package(
         gap_count=len(gaps),
         dictionary_ref_count=len(used_dicts),
         section_id=section_id,
+        execution_profile=execution_profile,
+        unsupported_dimensions=unsupported_dimensions,
     )

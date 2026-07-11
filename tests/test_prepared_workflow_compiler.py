@@ -62,6 +62,16 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
 """,
             encoding="utf-8",
         )
+        (self.design / "test-design-applicability-matrix.md").write_text(
+            """# Test-design Applicability Matrix
+
+| dimension | applicable |
+| --- | --- |
+| `field-property` | `yes` |
+| `integration` | `no` |
+""",
+            encoding="utf-8",
+        )
         self.state = self.ft / "work" / "stage-handoffs" / "01-demo" / "workflow-state.yaml"
         self.state.parent.mkdir(parents=True)
         (self.state.parent / "source-selection.md").write_text(
@@ -86,6 +96,7 @@ latest_artifacts:
   source_selection: work/stage-handoffs/01-demo/source-selection.md
   atomic_requirements_ledger: work/test-design/demo-scope/atomic-requirements-ledger.md
   package_test_design_plan: work/test-design/demo-scope/package-test-design-plan.md
+  test_design_applicability_matrix: work/test-design/demo-scope/test-design-applicability-matrix.md
   dictionary_inventory: work/test-design/demo-scope/dictionary-inventory.md
   coverage_gaps: work/test-design/demo-scope/coverage-gaps.md
 coverage_gaps:
@@ -115,6 +126,8 @@ coverage_gaps:
         self.assertEqual(result.gap_count, 1)
         self.assertEqual(result.dictionary_ref_count, 1)
         self.assertEqual(result.section_id, "4.2")
+        self.assertEqual(result.execution_profile, "simple-field-property")
+        self.assertEqual(result.unsupported_dimensions, ())
         package = load_prepared_package(result.stage_package, self.root)
         roles = {item.role for item in package.source_registry}
         self.assertEqual(
@@ -194,6 +207,29 @@ coverage_gaps:
             encoding="utf-8",
         )
         with self.assertRaisesRegex(StageRuntimeError, "unsupported coverage_status"):
+            self.compile()
+
+    def test_routes_numeric_scope_out_of_fast_path(self) -> None:
+        matrix = self.design / "test-design-applicability-matrix.md"
+        matrix.write_text(
+            "| dimension | applicable |\n| --- | --- |\n| `numeric` | `yes` |\n",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.execution_profile, "standard-required")
+        self.assertEqual(result.unsupported_dimensions, ("numeric-boundaries",))
+        package = load_prepared_package(result.stage_package, self.root)
+        self.assertEqual(package.execution_profile, "standard-required")
+        self.assertEqual(package.unsupported_dimensions, ("numeric-boundaries",))
+
+    def test_blocks_duplicate_workflow_key(self) -> None:
+        self.state.write_text(
+            self.state.read_text(encoding="utf-8") + "ft_slug: demo\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "duplicate workflow YAML key"):
             self.compile()
 
 

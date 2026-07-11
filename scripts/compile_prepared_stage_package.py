@@ -54,6 +54,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "coverage_gaps": compiled.gap_count,
                 "dictionary_refs": compiled.dictionary_ref_count,
                 "section_id": compiled.section_id,
+                "execution_profile": compiled.execution_profile,
+                "unsupported_dimensions": list(compiled.unsupported_dimensions),
+                "fast_path_eligible": not compiled.unsupported_dimensions,
             },
             ensure_ascii=False,
         )
