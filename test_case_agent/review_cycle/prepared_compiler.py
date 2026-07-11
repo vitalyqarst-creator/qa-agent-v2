@@ -704,6 +704,7 @@ def compile_workflow_package(
         obligations.append(
             PreparedObligation(
                 obligation_id=obligation_id,
+                atom_id=atom_id,
                 source_refs=source_refs,
                 atomic_statement=row["atomic_statement"],
                 observable_oracle=oracle,

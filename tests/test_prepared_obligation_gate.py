@@ -130,6 +130,77 @@ class PreparedObligationGateTests(unittest.TestCase):
             {item["id"] for item in result.findings},
         )
 
+    def test_v5_obligation_atom_pair_covers_testable_child_without_claiming_gap_child(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-v5-pair",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-1",),
+                    atomic_statement="Visible behavior",
+                    observable_oracle="Visible result",
+                    test_intent="Verify behavior",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-002",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-1",),
+                    atomic_statement="Unobservable constraint",
+                    observable_oracle="",
+                    test_intent="Preserve gap",
+                    coverage_status="gap",
+                    gap_id="GAP-001",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+            ),
+            coverage_gaps=(
+                PreparedGap("GAP-001", ("SRC-1",), "Not observable", "Preserve", False),
+            ),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            "## TC-001\n**Трассировка:** OBL-001; ATOM-001\n"
+        )
+
+        self.assertTrue(result.passed)
+        self.assertEqual(("OBL-001",), result.covered_obligations)
+
+    def test_v5_atom_without_obligation_id_is_rejected(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-v5-pair",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-1",),
+                    atomic_statement="Visible behavior",
+                    observable_oracle="Visible result",
+                    test_intent="Verify behavior",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate("## TC-001\n**Трассировка:** ATOM-001\n")
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "atom-without-prepared-obligation",
+            {item["id"] for item in result.findings},
+        )
+
     def test_set_level_unknown_atom_does_not_attach_to_last_tc(self) -> None:
         result = self._validate(
             "## TC-001\n**Трассировка:** ATOM-001, ATOM-002\n\n"

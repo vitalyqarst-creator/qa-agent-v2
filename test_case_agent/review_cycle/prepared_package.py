@@ -20,14 +20,15 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 4
-SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, PACKAGE_VERSION}
+PACKAGE_VERSION = 5
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 OBLIGATION_ID = re.compile(r"(?:ATOM|OBL)-[A-Za-z0-9._-]+")
+ATOM_ID = re.compile(r"ATOM-[A-Za-z0-9._-]+")
 GAP_ID = re.compile(r"GAP-[A-Za-z0-9._-]+")
 DICT_ID = re.compile(r"DICT-[A-Za-z0-9._-]+")
 REFERENCE_SELECTOR = re.compile(
@@ -219,9 +220,24 @@ class PreparedObligation:
     dictionary_refs: tuple[str, ...]
     notes: str
     constraint_gap_ids: tuple[str, ...] = ()
+    atom_id: str = ""
 
-    def validate(self) -> None:
+    @property
+    def traceability_atom_id(self) -> str:
+        if self.atom_id:
+            return self.atom_id
+        if self.obligation_id.startswith("ATOM-"):
+            return self.obligation_id
+        return ""
+
+    def validate(self, *, package_version: int = PACKAGE_VERSION) -> None:
         _identifier(self.obligation_id, "obligation_id", OBLIGATION_ID)
+        if package_version >= 5:
+            _identifier(
+                self.traceability_atom_id,
+                f"{self.obligation_id}.atom_id",
+                ATOM_ID,
+            )
         if not self.source_refs:
             raise StageRuntimeError(f"{self.obligation_id}.source_refs must not be empty")
         for value in self.source_refs:
@@ -251,7 +267,12 @@ class PreparedObligation:
         if not isinstance(self.notes, str):
             raise StageRuntimeError(f"{self.obligation_id}.notes must be text")
 
-    def to_dict(self, *, include_constraints: bool = False) -> dict[str, Any]:
+    def to_dict(
+        self,
+        *,
+        include_constraints: bool = False,
+        include_atom_id: bool = False,
+    ) -> dict[str, Any]:
         payload = {
             "obligation_id": self.obligation_id,
             "source_refs": list(self.source_refs),
@@ -265,6 +286,8 @@ class PreparedObligation:
         }
         if include_constraints:
             payload["constraint_gap_ids"] = list(self.constraint_gap_ids)
+        if include_atom_id:
+            payload["atom_id"] = self.traceability_atom_id
         return payload
 
     @classmethod
@@ -284,6 +307,8 @@ class PreparedObligation:
         }
         if package_version >= 4:
             expected.add("constraint_gap_ids")
+        if package_version >= 5:
+            expected.add("atom_id")
         _exact_fields(payload, expected, "obligation")
         item = cls(
             obligation_id=payload["obligation_id"],
@@ -306,8 +331,9 @@ class PreparedObligation:
                 if package_version >= 4
                 else ()
             ),
+            atom_id=(payload["atom_id"] if package_version >= 5 else ""),
         )
-        item.validate()
+        item.validate(package_version=package_version)
         return item
 
 
@@ -324,7 +350,10 @@ class PreparedObligationSet:
             "package_version": self.package_version,
             "package_id": self.package_id,
             "obligations": [
-                item.to_dict(include_constraints=self.package_version >= 4)
+                item.to_dict(
+                    include_constraints=self.package_version >= 4,
+                    include_atom_id=self.package_version >= 5,
+                )
                 for item in self.obligations
             ],
             "coverage_gaps": [item.to_dict() for item in self.coverage_gaps],
@@ -350,7 +379,7 @@ class PreparedObligationSet:
         linked_gaps: set[str] = set()
         all_refs: set[str] = set()
         for item in self.obligations:
-            item.validate()
+            item.validate(package_version=self.package_version)
             all_refs.update(item.source_refs)
             if item.gap_id and item.gap_id not in known_gaps:
                 raise StageRuntimeError(f"{item.obligation_id} references unknown gap {item.gap_id}")
@@ -533,7 +562,7 @@ class PreparedStagePackage:
                 )
                 if not has_docx_truth or not has_xhtml_machine_source:
                     raise StageRuntimeError(
-                        "package version 4 fast path requires DOCX source-of-truth and "
+                        f"package version {PACKAGE_VERSION} fast path requires DOCX source-of-truth and "
                         "XHTML machine-readable source registry entries"
                     )
         if not self.forbidden_evidence_roots:

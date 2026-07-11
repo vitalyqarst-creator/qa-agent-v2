@@ -333,6 +333,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     ).hexdigest(),
                     "obligation_reviews": [
                         {
+                            "obligation_id": "ATOM-001",
                             "atom_id": "ATOM-001",
                             "verdict": verdict,
                             "test_case_ids": ["TC-DEMO-001"],
@@ -1002,6 +1003,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             "reviewed_draft_sha256": digest,
             "obligation_reviews": [
                 {
+                    "obligation_id": "ATOM-001",
                     "atom_id": "ATOM-001",
                     "verdict": "covered",
                     "test_case_ids": ["TC-PREP-001"],
@@ -1021,6 +1023,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual(2, review.contract_version)
         self.assertEqual("accepted", review.decision)
+        self.assertEqual("ATOM-001", review.obligation_reviews[0].obligation_id)
         self.assertEqual("ATOM-001", review.obligation_reviews[0].atom_id)
 
     def test_prepared_reviewer_contract_rejects_hash_mismatch(self) -> None:
@@ -1051,6 +1054,70 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 expected_draft_sha256="1" * 64,
                 draft_text="## TC-PREP-001\n",
             )
+
+    def test_prepared_reviewer_contract_distinguishes_obligations_sharing_atom(self) -> None:
+        draft = "# Cases\n\n## TC-PREP-001\n\n**Трассировка:** OBL-001; ATOM-001\n"
+        digest = hashlib.sha256(draft.encode("utf-8")).hexdigest()
+        obligations = (
+            PreparedObligation(
+                obligation_id="OBL-001",
+                atom_id="ATOM-001",
+                source_refs=("SRC-1",),
+                atomic_statement="Visible behavior",
+                observable_oracle="Visible result",
+                test_intent="Verify result",
+                coverage_status="testable",
+                gap_id="",
+                dictionary_refs=(),
+                notes="",
+            ),
+            PreparedObligation(
+                obligation_id="OBL-002",
+                atom_id="ATOM-001",
+                source_refs=("SRC-1",),
+                atomic_statement="Unobservable constraint",
+                observable_oracle="",
+                test_intent="Preserve gap",
+                coverage_status="gap",
+                gap_id="GAP-001",
+                dictionary_refs=(),
+                notes="",
+            ),
+        )
+        payload = {
+            "contract_version": 2,
+            "decision": "accepted",
+            "reviewed_draft_sha256": digest,
+            "obligation_reviews": [
+                {
+                    "obligation_id": "OBL-001",
+                    "atom_id": "ATOM-001",
+                    "verdict": "covered",
+                    "test_case_ids": ["TC-PREP-001"],
+                    "note": "Visible obligation covered.",
+                },
+                {
+                    "obligation_id": "OBL-002",
+                    "atom_id": "ATOM-001",
+                    "verdict": "gap-preserved",
+                    "test_case_ids": [],
+                    "note": "Constraint remains non-executable.",
+                },
+            ],
+            "findings": [],
+            "summary": "All obligations accounted for.",
+        }
+
+        review = runner_module.parse_prepared_review_contract(
+            json.dumps(payload),
+            expected_obligations=obligations,
+            expected_draft_sha256=digest,
+            draft_text=draft,
+        )
+
+        self.assertEqual(["OBL-001", "OBL-002"], [
+            item.obligation_id for item in review.obligation_reviews
+        ])
 
     def test_validator_failure_blocks_before_reviewer(self) -> None:
         executor = ScriptedExecutor(self.writer_step())

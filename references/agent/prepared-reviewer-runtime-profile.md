@@ -6,7 +6,7 @@ This is a technical execution profile inside the `ft-test-case-reviewer` phase. 
 
 Continue only when the embedded payload confirms:
 
-- package version `4`;
+- package version `5`;
 - `execution_profile = simple-field-property`;
 - empty `unsupported_dimensions`;
 - an immutable draft hash;
@@ -18,7 +18,7 @@ Legacy/unclassified, table-parity, numeric-boundary, integration/persistence, de
 ## Review Procedure
 
 1. Use only the verified inline payload. Do not reread the full reviewer skill, instruction manifest, package files, references, prior cycles, production test cases or full sources.
-2. Review every supplied obligation exactly once and bind the result to the supplied draft SHA-256.
+2. Review every supplied obligation exactly once, preserving its exact `obligation_id -> atom_id` pair, and bind the result to the supplied draft SHA-256.
 3. For each `coverage_status = testable`, verify that linked `TC-*` steps and final expected result exercise the obligation condition and its concrete observable oracle.
 4. For each `gap`, `unclear` or `not-applicable` obligation, verify that the draft does not claim executable coverage or invent the missing mechanism.
 5. Reject invented screens, fields, literals, dictionaries, messages, statuses, UI reactions, API/DB effects, persistence or internal state.

@@ -13,7 +13,7 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Workflow compilation requires an explicit expected FT slug. The workflow state, selected sources, prepared output and attempt root must remain inside that FT package; compiler discovery must not scan or substitute a neighboring `fts/*` package.
 - Source registry entries come only from the workflow-linked `source-selection.md`, never from aggregating historical source selections. DOCX and XHTML/HTML must have the same selected base name; PDF is registered as structural cross-check when selected.
 - Workflow compilation must derive fast-path eligibility from the canonical test-design applicability matrix. Numeric/boundary, dependency/state, integration/persistence, table-parity and any unclassified applicable dimension produce a `standard-required` package with explicit `unsupported_dimensions`; callers cannot opt those dimensions into `simple-field-property` by flag or prompt.
-- Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability.
+- Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 5 carries `obligation_id` and `atom_id` as separate machine-readable fields; evidence text alone is not sufficient for this relation.
 
 ## Layout
 
@@ -33,7 +33,7 @@ The four files are the default writer/reviewer input capsule. Package-local path
 
 Required fields:
 
-- `package_version`: currently `4`; versions `1`, `2` and `3` remain readable as legacy evidence but are not eligible for the optimized writer fast path;
+- `package_version`: currently `5`; versions `1` through `4` remain readable as legacy evidence but are not eligible for the optimized writer fast path;
 - stable `package_id`, `ft_slug`, `scope_slug` and `section_id`;
 - `created_at` with timezone;
 - `source_registry`: full source path, role, SHA-256 and scope locator;
@@ -46,7 +46,7 @@ Required fields:
 
 The package is rejected when registered full sources changed after preparation. Full source files are not copied into `prepared-input/`.
 
-Version `4` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
+Version `5` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
 
 The runner must route to the standard writer when the package is legacy/unclassified, its profile is not `simple-field-property`, or `unsupported_dimensions` is non-empty. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
@@ -57,12 +57,13 @@ Required top-level fields are `package_version`, `package_id`, `obligations`, `c
 Each obligation contains:
 
 - unique `obligation_id` using `OBL-*`; legacy packages may still contain atom ids in this field;
+- unique `atom_id` using `ATOM-*` in package version 5, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
 - non-empty `source_refs` using exact requirement codes and/or `SRC-*` anchors;
 - one independently checkable `atomic_statement`;
 - `observable_oracle` or an explicit linked gap;
 - `test_intent`;
 - `coverage_status`: `testable | gap | unclear | not-applicable`;
-- optional `dictionary_refs`, `constraint_gap_ids` and `notes`. In version `4`, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
+- optional `dictionary_refs`, `constraint_gap_ids` and `notes`. In version `5`, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 

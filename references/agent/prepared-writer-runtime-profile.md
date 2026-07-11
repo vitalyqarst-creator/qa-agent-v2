@@ -6,7 +6,7 @@ This is a technical execution profile inside the `ft-test-case-writer` phase. It
 
 Continue only when the embedded payload confirms:
 
-- package version `4`;
+- package version `5`;
 - `execution_profile = simple-field-property`;
 - empty `unsupported_dimensions`;
 - exact output path and attempt root;
@@ -31,7 +31,7 @@ Legacy/unclassified, table-parity, numeric-boundary, integration/persistence and
 
 - one TC covers one check and one main observable result;
 - every TC has parseable runtime metadata, reproducible preconditions, concrete permitted data, numbered steps, final expected result and postconditions;
-- traceability names an existing testable `ATOM-*`;
+- traceability names both the existing testable `OBL-*` and its linked `ATOM-*`;
 - placeholders and invented literals are forbidden;
 - production `test-cases/` stays unchanged;
 - draft must differ from the seed and contain no seed sentinel.

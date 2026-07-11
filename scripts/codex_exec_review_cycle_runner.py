@@ -485,6 +485,7 @@ class ProjectDraftStructureValidator:
 
 @dataclass(frozen=True)
 class ObligationReview:
+    obligation_id: str
     atom_id: str
     verdict: str
     test_case_ids: tuple[str, ...]
@@ -865,11 +866,11 @@ class CodexExecReviewCycleRunner:
                 [
                     f"## {tc_id}",
                     "",
-                    f"**Название:** [SEED:title:{obligation.obligation_id}]",
+                    f"**Название:** [SEED:title:{obligation.traceability_atom_id}]",
                     "**Тип:** позитивный",
                     "**Приоритет:** средний",
                     "**package_id:** [SEED:package_id]",
-                    f"**Трассировка:** {obligation.obligation_id}",
+                    f"**Трассировка:** {obligation.obligation_id}; {obligation.traceability_atom_id}",
                     "",
                     "### Предусловия",
                     "",
@@ -976,7 +977,7 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Required final contract",
                 "",
-                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied atom, structured findings and a non-empty summary. Use only schema enum values. Do not emit commentary outside the final JSON object.",
+                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation with its exact obligation_id and atom_id, structured findings and a non-empty summary. Use only schema enum values. Do not emit commentary outside the final JSON object.",
                 "<!-- PREPARED-REVIEW-PAYLOAD:END -->",
             ]
         )
@@ -2014,8 +2015,15 @@ class CodexExecReviewCycleRunner:
                         "items": {
                             "type": "object",
                             "additionalProperties": False,
-                            "required": ["atom_id", "verdict", "test_case_ids", "note"],
+                            "required": [
+                                "obligation_id",
+                                "atom_id",
+                                "verdict",
+                                "test_case_ids",
+                                "note",
+                            ],
                             "properties": {
+                                "obligation_id": {"type": "string", "minLength": 1},
                                 "atom_id": {"type": "string", "minLength": 1},
                                 "verdict": {
                                     "type": "string",
@@ -2456,6 +2464,7 @@ def parse_prepared_review_contract(
     for index, item in enumerate(raw_reviews):
         context = f"obligation_reviews[{index}]"
         if not isinstance(item, dict) or set(item) != {
+            "obligation_id",
             "atom_id",
             "verdict",
             "test_case_ids",
@@ -2467,6 +2476,7 @@ def parse_prepared_review_contract(
             raise RunnerError(f"{context}.verdict is not allowed: {verdict}")
         reviews.append(
             ObligationReview(
+                obligation_id=_required_text(item, "obligation_id", context),
                 atom_id=_required_text(item, "atom_id", context),
                 verdict=verdict,
                 test_case_ids=_string_list(item, "test_case_ids", context),
@@ -2475,15 +2485,27 @@ def parse_prepared_review_contract(
         )
 
     expected_by_id = {item.obligation_id: item for item in expected_obligations}
-    review_ids = [item.atom_id for item in reviews]
+    review_ids = [item.obligation_id for item in reviews]
     if len(review_ids) != len(set(review_ids)):
-        raise RunnerError("prepared reviewer obligation_reviews contain duplicate atom ids")
+        raise RunnerError("prepared reviewer obligation_reviews contain duplicate obligation ids")
     if set(review_ids) != set(expected_by_id):
         missing = sorted(set(expected_by_id) - set(review_ids))
         unknown = sorted(set(review_ids) - set(expected_by_id))
         raise RunnerError(
-            f"prepared reviewer atom set mismatch: missing={missing}, unknown={unknown}"
+            f"prepared reviewer obligation set mismatch: missing={missing}, unknown={unknown}"
         )
+    for review in reviews:
+        expected_atom_id = expected_by_id[review.obligation_id].traceability_atom_id
+        if review.atom_id != expected_atom_id:
+            raise RunnerError(
+                "prepared reviewer obligation-to-atom mismatch: "
+                f"obligation_id={review.obligation_id}, expected={expected_atom_id}, "
+                f"got={review.atom_id}"
+            )
+
+    known_atom_ids = {
+        item.traceability_atom_id for item in expected_obligations
+    }
 
     known_tc_ids = set(
         re.findall(r"^##\s+(TC-[A-Za-z0-9][A-Za-z0-9_.-]*)\b", draft_text, flags=re.MULTILINE)
@@ -2518,7 +2540,7 @@ def parse_prepared_review_contract(
             raise RunnerError(f"{context}.category is not allowed: {category}")
         atom_ids = _string_list(item, "atom_ids", context)
         test_case_ids = _string_list(item, "test_case_ids", context)
-        if set(atom_ids) - set(expected_by_id):
+        if set(atom_ids) - known_atom_ids:
             raise RunnerError(f"{context} references unknown atom ids")
         if set(test_case_ids) - known_tc_ids:
             raise RunnerError(f"{context} references unknown test-case ids")
@@ -2541,28 +2563,28 @@ def parse_prepared_review_contract(
         for atom_id in finding.atom_ids
     }
     for review in reviews:
-        obligation = expected_by_id[review.atom_id]
+        obligation = expected_by_id[review.obligation_id]
         if set(review.test_case_ids) - known_tc_ids:
             raise RunnerError(
-                f"obligation review {review.atom_id} references unknown test-case ids"
+                f"obligation review {review.obligation_id} references unknown test-case ids"
             )
         if obligation.coverage_status == "testable":
             if review.verdict not in {"covered", "missing", "incorrect"}:
                 raise RunnerError(
-                    f"testable obligation {review.atom_id} has incompatible verdict {review.verdict}"
+                    f"testable obligation {review.obligation_id} has incompatible verdict {review.verdict}"
                 )
             if review.verdict == "covered" and not review.test_case_ids:
                 raise RunnerError(
-                    f"covered obligation {review.atom_id} must reference at least one test case"
+                    f"covered obligation {review.obligation_id} must reference at least one test case"
                 )
         else:
             if review.verdict not in {"gap-preserved", "invented-coverage"}:
                 raise RunnerError(
-                    f"non-testable obligation {review.atom_id} has incompatible verdict {review.verdict}"
+                    f"non-testable obligation {review.obligation_id} has incompatible verdict {review.verdict}"
                 )
             if review.verdict == "gap-preserved" and review.test_case_ids:
                 raise RunnerError(
-                    f"gap-preserved obligation {review.atom_id} must not reference executable test cases"
+                    f"gap-preserved obligation {review.obligation_id} must not reference executable test cases"
                 )
         if review.verdict in {"missing", "incorrect", "invented-coverage"} and (
             review.atom_id not in blocking_atoms
@@ -2605,7 +2627,8 @@ def render_prepared_review_findings(review: ReviewContract) -> str:
     for item in review.obligation_reviews:
         tc_ids = ", ".join(f"`{value}`" for value in item.test_case_ids) or "нет"
         lines.append(
-            f"- `{item.atom_id}` — `{item.verdict}`; test cases: {tc_ids}; {item.note}"
+            f"- `{item.obligation_id}` -> `{item.atom_id}` — `{item.verdict}`; "
+            f"test cases: {tc_ids}; {item.note}"
         )
     lines.extend(["", "## Findings", ""])
     if review.findings:

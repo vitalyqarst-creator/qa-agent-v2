@@ -151,6 +151,10 @@ coverage_gaps:
             item.path for item in package.package_artifacts if item.kind == "atomic-obligations"
         )
         obligations = load_obligations(obligation_path)
+        self.assertEqual(
+            [(item.obligation_id, item.atom_id) for item in obligations.obligations],
+            [("OBL-001", "ATOM-001"), ("OBL-002", "ATOM-002")],
+        )
         self.assertEqual(obligations.obligations[0].dictionary_refs, ("DICT-001",))
         self.assertEqual(obligations.obligations[1].gap_id, "GAP-001")
 

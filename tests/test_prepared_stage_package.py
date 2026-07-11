@@ -123,6 +123,10 @@ class PreparedStagePackageTests(unittest.TestCase):
         self.assertFalse((package_root / self.docx.name).exists())
         self.assertLess(sum(path.stat().st_size for path in package_root.iterdir()), 16 * 1024)
         self.assertTrue(all(item.path.startswith("work/prepared/") for item in loaded.package_artifacts))
+        obligation_payload = json.loads(
+            (package_root / "atomic-obligations.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("ATOM-001", obligation_payload["obligations"][0]["atom_id"])
         instructions = (package_root / "stage-instructions.md").read_text(encoding="utf-8")
         self.assertIn("Do not rerun source locator", instructions)
         self.assertIn("targeted_source_fallback", instructions)
@@ -417,7 +421,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         legacy = PreparedObligationSet.from_dict(payload)
 
         self.assertEqual(2, legacy.package_version)
-        with self.assertRaisesRegex(StageRuntimeError, "requires package version 4"):
+        with self.assertRaisesRegex(StageRuntimeError, "requires package version 5"):
             PreparedPackageBuilder(self.root).build(
                 output_root=self.root / "work" / "legacy-fast",
                 package_id="pkg-001",
@@ -443,6 +447,30 @@ class PreparedStagePackageTests(unittest.TestCase):
                 unsupported_dimensions=(),
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
             )
+
+    def test_version_four_obligations_remain_readable_without_explicit_atom_field(self) -> None:
+        current = self._obligations()
+        payload = {
+            "package_version": 4,
+            "package_id": current.package_id,
+            "obligations": [
+                item.to_dict(include_constraints=True) for item in current.obligations
+            ],
+            "coverage_gaps": [item.to_dict() for item in current.coverage_gaps],
+        }
+        payload["digest"] = hashlib.sha256(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+        legacy = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual(4, legacy.package_version)
+        self.assertEqual("ATOM-001", legacy.obligations[0].traceability_atom_id)
 
     def test_scope_local_selector_excludes_unrelated_markdown_sections(self) -> None:
         self.evidence.write_text(

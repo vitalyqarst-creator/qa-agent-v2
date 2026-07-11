@@ -15,6 +15,7 @@ TRACEABILITY_FIELD = re.compile(
     r"(?im)^[ \t]*(?:[-+*][ \t]+)?\*\*(?:Трассировка|Traceability):\*\*[ \t]*(.+)$"
 )
 ATOM_REFERENCE = re.compile(r"\bATOM-[A-Za-z0-9._-]+\b")
+OBLIGATION_REFERENCE = re.compile(r"\bOBL-[A-Za-z0-9._-]+\b")
 
 
 @dataclass(frozen=True)
@@ -126,12 +127,16 @@ def validate_draft_obligation_coverage(
 ) -> ObligationGateResult:
     text = draft_path.read_text(encoding="utf-8")
     obligations = load_obligations(obligations_path)
-    status_by_atom = {
-        obligation.obligation_id: obligation.coverage_status
-        for obligation in obligations.obligations
+    obligations_by_id = {
+        obligation.obligation_id: obligation for obligation in obligations.obligations
     }
+    obligations_by_atom: dict[str, list[Any]] = {}
+    for obligation in obligations.obligations:
+        obligations_by_atom.setdefault(obligation.traceability_atom_id, []).append(obligation)
     testable = {
-        atom_id for atom_id, status in status_by_atom.items() if status == "testable"
+        obligation.obligation_id
+        for obligation in obligations.obligations
+        if obligation.coverage_status == "testable"
     }
     covered: set[str] = set()
     findings: list[dict[str, Any]] = []
@@ -139,10 +144,11 @@ def validate_draft_obligation_coverage(
 
     for tc_id, block in sections:
         trace_values = TRACEABILITY_FIELD.findall(without_fenced_blocks(block))
-        traced_atoms = set(ATOM_REFERENCE.findall(" ".join(trace_values)))
+        trace_text = " ".join(trace_values)
+        traced_atoms = set(ATOM_REFERENCE.findall(trace_text))
+        traced_obligations = set(OBLIGATION_REFERENCE.findall(trace_text))
         for atom_id in sorted(traced_atoms):
-            status = status_by_atom.get(atom_id)
-            if status is None:
+            if atom_id not in obligations_by_atom:
                 findings.append(
                     {
                         "id": "unknown-atomic-obligation",
@@ -152,26 +158,86 @@ def validate_draft_obligation_coverage(
                         "message": "TC references an ATOM that is absent from the prepared package.",
                     }
                 )
-            elif status != "testable":
+        for obligation_id in sorted(traced_obligations):
+            obligation = obligations_by_id.get(obligation_id)
+            if obligation is None:
+                findings.append(
+                    {
+                        "id": "unknown-prepared-obligation",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation_id,
+                        "message": "TC references an OBL that is absent from the prepared package.",
+                    }
+                )
+                continue
+            atom_id = obligation.traceability_atom_id
+            if atom_id not in traced_atoms:
+                findings.append(
+                    {
+                        "id": "obligation-atom-pair-mismatch",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation_id,
+                        "atom_id": atom_id,
+                        "message": "TC must trace both the prepared obligation and its linked atom.",
+                    }
+                )
+            elif obligation.coverage_status != "testable":
                 findings.append(
                     {
                         "id": "non-testable-obligation-used-as-test",
                         "severity": "error",
                         "tc_id": tc_id,
+                        "obligation_id": obligation_id,
                         "atom_id": atom_id,
-                        "coverage_status": status,
+                        "coverage_status": obligation.coverage_status,
                         "message": "gap, unclear and not-applicable obligations cannot become executable TC coverage.",
                     }
                 )
             else:
-                covered.add(atom_id)
+                covered.add(obligation_id)
 
-    for atom_id in sorted(testable - covered):
+        for atom_id in sorted(traced_atoms):
+            linked = obligations_by_atom.get(atom_id, [])
+            legacy = [item for item in linked if item.obligation_id == atom_id]
+            if legacy:
+                for obligation in legacy:
+                    if obligation.coverage_status != "testable":
+                        findings.append(
+                            {
+                                "id": "non-testable-obligation-used-as-test",
+                                "severity": "error",
+                                "tc_id": tc_id,
+                                "obligation_id": obligation.obligation_id,
+                                "atom_id": atom_id,
+                                "coverage_status": obligation.coverage_status,
+                                "message": "gap, unclear and not-applicable obligations cannot become executable TC coverage.",
+                            }
+                        )
+                    else:
+                        covered.add(obligation.obligation_id)
+            elif linked and not any(
+                item.obligation_id in traced_obligations for item in linked
+            ):
+                findings.append(
+                    {
+                        "id": "atom-without-prepared-obligation",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "atom_id": atom_id,
+                        "message": "Package version 5 TC traceability must name the linked OBL as well as the ATOM.",
+                    }
+                )
+
+    for obligation_id in sorted(testable - covered):
+        obligation = obligations_by_id[obligation_id]
         findings.append(
             {
                 "id": "missing-testable-obligation-coverage",
                 "severity": "error",
-                "atom_id": atom_id,
+                "obligation_id": obligation_id,
+                "atom_id": obligation.traceability_atom_id,
                 "message": "A testable prepared obligation has no TC traceability reference.",
             }
         )

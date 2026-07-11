@@ -68,12 +68,14 @@ class PreparedReviewerContractTests(unittest.TestCase):
             "reviewed_draft_sha256": self.digest,
             "obligation_reviews": [
                 {
+                    "obligation_id": "ATOM-001",
                     "atom_id": "ATOM-001",
                     "verdict": "covered",
                     "test_case_ids": ["TC-PREP-001"],
                     "note": "The concrete observable result is covered.",
                 },
                 {
+                    "obligation_id": "ATOM-002",
                     "atom_id": "ATOM-002",
                     "verdict": "gap-preserved",
                     "test_case_ids": [],
@@ -111,7 +113,7 @@ class PreparedReviewerContractTests(unittest.TestCase):
     def test_rejects_missing_atom(self) -> None:
         payload = copy.deepcopy(self.payload)
         payload["obligation_reviews"].pop()
-        with self.assertRaisesRegex(runner.RunnerError, "atom set mismatch"):
+        with self.assertRaisesRegex(runner.RunnerError, "obligation set mismatch"):
             self.parse(payload)
 
     def test_rejects_duplicate_atom(self) -> None:
@@ -119,7 +121,7 @@ class PreparedReviewerContractTests(unittest.TestCase):
         payload["obligation_reviews"].append(
             copy.deepcopy(payload["obligation_reviews"][0])
         )
-        with self.assertRaisesRegex(runner.RunnerError, "duplicate atom ids"):
+        with self.assertRaisesRegex(runner.RunnerError, "duplicate obligation ids"):
             self.parse(payload)
 
     def test_rejects_unknown_test_case(self) -> None:
