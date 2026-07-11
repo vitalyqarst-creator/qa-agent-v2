@@ -376,6 +376,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         *,
         validator=None,
         promote_final: bool = False,
+        promotion_dry_run: bool = False,
         allow_overwrite_final: bool = False,
         verified: bool = True,
     ):
@@ -401,6 +402,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             validator=validator or self.validator,
             timeout_seconds=5,
             promote_final=promote_final,
+            promotion_dry_run=promotion_dry_run,
             allow_overwrite_final=allow_overwrite_final,
         )
 
@@ -795,6 +797,41 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("accepted-not-promoted", result.status)
         self.assertFalse(result.final_promoted)
         self.assertFalse(self.final_path.exists())
+
+    def test_promotion_dry_run_records_hash_destination_and_performs_no_write(self) -> None:
+        executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="accepted"))
+        result = self.make_runner(executor, promotion_dry_run=True).run()
+
+        self.assertEqual("accepted-promotion-dry-run", result.status)
+        self.assertFalse(result.final_promoted)
+        self.assertFalse(self.final_path.exists())
+        report = json.loads(
+            (self.cycle_dir / "promotion-dry-run.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("passed", report["status"])
+        self.assertEqual(hashlib.sha256(self.draft_path.read_bytes()).hexdigest(), report["draft_sha256"])
+        self.assertTrue(
+            report["destination_path"].endswith(f"test-cases/{self.final_path.name}")
+        )
+        self.assertFalse(report["overwrite_allowed"])
+        self.assertFalse(report["write_performed"])
+
+    def test_promotion_dry_run_blocks_existing_destination(self) -> None:
+        self.final_path.parent.mkdir(parents=True, exist_ok=True)
+        self.final_path.write_text("existing\n", encoding="utf-8")
+        executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="accepted"))
+        result = self.make_runner(executor, promotion_dry_run=True).run()
+
+        self.assertEqual("blocked-promotion-dry-run", result.status)
+        self.assertEqual("existing\n", self.final_path.read_text(encoding="utf-8"))
+        self.assertFalse((self.cycle_dir / "promotion-dry-run.json").exists())
+
+    def test_promotion_dry_run_rejects_overwrite_override(self) -> None:
+        runner = self.make_runner(
+            ScriptedExecutor(), promotion_dry_run=True, allow_overwrite_final=True
+        )
+        with self.assertRaisesRegex(runner_module.RunnerError, "never permits overwrite"):
+            runner.validate_configuration()
 
     def test_timeout_without_required_writer_artifact_blocks(self) -> None:
         executor = ScriptedExecutor(

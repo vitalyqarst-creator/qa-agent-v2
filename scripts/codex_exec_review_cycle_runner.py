@@ -548,6 +548,7 @@ class CodexExecReviewCycleRunner:
     writer_first_artifact_deadline_seconds: int = 120
     prepared_reviewer_prompt_max_bytes: int = DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES
     promote_final: bool = False
+    promotion_dry_run: bool = False
     allow_overwrite_final: bool = False
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
     _backend_session_ids: list[str] = field(default_factory=list, init=False)
@@ -610,6 +611,10 @@ class CodexExecReviewCycleRunner:
         return self.runner_output_dir(WRITER_STAGE) / "evidence-access-report.json"
 
     @property
+    def promotion_dry_run_path(self) -> Path:
+        return self.cycle_dir / "promotion-dry-run.json"
+
+    @property
     def draft_seed_path(self) -> Path:
         return self.attempt_root(WRITER_STAGE) / "runner-input" / "draft-seed.md"
 
@@ -638,6 +643,10 @@ class CodexExecReviewCycleRunner:
 
     def validate_configuration(self) -> None:
         self.command_config.validate()
+        if self.promote_final and self.promotion_dry_run:
+            raise RunnerError("promotion and promotion dry-run are mutually exclusive")
+        if self.promotion_dry_run and self.allow_overwrite_final:
+            raise RunnerError("promotion dry-run never permits overwrite")
         if self.timeout_seconds < 1:
             raise RunnerError("timeout_seconds must be >= 1")
         for name in (
@@ -1446,6 +1455,34 @@ class CodexExecReviewCycleRunner:
         self._write_state(state)
         append_event(self.cycle_dir, "reviewer_terminal_state_accepted")
 
+        if self.promotion_dry_run:
+            try:
+                plan = self._promotion_plan(
+                    production_before, expected_draft_sha256=draft_sha256
+                )
+            except RunnerError as exc:
+                state["workflow_status"] = "blocked-promotion-dry-run"
+                state["stage_status"] = "blocked-input"
+                state["blocking_reasons"] = [str(exc)]
+                self._write_state(state)
+                append_event(self.cycle_dir, "promotion_dry_run_blocked", reason=str(exc))
+                return self._result(state)
+            write_json(self.promotion_dry_run_path, plan)
+            state.update(
+                {
+                    "workflow_status": "accepted-promotion-dry-run",
+                    "stage_status": "accepted-promotion-dry-run",
+                    "promotion_status": "dry-run-passed",
+                    "promotion_dry_run_report": relative_path(
+                        self.promotion_dry_run_path, self.ft_root
+                    ),
+                    "blocking_reasons": ["promotion dry-run passed; production was not written"],
+                }
+            )
+            self._write_state(state)
+            append_event(self.cycle_dir, "promotion_dry_run_passed", **plan)
+            return self._result(state)
+
         if not self.promote_final:
             state["workflow_status"] = "accepted-not-promoted"
             state["stage_status"] = "accepted-not-promoted"
@@ -2152,6 +2189,20 @@ class CodexExecReviewCycleRunner:
         )
 
     def _promote(self, production_before: dict[str, str], *, expected_draft_sha256: str) -> None:
+        self._promotion_plan(production_before, expected_draft_sha256=expected_draft_sha256)
+        self.final_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary_path = self.final_path.with_suffix(self.final_path.suffix + ".promotion-tmp")
+        try:
+            shutil.copyfile(self.draft_path, temporary_path)
+            if sha256_file(temporary_path) != expected_draft_sha256:
+                raise RunnerError("promotion copy hash differs from the validated writer draft")
+            temporary_path.replace(self.final_path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+
+    def _promotion_plan(
+        self, production_before: dict[str, str], *, expected_draft_sha256: str
+    ) -> dict[str, Any]:
         changes = self._production_changes(production_before)
         if changes:
             raise RunnerError(
@@ -2167,15 +2218,16 @@ class CodexExecReviewCycleRunner:
                 "writer draft changed after validation/review and cannot be promoted: "
                 f"expected sha256={expected_draft_sha256}, actual sha256={actual_draft_sha256}"
             )
-        self.final_path.parent.mkdir(parents=True, exist_ok=True)
-        temporary_path = self.final_path.with_suffix(self.final_path.suffix + ".promotion-tmp")
-        try:
-            shutil.copyfile(self.draft_path, temporary_path)
-            if sha256_file(temporary_path) != expected_draft_sha256:
-                raise RunnerError("promotion copy hash differs from the validated writer draft")
-            temporary_path.replace(self.final_path)
-        finally:
-            temporary_path.unlink(missing_ok=True)
+        return {
+            "status": "passed",
+            "draft_path": relative_path(self.draft_path, self.repo_root),
+            "draft_sha256": actual_draft_sha256,
+            "destination_path": relative_path(self.final_path, self.repo_root),
+            "destination_exists": self.final_path.exists(),
+            "overwrite_allowed": False,
+            "production_changes": [],
+            "write_performed": False,
+        }
 
     def _reviewer_message(self, stdout: str) -> str:
         if not self.command_config.json_flag:
@@ -2581,6 +2633,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES,
     )
     parser.add_argument("--promote-final", action="store_true")
+    parser.add_argument("--promotion-dry-run", action="store_true")
     parser.add_argument("--allow-overwrite-final", action="store_true")
     return parser
 
@@ -2621,6 +2674,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
         prepared_reviewer_prompt_max_bytes=args.prepared_reviewer_prompt_max_bytes,
         promote_final=args.promote_final,
+        promotion_dry_run=args.promotion_dry_run,
         allow_overwrite_final=args.allow_overwrite_final,
     )
     try:
