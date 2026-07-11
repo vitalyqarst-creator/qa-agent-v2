@@ -1010,6 +1010,27 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual([], executor.requests)
         self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
 
+    def test_prepared_standard_validate_only_reports_route_without_cycle_artifacts(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        report = runner.validate_only_report()
+
+        self.assertEqual("validated", report["status"])
+        self.assertEqual("prepared-standard", report["route"])
+        self.assertEqual("writer.session_initial_draft", report["writer_scenario"])
+        self.assertEqual(
+            "reviewer.semantic_traceability_test_design",
+            report["reviewer_scenario"],
+        )
+        self.assertTrue(report["writer_context_budget"]["passed"])
+        self.assertFalse(report["cycle_artifacts_created"])
+        self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
+        self.assertFalse(self.writer_attempt.exists())
+
     def test_standard_path_blocks_before_writer_when_reviewer_command_budget_cannot_read_inputs(self) -> None:
         executor = ScriptedExecutor()
         cycle = self.make_runner(executor)

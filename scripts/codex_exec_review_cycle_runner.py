@@ -1964,6 +1964,49 @@ class CodexExecReviewCycleRunner:
         )
         return self._result(state)
 
+    def validate_only_report(self) -> dict[str, Any]:
+        """Validate the first transition without creating cycle or attempt artifacts."""
+        self.validate_configuration()
+        self._writer_prompt()
+        route = (
+            "prepared-fast"
+            if self._is_prepared_fast()
+            else "prepared-standard"
+            if self._is_prepared_standard()
+            else "raw-standard"
+        )
+        report: dict[str, Any] = {
+            "status": "validated",
+            "route": route,
+            "writer_scenario": (
+                "writer.session_prepared_initial_draft"
+                if self._is_prepared_fast()
+                else self._standard_scenario("writer")
+            ),
+            "reviewer_scenario": (
+                "reviewer.session_prepared_semantic"
+                if self._is_prepared_fast()
+                else self._standard_scenario("reviewer")
+            ),
+            "final_artifact": relative_path(self.final_path, self.repo_root),
+            "final_exists": self.final_path.exists(),
+            "cycle_artifacts_created": False,
+        }
+        if self._prepared_package is not None:
+            report.update(
+                {
+                    "package_version": self._prepared_package.package_version,
+                    "execution_profile": self._prepared_package.execution_profile,
+                    "unsupported_dimensions": list(
+                        self._prepared_package.unsupported_dimensions
+                    ),
+                    "writer_context_budget": self._context_budget_reports.get(
+                        WRITER_STAGE, {}
+                    ),
+                }
+            )
+        return report
+
     def _initial_state(self) -> dict[str, Any]:
         return {
             "cycle_id": self.cycle_dir.name,
@@ -3234,6 +3277,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--promotion-dry-run", action="store_true")
     parser.add_argument("--allow-overwrite-final", action="store_true")
+    parser.add_argument("--validate-only", action="store_true")
     return parser
 
 
@@ -3289,6 +3333,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         allow_overwrite_final=args.allow_overwrite_final,
     )
     try:
+        if args.validate_only:
+            print(json.dumps(runner.validate_only_report(), ensure_ascii=False))
+            return 0
         result = runner.run()
     except RunnerError as exc:
         print(json.dumps({"status": "blocked-configuration", "reason": str(exc)}, ensure_ascii=False))
