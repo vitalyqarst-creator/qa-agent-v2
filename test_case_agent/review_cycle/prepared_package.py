@@ -20,8 +20,8 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 3
-SUPPORTED_PACKAGE_VERSIONS = {1, 2, PACKAGE_VERSION}
+PACKAGE_VERSION = 4
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
@@ -218,6 +218,7 @@ class PreparedObligation:
     gap_id: str
     dictionary_refs: tuple[str, ...]
     notes: str
+    constraint_gap_ids: tuple[str, ...] = ()
 
     def validate(self) -> None:
         _identifier(self.obligation_id, "obligation_id", ATOM_ID)
@@ -241,11 +242,17 @@ class PreparedObligation:
             raise StageRuntimeError(f"{self.obligation_id} not-applicable obligation cannot link a gap")
         for value in self.dictionary_refs:
             _identifier(value, f"{self.obligation_id}.dictionary_refs[]")
+        for value in self.constraint_gap_ids:
+            _identifier(value, f"{self.obligation_id}.constraint_gap_ids[]", GAP_ID)
+        if len(self.constraint_gap_ids) != len(set(self.constraint_gap_ids)):
+            raise StageRuntimeError(
+                f"{self.obligation_id}.constraint_gap_ids must not contain duplicates"
+            )
         if not isinstance(self.notes, str):
             raise StageRuntimeError(f"{self.obligation_id}.notes must be text")
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
+    def to_dict(self, *, include_constraints: bool = False) -> dict[str, Any]:
+        payload = {
             "obligation_id": self.obligation_id,
             "source_refs": list(self.source_refs),
             "atomic_statement": self.atomic_statement,
@@ -256,9 +263,14 @@ class PreparedObligation:
             "dictionary_refs": list(self.dictionary_refs),
             "notes": self.notes,
         }
+        if include_constraints:
+            payload["constraint_gap_ids"] = list(self.constraint_gap_ids)
+        return payload
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedObligation:
+    def from_dict(
+        cls, payload: Mapping[str, Any], *, package_version: int = PACKAGE_VERSION
+    ) -> PreparedObligation:
         expected = {
             "obligation_id",
             "source_refs",
@@ -270,6 +282,8 @@ class PreparedObligation:
             "dictionary_refs",
             "notes",
         }
+        if package_version >= 4:
+            expected.add("constraint_gap_ids")
         _exact_fields(payload, expected, "obligation")
         item = cls(
             obligation_id=payload["obligation_id"],
@@ -283,6 +297,15 @@ class PreparedObligation:
                 payload["dictionary_refs"], "obligation.dictionary_refs", allow_empty=True
             ),
             notes=payload["notes"],
+            constraint_gap_ids=(
+                _string_list(
+                    payload["constraint_gap_ids"],
+                    "obligation.constraint_gap_ids",
+                    allow_empty=True,
+                )
+                if package_version >= 4
+                else ()
+            ),
         )
         item.validate()
         return item
@@ -300,7 +323,10 @@ class PreparedObligationSet:
         return {
             "package_version": self.package_version,
             "package_id": self.package_id,
-            "obligations": [item.to_dict() for item in self.obligations],
+            "obligations": [
+                item.to_dict(include_constraints=self.package_version >= 4)
+                for item in self.obligations
+            ],
             "coverage_gaps": [item.to_dict() for item in self.coverage_gaps],
         }
 
@@ -330,6 +356,18 @@ class PreparedObligationSet:
                 raise StageRuntimeError(f"{item.obligation_id} references unknown gap {item.gap_id}")
             if item.gap_id:
                 linked_gaps.add(item.gap_id)
+            if self.package_version >= 4:
+                for constraint_gap_id in item.constraint_gap_ids:
+                    if constraint_gap_id not in known_gaps:
+                        raise StageRuntimeError(
+                            f"{item.obligation_id} references unknown constraint gap "
+                            f"{constraint_gap_id}"
+                        )
+                    linked_gaps.add(constraint_gap_id)
+            elif item.constraint_gap_ids:
+                raise StageRuntimeError(
+                    f"{item.obligation_id} constraint gaps require package_version 4"
+                )
             if self.package_version >= 3:
                 for value in item.dictionary_refs:
                     _identifier(value, f"{item.obligation_id}.dictionary_refs[]", DICT_ID)
@@ -398,7 +436,10 @@ class PreparedObligationSet:
         value = cls(
             package_version=payload["package_version"],
             package_id=payload["package_id"],
-            obligations=tuple(PreparedObligation.from_dict(item) for item in payload["obligations"]),
+            obligations=tuple(
+                PreparedObligation.from_dict(item, package_version=payload["package_version"])
+                for item in payload["obligations"]
+            ),
             coverage_gaps=tuple(PreparedGap.from_dict(item) for item in payload["coverage_gaps"]),
             digest=payload["digest"],
         )
@@ -524,7 +565,7 @@ class PreparedStagePackage:
             "package_digest",
         }
         package_version = payload.get("package_version")
-        if package_version in {2, 3}:
+        if isinstance(package_version, int) and package_version >= 2:
             expected.update({"execution_profile", "unsupported_dimensions"})
         _exact_fields(payload, expected, "prepared stage package")
         if not isinstance(payload["source_registry"], list) or not isinstance(payload["package_artifacts"], list):
@@ -539,7 +580,7 @@ class PreparedStagePackage:
             source_registry=tuple(SourceRegistryEntry.from_dict(item) for item in payload["source_registry"]),
             package_artifacts=tuple(PackageArtifact.from_dict(item) for item in payload["package_artifacts"]),
             execution_profile=(
-                payload["execution_profile"] if package_version in {2, 3} else "legacy-unclassified"
+                payload["execution_profile"] if isinstance(package_version, int) and package_version >= 2 else "legacy-unclassified"
             ),
             unsupported_dimensions=(
                 _string_list(
@@ -547,7 +588,7 @@ class PreparedStagePackage:
                     "unsupported_dimensions",
                     allow_empty=True,
                 )
-                if package_version in {2, 3}
+                if isinstance(package_version, int) and package_version >= 2
                 else ("legacy-unclassified",)
             ),
             forbidden_evidence_roots=_string_list(

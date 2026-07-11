@@ -285,6 +285,53 @@ coverage_gaps:
 
         self.assertEqual(result.gap_count, 1)
 
+    def test_preserves_non_blocking_constraint_gap_on_testable_atom(self) -> None:
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc |",
+                "| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc | constraint_gap_ids |",
+            ).replace(
+                "| --- | --- | --- | --- | --- | --- |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+                1,
+            ).replace(
+                "| `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered` | `TC-001` |",
+                "| `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered` | `TC-001` | `GAP-001` |",
+            ).replace(
+                "| `ATOM-002` | `SRC-001.P02` | `GSR 2` | Неизвестен текст ошибки. | `gap` | `GAP-001` |",
+                "| `ATOM-002` | `SRC-001.P02` | `GSR 2` | Неизвестен текст ошибки. | `gap` | `GAP-001` | `-` |",
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(result.gap_count, 1)
+
+    def test_blocks_missing_constraint_gap(self) -> None:
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc |",
+                "| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc | constraint_gap_ids |",
+            ).replace(
+                "| --- | --- | --- | --- | --- | --- |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
+                1,
+            ).replace(
+                "| `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered` | `TC-001` |",
+                "| `ATOM-001` | `SRC-001.P01` | `GSR 1; DICT-001` | Поле использует фиксированный список DICT-001. | `covered` | `TC-001` | `GAP-999` |",
+            ).replace(
+                "| `ATOM-002` | `SRC-001.P02` | `GSR 2` | Неизвестен текст ошибки. | `gap` | `GAP-001` |",
+                "| `ATOM-002` | `SRC-001.P02` | `GSR 2` | Неизвестен текст ошибки. | `gap` | `GAP-001` | `-` |",
+            ),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "constraint gap is missing"):
+            self.compile()
+
     def test_blocks_duplicate_workflow_key(self) -> None:
         self.state.write_text(
             self.state.read_text(encoding="utf-8") + "ft_slug: demo\n",

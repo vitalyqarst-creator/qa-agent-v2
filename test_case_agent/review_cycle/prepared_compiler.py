@@ -468,6 +468,13 @@ def compile_workflow_package(
         atom_id = row["atom_id"]
         status_raw = row["coverage_status"].lower()
         linked = plan_by_atom.get(atom_id, [])
+        constraint_gap_tokens = list(
+            dict.fromkeys(TOKEN.findall(row.get("constraint_gap_ids", "")))
+        )
+        if any(not item.startswith("GAP-") for item in constraint_gap_tokens):
+            raise StageRuntimeError(
+                f"semantic degradation: {atom_id} constraint_gap_ids must contain only GAP ids"
+            )
         gap_tokens = list(
             dict.fromkeys(item for item in TOKEN.findall(" ".join(row.values())) if item.startswith("GAP-"))
         )
@@ -495,6 +502,13 @@ def compile_workflow_package(
             intent = "; ".join(dict.fromkeys(item["planned_check"] for item in viable))
             if not oracle or "none_required" in oracle.lower():
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no observable plan oracle")
+            for constraint_gap_id in constraint_gap_tokens:
+                if constraint_gap_id not in known_gaps:
+                    raise StageRuntimeError(
+                        "semantic degradation: constraint gap is missing from coverage-gaps.md: "
+                        f"{constraint_gap_id}"
+                    )
+                used_gaps.add(constraint_gap_id)
             gap_id = ""
         elif coverage_status in {"gap", "unclear"}:
             if len(set(gap_tokens)) != 1:
@@ -531,7 +545,15 @@ def compile_workflow_package(
                 coverage_status=coverage_status,
                 gap_id=gap_id,
                 dictionary_refs=tuple(dict_tokens),
-                notes="Compiled from workflow-state canonical design artifacts.",
+                notes=(
+                    "Compiled from workflow-state canonical design artifacts."
+                    + (
+                        " Non-blocking constraints: " + ", ".join(constraint_gap_tokens) + "."
+                        if constraint_gap_tokens
+                        else ""
+                    )
+                ),
+                constraint_gap_ids=tuple(constraint_gap_tokens),
             )
         )
         evidence_rows.extend([f"## {atom_id}", "", " | ".join(row.values()), ""])

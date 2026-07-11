@@ -417,7 +417,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         legacy = PreparedObligationSet.from_dict(payload)
 
         self.assertEqual(2, legacy.package_version)
-        with self.assertRaisesRegex(StageRuntimeError, "requires package version 3"):
+        with self.assertRaisesRegex(StageRuntimeError, "requires package version 4"):
             PreparedPackageBuilder(self.root).build(
                 output_root=self.root / "work" / "legacy-fast",
                 package_id="pkg-001",
