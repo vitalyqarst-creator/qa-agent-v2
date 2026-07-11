@@ -710,6 +710,7 @@ class CodexExecReviewCycleRunner:
                     f"profile={self._prepared_package.execution_profile}, "
                     f"unsupported_dimensions={dimensions}"
                 )
+            self._validate_prepared_attempt_binding()
         else:
             if not self.source_files:
                 raise RunnerError("At least one explicit source file is required")
@@ -757,6 +758,40 @@ class CodexExecReviewCycleRunner:
         if reference is None:
             raise RunnerError(f"Prepared package does not contain {kind}")
         return resolve_repository_path(reference.path, self.repo_root)
+
+    def _prepared_instruction_field(self, field_name: str) -> str:
+        instructions_path = self._prepared_artifact("stage-instructions")
+        text = instructions_path.read_text(encoding="utf-8")
+        matches = re.findall(
+            rf"(?m)^- {re.escape(field_name)}: `([^`\r\n]+)`\s*$",
+            text,
+        )
+        if len(matches) != 1:
+            raise RunnerError(
+                "Prepared stage instructions must declare exactly one "
+                f"{field_name}: {relative_path(instructions_path, self.repo_root)}"
+            )
+        return matches[0].replace("\\", "/")
+
+    def _validate_prepared_attempt_binding(self) -> None:
+        expected_attempt = relative_path(self.attempt_root(WRITER_STAGE), self.repo_root)
+        expected_output = relative_path(self.draft_path, self.repo_root)
+        declared_attempt = self._prepared_instruction_field("attempt_root")
+        declared_output = self._prepared_instruction_field("output_path")
+        mismatches = []
+        if declared_attempt != expected_attempt:
+            mismatches.append(
+                f"attempt_root declared={declared_attempt} expected={expected_attempt}"
+            )
+        if declared_output != expected_output:
+            mismatches.append(
+                f"output_path declared={declared_output} expected={expected_output}"
+            )
+        if mismatches:
+            raise RunnerError(
+                "Prepared stage package attempt binding mismatch; compile a new immutable "
+                "package for the target cycle before launch: " + "; ".join(mismatches)
+            )
 
     @property
     def prepared_writer_profile_path(self) -> Path:

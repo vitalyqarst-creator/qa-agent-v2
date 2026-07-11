@@ -412,6 +412,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         execution_profile: str = "simple-field-property",
         unsupported_dimensions=(),
         forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+        instruction_attempt_root: Path | None = None,
     ) -> Path:
         self.handoff_path.write_text("# Scope contract\n\nSRC-1: observable requirement.\n", encoding="utf-8")
         obligations = PreparedObligationSet.create(
@@ -432,6 +433,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             coverage_gaps=(),
         )
         package_root = self.cycle_dir / "prepared-input" / "pkg-exec-001"
+        bound_attempt = instruction_attempt_root or self.writer_attempt
         PreparedPackageBuilder(self.repo_root).build(
             output_root=package_root,
             package_id="pkg-exec-001",
@@ -449,8 +451,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             instructions=StageInstructionConfig(
                 role="writer",
                 scenario="writer.session_prepared_initial_draft",
-                output_path=self.draft_path.relative_to(self.repo_root).as_posix(),
-                attempt_root=self.writer_attempt.relative_to(self.repo_root).as_posix(),
+                output_path=(bound_attempt / "stage-output" / "draft.md")
+                .relative_to(self.repo_root)
+                .as_posix(),
+                attempt_root=bound_attempt.relative_to(self.repo_root).as_posix(),
                 sandbox_policy="workspace_write",
                 timeout_seconds=180,
                 idle_timeout_seconds=60,
@@ -742,6 +746,27 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(runner_module.RunnerError, "Prepared stage package is invalid"):
             self.make_prepared_runner(executor, package_path).run()
         self.assertEqual([], executor.requests)
+
+    def test_prepared_fast_path_rejects_foreign_attempt_binding_before_exec(self) -> None:
+        foreign_attempt = (
+            self.ft_root
+            / "work"
+            / "review-cycles"
+            / "foreign-cycle"
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+        )
+        package_path = self.build_prepared_package(
+            instruction_attempt_root=foreign_attempt,
+        )
+        executor = ScriptedExecutor()
+
+        with self.assertRaisesRegex(runner_module.RunnerError, "attempt binding mismatch"):
+            self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
 
     def test_ineligible_prepared_profile_routes_to_standard_writer(self) -> None:
         package_path = self.build_prepared_package(

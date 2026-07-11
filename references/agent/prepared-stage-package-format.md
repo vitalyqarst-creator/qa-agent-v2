@@ -27,6 +27,8 @@ work/review-cycles/<cycle-id>/prepared-input/<package-id>/
 
 The four files are the default writer/reviewer input capsule. Package-local paths are repository-relative POSIX paths. Unknown fields, missing files, stale hashes, duplicate ids and path traversal are blocking errors.
 
+`stage-instructions.md` is attempt-bound: its `attempt_root` and `output_path` must exactly match the target writer attempt selected by the runner. A compiled package may be reused as source material for a new compilation, but its immutable manifest must not be passed directly to a different cycle. The runner rejects binding drift before starting an LLM session.
+
 ## `stage-package.json`
 
 Required fields:
