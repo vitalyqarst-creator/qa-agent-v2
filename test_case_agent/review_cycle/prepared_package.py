@@ -23,6 +23,8 @@ from test_case_agent.review_cycle.runtime import (
 PACKAGE_VERSION = 5
 SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
+FAST_EVIDENCE_MAX_BYTES = 32768
+STANDARD_ROUTING_EVIDENCE_MAX_BYTES = 49152
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -746,9 +748,15 @@ class PreparedPackageBuilder:
         try:
             temporary.mkdir(parents=True)
             evidence_text = self._render_evidence(package_id, evidence_inputs)
-            if len(evidence_text.encode("utf-8")) > 32768:
+            evidence_max_bytes = (
+                FAST_EVIDENCE_MAX_BYTES
+                if execution_profile == FAST_EXECUTION_PROFILE
+                else STANDARD_ROUTING_EVIDENCE_MAX_BYTES
+            )
+            if len(evidence_text.encode("utf-8")) > evidence_max_bytes:
                 raise StageRuntimeError(
-                    "blocked-package-budget: source evidence exceeds 32768 bytes"
+                    "blocked-package-budget: source evidence exceeds "
+                    f"{evidence_max_bytes} bytes for {execution_profile}"
                 )
             obligations.validate(evidence_text=evidence_text)
             evidence_path = temporary / "source-evidence.md"

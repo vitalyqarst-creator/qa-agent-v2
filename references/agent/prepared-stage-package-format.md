@@ -14,6 +14,7 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Source registry entries come only from the workflow-linked `source-selection.md`, never from aggregating historical source selections. DOCX and XHTML/HTML must have the same selected base name; PDF is registered as structural cross-check when selected.
 - Workflow compilation must derive fast-path eligibility from the canonical test-design applicability matrix. Numeric/boundary, dependency/state, integration/persistence, table-parity and any unclassified applicable dimension produce a `standard-required` package with explicit `unsupported_dimensions`; callers cannot opt those dimensions into `simple-field-property` by flag or prompt.
 - Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 5 carries `obligation_id` and `atom_id` as separate machine-readable fields; evidence text alone is not sufficient for this relation.
+- When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
 
 ## Layout
 
@@ -77,7 +78,7 @@ Keep only scope-local evidence needed to understand the obligations:
 - dictionary/oracle statements;
 - coverage gaps and accepted risks.
 
-Builder inputs use explicit selectors. Each selector must resolve to a Markdown heading block or a narrow line window; missing selectors block the package. Full-file inclusion is explicit and byte-capped. One evidence slice is capped by its declared `max_bytes`, and combined `source-evidence.md` is capped at 32768 bytes.
+Builder inputs use explicit selectors. Each selector must resolve to a Markdown heading block or a narrow line window; missing selectors block the package. Full-file inclusion is explicit and byte-capped. One evidence slice is capped by its declared `max_bytes`. Fast-eligible combined `source-evidence.md` is capped at 32768 bytes. A `standard-required` diagnostic/routing package may use up to 49152 bytes so mandatory package context can be retained, but it remains ineligible for the optimized writer and is rejected by fast-runner preflight.
 
 Do not copy whole DOCX/PDF documents, unrelated sections, historical reports or generated TC. The file must name every `SRC-*`, requirement code and `GAP-*` used by `atomic-obligations.json`.
 
@@ -103,14 +104,22 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 | package artifact bytes | 512000 | 512000 |
 | hard timeout seconds | 180 | 90 |
 | idle timeout seconds | 60 | disabled; hard deadline applies |
-| command executions | 12 | 8 |
+| command executions | 12 | 1 |
 | first meaningful draft deadline seconds | 120 (experimental) | n/a |
 
 Before the first meaningful draft write, the writer is governed by the experimental `120 s` first-artifact deadline rather than the post-write idle timeout. The separate writer hard timeout remains `180 s`; after a meaningful write, draft changes and JSONL events refresh the `60 s` idle clock. Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-command-budget`, `blocked-first-artifact-deadline`, `blocked-idle-timeout` or `blocked-timeout`. Increasing a budget is an explicit experiment decision, not automatic recovery.
 
 ## Fast Path And Fallback
 
-The runner verifies the four package files and embeds a compact projection into the starting prompt. The optimized writer must not spend stage commands rereading package files, the full writer skill or general references. Package-level notes are included only through applicable scope-local selectors. A stage must not load document/PDF processing skills or scan full sources by default.
+The runner verifies the four package files and embeds a compact projection into the starting prompt. The optimized writer must not spend stage commands rereading package files, the full writer skill or general references. Existing package-level `AGENT-NOTES.md` is embedded by the compiler as mandatory context; it must not introduce behavior outside the confirmed scope. A stage must not load document/PDF processing skills or scan full sources by default.
+
+## Recovery And Replay
+
+- A package is bound to one exact cycle, writer attempt root and output path. It is never replayed against another attempt.
+- If writer execution is interrupted after a meaningful draft exists, the runner may continue only when the structural, seed, obligation and evidence-access gates all pass; the stage is recorded as `completed-with-progress`.
+- Missing/invalid draft, package drift, validator failure or evidence-access failure stops the cycle. Recovery creates a new cycle and recompiles a new target-bound package.
+- Reviewer timeout, idle timeout or command-budget interruption never yields a semantic verdict. Partial reviewer output is discarded and recovery starts a new immutable cycle with fresh writer/reviewer sessions.
+- Re-running a terminal or blocked cycle directory is rejected before LLM launch; existing state and evidence remain unchanged.
 
 Targeted fallback is allowed only when a named obligation cannot be resolved from the capsule. It must be limited to an exact XHTML/DOCX locator. PDF remains structural evidence only. An unbounded source scan, full document re-analysis or external scratch path blocks the prepared-package run.
 

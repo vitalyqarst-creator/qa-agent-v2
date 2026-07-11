@@ -175,6 +175,39 @@ coverage_gaps:
         self.assertIn("fts/demo/AGENT-NOTES.md", evidence)
         self.assertIn("PACKAGE-NOTE-SENTINEL", evidence)
 
+    def test_fast_profile_keeps_strict_32k_compiled_evidence_limit(self) -> None:
+        (self.ft / "AGENT-NOTES.md").write_text(
+            "# Oversized notes\n\n" + ("X" * 34000),
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            StageRuntimeError,
+            "compiled evidence exceeds 32768 bytes for simple-field-property",
+        ):
+            self.compile()
+
+    def test_standard_routing_package_allows_mandatory_context_up_to_48k(self) -> None:
+        (self.ft / "AGENT-NOTES.md").write_text(
+            "# Large mandatory notes\n\n" + ("X" * 34000),
+            encoding="utf-8",
+        )
+        (self.design / "test-design-applicability-matrix.md").write_text(
+            """# Test-design Applicability Matrix
+
+| dimension | applicable |
+| --- | --- |
+| `field-property` | `yes` |
+| `dependency` | `yes` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual("standard-required", result.execution_profile)
+        self.assertIn("dependency-state", result.unsupported_dimensions)
+
     def test_blocks_testable_atom_without_plan_oracle(self) -> None:
         obligations = self.design / "coverage-obligation-table.md"
         obligations.write_text(

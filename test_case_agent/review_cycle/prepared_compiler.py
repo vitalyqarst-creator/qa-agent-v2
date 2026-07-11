@@ -12,6 +12,8 @@ from .prepared_package import (
     PreparedObligationSet,
     PreparedPackageBuilder,
     StageInstructionConfig,
+    FAST_EVIDENCE_MAX_BYTES,
+    STANDARD_ROUTING_EVIDENCE_MAX_BYTES,
 )
 from .runtime import StageRuntimeError
 
@@ -795,8 +797,16 @@ def compile_workflow_package(
         )
 
     evidence_text = "\n".join(evidence_rows).rstrip() + "\n"
-    if len(evidence_text.encode("utf-8")) > 32768:
-        raise StageRuntimeError("blocked-package-budget: compiled evidence exceeds 32768 bytes")
+    evidence_max_bytes = (
+        FAST_EVIDENCE_MAX_BYTES
+        if execution_profile == FAST_PROFILE
+        else STANDARD_ROUTING_EVIDENCE_MAX_BYTES
+    )
+    if len(evidence_text.encode("utf-8")) > evidence_max_bytes:
+        raise StageRuntimeError(
+            "blocked-package-budget: compiled evidence exceeds "
+            f"{evidence_max_bytes} bytes for {execution_profile}"
+        )
     temp_evidence = output_root.parent / f".{output_root.name}.compiled-evidence.md"
     if temp_evidence.exists():
         raise StageRuntimeError(f"compiler temporary evidence already exists: {temp_evidence}")
@@ -823,7 +833,14 @@ def compile_workflow_package(
             scope_slug=scope_slug,
             section_id=section_id,
             source_registry=_source_registry(ft_root, source_selection_path),
-            evidence_inputs=[EvidenceInput(temp_evidence, "Compiled fidelity projection", include_full=True, max_bytes=32768)],
+            evidence_inputs=[
+                EvidenceInput(
+                    temp_evidence,
+                    "Compiled fidelity projection",
+                    include_full=True,
+                    max_bytes=evidence_max_bytes,
+                )
+            ],
             obligations=obligation_set,
             instructions=StageInstructionConfig(
                 role="writer",

@@ -7,7 +7,7 @@
 - `source_signal`: live prepared widget-selection canary v11
 - `affected_skill`: `ft-test-case-iteration`
 - `failure_class`: `prepared-runtime-contract-drift`
-- `status`: `candidate`
+- `status`: `implemented-and-live-verified`
 
 ## Failure Signal
 
@@ -53,5 +53,13 @@
 
 - `decision`: accepted as the next bounded fix
 - `reason`: the mismatch wastes an LLM session and makes otherwise eligible v4 packages non-deterministic.
-- `next_action`: update the profile, add deterministic runner preflight, compile per target cycle, then use entirely new v12/control cycle directories.
+- `next_action`: keep the attempt-binding and package-version cases in the permanent regression matrix; no additional bounded fix is open.
 
+## Resolution Evidence
+
+- Package schema is now version `5`; versions `1` through `4` remain readable but are not fast-path eligible.
+- Runner preflight requires exact `attempt_root` and `output_path` binding and rejects a reused/foreign package before LLM launch.
+- Explicit `OBL-* -> ATOM-*` mapping is machine-readable and checked by writer gate and reviewer contract.
+- Checkpoint commits: `d43db29`, `9212141`.
+- Live proof: widget-selection v13, v14 and v15 all used newly compiled target-bound packages and reached accepted reviewer outcomes.
+- Negative proof: common-actions routing v1 compiled as `standard-required` and was rejected before state/attempt/session creation.

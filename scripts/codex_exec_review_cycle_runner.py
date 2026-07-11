@@ -876,7 +876,8 @@ class CodexExecReviewCycleRunner:
             joined = ", ".join(relative_path(path, self.repo_root) for path in existing_runner_artifacts)
             raise RunnerError(
                 "Cycle directory contains runner-owned artifacts from an earlier attempt; "
-                "use a new cycle directory or an explicit recovery path instead of reusing stale outputs: "
+                "start a new immutable cycle instead of replaying stale outputs; prepared recovery "
+                "must recompile a target-bound package for the new attempt: "
                 + joined
             )
 
