@@ -1,0 +1,59 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f4f70-bc6b-7851-949d-afb0a6dce31f",
+  "blocking_reasons": [
+    "prepared evidence-access gate reported findings",
+    "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json"
+  ],
+  "contract_version": 2,
+  "cycle_id": "codex-exec-prepared-widget-selection-live-v10-20260711",
+  "duration_ms": 76375,
+  "exit_code": 0,
+  "finished_at": "2026-07-11T04:31:29.381345+00:00",
+  "input_digest": "5238fa49577c1c23f98e5142d91f8f26247d42b8dfa92a3d869f67af9f531285",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "925abc544544088db2162ca056fd40004dbcc9ca8ce28d079996113aa19bcd9e"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "edfa1eca55becc2dbe1b5ed0866688d3cce88da4f7e7cbfb2085e2033844572b"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "925abc544544088db2162ca056fd40004dbcc9ca8ce28d079996113aa19bcd9e"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "911d394dc59623bf57cf5bdbb5e8bc0b826559db6c07f4efbb1b358402bbbbb8"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "e9d5dda4afb60776b67a09b8ae075803500c1e8a4dc4afb8bc23845c240a1838"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "65f4ddb931ab056b8566c1f6075827cd04b8c654dd66595734a666bb366e461b"
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "sha256": "df5e4f46f1907ab7975346009fa13dc1df52be5c03adc2194b18dc1ddc49fdf9"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-11T04:30:12.999011+00:00",
+  "status": "blocked",
+  "timed_out": false
+}

@@ -1,0 +1,23 @@
+ft_slug: AutoFin
+scope_slug: prepared-widget-selection-live-canary
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 0
+next_skill: none
+required_inputs:
+  - work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/cycle-state.yaml
+  - work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json
+  - work/stage-handoffs/22-prepared-live-canary-blocker/live-canary-report.md
+  - work/stage-handoffs/22-prepared-live-canary-blocker/iteration-session-log.md
+  - work/stage-handoffs/22-prepared-live-canary-blocker/agent-decision-log.md
+latest_artifacts:
+  cycle_state: work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/cycle-state.yaml
+  evidence_access_report: work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json
+  unsigned_draft: work/review-cycles/codex-exec-prepared-widget-selection-live-v10-20260711/attempts/writer-r1/attempt-001/stage-output/draft.md
+  live_canary_report: work/stage-handoffs/22-prepared-live-canary-blocker/live-canary-report.md
+  session_log: work/stage-handoffs/22-prepared-live-canary-blocker/iteration-session-log.md
+  decision_log: work/stage-handoffs/22-prepared-live-canary-blocker/agent-decision-log.md
+open_questions: []
+blocking_reasons:
+  - prepared evidence-access gate rejects a command that reads the current stage-owned output because the attempt root is nested under a forbidden review-cycles root
+

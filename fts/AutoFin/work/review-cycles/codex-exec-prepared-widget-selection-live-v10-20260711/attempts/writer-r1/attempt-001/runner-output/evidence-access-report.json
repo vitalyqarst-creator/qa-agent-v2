@@ -1,0 +1,16 @@
+{
+  "passed": false,
+  "validator": "prepared-evidence-access-gate-v1",
+  "commands_checked": 2,
+  "fallback_authorizations": 0,
+  "accesses": [],
+  "findings": [
+    {
+      "id": "forbidden-evidence-root-access",
+      "severity": "error",
+      "command_id": "item_5",
+      "path": "fts/AutoFin/work/review-cycles",
+      "message": "Prepared stage command accessed a forbidden evidence root."
+    }
+  ]
+}
