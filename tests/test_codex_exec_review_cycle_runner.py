@@ -527,18 +527,26 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
     def test_first_artifact_experiment_preserves_independent_writer_budgets(self) -> None:
         parser = runner_module.build_parser()
 
-        self.assertEqual(180, parser.get_default("writer_timeout_seconds"))
-        self.assertEqual(60, parser.get_default("writer_idle_timeout_seconds"))
+        self.assertEqual(900, parser.get_default("writer_timeout_seconds"))
+        self.assertEqual(180, parser.get_default("writer_idle_timeout_seconds"))
         self.assertEqual(
-            120,
+            600,
             parser.get_default("writer_first_artifact_deadline_seconds"),
         )
         self.assertEqual(
-            120,
+            600,
             runner_module.CodexExecReviewCycleRunner.__dataclass_fields__[
                 "writer_first_artifact_deadline_seconds"
             ].default,
         )
+
+    def test_prepared_writer_uses_embedded_runtime_limits_not_standard_defaults(self) -> None:
+        package_path = self.build_prepared_package()
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        runner.validate_configuration()
+
+        self.assertEqual((180, 60, 12), runner._stage_limits("writer"))
 
     def test_prepared_fast_path_uses_only_compact_package_artifacts(self) -> None:
         package_path = self.build_prepared_package()
@@ -892,6 +900,20 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         with self.assertRaisesRegex(
             runner_module.RunnerError,
             "Instruction context budget failed",
+        ):
+            cycle.run()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
+
+    def test_standard_path_blocks_before_writer_when_reviewer_command_budget_cannot_read_inputs(self) -> None:
+        executor = ScriptedExecutor()
+        cycle = self.make_runner(executor)
+        cycle.reviewer_command_budget = 10
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "Standard reviewer command budget is lower than its explicit input floor",
         ):
             cycle.run()
 

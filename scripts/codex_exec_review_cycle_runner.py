@@ -70,6 +70,14 @@ REVIEW_FINDING_CATEGORIES = {
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
+DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 64
+DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET = 48
+DEFAULT_STANDARD_WRITER_TIMEOUT_SECONDS = 900
+DEFAULT_STANDARD_REVIEWER_TIMEOUT_SECONDS = 450
+DEFAULT_STANDARD_WRITER_IDLE_TIMEOUT_SECONDS = 180
+DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS = 120
+DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS = 600
+STANDARD_COMMAND_BUDGET_RESERVE = 5
 STANDARD_STAGE_SCENARIOS = {
     "writer": "writer.session_initial_draft",
     "reviewer": "reviewer.semantic_traceability_test_design",
@@ -550,12 +558,14 @@ class CodexExecReviewCycleRunner:
     writer_timeout_seconds: int | None = None
     reviewer_timeout_seconds: int | None = None
     prepared_reviewer_timeout_seconds: int = 90
-    writer_idle_timeout_seconds: int = 60
-    reviewer_idle_timeout_seconds: int = 45
-    writer_command_budget: int = 12
-    reviewer_command_budget: int = 8
+    writer_idle_timeout_seconds: int = DEFAULT_STANDARD_WRITER_IDLE_TIMEOUT_SECONDS
+    reviewer_idle_timeout_seconds: int = DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS
+    writer_command_budget: int = DEFAULT_STANDARD_WRITER_COMMAND_BUDGET
+    reviewer_command_budget: int = DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET
     prepared_reviewer_command_budget: int = 1
-    writer_first_artifact_deadline_seconds: int = 120
+    writer_first_artifact_deadline_seconds: int = (
+        DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS
+    )
     prepared_reviewer_prompt_max_bytes: int = DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES
     promote_final: bool = False
     promotion_dry_run: bool = False
@@ -724,6 +734,31 @@ class CodexExecReviewCycleRunner:
         self._standard_instruction_contexts[role] = result
         return result
 
+    def _validate_standard_command_budgets(self) -> None:
+        writer_minimum = (
+            len(self._standard_instruction_paths("writer"))
+            + len(self.source_files)
+            + len(self.handoff_files)
+            + STANDARD_COMMAND_BUDGET_RESERVE
+        )
+        reviewer_minimum = (
+            len(self._standard_instruction_paths("reviewer"))
+            + len(self.source_files)
+            + len(self.handoff_files)
+            + 2  # validated draft and deterministic validator report
+            + STANDARD_COMMAND_BUDGET_RESERVE
+        )
+        if self.writer_command_budget < writer_minimum:
+            raise RunnerError(
+                "Standard writer command budget is lower than its explicit input floor: "
+                f"configured={self.writer_command_budget}, required>={writer_minimum}"
+            )
+        if self.reviewer_command_budget < reviewer_minimum:
+            raise RunnerError(
+                "Standard reviewer command budget is lower than its explicit input floor: "
+                f"configured={self.reviewer_command_budget}, required>={reviewer_minimum}"
+            )
+
     def validate_configuration(self) -> None:
         self.command_config.validate()
         if self.promote_final and self.promotion_dry_run:
@@ -805,6 +840,7 @@ class CodexExecReviewCycleRunner:
                 raise RunnerError("At least one explicit handoff file is required")
             self._standard_instruction_paths("writer")
             self._standard_instruction_paths("reviewer")
+            self._validate_standard_command_budgets()
         prepared_inputs = self._prepared_input_paths()
         instruction_inputs = (
             (*self.instruction_files, *self.writer_instruction_files, *self.reviewer_instruction_files)
@@ -869,6 +905,20 @@ class CodexExecReviewCycleRunner:
                 f"{field_name}: {relative_path(instructions_path, self.repo_root)}"
             )
         return matches[0].replace("\\", "/")
+
+    def _prepared_instruction_int(self, field_name: str) -> int:
+        raw = self._prepared_instruction_field(field_name)
+        try:
+            value = int(raw)
+        except ValueError as exc:
+            raise RunnerError(
+                f"Prepared stage instruction {field_name} must be an integer"
+            ) from exc
+        if value < 1:
+            raise RunnerError(
+                f"Prepared stage instruction {field_name} must be positive"
+            )
+        return value
 
     def _validate_prepared_attempt_binding(self) -> None:
         expected_attempt = relative_path(self.attempt_root(WRITER_STAGE), self.repo_root)
@@ -1124,9 +1174,14 @@ class CodexExecReviewCycleRunner:
 
     def _stage_limits(self, role: str) -> tuple[int, int | None, int]:
         if role == "writer":
-            timeout = self.writer_timeout_seconds or self.timeout_seconds
-            idle_timeout = self.writer_idle_timeout_seconds
-            command_budget = self.writer_command_budget
+            if self._prepared_package is not None:
+                timeout = self._prepared_instruction_int("hard_timeout_seconds")
+                idle_timeout = self._prepared_instruction_int("idle_timeout_seconds")
+                command_budget = self._prepared_instruction_int("command_budget")
+            else:
+                timeout = self.writer_timeout_seconds or self.timeout_seconds
+                idle_timeout = self.writer_idle_timeout_seconds
+                command_budget = self.writer_command_budget
         else:
             if self._prepared_package is not None:
                 timeout = self.prepared_reviewer_timeout_seconds
@@ -2799,15 +2854,43 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--extra-arg", action="append", default=[])
     parser.add_argument("--cli-contract-verified", action="store_true")
     parser.add_argument("--timeout-seconds", type=int, default=1800)
-    parser.add_argument("--writer-timeout-seconds", type=int, default=180)
-    parser.add_argument("--reviewer-timeout-seconds", type=int, default=120)
+    parser.add_argument(
+        "--writer-timeout-seconds",
+        type=int,
+        default=DEFAULT_STANDARD_WRITER_TIMEOUT_SECONDS,
+    )
+    parser.add_argument(
+        "--reviewer-timeout-seconds",
+        type=int,
+        default=DEFAULT_STANDARD_REVIEWER_TIMEOUT_SECONDS,
+    )
     parser.add_argument("--prepared-reviewer-timeout-seconds", type=int, default=90)
-    parser.add_argument("--writer-idle-timeout-seconds", type=int, default=60)
-    parser.add_argument("--reviewer-idle-timeout-seconds", type=int, default=45)
-    parser.add_argument("--writer-command-budget", type=int, default=12)
-    parser.add_argument("--reviewer-command-budget", type=int, default=8)
+    parser.add_argument(
+        "--writer-idle-timeout-seconds",
+        type=int,
+        default=DEFAULT_STANDARD_WRITER_IDLE_TIMEOUT_SECONDS,
+    )
+    parser.add_argument(
+        "--reviewer-idle-timeout-seconds",
+        type=int,
+        default=DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS,
+    )
+    parser.add_argument(
+        "--writer-command-budget",
+        type=int,
+        default=DEFAULT_STANDARD_WRITER_COMMAND_BUDGET,
+    )
+    parser.add_argument(
+        "--reviewer-command-budget",
+        type=int,
+        default=DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET,
+    )
     parser.add_argument("--prepared-reviewer-command-budget", type=int, default=1)
-    parser.add_argument("--writer-first-artifact-deadline-seconds", type=int, default=120)
+    parser.add_argument(
+        "--writer-first-artifact-deadline-seconds",
+        type=int,
+        default=DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS,
+    )
     parser.add_argument(
         "--prepared-reviewer-prompt-max-bytes",
         type=int,
