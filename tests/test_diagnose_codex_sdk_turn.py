@@ -163,6 +163,10 @@ class DiagnoseCodexSdkTurnTests(unittest.TestCase):
         self.assertEqual("OK", (self.root / "diag-success" / "response.md").read_text(encoding="utf-8"))
 
     def test_missing_sdk_runtime_reports_blocked_runtime_status(self) -> None:
+        (self.fake_sdk_dir / "openai_codex.py").write_text(
+            "# Intentionally incomplete SDK fixture.\n",
+            encoding="utf-8",
+        )
         output_dir = self.root / "diag-missing-runtime"
 
         result = self.run_diagnostic(
@@ -186,7 +190,7 @@ class DiagnoseCodexSdkTurnTests(unittest.TestCase):
         self.assertEqual(2, payload["returncode"])
         run_payload = json.loads((output_dir / "run.json").read_text(encoding="utf-8"))
         self.assertEqual("blocked-sdk-runtime", run_payload["status"])
-        self.assertIn("openai-codex is not installed", run_payload["stderr_tail"])
+        self.assertIn("openai-codex runtime is incomplete", run_payload["stderr_tail"])
 
 
 if __name__ == "__main__":

@@ -411,6 +411,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         *,
         execution_profile: str = "simple-field-property",
         unsupported_dimensions=(),
+        forbidden_evidence_roots=("fts/demo-ft/test-cases",),
     ) -> Path:
         self.handoff_path.write_text("# Scope contract\n\nSRC-1: observable requirement.\n", encoding="utf-8")
         obligations = PreparedObligationSet.create(
@@ -457,7 +458,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             ),
             execution_profile=execution_profile,
             unsupported_dimensions=unsupported_dimensions,
-            forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            forbidden_evidence_roots=forbidden_evidence_roots,
         )
         return package_root / "stage-package.json"
 
@@ -699,6 +700,39 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         self.assertFalse(report["passed"])
         self.assertEqual("forbidden-evidence-root-access", report["findings"][0]["id"])
+
+    def test_prepared_fast_path_allows_writer_to_read_current_stage_output(self) -> None:
+        package_path = self.build_prepared_package(
+            forbidden_evidence_roots=("fts/demo-ft/work/review-cycles",),
+        )
+        stdout = self.json_event("writer started", session_id="writer-session")
+        stdout += json.dumps(
+            {
+                "type": "item.started",
+                "item": {
+                    "id": "own-output-command",
+                    "type": "command_execution",
+                    "command": (
+                        "Get-Content "
+                        + self.draft_path.relative_to(self.repo_root).as_posix()
+                    ),
+                },
+            }
+        ) + "\n"
+        executor = ScriptedExecutor(
+            self.writer_step(stdout=stdout),
+            self.reviewer_step(decision="accepted"),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(report["passed"])
 
     def test_prepared_fast_path_rejects_tampered_package_before_exec(self) -> None:
         package_path = self.build_prepared_package()

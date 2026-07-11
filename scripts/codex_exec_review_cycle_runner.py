@@ -1029,6 +1029,9 @@ class CodexExecReviewCycleRunner:
                 events_text=writer_result.stdout,
                 forbidden_roots=self._prepared_package.forbidden_evidence_roots,
                 source_registry=self._prepared_package.source_registry,
+                allowed_stage_roots=(
+                    relative_path(self.stage_output_dir(WRITER_STAGE), self.repo_root),
+                ),
             )
             write_json(self.evidence_access_path, evidence_access.as_dict())
             if not evidence_access.passed:

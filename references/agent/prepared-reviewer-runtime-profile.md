@@ -6,7 +6,7 @@ This is a technical execution profile inside the `ft-test-case-reviewer` phase. 
 
 Continue only when the embedded payload confirms:
 
-- package version `3`;
+- package version `4`;
 - `execution_profile = simple-field-property`;
 - empty `unsupported_dimensions`;
 - an immutable draft hash;

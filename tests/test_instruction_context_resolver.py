@@ -214,6 +214,7 @@ class InstructionContextResolverTests(unittest.TestCase):
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertIn("references/agent/prepared-writer-runtime-profile.md", paths)
+        self.assertNotIn("skills/README.md", paths)
         self.assertNotIn("skills/ft-test-case-writer/SKILL.md", paths)
         self.assertIn("references/agent/prepared-stage-package-format.md", paths)
         self.assertNotIn("references/agent/writer-runtime-workflow.md", paths)
@@ -293,6 +294,7 @@ class InstructionContextResolverTests(unittest.TestCase):
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertIn("references/agent/prepared-reviewer-runtime-profile.md", paths)
+        self.assertNotIn("skills/README.md", paths)
         self.assertIn("references/agent/prepared-stage-package-format.md", paths)
         self.assertNotIn("skills/ft-test-case-reviewer/SKILL.md", paths)
         self.assertNotIn("references/qa/test-design-review-rubric.md", paths)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any, Sequence
 
@@ -35,6 +36,7 @@ def validate_evidence_access(
     events_text: str,
     forbidden_roots: Sequence[str],
     source_registry: Sequence[SourceRegistryEntry],
+    allowed_stage_roots: Sequence[str] = (),
     allowed_command_fragments: Sequence[str] = (),
     reject_unlisted_commands: bool = False,
 ) -> EvidenceAccessResult:
@@ -71,10 +73,24 @@ def validate_evidence_access(
     findings: list[dict[str, Any]] = []
     accesses: list[dict[str, Any]] = []
     normalized_forbidden = [(_normalized(path), path) for path in forbidden_roots]
+    normalized_stage_roots = sorted(
+        (_normalized(path).rstrip("/") for path in allowed_stage_roots),
+        key=len,
+        reverse=True,
+    )
     normalized_allowed = tuple(_normalized(item) for item in allowed_command_fragments)
 
     for command_id, command, command_fallbacks in commands:
         normalized_command = _normalized(command)
+        command_for_forbidden_check = normalized_command
+        has_path_traversal = re.search(r"(?:^|/)\.\.(?:/|$)", normalized_command) is not None
+        if not has_path_traversal:
+            for stage_root in normalized_stage_roots:
+                command_for_forbidden_check = re.sub(
+                    re.escape(stage_root) + r"(?=$|/|[\s'\";|&)])",
+                    "<allowed-stage-root>",
+                    command_for_forbidden_check,
+                )
         if reject_unlisted_commands and not any(
             allowed in normalized_command for allowed in normalized_allowed
         ):
@@ -87,7 +103,7 @@ def validate_evidence_access(
                 }
             )
         for root, original_root in normalized_forbidden:
-            if root in normalized_command:
+            if root in command_for_forbidden_check:
                 findings.append(
                     {
                         "id": "forbidden-evidence-root-access",

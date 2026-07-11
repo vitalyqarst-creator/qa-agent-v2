@@ -22,11 +22,12 @@ class PreparedEvidenceAccessTests(unittest.TestCase):
             locator="SRC-001 exact row",
         )
 
-    def validate(self, events: str):
+    def validate(self, events: str, *, allowed_stage_roots=()):
         return validate_evidence_access(
             events_text=events,
             forbidden_roots=("fts/demo/test-cases", "fts/demo/work/canary-runs"),
             source_registry=(self.source,),
+            allowed_stage_roots=allowed_stage_roots,
         )
 
     def test_allows_narrow_prepared_input_commands(self) -> None:
@@ -45,6 +46,53 @@ class PreparedEvidenceAccessTests(unittest.TestCase):
         self.assertFalse(result.passed)
         self.assertIn("forbidden-evidence-root-access", ids)
         self.assertIn("unbounded-prepared-stage-scan", ids)
+
+    def test_allows_current_stage_output_nested_under_forbidden_cycle_root(self) -> None:
+        stage_root = "fts/demo/work/canary-runs/current/attempts/writer-r1/attempt-001/stage-output"
+        result = self.validate(
+            event(
+                "cmd-1",
+                "command_execution",
+                command=f"Get-Content {stage_root}/draft.md",
+            ),
+            allowed_stage_roots=(stage_root,),
+        )
+        self.assertTrue(result.passed)
+
+    def test_allowed_stage_root_does_not_hide_sibling_cycle_access(self) -> None:
+        stage_root = "fts/demo/work/canary-runs/current/attempts/writer-r1/attempt-001/stage-output"
+        result = self.validate(
+            event(
+                "cmd-1",
+                "command_execution",
+                command=(
+                    f"Get-Content {stage_root}/draft.md; "
+                    "Get-Content fts/demo/work/canary-runs/sibling/cycle-state.yaml"
+                ),
+            ),
+            allowed_stage_roots=(stage_root,),
+        )
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "forbidden-evidence-root-access",
+            {finding["id"] for finding in result.findings},
+        )
+
+    def test_allowed_stage_root_rejects_path_traversal(self) -> None:
+        stage_root = "fts/demo/work/canary-runs/current/attempts/writer-r1/attempt-001/stage-output"
+        result = self.validate(
+            event(
+                "cmd-1",
+                "command_execution",
+                command=f"Get-Content {stage_root}/../runner-output/events.ndjson",
+            ),
+            allowed_stage_roots=(stage_root,),
+        )
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "forbidden-evidence-root-access",
+            {finding["id"] for finding in result.findings},
+        )
 
     def test_blocks_full_source_without_exact_fallback(self) -> None:
         result = self.validate(

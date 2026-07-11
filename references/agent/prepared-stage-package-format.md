@@ -123,6 +123,7 @@ Before writer output can reach reviewer:
 - `gap` and `unclear` obligations are not represented as executable coverage;
 - source/package/input hashes remain unchanged;
 - no forbidden evidence root was used;
+- a stage may read its exact runner-declared current `stage-output` root for local self-checks; this allowance must not extend to the attempt's `runner-output`, sibling attempts, historical cycles or any other part of a forbidden evidence root, and path traversal must remain blocked;
 - JSONL command evidence contains no broad repository scan or registered full-source access without a prior exact `targeted_source_fallback` authorization;
 - command, idle and hard-time budgets were respected or the explicit timeout-with-progress policy passed all deterministic gates.
 
