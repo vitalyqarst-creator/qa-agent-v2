@@ -40,6 +40,7 @@ def validate_evidence_access(
     allowed_command_fragments: Sequence[str] = (),
     reject_unlisted_commands: bool = False,
     require_source_fallback_authorization: bool = True,
+    allow_read_only_git_status_checks: bool = False,
 ) -> EvidenceAccessResult:
     fallback_messages: list[str] = []
     commands: list[tuple[str, str, tuple[str, ...]]] = []
@@ -105,6 +106,15 @@ def validate_evidence_access(
             )
         for root, original_root in normalized_forbidden:
             if root in command_for_forbidden_check:
+                status_marker = " status --short -- "
+                status_index = command_for_forbidden_check.find(status_marker)
+                root_index = command_for_forbidden_check.find(root)
+                if (
+                    allow_read_only_git_status_checks
+                    and status_index >= 0
+                    and root_index > status_index
+                ):
+                    continue
                 findings.append(
                     {
                         "id": "forbidden-evidence-root-access",

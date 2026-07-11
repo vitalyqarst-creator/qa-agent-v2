@@ -1479,6 +1479,7 @@ class CodexExecReviewCycleRunner:
                     relative_path(self.stage_output_dir(WRITER_STAGE), self.repo_root),
                 ),
                 require_source_fallback_authorization=self._is_prepared_fast(),
+                allow_read_only_git_status_checks=self._is_prepared_standard(),
             )
             write_json(self.evidence_access_path, evidence_access.as_dict())
             if not evidence_access.passed:
@@ -1712,6 +1713,7 @@ class CodexExecReviewCycleRunner:
                 allowed_command_fragments=("python scripts/probe_environment.py",),
                 reject_unlisted_commands=self._is_prepared_fast(),
                 require_source_fallback_authorization=self._is_prepared_fast(),
+                allow_read_only_git_status_checks=self._is_prepared_standard(),
             )
             write_json(self.reviewer_evidence_access_path, reviewer_access.as_dict())
             if not reviewer_access.passed:

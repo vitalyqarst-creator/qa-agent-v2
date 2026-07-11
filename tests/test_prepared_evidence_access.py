@@ -132,6 +132,41 @@ class PreparedEvidenceAccessTests(unittest.TestCase):
         self.assertEqual("fts/demo/source/main.xhtml", result.accesses[0]["path"])
         self.assertFalse(result.accesses[0]["authorized"])
 
+    def test_standard_route_allows_read_only_git_status_for_forbidden_production_root(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command=(
+                    "Get-Content fts/demo/work/current/draft.md; "
+                    "git -c safe.directory='*' status --short -- "
+                    "fts/demo/work/current/draft.md fts/demo/test-cases"
+                ),
+            ),
+            forbidden_roots=("fts/demo/test-cases",),
+            source_registry=(self.source,),
+            allow_read_only_git_status_checks=True,
+        )
+
+        self.assertTrue(result.passed)
+
+    def test_standard_status_allowance_does_not_hide_production_content_read(self) -> None:
+        result = validate_evidence_access(
+            events_text=event(
+                "cmd-1",
+                "command_execution",
+                command=(
+                    "Get-Content fts/demo/test-cases/old.md; "
+                    "git status --short -- fts/demo/test-cases"
+                ),
+            ),
+            forbidden_roots=("fts/demo/test-cases",),
+            source_registry=(self.source,),
+            allow_read_only_git_status_checks=True,
+        )
+
+        self.assertFalse(result.passed)
+
     def test_late_fallback_message_cannot_authorize_prior_access(self) -> None:
         result = self.validate(
             event("cmd-1", "command_execution", command="Get-Content fts/demo/source/main.xhtml")
