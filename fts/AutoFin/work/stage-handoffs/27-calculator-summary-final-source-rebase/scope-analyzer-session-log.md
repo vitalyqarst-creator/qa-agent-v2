@@ -51,6 +51,10 @@
 | 2 | Audited baseline | Handoff 05 and package BSR inventory are PreFinal-based; active design is already BSR 43–46 | handoffs 05, 20 and 26 |
 | 3 | Extracted bounded Final evidence | DOCX semantic rows, XHTML codes/rows and PDF pages agree; BSR 35–38 are neighboring common actions, BSR 43–46 are calculator-summary | `final-bsr-evidence.json` |
 | 4 | Built scope handoff and ran strict validation | Initial findings required canonical prompt headings, explicit empty oracle inventories and fresh visual inventory | handoff 27 validation |
+| 5 | Regenerated package BSR inventory from Final | 329 codes; only active in-scope source-row mappings count; multiple mappings remain explicit conflicts | package BSR inventory |
+| 6 | Ran gap-review attempt with configured default model | Backend rejected `gpt-5.6-sol` before reasoning because local Codex version is incompatible | failed start evidence; runnable state preserved |
+| 7 | Ran gap-review with compatible `gpt-5.5` | Reviewer blocked on production TC mismatch after reading forbidden test-case/design inputs | immutable failed gap-review cycle |
+| 8 | Corrected bounded scope-review data plane | Scope reviewer now receives only explicit handoff inputs; blocked review no longer routes to writer prompt | generic runner and regression tests |
 
 ## Quality Checkpoints
 
@@ -76,6 +80,8 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `TF-001` | PowerShell quoting corrupted three inline extraction commands | inline `python -c` extraction | moved multiline extraction to a UTF-8 helper and require explicit UTF-8 artifact reread | `scripts/extract_autofin_bsr_evidence.py` | `yes` | `failed stdout was syntax errors only and was not used as source evidence` | Validate helper output against DOCX/XHTML/PDF and add focused tests |
 | `TF-002` | artifact writer rejected a preamble-only empty-sections manifest | attempted to assemble the BSR inventory with `preamble_file` and `sections: []` | changed generator output to section content and used a non-empty level-1 manifest section | `work/stage-handoffs/27-calculator-summary-final-source-rebase/_artifact_write/bsr-inventory/manifest.json` | `yes` | `failed validation wrote no canonical artifact; previous legacy inventory remained unchanged` | Regenerate chunk, dry-run and assemble through canonical helper |
+| `TF-003` | backend rejected configured default model before gap-review reasoning | start with `gpt-5.6-sol` inherited from local config | doctor confirmed runnable state and a new attempt used explicit compatible `gpt-5.5` | `work/review-cycles/calculator-summary-final-gap-review-20260711/runner-events.ndjson` | `yes` | `no reviewer verdict or source evidence was produced by the rejected turn` | Pin compatible model for remaining live runs and preserve failed start evidence |
+| `TF-004` | compatible gap reviewer evaluated production TCs despite scope-only prompt | generic bounded reviewer always supplied canonical test cases and test-design directory | made allowed inputs scenario-specific and explicit for `reviewer.scope_gap_review` | `work/review-cycles/calculator-summary-final-gap-review-20260711/outputs/scope-gap-review-findings.md` | `yes` | `blocked verdict is invalid for scope-gap acceptance but exposes a real later writer/reviewer issue` | Never advance failed cycle; start new immutable gap review after regression tests |
 
 ## Handoff Notes For Next Session
 

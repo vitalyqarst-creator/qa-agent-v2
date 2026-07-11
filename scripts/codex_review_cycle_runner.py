@@ -2949,11 +2949,30 @@ BOUNDED_REVIEWER_FINDING_STATUS = {
 def bounded_reviewer_artifact_paths(
     state: dict[str, Any],
     state_path: Path,
+    next_session: NextSession,
     *,
     cwd_base: Path | None = None,
 ) -> list[str]:
     ft_root = infer_ft_root(state_path)
     path_base = cwd_base or ft_root.parent.parent
+    if next_session.scenario == "reviewer.scope_gap_review":
+        repo_root = ft_root.parent.parent
+        refs = unique_nonempty_strings(state.get("scope_review_inputs"))
+        prompt_ref = normalize_artifact_path_text(state.get("active_transition_prompt"))
+        prompt_path = resolve_artifact_path(prompt_ref, ft_root)
+        if not refs and prompt_path is not None and prompt_path.is_file():
+            prompt_text = prompt_path.read_text(encoding="utf-8")
+            refs = unique_nonempty_strings(re.findall(r"`([^`\r\n]+)`", prompt_text))
+        paths: list[str] = []
+        if prompt_path is not None and prompt_path.is_file():
+            paths.append(relative_or_name(prompt_path, path_base))
+        for ref in refs:
+            normalized = normalize_artifact_path_text(ref)
+            candidate = repo_root / normalized if normalized.startswith("fts/") else ft_root / normalized
+            if candidate.is_file():
+                paths.append(relative_or_name(candidate, path_base))
+        return unique_nonempty_strings(paths)
+
     paths: list[str] = []
     active_test_cases = active_test_cases_path(state, state_path)
     if active_test_cases.exists():
@@ -2976,7 +2995,12 @@ def render_bounded_reviewer_prompt(
     *,
     cwd_base: Path | None = None,
 ) -> str:
-    allowed_files = bounded_reviewer_artifact_paths(state, state_path, cwd_base=cwd_base)
+    allowed_files = bounded_reviewer_artifact_paths(
+        state,
+        state_path,
+        next_session,
+        cwd_base=cwd_base,
+    )
     allowed_statuses = sorted(BOUNDED_REVIEWER_ALLOWED_STATUSES[next_session.scenario])
     lines = [
         "# Bounded reviewer stage",
@@ -3003,7 +3027,15 @@ def render_bounded_reviewer_prompt(
             "```json",
             "{",
             '  "findings": [',
-            '    {"id": "REV-001", "severity": "warning", "category": "review", "test_case_id": "TC-001", "problem": "", "evidence": "", "required_change": "", "source_reference": "", "status": "open"}',
+            (
+                '    {"id": "REV-001", "severity": "warning", "category": "scope-gap", '
+                '"gap_id": "GAP-001", "problem": "", "evidence": "", "required_change": "", '
+                '"source_reference": "", "status": "open"}'
+                if next_session.scenario == "reviewer.scope_gap_review"
+                else '    {"id": "REV-001", "severity": "warning", "category": "review", '
+                '"test_case_id": "TC-001", "problem": "", "evidence": "", "required_change": "", '
+                '"source_reference": "", "status": "open"}'
+            ),
             "  ],",
             '  "human_summary": "",',
             f'  "recommended_stage_status": "{BOUNDED_REVIEWER_PASS_STATUS[next_session.scenario]}"',
@@ -3056,7 +3088,12 @@ def normalize_bounded_reviewer_response(
     }
 
 
-def render_bounded_reviewer_findings(stage: str, response: dict[str, Any]) -> str:
+def render_bounded_reviewer_findings(
+    stage: str,
+    response: dict[str, Any],
+    *,
+    scenario: str,
+) -> str:
     lines = [
         f"# {stage} findings",
         "",
@@ -3076,7 +3113,11 @@ def render_bounded_reviewer_findings(stage: str, response: dict[str, Any]) -> st
                 "",
                 f"- severity: `{finding.get('severity') or 'info'}`",
                 f"- category: `{finding.get('category') or 'review'}`",
-                f"- test_case_id: `{finding.get('test_case_id') or ''}`",
+                (
+                    f"- gap_id: `{finding.get('gap_id') or ''}`"
+                    if scenario == "reviewer.scope_gap_review"
+                    else f"- test_case_id: `{finding.get('test_case_id') or ''}`"
+                ),
                 f"- problem: {finding.get('problem') or ''}",
                 f"- evidence: {finding.get('evidence') or ''}",
                 f"- required_change: {finding.get('required_change') or ''}",
@@ -3123,6 +3164,21 @@ def next_prompt_for_bounded_reviewer(
     prompt_dir = state_path.parent / "prompts"
     prompt_dir.mkdir(parents=True, exist_ok=True)
     if next_session.scenario == "reviewer.scope_gap_review":
+        if status_after == "blocked-input":
+            prompt = prompt_dir / "prompt.scope-gap-review-blocked.md"
+            prompt.write_text(
+                "\n".join(
+                    [
+                        "# Scope gap review blocked",
+                        "",
+                        f"Review findings: `{relative_or_name(findings_path, ft_root)}`.",
+                        "Return to ft-scope-analyzer. Do not start writer.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            return prompt
         prompt = prompt_dir / "prompt.writer-r1.md"
         prompt.write_text(
             render_writer_initial_prompt_from_scope_review(
@@ -4903,7 +4959,12 @@ def run_bounded_reviewer_session(
     input_snapshot = relative_or_name(cycle_dir / "versions" / before_snapshot_id, ft_root)
     output_snapshot = relative_or_name(cycle_dir / "versions" / after_snapshot_id, ft_root)
     sdk_cwd = Path(cwd or Path.cwd())
-    checked_paths = bounded_reviewer_artifact_paths(state, state_path, cwd_base=sdk_cwd)
+    checked_paths = bounded_reviewer_artifact_paths(
+        state,
+        state_path,
+        next_session,
+        cwd_base=sdk_cwd,
+    )
     prompt = render_bounded_reviewer_prompt(
         state,
         state_path,
@@ -5041,7 +5102,11 @@ def run_bounded_reviewer_session(
         status_after = response_payload["recommended_stage_status"]
         findings_path = output_dir / f"{next_session.stage}-findings.md"
         findings_path.write_text(
-            render_bounded_reviewer_findings(next_session.stage, response_payload),
+            render_bounded_reviewer_findings(
+                next_session.stage,
+                response_payload,
+                scenario=next_session.scenario,
+            ),
             encoding="utf-8",
         )
         next_prompt = next_prompt_for_bounded_reviewer(

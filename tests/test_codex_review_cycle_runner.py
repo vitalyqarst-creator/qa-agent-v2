@@ -1253,6 +1253,47 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("thread_id: fake-thread-format-review", session_map)
         self.assertIn("sandbox: read_only", session_map)
 
+    def test_scope_gap_reviewer_reads_only_explicit_scope_inputs(self) -> None:
+        self.write_state(status="scope-ready-for-gap-review", semantic_round=0)
+        scope_input = self.ft_root / "work" / "stage-handoffs" / "01-scope" / "scope-contract.md"
+        scope_input.parent.mkdir(parents=True)
+        scope_input.write_text("# Scope contract\n", encoding="utf-8")
+        state = load_runner_module().load_simple_yaml(self.state_path)
+        state["scope_review_inputs"] = ["work/stage-handoffs/01-scope/scope-contract.md"]
+        runner = load_runner_module()
+        next_session = runner.next_session_for_state(state)
+
+        paths = runner.bounded_reviewer_artifact_paths(
+            state,
+            self.state_path,
+            next_session,
+            cwd_base=self.root,
+        )
+
+        self.assertIn("fts/demo-ft/work/stage-handoffs/01-scope/scope-contract.md", paths)
+        self.assertNotIn("fts/demo-ft/test-cases/1-section-scope.md", paths)
+        self.assertFalse(any("test-design" in path for path in paths))
+
+    def test_blocked_scope_gap_review_does_not_route_to_writer_prompt(self) -> None:
+        self.write_state(status="scope-ready-for-gap-review", semantic_round=0)
+        runner = load_runner_module()
+        state = runner.load_simple_yaml(self.state_path)
+        next_session = runner.next_session_for_state(state)
+        findings = self.cycle_dir / "outputs" / "scope-gap-review-findings.md"
+        findings.parent.mkdir(exist_ok=True)
+        findings.write_text("blocked", encoding="utf-8")
+
+        prompt = runner.next_prompt_for_bounded_reviewer(
+            state,
+            self.state_path,
+            next_session,
+            "blocked-input",
+            findings,
+        )
+
+        self.assertEqual("prompt.scope-gap-review-blocked.md", prompt.name)
+        self.assertIn("Do not start writer", prompt.read_text(encoding="utf-8"))
+
     def test_bounded_semantic_regression_pass_signs_off_read_only(self) -> None:
         self.write_state(status="final-regression-ready", semantic_round=2)
         self.write_valid_structure_preflight_artifacts()
