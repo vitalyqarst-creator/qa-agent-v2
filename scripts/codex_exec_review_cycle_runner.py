@@ -2570,11 +2570,19 @@ class CodexExecReviewCycleRunner:
             forbidden_write_roots=[relative_path(self.ft_root / "test-cases", self.repo_root)],
         )
 
-    def _review_contract_schema(self) -> dict[str, Any]:
+    def _review_contract_schema(
+        self,
+        *,
+        obligations_override: Sequence[Any] | None = None,
+    ) -> dict[str, Any]:
         if self._prepared_package is not None:
-            obligations = load_obligations(
-                self._prepared_artifact("atomic-obligations")
-            ).obligations
+            obligations = (
+                list(obligations_override)
+                if obligations_override is not None
+                else load_obligations(
+                    self._prepared_artifact("atomic-obligations")
+                ).obligations
+            )
             obligation_review_variants = []
             for obligation in obligations:
                 allowed_verdicts = (

@@ -36,6 +36,7 @@ class CodexOutputSchemaProbeTests(unittest.TestCase):
             "reviewed_draft_sha256": "0" * 64,
             "obligation_reviews": [
                 {
+                    "obligation_id": "OBL-PROBE-001",
                     "atom_id": "ATOM-PROBE-001",
                     "verdict": "covered",
                     "test_case_ids": ["TC-PROBE-001"],

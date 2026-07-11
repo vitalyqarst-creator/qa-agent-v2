@@ -58,14 +58,21 @@ def run_probe(*, codex_command: str, output_dir: Path, timeout_seconds: int) -> 
     output_dir.mkdir(parents=True)
     runner = load_runner_module()
     schema = runner.CodexExecReviewCycleRunner._review_contract_schema(
-        SimpleNamespace(_prepared_package=object())
+        SimpleNamespace(_prepared_package=object()),
+        obligations_override=[
+            SimpleNamespace(
+                obligation_id="OBL-PROBE-001",
+                traceability_atom_id="ATOM-PROBE-001",
+                coverage_status="testable",
+            )
+        ],
     )
     schema_text = json.dumps(schema, ensure_ascii=False, indent=2) + "\n"
     schema_path = output_dir / "review-contract.schema.json"
     write_text(schema_path, schema_text)
     prompt = """Return exactly one JSON object matching the supplied response schema.
 Use contract_version 2, decision accepted, reviewed_draft_sha256 as 64 zero characters,
-one obligation review for ATOM-PROBE-001 with verdict covered and TC-PROBE-001,
+one obligation review for OBL-PROBE-001 / ATOM-PROBE-001 with verdict covered and TC-PROBE-001,
 an empty findings array, and a short non-empty summary. Do not run commands or read files.
 """
     write_text(output_dir / "prompt.txt", prompt)
