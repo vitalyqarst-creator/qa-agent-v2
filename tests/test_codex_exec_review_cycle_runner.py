@@ -199,6 +199,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.docx_path = self.ft_root / "source" / "main.docx"
         self.handoff_path = self.ft_root / "work" / "stage-handoffs" / "01-demo" / "scope-contract.md"
         self.instruction_path = self.repo_root / "AGENTS.md"
+        self.writer_runtime_instruction = self.repo_root / "writer-runtime.md"
+        self.reviewer_runtime_instruction = self.repo_root / "reviewer-runtime.md"
         self.prepared_profile_path = (
             self.repo_root / "references" / "agent" / "prepared-writer-runtime-profile.md"
         )
@@ -212,6 +214,14 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.docx_path.write_bytes(b"docx-source")
         self.handoff_path.write_text("# Scope contract\n", encoding="utf-8")
         self.instruction_path.write_text("# Test instructions\n", encoding="utf-8")
+        self.writer_runtime_instruction.write_text(
+            "# Writer runtime\n\nUse canonical `## TC-*` headings.\n",
+            encoding="utf-8",
+        )
+        self.reviewer_runtime_instruction.write_text(
+            "# Reviewer runtime\n\nReview traceability and test design.\n",
+            encoding="utf-8",
+        )
         self.prepared_profile_path.parent.mkdir(parents=True)
         self.prepared_profile_path.write_text(
             "# Prepared Writer Runtime Profile\n\nWrite the embedded seed immediately.\n",
@@ -222,6 +232,27 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.validator = FakeValidator()
+
+    def resolve_instruction_context(self, *, root: Path, scenario_id: str):
+        self.assertTrue(self.repo_root.samefile(root))
+        role_path = (
+            self.writer_runtime_instruction
+            if scenario_id == "writer.session_initial_draft"
+            else self.reviewer_runtime_instruction
+        )
+        return {
+            "scenario": scenario_id,
+            "budget": {
+                "status": "pass",
+                "total_kib": 1.0,
+                "limit_kib": 10.0,
+            },
+            "files": [
+                {"path": self.instruction_path.relative_to(self.repo_root).as_posix()},
+                {"path": role_path.relative_to(self.repo_root).as_posix()},
+            ],
+            "missing": [],
+        }
 
     def tearDown(self) -> None:
         self.tmp.cleanup()
@@ -405,6 +436,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             promote_final=promote_final,
             promotion_dry_run=promotion_dry_run,
             allow_overwrite_final=allow_overwrite_final,
+            instruction_context_resolver=self.resolve_instruction_context,
         )
 
     def build_prepared_package(
@@ -811,8 +843,16 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         writer_prompt = executor.requests[0].prompt
         reviewer_prompt = executor.requests[1].prompt
+        self.assertIn("writer.session_initial_draft", writer_prompt)
+        self.assertIn("--budget-report --fail-on-budget", writer_prompt)
+        self.assertIn("writer-runtime.md", writer_prompt)
+        self.assertNotIn("reviewer-runtime.md", writer_prompt)
         self.assertIn("writer-instructions.md", writer_prompt)
         self.assertNotIn("reviewer-instructions.md", writer_prompt)
+        self.assertIn("reviewer.semantic_traceability_test_design", reviewer_prompt)
+        self.assertIn("--budget-report --fail-on-budget", reviewer_prompt)
+        self.assertIn("reviewer-runtime.md", reviewer_prompt)
+        self.assertNotIn("writer-runtime.md", reviewer_prompt)
         self.assertIn("reviewer-instructions.md", reviewer_prompt)
         self.assertNotIn("writer-instructions.md", reviewer_prompt)
         writer_manifest = json.loads(
@@ -833,6 +873,30 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 for item in reviewer_manifest["instruction_artifacts"]
             )
         )
+
+    def test_standard_path_blocks_before_session_when_instruction_budget_does_not_pass(self) -> None:
+        executor = ScriptedExecutor()
+        cycle = self.make_runner(executor)
+
+        def near_limit_context(*, root: Path, scenario_id: str):
+            result = self.resolve_instruction_context(root=root, scenario_id=scenario_id)
+            result["budget"] = {
+                "status": "near_limit",
+                "total_kib": 9.5,
+                "limit_kib": 10.0,
+            }
+            return result
+
+        cycle.instruction_context_resolver = near_limit_context
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "Instruction context budget failed",
+        ):
+            cycle.run()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
 
     def test_reviewer_command_uses_configured_read_only_sandbox_without_output_file(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="changes-required"))

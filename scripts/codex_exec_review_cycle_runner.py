@@ -14,7 +14,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol, Sequence
+from typing import Any, Callable, Protocol, Sequence
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -44,6 +44,7 @@ from test_case_agent.review_cycle.obligation_gate import validate_draft_obligati
 from test_case_agent.review_cycle.evidence_access import validate_evidence_access
 from test_case_agent.review_cycle.attempts import format_attempt_id
 from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
+from scripts.resolve_instruction_context import resolve_instruction_context
 
 
 WRITER_STAGE = "writer-r1"
@@ -69,6 +70,12 @@ REVIEW_FINDING_CATEGORIES = {
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
+STANDARD_STAGE_SCENARIOS = {
+    "writer": "writer.session_initial_draft",
+    "reviewer": "reviewer.semantic_traceability_test_design",
+}
+
+InstructionContextResolver = Callable[..., dict[str, Any]]
 
 
 class RunnerError(RuntimeError):
@@ -553,10 +560,14 @@ class CodexExecReviewCycleRunner:
     promote_final: bool = False
     promotion_dry_run: bool = False
     allow_overwrite_final: bool = False
+    instruction_context_resolver: InstructionContextResolver = resolve_instruction_context
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
     _backend_session_ids: list[str] = field(default_factory=list, init=False)
     _prepared_package: PreparedStagePackage | None = field(default=None, init=False)
     _draft_seed_sha256: str = field(default="", init=False)
+    _standard_instruction_contexts: dict[str, tuple[Path, ...]] = field(
+        default_factory=dict, init=False
+    )
 
     def __post_init__(self) -> None:
         self.repo_root = self.repo_root.resolve()
@@ -651,6 +662,68 @@ class CodexExecReviewCycleRunner:
         ]
         return tuple(paths)
 
+    def _standard_scenario(self, role: str) -> str:
+        try:
+            return STANDARD_STAGE_SCENARIOS[role]
+        except KeyError as exc:
+            raise RunnerError(f"Unsupported standard stage role: {role}") from exc
+
+    def _standard_instruction_paths(self, role: str) -> tuple[Path, ...]:
+        cached = self._standard_instruction_contexts.get(role)
+        if cached is not None:
+            return cached
+
+        scenario = self._standard_scenario(role)
+        try:
+            context = self.instruction_context_resolver(
+                root=self.repo_root,
+                scenario_id=scenario,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            raise RunnerError(
+                f"Instruction context resolver failed for {scenario}: {exc}"
+            ) from exc
+
+        if context.get("scenario") != scenario:
+            raise RunnerError(
+                "Instruction context resolver returned the wrong scenario: "
+                f"expected {scenario}, got {context.get('scenario')}"
+            )
+        missing = tuple(str(item) for item in context.get("missing", ()))
+        if missing:
+            raise RunnerError(
+                f"Instruction context for {scenario} has missing files: {', '.join(missing)}"
+            )
+        budget = context.get("budget", {})
+        if budget.get("status") != "pass":
+            raise RunnerError(
+                f"Instruction context budget failed for {scenario}: "
+                f"status={budget.get('status')}, total_kib={budget.get('total_kib')}, "
+                f"limit_kib={budget.get('limit_kib')}"
+            )
+
+        resolved = [
+            (self.repo_root / str(item["path"])).resolve()
+            for item in context.get("files", ())
+        ]
+        configured = (
+            self.writer_instruction_files
+            if role == "writer"
+            else self.reviewer_instruction_files
+        )
+        ordered: list[Path] = []
+        seen: set[Path] = set()
+        for path in (*self.instruction_files, *resolved, *configured):
+            normalized = path.resolve()
+            if normalized not in seen:
+                seen.add(normalized)
+                ordered.append(normalized)
+        if not ordered:
+            raise RunnerError(f"Instruction context for {scenario} resolved no files")
+        result = tuple(ordered)
+        self._standard_instruction_contexts[role] = result
+        return result
+
     def validate_configuration(self) -> None:
         self.command_config.validate()
         if self.promote_final and self.promotion_dry_run:
@@ -730,11 +803,19 @@ class CodexExecReviewCycleRunner:
                 raise RunnerError("At least one explicit source file is required")
             if not self.handoff_files:
                 raise RunnerError("At least one explicit handoff file is required")
+            self._standard_instruction_paths("writer")
+            self._standard_instruction_paths("reviewer")
         prepared_inputs = self._prepared_input_paths()
+        instruction_inputs = (
+            (*self.instruction_files, *self.writer_instruction_files, *self.reviewer_instruction_files)
+            if self._prepared_package is not None
+            else (
+                *self._standard_instruction_paths("writer"),
+                *self._standard_instruction_paths("reviewer"),
+            )
+        )
         for input_path in (
-            *self.instruction_files,
-            *self.writer_instruction_files,
-            *self.reviewer_instruction_files,
+            *instruction_inputs,
             *self.source_files,
             *self.handoff_files,
             *prepared_inputs,
@@ -1645,6 +1726,11 @@ class CodexExecReviewCycleRunner:
             [
                 "# Codex exec writer stage contract",
                 "",
+                f"Instruction-loading scenario: `{self._standard_scenario('writer')}`.",
+                f"Run `python scripts/resolve_instruction_context.py --scenario {self._standard_scenario('writer')} --budget-report --fail-on-budget` and verify it matches the runner-selected files below.",
+                "Read every selected instruction file before making domain decisions.",
+                "Record the resolver command, passing budget and selected files in the stage evidence or final summary.",
+                "",
                 "Work only from the explicit source and handoff files below.",
                 "Do not use previously generated test cases as requirement evidence.",
                 "Do not write under any production test-cases directory.",
@@ -1654,7 +1740,7 @@ class CodexExecReviewCycleRunner:
                 "## Instruction files",
                 *[
                     f"- `{relative_path(path, self.repo_root)}`"
-                    for path in (*self.instruction_files, *self.writer_instruction_files)
+                    for path in self._standard_instruction_paths("writer")
                 ],
                 "",
                 "## Source files",
@@ -1695,6 +1781,11 @@ class CodexExecReviewCycleRunner:
             [
                 "# Codex exec reviewer stage contract",
                 "",
+                f"Instruction-loading scenario: `{self._standard_scenario('reviewer')}`.",
+                f"Run `python scripts/resolve_instruction_context.py --scenario {self._standard_scenario('reviewer')} --budget-report --fail-on-budget` and verify it matches the runner-selected files below.",
+                "Read every selected instruction file before making domain decisions.",
+                "Record the resolver command, passing budget and selected files in the final review summary.",
+                "",
                 "This stage is read-only. Do not modify any workspace file.",
                 "Review only the explicit inputs listed below.",
                 f"Writer draft: `{relative_path(self.draft_path, self.repo_root)}`",
@@ -1703,7 +1794,7 @@ class CodexExecReviewCycleRunner:
                 "## Instruction files",
                 *[
                     f"- `{relative_path(path, self.repo_root)}`"
-                    for path in (*self.instruction_files, *self.reviewer_instruction_files)
+                    for path in self._standard_instruction_paths("reviewer")
                 ],
                 "",
                 "## Source files",
@@ -1904,12 +1995,7 @@ class CodexExecReviewCycleRunner:
             if role == "writer":
                 handoff_paths.append(self.draft_seed_path)
         else:
-            role_instruction_paths = (
-                self.writer_instruction_files
-                if role == "writer"
-                else self.reviewer_instruction_files
-            )
-            instruction_paths = [*self.instruction_files, *role_instruction_paths]
+            instruction_paths = list(self._standard_instruction_paths(role))
             source_paths = list(self.source_files)
             handoff_paths = list(self.handoff_files)
         allowed_write_roots: list[str] = []
@@ -1990,13 +2076,13 @@ class CodexExecReviewCycleRunner:
                 (
                     "writer.session_prepared_initial_draft"
                     if self._prepared_package is not None
-                    else "writer.session_initial_draft"
+                    else self._standard_scenario("writer")
                 )
                 if role == "writer"
                 else (
                     "reviewer.session_prepared_semantic"
                     if self._prepared_package is not None
-                    else "reviewer.semantic_traceability_test_design"
+                    else self._standard_scenario("reviewer")
                 )
             ),
             semantic_round=0,
