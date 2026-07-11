@@ -10,6 +10,8 @@ This reference defines the compact, source-backed input used by fresh writer and
 - The package contains scoped evidence already checked against DOCX/XHTML and, when available, source parity evidence for PDF.
 - Every package artifact is immutable and covered by one package digest. The runner verifies both package artifacts and registered full-source hashes before and after a stage.
 - Existing generated test cases, previous cycle outputs and canary artifacts must never enter the package as requirement evidence.
+- Workflow compilation requires an explicit expected FT slug. The workflow state, selected sources, prepared output and attempt root must remain inside that FT package; compiler discovery must not scan or substitute a neighboring `fts/*` package.
+- Source registry entries come only from the workflow-linked `source-selection.md`, never from aggregating historical source selections. DOCX and XHTML/HTML must have the same selected base name; PDF is registered as structural cross-check when selected.
 
 ## Layout
 

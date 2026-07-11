@@ -23,6 +23,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--output-root", required=True)
     result.add_argument("--package-id", required=True)
     result.add_argument("--attempt-root", required=True)
+    result.add_argument("--expected-ft-slug", required=True)
     result.add_argument("--section-id")
     result.add_argument("--repo-root", default=".")
     return result
@@ -38,6 +39,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_root=(repo_root / args.output_root),
             package_id=args.package_id,
             attempt_root=(repo_root / args.attempt_root),
+            expected_ft_slug=args.expected_ft_slug,
             section_id=args.section_id,
         )
     except (OSError, StageRuntimeError, ValueError) as exc:

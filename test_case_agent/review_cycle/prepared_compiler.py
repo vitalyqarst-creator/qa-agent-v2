@@ -156,23 +156,56 @@ def _gap_sections(path: Path | None) -> dict[str, PreparedGap]:
     return result
 
 
-def _source_registry(ft_root: Path) -> list[tuple[Path, str, str]]:
-    source_root = ft_root / "source"
-    docx = sorted(source_root.glob("*.docx"))
-    xhtml = sorted([*source_root.glob("*.xhtml"), *source_root.glob("*.html")])
-    if len(docx) != 1 or len(xhtml) != 1:
-        selection_files = sorted((ft_root / "work" / "stage-handoffs").glob("**/source-selection.md"))
-        selected_text = "\n".join(item.read_text(encoding="utf-8") for item in selection_files)
-        docx = [item for item in docx if item.relative_to(ft_root).as_posix() in selected_text]
-        xhtml = [item for item in xhtml if item.relative_to(ft_root).as_posix() in selected_text]
-    if len(docx) != 1 or len(xhtml) != 1:
-        raise StageRuntimeError(
-            "prepared compiler requires exactly one selected DOCX and one selected XHTML/HTML source"
-        )
-    return [
-        (docx[0], "source-of-truth", "selected FT source"),
-        (xhtml[0], "machine-readable", "selected FT extraction source"),
-    ]
+def _within(path: Path, root: Path, label: str) -> Path:
+    path = path.resolve()
+    root = root.resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise StageRuntimeError(f"{label} escapes {root}: {path}") from exc
+    return path
+
+
+def _source_registry(ft_root: Path, source_selection: Path) -> list[tuple[Path, str, str]]:
+    rows = _table_with(source_selection, {"path", "role"})
+    role_map = {
+        "main-ft-docx": ("source-of-truth", {".docx"}),
+        "main-ft-xhtml": ("machine-readable", {".xhtml", ".html"}),
+        "main-ft-pdf": ("structural-cross-check", {".pdf"}),
+    }
+    selected: dict[str, Path] = {}
+    for row in rows:
+        source_role = row["role"]
+        if source_role not in role_map:
+            continue
+        if source_role in selected:
+            raise StageRuntimeError(f"source-selection has duplicate {source_role} rows")
+        raw_path = PurePosixPath(row["path"])
+        if raw_path.is_absolute():
+            raise StageRuntimeError(f"source-selection path must be FT-relative: {row['path']}")
+        path = _within(ft_root / Path(*raw_path.parts), ft_root, "selected source")
+        expected_role, suffixes = role_map[source_role]
+        if path.suffix.lower() not in suffixes:
+            raise StageRuntimeError(f"{source_role} has invalid extension: {row['path']}")
+        if not path.is_file():
+            raise StageRuntimeError(f"selected source is missing: {row['path']}")
+        selected[source_role] = path
+    for required in ("main-ft-docx", "main-ft-xhtml"):
+        if required not in selected:
+            raise StageRuntimeError(f"source-selection requires exactly one {required} source")
+    if selected["main-ft-docx"].stem != selected["main-ft-xhtml"].stem:
+        raise StageRuntimeError("selected DOCX and XHTML/HTML must have the same base name")
+    text = source_selection.read_text(encoding="utf-8")
+    if not re.search(r"xhtml_available:\s*`?yes`?", text, re.IGNORECASE):
+        raise StageRuntimeError("source-selection does not confirm xhtml_available: yes")
+    if not re.search(r"xhtml_matches_main_ft:\s*`?yes`?", text, re.IGNORECASE):
+        raise StageRuntimeError("source-selection does not confirm xhtml_matches_main_ft: yes")
+    registry: list[tuple[Path, str, str]] = []
+    for source_role in ("main-ft-docx", "main-ft-xhtml", "main-ft-pdf"):
+        if source_role in selected:
+            target_role = role_map[source_role][0]
+            registry.append((selected[source_role], target_role, f"pinned by {source_selection.name}"))
+    return registry
 
 
 @dataclass(frozen=True)
@@ -191,28 +224,49 @@ def compile_workflow_package(
     output_root: Path,
     package_id: str,
     attempt_root: Path,
+    expected_ft_slug: str,
     section_id: str | None = None,
 ) -> CompileResult:
     repo_root = repo_root.resolve()
     workflow_state = workflow_state.resolve()
     output_root = output_root.resolve()
     attempt_root = attempt_root.resolve()
+    expected_ft_root = (repo_root / "fts" / expected_ft_slug).resolve()
+    if not expected_ft_root.is_dir():
+        raise StageRuntimeError(f"expected FT package is missing: fts/{expected_ft_slug}")
+    _within(workflow_state, expected_ft_root, "workflow-state")
     state = load_workflow_state(workflow_state)
     ft_slug = str(state.get("ft_slug", ""))
     scope_slug = str(state.get("scope_slug", ""))
     if not ft_slug or not scope_slug:
         raise StageRuntimeError("workflow-state requires ft_slug and scope_slug")
-    ft_root = workflow_state
-    while ft_root != repo_root and ft_root.name != ft_slug:
-        ft_root = ft_root.parent
-    if ft_root.name != ft_slug:
-        raise StageRuntimeError("workflow-state path does not belong to its ft_slug")
+    if ft_slug != expected_ft_slug:
+        raise StageRuntimeError(
+            f"workflow-state ft_slug mismatch: expected {expected_ft_slug}, found {ft_slug}"
+        )
+    ft_root = expected_ft_root
+    review_cycles_root = ft_root / "work" / "review-cycles"
+    output_relative = _within(output_root, review_cycles_root, "prepared output").relative_to(
+        review_cycles_root
+    )
+    attempt_relative = _within(attempt_root, review_cycles_root, "attempt root").relative_to(
+        review_cycles_root
+    )
+    if not output_relative.parts or not attempt_relative.parts:
+        raise StageRuntimeError("prepared output and attempt root require a cycle id")
+    if output_relative.parts[0] != attempt_relative.parts[0]:
+        raise StageRuntimeError("prepared output and attempt root must belong to the same cycle")
+    if len(output_relative.parts) < 3 or output_relative.parts[1] != "prepared-input":
+        raise StageRuntimeError("prepared output must be under <cycle>/prepared-input/<package-id>")
+    if len(attempt_relative.parts) < 4 or attempt_relative.parts[1] != "attempts":
+        raise StageRuntimeError("attempt root must be under <cycle>/attempts/<stage>/<attempt-id>")
 
+    source_selection_path = _artifact(ft_root, state, "source_selection")
     ledger_path = _artifact(ft_root, state, "atomic_requirements_ledger")
     plan_path = _artifact(ft_root, state, "package_test_design_plan")
     gaps_path = _artifact(ft_root, state, "coverage_gaps", required=False)
     dictionary_path = _artifact(ft_root, state, "dictionary_inventory", required=False)
-    assert ledger_path is not None and plan_path is not None
+    assert source_selection_path is not None and ledger_path is not None and plan_path is not None
     ledger = _table_with(ledger_path, {"atom_id", "statement", "coverage_status"})
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
     plan_by_atom: dict[str, list[dict[str, str]]] = {}
@@ -224,6 +278,10 @@ def compile_workflow_package(
     dictionary_rows: dict[str, dict[str, str]] = {}
     if dictionary_path is not None:
         for row in _table_with(dictionary_path, {"dictionary_id", "active_values"}):
+            if not row["active_values"].strip():
+                raise StageRuntimeError(
+                    f"semantic degradation: {row['dictionary_id']} has no active values"
+                )
             dictionary_rows[row["dictionary_id"]] = row
 
     obligations: list[PreparedObligation] = []
@@ -245,12 +303,14 @@ def compile_workflow_package(
             for item in TOKEN.findall(" ".join(row.values()))
             if item.startswith("SRC-") or item.startswith("GSR")
         ]
-        coverage_status = (
-            "testable" if status_raw in {"covered", "testable"}
-            else "unclear" if status_raw == "unclear"
-            else "gap" if status_raw == "gap"
-            else "not-applicable"
-        )
+        if status_raw in {"covered", "testable"}:
+            coverage_status = "testable"
+        elif status_raw in {"unclear", "gap", "not-applicable"}:
+            coverage_status = status_raw
+        else:
+            raise StageRuntimeError(
+                f"semantic degradation: {atom_id} has unsupported coverage_status {status_raw}"
+            )
         if coverage_status == "testable":
             viable = [item for item in linked if item.get("status", "covered").lower() in {"covered", "testable", "planned"}]
             if not viable:
@@ -265,6 +325,10 @@ def compile_workflow_package(
                 raise StageRuntimeError(f"semantic degradation: {atom_id} must link exactly one GAP id")
             gap_id = gap_tokens[0]
             used_gaps.add(gap_id)
+            if gap_id in known_gaps and known_gaps[gap_id].source_refs == (gap_id,):
+                raise StageRuntimeError(
+                    f"semantic degradation: {gap_id} has no exact source reference"
+                )
             oracle = ""
             intent = linked[0]["planned_check"] if linked else "Не создавать исполнимое покрытие до закрытия gap."
         else:
@@ -336,7 +400,7 @@ def compile_workflow_package(
             ft_slug=ft_slug,
             scope_slug=scope_slug,
             section_id=section_id,
-            source_registry=_source_registry(ft_root),
+            source_registry=_source_registry(ft_root, source_selection_path),
             evidence_inputs=[EvidenceInput(temp_evidence, "Compiled fidelity projection", include_full=True, max_bytes=32768)],
             obligations=obligation_set,
             instructions=StageInstructionConfig(

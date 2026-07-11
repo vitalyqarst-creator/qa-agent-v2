@@ -17,6 +17,9 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
         (self.ft / "source").mkdir(parents=True)
         (self.ft / "source" / "main.docx").write_bytes(b"docx")
         (self.ft / "source" / "main.xhtml").write_text("<html/>", encoding="utf-8")
+        (self.ft / "source" / "main.pdf").write_bytes(b"pdf")
+        (self.ft / "source" / "unselected.docx").write_bytes(b"other")
+        (self.ft / "source" / "unselected.xhtml").write_text("<html/>", encoding="utf-8")
         self.design = self.ft / "work" / "test-design" / "demo-scope"
         self.design.mkdir(parents=True)
         (self.design / "atomic-requirements-ledger.md").write_text(
@@ -61,11 +64,26 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
         )
         self.state = self.ft / "work" / "stage-handoffs" / "01-demo" / "workflow-state.yaml"
         self.state.parent.mkdir(parents=True)
+        (self.state.parent / "source-selection.md").write_text(
+            """# Source Selection
+
+| path | role |
+| --- | --- |
+| `source/main.docx` | `main-ft-docx` |
+| `source/main.xhtml` | `main-ft-xhtml` |
+| `source/main.pdf` | `main-ft-pdf` |
+
+- xhtml_available: `yes`
+- xhtml_matches_main_ft: `yes`
+""",
+            encoding="utf-8",
+        )
         self.state.write_text(
             """ft_slug: demo
 scope_slug: demo-scope
 canonical_test_cases: test-cases/4.2-demo-scope.md
 latest_artifacts:
+  source_selection: work/stage-handoffs/01-demo/source-selection.md
   atomic_requirements_ledger: work/test-design/demo-scope/atomic-requirements-ledger.md
   package_test_design_plan: work/test-design/demo-scope/package-test-design-plan.md
   dictionary_inventory: work/test-design/demo-scope/dictionary-inventory.md
@@ -88,6 +106,7 @@ coverage_gaps:
             output_root=cycle / "prepared-input" / "demo-package",
             package_id="demo-package",
             attempt_root=cycle / "attempts" / "writer-r1" / "attempt-001",
+            expected_ft_slug="demo",
         )
 
     def test_compiles_obligations_gaps_dictionaries_and_sources(self) -> None:
@@ -98,7 +117,11 @@ coverage_gaps:
         self.assertEqual(result.section_id, "4.2")
         package = load_prepared_package(result.stage_package, self.root)
         roles = {item.role for item in package.source_registry}
-        self.assertEqual(roles, {"source-of-truth", "machine-readable"})
+        self.assertEqual(
+            roles, {"source-of-truth", "machine-readable", "structural-cross-check"}
+        )
+        source_names = {Path(item.path).name for item in package.source_registry}
+        self.assertEqual(source_names, {"main.docx", "main.xhtml", "main.pdf"})
         obligation_path = self.root / next(
             item.path for item in package.package_artifacts if item.kind == "atomic-obligations"
         )
@@ -123,6 +146,54 @@ coverage_gaps:
             encoding="utf-8",
         )
         with self.assertRaisesRegex(StageRuntimeError, "references missing DICT-001"):
+            self.compile()
+
+    def test_blocks_cross_package_ft_slug_switch(self) -> None:
+        self.state.write_text(
+            self.state.read_text(encoding="utf-8").replace("ft_slug: demo", "ft_slug: other"),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "ft_slug mismatch"):
+            self.compile()
+
+    def test_blocks_output_outside_expected_ft_cycle(self) -> None:
+        with self.assertRaisesRegex(StageRuntimeError, "prepared output escapes"):
+            compile_workflow_package(
+                workflow_state=self.state,
+                repo_root=self.root,
+                output_root=self.root / "outside" / "prepared-input" / "demo-package",
+                package_id="demo-package",
+                attempt_root=(
+                    self.ft
+                    / "work"
+                    / "review-cycles"
+                    / "compiled-cycle"
+                    / "attempts"
+                    / "writer-r1"
+                    / "attempt-001"
+                ),
+                expected_ft_slug="demo",
+            )
+
+    def test_blocks_different_output_and_attempt_cycles(self) -> None:
+        cycle = self.ft / "work" / "review-cycles"
+        with self.assertRaisesRegex(StageRuntimeError, "same cycle"):
+            compile_workflow_package(
+                workflow_state=self.state,
+                repo_root=self.root,
+                output_root=cycle / "cycle-a" / "prepared-input" / "demo-package",
+                package_id="demo-package",
+                attempt_root=cycle / "cycle-b" / "attempts" / "writer-r1" / "attempt-001",
+                expected_ft_slug="demo",
+            )
+
+    def test_blocks_unknown_coverage_status(self) -> None:
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace("`covered`", "`maybe`", 1),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "unsupported coverage_status"):
             self.compile()
 
 
