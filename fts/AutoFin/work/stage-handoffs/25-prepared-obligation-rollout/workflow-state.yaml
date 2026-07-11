@@ -1,0 +1,33 @@
+ft_slug: AutoFin
+scope_slug: prepared-obligation-rollout
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 0
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/09-application-card-client-addresses/scope-contract.md
+  - work/stage-handoffs/09-application-card-client-addresses/scope-coverage-gaps.md
+  - work/stage-handoffs/09-application-card-client-addresses/scope-clarification-requests.md
+  - work/stage-handoffs/25-prepared-obligation-rollout/iteration-summary.md
+  - work/stage-handoffs/25-prepared-obligation-rollout/iteration-session-log.md
+  - work/stage-handoffs/25-prepared-obligation-rollout/agent-decision-log.md
+  - work/stage-handoffs/25-prepared-obligation-rollout/client-address-static-properties-canary-selection.md
+  - work/stage-handoffs/25-prepared-obligation-rollout/prompt.scope-to-iteration.md
+  - work/review-cycles/codex-exec-prepared-client-address-static-live-v2-20260711/cycle-state.yaml
+  - work/review-cycles/codex-exec-prepared-client-address-static-live-v2-20260711/promotion-dry-run.json
+latest_artifacts:
+  iteration_summary: work/stage-handoffs/25-prepared-obligation-rollout/iteration-summary.md
+  session_log: work/stage-handoffs/25-prepared-obligation-rollout/iteration-session-log.md
+  decision_log: work/stage-handoffs/25-prepared-obligation-rollout/agent-decision-log.md
+  canary_selection: work/stage-handoffs/25-prepared-obligation-rollout/client-address-static-properties-canary-selection.md
+  active_transition_prompt: work/stage-handoffs/25-prepared-obligation-rollout/prompt.scope-to-iteration.md
+  accepted_cycle_state: work/review-cycles/codex-exec-prepared-client-address-static-live-v2-20260711/cycle-state.yaml
+  promotion_dry_run: work/review-cycles/codex-exec-prepared-client-address-static-live-v2-20260711/promotion-dry-run.json
+open_questions: []
+blocking_reasons: []
+accepted_risks: []
+notes:
+  - All nine original compiler inputs build after obligation remediation.
+  - The second fast canary passed twice in separate writer/reviewer sessions.
+  - Eval-only canary target was not promoted to production.
