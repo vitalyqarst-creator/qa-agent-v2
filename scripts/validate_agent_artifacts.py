@@ -346,6 +346,9 @@ DICTIONARY_INVENTORY_REQUIRED_COLUMNS = {
     "gap_id",
 }
 COVERAGE_OBLIGATION_REQUIRED_CLASSES_BY_PROPERTY_TYPE = {
+    "visibility": ("visible",),
+    "summary-content": ("content-and-values-shown",),
+    "prefill-presence": ("prefilled-data-present",),
     "numeric-format": (
         "valid-digits",
         "reject-letters",
@@ -4201,7 +4204,11 @@ def is_valid_risk_priority_atom_id(atom_id: str, ledger_atom_ids: set[str]) -> b
 
 def meaningful_matrix_value(value: str) -> bool:
     normalized = value.strip().strip("`").strip().lower()
-    return bool(normalized and normalized not in {"-", "n/a", "na", "none", "null"})
+    return bool(
+        normalized
+        and normalized not in {"-", "n/a", "na", "none", "null"}
+        and not normalized.startswith(("none_required", "not-applicable", "not_applicable"))
+    )
 
 
 def is_production_test_case_path(path: Path) -> bool:
@@ -6336,11 +6343,15 @@ def source_normalization_property_classes(row: dict[str, str]) -> list[str]:
     )
     if not inspected_text:
         return []
-    return sorted(
+    classes = {
         class_name
         for class_name, pattern in SOURCE_NORMALIZATION_PROPERTY_CLASS_PATTERNS.items()
         if pattern.search(inspected_text)
-    )
+    }
+    property_type = row.get("property", "").strip().strip("`").lower()
+    if property_type in {"prefill-presence", "integration-prefill"}:
+        classes.discard("default-value")
+    return sorted(classes)
 
 
 def real_gap_ids(value: str) -> list[str]:
@@ -6464,6 +6475,24 @@ def validate_scoped_validator_profile(
 
     if not isinstance(payload, dict):
         return [f"{display_source_path}:profile-not-object:{profile_path.name}"], evidence
+
+    if profile_path.name == "validator.json" and {"passed", "validator", "findings"}.issubset(payload):
+        findings = payload.get("findings")
+        if payload.get("passed") is not True:
+            issues.append(f"{display_source_path}:runner-validator-not-passed:{profile_path.name}")
+        if not isinstance(findings, list):
+            issues.append(f"{display_source_path}:runner-validator-findings-not-list:{profile_path.name}")
+        elif any(
+            isinstance(item, dict)
+            and str(item.get("severity") or "").lower() in {"warning", "error"}
+            for item in findings
+        ):
+            issues.append(f"{display_source_path}:runner-validator-has-findings:{profile_path.name}")
+        evidence.append(
+            f"{profile_path.as_posix()}:runner-validator={payload.get('validator') or '-'}"
+        )
+        evidence.append(f"{profile_path.as_posix()}:passed={payload.get('passed')!r}")
+        return issues, evidence
 
     missing_keys = sorted(SCOPED_VALIDATOR_PROFILE_REQUIRED_KEYS - set(payload))
     if missing_keys:
@@ -7560,6 +7589,12 @@ def validate_coverage_obligation_table(
     checks: list[Check] = []
     display_path = rel(path, root)
     relevant_source_rows = coverage_obligation_relevant_source_rows(content)
+    _, all_source_rows = parsed_section_table_rows(content, "Source Table Normalization")
+    all_source_property_ids = {
+        row.get("source_property_id", "").strip()
+        for row in all_source_rows
+        if row.get("source_property_id", "").strip()
+    }
     relevant_by_source_property = {
         row.get("source_property_id", "").strip(): row
         for row in relevant_source_rows
@@ -7664,7 +7699,16 @@ def validate_coverage_obligation_table(
 
         if property_type in ARTIFICIAL_NUMERIC_PROPERTY_TYPES:
             artificial_numeric_obligation_rows.append(f"{row_label}:property_type={property_type}")
-        if source_property_id and source_property_id not in relevant_by_source_property:
+        gap_only_mapping = (
+            source_property_id in all_source_property_ids
+            and status in {"gap", "unclear", "blocked"}
+            and bool(extract_gap_ids_from_text(planned_tc_or_gap))
+        )
+        if (
+            source_property_id
+            and source_property_id not in relevant_by_source_property
+            and not gap_only_mapping
+        ):
             unknown_source_properties.append(row_label)
 
         if source_property_id and obligation_class:
@@ -11179,7 +11223,11 @@ PERSISTENCE_OUT_OF_SCOPE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 EDITABLE_CARD_SCOPE_RE = re.compile(
-    r"карточк\w*\s+заявк|application\s+card|доступн\w*\s+для\s+редакт",
+    r"карточк\w*\s+заявк|application\s+card",
+    flags=re.IGNORECASE,
+)
+EDITABLE_BEHAVIOR_RE = re.compile(
+    r"\beditable\b|\bediting\b|редактир|доступн\w*\s+для\s+редакт",
     flags=re.IGNORECASE,
 )
 SAMPLED_GROUP_STRATEGY_RE = re.compile(
@@ -12266,12 +12314,15 @@ def validate_test_case_quality_smells(
     ambiguous_create_or_take_preconditions: list[str] = []
     missing_target_revealing_actions: list[str] = []
     if production_test_case_file:
+        production_content = physical_content if physical_content is not None else content
         production_diagnostic_sections = [
             section_title
             for section_title in PRODUCTION_DIAGNOSTIC_SECTIONS
-            if extract_markdown_section(content, section_title) is not None
+            if extract_markdown_section(production_content, section_title) is not None
         ]
-        production_setup_profile_refs = sorted(set(PRODUCTION_SETUP_PROFILE_REFERENCE_RE.findall(content)))
+        production_setup_profile_refs = sorted(
+            set(PRODUCTION_SETUP_PROFILE_REFERENCE_RE.findall(production_content))
+        )
     compressed_atoms: list[str] = []
     covered_range_atoms: list[str] = []
     combined_atoms: list[str] = []
@@ -14172,7 +14223,8 @@ def validate_test_case_quality_smells(
     if (
         production_test_case_file
         and source_row_inventory_required(content)
-        and EDITABLE_CARD_SCOPE_RE.search(content)
+        and EDITABLE_CARD_SCOPE_RE.search(physical_content if physical_content is not None else content)
+        and EDITABLE_BEHAVIOR_RE.search(physical_content if physical_content is not None else content)
         and not SAVE_PERSISTENCE_COVERAGE_RE.search(content)
         and not PERSISTENCE_OUT_OF_SCOPE_RE.search(content)
     ):

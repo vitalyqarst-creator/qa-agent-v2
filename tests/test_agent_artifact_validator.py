@@ -17164,6 +17164,52 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
 
+    def test_writer_quality_gate_accepts_clean_runner_validator_output(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "test-cases" / "writer-gate.md"
+            self.write_minimal_test_case_file(test_case_file)
+            self.append_passing_writer_quality_gate(test_case_file)
+            test_case_file.write_text(
+                test_case_file.read_text(encoding="utf-8").replace(
+                    "scoped-validator-profile.writer-r1.json", "validator.json"
+                ),
+                encoding="utf-8",
+            )
+            (test_case_file.parent / "validator.json").write_text(
+                json.dumps(
+                    {
+                        "passed": True,
+                        "validator": "prepared-structure-validator",
+                        "checked_paths": ["draft.md"],
+                        "findings": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("writer-quality-gate-scoped-validator-profile-invalid", finding_ids)
+
+    def test_noneditable_application_card_scope_does_not_require_persistence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "Demo" / "test-cases" / "card.md"
+            self.write_minimal_test_case_file(test_case_file)
+            test_case_file.write_text(
+                test_case_file.read_text(encoding="utf-8").replace(
+                    "# Test Cases", "# Application card widget"
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        finding_ids = {finding["id"] for finding in json.loads(result.stdout)["findings"]}
+        self.assertNotIn("persist-coverage-missing-for-crud-scope", finding_ids)
+
     def test_noncanonical_test_case_heading_level_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
