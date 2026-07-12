@@ -1,0 +1,14 @@
+2026-07-12T15:49:22.435559Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-12T15:52:29.898016Z ERROR codex_core::tools::router: error=Exit code: 1
+Wall time: 0.7 seconds
+Output:
+fatal: detected dubious ownership in repository at 'C:/Users/袩芯谢褜蟹芯胁邪褌械谢褜/Documents/袙懈褌邪谢褟/GitProjects/qa-agent-v2'
+'C:/Users/袩芯谢褜蟹芯胁邪褌械谢褜/Documents/袙懈褌邪谢褟/GitProjects/qa-agent-v2' is owned by:
+	VITALY/项朦珙忄蝈朦 (S-1-5-21-2437574174-3743853401-812327379-1001)
+but the current user is:
+	VITALY/CodexSandboxOffline (S-1-5-21-2437574174-3743853401-812327379-1006)
+To add an exception for this directory, call:
+
+	git config --global --add safe.directory 'C:/Users/袩芯谢褜蟹芯胁邪褌械谢褜/Documents/袙懈褌邪谢褟/GitProjects/qa-agent-v2'
+
+2026-07-12T15:52:37.422981Z  WARN codex_core::hook_runtime: after_agent hook failed; continuing turn_id=019f5704-d6a0-73b0-a7a2-ef68f0087c41 hook_name=legacy_notify error=Имя файла или его расширение имеет слишком большую длину. (os error 206)

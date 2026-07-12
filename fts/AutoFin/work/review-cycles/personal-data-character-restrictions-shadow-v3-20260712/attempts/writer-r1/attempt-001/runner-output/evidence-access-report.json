@@ -1,0 +1,15 @@
+{
+  "passed": true,
+  "validator": "prepared-evidence-access-gate-v1",
+  "commands_checked": 12,
+  "fallback_authorizations": 0,
+  "accesses": [
+    {
+      "command_id": "item_9",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "locator": "pinned by source-selection.md",
+      "authorized": false
+    }
+  ],
+  "findings": []
+}

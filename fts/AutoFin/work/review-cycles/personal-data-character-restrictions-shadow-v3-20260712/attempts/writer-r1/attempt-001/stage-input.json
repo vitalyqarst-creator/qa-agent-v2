@@ -1,0 +1,216 @@
+{
+  "allowed_write_roots": [
+    "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/stage-output"
+  ],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/4.3-prepared-shadow-personal-data-character-restrictions.md",
+  "contract_version": 2,
+  "cycle_id": "personal-data-character-restrictions-shadow-v3-20260712",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "producer": "stage",
+      "required": true
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "last-message",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/stage-output/last-message.txt",
+      "producer": "stage",
+      "required": false
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "producer": "runner",
+      "required": true
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/prepared-input/personal-data-character-restrictions-v3/stage-package.json",
+      "sha256": "e3e93c454e8d9504d7a551627b128d971fc5e353337e4d49a47328894d5ea5e8"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/prepared-input/personal-data-character-restrictions-v3/atomic-obligations.json",
+      "sha256": "0f92861fda86d1e1663e59b526f606cc445138eb519f8ac0e3eae6a9a2612f8e"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/prepared-input/personal-data-character-restrictions-v3/stage-instructions.md",
+      "sha256": "5260270e1c00b4a283ba9d38ef55d8c955899a19af0f83595bf8454fd70f7c74"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-input/draft-seed.md",
+      "sha256": "d358875d3750b5437d717957b2ac859be212249504a75aba11eacf0e3bbe38f1"
+    }
+  ],
+  "input_digest": "f4795c728e668aaae8b1782b3b250b6edb00e024a74cfef6a21e5642ec537775",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "2514e3e5166408ec2741cc87a6d335d6d00208033df961519e05127f89b07cf3"
+    },
+    {
+      "kind": "instruction",
+      "path": "skills/README.md",
+      "sha256": "0468522e7076eef4721e47df70222a9b1d31d1338113fc7e92898dc642436530"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/session-based-review-cycle-format.md",
+      "sha256": "b4d08f039f95f1ee3541728aaf86945df59ed8643fe44426705421882f52f344"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/codex-sdk-orchestration-format.md",
+      "sha256": "16cad73d58bb54befee4029ef09315bfbb6a447944309001ff2b79273a1d6acb"
+    },
+    {
+      "kind": "instruction",
+      "path": "skills/ft-test-case-writer/SKILL.md",
+      "sha256": "297aad1e2198a0ecc6d599feae4abc081dfa8ecfea93e04ab9dc4fb9e1dfb98d"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/writer-runtime-workflow.md",
+      "sha256": "a9b7d41b9c229d7d3396adb1de6cc38de9e19a36daf52aa47ce05d8bc720e91c"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/writer-runtime-contract.md",
+      "sha256": "14b54c6e64f376af27e4ce35fc1664bc8e5b8add9c55e1c02f75c56628a8ffd1"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/negative-ui-calibration-policy.md",
+      "sha256": "23acf93ade8e8ca2f19eccbc31428b0e9cf0834b40c20e99be0cbfba8a19f70a"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/qa/test-case-runtime-format.md",
+      "sha256": "dda96ed31d49c53dd43a90d1ded40b5f5da3208317934037acd2f7f1c82762c7"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/qa/coverage-runtime-checklist.md",
+      "sha256": "2d9de06d9b4c6ce72065cabbfc5c05bf1da47f27d0c51bd55ade2173a823ed4c"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/qa/traceability-rules.md",
+      "sha256": "7051d4f4d4e8f8591f9f3f2f75c11b3657fcbaa925809c3506ecc3af8e349900"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/runtime-quality-rule-cards.md",
+      "sha256": "4a2ebe5dc37737116832d8b5a6df7b5b5a6989096206b193c3f869695f1653cd"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/writer-process-workflow.md",
+      "sha256": "42547d3591dcf3d9b19b47651bc4c4977cbf946ce46718a56aaa892d894b02e7"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/workflow-state-format.md",
+      "sha256": "c270bbc0f1b9363024ac4d70bb75248881af2384fe2524fc4ed46839f0467ce6"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/session-log-format.md",
+      "sha256": "27b0d18b5d70bad8ba5dd47da7828e57eb8efc075c7cc9820c2e0b11e36f9f3e"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/agent-decision-log-format.md",
+      "sha256": "ae367d15319303b370745b8ccf8672227fa606dbea82ce09d4d5cd3c09b9463d"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/writer-handoff-format.md",
+      "sha256": "2d0a50fa96b1d3e8333758f9c6f36668d6197554c935b8be820e9efacb35514b"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/writer-r1/attempt-001/prompt.md",
+    "sha256": "7a143732f26822ad0a74aee70457ad91dd946cd95b9e30ce94d80302ffec3c5c"
+  },
+  "role": "writer",
+  "sandbox_policy": "workspace_write",
+  "scenario": "writer.session_initial_draft",
+  "semantic_round": 0,
+  "session_id": "session-writer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/prepared-input/personal-data-character-restrictions-v3/source-evidence.md",
+      "sha256": "28b08db1a67bb809c676cc0890ac1b780f7f995a182e0afdd827e59998ddbbad"
+    }
+  ],
+  "stage_id": "writer-r1",
+  "timeout_seconds": 900
+}

@@ -1,0 +1,56 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5707-d8af-7783-81bb-adc4aba87d47",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "personal-data-character-restrictions-shadow-v3-20260712",
+  "duration_ms": 189829,
+  "exit_code": 0,
+  "finished_at": "2026-07-12T15:55:49.485188+00:00",
+  "input_digest": "2d8b29658224db4413d907330a5183fc500e558188361e94ae42169deb311db5",
+  "outcome": "accepted",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "5c713e8cf534bf7f028151d23440ffe515cb1cde4bbffc7b2a651889c74adceb"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "4b6c39330e7830c2ef598891ceba77e3ada1c81e0df679a860999510c1423a6a"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "5c713e8cf534bf7f028151d23440ffe515cb1cde4bbffc7b2a651889c74adceb"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "4b8a370f5fb9024f31f5c8a4073ab33542caad1063a79eab70baa6d9634c174d"
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "sha256": "71baec551f06fc71ed749966b5fc2bb574e71f1fbec58537db9ffb3959759347"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "3d0364e786e3e16c9ec26b7c71ebc670339d9049a5a640b2a5f1ef19940e0145"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "53da0e4e1a5d8d037957546192fc9bb0f3b48e625f452b61e91b2228028be1d0"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.semantic_traceability_test_design",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-12T15:52:39.650834+00:00",
+  "status": "completed",
+  "timed_out": false
+}

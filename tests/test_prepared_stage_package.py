@@ -133,6 +133,50 @@ class PreparedStagePackageTests(unittest.TestCase):
         with self.assertRaisesRegex(StageRuntimeError, "immutable"):
             self._build()
 
+    def test_legacy_v5_obligation_payload_without_planned_tc_round_trips_unchanged(self) -> None:
+        original = self._obligations()
+        payload = original.to_dict()
+
+        self.assertNotIn("planned_test_case_id", payload["obligations"][0])
+        restored = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual(original.digest, restored.digest)
+        self.assertEqual(payload, restored.to_dict())
+
+    def test_v5_obligation_payload_with_planned_tc_round_trips(self) -> None:
+        original = PreparedObligationSet.create(
+            package_id="pkg-grouped",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-1",),
+                    atomic_statement="Поле редактируемо.",
+                    observable_oracle="Значение отображается.",
+                    test_intent="Ввести значение.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-GROUP-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        payload = original.to_dict()
+
+        restored = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual("TC-GROUP-001", restored.obligations[0].planned_test_case_id)
+        self.assertEqual(original.digest, restored.digest)
+
+    def test_v5_obligation_payload_still_rejects_unknown_extra_field(self) -> None:
+        payload = self._obligations().to_dict()
+        payload["obligations"][0]["unexpected_field"] = "unexpected"
+
+        with self.assertRaisesRegex(StageRuntimeError, "unknown=.*unexpected_field"):
+            PreparedObligationSet.from_dict(payload)
+
     def test_detects_registered_source_and_package_tampering(self) -> None:
         self._build()
         manifest = self.root / "work" / "prepared" / "stage-package.json"

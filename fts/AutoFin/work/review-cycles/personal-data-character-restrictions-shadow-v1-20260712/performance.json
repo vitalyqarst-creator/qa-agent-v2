@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "backend": "exec",
+  "cycle_dir": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v1-20260712",
+  "stage_count": 0,
+  "duration_ms_total": 0,
+  "total_tokens": null,
+  "uncached_input_tokens_total": null,
+  "input_artifact_bytes_total": 0,
+  "output_artifact_bytes_total": 0,
+  "validator_invocations": 0,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [],
+  "stage_metrics": [],
+  "stage_attribution": []
+}

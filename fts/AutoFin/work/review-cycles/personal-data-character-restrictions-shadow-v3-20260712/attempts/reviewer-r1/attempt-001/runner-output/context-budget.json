@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-standard-context-budget-v1",
+  "error_code": "",
+  "role": "reviewer",
+  "scenario": "reviewer.semantic_traceability_test_design",
+  "prompt_bytes": 46694,
+  "instruction_bytes": 279693,
+  "primary_context_bytes": 326387,
+  "limit_bytes": 786432,
+  "instruction_artifact_count": 19
+}

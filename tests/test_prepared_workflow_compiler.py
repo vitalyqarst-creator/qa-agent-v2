@@ -135,6 +135,55 @@ coverage_gaps:
             expected_ft_slug="demo",
         )
 
+    def write_grouped_plan(
+        self,
+        *,
+        shared_plan: bool = True,
+        second_package: str = "WP-01",
+        second_property: str = "SRC-001.P02",
+        justification: str = "",
+    ) -> None:
+        (self.design / "atomic-requirements-ledger.md").write_text(
+            """# Atomic Requirements Ledger
+
+| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc |
+| --- | --- | --- | --- | --- | --- |
+| `ATOM-001` | `SRC-001.P01` | `GSR 1` | Поле доступно для редактирования. | `covered` | `TC-GROUP-001` |
+| `ATOM-002` | `SRC-001.P02` | `GSR 1` | Поле принимает строковое значение. | `covered` | `TC-GROUP-001` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "coverage-obligation-table.md").write_text(
+            f"""# Coverage Obligation Table
+
+| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `editability` | `editable` | Поле доступно для редактирования. | `GSR 1; SRC-001.P01` | `TC-GROUP-001` | `covered` | `{justification}` |
+| `OBL-002` | `{second_package}` | `{second_property}` | `ATOM-002` | `field-property` | `string-value` | Поле принимает строковое значение. | `GSR 1; {second_property}` | `TC-GROUP-001` | `covered` | `{justification}` |
+""",
+            encoding="utf-8",
+        )
+        plan_rows = (
+            "| `PLAN-001` | `WP-01` | `ATOM-001; ATOM-002` | Ввести значение `Тест`. | Значение `Тест` отображается. | `synthetic-valid-text:Тест` | `TC-GROUP-001` | `covered` |\n"
+            if shared_plan
+            else (
+                "| `PLAN-001` | `WP-01` | `ATOM-001` | Ввести значение `Тест`. | Значение `Тест` отображается. | `synthetic-valid-text:Тест` | `TC-GROUP-001` | `covered` |\n"
+                "| `PLAN-002` | `WP-01` | `ATOM-002` | Ввести значение `Строка`. | Значение `Строка` отображается. | `synthetic-valid-text:Строка` | `TC-GROUP-001` | `covered` |\n"
+            )
+        )
+        (self.design / "package-test-design-plan.md").write_text(
+            """# Package Test Design Plan
+
+| design_item_id | package_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+"""
+            + plan_rows,
+            encoding="utf-8",
+        )
+        (self.design / "coverage-gaps.md").write_text(
+            "# Coverage Gaps\n\nNo gaps.\n", encoding="utf-8"
+        )
+
     def test_compiles_obligations_gaps_dictionaries_and_sources(self) -> None:
         result = self.compile()
         self.assertEqual(result.obligation_count, 2)
@@ -222,6 +271,64 @@ coverage_gaps:
         result = self.compile()
 
         self.assertEqual("simple-field-property", result.execution_profile)
+
+    def test_accepts_one_shared_plan_row_for_grouped_obligations(self) -> None:
+        self.write_grouped_plan()
+
+        result = self.compile()
+
+        obligations = load_obligations(result.stage_package.parent / "atomic-obligations.json")
+        self.assertEqual(
+            ["TC-GROUP-001", "TC-GROUP-001"],
+            [item.planned_test_case_id for item in obligations.obligations],
+        )
+
+    def test_rejects_accidental_shared_tc_id_without_one_shared_plan_row(self) -> None:
+        self.write_grouped_plan(shared_plan=False)
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("invalid-planned-test-case-group", context.exception.code)
+        self.assertIn("exactly one shared design-plan row", str(context.exception))
+
+    def test_rejects_group_with_conflicting_fixture_rows(self) -> None:
+        self.write_grouped_plan(shared_plan=False)
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        detail = context.exception.details[0]
+        self.assertEqual("invalid-planned-test-case-group", context.exception.code)
+        self.assertEqual("TC-GROUP-001", detail["planned_test_case_id"])
+
+    def test_rejects_grouping_different_fields_without_justification(self) -> None:
+        self.write_grouped_plan(second_property="SRC-002.P01")
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("invalid-planned-test-case-group", context.exception.code)
+        self.assertIn("cross-field", str(context.exception))
+
+    def test_rejects_grouping_different_packages_without_justification(self) -> None:
+        self.write_grouped_plan(second_package="WP-02")
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("invalid-planned-test-case-group", context.exception.code)
+        self.assertIn("cross-field or cross-package", str(context.exception))
+
+    def test_allows_cross_field_group_with_explicit_justification(self) -> None:
+        self.write_grouped_plan(
+            second_property="SRC-002.P01",
+            justification="grouping-justification: one observable scenario action",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(2, result.obligation_count)
 
     def test_fast_profile_keeps_strict_32k_compiled_evidence_limit(self) -> None:
         (self.ft / "AGENT-NOTES.md").write_text(

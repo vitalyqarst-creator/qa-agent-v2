@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "cycle_dir": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v2-20260712",
+  "exec_runner_args": [
+    "--ft-root", "fts/AutoFin",
+    "--cycle-dir", "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v2-20260712",
+    "--final-artifact", "fts/AutoFin/test-cases/4.3-prepared-shadow-personal-data-character-restrictions.md",
+    "--prepared-package", "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v2-20260712/prepared-input/personal-data-character-restrictions-v2/stage-package.json",
+    "--sandbox-flag", "--sandbox",
+    "--writer-sandbox", "workspace-write",
+    "--reviewer-sandbox", "read-only",
+    "--working-directory-flag", "--cd",
+    "--json-flag", "--json",
+    "--output-last-message-flag", "--output-last-message",
+    "--output-schema-flag", "--output-schema",
+    "--writer-timeout-seconds", "900",
+    "--reviewer-timeout-seconds", "600",
+    "--prepared-reviewer-timeout-seconds", "600",
+    "--writer-idle-timeout-seconds", "240",
+    "--reviewer-idle-timeout-seconds", "240",
+    "--prepared-standard-reviewer-idle-timeout-seconds", "300",
+    "--writer-command-budget", "25",
+    "--reviewer-command-budget", "4",
+    "--prepared-reviewer-command-budget", "4"
+  ],
+  "sdk_runner_args": []
+}

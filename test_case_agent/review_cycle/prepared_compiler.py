@@ -19,6 +19,7 @@ from .runtime import StageRuntimeError
 
 
 TOKEN = re.compile(r"\b(?:ATOM|OBL|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\bGSR\s+\d+\b")
+TC_TOKEN = re.compile(r"\bTC-[A-Za-z0-9_.-]+\b")
 COMPILER_CONTRACT_VERSION = 2
 SECTION_PREFIX = re.compile(r"^(?P<section>(?:section-)?\d+(?:[-.]\d+)*)-")
 FAST_PROFILE = "simple-field-property"
@@ -112,6 +113,85 @@ def _plan_has_concrete_fixture(row: Mapping[str, str]) -> bool:
             )
         )
     )
+
+
+def _validate_planned_test_case_groups(
+    *,
+    obligation_rows: Sequence[Mapping[str, str]],
+    plan_rows: Sequence[Mapping[str, str]],
+    obligations_path: Path,
+    plan_path: Path,
+    repo_root: Path,
+) -> None:
+    groups: dict[str, list[Mapping[str, str]]] = {}
+    for row in obligation_rows:
+        if row.get("status", "").lower() != "covered":
+            continue
+        tc_ids = TC_TOKEN.findall(row.get("planned_tc_or_gap", ""))
+        if len(set(tc_ids)) == 1:
+            groups.setdefault(tc_ids[0], []).append(row)
+    for tc_id, group in groups.items():
+        if len(group) < 2:
+            continue
+        atom_ids = {
+            token
+            for row in group
+            for token in TOKEN.findall(row.get("linked_atom_id", ""))
+            if token.startswith("ATOM-")
+        }
+        linked_plan_rows = [
+            row
+            for row in plan_rows
+            if tc_id in TC_TOKEN.findall(row.get("planned_tc_or_gap", ""))
+        ]
+        shared_plan_rows = [
+            row
+            for row in linked_plan_rows
+            if {
+                token
+                for token in TOKEN.findall(row.get("linked_atoms", ""))
+                if token.startswith("ATOM-")
+            }
+            == atom_ids
+        ]
+        package_ids = {row.get("package_id", "").strip() for row in group}
+        property_roots = {
+            row.get("source_property_id", "").split(".P", 1)[0].strip()
+            for row in group
+        }
+        justification = " ".join(
+            [row.get("review_notes", "") for row in group]
+            + [row.get("grouping_justification", "") for row in shared_plan_rows]
+        ).lower()
+        cross_boundary = len(package_ids) != 1 or len(property_roots) != 1
+        valid = (
+            len(linked_plan_rows) == 1
+            and len(shared_plan_rows) == 1
+            and (not cross_boundary or "grouping-justification:" in justification)
+        )
+        if valid:
+            continue
+        reason = (
+            "cross-field or cross-package group has no grouping-justification"
+            if cross_boundary and "grouping-justification:" not in justification
+            else "group must have exactly one shared design-plan row linking all atoms"
+        )
+        raise PreparedCompilerDiagnostic(
+            "invalid-planned-test-case-group",
+            f"semantic degradation: {tc_id} {reason}",
+            details=(
+                {
+                    "kind": "invalid-planned-test-case-group",
+                    "planned_test_case_id": tc_id,
+                    "atom_ids": sorted(atom_ids),
+                    "package_ids": sorted(package_ids),
+                    "source_property_roots": sorted(property_roots),
+                    "reason": reason,
+                    **_artifact_anchor(obligations_path, tc_id, repo_root),
+                    "plan_artifact": _artifact_anchor(plan_path, tc_id, repo_root),
+                },
+            ),
+        )
 
 
 class PreparedCompilerDiagnostic(StageRuntimeError):
@@ -608,6 +688,13 @@ def compile_workflow_package(
         for atom in TOKEN.findall(row.get("linked_atoms", "")):
             if atom.startswith("ATOM-"):
                 plan_by_atom.setdefault(atom, []).append(row)
+    _validate_planned_test_case_groups(
+        obligation_rows=obligation_rows,
+        plan_rows=plan,
+        obligations_path=obligations_path,
+        plan_path=plan_path,
+        repo_root=repo_root,
+    )
     known_gaps = _gap_sections(gaps_path)
     dictionary_rows: dict[str, dict[str, str]] = {}
     if dictionary_path is not None:
