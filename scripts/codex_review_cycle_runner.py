@@ -950,15 +950,13 @@ def finding_belongs_to_current_scope(
     if not path or is_snapshot_or_write_scratch_path(path):
         return False
 
-    canonical = normalize_artifact_path_text(state.get("canonical_test_cases"))
-    draft = normalize_artifact_path_text(state.get("draft_test_cases"))
+    active_test_cases = active_test_cases_ref(state, state_path)
     test_design_dir = normalize_artifact_path_text(state.get("test_design_dir"))
     ft_root = infer_ft_root(state_path)
     outputs_dir = relative_or_name(state_path.parent / "outputs", ft_root)
 
     return (
-        path == canonical
-        or path == draft
+        path == active_test_cases
         or path_is_under(path, test_design_dir)
         or path_is_under(path, outputs_dir)
     )
@@ -2608,9 +2606,9 @@ def bounded_semantic_artifact_paths(
     ft_root = infer_ft_root(state_path)
     path_base = cwd_base or ft_root.parent.parent
     paths: list[str] = []
-    canonical = resolve_artifact_path(str(state.get("canonical_test_cases") or ""), ft_root)
-    if canonical is not None and canonical.exists():
-        paths.append(relative_or_name(canonical, path_base))
+    active_test_cases = active_test_cases_path(state, state_path)
+    if active_test_cases.exists():
+        paths.append(relative_or_name(active_test_cases, path_base))
     test_design_dir = resolve_artifact_path(str(state.get("test_design_dir") or ""), ft_root)
     if test_design_dir is not None and test_design_dir.is_dir():
         for file_name in BOUNDED_SEMANTIC_ALLOWED_FILES:
@@ -2902,15 +2900,34 @@ def render_bounded_semantic_decision_log(
     )
 
 
-def render_writer_semantic_prompt(next_session: NextSession, findings_path: str) -> str:
+def render_writer_semantic_prompt(
+    next_session: NextSession,
+    findings_path: str,
+    active_test_cases: str,
+) -> str:
     round_no = semantic_round_for_stage(next_session.stage)
     return "\n".join(
         [
             f"# Writer semantic revision R{round_no + 1}",
             "",
             f"Resolve blocking semantic review findings from `{findings_path}`.",
-            "Update canonical test cases and bounded test-design artifacts only where required by findings.",
+            f"Update the unsigned test-case draft `{active_test_cases}` and bounded test-design artifacts only where required by findings.",
+            "Do not modify `canonical_test_cases`; promotion to the canonical file is runner-owned and allowed only after reviewer sign-off.",
             "Preserve traceability refs and explain any split/merge of TC or ATOM references in the writer response.",
+            "",
+        ]
+    )
+
+
+def render_semantic_round_cap_prompt(next_session: NextSession, findings_path: str) -> str:
+    round_no = semantic_round_for_stage(next_session.stage)
+    return "\n".join(
+        [
+            "# Semantic review round cap reached",
+            "",
+            f"Semantic review R{round_no} found blocking findings in `{findings_path}`.",
+            "The configured semantic round cap has been reached; do not start another writer session automatically.",
+            "Keep the unsigned draft and canonical test cases unchanged until an explicit continuation decision is made.",
             "",
         ]
     )
@@ -4732,6 +4749,9 @@ def run_bounded_semantic_review_session(
         )
         status_after = response_payload["recommended_stage_status"]
         round_no = semantic_round_for_stage(next_session.stage)
+        max_rounds = int(state.get("max_semantic_rounds") or 2)
+        if status_after == "semantic-revision-needed" and round_no >= max_rounds:
+            status_after = "round-cap-reached"
         findings_path = output_dir / f"round-{round_no}-findings.md"
         matrix_md_path = output_dir / f"round-{round_no}-traceability-matrix.md"
         matrix_xlsx_path = output_dir / f"round-{round_no}-traceability-matrix.xlsx"
@@ -4745,6 +4765,16 @@ def run_bounded_semantic_review_session(
             next_prompt = prompt_dir / f"prompt.writer-r{round_no + 1}.md"
             next_prompt.write_text(
                 render_writer_semantic_prompt(
+                    next_session,
+                    relative_or_name(findings_path, ft_root),
+                    active_test_cases_ref(state, state_path),
+                ),
+                encoding="utf-8",
+            )
+        elif status_after == "round-cap-reached":
+            next_prompt = prompt_dir / "prompt.round-cap-reached.md"
+            next_prompt.write_text(
+                render_semantic_round_cap_prompt(
                     next_session,
                     relative_or_name(findings_path, ft_root),
                 ),

@@ -1126,6 +1126,14 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
     def test_bounded_semantic_pass_advances_to_format_review(self) -> None:
         self.write_state(status="semantic-review-ready", semantic_round=1)
         self.write_valid_structure_preflight_artifacts()
+        draft = self.cycle_dir / "outputs" / "writer-r1-draft.md"
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text(self.test_case.read_text(encoding="utf-8"), encoding="utf-8")
+        self.state_path.write_text(
+            self.state_path.read_text(encoding="utf-8")
+            + "draft_test_cases: work/review-cycles/section-scope/outputs/writer-r1-draft.md\n",
+            encoding="utf-8",
+        )
         runner = load_runner_module()
         runner.run_agent_artifact_validator = lambda ft_root: {"findings": []}
         recorded_turn_kwargs = {}
@@ -1184,6 +1192,11 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
         )
         self.assertNotIn("Run reviewer.semantic_traceability_test_design", prompt_text)
         self.assertIn("Do not recursively read directories", prompt_text)
+        self.assertIn(
+            "fts/demo-ft/work/review-cycles/section-scope/outputs/writer-r1-draft.md",
+            prompt_text,
+        )
+        self.assertNotIn("fts/demo-ft/test-cases/1-section-scope.md", prompt_text)
         self.assertIn("fts/demo-ft/work/test-design/section-scope/coverage-map.md", prompt_text)
         from openpyxl import load_workbook
 
@@ -1336,6 +1349,14 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
     def test_bounded_semantic_findings_force_semantic_revision(self) -> None:
         self.write_state(status="semantic-review-ready", semantic_round=1)
         self.write_valid_structure_preflight_artifacts()
+        draft = self.cycle_dir / "outputs" / "writer-r1-draft.md"
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text(self.test_case.read_text(encoding="utf-8"), encoding="utf-8")
+        self.state_path.write_text(
+            self.state_path.read_text(encoding="utf-8")
+            + "draft_test_cases: work/review-cycles/section-scope/outputs/writer-r1-draft.md\n",
+            encoding="utf-8",
+        )
         runner = load_runner_module()
         runner.run_agent_artifact_validator = lambda ft_root: {"findings": []}
         finding = {
@@ -1375,11 +1396,62 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
             updated_state["active_transition_prompt"],
         )
         self.assertTrue((self.prompt_dir / "prompt.writer-r2.md").exists())
+        writer_prompt = (self.prompt_dir / "prompt.writer-r2.md").read_text(encoding="utf-8")
+        self.assertIn(
+            "work/review-cycles/section-scope/outputs/writer-r1-draft.md",
+            writer_prompt,
+        )
+        self.assertIn("Do not modify `canonical_test_cases`", writer_prompt)
+        self.assertNotIn("Update canonical test cases", writer_prompt)
         findings = (self.cycle_dir / "outputs" / "round-1-findings.md").read_text(
             encoding="utf-8"
         )
         self.assertIn("SEM-001", findings)
         self.assertIn("REQ-002 lacks negative coverage", findings)
+
+    def test_bounded_semantic_findings_at_round_cap_stop_without_writer_r3(self) -> None:
+        self.write_state(status="semantic-review-ready", semantic_round=2)
+        self.write_valid_structure_preflight_artifacts()
+        runner = load_runner_module()
+        runner.run_agent_artifact_validator = lambda ft_root: {"findings": []}
+        finding = {
+            "id": "SEM-001",
+            "severity": "error",
+            "category": "traceability",
+            "problem": "Traceability remains inconsistent.",
+            "evidence": "Draft and decision table disagree.",
+            "required_change": "Synchronize mappings.",
+            "source_reference": "ATOM-001",
+        }
+        previous_module = self.install_fake_codex(
+            runner,
+            final_response=self.bounded_semantic_response(
+                findings=[finding],
+                recommended_stage_status="semantic-revision-needed",
+            ),
+        )
+        try:
+            runner.run_real_session(
+                runner.load_simple_yaml(self.state_path),
+                self.state_path,
+                cwd=str(self.root),
+                approval_mode="auto_review",
+                model=None,
+                session_timeout_seconds=1,
+                process_supervised=False,
+            )
+        finally:
+            self.restore_openai_codex_module(previous_module)
+
+        updated_state = runner.load_simple_yaml(self.state_path)
+        self.assertEqual("round-cap-reached", updated_state["stage_status"])
+        self.assertEqual(
+            "work/review-cycles/section-scope/prompts/prompt.round-cap-reached.md",
+            updated_state["active_transition_prompt"],
+        )
+        self.assertFalse((self.prompt_dir / "prompt.writer-r3.md").exists())
+        cap_prompt = (self.prompt_dir / "prompt.round-cap-reached.md").read_text(encoding="utf-8")
+        self.assertIn("do not start another writer session automatically", cap_prompt)
 
     def test_bounded_semantic_invalid_json_blocks_with_diagnostic_artifact(self) -> None:
         self.write_state(status="semantic-review-ready", semantic_round=1)
@@ -2740,6 +2812,43 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual(0, gate["scoped_findings_count"])
         self.assertEqual(0, gate["blocking_writer_ready_count"])
+
+    def test_writer_ready_gate_uses_unsigned_draft_instead_of_stale_canonical(self) -> None:
+        self.write_state(status="writer-draft-ready", semantic_round=0)
+        draft = self.cycle_dir / "outputs" / "writer-r1-draft.md"
+        draft.parent.mkdir(parents=True, exist_ok=True)
+        draft.write_text("# Current draft\n", encoding="utf-8")
+        self.state_path.write_text(
+            self.state_path.read_text(encoding="utf-8")
+            + "draft_test_cases: work/review-cycles/section-scope/outputs/writer-r1-draft.md\n",
+            encoding="utf-8",
+        )
+        runner = load_runner_module()
+        runner.run_agent_artifact_validator = lambda ft_root: {
+            "findings": [
+                {
+                    "id": "stale-canonical-warning",
+                    "severity": "warning",
+                    "path": "test-cases/1-section-scope.md",
+                    "evidence": ["historical production baseline"],
+                },
+                {
+                    "id": "active-draft-warning",
+                    "severity": "warning",
+                    "path": "work/review-cycles/section-scope/outputs/writer-r1-draft.md",
+                    "evidence": ["current unsigned draft"],
+                },
+            ]
+        }
+        state = runner.load_simple_yaml(self.state_path)
+
+        gate = runner.session_ready_validator_gate(state, self.state_path)
+
+        finding_ids = {
+            finding["id"]
+            for finding in gate["blocking_writer_ready"]
+        }
+        self.assertEqual({"active-draft-warning"}, finding_ids)
 
     def test_writer_ready_gate_rejects_current_scope_blocking_validator_warning(self) -> None:
         self.write_state(status="writer-draft-ready", semantic_round=1)

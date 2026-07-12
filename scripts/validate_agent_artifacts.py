@@ -4713,7 +4713,12 @@ def extract_test_case_expected_result(block: str) -> str:
         block,
         flags=re.IGNORECASE | re.MULTILINE,
     )
-    return match.group(1).strip() if match else ""
+    if match:
+        return match.group(1).strip()
+    return extract_test_case_field_block(
+        block,
+        ["Expected Result", "expected_result", "expected result", "Итоговый ожидаемый результат", "Ожидаемый результат"],
+    )
 
 
 def extract_test_case_type(block: str) -> str:
@@ -11634,25 +11639,36 @@ def extract_test_case_field_block(block: str, field_names: list[str]) -> str:
         block,
         flags=re.IGNORECASE | re.MULTILINE,
     )
+    heading_match = None
     if not match and any(name.lower() == "steps" or name == "Шаги" for name in expanded_field_names):
         match = re.search(
             rf"^(?:{names_pattern}):\s*$",
             block,
             flags=re.IGNORECASE | re.MULTILINE,
         )
-        if not match:
-            return extract_test_case_table_field(block, expanded_field_names)
-        start = match.end()
+    if not match:
+        heading_match = re.search(
+            rf"^###\s+(?:{names_pattern})\s*$",
+            block,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+    if match:
+        if match.lastindex:
+            start = match.start(1)
+        else:
+            start = match.end()
+        search_from = match.end()
+    elif heading_match:
+        start = heading_match.end()
+        search_from = heading_match.end()
     else:
-        if not match:
-            return extract_test_case_table_field(block, expanded_field_names)
-        start = match.start(1)
+        return extract_test_case_table_field(block, expanded_field_names)
     next_field = re.search(
-        r"^(?:\*\*[^*\n]+:\*\*|(?:Steps|steps|Шаги):\s*$)",
-        block[match.end() :],
+        r"^(?:\*\*[^*\n]+:\*\*|###\s+[^#\n]+\s*$|(?:Steps|steps|Шаги):\s*$)",
+        block[search_from:],
         flags=re.IGNORECASE | re.MULTILINE,
     )
-    end = match.end() + next_field.start() if next_field else len(block)
+    end = search_from + next_field.start() if next_field else len(block)
     return block[start:end].strip()
 
 
