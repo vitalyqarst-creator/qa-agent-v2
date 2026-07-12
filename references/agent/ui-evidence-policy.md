@@ -45,6 +45,8 @@ output/playwright/<scope-slug>/...
 
 Local-only evidence не запрещает `confirmed`, но снижает воспроизводимость handoff. Для внешней передачи нужно экспортировать durable artifacts или явно оставить portability limitation.
 
+Local-only raw artifacts с PII, cookies, authorization headers, session state или чувствительными payloads не должны публиковаться ради формального переноса evidence. В Git сохраняй безопасный индекс: стабильный `evidence_id`, тип, локальный путь, классификацию/статус публикации и краткое наблюдение без PII. На ПК, где artifact доступен, дополнительно допустимо сохранить SHA-256 в индексе; сам digest не делает чувствительный artifact безопасным для публикации.
+
 ### DOM-Seeded Observation
 
 DOM-seeded observation означает, что агент получил состояние через инъекцию DOM, прямую подстановку данных, обход normal UI path или другой synthetic route.
@@ -114,6 +116,8 @@ User comments after a run are input for rerun, not evidence for direct status ch
 ```
 
 Не добавляй policy declaration, если соответствующего ограничения нет. Ложная декларация хуже отсутствующей: она скрывает качество evidence.
+
+Каждая строка evidence table должна иметь уникальный стабильный `evidence_id` в формате `UIE-<UPPERCASE-TOKEN>`. Automation-ready кейс ссылается на `evidence_id`; локальный `path` остается locator и может отличаться между сессиями. Повторный прогон создает новые IDs, а не переиспользует старый ID для другого содержимого.
 
 ## Relationship To Automation-Ready
 

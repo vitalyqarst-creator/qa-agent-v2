@@ -39,7 +39,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 ## Допустимые значения
 
 - `current_stage` = `ft-source-locator | ft-scope-analyzer | ft-test-case-writer | ft-test-case-reviewer | ft-test-case-iteration | ft-ui-automation-prep`
-- `stage_status` = `ready-for-next-stage | ready-for-gap-review | ready-for-review | ready-for-writer-revision | signed-off | round-cap-reached | blocked-input`
+- `stage_status` = `ready-for-next-stage | ready-for-gap-review | ready-for-review | ready-for-writer-revision | signed-off | round-cap-reached | blocked-input | completed`
 - `next_skill` = `ft-source-locator | ft-scope-analyzer | ft-test-case-writer | ft-test-case-reviewer | ft-test-case-iteration | ft-ui-automation-prep | none`
 - `current_round` — целое число, где `0` допустим для pre-writer handoff
 

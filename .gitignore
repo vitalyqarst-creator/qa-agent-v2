@@ -33,6 +33,14 @@ evals/candidates/*
 # the agent repository. Keep reusable agent rules in skills/ and references/.
 fts/
 
+# Static validator fixtures intentionally mirror FT package paths. Keep this
+# narrowly scoped fixture tracked even though real `fts/` and `work/` trees are
+# generated or package-local.
+!tests/fixtures/agent-artifacts/ui-evidence-policy/fts/
+!tests/fixtures/agent-artifacts/ui-evidence-policy/fts/sample-ft/
+!tests/fixtures/agent-artifacts/ui-evidence-policy/fts/sample-ft/work/
+!tests/fixtures/agent-artifacts/ui-evidence-policy/fts/sample-ft/work/**
+
 # Generated archives
 *.zip
 

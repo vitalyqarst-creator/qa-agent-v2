@@ -9539,6 +9539,45 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertIn("ui-evidence-dom-seeded-observations-declared", finding_ids)
         self.assertIn("ui-evidence-traces-not-collected-declared", finding_ids)
 
+    def test_ui_evidence_policy_requires_stable_evidence_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            shutil.copytree(FIXTURES_DIR / "ui-evidence-policy", fixture_root, dirs_exist_ok=True)
+            evidence_index = next(fixture_root.rglob("ui-evidence-index.md"))
+            evidence_index.write_text(
+                evidence_index.read_text(encoding="utf-8")
+                .replace("| evidence_id | ", "| ")
+                .replace("| --- | --- | --- | --- | --- |", "| --- | --- | --- | --- |")
+                .replace("| UIE-SAMPLE-001-SCREENSHOT-01 | ", "| ")
+                .replace("| UIE-SAMPLE-002-TRACE-01 | ", "| "),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("ui-evidence-missing-stable-ids", finding_ids)
+
+    def test_ui_evidence_policy_rejects_duplicate_evidence_ids(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            shutil.copytree(FIXTURES_DIR / "ui-evidence-policy", fixture_root, dirs_exist_ok=True)
+            evidence_index = next(fixture_root.rglob("ui-evidence-index.md"))
+            evidence_index.write_text(
+                evidence_index.read_text(encoding="utf-8").replace(
+                    "UIE-SAMPLE-002-TRACE-01",
+                    "UIE-SAMPLE-001-SCREENSHOT-01",
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "warning")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("ui-evidence-duplicate-stable-ids", finding_ids)
+
     def test_artifact_manifest_accepts_declared_alias_duplicates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -9841,6 +9880,67 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-round-cap-with-next-skill", finding_ids)
+
+    def test_completed_is_reserved_for_ui_prep(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir) / "valid-signed-off"
+            shutil.copytree(FIXTURES_DIR / "valid-signed-off", fixture_root)
+            workflow_state = fixture_root / "workflow-state.yaml"
+            workflow_state.write_text(
+                workflow_state.read_text(encoding="utf-8")
+                .replace("stage_status: signed-off", "stage_status: completed")
+                .replace("next_skill: ft-ui-automation-prep", "next_skill: null")
+                + "\ncloseout_status: ui-prep-complete\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-completed-outside-ui-prep", finding_ids)
+
+    def test_completed_ui_prep_requires_terminal_routing_and_success_closeout(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir) / "valid-signed-off"
+            shutil.copytree(FIXTURES_DIR / "valid-signed-off", fixture_root)
+            workflow_state = fixture_root / "workflow-state.yaml"
+            workflow_state.write_text(
+                workflow_state.read_text(encoding="utf-8")
+                .replace("current_stage: ft-test-case-iteration", "current_stage: ft-ui-automation-prep")
+                .replace("stage_status: signed-off", "stage_status: completed")
+                + "\ncloseout_status: ui-prep-blocked\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-completed-with-next-skill", finding_ids)
+        self.assertIn("workflow-state-completed-invalid-closeout", finding_ids)
+        self.assertIn("workflow-state-completed-missing-ui-artifacts", finding_ids)
+
+    def test_completed_ui_prep_requires_empty_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir) / "valid-signed-off"
+            shutil.copytree(FIXTURES_DIR / "valid-signed-off", fixture_root)
+            workflow_state = fixture_root / "workflow-state.yaml"
+            workflow_state.write_text(
+                workflow_state.read_text(encoding="utf-8")
+                .replace("current_stage: ft-test-case-iteration", "current_stage: ft-ui-automation-prep")
+                .replace("stage_status: signed-off", "stage_status: completed")
+                .replace("next_skill: ft-ui-automation-prep", "next_skill: null")
+                .replace("blocking_reasons: []", "blocking_reasons:\n  - missing observability")
+                + "\ncloseout_status: ui-prep-complete-with-findings\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json", "--fail-on", "error")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("workflow-state-completed-with-blockers", finding_ids)
 
     def test_round_cap_loop_summary_without_residual_risk_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

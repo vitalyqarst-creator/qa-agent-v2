@@ -65,6 +65,8 @@ Skill не пересматривает scope, не заменяет session-bas
 10. Для каждого кейса со статусом `confirmed` или `mismatch-ft-ui` сохраняй screenshot. Если шаг падает, происходит неожиданная навигация или найден mismatch, дополнительно сохраняй trace.
 11. Индексируй все screenshots, snapshots, traces и logs в `ui-evidence-index.md`.
     - Evidence quality, DOM-seeded observations, local `output/` paths и trace limitations оценивай по [../../references/agent/ui-evidence-policy.md](../../references/agent/ui-evidence-policy.md).
+    - Каждому artifact назначай уникальный стабильный `evidence_id`; automation-ready кейсы ссылаются на этот ID, а не используют локальный path как идентичность evidence.
+    - Не публикуй raw artifact с PII/session data ради переносимости: оставь его restricted и опубликуй только безопасный индекс без чувствительных значений.
     - Не ставь `confirmed` или `mismatch-ft-ui` на основании DOM-seeded observation, пользовательского комментария или старого screenshot без normal UI path.
 12. Если UI расходится с ФТ, не переписывай baseline-набор. Зафиксируй `FT vs UI` divergence в report и в automation-ready версии.
 13. В automation-ready версии сохраняй все обязательные поля ручного тест-кейса из `test-case-format.md` и добавляй:
@@ -80,6 +82,9 @@ Skill не пересматривает scope, не заменяет session-bas
 18. Если прохождение кейса требует дополнительного действия, неочевидного из baseline, фиксируй это действие в самом automation-ready кейсе, а не оставляй его только в `Automation Notes`.
 19. Для `blocked-*` и `not-automatable-manual-only` кейсов не удаляй кейс из automation-ready версии: оставляй blocker или limitation как часть результата и не додумывай недостающий executable path.
 20. Если утверждение из ФТ не имеет наблюдаемого UI-критерия, используй `blocked-observability`, а не домысливай поведение интерфейса.
+21. Закрой `workflow-state.yaml` по каноническому terminal contract из `workflow-state-format.md`:
+    - `stage_status: completed`, `next_skill: none`, пустые `blocking_reasons` и успешный `closeout_status`, если этап действительно завершен;
+    - `stage_status: blocked-input`, `next_skill: none`, `closeout_status: ui-prep-blocked` и конкретные `blocking_reasons`, если повторный UI-доступ, fixture или наблюдаемость еще нужны.
 
 ## Канонические references
 

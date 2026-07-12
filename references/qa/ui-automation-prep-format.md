@@ -4,6 +4,18 @@
 
 Все человекочитаемые поля `ui-validation-report.md`, `ui-evidence-index.md` и automation-ready версии должны быть заполнены на русском языке. Служебные имена полей, статусы и другие канонические enum-значения сохраняются в виде, заданном этим форматом.
 
+## Closeout Status
+
+Успешно завершенный UI-prep фиксируется в `workflow-state.yaml` так:
+
+- `stage_status: completed`;
+- `next_skill: none`;
+- `blocking_reasons: []`;
+- `closeout_status: ui-prep-complete` без UI findings либо `ui-prep-complete-with-findings`, если наблюдаемые неблокирующие расхождения сохранены;
+- `latest_artifacts` связывает automation-ready test cases, UI validation report и UI evidence index.
+
+Если доступ, fixture или наблюдаемость не позволяют закончить проверки, используй `stage_status: blocked-input`, `closeout_status: ui-prep-blocked` и конкретные `blocking_reasons`. Наличие FT/UI findings само по себе не блокирует closeout, если они наблюдаемы, классифицированы и не требуют повторного прогона для определения результата.
+
 ## Общие правила
 
 - UI-проверка запускается только на наборе со статусом `signed-off`.
@@ -79,6 +91,7 @@ DOM-seeded observations не являются normal UI path и не могут 
 
 Каждая запись должна включать:
 
+- `evidence_id` — уникальный стабильный ID по `references/agent/ui-evidence-policy.md`;
 - `test_case_id`
 - `artifact_type`
 - `path`
@@ -101,6 +114,8 @@ Automation-ready версия хранится в `fts/<ft-slug>/test-cases/auto
 - `UI Evidence`
 - `Automation Notes`
 - опционально `FT/UI Divergence`
+
+`UI Evidence` ссылается прежде всего на стабильные `evidence_id` из `ui-evidence-index.md`. Локальный path можно оставить рядом как диагностический locator, но он не заменяет ID и не обязан переноситься в другой checkout.
 
 При необходимости automation-ready версия может и должна уточнять существующие поля кейса по данным UI-прохождения:
 

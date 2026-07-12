@@ -38,6 +38,11 @@ ALLOWED_STAGE_STATUSES = {
     "signed-off",
     "round-cap-reached",
     "blocked-input",
+    "completed",
+}
+UI_PREP_SUCCESS_CLOSEOUT_STATUSES = {
+    "ui-prep-complete",
+    "ui-prep-complete-with-findings",
 }
 ALLOWED_NEXT_SKILLS = ALLOWED_CURRENT_STAGES | {"none", None}
 SESSION_BASED_REVIEW_CYCLE_STATUSES = {
@@ -16763,10 +16768,37 @@ def validate_ui_evidence_index(path: Path, root: Path) -> tuple[list[Finding], l
     missing_paths: list[str] = []
     dom_seeded_entries: list[str] = []
 
-    for row in rows[1:]:
-        if len(row) < 4:
+    evidence_header = next(
+        (row for row in rows if "test_case_id" in row and "artifact_type" in row and "path" in row),
+        [],
+    )
+    evidence_columns = {name: index for index, name in enumerate(evidence_header)}
+    evidence_ids: list[str] = []
+
+    if evidence_header and "evidence_id" not in evidence_columns:
+        findings.append(
+            Finding(
+                id="ui-evidence-missing-stable-ids",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence entries have no stable evidence_id",
+                details="Local paths and generated Playwright filenames are not durable cross-session identifiers.",
+                path=display_path,
+                evidence=[" | ".join(evidence_header)],
+                recommended_action="Add a unique evidence_id column and reference those IDs from automation-ready cases.",
+            )
+        )
+
+    for row in rows:
+        if row == evidence_header or not evidence_header or len(row) < len(evidence_header):
             continue
-        test_case_id, artifact_type, artifact_path, note = row[:4]
+        test_case_id = row[evidence_columns["test_case_id"]]
+        artifact_type = row[evidence_columns["artifact_type"]]
+        artifact_path = row[evidence_columns["path"]]
+        note = row[evidence_columns.get("note", -1)] if "note" in evidence_columns else ""
+        evidence_id = row[evidence_columns["evidence_id"]] if "evidence_id" in evidence_columns else ""
+        if evidence_id:
+            evidence_ids.append(evidence_id)
         if artifact_path.startswith("output/"):
             output_paths.append(artifact_path)
         if "dom-seeded" in artifact_type.lower() or "dom-seeded" in note.lower():
@@ -16775,6 +16807,41 @@ def validate_ui_evidence_index(path: Path, root: Path) -> tuple[list[Finding], l
             candidate = root / artifact_path
             if not candidate.exists():
                 missing_paths.append(artifact_path)
+
+    invalid_evidence_ids = sorted(
+        evidence_id
+        for evidence_id in evidence_ids
+        if not re.fullmatch(r"UIE-[A-Z0-9][A-Z0-9-]*", evidence_id)
+    )
+    duplicate_evidence_ids = sorted(
+        evidence_id for evidence_id, count in Counter(evidence_ids).items() if count > 1
+    )
+    if invalid_evidence_ids:
+        findings.append(
+            Finding(
+                id="ui-evidence-invalid-stable-ids",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence contains invalid evidence_id values",
+                details="Stable evidence identifiers must use the UIE-<UPPERCASE-TOKEN> form.",
+                path=display_path,
+                evidence=invalid_evidence_ids[:10],
+                recommended_action="Replace invalid identifiers with stable UIE-* values.",
+            )
+        )
+    if duplicate_evidence_ids:
+        findings.append(
+            Finding(
+                id="ui-evidence-duplicate-stable-ids",
+                severity="warning",
+                category="ui-evidence",
+                title="UI evidence contains duplicate evidence_id values",
+                details="Each indexed artifact needs its own durable identifier.",
+                path=display_path,
+                evidence=duplicate_evidence_ids[:10],
+                recommended_action="Assign a unique evidence_id to every evidence row.",
+            )
+        )
 
     if output_paths and local_output_policy:
         findings.append(
@@ -19180,6 +19247,87 @@ def validate_workflow_state(
                 recommended_action="Set next_skill to null/none or resolve blockers before routing to the next stage.",
             )
         )
+    if stage_status == "completed":
+        closeout_status = state.get("closeout_status")
+        blocking_reasons = state.get("blocking_reasons")
+        latest_artifacts = state.get("latest_artifacts")
+        if state.get("current_stage") != "ft-ui-automation-prep":
+            findings.append(
+                Finding(
+                    id="workflow-state-completed-outside-ui-prep",
+                    severity="error",
+                    category="stage-transition",
+                    title="completed is reserved for UI automation prep",
+                    details="The generic terminal status is currently defined only for a completed ft-ui-automation-prep stage.",
+                    path=display_path,
+                    evidence=[f"current_stage={state.get('current_stage')}", f"stage_status={stage_status}"],
+                    recommended_action="Use a stage-specific non-terminal status, or set current_stage to ft-ui-automation-prep for a genuine UI-prep closeout.",
+                )
+            )
+        if next_skill not in {None, "none"}:
+            findings.append(
+                Finding(
+                    id="workflow-state-completed-with-next-skill",
+                    severity="error",
+                    category="stage-transition",
+                    title="completed must not route to another skill",
+                    details="A completed UI-prep handoff is terminal and cannot name an automatic downstream skill.",
+                    path=display_path,
+                    evidence=[f"next_skill={next_skill}"],
+                    recommended_action="Set next_skill to null/none. Start later work from an explicit new handoff.",
+                )
+            )
+        if closeout_status not in UI_PREP_SUCCESS_CLOSEOUT_STATUSES:
+            findings.append(
+                Finding(
+                    id="workflow-state-completed-invalid-closeout",
+                    severity="error",
+                    category="stage-transition",
+                    title="completed has no successful UI-prep closeout",
+                    details="A completed UI-prep state must record a canonical successful closeout_status.",
+                    path=display_path,
+                    evidence=[f"closeout_status={closeout_status}"],
+                    recommended_action=(
+                        "Set closeout_status to ui-prep-complete or ui-prep-complete-with-findings, "
+                        "or use blocked-input when the stage remains blocked."
+                    ),
+                )
+            )
+        if not isinstance(blocking_reasons, list) or blocking_reasons:
+            findings.append(
+                Finding(
+                    id="workflow-state-completed-with-blockers",
+                    severity="error",
+                    category="stage-transition",
+                    title="completed contains blocking reasons",
+                    details="A terminal successful UI-prep state must contain an explicit empty blocking_reasons list.",
+                    path=display_path,
+                    evidence=[f"blocking_reasons={blocking_reasons}"],
+                    recommended_action="Clear resolved blockers or keep the workflow in blocked-input until they are resolved.",
+                )
+            )
+        required_ui_closeout_aliases = {
+            "automation_ready_test_cases",
+            "ui_validation_report",
+            "ui_evidence_index",
+        }
+        missing_ui_closeout_aliases = sorted(
+            required_ui_closeout_aliases
+            - (set(latest_artifacts) if isinstance(latest_artifacts, dict) else set())
+        )
+        if missing_ui_closeout_aliases:
+            findings.append(
+                Finding(
+                    id="workflow-state-completed-missing-ui-artifacts",
+                    severity="error",
+                    category="stage-transition",
+                    title="completed is missing canonical UI-prep artifacts",
+                    details="A successful UI-prep closeout must expose the automation-ready file, validation report and evidence index.",
+                    path=display_path,
+                    evidence=missing_ui_closeout_aliases,
+                    recommended_action="Add the missing canonical aliases to latest_artifacts before closing the stage.",
+                )
+            )
     if next_skill == "ft-ui-automation-prep" and not workflow_superseded_by_session_cycle:
         loop_final_status = loop_summary_metrics.get("final_status") if loop_summary_metrics else None
         if not (is_signed_off_state(state) or loop_final_status == "signed-off"):
