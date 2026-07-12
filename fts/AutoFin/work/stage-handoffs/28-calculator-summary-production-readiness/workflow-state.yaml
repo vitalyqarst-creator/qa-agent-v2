@@ -58,9 +58,8 @@ coverage_gaps:
   non_blocking: 1
 open_questions: []
 blocking_reasons:
-  - "TC-ACCS-002: calculator stage values cannot be observed independently because neither available calculator entrypoint opens the stage/window for the local restricted fixture."
-  - "TC-ACCS-005: calculator window does not open, so prefill presence cannot be observed."
-  - "Safe synthetic fixture with portable setup/reset path is absent; current local fixture identifier and data are restricted."
+  - "Gate 1: safe synthetic fixture with a portable alias and documented create/select/reset path is absent; the only known fixture remains local-restricted."
+  - "Gate 2-3: no new normal UI path to the calculator stage/window is documented, so independent calculator-stage values for TC-ACCS-002 and pre-input prefill for TC-ACCS-005 remain unobservable."
 accepted_risks:
   - "GAP-001 accepted-risk; owner: BA/FT owner; rationale: Calculator FT is absent, so the full prefill field set and exact source-to-target mapping cannot be asserted; revisit: when the Calculator FT becomes available"
 notes:
@@ -74,3 +73,4 @@ notes:
   - No Playwright output is eligible for publication in this branch; safe rerun evidence is required after blockers are removed.
   - Restricted raw evidence may remain local; a safe index with stable evidence_id values is the portable contract, and raw publication is not a closeout gate.
   - After a successful controlled rerun, use stage_status completed with next_skill none and a canonical successful UI-prep closeout_status.
+  - Controlled rerun gate was re-evaluated on 2026-07-12 from remediation HEAD b0f1108cc2ded7cc9313938cabd2f7f79425cd15; gates 1, 2 and 3 remain unmet, so no new UI run or status change was performed. The two divergences remain explicitly unresolved pending an authoritative owner disposition.

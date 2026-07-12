@@ -75,6 +75,8 @@
 | 5 | Post-run classification | Seven findings classified with one primary category each | `ui-validation-report.md` |
 | 6 | Safe closeout edits | Sensitive literals removed; evidence marked restricted; handoff completed | automation-ready, report, index, workflow |
 | 7 | Scoped validation | Active artifacts have zero errors/warnings; 12 relevant tests pass | validator JSON; unittest output |
+| 8 | Controlled rerun gate audit | Gates 1-3 remain blocked; no UI rerun or status change | report; workflow; prompt |
+| 9 | Explicit staging fallback | Normal add was rejected by repository ignore policy; only seven named closeout files were force-added | Git staging audit |
 
 ## Quality Checkpoints
 
@@ -96,6 +98,7 @@
 | `TF-003` | storage state target directory was absent | state save | retain interactive authenticated run without publishing auth state | `n/a` | `n/a` | `rerun reproducibility` | provision secure local auth state path |
 | `TF-004` | package validator includes legacy unrelated findings | package-wide fail-on-warning verdict | filter read-only JSON to active closeout paths and run focused artifact tests | `n/a` | `n/a` | `legacy-noise` | maintain separate architecture cleanup task |
 | `TF-005` | validator-unit fixture directory is absent | two fixture-dependent unittest methods | run independent UI/handoff/evidence modules and retain missing-fixture failure as external debt | `tests/fixtures/agent-artifacts/ui-evidence-policy` | `no` | `test-coverage-gap` | restore fixture in a separate agent-layer task |
+| `TF-006` | repository ignore policy rejects ordinary staging under `fts/AutoFin/work/**` | explicit `git add -- <seven named files>` | use `git add -f -- <same seven named files>` and verify staged names plus zero `output/` files | `n/a` | `n/a` | `unintended-file-staging` | inspect `git diff --cached --name-status` before commit |
 
 ## Handoff Notes For Next Session
 
@@ -103,3 +106,36 @@
 - Treat `TC-ACCS-001` as locally confirmed but not portable automation-ready.
 - Product/frontend owner must triage `UI-F-001` and `UI-F-002`; QA must not resolve them by rewriting FT-first expectations.
 - BA/FT owner retains `GAP-001`; exact prefill mapping remains out of scope.
+
+## Controlled Rerun Gate Audit
+
+### Audit Metadata
+
+| field | value |
+| --- | --- |
+| review_date | `2026-07-12` |
+| source_branch | `audit/calculator-summary-ui-blocker-remediation` |
+| source_head | `b0f1108cc2ded7cc9313938cabd2f7f79425cd15` |
+| work_branch | `audit/calculator-summary-ui-controlled-rerun` |
+| gate_status | `blocked` |
+| controlled_rerun_started | `no` |
+
+### Gate Results
+
+- Gate 1 failed: no safe synthetic fixture with portable alias and documented create/select/reset path was added.
+- Gates 2 and 3 failed: no new working normal UI calculator entrypoint or independent observation path for `TC-ACCS-002` / `TC-ACCS-005` was documented.
+- Gate 4 passed with limitation: restricted raw evidence may remain local because the safe index now provides stable `UIE-*` identities; no new evidence was collected.
+- Gate 5 is explicitly unresolved: no product/FT-owner disposition for `TC-ACCS-003` and `TC-ACCS-004` was available; this was not used as evidence to change either status.
+- Existing statuses were preserved because no new normal UI evidence exists.
+
+### Audit Validation
+
+- Runtime/encoding probe passed before repository diagnostics.
+- Canonical LF-normalized baseline SHA before edits: `bb8b90d9b5e80482a486aa186247aae6031ea2ab21cdffce66f0598b3440b571`.
+- Remediation diff audit confirmed that evidence-contract changes did not add fixture, runtime setup or product disposition artifacts.
+- Controlled UI rerun was intentionally skipped under the blocker-gate contract.
+- Target UI evidence/workflow modules: `12 passed`.
+- Focused validator policy/closeout methods: `5 passed`; the formerly missing UI evidence fixture is present in the remediation source branch.
+- Active handoff validator: `0 errors`, `0 warnings`, `1 expected info` for declared local evidence paths.
+- Package-wide inherited findings: `5 errors`, `155 warnings`, `7 info`; none resolve to active calculator-summary closeout artifacts.
+- Script-first architecture audit: `0 errors`, `1 inherited warning` for reviewer instruction-budget headroom outside this scope.

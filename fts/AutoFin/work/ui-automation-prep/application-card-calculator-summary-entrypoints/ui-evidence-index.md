@@ -6,6 +6,7 @@
 - `scope_slug`: `application-card-calculator-summary-entrypoints`
 - `run_date`: `2026-07-12`
 - `runtime`: `local-restricted-stand`
+- `controlled_rerun_gate_review`: `2026-07-12`
 
 ## Evidence Policy
 
@@ -18,6 +19,14 @@
 - `normal_ui_path`: `interactive-login-and-cff-launch`
 - `downstream_rule`: статусы подтверждены локальным evidence, но portable rerun заблокирован до получения безопасной fixture и sanitized evidence.
 - `identity_rule`: `evidence_id` стабилен внутри этого прогона; локальный path является locator, а не переносимым идентификатором.
+
+## Controlled Rerun Gate Audit
+
+- `gate_status`: `blocked`
+- `controlled_rerun_started`: `no`
+- `new_evidence_artifacts`: `none`
+- Существующие `UIE-*` относятся только к прежнему UI run и не переиспользовались для нового содержимого.
+- Без нового normal UI evidence статусы `TC-ACCS-001..005` не изменялись.
 
 ## Evidence
 
