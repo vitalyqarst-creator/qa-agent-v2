@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "generated_by": "codex_review_cycle_runner",
+  "command": "python scripts/codex_review_cycle_runner.py validate --state fts/AutoFin/work/review-cycles/personal-data-current-source-gap-review-20260712/cycle-state.yaml",
+  "scope_slug": "application-card-client-personal-data",
+  "canonical_test_cases": "test-cases/14-application-card-client-personal-data.md",
+  "draft_test_cases": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r2-draft.md",
+  "test_design_dir": "work/test-design/14-application-card-client-personal-data",
+  "current_stage": "writer-r2",
+  "current_scope_findings": [],
+  "unresolved_warning_error_count": 0
+}

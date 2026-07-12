@@ -1,0 +1,340 @@
+{
+  "coverage_summary": {
+    "executable_tc_count": 47,
+    "atoms_total": 42,
+    "atoms_covered": 42,
+    "gaps": [
+      "GAP-001",
+      "GAP-002",
+      "GAP-003"
+    ]
+  },
+  "traceability_matrix_rows": [
+    {
+      "atom_id": "ATOM-001",
+      "source_ref": "SRC-001",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-001",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-002",
+      "source_ref": "SRC-002",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-001",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-003",
+      "source_ref": "SRC-002",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-022",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-004",
+      "source_ref": "SRC-002",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-002",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-005",
+      "source_ref": "SRC-002",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-003; TC-ACPD-016; TC-ACPD-017",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-006",
+      "source_ref": "SRC-002",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-004",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-007",
+      "source_ref": "SRC-003",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-001",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-008",
+      "source_ref": "SRC-003",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-023",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-009",
+      "source_ref": "SRC-003",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-002",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-010",
+      "source_ref": "SRC-003",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-005; TC-ACPD-018; TC-ACPD-019",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-011",
+      "source_ref": "SRC-003",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-006",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-012",
+      "source_ref": "SRC-004",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-001",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-013",
+      "source_ref": "SRC-004",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-047",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-014",
+      "source_ref": "SRC-004",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-002",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-015",
+      "source_ref": "SRC-004",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-007; TC-ACPD-020; TC-ACPD-021",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-016",
+      "source_ref": "SRC-004",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-008",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-017",
+      "source_ref": "SRC-005",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-009",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-018",
+      "source_ref": "SRC-005",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-010",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-019",
+      "source_ref": "SRC-006",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-011; TC-ACPD-024",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-020",
+      "source_ref": "SRC-006",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-012",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-021",
+      "source_ref": "SRC-007",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-013; TC-ACPD-025",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-022",
+      "source_ref": "SRC-007",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-014; TC-ACPD-026",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-023",
+      "source_ref": "SRC-007",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-027",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-024",
+      "source_ref": "SRC-007",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-015; TC-ACPD-028",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-025",
+      "source_ref": "SRC-007",
+      "coverage_status": "covered_with_traceability_defect",
+      "covered_by_tc": "TC-ACPD-014; TC-ACPD-015; TC-ACPD-026; TC-ACPD-027; TC-ACPD-028",
+      "notes": "ledger/design coverage conflicts with draft traces for TC-ACPD-026..028"
+    },
+    {
+      "atom_id": "ATOM-026",
+      "source_ref": "SRC-008",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-029",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-027",
+      "source_ref": "SRC-008",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-030",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-028",
+      "source_ref": "SRC-009",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-031; TC-ACPD-032",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-029",
+      "source_ref": "SRC-009",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-033",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-030",
+      "source_ref": "SRC-009",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-034; TC-ACPD-035; TC-ACPD-036",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-031",
+      "source_ref": "SRC-009",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-041",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-032",
+      "source_ref": "SRC-009",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-037",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-033",
+      "source_ref": "SRC-010",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-031; TC-ACPD-032",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-034",
+      "source_ref": "SRC-010",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-033",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-035",
+      "source_ref": "SRC-010",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-038; TC-ACPD-039; TC-ACPD-040",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-036",
+      "source_ref": "SRC-010",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-041",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-037",
+      "source_ref": "SRC-010",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-042",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    },
+    {
+      "atom_id": "ATOM-038",
+      "source_ref": "SRC-011",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-031; TC-ACPD-032",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-039",
+      "source_ref": "SRC-011",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-033",
+      "notes": ""
+    },
+    {
+      "atom_id": "ATOM-040",
+      "source_ref": "SRC-011",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-043; TC-ACPD-044; TC-ACPD-045",
+      "notes": "covered with accepted GAP-001 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-041",
+      "source_ref": "SRC-011",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-041",
+      "notes": "covered with accepted GAP-002 calibration risk"
+    },
+    {
+      "atom_id": "ATOM-042",
+      "source_ref": "SRC-011",
+      "coverage_status": "covered",
+      "covered_by_tc": "TC-ACPD-046",
+      "notes": "covered with accepted GAP-003 integration-evidence risk"
+    }
+  ],
+  "findings": [
+    {
+      "id": "SEM-001",
+      "review_mode": "traceability",
+      "severity": "error",
+      "category": "coverage",
+      "test_case_id": "TC-ACPD-026; TC-ACPD-027; TC-ACPD-028",
+      "coverage_gap": "",
+      "traceability_ref": "ATOM-025",
+      "problem": "Ledger and design plan state that ATOM-025 is covered by the negative date-boundary cases, but the writer draft traces TC-ACPD-026 to ATOM-022, TC-ACPD-027 to ATOM-023, and TC-ACPD-028 to ATOM-024 without ATOM-025.",
+      "evidence": "atomic-requirements-ledger.md maps ATOM-025 to TC-ACPD-014; TC-ACPD-015; TC-ACPD-026; TC-ACPD-027; TC-ACPD-028. package-test-design-plan.md PLAN-025 has the same intent. writer-r2-draft.md traces ATOM-025 only in TC-ACPD-014 and TC-ACPD-015, while TC-ACPD-026..028 omit it.",
+      "required_change": "Align draft traceability and test-design artifacts: add ATOM-025 to TC-ACPD-026..028 if those cases validate D-relative boundary calculation, or reduce ledger/design coverage if that was not intended.",
+      "source_reference": "SRC-007; BSR 61-63; ATOM-025",
+      "status": "open"
+    },
+    {
+      "id": "SEM-002",
+      "review_mode": "test-design",
+      "severity": "error",
+      "category": "traceability-artifact-consistency",
+      "test_case_id": "",
+      "coverage_gap": "",
+      "traceability_ref": "ATOM-022..ATOM-030; ATOM-033; ATOM-034; ATOM-038; ATOM-039",
+      "problem": "test-design-decision-table.md contains stale/off-by-one planned_tc_or_gap mappings that conflict with package-test-design-plan.md, atomic-requirements-ledger.md, and the writer draft.",
+      "evidence": "Examples: DD-022 maps ATOM-022 to TC-ACPD-025, but the ledger/plan/draft map the invalid D-18 boundary to TC-ACPD-026; DD-026 maps ATOM-026 to TC-ACPD-028, but draft TC-ACPD-029 traces ATOM-026; DD-028 maps ATOM-028 to TC-ACPD-030; TC-ACPD-031, but draft coverage is TC-ACPD-031; TC-ACPD-032.",
+      "required_change": "Regenerate or correct the affected decision table rows so planned_tc_or_gap matches the writer draft and ledger before moving to format review.",
+      "source_reference": "test-design-decision-table.md DD-022..DD-030, DD-033..DD-034, DD-038..DD-039",
+      "status": "open"
+    }
+  ],
+  "human_summary": "Семантическое покрытие в целом заявлено на 42/42 атома и 47 TC, с принятыми рисками GAP-001..GAP-003. Прогресс блокируют не новые продуктовые gaps, а несогласованная трассировка: ATOM-025 расходится между ledger/design plan и draft TC, а decision table содержит устаревшие TC-маппинги после перенумерации/вставки TC-ACPD-047.",
+  "recommended_stage_status": "semantic-revision-needed"
+}

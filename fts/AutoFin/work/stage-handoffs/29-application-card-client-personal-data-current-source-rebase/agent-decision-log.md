@@ -19,3 +19,6 @@
 | `DEC-004` | 4 | gap | Missing validation oracle | Use candidate calibration obligations. | Restriction exists, exact UI reaction does not. | oracle inventories; GAP-001/002 | high | applied |
 | `DEC-005` | 5 | integration | DaData/ABS clauses | Cover visible success effect; separate technical attribution. | UI does not prove provider. | GAP-003 | medium | applied |
 | `DEC-006` | 6 | source-boundary | Opened mockups | Use only for field/toggle mechanics. | Mockup is not a business source. | mockup-visual-inventory.md | high | applied |
+| `DEC-007` | 7 | process-defect | Semantic R1 read canonical instead of unsigned draft. | Stop writer R2, fix runner active-artifact selection, invalidate the false review and rerun R1. | semantic-review-r1-invalidated.md; commit `0205c06` | risk:baseline corruption prevented | applied |
+| `DEC-008` | 8 | review | Corrected semantic R1 findings | Add `TC-ACPD-047` for `ATOM-013` and synchronize the cited design artifacts in writer R2. | writer-r2-draft.md; round-1-findings.md | reviewer verified 42/42 atoms | applied |
+| `DEC-009` | 9 | terminal | Semantic R2 retained two consistency findings at the configured cap. | Stop as `round-cap-reached`; do not promote draft or start writer R3 automatically. | round-2-findings.md; prompt.round-cap-reached.md | real non-product blocker | applied |

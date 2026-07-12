@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "generated_by": "codex_review_cycle_runner",
+  "command": "python scripts/validate_agent_artifacts.py --root fts/AutoFin --json",
+  "scope_slug": "application-card-client-personal-data",
+  "canonical_test_cases": "test-cases/14-application-card-client-personal-data.md",
+  "test_design_dir": "work/test-design/14-application-card-client-personal-data",
+  "current_stage": "writer-structure-r1",
+  "current_scope_findings": [
+    {
+      "id": "decision-log-missing-required-columns",
+      "severity": "info",
+      "category": "decision-log",
+      "title": "Decision log misses required columns",
+      "details": "The decision table must expose the decision, source/input, rationale, output artifact and risk.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.writer-structure-r1.md",
+      "evidence": [
+        "artifact_or_output",
+        "decision_type",
+        "input_or_trigger",
+        "risk_or_confidence",
+        "step"
+      ],
+      "recommended_action": "Use the canonical columns from references/agent/agent-decision-log-format.md."
+    },
+    {
+      "id": "decision-log-missing-required-section",
+      "severity": "info",
+      "category": "decision-log",
+      "title": "Decision log misses Decision Log section",
+      "details": "agent-decision-log.md must contain a `## Decision Log` table with observable intermediate decisions, not hidden chain-of-thought.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.scope-gap-review.md",
+      "evidence": [
+        "Decision Log"
+      ],
+      "recommended_action": "Rewrite the artifact using references/agent/agent-decision-log-format.md."
+    },
+    {
+      "id": "decision-log-missing-required-section",
+      "severity": "info",
+      "category": "decision-log",
+      "title": "Decision log misses Decision Log section",
+      "details": "agent-decision-log.md must contain a `## Decision Log` table with observable intermediate decisions, not hidden chain-of-thought.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.structure-preflight-r1.md",
+      "evidence": [
+        "Decision Log"
+      ],
+      "recommended_action": "Rewrite the artifact using references/agent/agent-decision-log-format.md."
+    },
+    {
+      "id": "session-log-missing-required-sections",
+      "severity": "info",
+      "category": "session-log",
+      "title": "Session log misses required audit sections",
+      "details": "A stage session log should capture inputs read, inputs intentionally not used, key decisions, risks/fallbacks, validation and contamination check.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/reviewer-session-log.scope-gap-review.md",
+      "evidence": [
+        "Contamination Check",
+        "Inputs Not Used",
+        "Inputs Read",
+        "Key Decisions",
+        "Risks And Fallbacks",
+        "Session Metadata",
+        "Validation"
+      ],
+      "recommended_action": "Rewrite the session log using references/agent/session-log-format.md."
+    },
+    {
+      "id": "session-log-missing-required-sections",
+      "severity": "info",
+      "category": "session-log",
+      "title": "Session log misses required audit sections",
+      "details": "A stage session log should capture inputs read, inputs intentionally not used, key decisions, risks/fallbacks, validation and contamination check.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/reviewer-session-log.structure-preflight-r1.md",
+      "evidence": [
+        "Contamination Check",
+        "Inputs Not Used",
+        "Inputs Read",
+        "Key Decisions",
+        "Risks And Fallbacks",
+        "Session Metadata",
+        "Validation"
+      ],
+      "recommended_action": "Rewrite the session log using references/agent/session-log-format.md."
+    },
+    {
+      "id": "session-log-missing-required-sections",
+      "severity": "info",
+      "category": "session-log",
+      "title": "Session log misses required audit sections",
+      "details": "A stage session log should capture inputs read, inputs intentionally not used, key decisions, risks/fallbacks, validation and contamination check.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-session-log.writer-structure-r1.md",
+      "evidence": [
+        "Risks And Fallbacks"
+      ],
+      "recommended_action": "Rewrite the session log using references/agent/session-log-format.md."
+    },
+    {
+      "id": "test-case-nonsequential-id-numbering",
+      "severity": "info",
+      "category": "test-case-format",
+      "title": "Test-case file does not use continuous TC numbering",
+      "details": "TC numeric suffixes should be continuous in file order; numbering must not restart inside functional groups.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r1-draft.md",
+      "evidence": [
+        "missing_numbers:022, 023, 024, 040",
+        "out_of_range:047, 048, 049, 050",
+        "actual_order:TC-ACPD-001=001, TC-ACPD-002=002, TC-ACPD-003=003, TC-ACPD-004=004, TC-ACPD-005=005, TC-ACPD-006=006, TC-ACPD-007=007, TC-ACPD-008=008, TC-ACPD-009=009, TC-ACPD-010=010, TC-ACPD-011=011, TC-ACPD-012=012, TC-ACPD-013=013, TC-ACPD-014=014, TC-ACPD-015=015, TC-ACPD-016=016, TC-ACPD-017=017, TC-ACPD-018=018, TC-ACPD-019=019, TC-ACPD-020=020"
+      ],
+      "recommended_action": "Renumber TC-* sections sequentially across the canonical file and update traceability, coverage-map, matrix, and writer-response references."
+    },
+    {
+      "id": "test-design-applicability-matrix-missing",
+      "severity": "info",
+      "category": "test-design",
+      "title": "Test-case file has no Test-design applicability matrix",
+      "details": "Canonical initial drafts should explicitly record which coverage dimensions apply, do not apply, or remain unclear.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r1-draft.md",
+      "evidence": [],
+      "recommended_action": "Add a Test-design Applicability Matrix before review handoff."
+    },
+    {
+      "id": "test-design-applicability-matrix-missing",
+      "severity": "info",
+      "category": "test-design",
+      "title": "Test-case file has no Test-design applicability matrix",
+      "details": "Canonical initial drafts should explicitly record which coverage dimensions apply, do not apply, or remain unclear.",
+      "path": "work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-structure-r1-draft.md",
+      "evidence": [],
+      "recommended_action": "Add a Test-design Applicability Matrix before review handoff."
+    },
+    {
+      "id": "traceability-matrix-legacy-missing-atom-id",
+      "severity": "info",
+      "category": "traceability",
+      "title": "Legacy traceability matrix has no atom_id column",
+      "details": "This matrix predates the atom_id / traceability_ref contract. Do not mechanically migrate it without a reviewer pass.",
+      "path": "work/test-design/14-application-card-client-personal-data/traceability-matrix.md",
+      "evidence": [
+        "columns=trace_ref, package_id, source_ref, req_id, linked_tc_or_gap, coverage_status"
+      ],
+      "recommended_action": "Treat this as a legacy baseline. New or updated matrices should add stable ATOM-* ids."
+    }
+  ],
+  "unresolved_warning_error_count": 0
+}

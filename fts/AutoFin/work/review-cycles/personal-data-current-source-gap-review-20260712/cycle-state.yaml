@@ -1,0 +1,75 @@
+cycle_id: personal-data-current-source-gap-review-20260712
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+section_id: 14
+current_stage: semantic-review-r2
+stage_status: round-cap-reached
+semantic_round: 2
+max_semantic_rounds: 2
+canonical_test_cases: test-cases/14-application-card-client-personal-data.md
+draft_test_cases: work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r2-draft.md
+test_design_dir: work/test-design/14-application-card-client-personal-data
+active_snapshot: none
+active_transition_prompt: work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.round-cap-reached.md
+sessions:
+latest_artifacts:
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-structure-r1-draft.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-structure-r1-response.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-session-log.writer-structure-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.writer-structure-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/scoped-validator-profile.writer-structure-r1.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/validator-report.writer-structure-r1.latest.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/validator-report.global-after-writer-structure-r1.v2.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.structure-preflight-r2.md
+  - work/test-design/14-application-card-client-personal-data/traceability-matrix.md
+  - work/test-design/14-application-card-client-personal-data/package-test-design-plan.md
+  - work/test-design/14-application-card-client-personal-data/test-design-applicability-matrix.md
+  - work/test-design/14-application-card-client-personal-data/coverage-metrics.md
+  - work/test-design/14-application-card-client-personal-data/risk-priority-map.md
+  - work/test-design/14-application-card-client-personal-data/test-design-review.md
+  - work/test-design/14-application-card-client-personal-data/writer-quality-gate.md
+  - work/test-design/14-application-card-client-personal-data/writer-self-check.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/structure-preflight-r1-findings.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/reviewer-session-log.structure-preflight-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.structure-preflight-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.semantic-review-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/structure-preflight-r1-completion.yaml
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/semantic-review-r1-response.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-1-findings.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-1-traceability-matrix.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-1-traceability-matrix.xlsx
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/reviewer-session-log.semantic-review-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.semantic-review-r1.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.semantic-review-r1.bounded.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.writer-r2.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/semantic-review-r1-completion.yaml
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/semantic-review-r1-invalidated.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r2-draft.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r2-response.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-session-log.writer-r2.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.writer-r2.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.semantic-review-r2.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/validator-report.writer-r2.latest.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/scoped-validator-profile.writer-r2.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/semantic-review-r2-response.json
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-2-findings.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-2-traceability-matrix.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-2-traceability-matrix.xlsx
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/reviewer-session-log.semantic-review-r2.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/agent-decision-log.semantic-review-r2.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.semantic-review-r2.bounded.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.round-cap-reached.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/semantic-review-r2-completion.yaml
+blocking_reasons:
+  - "semantic-review-r2: bounded semantic review found blocking findings."
+blocking_findings:
+  - SEM-001
+  - SEM-002
+open_questions:
+  - GAP-001 exact invalid-value UI oracle remains pending for UI calibration.
+  - GAP-002 empty requiredness UI oracle remains pending for UI calibration.
+  - GAP-003 DaData/ABS failure and technical attribution evidence remain pending.
+accepted_risks:
+  - GAP-001 non-blocking calibration risk accepted for writer draft only; candidate TC preserved.
+  - GAP-002 non-blocking calibration risk accepted for writer draft only; candidate TC preserved.
+  - GAP-003 non-blocking integration-evidence risk accepted for writer draft only; success-path visible checks only.

@@ -1,0 +1,10 @@
+# Agent Decision Log: writer-structure-r1
+
+## Decision Log
+
+| decision_id | input | decision | rationale | risk | linked_artifact |
+| --- | --- | --- | --- | --- | --- |
+| DEC-001 | `structure-preflight-test-case-runtime-field-missing` for all TC blocks | Convert runtime bold labels to `###` runtime sections | `codex_review_cycle_runner.py` structure preflight requires `RUNTIME_SECTION_PATTERNS`; current content already had the sections semantically. | Format-only change can break TC references if not propagated. | `work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-structure-r1-draft.md` |
+| DEC-002 | `structure-preflight-test-case-id-sequence-not-contiguous` | Preserve file order and assign contiguous suffixes `001`..`046` | The finding is deterministic and file-order renumbering is the least semantic change. | Downstream artifacts can become stale; TC references were updated in writer-owned artifacts. | `work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/scoped-validator-profile.writer-structure-r1.json` |
+| DEC-003 | Runner contract forbids canonical write before sign-off | Keep production test-case file unchanged | Current stage is an unsigned writer remediation. | Reviewer must inspect draft path, not canonical file. | `work/review-cycles/personal-data-current-source-gap-review-20260712/cycle-state.yaml` |
+| DEC-004 | Project validator initially parsed `###` runtime sections as empty while structure-preflight requires them | Update validator extraction to read parser-supported `###` runtime sections | The two validators otherwise contradicted each other: fixing the draft for structure-preflight created false current-draft warnings in the general validator. | Validator-code change affects future validation; extraction was verified on `TC-ACPD-016` and scoped warning/error count became `0`. | `scripts/validate_agent_artifacts.py`; `work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/validator-report.global-after-writer-structure-r1.v2.json` |

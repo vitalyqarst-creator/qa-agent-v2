@@ -1,9 +1,9 @@
 ft_slug: AutoFin
 scope_slug: application-card-client-personal-data
-current_stage: ft-scope-analyzer
-stage_status: ready-for-gap-review
-current_round: 0
-next_skill: ft-test-case-reviewer
+current_stage: ft-test-case-iteration
+stage_status: round-cap-reached
+current_round: 2
+next_skill: ft-test-case-iteration
 required_inputs:
   - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
   - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
@@ -15,6 +15,9 @@ required_inputs:
   - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
   - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
   - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/prompt.scope-gaps-to-reviewer.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/cycle-state.yaml
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r2-draft.md
+  - work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-2-findings.md
   - AGENT-NOTES.md
 latest_artifacts:
   source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
@@ -27,7 +30,10 @@ latest_artifacts:
   scope_coverage_gaps: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
   scope_clarification_requests: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
   scope_execution_options: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-execution-options.md
-  active_transition_prompt: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/prompt.scope-gaps-to-reviewer.md
+  review_cycle_state: work/review-cycles/personal-data-current-source-gap-review-20260712/cycle-state.yaml
+  unsigned_draft: work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/writer-r2-draft.md
+  latest_findings: work/review-cycles/personal-data-current-source-gap-review-20260712/outputs/round-2-findings.md
+  active_transition_prompt: work/review-cycles/personal-data-current-source-gap-review-20260712/prompts/prompt.round-cap-reached.md
   final_bsr_evidence: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/final-bsr-evidence.json
   session_log: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-analyzer-session-log.md
   decision_log: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/agent-decision-log.md
@@ -38,8 +44,15 @@ open_questions:
   - GAP-001 exact invalid-value UI oracle
   - GAP-002 empty requiredness UI oracle
   - GAP-003 integration failure/technical evidence
-blocking_reasons: []
-accepted_risks: []
+blocking_reasons:
+  - SEM-001 ATOM-025 traceability differs between draft and ledger/design plan.
+  - SEM-002 decision-table TC mappings remain stale after draft renumbering.
+  - Semantic round cap 2 reached; automatic writer-r3 is prohibited.
+accepted_risks:
+  - GAP-001 remains a non-blocking UI calibration risk.
+  - GAP-002 remains a non-blocking UI calibration risk.
+  - GAP-003 remains a non-blocking integration-evidence risk.
 notes:
   - Historical signed-off is regression evidence only; current-source sign-off requires a new cycle.
-  - Canonical test cases remain unchanged during scope analysis.
+  - Unsigned draft covers 42/42 atoms with 47 test cases, but reviewer sign-off was not granted.
+  - Canonical test cases remain unchanged; SHA-256 is 98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc.
