@@ -1,0 +1,35 @@
+{
+  "contract_version": 1,
+  "canonical_test_cases": "fts/AutoFin/test-cases/14-application-card-calculator-summary-entrypoints.md",
+  "canonical_title": "Тест-кейсы: виджет и кнопка кредитного калькулятора в карточке заявки",
+  "ft_slug": "AutoFin",
+  "scope_slug": "application-card-calculator-summary-entrypoints",
+  "section_id": "14",
+  "domain_package_id": "WP-01",
+  "test_design_dir": "work/test-design/14-application-card-calculator-summary-entrypoints",
+  "test_case_ids": [
+    "TC-ACCS-001",
+    "TC-ACCS-002",
+    "TC-ACCS-003",
+    "TC-ACCS-004",
+    "TC-ACCS-005"
+  ],
+  "expected_priorities": {
+    "TC-ACCS-001": "High",
+    "TC-ACCS-002": "High",
+    "TC-ACCS-003": "Medium",
+    "TC-ACCS-004": "High",
+    "TC-ACCS-005": "Medium"
+  },
+  "required_requirement_ids": ["BSR 43", "BSR 44", "BSR 45", "BSR 46"],
+  "required_sections": [
+    "Metadata",
+    "Scope Boundaries",
+    "Coverage Summary",
+    "Coverage Gaps",
+    "Test Cases"
+  ],
+  "required_gap_ids": ["GAP-001"],
+  "accepted_candidate": "fts/AutoFin/work/review-cycles/codex-exec-prepared-standard-calculator-summary-final-v9-20260711/attempts/writer-r1/attempt-001/stage-output/draft.md",
+  "accepted_candidate_sha256": "7f7e076abf1faca3e4bf58e8aab62f2b7beec6ffd1e63ef4a05be4cc29c0bc00"
+}

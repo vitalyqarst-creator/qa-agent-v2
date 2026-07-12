@@ -1,0 +1,18 @@
+{
+  "status": "signed-off",
+  "promotion_method": "controlled apply_patch after accepted promotion-ready cycle",
+  "production_path": "fts/AutoFin/test-cases/14-application-card-calculator-summary-entrypoints.md",
+  "production_before_sha256": "a32a6049a5ca9f88d5c9e8d379bfd390724db688bc1d69c4b409e83743ac75f5",
+  "accepted_candidate_path": "fts/AutoFin/work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md",
+  "accepted_candidate_sha256": "bb8b90d9b5e80482a486aa186247aae6031ea2ab21cdffce66f0598b3440b571",
+  "production_after_sha256": "bb8b90d9b5e80482a486aa186247aae6031ea2ab21cdffce66f0598b3440b571",
+  "byte_equivalent_to_candidate": true,
+  "reviewer_decision": "accepted",
+  "reviewer_findings_count": 0,
+  "promotion_readiness_findings_count": 0,
+  "strict_production_validator_checks": 37,
+  "strict_production_validator_findings": 0,
+  "neighbor_production_files_changed": false,
+  "gap_ids_preserved": ["GAP-001"],
+  "requirement_ids_preserved": ["BSR 43", "BSR 44", "BSR 45", "BSR 46"]
+}
