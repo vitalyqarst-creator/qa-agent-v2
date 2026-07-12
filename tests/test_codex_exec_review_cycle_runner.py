@@ -490,6 +490,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         forbidden_evidence_roots=("fts/demo-ft/test-cases",),
         instruction_attempt_root: Path | None = None,
         include_gap: bool = False,
+        grouped_obligations: bool = False,
     ) -> Path:
         gap_evidence = "\nGAP-001: exact mapping is unresolved.\n" if include_gap else ""
         self.handoff_path.write_text(
@@ -507,8 +508,25 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 gap_id="",
                 dictionary_refs=(),
                 notes="",
+                planned_test_case_id=("TC-GROUP-001" if grouped_obligations else ""),
             )
         ]
+        if grouped_obligations:
+            prepared_obligations.append(
+                PreparedObligation(
+                    obligation_id="OBL-002",
+                    atom_id="ATOM-002",
+                    source_refs=("SRC-1",),
+                    atomic_statement="The same observable action proves a second property.",
+                    observable_oracle="The visible result matches the second property.",
+                    test_intent="Verify both properties with one observable action.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-GROUP-001",
+                )
+            )
         prepared_gaps = []
         if include_gap:
             prepared_obligations.append(
@@ -696,6 +714,12 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse(any(item["path"].endswith("main.xhtml") for item in manifest["source_artifacts"]))
         gate = json.loads((self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(encoding="utf-8"))
         self.assertTrue(gate["passed"])
+        overlap = json.loads(
+            (self.writer_attempt / "runner-output" / "semantic-overlap-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("clean", overlap["status"])
         reviewer_command = executor.requests[1].command
         self.assertIn("--output-schema-contract", reviewer_command)
         schema_path = Path(
@@ -725,6 +749,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("PREPARED-REVIEW-PAYLOAD:BEGIN", reviewer_prompt)
         self.assertIn("Prepared Reviewer Runtime Profile", reviewer_prompt)
         self.assertIn("Immutable writer draft", reviewer_prompt)
+        self.assertIn("Semantic overlap diagnostic", reviewer_prompt)
         self.assertIn("reviewed_draft_sha256", reviewer_prompt)
         self.assertIn(
             "do not load the full ft-test-case-reviewer skill", reviewer_prompt.lower()
@@ -734,6 +759,57 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             len(reviewer_prompt.encode("utf-8")),
             runner_module.DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES,
         )
+
+    def test_semantic_overlap_diagnostic_is_non_blocking_and_names_duplicate_bodies(self) -> None:
+        draft = self.repo_root / "overlap.md"
+        draft.write_text(
+            """# Тест-кейсы
+
+## TC-001
+
+**Название:** Проверка редактируемости поля
+**Трассировка:** OBL-001; ATOM-001
+
+### Шаги
+
+1. Ввести строковое значение `Тест` в поле.
+
+### Итоговый ожидаемый результат
+
+Значение `Тест` отображается в поле.
+
+## TC-002
+
+**Название:** Проверка строкового типа поля
+**Трассировка:** OBL-002; ATOM-002
+
+### Шаги
+
+1. Ввести значение `Тест` в поле.
+
+### Итоговый ожидаемый результат
+
+Значение `Тест` отображается в поле.
+""",
+            encoding="utf-8",
+        )
+
+        report = runner_module.build_semantic_overlap_diagnostic(draft)
+
+        self.assertTrue(report["passed"])
+        self.assertFalse(report["blocking"])
+        self.assertEqual("overlap-detected", report["status"])
+        self.assertEqual(["TC-001", "TC-002"], report["findings"][0]["test_case_ids"])
+
+    def test_prepared_seed_groups_obligations_with_same_planned_test_case_id(self) -> None:
+        package_path = self.build_prepared_package(grouped_obligations=True)
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        runner.validate_configuration()
+        seed = runner._draft_seed_text()
+
+        self.assertEqual(1, seed.count("## TC-GROUP-001"))
+        self.assertIn("ATOM-001; OBL-002; ATOM-002", seed)
 
     def test_prepared_writer_creates_absent_stage_owned_output_from_template(self) -> None:
         package_path = self.build_prepared_package()

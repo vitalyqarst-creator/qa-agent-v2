@@ -224,6 +224,7 @@ class PreparedObligation:
     notes: str
     constraint_gap_ids: tuple[str, ...] = ()
     atom_id: str = ""
+    planned_test_case_id: str = ""
 
     @property
     def traceability_atom_id(self) -> str:
@@ -269,6 +270,12 @@ class PreparedObligation:
             )
         if not isinstance(self.notes, str):
             raise StageRuntimeError(f"{self.obligation_id}.notes must be text")
+        if self.planned_test_case_id:
+            _identifier(
+                self.planned_test_case_id,
+                f"{self.obligation_id}.planned_test_case_id",
+                re.compile(r"^TC-[A-Za-z0-9_.-]+$"),
+            )
 
     def to_dict(
         self,
@@ -291,6 +298,8 @@ class PreparedObligation:
             payload["constraint_gap_ids"] = list(self.constraint_gap_ids)
         if include_atom_id:
             payload["atom_id"] = self.traceability_atom_id
+        if self.planned_test_case_id:
+            payload["planned_test_case_id"] = self.planned_test_case_id
         return payload
 
     @classmethod
@@ -312,6 +321,8 @@ class PreparedObligation:
             expected.add("constraint_gap_ids")
         if package_version >= 5:
             expected.add("atom_id")
+        if "planned_test_case_id" in payload:
+            expected.add("planned_test_case_id")
         _exact_fields(payload, expected, "obligation")
         item = cls(
             obligation_id=payload["obligation_id"],
@@ -335,6 +346,7 @@ class PreparedObligation:
                 else ()
             ),
             atom_id=(payload["atom_id"] if package_version >= 5 else ""),
+            planned_test_case_id=payload.get("planned_test_case_id", ""),
         )
         item.validate(package_version=package_version)
         return item

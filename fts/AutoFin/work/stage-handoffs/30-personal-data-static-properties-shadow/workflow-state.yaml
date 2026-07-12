@@ -2,7 +2,7 @@ ft_slug: AutoFin
 scope_slug: personal-data-static-properties-shadow
 current_stage: ft-test-case-iteration
 stage_status: ready-for-next-stage
-current_round: 1
+current_round: 2
 next_skill: ft-test-case-iteration
 required_inputs:
   - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
@@ -21,9 +21,10 @@ latest_artifacts:
   source_row_inventory: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
   scope_selection: work/stage-handoffs/30-personal-data-static-properties-shadow/scope-selection.md
   compiler_input: work/stage-handoffs/30-personal-data-static-properties-shadow/compiler-inputs/personal-data-static-properties/compiler-input.yaml
-  cycle_state: work/review-cycles/personal-data-static-properties-shadow-v2-20260712/cycle-state.yaml
-  accepted_draft: work/review-cycles/personal-data-static-properties-shadow-v2-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md
-  final_findings: work/review-cycles/personal-data-static-properties-shadow-v2-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  cycle_state: work/review-cycles/personal-data-static-properties-shadow-v6-20260712/cycle-state.yaml
+  accepted_draft: work/review-cycles/personal-data-static-properties-shadow-v6-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md
+  final_findings: work/review-cycles/personal-data-static-properties-shadow-v6-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  semantic_overlap_diagnostic: work/review-cycles/personal-data-static-properties-shadow-v6-20260712/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json
   iteration_summary: work/stage-handoffs/30-personal-data-static-properties-shadow/iteration-summary.md
   active_transition_prompt: work/stage-handoffs/30-personal-data-static-properties-shadow/prompt.scope-to-iteration.md
   session_log: work/stage-handoffs/30-personal-data-static-properties-shadow/iteration-session-log.md
@@ -31,9 +32,7 @@ latest_artifacts:
 coverage_gaps:
   blocking: 0
   non_blocking: 0
-open_questions:
-  - Следует ли deterministic reviewer объединять пары editability/value-type с одинаковыми шагами и oracle.
+open_questions: []
 blocking_reasons: []
 accepted_risks:
   - Eval-only draft не предназначен для promotion и не покрывает весь parent scope 4.3.
-  - Три пары кейсов имеют разные obligations, но практически одинаковые действие и oracle; это residual optimization finding.

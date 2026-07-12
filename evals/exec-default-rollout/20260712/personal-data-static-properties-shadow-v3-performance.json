@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "backend": "exec",
+  "cycle_dir": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712",
+  "stage_count": 2,
+  "duration_ms_total": 114969,
+  "total_tokens": 56171,
+  "uncached_input_tokens_total": 51168,
+  "input_artifact_bytes_total": 226149,
+  "output_artifact_bytes_total": 74535,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f56d0-0196-7a92-bcb0-1c43a0a1dd7f",
+    "019f56d0-f661-7d83-b8cf-be0db04bc535"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "personal-data-static-properties-shadow-v3-20260712",
+      "duration_ms": 62203,
+      "input_artifact_bytes": 99647,
+      "input_artifact_count": 9,
+      "input_tokens": 24779,
+      "outcome": "draft-ready",
+      "output_artifact_bytes": 56379,
+      "output_artifact_count": 11,
+      "output_tokens": 3048,
+      "role": "writer",
+      "scenario": "writer.session_prepared_initial_draft",
+      "stage_id": "writer-r1",
+      "total_tokens": 27827
+    },
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "personal-data-static-properties-shadow-v3-20260712",
+      "duration_ms": 52766,
+      "input_artifact_bytes": 126502,
+      "input_artifact_count": 14,
+      "input_tokens": 26389,
+      "outcome": "changes-required",
+      "output_artifact_bytes": 18156,
+      "output_artifact_count": 6,
+      "output_tokens": 1955,
+      "role": "reviewer",
+      "scenario": "reviewer.session_prepared_semantic",
+      "stage_id": "reviewer-r1",
+      "total_tokens": 28344
+    }
+  ],
+  "stage_attribution": [
+    {
+      "stage_id": "reviewer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    },
+    {
+      "stage_id": "writer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    }
+  ]
+}

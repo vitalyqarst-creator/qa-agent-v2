@@ -15,6 +15,7 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Workflow compilation must derive fast-path eligibility from the canonical test-design applicability matrix. Numeric/boundary, dependency/state, integration/persistence, table-parity and any unclassified applicable dimension produce a `standard-required` package with explicit `unsupported_dimensions`; callers cannot opt those dimensions into `simple-field-property` by flag or prompt.
 - Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 5 carries `obligation_id` and `atom_id` as separate machine-readable fields; evidence text alone is not sufficient for this relation.
 - When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
+- Before package materialization, every input-based design-plan row must bind a concrete synthetic/source-backed value or a stable fixture reference. Abstract classes such as `valid-text` are not execution-ready by themselves and fail compilation with `input-fixture-required`; this preflight prevents spending a live writer turn to discover missing test data.
 
 ## Layout
 
@@ -64,7 +65,7 @@ Each obligation contains:
 - `observable_oracle` or an explicit linked gap;
 - `test_intent`;
 - `coverage_status`: `testable | gap | unclear | not-applicable`;
-- optional `dictionary_refs`, `constraint_gap_ids` and `notes`. In version `5`, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
+- optional `dictionary_refs`, `constraint_gap_ids`, `notes` and `planned_test_case_id`. The compiler emits `planned_test_case_id` from the Coverage Obligation Table; multiple independently traced obligations may share one id only when the Package Test Design Plan defines one observable action/oracle for that group. The runner then creates one seed case with all grouped `OBL-*`/`ATOM-*` references instead of duplicating executable bodies. Legacy version `5` packages without this optional field remain readable. In version `5`, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 
@@ -146,6 +147,7 @@ Before writer output can reach reviewer:
 - structured fast writer is read-only and performs no workspace reads; explicit legacy workspace mode may read only its exact runner-declared current `stage-output` root for local self-checks;
 - JSONL command evidence contains no broad repository scan or registered full-source access without a prior exact `targeted_source_fallback` authorization;
 - command, idle and hard-time budgets were respected or the explicit timeout-with-progress policy passed all deterministic gates.
+- the runner writes a non-blocking `semantic-overlap-diagnostic.json` after structural and obligation gates; exact normalized step/final-oracle matches are passed to reviewer for classification and are never cleared merely because titles differ.
 
 Reviewer fast path receives the same package, writer output and deterministic gate report. It remains read-only and returns a structured outcome; only the runner persists findings and applies transitions.
 

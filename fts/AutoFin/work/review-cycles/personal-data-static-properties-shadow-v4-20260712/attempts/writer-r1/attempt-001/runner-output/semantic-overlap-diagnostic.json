@@ -1,0 +1,72 @@
+{
+  "passed": true,
+  "validator": "semantic-overlap-diagnostic-v1",
+  "status": "overlap-detected",
+  "blocking": false,
+  "test_case_count": 15,
+  "findings": [
+    {
+      "id": "semantic-overlap-001",
+      "severity": "warning",
+      "category": "duplication",
+      "blocking": false,
+      "test_case_ids": [
+        "TC-PDSP-003",
+        "TC-PDSP-005"
+      ],
+      "titles": [
+        "Проверка редактируемости поля «Фамилия»",
+        "Проверка строкового типа значения поля «Фамилия»"
+      ],
+      "traceability": [
+        "OBL-003; ATOM-003",
+        "OBL-005; ATOM-005"
+      ],
+      "reason": "Test cases have identical normalized steps and final expected result.",
+      "required_review": "Classify as a justified multi-obligation check or require consolidation; unique titles alone are insufficient."
+    },
+    {
+      "id": "semantic-overlap-002",
+      "severity": "warning",
+      "category": "duplication",
+      "blocking": false,
+      "test_case_ids": [
+        "TC-PDSP-008",
+        "TC-PDSP-010"
+      ],
+      "titles": [
+        "Проверка редактируемости поля «Имя»",
+        "Проверка строкового типа значения поля «Имя»"
+      ],
+      "traceability": [
+        "OBL-008; ATOM-008",
+        "OBL-010; ATOM-010"
+      ],
+      "reason": "Test cases have identical normalized steps and final expected result.",
+      "required_review": "Classify as a justified multi-obligation check or require consolidation; unique titles alone are insufficient."
+    },
+    {
+      "id": "semantic-overlap-003",
+      "severity": "warning",
+      "category": "duplication",
+      "blocking": false,
+      "test_case_ids": [
+        "TC-PDSP-013",
+        "TC-PDSP-015"
+      ],
+      "titles": [
+        "Проверка редактируемости поля «Отчество»",
+        "Проверка строкового типа значения поля «Отчество»"
+      ],
+      "traceability": [
+        "OBL-013; ATOM-013",
+        "OBL-015; ATOM-015"
+      ],
+      "reason": "Test cases have identical normalized steps and final expected result.",
+      "required_review": "Classify as a justified multi-obligation check or require consolidation; unique titles alone are insufficient."
+    }
+  ],
+  "checked_paths": [
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\personal-data-static-properties-shadow-v4-20260712\\attempts\\writer-r1\\attempt-001\\stage-output\\draft.md"
+  ]
+}

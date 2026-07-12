@@ -1,0 +1,27 @@
+cycle_id: personal-data-static-properties-shadow-v3-20260712
+ft_slug: AutoFin
+scope_slug: personal-data-static-properties-shadow-v3-20260712
+backend: codex-exec
+workflow_status: changes-required
+stage_status: semantic-revision-needed
+current_stage: reviewer-r1
+semantic_round: 0
+max_semantic_rounds: 2
+writer_stage_status: completed
+reviewer_stage_status: changes-required
+draft_test_cases: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md
+canonical_test_cases: test-cases/4.3-prepared-shadow-personal-data-static-properties.md
+validator_report: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/validator.json
+obligation_gate_report: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json
+semantic_overlap_diagnostic: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json
+seed_gate_report: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/seed-gate.json
+evidence_access_report: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json
+writer_draft_sha256: 89b54cbad634961f8dd380c641827e2beddf852f5ef2d4a0dba3d0469ac2b7c5
+reviewer_findings: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+accepted_terminal_state: false
+final_promoted: false
+draft_or_unsigned: true
+promotion_status: pending
+active_transition_prompt: work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/reviewer-r1/attempt-001/prompt.md
+blocking_reasons:
+  - reviewer returned changes-required

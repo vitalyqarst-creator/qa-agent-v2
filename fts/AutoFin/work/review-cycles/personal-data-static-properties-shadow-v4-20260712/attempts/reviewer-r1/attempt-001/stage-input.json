@@ -1,0 +1,133 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/4.3-prepared-shadow-personal-data-static-properties.md",
+  "contract_version": 2,
+  "cycle_id": "personal-data-static-properties-shadow-v4-20260712",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/prepared-input/personal-data-static-properties-v4/stage-package.json",
+      "sha256": "839491e3be77e1b429237cc656cd07a1853f31ccef2082093e9a972974396066"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/prepared-input/personal-data-static-properties-v4/atomic-obligations.json",
+      "sha256": "395472ffe3f2632cd13a4a97d47464e37b78580e1ab1487f50205377c0e07ddc"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "b55efe78b81f85fae07a67d96145958641420a0424d670e43f44fcbefcd69642"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "1231ed42d704dfd0923f78f79b61b4ede9da0b3eff5756a54e8882bcb511741d"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "d48aa662f9309c90f017b0e3208e3213d054da5317af8ef5ed55337ba276da61"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "24b5e2742c6717fe5f1c3aee97f27e15e21925fc0f91a27cefe4a34c536d7ff6"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "3046853b6f522208b385e087bf644ad88a7e2b24b808220fec5c564e333ffb89"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "479a38597bbe35d9160e08d280b21a73d92dce499672f09b5f944c8ee0b4ee38"
+    }
+  ],
+  "input_digest": "304eb5e81f4fabf12ede3ec72af7d7a169db94224e7ef38be6bc9ebae4df8d00",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "2514e3e5166408ec2741cc87a6d335d6d00208033df961519e05127f89b07cf3"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/prepared-input/personal-data-static-properties-v4/stage-instructions.md",
+      "sha256": "6abdb6bc4be6bc3ebf4ba1d64b0596c2a1f4f513e67a36dcc3be7eb090717bff"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "7cb115f73c9949d7f8268d7585a132d929f6cccedbceedfbb12e1d97d9c6b156"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/prompt.md",
+    "sha256": "820bc1c1944097e6a77789baf64f9f93ffd289728c011ba4ba08cdfe96e82714"
+  },
+  "role": "reviewer",
+  "sandbox_policy": "read_only",
+  "scenario": "reviewer.session_prepared_semantic",
+  "semantic_round": 0,
+  "session_id": "session-reviewer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v4-20260712/prepared-input/personal-data-static-properties-v4/source-evidence.md",
+      "sha256": "f9ee6e8d02be9b244abb99568cad5907295d08a1904b732eb6deeb95b1d2e885"
+    }
+  ],
+  "stage_id": "reviewer-r1",
+  "timeout_seconds": 90
+}

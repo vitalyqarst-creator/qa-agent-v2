@@ -23,7 +23,8 @@ Legacy/unclassified, table-parity, numeric-boundary, integration/persistence, de
 4. For each `gap`, `unclear` or `not-applicable` obligation, verify that the draft does not claim executable coverage or invent the missing mechanism.
 5. Reject invented screens, fields, literals, dictionaries, messages, statuses, UI reactions, API/DB effects, persistence or internal state.
 6. Reject non-atomic cases, generic test data, placeholder steps, source-rule oracles and traceability that is present only nominally.
-7. Return the exact structured review contract requested by the runner. Do not write files; the runner renders human-readable findings.
+7. Classify every supplied semantic-overlap diagnostic group. Accept a shared body only when it is a justified observable multi-obligation check; otherwise return a `duplication` finding and require consolidation. Different titles do not justify identical steps and final expected results.
+8. Return the exact structured review contract requested by the runner. Do not write files; the runner renders human-readable findings.
 
 ## Decision Floor
 

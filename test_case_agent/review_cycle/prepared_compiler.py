@@ -67,6 +67,52 @@ OBLIGATION_DIMENSION_GROUPS = {
     "repeatable-block": "repeatable-lifecycle",
 }
 
+ABSTRACT_INPUT_CLASSES = {
+    "input",
+    "text",
+    "string",
+    "valid-input",
+    "valid-text",
+    "valid-string",
+    "valid-value",
+    "invalid-input",
+    "invalid-text",
+    "invalid-string",
+    "invalid-value",
+}
+INPUT_ACTION = re.compile(
+    r"\b(?:enter|fill|input|type|ввести|ввод|заполнить|указать)\b",
+    flags=re.IGNORECASE,
+)
+CONCRETE_INLINE_VALUE = re.compile(r"`[^`\r\n]+`")
+
+
+def _plan_requires_concrete_fixture(row: Mapping[str, str]) -> bool:
+    input_class = row.get("input_class", "").strip().lower()
+    if input_class in ABSTRACT_INPUT_CLASSES:
+        return True
+    return bool(INPUT_ACTION.search(row.get("planned_check", "")))
+
+
+def _plan_has_concrete_fixture(row: Mapping[str, str]) -> bool:
+    for key in ("fixture_id", "fixture", "test_data", "test_data_ref"):
+        value = row.get(key, "").strip()
+        if value and value.lower() not in {"n/a", "none", "none_required", "-"}:
+            return True
+    input_class = row.get("input_class", "").strip()
+    if ":" in input_class and input_class.split(":", 1)[1].strip():
+        return True
+    return bool(
+        CONCRETE_INLINE_VALUE.search(
+            " ".join(
+                (
+                    row.get("planned_check", ""),
+                    row.get("single_expected_behavior", ""),
+                )
+            )
+        )
+    )
+
 
 class PreparedCompilerDiagnostic(StageRuntimeError):
     """Machine-readable compiler failure with bounded artifact anchors."""
@@ -711,6 +757,30 @@ def compile_workflow_package(
             ]
             if not viable:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no testable design-plan row")
+            fixtureless = [
+                item
+                for item in viable
+                if _plan_requires_concrete_fixture(item)
+                and not _plan_has_concrete_fixture(item)
+            ]
+            if fixtureless:
+                raise PreparedCompilerDiagnostic(
+                    "input-fixture-required",
+                    "semantic degradation: input-based design-plan rows require a concrete "
+                    f"fixture before live execution: {atom_id}",
+                    details=tuple(
+                        {
+                            "kind": "input-fixture-required",
+                            "atom_id": atom_id,
+                            **_artifact_anchor(
+                                plan_path,
+                                item.get("design_item_id") or atom_id,
+                                repo_root,
+                            ),
+                        }
+                        for item in fixtureless
+                    ),
+                )
             if not any(
                 obligation_row["planned_tc_or_gap"] in item.get("planned_tc_or_gap", "")
                 for item in viable
@@ -802,6 +872,11 @@ def compile_workflow_package(
                     )
                 ),
                 constraint_gap_ids=tuple(constraint_gap_tokens),
+                planned_test_case_id=(
+                    obligation_row["planned_tc_or_gap"]
+                    if coverage_status == "testable"
+                    else ""
+                ),
             )
         )
         evidence_rows.extend(

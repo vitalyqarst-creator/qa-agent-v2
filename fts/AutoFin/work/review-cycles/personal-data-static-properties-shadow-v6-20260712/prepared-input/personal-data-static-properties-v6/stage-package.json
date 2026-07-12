@@ -1,0 +1,56 @@
+{
+  "created_at": "2026-07-12T15:05:59.141161+00:00",
+  "execution_profile": "simple-field-property",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/review-cycles"
+  ],
+  "ft_slug": "AutoFin",
+  "package_artifacts": [
+    {
+      "bytes": 16436,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v6-20260712/prepared-input/personal-data-static-properties-v6/source-evidence.md",
+      "sha256": "5f6cf0b48ecff208b514b8201bd1496fe5d9774e0e8458923aaeeae52f64faf0"
+    },
+    {
+      "bytes": 11072,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v6-20260712/prepared-input/personal-data-static-properties-v6/atomic-obligations.json",
+      "sha256": "8676ef1b843703848727299f344665e24fec4e98682ee09b9c3cdd2cc56f9a50"
+    },
+    {
+      "bytes": 1115,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v6-20260712/prepared-input/personal-data-static-properties-v6/stage-instructions.md",
+      "sha256": "07b6ecef3c76365289d391f9390f66654b0bd2ca3f4d3a802fc3ce83de8e025c"
+    }
+  ],
+  "package_digest": "a9f29090d3fc41a6575a2e01e99dc4f1093ae4361c77036e76049df764818647",
+  "package_id": "personal-data-static-properties-v6",
+  "package_version": 5,
+  "scope_slug": "4.3-prepared-shadow-personal-data-static-properties",
+  "section_id": "4.3",
+  "source_registry": [
+    {
+      "locator": "pinned by source-selection.md",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "locator": "pinned by source-selection.md",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "locator": "pinned by source-selection.md",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ],
+  "unsupported_dimensions": []
+}

@@ -1,0 +1,76 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f56d0-0196-7a92-bcb0-1c43a0a1dd7f",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "personal-data-static-properties-shadow-v3-20260712",
+  "duration_ms": 62203,
+  "exit_code": 0,
+  "finished_at": "2026-07-12T14:52:42.285073+00:00",
+  "input_digest": "0059a2522975ebd9c1cfd004d0b09802f19c238eeb739bd09f75fa07673029fe",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "ce37046ade013892cde6e85aa8d181e57ceb9dc91a12353b6d14340d164a4c23"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "b42236b85c09cbd625e8f497f9e1467c4023882c33c5bf246306568335e2080c"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "ce37046ade013892cde6e85aa8d181e57ceb9dc91a12353b6d14340d164a4c23"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "ac1da638b3ad3ac31b1b3a515e8c7613ae3c12b0d88412012291ef8e0022c4bc"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "89b54cbad634961f8dd380c641827e2beddf852f5ef2d4a0dba3d0469ac2b7c5"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "476819314eb1307d3c1b329a7ce19703b4ad0946ee46e0623255a98811436222"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "2e82fa52da00f7eb9ff4d37755feede4def50eab5a44aab02c61e6c1ed3b5c36"
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "002fd48d52d8e57384481beb56c256fc863c21f8ee050aa2238f5eb94d65def3"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "33553d30c703a31b63cd6850d48f4a4beb577e0836a48a3822219047761f7ab1"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v3-20260712/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "sha256": "8ec2b88ba24367681abb4806e3bad5a08cd7c6c48fe77ab80344eda7a74e8e90"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_initial_draft",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-12T14:51:40.071710+00:00",
+  "status": "completed",
+  "timed_out": false
+}

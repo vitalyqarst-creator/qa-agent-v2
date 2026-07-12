@@ -1,0 +1,138 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/4.3-prepared-shadow-personal-data-static-properties.md",
+  "contract_version": 2,
+  "cycle_id": "personal-data-static-properties-shadow-v5-20260712",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "producer": "runner",
+      "required": false
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/prepared-input/personal-data-static-properties-v5/stage-package.json",
+      "sha256": "374a478374b23e127e083ac198038a283012305d3a8f2c620f2b05d7cf7f09b9"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/prepared-input/personal-data-static-properties-v5/atomic-obligations.json",
+      "sha256": "863c8e352652d6dd7159b86b67770f9ca791ac128ff0bfb560551f377ef11606"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/runner-input/draft-seed.md",
+      "sha256": "e3d1c997bfda09403238c7fa961d7572363cccdb6ab8c06acaa5343b2e4a5864"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/writer-contract.schema.json",
+      "sha256": "92f0dd91ab78e3ac859514a4eddc66d3fc4641120ccb43151c447397caa4d816"
+    }
+  ],
+  "input_digest": "33da0c8b2fac6dd436231b719226b2a0c94a536eb32868088234cf7a9c25f9c5",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "AGENTS.md",
+      "sha256": "2514e3e5166408ec2741cc87a6d335d6d00208033df961519e05127f89b07cf3"
+    },
+    {
+      "kind": "instruction",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/prepared-input/personal-data-static-properties-v5/stage-instructions.md",
+      "sha256": "56d4fee3b3fd3087a962e043fd4975a1eb6980cacfbf5e1b0a14611e427f5aae"
+    },
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-writer-runtime-profile.md",
+      "sha256": "16a49b11be6f03c924979aca1ea9f1558ce5da2412cc9f8d17756cdb5e403118"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/attempts/writer-r1/attempt-001/prompt.md",
+    "sha256": "e26255166366de0e84fa41cf31427cf850ef8c61eb736ea502f8e83fb8e8a296"
+  },
+  "role": "writer",
+  "sandbox_policy": "read_only",
+  "scenario": "writer.session_prepared_initial_draft",
+  "semantic_round": 0,
+  "session_id": "session-writer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-static-properties-shadow-v5-20260712/prepared-input/personal-data-static-properties-v5/source-evidence.md",
+      "sha256": "8cfea62a9754fcf743cf7f247ad7f4f205e5ba35ddabfd0aa5e65a947f5a5ef5"
+    }
+  ],
+  "stage_id": "writer-r1",
+  "timeout_seconds": 180
+}

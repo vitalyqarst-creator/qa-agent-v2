@@ -470,6 +470,102 @@ class ValidationResult:
         }
 
 
+def _normalized_case_body(value: str) -> str:
+    normalized_lines = []
+    for raw_line in value.splitlines():
+        line = re.sub(r"^\s*\d+[.)]\s*", "", raw_line.strip())
+        line = re.sub(r"\s+", " ", line).strip().lower()
+        line = re.sub(
+            r"\b(?:строковое|текстовое|допустимое|синтетическое|string|text|valid|synthetic)\s+(?=значение\b|value\b)",
+            "",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if line:
+            normalized_lines.append(line)
+    return "\n".join(normalized_lines)
+
+
+def _test_case_subsection(body: str, names: str) -> str:
+    match = re.search(
+        rf"(?ms)^###\s+(?:{names})\s*$\s*(.*?)(?=^###\s+|\Z)",
+        body,
+        flags=re.IGNORECASE,
+    )
+    return match.group(1).strip() if match else ""
+
+
+def build_semantic_overlap_diagnostic(draft_path: Path) -> dict[str, Any]:
+    text = draft_path.read_text(encoding="utf-8")
+    cases: list[dict[str, str]] = []
+    for match in re.finditer(
+        r"(?ms)^##\s+(TC-[A-Za-z0-9_.-]+)\s*$\s*(.*?)(?=^##\s+TC-[A-Za-z0-9_.-]+\s*$|\Z)",
+        text,
+    ):
+        tc_id, body = match.groups()
+        title_match = re.search(
+            r"(?m)^\*\*(?:Название|Title):\*\*\s*(.+?)\s*$",
+            body,
+            flags=re.IGNORECASE,
+        )
+        trace_match = re.search(
+            r"(?m)^\*\*(?:Трассировка|Traceability):\*\*\s*(.+?)\s*$",
+            body,
+            flags=re.IGNORECASE,
+        )
+        steps = _test_case_subsection(body, r"Шаги|Steps")
+        expected = _test_case_subsection(
+            body,
+            r"Итоговый\s+ожидаемый\s+результат|Expected\s+result|Final\s+expected\s+result",
+        )
+        signature = (
+            _normalized_case_body(steps),
+            _normalized_case_body(expected),
+        )
+        if all(signature):
+            cases.append(
+                {
+                    "tc_id": tc_id,
+                    "title": title_match.group(1).strip() if title_match else "",
+                    "traceability": trace_match.group(1).strip() if trace_match else "",
+                    "signature": "\n---EXPECTED---\n".join(signature),
+                }
+            )
+    grouped: dict[str, list[dict[str, str]]] = {}
+    for item in cases:
+        grouped.setdefault(item["signature"], []).append(item)
+    findings = []
+    for index, items in enumerate(
+        (items for items in grouped.values() if len(items) > 1),
+        start=1,
+    ):
+        findings.append(
+            {
+                "id": f"semantic-overlap-{index:03d}",
+                "severity": "warning",
+                "category": "duplication",
+                "blocking": False,
+                "test_case_ids": [item["tc_id"] for item in items],
+                "titles": [item["title"] for item in items],
+                "traceability": [item["traceability"] for item in items],
+                "reason": "Test cases have identical normalized steps and final expected result.",
+                "required_review": (
+                    "Classify as a justified multi-obligation check or require consolidation; "
+                    "unique titles alone are insufficient."
+                ),
+            }
+        )
+    return {
+        "passed": True,
+        "validator": "semantic-overlap-diagnostic-v1",
+        "status": "overlap-detected" if findings else "clean",
+        "blocking": False,
+        "test_case_count": len(cases),
+        "findings": findings,
+        "checked_paths": [str(draft_path)],
+    }
+
+
 class DraftValidator(Protocol):
     def validate(
         self,
@@ -744,6 +840,10 @@ class CodexExecReviewCycleRunner:
     @property
     def obligation_gate_path(self) -> Path:
         return self.runner_output_dir(WRITER_STAGE) / "obligation-gate.json"
+
+    @property
+    def semantic_overlap_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "semantic-overlap-diagnostic.json"
 
     @property
     def promotion_readiness_path(self) -> Path:
@@ -1249,6 +1349,7 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("structure", self.validator_path),
             self._prepared_gate_summary("seed", self.seed_gate_path),
             self._prepared_gate_summary("obligation", self.obligation_gate_path),
+            self._prepared_gate_summary("semantic-overlap", self.semantic_overlap_path),
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
         ]
         if self._promotion_contract is not None:
@@ -1282,6 +1383,12 @@ class CodexExecReviewCycleRunner:
                 "",
                 "```json",
                 json.dumps(gates, ensure_ascii=False, indent=2),
+                "```",
+                "",
+                "## Semantic overlap diagnostic (non-blocking, reviewer classification required)",
+                "",
+                "```json",
+                self.semantic_overlap_path.read_text(encoding="utf-8").strip(),
                 "```",
                 "",
                 "## Immutable writer draft",
@@ -1406,7 +1513,19 @@ class CodexExecReviewCycleRunner:
     def _draft_seed_text(self) -> str:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
         testable = [item for item in obligations.obligations if item.coverage_status == "testable"]
+        grouped_testable: list[tuple[str, list[Any]]] = []
+        group_positions: dict[str, int] = {}
+        for index, obligation in enumerate(testable, start=1):
+            group_id = obligation.planned_test_case_id or f"TC-PREP-{index:03d}"
+            if group_id not in group_positions:
+                group_positions[group_id] = len(grouped_testable)
+                grouped_testable.append((group_id, []))
+            grouped_testable[group_positions[group_id]][1].append(obligation)
         contract = self._promotion_contract
+        if contract is not None and len(grouped_testable) != len(testable):
+            raise RunnerError(
+                "promotion contract does not support grouped prepared obligations"
+            )
         if contract is None:
             lines = [
                 "# Тест-кейсы", "",
@@ -1442,17 +1561,31 @@ class CodexExecReviewCycleRunner:
                     f"`{tc_id}` | `covered` |"
                 )
             lines.extend(["", "## Coverage Gaps", "", "[SEED:preserve required gaps]", "", "## Test Cases", ""])
-        for index, obligation in enumerate(testable, start=1):
+        for index, (planned_tc_id, obligation_group) in enumerate(grouped_testable, start=1):
+            obligation = obligation_group[0]
             tc_id = (
                 contract.test_case_ids[index - 1]
                 if contract is not None
-                else f"TC-PREP-{index:03d}"
+                else planned_tc_id
+            )
+            traceability = "; ".join(
+                dict.fromkeys(
+                    value
+                    for item in obligation_group
+                    for value in (item.obligation_id, item.traceability_atom_id)
+                )
+            )
+            observable_oracles = "; ".join(
+                dict.fromkeys(item.observable_oracle for item in obligation_group)
+            )
+            atom_label = "+".join(
+                item.traceability_atom_id for item in obligation_group
             )
             lines.extend(
                 [
                     f"## {tc_id}",
                     "",
-                    f"**Название:** [SEED:title:{obligation.traceability_atom_id}]",
+                    f"**Название:** [SEED:title:{atom_label}]",
                     "**Тип:** позитивный",
                     (
                         f"**Приоритет:** {contract.expected_priorities[tc_id]}"
@@ -1464,7 +1597,7 @@ class CodexExecReviewCycleRunner:
                         if contract is not None
                         else "**package_id:** [SEED:package_id]"
                     ),
-                    f"**Трассировка:** {obligation.obligation_id}; {obligation.traceability_atom_id}",
+                    f"**Трассировка:** {traceability}",
                     "",
                     "### Предусловия",
                     "",
@@ -1480,7 +1613,7 @@ class CodexExecReviewCycleRunner:
                     "",
                     "### Итоговый ожидаемый результат",
                     "",
-                    f"[SEED:observable oracle] {obligation.observable_oracle}",
+                    f"[SEED:observable oracle] {observable_oracles}",
                     "",
                     "### Постусловия",
                     "",
@@ -1534,6 +1667,7 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("structure", self.validator_path),
             self._prepared_gate_summary("seed", self.seed_gate_path),
             self._prepared_gate_summary("obligation", self.obligation_gate_path),
+            self._prepared_gate_summary("semantic-overlap", self.semantic_overlap_path),
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
         ]
         return "\n".join(
@@ -1563,6 +1697,12 @@ class CodexExecReviewCycleRunner:
                 json.dumps(gates, ensure_ascii=False, indent=2),
                 "```",
                 "",
+                "## Semantic overlap diagnostic (non-blocking, reviewer classification required)",
+                "",
+                "```json",
+                self.semantic_overlap_path.read_text(encoding="utf-8").strip(),
+                "```",
+                "",
                 "## Immutable writer draft",
                 "",
                 "```markdown",
@@ -1571,7 +1711,7 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Required final contract",
                 "",
-                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation with its exact obligation_id and atom_id, structured findings and a non-empty summary. Use only schema enum values. Do not emit commentary outside the final JSON object.",
+                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation with its exact obligation_id and atom_id, structured findings and a non-empty summary. Classify every semantic-overlap group: accept only when the shared body is justified as one observable multi-obligation check; otherwise require consolidation with a duplication finding. Use only schema enum values. Do not emit commentary outside the final JSON object.",
                 "<!-- PREPARED-REVIEW-PAYLOAD:END -->",
             ]
         )
@@ -1883,6 +2023,9 @@ class CodexExecReviewCycleRunner:
                     validation=validation,
                 )
 
+            semantic_overlap = build_semantic_overlap_diagnostic(self.draft_path)
+            write_json(self.semantic_overlap_path, semantic_overlap)
+
         if self._promotion_contract is not None:
             promotion_readiness = validate_promotion_readiness(
                 draft_path=self.draft_path,
@@ -1957,6 +2100,11 @@ class CodexExecReviewCycleRunner:
                 "validator_report": relative_path(self.validator_path, self.ft_root),
                 "obligation_gate_report": (
                     relative_path(self.obligation_gate_path, self.ft_root)
+                    if self._prepared_package is not None
+                    else ""
+                ),
+                "semantic_overlap_diagnostic": (
+                    relative_path(self.semantic_overlap_path, self.ft_root)
                     if self._prepared_package is not None
                     else ""
                 ),
@@ -2356,6 +2504,7 @@ class CodexExecReviewCycleRunner:
             "canonical_test_cases": relative_path(self.final_path, self.ft_root),
             "validator_report": "",
             "obligation_gate_report": "",
+            "semantic_overlap_diagnostic": "",
             "seed_gate_report": "",
             "evidence_access_report": "",
             "writer_draft_sha256": "",
@@ -2833,6 +2982,12 @@ class CodexExecReviewCycleRunner:
                         required=False,
                     ),
                     ExpectedOutput(
+                        path=relative_path(self.semantic_overlap_path, self.repo_root),
+                        kind="semantic-overlap-diagnostic",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
                         path=relative_path(self.seed_gate_path, self.repo_root),
                         kind="seed-gate",
                         producer="runner",
@@ -2873,7 +3028,12 @@ class CodexExecReviewCycleRunner:
             handoff_paths.extend((self.draft_path, self.validator_path))
             if self._prepared_package is not None:
                 handoff_paths.extend(
-                    (self.obligation_gate_path, self.seed_gate_path, self.evidence_access_path)
+                    (
+                        self.obligation_gate_path,
+                        self.semantic_overlap_path,
+                        self.seed_gate_path,
+                        self.evidence_access_path,
+                    )
                 )
             handoff_paths.append(self.reviewer_schema_path)
             expected_outputs.append(

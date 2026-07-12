@@ -158,6 +158,8 @@ coverage_gaps:
             [(item.obligation_id, item.atom_id) for item in obligations.obligations],
             [("OBL-001", "ATOM-001"), ("OBL-002", "ATOM-002")],
         )
+        self.assertEqual("TC-001", obligations.obligations[0].planned_test_case_id)
+        self.assertEqual("", obligations.obligations[1].planned_test_case_id)
         self.assertEqual(obligations.obligations[0].dictionary_refs, ("DICT-001",))
         self.assertEqual(obligations.obligations[1].gap_id, "GAP-001")
         instructions = (result.stage_package.parent / "stage-instructions.md").read_text(
@@ -183,6 +185,43 @@ coverage_gaps:
         self.assertIn("## Mandatory package context", evidence)
         self.assertIn("fts/demo/AGENT-NOTES.md", evidence)
         self.assertIn("PACKAGE-NOTE-SENTINEL", evidence)
+
+    def test_blocks_input_plan_without_concrete_fixture_before_package_build(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Ввести допустимое значение в поле. | Значение отображается в поле. | `valid-text` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("input-fixture-required", context.exception.code)
+        self.assertEqual("ATOM-001", context.exception.details[0]["atom_id"])
+        self.assertEqual("PLAN-001", context.exception.details[0]["id"])
+
+    def test_accepts_input_plan_with_inline_synthetic_fixture(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Ввести синтетическое значение `Тест` в поле. | Значение `Тест` отображается в поле. | `synthetic-valid-text:Тест` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual("simple-field-property", result.execution_profile)
 
     def test_fast_profile_keeps_strict_32k_compiled_evidence_limit(self) -> None:
         (self.ft / "AGENT-NOTES.md").write_text(
