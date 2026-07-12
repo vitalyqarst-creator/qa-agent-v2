@@ -6,7 +6,11 @@
 | --- | --- |
 | baseline | `test-cases/14-application-card-calculator-summary-entrypoints.md` |
 | baseline_sha256 | `bb8b90d9b5e80482a486aa186247aae6031ea2ab21cdffce66f0598b3440b571` |
+| ft_slug | `AutoFin` |
+| section_id | `14` |
 | scope_slug | `application-card-calculator-summary-entrypoints` |
+| package_id | `WP-01` |
+| test_design_dir | `work/test-design/14-application-card-calculator-summary-entrypoints/` |
 | preparation_phase | `ui-validated-partial-blocked` |
 | closeout_status | `ui-prep-blocked` |
 | evidence_publication | `local-restricted-not-published` |
@@ -87,8 +91,8 @@
 **UI Verification Status:** confirmed
 
 **UI Evidence:**
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/element-2026-07-12T03-16-40-029Z.png`
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/page-2026-07-12T03-18-14-464Z.png`
+- `UIE-ACCS-001-SCREENSHOT-01`
+- `UIE-ACCS-001-SCREENSHOT-02`
 
 **Automation Notes:** Использовать локальный restricted setup profile. Проверять наличие calculator-summary area по пяти source-backed label/value позициям; видимый заголовок виджета на стенде отсутствует. Downstream automation заблокирована до появления безопасной воспроизводимой fixture; evidence не публикуется.
 
@@ -127,8 +131,8 @@
 **UI Verification Status:** blocked-observability
 
 **UI Evidence:**
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/page-2026-07-12T03-17-54-951Z.yml`
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/traces/trace-1783825972365.trace`
+- `UIE-ACCS-002-SNAPSHOT-01`
+- `UIE-ACCS-002-TRACE-01`
 
 **Automation Notes:** На локальной restricted fixture наблюдались пять заполненных summary values, но independent calculator-stage source values недоступны через normal UI path. Не автоматизировать equality assertion до появления воспроизводимого setup/navigation path к calculator stage для той же безопасной fixture.
 
@@ -165,8 +169,8 @@
 **UI Verification Status:** mismatch-ft-ui
 
 **UI Evidence:**
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/page-2026-07-12T03-18-14-464Z.png`
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/traces/trace-1783825972365.trace`
+- `UIE-ACCS-003-SCREENSHOT-01`
+- `UIE-ACCS-003-TRACE-01`
 
 **Automation Notes:** На локальной restricted fixture выполнить click по wrapper calculator-summary и проверить смену route или появление целевого stage. Текущий стенд оставляет карточку открытой без перехода; evidence не публикуется из-за персональных данных.
 
@@ -205,8 +209,8 @@
 **UI Verification Status:** mismatch-ft-ui
 
 **UI Evidence:**
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/page-2026-07-12T03-22-23-733Z.png`
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/traces/trace-1783825972365.trace`
+- `UIE-ACCS-004-SCREENSHOT-01`
+- `UIE-ACCS-004-TRACE-01`
 
 **Automation Notes:** В карточке restricted fixture action не найден. Кнопка в общем списке не считается эквивалентным entrypoint и не переносится в шаги baseline-кейса. Автоматизация заблокирована до восстановления карточного action или подтверждения иного пути владельцем требований.
 
@@ -247,7 +251,7 @@
 **UI Verification Status:** blocked-observability
 
 **UI Evidence:**
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/page-2026-07-12T03-22-23-733Z.png`
-- `output/playwright/application-card-calculator-summary-entrypoints/.playwright-cli/traces/trace-1783825972365.trace`
+- `UIE-ACCS-005-SCREENSHOT-01`
+- `UIE-ACCS-005-TRACE-01`
 
 **Automation Notes:** Окно calculator не открылось, поэтому prefill до пользовательского ввода не наблюдаем. После восстановления entrypoint повторить проверку наличия хотя бы одного data-bearing значения; не проверять полный состав или exact mapping по `GAP-001`.

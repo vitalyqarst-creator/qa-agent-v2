@@ -61,7 +61,6 @@ blocking_reasons:
   - "TC-ACCS-002: calculator stage values cannot be observed independently because neither available calculator entrypoint opens the stage/window for the local restricted fixture."
   - "TC-ACCS-005: calculator window does not open, so prefill presence cannot be observed."
   - "Safe synthetic fixture with portable setup/reset path is absent; current local fixture identifier and data are restricted."
-  - "Playwright screenshots/snapshots/traces are local-restricted-not-published because they contain PII/application data or session/payload risk."
 accepted_risks:
   - "GAP-001 accepted-risk; owner: BA/FT owner; rationale: Calculator FT is absent, so the full prefill field set and exact source-to-target mapping cannot be asserted; revisit: when the Calculator FT becomes available"
 notes:
@@ -73,3 +72,5 @@ notes:
   - Production baseline remains unchanged; all UI-specific fields are stored only in the automation-ready copy and UI prep artifacts.
   - Canonical LF-normalized production SHA-256 remains bb8b90d9b5e80482a486aa186247aae6031ea2ab21cdffce66f0598b3440b571; working-tree CRLF does not represent a content change.
   - No Playwright output is eligible for publication in this branch; safe rerun evidence is required after blockers are removed.
+  - Restricted raw evidence may remain local; a safe index with stable evidence_id values is the portable contract, and raw publication is not a closeout gate.
+  - After a successful controlled rerun, use stage_status completed with next_skill none and a canonical successful UI-prep closeout_status.
