@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "backend": "exec",
+  "cycle_dir": "fts/AutoFin/work/review-cycles/codex-exec-dispatcher-canary-20260712-01",
+  "stage_count": 2,
+  "duration_ms_total": 122469,
+  "total_tokens": 162438,
+  "input_artifact_bytes_total": 145047,
+  "output_artifact_bytes_total": 25503,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f5667-2a43-7413-9b4f-3e3312224d93",
+    "019f5668-ba00-7151-a245-68ec46902dcb"
+  ]
+}
