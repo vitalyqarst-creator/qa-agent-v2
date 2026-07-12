@@ -88,6 +88,8 @@ Use `--backend sdk` only for an explicit v1 diagnostic/fallback run. Use `--allo
 
 For `simple-field-property`, keep the default `prepared_fast_writer_mode=structured`: the writer is read-only and the runner materializes its schema-constrained draft. Select `workspace` only as an explicit legacy experiment; never use it as automatic recovery from a failed structured attempt.
 
+For `standard-required`, keep the default `prepared_standard_writer_mode=structured`: the compiler supplies an explicit context profile, writer/reviewer use bounded embedded runtime profiles, and the runner materializes the draft and deterministic gate bundle. Select `assisted` only in a newly compiled immutable cycle when a named OBL/ATOM needs targeted registered-source fallback; never switch modes inside a failed cycle.
+
 8. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.
 
 ## Gates

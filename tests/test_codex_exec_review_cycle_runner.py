@@ -378,7 +378,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                             "atom_id": "ATOM-001",
                             "verdict": verdict,
                             "test_case_ids": ["TC-DEMO-001"],
-                            "note": "The supplied draft was reviewed against the atom.",
+                            "note": (
+                                "The supplied draft was reviewed against the atom; GAP-001 preserved."
+                                if '"constraint_gap_ids"' in _request.prompt and "GAP-001" in _request.prompt
+                                else "The supplied draft was reviewed against the atom."
+                            ),
                         }
                     ],
                     "findings": prepared_findings,
@@ -490,9 +494,14 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         forbidden_evidence_roots=("fts/demo-ft/test-cases",),
         instruction_attempt_root: Path | None = None,
         include_gap: bool = False,
+        constraint_gap: bool = False,
         grouped_obligations: bool = False,
     ) -> Path:
-        gap_evidence = "\nGAP-001: exact mapping is unresolved.\n" if include_gap else ""
+        gap_evidence = (
+            "\nGAP-001: exact mapping is unresolved.\n"
+            if include_gap or constraint_gap
+            else ""
+        )
         self.handoff_path.write_text(
             "# Scope contract\n\nSRC-1: observable requirement.\n" + gap_evidence,
             encoding="utf-8",
@@ -508,6 +517,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 gap_id="",
                 dictionary_refs=(),
                 notes="",
+                constraint_gap_ids=(("GAP-001",) if constraint_gap else ()),
                 planned_test_case_id=("TC-GROUP-001" if grouped_obligations else ""),
             )
         ]
@@ -528,6 +538,16 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 )
             )
         prepared_gaps = []
+        if constraint_gap:
+            prepared_gaps.append(
+                PreparedGap(
+                    gap_id="GAP-001",
+                    source_refs=("SRC-1",),
+                    problem="Exact UI reaction is unresolved.",
+                    handling="Keep the check as a UI calibration candidate.",
+                    blocking=False,
+                )
+            )
         if include_gap:
             prepared_obligations.append(
                 PreparedObligation(
@@ -603,6 +623,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         *,
         promotion_contract_path: Path | None = None,
         writer_mode: str = "workspace",
+        standard_writer_mode: str = "structured",
     ):
         return runner_module.CodexExecReviewCycleRunner(
             repo_root=self.repo_root,
@@ -614,6 +635,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             prepared_package_path=package_path,
             promotion_contract_path=promotion_contract_path,
             prepared_fast_writer_mode=writer_mode,
+            prepared_standard_writer_mode=standard_writer_mode,
             command_config=runner_module.ExecCommandConfig(
                 executable="codex-test",
                 sandbox_flag="--sandbox-contract",
@@ -681,6 +703,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(
             "structured",
             parser.get_default("prepared_fast_writer_mode"),
+        )
+        self.assertEqual(
+            "structured",
+            parser.get_default("prepared_standard_writer_mode"),
         )
 
     def test_prepared_writer_uses_embedded_runtime_limits_not_standard_defaults(self) -> None:
@@ -974,7 +1000,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
     def test_prepared_reviewer_prompt_budget_blocks_oversized_inline_handoff(self) -> None:
         package_path = self.build_prepared_package()
         executor = ScriptedExecutor(self.writer_step())
-        runner = self.make_prepared_runner(executor, package_path)
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            standard_writer_mode="assisted",
+        )
         runner.prepared_reviewer_prompt_max_bytes = 32
 
         with self.assertRaisesRegex(
@@ -1296,7 +1326,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             self.reviewer_step(decision="changes-required"),
         )
 
-        runner = self.make_prepared_runner(executor, package_path)
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            standard_writer_mode="assisted",
+        )
         runner.reviewer_timeout_seconds = 450
         result = runner.run()
 
@@ -1334,6 +1368,105 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             (self.reviewer_attempt / "runner-output" / "context-budget.json").is_file()
         )
 
+    def test_prepared_standard_defaults_to_compact_structured_sessions(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+        )
+        executor = ScriptedExecutor(
+            self.structured_writer_step(),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(0, executor.requests[0].command_budget)
+        self.assertEqual("read_only", json.loads(
+            (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )["sandbox_policy"])
+        self.assertIn("Prepared Writer Runtime Profile", executor.requests[0].prompt)
+        self.assertNotIn("writer-runtime.md", executor.requests[0].prompt)
+        self.assertIn("Prepared Reviewer Runtime Profile", executor.requests[1].prompt)
+        self.assertNotIn("reviewer-runtime.md", executor.requests[1].prompt)
+        self.assertTrue((self.writer_attempt / "artifact-graph.json").is_file())
+        self.assertTrue((self.reviewer_attempt / "artifact-graph.json").is_file())
+        graph = json.loads((self.writer_attempt / "artifact-graph.json").read_text(encoding="utf-8"))
+        self.assertEqual("character-restriction-calibration", graph["context_profile"])
+        self.assertEqual("read_only", graph["access_policy"]["sandbox"])
+        self.assertTrue(all("lifecycle" in item for item in graph["input_nodes"]))
+        self.assertTrue(all("consumers" in item for item in graph["output_nodes"]))
+
+    def test_character_restriction_seed_and_lifecycle_preserve_constraint_gap(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=(
+                "negative-oracle",
+                "evidence-qualified-ui-calibration",
+            ),
+            constraint_gap=True,
+        )
+        draft = """# Test cases
+
+## TC-DEMO-001
+
+**Название:** Отклонение цифры в поле Фамилия
+**Трассировка:** ATOM-001; GAP-001
+**Статус oracle:** ui-calibration-required
+**Статус тест-кейса:** candidate-ui-calibration
+
+Draft body.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        seed = (self.writer_attempt / "runner-input" / "draft-seed.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("candidate-ui-calibration", seed)
+        lifecycle = json.loads(
+            (self.writer_attempt / "runner-output" / "calibration-lifecycle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("awaiting-ui-calibration", lifecycle["items"][0]["status"])
+        self.assertFalse(lifecycle["items"][0]["regression_ready"])
+
+    def test_quality_gate_blocks_lost_calibration_markers(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=(
+                "negative-oracle",
+                "evidence-qualified-ui-calibration",
+            ),
+            constraint_gap=True,
+        )
+        executor = ScriptedExecutor(
+            self.structured_writer_step(
+                draft_text=(
+                    "# Test cases\n\n## TC-DEMO-001\n\n"
+                    "**Название:** Отклонение цифры\n"
+                    "**Трассировка:** ATOM-001; GAP-001\n\nDraft body.\n"
+                )
+            )
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-quality-gate", result.status)
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(report["passed"])
+        self.assertIn("calibration-marker-missing", {item["id"] for item in report["findings"]})
+
     def test_prepared_standard_context_budget_blocks_before_writer_session(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -1363,9 +1496,12 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual("validated", report["status"])
         self.assertEqual("prepared-standard", report["route"])
-        self.assertEqual("writer.session_initial_draft", report["writer_scenario"])
         self.assertEqual(
-            "reviewer.semantic_traceability_test_design",
+            "writer.session_prepared_standard_structured",
+            report["writer_scenario"],
+        )
+        self.assertEqual(
+            "reviewer.session_prepared_standard_semantic",
             report["reviewer_scenario"],
         )
         self.assertTrue(report["writer_context_budget"]["passed"])

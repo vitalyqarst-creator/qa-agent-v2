@@ -144,7 +144,39 @@ def load_config(path: Path) -> dict[str, Any]:
         value = payload.get(key, [])
         if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
             raise DispatcherError(f"{key} must be a string array")
+    cycle_dir = payload.get("cycle_dir")
+    if not isinstance(cycle_dir, str) or not cycle_dir:
+        raise DispatcherError("cycle_dir must be a non-empty string")
+    exec_args = payload.get("exec_runner_args") or []
+    declared_cycle_dirs = [
+        exec_args[index + 1]
+        for index, item in enumerate(exec_args[:-1])
+        if item == "--cycle-dir"
+    ]
+    if exec_args and declared_cycle_dirs != [cycle_dir]:
+        raise DispatcherError(
+            "cycle_dir must exactly match one --cycle-dir value in exec_runner_args"
+        )
     return payload
+
+
+def preflight_exec_runner(command_line: Sequence[str], *, repo_root: Path) -> None:
+    preflight = list(command_line)
+    if "--validate-only" not in preflight:
+        preflight.append("--validate-only")
+    completed = subprocess.run(
+        preflight,
+        cwd=repo_root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode == 0:
+        return
+    detail = (completed.stdout or completed.stderr or "runner preflight failed").strip()
+    raise DispatcherError(f"blocked-configuration-preflight: {detail[-2000:]}")
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -202,6 +234,27 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
                 **counts,
             }
         )
+    context_records: list[dict[str, Any]] = []
+    for context_path in sorted(cycle_dir.glob("attempts/*/*/runner-output/context-budget.json")):
+        try:
+            payload = json.loads(context_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if isinstance(payload, dict):
+            context_records.append(payload)
+    obligation_reports = sorted(
+        cycle_dir.glob("attempts/writer-r1/*/runner-output/obligation-gate.json")
+    )
+    test_case_count = 0
+    testable_obligations = 0
+    if obligation_reports:
+        try:
+            obligation_report = json.loads(obligation_reports[-1].read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            obligation_report = {}
+        if isinstance(obligation_report, dict):
+            test_case_count = int(obligation_report.get("test_case_count") or 0)
+            testable_obligations = int(obligation_report.get("testable_obligations") or 0)
     uncached_values = [
         max(
             0,
@@ -211,6 +264,9 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
         for item in metric_records
         if item.get("input_tokens") is not None
     ]
+    uncached_total = sum(uncached_values) if uncached_values else None
+    command_total = sum(item["command_executions"] for item in stage_attribution)
+    file_change_total = sum(item["file_changes"] for item in stage_attribution)
     report = {
         "version": 1,
         "backend": "exec",
@@ -220,7 +276,7 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
         "total_tokens": sum(int(item.get("total_tokens") or 0) for item in metric_records)
         if any(item.get("total_tokens") is not None for item in metric_records)
         else None,
-        "uncached_input_tokens_total": sum(uncached_values) if uncached_values else None,
+        "uncached_input_tokens_total": uncached_total,
         "input_artifact_bytes_total": sum(int(item.get("input_artifact_bytes") or 0) for item in metric_records),
         "output_artifact_bytes_total": sum(int(item.get("output_artifact_bytes") or 0) for item in metric_records),
         "validator_invocations": len(validator_reports),
@@ -233,6 +289,33 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
         ],
         "stage_metrics": metric_records,
         "stage_attribution": stage_attribution,
+        "context_efficiency": {
+            "primary_context_bytes_total": sum(
+                int(item.get("primary_context_bytes") or 0) for item in context_records
+            ),
+            "prompt_bytes_total": sum(
+                int(item.get("prompt_bytes") or 0) for item in context_records
+            ),
+            "instruction_bytes_total": sum(
+                int(item.get("instruction_bytes") or 0) for item in context_records
+            ),
+            "instruction_artifact_count_total": sum(
+                int(item.get("instruction_artifact_count") or 0)
+                for item in context_records
+            ),
+            "command_executions_total": command_total,
+            "file_changes_total": file_change_total,
+            "test_case_count": test_case_count,
+            "testable_obligations": testable_obligations,
+            "uncached_tokens_per_obligation": (
+                round(uncached_total / testable_obligations, 2)
+                if uncached_total is not None and testable_obligations
+                else None
+            ),
+            "commands_per_test_case": (
+                round(command_total / test_case_count, 2) if test_case_count else None
+            ),
+        },
     }
     return report
 
@@ -294,6 +377,11 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     repo_root = Path(__file__).resolve().parents[1]
+    config: dict[str, Any] | None = None
+    if not args.dry_run:
+        if args.config is None:
+            raise DispatcherError("--config is required unless --dry-run is used")
+        config = load_config(args.config)
     command = resolve_exec_command(args.codex_command)
     capability = probe_exec_capability(command)
     try:
@@ -316,20 +404,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         print(str(exc), file=sys.stderr)
         return 2
-    payload = {"version": 1, "status": "selected", **asdict(selection)}
-    write_json(args.selection_output, payload)
     if args.dry_run:
+        payload = {"version": 1, "status": "selected", **asdict(selection)}
+        write_json(args.selection_output, payload)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
-    if args.config is None:
-        raise DispatcherError("--config is required unless --dry-run is used")
-    config = load_config(args.config)
+    assert config is not None
     command_line = runner_command(
         selection.selected_backend,
         config,
         repo_root=repo_root,
         exec_command=capability.command,
     )
+    if selection.selected_backend == "exec":
+        preflight_exec_runner(command_line, repo_root=repo_root)
+    payload = {"version": 1, "status": "selected", **asdict(selection)}
+    write_json(args.selection_output, payload)
     completed = subprocess.run(command_line, cwd=repo_root, check=False)
     if selection.selected_backend == "exec" and args.performance_output:
         cycle_dir_value = config.get("cycle_dir")

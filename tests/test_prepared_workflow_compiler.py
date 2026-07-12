@@ -366,7 +366,8 @@ coverage_gaps:
             encoding="utf-8"
         )
         self.assertIn("scenario: `writer.session_initial_draft`", instructions)
-        self.assertIn("## Prepared Standard Context", instructions)
+        self.assertIn("## Structured Standard Path", instructions)
+        self.assertIn("command_budget: `0`", instructions)
         self.assertNotIn("## Fast Path", instructions)
 
     def test_blocks_testable_atom_without_plan_oracle(self) -> None:

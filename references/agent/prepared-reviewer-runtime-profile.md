@@ -1,37 +1,38 @@
 # Prepared Reviewer Runtime Profile
 
-This is a technical execution profile inside the `ft-test-case-reviewer` phase. It introduces no new QA policy. The canonical full reviewer rubric remains authoritative for standard review; this projection contains only the checks applicable to an eligible immutable `simple-field-property` prepared package.
+This is the technical execution projection inside `ft-test-case-reviewer`. It introduces no new QA policy. The immutable package, context rule card and deterministic gates materialize the applicable canonical reviewer rubric for both `simple-field-property` and `standard-required` scopes.
 
 ## Eligibility
 
-Continue only when the embedded payload confirms:
+Continue only when the payload confirms:
 
-- package version `5`;
-- `execution_profile = simple-field-property`;
-- empty `unsupported_dimensions`;
-- an immutable draft hash;
-- scope-local evidence and atomic obligations;
-- passed structure, seed, obligation and writer evidence-access gates.
+- current package version and immutable draft SHA-256;
+- explicit execution/context profiles and unsupported dimensions;
+- scope-local source evidence and atomic obligations;
+- passed structure, seed, obligation, quality and evidence-access gates;
+- semantic-overlap diagnostic and calibration lifecycle.
 
-Legacy/unclassified, table-parity, numeric-boundary, integration/persistence, dependency/state and other unsupported packages return `route-to-standard-reviewer`. Do not open full project instructions or sources to bypass eligibility.
+Return a blocking finding when the payload is insufficient or inconsistent. Do not open full project instructions, package files, production test cases, earlier cycles or full sources to bypass eligibility.
 
 ## Review Procedure
 
-1. Use only the verified inline payload. Do not reread the full reviewer skill, instruction manifest, package files, references, prior cycles, production test cases or full sources.
-2. Review every supplied obligation exactly once, preserving its exact `obligation_id -> atom_id` pair, and bind the result to the supplied draft SHA-256.
-3. For each `coverage_status = testable`, verify that linked `TC-*` steps and final expected result exercise the obligation condition and its concrete observable oracle.
-4. For each `gap`, `unclear` or `not-applicable` obligation, verify that the draft does not claim executable coverage or invent the missing mechanism.
-5. Reject invented screens, fields, literals, dictionaries, messages, statuses, UI reactions, API/DB effects, persistence or internal state.
-6. Reject non-atomic cases, generic test data, placeholder steps, source-rule oracles and traceability that is present only nominally.
-7. Classify every supplied semantic-overlap diagnostic group. Accept a shared body only when it is a justified observable multi-obligation check; otherwise return a `duplication` finding and require consolidation. Different titles do not justify identical steps and final expected results.
-8. Return the exact structured review contract requested by the runner. Do not write files; the runner renders human-readable findings.
+1. Review every supplied obligation exactly once and preserve its exact `obligation_id -> atom_id` pair and draft SHA-256.
+2. For every testable obligation, verify that its linked TC performs the supplied condition/action with concrete data and reaches the supplied observable oracle.
+3. For every gap, unclear or not-applicable obligation, verify that the draft does not invent executable coverage.
+4. For every non-blocking constraint gap, verify that the linked TC preserves the `GAP-*` and does not choose an unspecified mechanism.
+5. Apply the embedded context rule card: boundary points remain independent; invalid classes remain independent; branch preconditions and integration triggers remain explicit.
+6. Reject invented screens, fields, literals, dictionary values, messages, statuses, UI reactions, API/DB effects, persistence or internal state.
+7. Reject non-atomic cases, generic fixtures, placeholder steps, source-rule-only expected results, duplicate titles and nominal traceability.
+8. Classify every semantic-overlap group. Accept a shared body only when the package explicitly groups one observable multi-obligation check.
+9. For UI-calibration candidates, require `ui-calibration-required`, `candidate-ui-calibration`, the linked GAP and a neutral expected result that does not preselect filtering/message/highlight/save behavior.
+10. Return exactly the structured review contract requested by the runner. Do not write files.
 
 ## Decision Floor
 
-- `accepted` requires every obligation to have a consistent verdict, every testable obligation to be correctly covered, every non-testable obligation to stay non-executable, and no `error` finding.
-- `changes-required` requires at least one concrete finding linked to a supplied `ATOM-*` or `TC-*` unless it is a set-level scope finding.
-- A deterministic gate marked failed, a draft hash mismatch, an unknown atom/test-case id or insufficient inline evidence blocks trusted sign-off.
+- `accepted` requires every obligation to have a compatible verdict, every testable obligation to be correctly covered, all gaps to be preserved and no error finding.
+- `changes-required` requires at least one concrete finding linked to supplied ATOM/TC identifiers, unless it is a set-level scope finding.
+- A failed deterministic gate, draft hash mismatch, unknown identifier, lost constraint gap or insufficient evidence prevents sign-off.
 
 ## Runtime Boundary
 
-No shell command is needed to review the inline payload. If the runtime environment has not already been confirmed, one exact `python scripts/probe_environment.py` command is allowed. Any other command or workspace read violates the prepared fast path.
+No command is needed. If runtime confirmation is absolutely required, only the explicitly allowlisted environment probe may be used. Any repository exploration or workspace mutation violates the compact prepared reviewer contract.

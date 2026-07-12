@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,6 +86,43 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
         self.assertNotIn("--sandbox", command)
         self.assertNotIn("--cd", command)
 
+    def test_config_rejects_cycle_dir_drift_before_execution(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = Path(tmp_dir) / "dispatcher.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "cycle_dir": "fts/demo/work/review-cycles/expected",
+                        "exec_runner_args": [
+                            "--cycle-dir",
+                            "fts/demo/work/review-cycles/other",
+                        ],
+                        "sdk_runner_args": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(module.DispatcherError, "cycle_dir must exactly match"):
+                module.load_config(path)
+
+    def test_exec_preflight_uses_validate_only_and_surfaces_runner_failure(self) -> None:
+        module = load_module()
+        completed = module.subprocess.CompletedProcess(
+            args=[],
+            returncode=2,
+            stdout='{"status":"blocked-configuration","reason":"budget"}',
+            stderr="",
+        )
+
+        with patch.object(module.subprocess, "run", return_value=completed) as mocked:
+            with self.assertRaisesRegex(module.DispatcherError, "blocked-configuration-preflight"):
+                module.preflight_exec_runner(["python", "runner.py"], repo_root=ROOT)
+
+        self.assertEqual("--validate-only", mocked.call_args.args[0][-1])
+
     def test_exec_performance_report_enforces_validator_budget(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -106,12 +144,29 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            (cycle / "attempts" / "writer-r1" / "attempt-001" / "runner-output" / "context-budget.json").write_text(
+                json.dumps(
+                    {
+                        "primary_context_bytes": 100,
+                        "prompt_bytes": 40,
+                        "instruction_bytes": 60,
+                        "instruction_artifact_count": 1,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (cycle / "attempts" / "writer-r1" / "attempt-001" / "runner-output" / "obligation-gate.json").write_text(
+                json.dumps({"test_case_count": 2, "testable_obligations": 2}),
+                encoding="utf-8",
+            )
             report = module.summarize_exec_cycle(cycle, validator_budget=1)
         self.assertTrue(report["validator_budget_passed"])
         self.assertEqual(1, report["validator_invocations"])
         self.assertEqual(20, report["total_tokens"])
         self.assertEqual(10, report["uncached_input_tokens_total"])
         self.assertEqual(1, report["stage_attribution"][0]["turns_started"])
+        self.assertEqual(100, report["context_efficiency"]["primary_context_bytes_total"])
+        self.assertEqual(5.0, report["context_efficiency"]["uncached_tokens_per_obligation"])
 
 
 if __name__ == "__main__":

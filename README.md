@@ -84,6 +84,8 @@ Dispatcher принимает JSON-конфигурацию v1 с `exec_runner_a
 
 Для `simple-field-property` prepared-fast route по умолчанию использует `--prepared-fast-writer-mode structured`: writer работает в `read-only`, не вызывает команды и возвращает полный Markdown внутри JSON contract; draft атомарно создаёт и валидирует runner. `--prepared-fast-writer-mode workspace` остаётся только явным legacy fallback и никогда не включается автоматически после malformed output, timeout или validator failure.
 
+Для `standard-required` действует тот же безопасный default через `--prepared-standard-writer-mode structured`: writer и reviewer получают bounded prepared context, writer имеет нулевой command budget, а runner создаёт draft, artifact graph, calibration lifecycle и deterministic gate bundle. `--prepared-standard-writer-mode assisted` разрешён только как явный новый immutable cycle для точечного source fallback.
+
 ## Как запускать тесты
 
 Канонический способ запуска тестов в репозитории:

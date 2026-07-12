@@ -1,45 +1,45 @@
 # Prepared Writer Runtime Profile
 
-This is a technical execution profile inside the `ft-test-case-writer` phase. It contains no new QA policy. Upstream source/scope preparation already applied the full writer contracts when it built the immutable package; the fresh prepared writer executes only the allowlisted draft step.
+This is the technical execution projection inside `ft-test-case-writer`. It introduces no new QA policy. Upstream source/scope preparation and the prepared compiler have already applied the canonical writer contracts; the fresh writer executes the allowlisted draft step from an immutable package.
 
 ## Eligibility
 
 Continue only when the embedded payload confirms:
 
-- package version `5`;
-- `execution_profile = simple-field-property`;
-- empty `unsupported_dimensions`;
-- exact runner-owned output path and attempt root;
-- scope-local evidence;
-- testable `ATOM-*` with observable oracles and explicit non-testable gaps;
-- draft seed and runtime limits.
+- current package version and valid package digest;
+- `execution_profile = simple-field-property` or `standard-required`;
+- an explicit context profile and unsupported dimensions;
+- scope-local source evidence and atomic obligations;
+- every testable obligation has a concrete intent, fixture and observable oracle;
+- every unresolved or non-blocking constraint is linked to an explicit `GAP-*`;
+- a runner-owned draft seed and schema-constrained output contract.
 
-Legacy/unclassified, table-parity, numeric-boundary, integration/persistence and dependency/state packages return `route-to-standard-writer`. Do not open a full source to bypass eligibility.
+Return `blocked-input` when these conditions do not hold. Do not open project instructions or full sources to bypass eligibility.
 
-## Structured Fast Execution
+## Structured Execution
 
-1. Do not call the environment probe, shell or file tools. The runner already supplies the verified prepared projection and the structured mode has a zero-command budget.
-2. Do not reread package files or general writer references: the runner embeds their verified prepared projection in the prompt.
-3. Return one schema-constrained JSON object. For `draft-ready`, put the complete unsigned Markdown in `draft_markdown` and leave `blocking_reasons` empty. The runner alone atomically materializes `draft.md`.
-4. Create executable `TC-*` only for `coverage_status = testable` and implement the provided `test_intent` and `observable_oracle`.
+1. Use only the embedded payload. Do not call the environment probe, shell, file, Git or search tools.
+   This is a zero-command budget: the runner alone atomically materializes the returned draft.
+2. Return one schema-constrained JSON object. For `draft-ready`, put the complete unsigned Markdown in `draft_markdown`; the runner atomically materializes `draft.md`.
+3. Create executable `TC-*` only for `coverage_status = testable` and implement the supplied `test_intent`, concrete fixture and `observable_oracle`.
+4. Preserve exact `OBL-* -> ATOM-* -> TC-*` traceability. Use a shared planned TC only when the package already groups those obligations.
 5. Never turn `gap`, `unclear` or `not-applicable` into executable coverage.
-6. Do not invent screens, fields, dictionaries, values, UI reactions, setup, API/DB effects or persistence.
-7. Do not create split design artifacts, matrices, workflow state, logs or next-stage prompts. Runner and upstream package own them.
-8. Return `blocked-input` with an empty `draft_markdown` and precise `blocking_reasons` when inline evidence is insufficient. Reviewer and promotion belong to the runner.
+6. Preserve every `constraint_gap_ids` marker in the linked TC. When the context profile requires UI calibration, label it `ui-calibration-required` and `candidate-ui-calibration`.
+7. Do not invent screens, fields, dictionaries, values, messages, validation mechanisms, setup, API/DB effects, state transitions or persistence.
+8. Keep one primary check and one main observable result per TC. Use unique titles that name the field/action and exact positive, boundary or invalid class.
+9. Return `blocked-input` with empty `draft_markdown` and precise reasons when inline evidence is insufficient.
 
-## Explicit Legacy Workspace Mode
+## Assisted Fallback
 
-Use this mode only when the runner prompt explicitly selects `workspace`. The declared output is then stage-owned and absent at start: create it as the first file change from the inline seed, keep all writes under the declared stage-output root, use only an exact targeted fallback authorized by the prompt, and finish only after the complete draft is written. Never switch from structured mode to workspace mode inside a running attempt.
+`prepared-standard --prepared-standard-writer-mode assisted` is an explicit recovery route, never an automatic retry. It may use only manifest-listed instruction artifacts and a single targeted registered-source fallback for a named unresolved OBL/ATOM. Record the path, locator and reason. Broad discovery, production test cases, prior cycles and generated drafts remain forbidden.
 
 ## Quality Floor
 
-- one TC covers one check and one main observable result;
-- every TC has parseable runtime metadata, reproducible preconditions, concrete permitted data, numbered steps, final expected result and postconditions;
-- traceability names both the existing testable `OBL-*` and its linked `ATOM-*`;
-- placeholders and invented literals are forbidden;
-- the read-only writer performs no workspace mutation; production `test-cases/` stays unchanged;
-- draft must differ from the seed and contain no seed sentinel.
-
-## Targeted Fallback
-
-Structured fast mode does not open registered full sources. Insufficient inline evidence returns `blocked-input` and routes to an explicitly selected standard writer. The legacy workspace mode retains targeted fallback only when the caller selects that mode explicitly; it is not a silent recovery path.
+- structurally complete Markdown with no seed sentinels or angle-bracket placeholders;
+- reproducible preconditions and concrete permitted data;
+- numbered user actions and one final observable expected result;
+- exact requirement/OBL/ATOM traceability;
+- unique IDs and titles;
+- explicit calibration lifecycle for constraint gaps;
+- no workspace mutation by the structured writer;
+- no production write or promotion.

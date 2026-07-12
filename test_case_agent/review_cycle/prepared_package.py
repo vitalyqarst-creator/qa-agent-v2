@@ -929,20 +929,23 @@ class PreparedPackageBuilder:
     def _render_instructions(package_id: str, config: StageInstructionConfig) -> str:
         fast_path = config.scenario == "writer.session_prepared_initial_draft"
         structured_fast = fast_path and config.sandbox_policy == "read_only"
+        structured_standard = not fast_path and config.sandbox_policy == "read_only"
         section_title = (
             "Structured Fast Path"
             if structured_fast
+            else "Structured Standard Path"
+            if structured_standard
             else "Fast Path"
             if fast_path
             else "Prepared Standard Context"
         )
-        if structured_fast:
+        if structured_fast or structured_standard:
             execution_rules = [
                 "1. Use only the runner-embedded verified projection; do not reread workspace files.",
                 "2. Do not call shell or file tools; the command budget is zero.",
                 "3. Return the complete unsigned draft in the schema-constrained final contract.",
                 "4. The runner alone materializes output_path and applies deterministic gates.",
-                "5. Return blocked-input when inline evidence is insufficient; do not open full sources.",
+                "5. Return blocked-input when inline evidence is insufficient; use a new explicit assisted cycle for targeted fallback.",
             ]
         elif fast_path:
             execution_rules = [
@@ -962,9 +965,9 @@ class PreparedPackageBuilder:
             ]
         fallback_rules = (
             [
-                "Structured fast mode has no source fallback; return blocked-input when inline evidence is insufficient."
+                "Structured mode has no source fallback; return blocked-input when inline evidence is insufficient."
             ]
-            if structured_fast
+            if structured_fast or structured_standard
             else [
                 "Use a registered full source only when one named ATOM/source locator is unresolved by the package.",
                 "Record targeted_source_fallback with the reason, source path and exact locator.",

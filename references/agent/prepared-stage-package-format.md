@@ -69,6 +69,8 @@ Each obligation contains:
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 
+Prepared execution profiles, the derived artifact graph, structured/assisted modes, context rule cards, deterministic gate bundle and UI-calibration lifecycle are defined in `references/agent/prepared-context-artifact-graph.md`. `standard-required` uses the read-only structured writer by default; `assisted` requires a new explicit immutable cycle and is never an automatic fallback.
+
 ## `source-evidence.md`
 
 Keep only scope-local evidence needed to understand the obligations:

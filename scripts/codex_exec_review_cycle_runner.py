@@ -76,6 +76,8 @@ ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
 PREPARED_FAST_WRITER_MODES = {"structured", "workspace"}
 DEFAULT_PREPARED_FAST_WRITER_MODE = "structured"
+PREPARED_STANDARD_WRITER_MODES = {"structured", "assisted"}
+DEFAULT_PREPARED_STANDARD_WRITER_MODE = "structured"
 MAX_STRUCTURED_WRITER_DRAFT_BYTES = 128 * 1024
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
 DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES = 512 * 1024
@@ -751,6 +753,7 @@ class CodexExecReviewCycleRunner:
     reviewer_command_budget: int = DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET
     prepared_reviewer_command_budget: int = 1
     prepared_fast_writer_mode: str = DEFAULT_PREPARED_FAST_WRITER_MODE
+    prepared_standard_writer_mode: str = DEFAULT_PREPARED_STANDARD_WRITER_MODE
     writer_first_artifact_deadline_seconds: int = (
         DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS
     )
@@ -846,6 +849,14 @@ class CodexExecReviewCycleRunner:
         return self.runner_output_dir(WRITER_STAGE) / "semantic-overlap-diagnostic.json"
 
     @property
+    def quality_gate_bundle_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "quality-gate-bundle.json"
+
+    @property
+    def calibration_lifecycle_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "calibration-lifecycle.json"
+
+    @property
     def promotion_readiness_path(self) -> Path:
         return self.runner_output_dir(WRITER_STAGE) / "promotion-readiness.json"
 
@@ -888,6 +899,9 @@ class CodexExecReviewCycleRunner:
     def context_budget_path(self, stage: str) -> Path:
         return self.runner_output_dir(stage) / "context-budget.json"
 
+    def artifact_graph_path(self, stage: str) -> Path:
+        return self.attempt_root(stage) / "artifact-graph.json"
+
     def _runner_owned_paths(self) -> tuple[Path, ...]:
         paths = [
             self.state_path,
@@ -918,7 +932,47 @@ class CodexExecReviewCycleRunner:
         )
 
     def _uses_structured_prepared_writer(self) -> bool:
-        return self._is_prepared_fast() and self.prepared_fast_writer_mode == "structured"
+        return (
+            self._is_prepared_fast()
+            and self.prepared_fast_writer_mode == "structured"
+        ) or (
+            self._is_prepared_standard()
+            and self.prepared_standard_writer_mode == "structured"
+            and self._promotion_contract is None
+        )
+
+    def _uses_compact_prepared_reviewer(self) -> bool:
+        return self._is_prepared_fast() or (
+            self._is_prepared_standard()
+            and self.prepared_standard_writer_mode == "structured"
+        )
+
+    def _prepared_context_profile(self) -> str:
+        if self._prepared_package is None:
+            return "legacy-standard"
+        dimensions = set(self._prepared_package.unsupported_dimensions)
+        if self._is_prepared_fast():
+            return "simple-field-property"
+        if dimensions & {
+            "negative-oracle",
+            "input-boundaries",
+            "evidence-qualified-ui-calibration",
+        }:
+            return "character-restriction-calibration"
+        if dimensions & {"numeric-boundaries", "date-boundaries", "numeric-or-date-boundaries"}:
+            return "numeric-date-boundary"
+        if any("integration" in item or "persistence" in item for item in dimensions):
+            return "integration-persistence"
+        if any("dependency" in item or "state" in item or "conditional" in item for item in dimensions):
+            return "conditional-state"
+        return "general-standard"
+
+    def _prepared_role_instruction_paths(self, role: str) -> tuple[Path, ...]:
+        if self._uses_compact_prepared_reviewer() and role == "reviewer":
+            return (self.prepared_reviewer_profile_path,)
+        if self._uses_structured_prepared_writer() and role == "writer":
+            return (self.prepared_writer_profile_path,)
+        return self._standard_instruction_paths(role)
 
     def _standard_instruction_paths(self, role: str) -> tuple[Path, ...]:
         cached = self._standard_instruction_contexts.get(role)
@@ -977,6 +1031,8 @@ class CodexExecReviewCycleRunner:
         return result
 
     def _validate_standard_command_budgets(self) -> None:
+        if self._is_prepared_standard() and self.prepared_standard_writer_mode == "structured":
+            return
         prepared_input_count = 3 if self._is_prepared_standard() else 0
         writer_minimum = (
             len(self._standard_instruction_paths("writer"))
@@ -1010,6 +1066,11 @@ class CodexExecReviewCycleRunner:
             raise RunnerError(
                 "prepared_fast_writer_mode must be one of "
                 f"{sorted(PREPARED_FAST_WRITER_MODES)}"
+            )
+        if self.prepared_standard_writer_mode not in PREPARED_STANDARD_WRITER_MODES:
+            raise RunnerError(
+                "prepared_standard_writer_mode must be one of "
+                f"{sorted(PREPARED_STANDARD_WRITER_MODES)}"
             )
         if self.promote_final and self.promotion_dry_run:
             raise RunnerError("promotion and promotion dry-run are mutually exclusive")
@@ -1096,8 +1157,8 @@ class CodexExecReviewCycleRunner:
                         "Prepared standard stage instructions must declare the standard writer scenario: "
                         f"declared={declared_scenario}, expected={self._standard_scenario('writer')}"
                     )
-                self._standard_instruction_paths("writer")
-                self._standard_instruction_paths("reviewer")
+                self._prepared_role_instruction_paths("writer")
+                self._prepared_role_instruction_paths("reviewer")
                 self._validate_standard_command_budgets()
             elif not self._is_prepared_fast():
                 dimensions = ", ".join(self._prepared_package.unsupported_dimensions) or "none"
@@ -1151,10 +1212,10 @@ class CodexExecReviewCycleRunner:
                 *self._standard_instruction_paths("writer"),
                 *self._standard_instruction_paths("reviewer"),
             )
-            if self._prepared_package is None or self._is_prepared_standard()
+            if self._prepared_package is None
             else (
-                self.prepared_writer_profile_path,
-                self.prepared_reviewer_profile_path,
+                *self._prepared_role_instruction_paths("writer"),
+                *self._prepared_role_instruction_paths("reviewer"),
             )
         )
         for input_path in (
@@ -1266,6 +1327,8 @@ class CodexExecReviewCycleRunner:
             "scope_slug": self._prepared_package.scope_slug,
             "section_id": self._prepared_package.section_id,
             "execution_profile": self._prepared_package.execution_profile,
+            "context_profile": self._prepared_context_profile(),
+            "writer_mode": self.prepared_standard_writer_mode,
             "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
             "fallback_policy": self._prepared_package.fallback_policy,
             "source_registry": [
@@ -1281,6 +1344,37 @@ class CodexExecReviewCycleRunner:
         if draft_sha256:
             metadata["reviewed_draft_sha256"] = draft_sha256
         return metadata
+
+    def _prepared_context_rule_card(self) -> str:
+        profile = self._prepared_context_profile()
+        rules = {
+            "simple-field-property": (
+                "Keep one observable field-property check per case and use only supplied fixtures.",
+            ),
+            "character-restriction-calibration": (
+                "Keep each invalid class and field independent.",
+                "For obligations with constraint_gap_ids, preserve every GAP-* marker and label the case candidate-ui-calibration.",
+                "Do not choose a validation message, filtering, highlight, save or transition mechanism that the evidence does not define.",
+            ),
+            "numeric-date-boundary": (
+                "Keep every supplied boundary point independent and preserve relative-date clock assumptions.",
+                "Do not invent catalog limits, rounding or timezone behavior.",
+            ),
+            "integration-persistence": (
+                "Separate trigger, observable response and persistence obligations.",
+                "Return blocked-input when the supplied package does not define a reproducible integration fixture or oracle.",
+            ),
+            "conditional-state": (
+                "Preserve branch preconditions and state transitions exactly as supplied.",
+                "Do not infer inverse branches or persistence across transitions.",
+            ),
+            "general-standard": (
+                "Apply the supplied obligation, fixture and oracle literally; do not broaden the scope.",
+            ),
+        }
+        return "\n".join(
+            [f"## Context profile: `{profile}`", "", *[f"- {item}" for item in rules[profile]]]
+        )
 
     def _prepared_standard_writer_payload(self) -> str:
         lines = [
@@ -1351,6 +1445,7 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("obligation", self.obligation_gate_path),
             self._prepared_gate_summary("semantic-overlap", self.semantic_overlap_path),
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
+            self._prepared_gate_summary("quality-bundle", self.quality_gate_bundle_path),
         ]
         if self._promotion_contract is not None:
             gates.append(
@@ -1391,6 +1486,12 @@ class CodexExecReviewCycleRunner:
                 self.semantic_overlap_path.read_text(encoding="utf-8").strip(),
                 "```",
                 "",
+                "## Calibration lifecycle",
+                "",
+                "```json",
+                self.calibration_lifecycle_path.read_text(encoding="utf-8").strip(),
+                "```",
+                "",
                 "## Immutable writer draft",
                 "",
                 "```markdown",
@@ -1407,7 +1508,7 @@ class CodexExecReviewCycleRunner:
         )
 
     def _enforce_prepared_standard_context_budget(self, *, role: str, prompt: str) -> None:
-        instruction_paths = self._standard_instruction_paths(role)
+        instruction_paths = self._prepared_role_instruction_paths(role)
         instruction_bytes = sum(path.stat().st_size for path in instruction_paths)
         prompt_bytes = len(prompt.encode("utf-8"))
         total_bytes = prompt_bytes + instruction_bytes
@@ -1449,6 +1550,7 @@ class CodexExecReviewCycleRunner:
             "scope_slug": self._prepared_package.scope_slug,
             "section_id": self._prepared_package.section_id,
             "execution_profile": self._prepared_package.execution_profile,
+            "context_profile": self._prepared_context_profile(),
             "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
             "fallback_policy": self._prepared_package.fallback_policy,
         }
@@ -1461,6 +1563,8 @@ class CodexExecReviewCycleRunner:
             "```",
             "",
             profile,
+            "",
+            self._prepared_context_rule_card(),
             "",
         ]
         if not structured:
@@ -1581,12 +1685,22 @@ class CodexExecReviewCycleRunner:
             atom_label = "+".join(
                 item.traceability_atom_id for item in obligation_group
             )
+            constraint_gap_ids = tuple(
+                dict.fromkeys(
+                    gap_id
+                    for item in obligation_group
+                    for gap_id in item.constraint_gap_ids
+                )
+            )
+            ui_calibration = bool(constraint_gap_ids) and (
+                self._prepared_context_profile() == "character-restriction-calibration"
+            )
             lines.extend(
                 [
                     f"## {tc_id}",
                     "",
                     f"**Название:** [SEED:title:{atom_label}]",
-                    "**Тип:** позитивный",
+                    "**Тип:** " + ("негативный" if ui_calibration else "позитивный"),
                     (
                         f"**Приоритет:** {contract.expected_priorities[tc_id]}"
                         if contract is not None
@@ -1598,6 +1712,15 @@ class CodexExecReviewCycleRunner:
                         else "**package_id:** [SEED:package_id]"
                     ),
                     f"**Трассировка:** {traceability}",
+                    *(
+                        [
+                            f"**Coverage gap:** {'; '.join(constraint_gap_ids)}",
+                            "**Статус oracle:** ui-calibration-required",
+                            "**Статус тест-кейса:** candidate-ui-calibration",
+                        ]
+                        if ui_calibration
+                        else []
+                    ),
                     "",
                     "### Предусловия",
                     "",
@@ -1622,6 +1745,117 @@ class CodexExecReviewCycleRunner:
                 ]
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    def _build_calibration_lifecycle(self) -> dict[str, Any]:
+        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+        items = []
+        for item in obligations.obligations:
+            if not item.constraint_gap_ids:
+                continue
+            items.append(
+                {
+                    "obligation_id": item.obligation_id,
+                    "atom_id": item.traceability_atom_id,
+                    "test_case_id": item.planned_test_case_id,
+                    "constraint_gap_ids": list(item.constraint_gap_ids),
+                    "status": "awaiting-ui-calibration",
+                    "evidence_status": "not-collected",
+                    "regression_ready": False,
+                    "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off",
+                }
+            )
+        return {
+            "version": 1,
+            "context_profile": self._prepared_context_profile(),
+            "items": items,
+            "open_count": len(items),
+            "resolved_count": 0,
+        }
+
+    def _build_quality_gate_bundle(self) -> dict[str, Any]:
+        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+        draft = self.draft_path.read_text(encoding="utf-8")
+        sections = {
+            match.group(1): match.group(0)
+            for match in re.finditer(
+                r"(?ms)^##\s+(TC-[A-Za-z0-9_.-]+)\s*$((?:(?!^##\s+TC-).)*)",
+                draft,
+            )
+        }
+        findings: list[dict[str, Any]] = []
+        titles: dict[str, list[str]] = {}
+        for tc_id, section in sections.items():
+            match = re.search(r"(?m)^\*\*Название:\*\*\s*(.+?)\s*$", section)
+            if not match:
+                continue
+            normalized = re.sub(r"\s+", " ", match.group(1).strip()).casefold()
+            titles.setdefault(normalized, []).append(tc_id)
+        for duplicate_ids in titles.values():
+            if len(duplicate_ids) > 1:
+                findings.append(
+                    {
+                        "id": "duplicate-title",
+                        "severity": "error",
+                        "test_case_ids": duplicate_ids,
+                    }
+                )
+        calibration_required = (
+            self._prepared_context_profile() == "character-restriction-calibration"
+        )
+        for obligation in obligations.obligations:
+            if obligation.coverage_status != "testable":
+                continue
+            section = next(
+                (
+                    value
+                    for value in sections.values()
+                    if obligation.obligation_id in value
+                    and obligation.traceability_atom_id in value
+                ),
+                "",
+            )
+            if not section:
+                continue  # the obligation gate owns missing traceability
+            for gap_id in obligation.constraint_gap_ids:
+                if gap_id not in section:
+                    findings.append(
+                        {
+                            "id": "constraint-gap-not-preserved",
+                            "severity": "error",
+                            "obligation_id": obligation.obligation_id,
+                            "gap_id": gap_id,
+                        }
+                    )
+            if obligation.constraint_gap_ids and calibration_required:
+                for marker in (
+                    "ui-calibration-required",
+                    "candidate-ui-calibration",
+                ):
+                    if marker not in section:
+                        findings.append(
+                            {
+                                "id": "calibration-marker-missing",
+                                "severity": "error",
+                                "obligation_id": obligation.obligation_id,
+                                "marker": marker,
+                            }
+                        )
+        return {
+            "passed": not findings,
+            "validator": "prepared-quality-gate-bundle-v1",
+            "context_profile": self._prepared_context_profile(),
+            "test_case_count": len(sections),
+            "checks": [
+                "unique-titles",
+                "constraint-gap-preservation",
+                "ui-calibration-lifecycle-markers",
+                "deterministic-structure",
+                "obligation-traceability",
+                "semantic-overlap",
+                "evidence-access",
+            ],
+            "findings": findings,
+        }
 
     def _prepared_gate_summary(self, label: str, path: Path) -> dict[str, Any]:
         try:
@@ -1660,6 +1894,7 @@ class CodexExecReviewCycleRunner:
             "scope_slug": self._prepared_package.scope_slug,
             "section_id": self._prepared_package.section_id,
             "execution_profile": self._prepared_package.execution_profile,
+            "context_profile": self._prepared_context_profile(),
             "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
             "reviewed_draft_sha256": sha256_file(self.draft_path),
         }
@@ -1669,6 +1904,7 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("obligation", self.obligation_gate_path),
             self._prepared_gate_summary("semantic-overlap", self.semantic_overlap_path),
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
+            self._prepared_gate_summary("quality-bundle", self.quality_gate_bundle_path),
         ]
         return "\n".join(
             [
@@ -1680,6 +1916,8 @@ class CodexExecReviewCycleRunner:
                 "```",
                 "",
                 self.prepared_reviewer_profile_path.read_text(encoding="utf-8").strip(),
+                "",
+                self._prepared_context_rule_card(),
                 "",
                 "## Selected source evidence",
                 "",
@@ -1701,6 +1939,12 @@ class CodexExecReviewCycleRunner:
                 "",
                 "```json",
                 self.semantic_overlap_path.read_text(encoding="utf-8").strip(),
+                "```",
+                "",
+                "## Calibration lifecycle",
+                "",
+                "```json",
+                self.calibration_lifecycle_path.read_text(encoding="utf-8").strip(),
                 "```",
                 "",
                 "## Immutable writer draft",
@@ -1762,12 +2006,17 @@ class CodexExecReviewCycleRunner:
 
     def _stage_limits(self, role: str) -> tuple[int, int | None, int]:
         if role == "writer":
-            if self._is_prepared_fast():
+            if self._uses_structured_prepared_writer():
+                timeout = (
+                    self._prepared_instruction_int("hard_timeout_seconds")
+                    if self._is_prepared_fast()
+                    else self.writer_timeout_seconds or self.timeout_seconds
+                )
+                idle_timeout = None
+                command_budget = 0
+            elif self._is_prepared_fast():
                 timeout = self._prepared_instruction_int("hard_timeout_seconds")
-                if self._uses_structured_prepared_writer():
-                    idle_timeout = None
-                    command_budget = 0
-                else:
+                if not self._uses_structured_prepared_writer():
                     idle_timeout = self._prepared_instruction_int("idle_timeout_seconds")
                     command_budget = self._prepared_instruction_int("command_budget")
             else:
@@ -1775,8 +2024,12 @@ class CodexExecReviewCycleRunner:
                 idle_timeout = self.writer_idle_timeout_seconds
                 command_budget = self.writer_command_budget
         else:
-            if self._is_prepared_fast():
-                timeout = self.prepared_reviewer_timeout_seconds
+            if self._uses_compact_prepared_reviewer():
+                timeout = (
+                    self.prepared_reviewer_timeout_seconds
+                    if self._is_prepared_fast()
+                    else self.reviewer_timeout_seconds or self.timeout_seconds
+                )
                 idle_timeout = None
                 command_budget = self.prepared_reviewer_command_budget
             else:
@@ -1819,9 +2072,21 @@ class CodexExecReviewCycleRunner:
                 allowed_stage_roots=(
                     relative_path(self.stage_output_dir(WRITER_STAGE), self.repo_root),
                 ),
-                require_source_fallback_authorization=self._is_prepared_fast(),
-                allow_read_only_git_status_checks=self._is_prepared_standard(),
-                allowed_bounded_scan_roots=("scripts",) if self._is_prepared_standard() else (),
+                reject_unlisted_commands=self._uses_structured_prepared_writer(),
+                require_source_fallback_authorization=(
+                    self._is_prepared_fast()
+                    or self.prepared_standard_writer_mode == "assisted"
+                ),
+                allow_read_only_git_status_checks=(
+                    self._is_prepared_standard()
+                    and self.prepared_standard_writer_mode == "assisted"
+                ),
+                allowed_bounded_scan_roots=(
+                    ("scripts",)
+                    if self._is_prepared_standard()
+                    and self.prepared_standard_writer_mode == "assisted"
+                    else ()
+                ),
             )
             write_json(self.evidence_access_path, evidence_access.as_dict())
             if not evidence_access.passed:
@@ -2026,6 +2291,27 @@ class CodexExecReviewCycleRunner:
             semantic_overlap = build_semantic_overlap_diagnostic(self.draft_path)
             write_json(self.semantic_overlap_path, semantic_overlap)
 
+            write_json(
+                self.calibration_lifecycle_path,
+                self._build_calibration_lifecycle(),
+            )
+            quality_bundle = self._build_quality_gate_bundle()
+            write_json(self.quality_gate_bundle_path, quality_bundle)
+            if not quality_bundle["passed"]:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-quality-gate",
+                    reasons=[
+                        "prepared deterministic quality gate reported findings",
+                        relative_path(self.quality_gate_bundle_path, self.repo_root),
+                    ],
+                    validation=validation,
+                )
+
         if self._promotion_contract is not None:
             promotion_readiness = validate_promotion_readiness(
                 draft_path=self.draft_path,
@@ -2108,6 +2394,16 @@ class CodexExecReviewCycleRunner:
                     if self._prepared_package is not None
                     else ""
                 ),
+                "quality_gate_bundle": (
+                    relative_path(self.quality_gate_bundle_path, self.ft_root)
+                    if self._prepared_package is not None
+                    else ""
+                ),
+                "calibration_lifecycle": (
+                    relative_path(self.calibration_lifecycle_path, self.ft_root)
+                    if self._prepared_package is not None
+                    else ""
+                ),
                 "seed_gate_report": (
                     relative_path(self.seed_gate_path, self.ft_root)
                     if self._prepared_package is not None
@@ -2141,7 +2437,7 @@ class CodexExecReviewCycleRunner:
                     "prepared-input",
                     "attempts/writer-r1",
                 )
-                if self._is_prepared_fast()
+                if self._uses_compact_prepared_reviewer()
                 else (
                     *self._prepared_package.forbidden_evidence_roots,
                     "prepared-input",
@@ -2153,10 +2449,18 @@ class CodexExecReviewCycleRunner:
                 forbidden_roots=reviewer_forbidden_roots,
                 source_registry=self._prepared_package.source_registry,
                 allowed_command_fragments=("python scripts/probe_environment.py",),
-                reject_unlisted_commands=self._is_prepared_fast(),
-                require_source_fallback_authorization=self._is_prepared_fast(),
-                allow_read_only_git_status_checks=self._is_prepared_standard(),
-                allowed_bounded_scan_roots=("scripts",) if self._is_prepared_standard() else (),
+                reject_unlisted_commands=self._uses_compact_prepared_reviewer(),
+                require_source_fallback_authorization=self._uses_compact_prepared_reviewer(),
+                allow_read_only_git_status_checks=(
+                    self._is_prepared_standard()
+                    and self.prepared_standard_writer_mode == "assisted"
+                ),
+                allowed_bounded_scan_roots=(
+                    ("scripts",)
+                    if self._is_prepared_standard()
+                    and self.prepared_standard_writer_mode == "assisted"
+                    else ()
+                ),
             )
             write_json(self.reviewer_evidence_access_path, reviewer_access.as_dict())
             if not reviewer_access.passed:
@@ -2454,12 +2758,20 @@ class CodexExecReviewCycleRunner:
             "writer_scenario": (
                 "writer.session_prepared_initial_draft"
                 if self._is_prepared_fast()
-                else self._standard_scenario("writer")
+                else (
+                    "writer.session_prepared_standard_structured"
+                    if self._uses_structured_prepared_writer()
+                    else self._standard_scenario("writer")
+                )
             ),
             "reviewer_scenario": (
                 "reviewer.session_prepared_semantic"
                 if self._is_prepared_fast()
-                else self._standard_scenario("reviewer")
+                else (
+                    "reviewer.session_prepared_standard_semantic"
+                    if self._uses_compact_prepared_reviewer()
+                    else self._standard_scenario("reviewer")
+                )
             ),
             "final_artifact": relative_path(self.final_path, self.repo_root),
             "final_exists": self.final_path.exists(),
@@ -2477,12 +2789,26 @@ class CodexExecReviewCycleRunner:
                         WRITER_STAGE, {}
                     ),
                     "prepared_fast_writer_mode": self.prepared_fast_writer_mode,
+                    "prepared_standard_writer_mode": self.prepared_standard_writer_mode,
+                    "context_profile": self._prepared_context_profile(),
+                    "compact_reviewer": self._uses_compact_prepared_reviewer(),
                     "writer_sandbox_policy": (
                         "read_only"
                         if self._uses_structured_prepared_writer()
                         else "workspace_write"
                     ),
                     "writer_command_budget": self._stage_limits("writer")[2],
+                    "reviewer_command_budget": self._stage_limits("reviewer")[2],
+                    "preflight_checks": [
+                        "package-digest",
+                        "attempt-binding",
+                        "profile-route",
+                        "instruction-allowlist",
+                        "context-budget",
+                        "command-budget",
+                        "sandbox-policy",
+                        "production-boundary",
+                    ],
                 }
             )
         return report
@@ -2553,11 +2879,81 @@ class CodexExecReviewCycleRunner:
             draft_sha256=sha256_file(self.draft_path),
         )
 
+    def _write_artifact_graph(self, manifest: StageInputManifest) -> None:
+        def lifecycle(path: str, kind: str) -> str:
+            if kind == "source":
+                return "source"
+            if "prepared-input" in path or kind in {"instruction", "handoff"}:
+                return "prepared"
+            if kind in {"review-findings", "quality-gate-bundle"}:
+                return "reviewed"
+            return "generated"
+
+        input_nodes = []
+        for group, artifacts in (
+            ("prompt", (manifest.prompt_artifact,)),
+            ("instruction", manifest.instruction_artifacts),
+            ("source", manifest.source_artifacts),
+            ("handoff", manifest.handoff_artifacts),
+        ):
+            for artifact in artifacts:
+                input_nodes.append(
+                    {
+                        "path": artifact.path,
+                        "sha256": artifact.sha256,
+                        "kind": artifact.kind,
+                        "group": group,
+                        "lifecycle": lifecycle(artifact.path, artifact.kind),
+                        "producer": "upstream" if group != "prompt" else "runner",
+                        "consumers": [manifest.role, "runner"],
+                    }
+                )
+        output_nodes = [
+            {
+                "path": item.path,
+                "kind": item.kind,
+                "lifecycle": lifecycle(item.path, item.kind),
+                "producer": item.producer,
+                "consumers": ["runner", "reviewer"] if manifest.role == "writer" else ["runner"],
+                "required": item.required,
+            }
+            for item in manifest.expected_outputs
+        ]
+        payload: dict[str, Any] = {
+            "version": 1,
+            "cycle_id": manifest.cycle_id,
+            "stage_id": manifest.stage_id,
+            "role": manifest.role,
+            "context_profile": self._prepared_context_profile(),
+            "input_digest": manifest.input_digest,
+            "input_nodes": input_nodes,
+            "output_nodes": output_nodes,
+            "access_policy": {
+                "sandbox": manifest.sandbox_policy,
+                "allowed_write_roots": list(manifest.allowed_write_roots),
+                "forbidden_write_roots": list(manifest.forbidden_write_roots),
+                "fallback_policy": (
+                    self._prepared_package.fallback_policy
+                    if self._prepared_package is not None
+                    else "explicit-inputs-only"
+                ),
+            },
+        }
+        payload["graph_digest"] = hashlib.sha256(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        write_json(self.artifact_graph_path(manifest.stage_id), payload)
+
     def _writer_prompt(self) -> str:
         if self._uses_structured_prepared_writer() and self.prepared_package_path is not None:
-            return "\n".join(
+            prompt = "\n".join(
                 [
-                    "# Codex exec prepared writer structured fast path",
+                    "# Codex exec prepared writer structured path",
                     "",
                     "The upstream package already applied the full source, scope and writer policy.",
                     "Use only the embedded Prepared Writer Runtime Profile below; do not load the full ft-test-case-writer skill or reread package/project reference files.",
@@ -2573,6 +2969,9 @@ class CodexExecReviewCycleRunner:
                     "",
                 ]
             )
+            if self._is_prepared_standard():
+                self._enforce_prepared_standard_context_budget(role="writer", prompt=prompt)
+            return prompt
         if self._is_prepared_fast() and self.prepared_package_path is not None:
             return "\n".join(
                 [
@@ -2655,10 +3054,14 @@ class CodexExecReviewCycleRunner:
         )
 
     def _reviewer_prompt(self) -> str:
-        if self._is_prepared_fast() and self.prepared_package_path is not None:
+        if self._uses_compact_prepared_reviewer() and self.prepared_package_path is not None:
             prompt = "\n".join(
                 [
-                    "# Codex exec prepared reviewer fast path",
+                    (
+                        "# Codex exec prepared reviewer fast path"
+                        if self._is_prepared_fast()
+                        else "# Codex exec prepared-standard reviewer compact path"
+                    ),
                     "",
                     "The upstream package and runner already applied the full source, scope, reviewer-routing and deterministic validation contracts.",
                     "Use only the embedded Prepared Reviewer Runtime Profile and verified payload below. Do not load the full ft-test-case-reviewer skill, instruction manifest, package files, project references, prior cycles, production test cases or full sources.",
@@ -2669,13 +3072,16 @@ class CodexExecReviewCycleRunner:
                     "",
                 ]
             )
-            prompt_bytes = len(prompt.encode("utf-8"))
-            if prompt_bytes > self.prepared_reviewer_prompt_max_bytes:
-                raise RunnerError(
-                    "blocked-prepared-reviewer-prompt-budget: "
-                    f"prompt bytes {prompt_bytes} exceed {self.prepared_reviewer_prompt_max_bytes}; "
-                    "route to standard reviewer or reduce the eligible scope"
-                )
+            if self._is_prepared_standard():
+                self._enforce_prepared_standard_context_budget(role="reviewer", prompt=prompt)
+            else:
+                prompt_bytes = len(prompt.encode("utf-8"))
+                if prompt_bytes > self.prepared_reviewer_prompt_max_bytes:
+                    raise RunnerError(
+                        "blocked-prepared-reviewer-prompt-budget: "
+                        f"prompt bytes {prompt_bytes} exceed {self.prepared_reviewer_prompt_max_bytes}; "
+                        "route to standard reviewer or reduce the eligible scope"
+                    )
             return prompt
         if self._is_prepared_standard() and self.prepared_package_path is not None:
             prompt = "\n".join(
@@ -2773,6 +3179,7 @@ class CodexExecReviewCycleRunner:
         except StageRuntimeError as exc:
             raise RunnerError(f"cannot persist v2 stage manifest: {exc}") from exc
         self._manifests[stage] = manifest
+        self._write_artifact_graph(manifest)
 
         stdout_path = self.runner_output_dir(stage) / "stdout.txt"
         stderr_path = self.runner_output_dir(stage) / "stderr.txt"
@@ -2931,25 +3338,23 @@ class CodexExecReviewCycleRunner:
                 kind="stage-status",
                 producer="runner",
             ),
+            ExpectedOutput(
+                path=relative_path(self.artifact_graph_path(stage), self.repo_root),
+                kind="artifact-graph",
+                producer="runner",
+            ),
         ]
         if self._prepared_package is not None and self.prepared_package_path is not None:
-            if self._is_prepared_fast():
-                instruction_paths = [
-                    *self.instruction_files,
-                    self._prepared_artifact("stage-instructions"),
-                ]
-                if role == "writer":
-                    instruction_paths.append(self.prepared_writer_profile_path)
-                else:
-                    instruction_paths.append(self.prepared_reviewer_profile_path)
-            else:
-                instruction_paths = list(self._standard_instruction_paths(role))
+            instruction_paths = list(self._prepared_role_instruction_paths(role))
             source_paths = [self._prepared_artifact("source-evidence")]
             handoff_paths = [
                 self.prepared_package_path,
                 self._prepared_artifact("atomic-obligations"),
             ]
-            if self._is_prepared_standard():
+            if (
+                self._is_prepared_standard()
+                and self.prepared_standard_writer_mode == "assisted"
+            ):
                 handoff_paths.append(self._prepared_artifact("stage-instructions"))
             if role == "writer":
                 handoff_paths.append(self.draft_seed_path)
@@ -2984,6 +3389,18 @@ class CodexExecReviewCycleRunner:
                     ExpectedOutput(
                         path=relative_path(self.semantic_overlap_path, self.repo_root),
                         kind="semantic-overlap-diagnostic",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(self.quality_gate_bundle_path, self.repo_root),
+                        kind="quality-gate-bundle",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(self.calibration_lifecycle_path, self.repo_root),
+                        kind="calibration-lifecycle",
                         producer="runner",
                         required=False,
                     ),
@@ -3031,6 +3448,8 @@ class CodexExecReviewCycleRunner:
                     (
                         self.obligation_gate_path,
                         self.semantic_overlap_path,
+                        self.quality_gate_bundle_path,
+                        self.calibration_lifecycle_path,
                         self.seed_gate_path,
                         self.evidence_access_path,
                     )
@@ -3072,13 +3491,21 @@ class CodexExecReviewCycleRunner:
                 (
                     "writer.session_prepared_initial_draft"
                     if self._is_prepared_fast()
-                    else self._standard_scenario("writer")
+                    else (
+                        "writer.session_prepared_standard_structured"
+                        if self._uses_structured_prepared_writer()
+                        else self._standard_scenario("writer")
+                    )
                 )
                 if role == "writer"
                 else (
                     "reviewer.session_prepared_semantic"
                     if self._is_prepared_fast()
-                    else self._standard_scenario("reviewer")
+                    else (
+                        "reviewer.session_prepared_standard_semantic"
+                        if self._uses_compact_prepared_reviewer()
+                        else self._standard_scenario("reviewer")
+                    )
                 )
             ),
             semantic_round=0,
@@ -3995,6 +4422,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_PREPARED_FAST_WRITER_MODE,
     )
     parser.add_argument(
+        "--prepared-standard-writer-mode",
+        choices=sorted(PREPARED_STANDARD_WRITER_MODES),
+        default=DEFAULT_PREPARED_STANDARD_WRITER_MODE,
+    )
+    parser.add_argument(
         "--writer-first-artifact-deadline-seconds",
         type=int,
         default=DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS,
@@ -4068,6 +4500,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         reviewer_command_budget=args.reviewer_command_budget,
         prepared_reviewer_command_budget=args.prepared_reviewer_command_budget,
         prepared_fast_writer_mode=args.prepared_fast_writer_mode,
+        prepared_standard_writer_mode=args.prepared_standard_writer_mode,
         writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
         prepared_reviewer_prompt_max_bytes=args.prepared_reviewer_prompt_max_bytes,
         prepared_standard_writer_context_max_bytes=(
