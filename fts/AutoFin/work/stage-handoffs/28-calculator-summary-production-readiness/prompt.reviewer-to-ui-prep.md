@@ -10,7 +10,9 @@
 - `work/test-design/14-application-card-calculator-summary-entrypoints/`
 - `work/stage-handoffs/28-calculator-summary-production-readiness/promotion-receipt.json`
 - `work/stage-handoffs/28-calculator-summary-production-readiness/iteration-summary.md`
-- `work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md`
+- `work/stage-handoffs/28-calculator-summary-production-readiness/accepted-v12-cycle-evidence.yaml`
+- `work/stage-handoffs/28-calculator-summary-production-readiness/accepted-v12-review-findings.md`
+- `work/stage-handoffs/28-calculator-summary-production-readiness/portable-evidence/validator.json`
 - `work/stage-handoffs/27-calculator-summary-final-source-rebase/mockup-visual-inventory.md`
 - `AGENT-NOTES.md`
 

@@ -61,6 +61,7 @@
 | 5 | Ran single correction v12 | accepted promotion-ready, zero findings | v12 cycle state |
 | 6 | Promoted exact v12 bytes | one production file changed | promotion receipt |
 | 7 | Ran production strict validator | 37 checks, zero findings | validator output |
+| 8 | Replaced downstream ignored runtime references with tracked portable evidence | handoff resolves after clone | accepted-v12 portable artifacts |
 
 ## Quality Checkpoints
 
@@ -86,6 +87,7 @@
 | `TF-001` | v10 reviewer hard-timeout | 450 s reviewer budget | fresh immutable v11 with 900/600 s budgets | v10 cycle | `yes` | `partial review never accepted` | use capacity-adjusted budgets for comparable live reviews |
 | `TF-002` | writer sandbox git safe-directory rejection | read-only scoped git status | runner-owned production hash guard and root-session git diff | v11 stdout | `yes` | `low: the root session independently verified the production diff` | keep the runner hash guard as the sandbox-independent invariant |
 | `TF-003` | DOCX locked during repeated hash command | direct Get-FileHash read | retained pinned Final hash plus XHTML/PDF and tracked-state verification | handoff 27 evidence | `yes` | `no new DOCX evidence used` | recheck when lock clears |
+| `TF-004` | clean Windows clone failed on historical snapshot paths | default Windows checkout path handling | `git -c core.longpaths=true clone` into a short root path | portable clone validation | `yes` | `low: checkout behavior only; committed bytes are unchanged` | use the verified longpaths clone command on the second PC |
 
 ## Handoff Notes For Next Session
 

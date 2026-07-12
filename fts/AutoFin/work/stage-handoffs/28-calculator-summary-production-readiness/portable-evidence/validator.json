@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "validator": "codex_review_cycle_runner.evaluate_test_case_markdown_structure",
+  "checked_paths": [
+    "test-cases/14-application-card-calculator-summary-entrypoints.md"
+  ],
+  "checked_sha256": "bb8b90d9b5e80482a486aa186247aae6031ea2ab21cdffce66f0598b3440b571",
+  "findings": []
+}

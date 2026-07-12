@@ -19,4 +19,4 @@
 | `action-observability` | `pass` | Writer-side check passed for `WP-01`. | `WP-01` | `none_required:pass` | `no` |
 | `semantic-req-id-parity` | `pass` | Writer-side check passed for `WP-01`. | `WP-01` | `none_required:pass` | `no` |
 | `package-ready` | `pass` | Writer-side check passed for `WP-01`. | `WP-01` | `none_required:pass` | `no` |
-| `scoped-validator-findings` | `pass` | `../work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/attempts/writer-r1/attempt-001/runner-output/validator.json` with `passed = true` and zero findings. | `WP-01` | `none_required:pass` | `no` |
+| `scoped-validator-findings` | `pass` | `../work/stage-handoffs/28-calculator-summary-production-readiness/portable-evidence/validator.json` with `passed = true` and zero findings. | `WP-01` | `none_required:pass` | `no` |

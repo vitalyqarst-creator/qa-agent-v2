@@ -14,8 +14,9 @@ required_inputs:
   - work/stage-handoffs/28-calculator-summary-production-readiness/loop-summary.md
   - work/stage-handoffs/28-calculator-summary-production-readiness/iteration-session-log.md
   - work/stage-handoffs/28-calculator-summary-production-readiness/prompt.reviewer-to-ui-prep.md
-  - work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/cycle-state.yaml
-  - work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  - work/stage-handoffs/28-calculator-summary-production-readiness/accepted-v12-cycle-evidence.yaml
+  - work/stage-handoffs/28-calculator-summary-production-readiness/accepted-v12-review-findings.md
+  - work/stage-handoffs/28-calculator-summary-production-readiness/portable-evidence/validator.json
   - work/stage-handoffs/27-calculator-summary-final-source-rebase/scope-contract.md
   - work/stage-handoffs/27-calculator-summary-final-source-rebase/source-parity-check.md
   - work/stage-handoffs/27-calculator-summary-final-source-rebase/mockup-visual-inventory.md
@@ -23,10 +24,11 @@ required_inputs:
   - AGENT-NOTES.md
 latest_artifacts:
   canonical_test_cases: test-cases/14-application-card-calculator-summary-entrypoints.md
-  cycle_state: work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/cycle-state.yaml
-  final_findings: work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  cycle_state: work/stage-handoffs/28-calculator-summary-production-readiness/accepted-v12-cycle-evidence.yaml
+  final_findings: work/stage-handoffs/28-calculator-summary-production-readiness/accepted-v12-review-findings.md
   final_traceability_matrix: work/test-design/14-application-card-calculator-summary-entrypoints/coverage-map.md
-  final_writer_response: work/review-cycles/codex-exec-prepared-standard-calculator-summary-production-v12-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md
+  final_writer_response: test-cases/14-application-card-calculator-summary-entrypoints.md
+  final_validator_report: work/stage-handoffs/28-calculator-summary-production-readiness/portable-evidence/validator.json
   loop_summary: work/stage-handoffs/28-calculator-summary-production-readiness/loop-summary.md
   iteration_summary: work/stage-handoffs/28-calculator-summary-production-readiness/iteration-summary.md
   signed_off_snapshot: work/stage-handoffs/28-calculator-summary-production-readiness

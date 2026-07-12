@@ -49,3 +49,15 @@
 ## Follow-up outside this scope
 
 Package-wide personal-data inventory всё ещё содержит старое cross-scope присвоение BSR 43–46. Это отдельная source-rebase задача и не меняет signed-off calculator-summary baseline.
+
+## Переносимость
+
+Handoff содержит tracked-копии минимальных доказательств v12: итоговое состояние, reviewer findings и validator result. Следующий этап воспроизводим после чистого clone с включённой поддержкой длинных путей; полные runtime-логи и diagnostics намеренно не публикуются.
+
+На Windows репозиторий содержит исторические snapshot-пути длиннее стандартного checkout-лимита. Проверенная команда клонирования:
+
+```powershell
+git -c core.longpaths=true clone https://github.com/vitalyqarst-creator/qa-agent-v2.git C:\src\qa-agent-v2
+```
+
+Короткий каталог `C:\src\qa-agent-v2` рекомендуется намеренно. Свежий clone с `core.longpaths=true` прошёл обе строгие проверки без локальных ignored runtime-файлов.
