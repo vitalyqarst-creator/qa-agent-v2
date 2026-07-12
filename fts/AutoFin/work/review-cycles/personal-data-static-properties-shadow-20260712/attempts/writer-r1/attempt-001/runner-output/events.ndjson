@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019f56a0-bfbb-7b61-a272-42244b76d219"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\"contract_version\":1,\"status\":\"blocked-input\",\"draft_markdown\":\"\",\"blocking_reasons\":[\"Для ATOM-003, ATOM-005, ATOM-008, ATOM-010, ATOM-013 и ATOM-015 не предоставлены конкретные допустимые строковые тестовые данные. Их нельзя выдумывать, а без них невозможно подготовить воспроизводимые тест-кейсы, удовлетворяющие quality floor.\"]}"}}
+{"type":"turn.completed","usage":{"input_tokens":24674,"cached_input_tokens":0,"output_tokens":417,"reasoning_output_tokens":315}}

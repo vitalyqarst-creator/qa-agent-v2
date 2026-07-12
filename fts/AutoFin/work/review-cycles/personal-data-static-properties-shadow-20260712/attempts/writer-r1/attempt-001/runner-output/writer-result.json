@@ -1,0 +1,1 @@
+{"contract_version":1,"status":"blocked-input","draft_markdown":"","blocking_reasons":["Для ATOM-003, ATOM-005, ATOM-008, ATOM-010, ATOM-013 и ATOM-015 не предоставлены конкретные допустимые строковые тестовые данные. Их нельзя выдумывать, а без них невозможно подготовить воспроизводимые тест-кейсы, удовлетворяющие quality floor."]}

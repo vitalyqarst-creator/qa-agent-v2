@@ -1,0 +1,233 @@
+{
+  "coverage_gaps": [],
+  "digest": "d3e576221467e4a0855a64fd2899ea8f713704d5800fa391506c348e839e2e0f",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Поле `Фамилия` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Поле `Фамилия` отображается всегда.",
+      "source_refs": [
+        "SRC-002.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить видимость поля `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Поле `Фамилия` является обязательным.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "Поле `Фамилия` является обязательным.",
+      "source_refs": [
+        "SRC-002.P02"
+      ],
+      "test_intent": "Проверить признак обязательности поля `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Поле `Фамилия` доступно для редактирования.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "Поле `Фамилия` доступно для редактирования.",
+      "source_refs": [
+        "SRC-002.P03"
+      ],
+      "test_intent": "Ввести синтетическое допустимое текстовое значение `Тест` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "Поле `Фамилия` реализовано как поле ввода текста.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "Поле `Фамилия` является полем ввода текста.",
+      "source_refs": [
+        "SRC-002.P04"
+      ],
+      "test_intent": "Проверить тип элемента управления `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "Тип значения поля `Фамилия` — строка.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-005",
+      "observable_oracle": "Поле `Фамилия` принимает строковое значение.",
+      "source_refs": [
+        "SRC-002.P05"
+      ],
+      "test_intent": "Ввести синтетическое строковое значение `Тест` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-006",
+      "atomic_statement": "Поле `Имя` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-006",
+      "observable_oracle": "Поле `Имя` отображается всегда.",
+      "source_refs": [
+        "SRC-003.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить видимость поля `Имя`."
+    },
+    {
+      "atom_id": "ATOM-007",
+      "atomic_statement": "Поле `Имя` является обязательным.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-007",
+      "observable_oracle": "Поле `Имя` является обязательным.",
+      "source_refs": [
+        "SRC-003.P02"
+      ],
+      "test_intent": "Проверить признак обязательности поля `Имя`."
+    },
+    {
+      "atom_id": "ATOM-008",
+      "atomic_statement": "Поле `Имя` доступно для редактирования.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-008",
+      "observable_oracle": "Поле `Имя` доступно для редактирования.",
+      "source_refs": [
+        "SRC-003.P03"
+      ],
+      "test_intent": "Ввести синтетическое допустимое текстовое значение `Тест` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-009",
+      "atomic_statement": "Поле `Имя` реализовано как поле ввода текста.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-009",
+      "observable_oracle": "Поле `Имя` является полем ввода текста.",
+      "source_refs": [
+        "SRC-003.P04"
+      ],
+      "test_intent": "Проверить тип элемента управления `Имя`."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "Тип значения поля `Имя` — строка.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-010",
+      "observable_oracle": "Поле `Имя` принимает строковое значение.",
+      "source_refs": [
+        "SRC-003.P05"
+      ],
+      "test_intent": "Ввести синтетическое строковое значение `Тест` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-011",
+      "atomic_statement": "Поле `Отчество` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-011",
+      "observable_oracle": "Поле `Отчество` отображается всегда.",
+      "source_refs": [
+        "SRC-004.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить видимость поля `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-012",
+      "atomic_statement": "Поле `Отчество` не является обязательным.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-012",
+      "observable_oracle": "Поле `Отчество` не является обязательным.",
+      "source_refs": [
+        "SRC-004.P02"
+      ],
+      "test_intent": "Проверить отсутствие признака обязательности поля `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-013",
+      "atomic_statement": "Поле `Отчество` доступно для редактирования.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-013",
+      "observable_oracle": "Поле `Отчество` доступно для редактирования.",
+      "source_refs": [
+        "SRC-004.P03"
+      ],
+      "test_intent": "Ввести синтетическое допустимое текстовое значение `Тест` в поле `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-014",
+      "atomic_statement": "Поле `Отчество` реализовано как поле ввода текста.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-014",
+      "observable_oracle": "Поле `Отчество` является полем ввода текста.",
+      "source_refs": [
+        "SRC-004.P04"
+      ],
+      "test_intent": "Проверить тип элемента управления `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-015",
+      "atomic_statement": "Тип значения поля `Отчество` — строка.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-015",
+      "observable_oracle": "Поле `Отчество` принимает строковое значение.",
+      "source_refs": [
+        "SRC-004.P05"
+      ],
+      "test_intent": "Ввести синтетическое строковое значение `Тест` в поле `Отчество`."
+    }
+  ],
+  "package_id": "personal-data-static-properties-v2",
+  "package_version": 5
+}
