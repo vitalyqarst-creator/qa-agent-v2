@@ -297,6 +297,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self,
         *,
         create_draft: bool = True,
+        draft_text: str | None = None,
         exit_code: int | None = 0,
         stdout: str | None = None,
         stderr: str = "",
@@ -306,7 +307,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             if create_draft:
                 self.draft_path.parent.mkdir(parents=True, exist_ok=True)
                 self.draft_path.write_text(
-                    "# Test cases\n\n## TC-DEMO-001\n\n**Трассировка:** ATOM-001\n\nDraft body.\n",
+                    draft_text
+                    or "# Test cases\n\n## TC-DEMO-001\n\n**Трассировка:** ATOM-001\n\nDraft body.\n",
                     encoding="utf-8",
                 )
             return self.process_result(
@@ -539,7 +541,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         return package_root / "stage-package.json"
 
-    def make_prepared_runner(self, executor, package_path: Path):
+    def make_prepared_runner(
+        self, executor, package_path: Path, *, promotion_contract_path: Path | None = None
+    ):
         return runner_module.CodexExecReviewCycleRunner(
             repo_root=self.repo_root,
             ft_root=self.ft_root,
@@ -548,6 +552,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             source_files=[],
             handoff_files=[],
             prepared_package_path=package_path,
+            promotion_contract_path=promotion_contract_path,
             command_config=runner_module.ExecCommandConfig(
                 executable="codex-test",
                 sandbox_flag="--sandbox-contract",
@@ -564,6 +569,35 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             timeout_seconds=5,
             instruction_context_resolver=self.resolve_instruction_context,
         )
+
+    def build_promotion_contract(self) -> Path:
+        accepted = self.ft_root / "work" / "accepted-candidate.md"
+        accepted.parent.mkdir(parents=True, exist_ok=True)
+        accepted.write_text("accepted semantic candidate\n", encoding="utf-8")
+        contract = self.ft_root / "work" / "promotion-contract.json"
+        contract.write_text(
+            json.dumps(
+                {
+                    "contract_version": 1,
+                    "canonical_test_cases": self.final_path.relative_to(self.repo_root).as_posix(),
+                    "canonical_title": "Тест-кейсы: demo",
+                    "ft_slug": "demo-ft",
+                    "scope_slug": "demo-scope",
+                    "section_id": "1",
+                    "domain_package_id": "WP-01",
+                    "test_case_ids": ["TC-DEMO-001"],
+                    "required_sections": [
+                        "Metadata", "Scope Boundaries", "Coverage Summary", "Coverage Gaps", "Test Cases"
+                    ],
+                    "required_gap_ids": ["GAP-001"],
+                    "accepted_candidate": accepted.relative_to(self.repo_root).as_posix(),
+                    "accepted_candidate_sha256": hashlib.sha256(accepted.read_bytes()).hexdigest(),
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        return contract
 
     def test_first_artifact_experiment_preserves_independent_writer_budgets(self) -> None:
         parser = runner_module.build_parser()
@@ -1101,6 +1135,63 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
             variants[0]["properties"]["test_case_ids"]["items"]["pattern"],
         )
+
+    def test_prepared_promotion_contract_produces_promotion_ready_terminal_state(self) -> None:
+        package_path = self.build_prepared_package(execution_profile="standard-required", unsupported_dimensions=("state-transition",))
+        contract_path = self.build_promotion_contract()
+        draft = """# Тест-кейсы: demo
+
+## Metadata
+| field | value |
+| --- | --- |
+| ft_slug | `demo-ft` |
+| scope_slug | `demo-scope` |
+| section_id | `1` |
+| package_id | `WP-01` |
+
+## Scope Boundaries
+Bounded scope.
+
+## Coverage Summary
+ATOM-001 is covered. GAP-001 is preserved.
+
+## Coverage Gaps
+GAP-001 remains open.
+
+## Test Cases
+
+## TC-DEMO-001
+**package_id:** WP-01
+**Трассировка:** ATOM-001
+"""
+        executor = ScriptedExecutor(
+            self.writer_step(draft_text=draft),
+            self.reviewer_step(decision="accepted"),
+        )
+        runner = self.make_prepared_runner(
+            executor, package_path, promotion_contract_path=contract_path
+        )
+
+        result = runner.run()
+
+        self.assertEqual("accepted-promotion-ready-not-promoted", result.status)
+        self.assertTrue(runner.promotion_readiness_path.is_file())
+        writer_prompt = executor.requests[0].prompt
+        self.assertIn("Promotion canonicalization contract", writer_prompt)
+        self.assertIn("TC-DEMO-001", writer_prompt)
+
+    def test_prepared_promotion_contract_blocks_diagnostic_shape_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(execution_profile="standard-required", unsupported_dimensions=("state-transition",))
+        contract_path = self.build_promotion_contract()
+        executor = ScriptedExecutor(self.writer_step())
+        runner = self.make_prepared_runner(
+            executor, package_path, promotion_contract_path=contract_path
+        )
+
+        result = runner.run()
+
+        self.assertEqual("blocked-promotion-readiness", result.status)
+        self.assertEqual(1, len(executor.requests))
 
     def test_standard_path_blocks_before_writer_when_reviewer_command_budget_cannot_read_inputs(self) -> None:
         executor = ScriptedExecutor()

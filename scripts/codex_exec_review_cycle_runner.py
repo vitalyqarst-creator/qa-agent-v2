@@ -42,6 +42,10 @@ from test_case_agent.review_cycle.prepared_package import (
     load_prepared_package,
 )
 from test_case_agent.review_cycle.obligation_gate import validate_draft_obligation_coverage
+from test_case_agent.review_cycle.promotion_readiness import (
+    PromotionContract,
+    validate_promotion_readiness,
+)
 from test_case_agent.review_cycle.evidence_access import validate_evidence_access
 from test_case_agent.review_cycle.attempts import format_attempt_id
 from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
@@ -618,6 +622,7 @@ class CodexExecReviewCycleRunner:
     handoff_files: Sequence[Path]
     command_config: ExecCommandConfig
     prepared_package_path: Path | None = None
+    promotion_contract_path: Path | None = None
     instruction_files: Sequence[Path] = ()
     writer_instruction_files: Sequence[Path] = ()
     reviewer_instruction_files: Sequence[Path] = ()
@@ -652,6 +657,7 @@ class CodexExecReviewCycleRunner:
     _manifests: dict[str, StageInputManifest] = field(default_factory=dict, init=False)
     _backend_session_ids: list[str] = field(default_factory=list, init=False)
     _prepared_package: PreparedStagePackage | None = field(default=None, init=False)
+    _promotion_contract: PromotionContract | None = field(default=None, init=False)
     _draft_seed_sha256: str = field(default="", init=False)
     _standard_instruction_contexts: dict[str, tuple[Path, ...]] = field(
         default_factory=dict, init=False
@@ -676,6 +682,8 @@ class CodexExecReviewCycleRunner:
         )
         if self.prepared_package_path is not None:
             self.prepared_package_path = self.prepared_package_path.resolve()
+        if self.promotion_contract_path is not None:
+            self.promotion_contract_path = self.promotion_contract_path.resolve()
         configured_instructions = tuple(path.resolve() for path in self.instruction_files)
         self.instruction_files = configured_instructions or ((self.repo_root / "AGENTS.md").resolve(),)
         package_notes = (self.ft_root / "AGENT-NOTES.md").resolve()
@@ -721,6 +729,10 @@ class CodexExecReviewCycleRunner:
     @property
     def obligation_gate_path(self) -> Path:
         return self.runner_output_dir(WRITER_STAGE) / "obligation-gate.json"
+
+    @property
+    def promotion_readiness_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "promotion-readiness.json"
 
     @property
     def seed_gate_path(self) -> Path:
@@ -972,6 +984,36 @@ class CodexExecReviewCycleRunner:
             self._standard_instruction_paths("writer")
             self._standard_instruction_paths("reviewer")
             self._validate_standard_command_budgets()
+        if self.promotion_contract_path is not None:
+            if self._prepared_package is None:
+                raise RunnerError("Promotion contract is supported only for prepared routes")
+            if not is_relative_to(self.promotion_contract_path, self.ft_root):
+                raise RunnerError("Promotion contract must be under the FT package")
+            try:
+                self._promotion_contract = PromotionContract.load(
+                    self.promotion_contract_path, self.repo_root
+                )
+            except StageRuntimeError as exc:
+                raise RunnerError(f"Promotion contract is invalid: {exc}") from exc
+            contract = self._promotion_contract
+            if contract.ft_slug != self._prepared_package.ft_slug:
+                raise RunnerError("Promotion contract ft_slug does not match prepared package")
+            if contract.scope_slug != self._prepared_package.scope_slug:
+                raise RunnerError("Promotion contract scope_slug does not match prepared package")
+            if contract.section_id != self._prepared_package.section_id:
+                raise RunnerError("Promotion contract section_id does not match prepared package")
+            if (self.repo_root / contract.canonical_test_cases).resolve() != self.final_path:
+                raise RunnerError("Promotion contract canonical_test_cases does not match final artifact")
+            obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+            testable_count = sum(
+                item.coverage_status == "testable" for item in obligations.obligations
+            )
+            if len(contract.test_case_ids) != testable_count:
+                raise RunnerError(
+                    "Promotion contract test_case_ids count does not match testable obligations"
+                )
+        elif self._prepared_package is not None and (self.promote_final or self.promotion_dry_run):
+            raise RunnerError("Prepared promotion requires an explicit promotion contract")
         prepared_inputs = self._prepared_input_paths()
         instruction_inputs = (
             (
@@ -1110,8 +1152,7 @@ class CodexExecReviewCycleRunner:
         return metadata
 
     def _prepared_standard_writer_payload(self) -> str:
-        return "\n".join(
-            [
+        lines = [
                 "<!-- PREPARED-STANDARD-WRITER-PAYLOAD:BEGIN -->",
                 "## Verified prepared-standard metadata",
                 "",
@@ -1136,9 +1177,37 @@ class CodexExecReviewCycleRunner:
                 "```markdown",
                 self._draft_seed_text().strip(),
                 "```",
-                "<!-- PREPARED-STANDARD-WRITER-PAYLOAD:END -->",
-            ]
-        )
+        ]
+        if self._promotion_contract is not None:
+            candidate = self.repo_root / self._promotion_contract.accepted_candidate
+            lines.extend(
+                [
+                    "",
+                    "## Promotion canonicalization contract",
+                    "",
+                    "The following accepted candidate is semantic baseline evidence, not requirement evidence. Preserve its accepted checks while converting the output to the exact canonical seed shape. Do not read its source path directly.",
+                    "",
+                    "```json",
+                    json.dumps(
+                        {
+                            "canonical_test_cases": self._promotion_contract.canonical_test_cases,
+                            "canonical_title": self._promotion_contract.canonical_title,
+                            "domain_package_id": self._promotion_contract.domain_package_id,
+                            "test_case_ids": list(self._promotion_contract.test_case_ids),
+                            "accepted_candidate_sha256": self._promotion_contract.accepted_candidate_sha256,
+                        },
+                        ensure_ascii=False,
+                        indent=2,
+                    ),
+                    "```",
+                    "",
+                    "```markdown",
+                    candidate.read_text(encoding="utf-8").strip(),
+                    "```",
+                ]
+            )
+        lines.append("<!-- PREPARED-STANDARD-WRITER-PAYLOAD:END -->")
+        return "\n".join(lines)
 
     def _prepared_standard_reviewer_payload(self) -> str:
         draft_sha256 = sha256_file(self.draft_path)
@@ -1148,6 +1217,10 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("obligation", self.obligation_gate_path),
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
         ]
+        if self._promotion_contract is not None:
+            gates.append(
+                self._prepared_gate_summary("promotion-readiness", self.promotion_readiness_path)
+            )
         return "\n".join(
             [
                 "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:BEGIN -->",
@@ -1274,14 +1347,39 @@ class CodexExecReviewCycleRunner:
     def _draft_seed_text(self) -> str:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
         testable = [item for item in obligations.obligations if item.coverage_status == "testable"]
-        lines = [
-            "# Тест-кейсы",
-            "",
-            f"<!-- {SEED_MARKER}: replace all [SEED:*] values before completion -->",
-            "",
-        ]
+        contract = self._promotion_contract
+        if contract is None:
+            lines = [
+                "# Тест-кейсы", "",
+                f"<!-- {SEED_MARKER}: replace all [SEED:*] values before completion -->", "",
+            ]
+        else:
+            lines = [
+                f"# {contract.canonical_title}", "",
+                f"<!-- {SEED_MARKER}: replace all [SEED:*] values before completion -->", "",
+                "## Metadata", "",
+                "| field | value |", "| --- | --- |",
+                f"| ft_slug | `{contract.ft_slug}` |",
+                f"| scope_slug | `{contract.scope_slug}` |",
+                f"| section_id | `{contract.section_id}` |",
+                f"| package_id | `{contract.domain_package_id}` |", "",
+                "## Scope Boundaries", "", "[SEED:scope boundaries]", "",
+                "## Coverage Summary", "",
+                "| package_id | obligation_id | atom_id | test_case_id | coverage_status |",
+                "| --- | --- | --- | --- | --- |",
+            ]
+            for tc_id, obligation in zip(contract.test_case_ids, testable, strict=True):
+                lines.append(
+                    f"| `{contract.domain_package_id}` | `{obligation.obligation_id}` | "
+                    f"`{obligation.traceability_atom_id}` | `{tc_id}` | `covered` |"
+                )
+            lines.extend(["", "## Coverage Gaps", "", "[SEED:preserve required gaps]", "", "## Test Cases", ""])
         for index, obligation in enumerate(testable, start=1):
-            tc_id = f"TC-PREP-{index:03d}"
+            tc_id = (
+                contract.test_case_ids[index - 1]
+                if contract is not None
+                else f"TC-PREP-{index:03d}"
+            )
             lines.extend(
                 [
                     f"## {tc_id}",
@@ -1289,7 +1387,11 @@ class CodexExecReviewCycleRunner:
                     f"**Название:** [SEED:title:{obligation.traceability_atom_id}]",
                     "**Тип:** позитивный",
                     "**Приоритет:** средний",
-                    "**package_id:** [SEED:package_id]",
+                    (
+                        f"**package_id:** {contract.domain_package_id}"
+                        if contract is not None
+                        else "**package_id:** [SEED:package_id]"
+                    ),
                     f"**Трассировка:** {obligation.obligation_id}; {obligation.traceability_atom_id}",
                     "",
                     "### Предусловия",
@@ -1626,6 +1728,27 @@ class CodexExecReviewCycleRunner:
                     reasons=[
                         "prepared atomic obligation gate reported findings",
                         relative_path(self.obligation_gate_path, self.repo_root),
+                    ],
+                    validation=validation,
+                )
+
+        if self._promotion_contract is not None:
+            promotion_readiness = validate_promotion_readiness(
+                draft_path=self.draft_path,
+                contract=self._promotion_contract,
+            )
+            write_json(self.promotion_readiness_path, promotion_readiness.as_dict())
+            if not promotion_readiness.passed:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-promotion-readiness",
+                    reasons=[
+                        "prepared promotion-readiness gate reported findings",
+                        relative_path(self.promotion_readiness_path, self.repo_root),
                     ],
                     validation=validation,
                 )
@@ -1967,10 +2090,20 @@ class CodexExecReviewCycleRunner:
             return self._result(state)
 
         if not self.promote_final:
-            state["workflow_status"] = "accepted-not-promoted"
-            state["stage_status"] = "accepted-not-promoted"
+            status = (
+                "accepted-promotion-ready-not-promoted"
+                if self._promotion_contract is not None
+                else "accepted-not-promoted"
+            )
+            state["workflow_status"] = status
+            state["stage_status"] = status
+            if self._promotion_contract is not None:
+                state["promotion_readiness_report"] = relative_path(
+                    self.promotion_readiness_path, self.ft_root
+                )
+                state["promotion_status"] = "ready-not-promoted"
             state["blocking_reasons"] = [
-                "promotion is disabled; use a new cycle with explicit promotion enabled after reviewing this result"
+                "promotion is disabled; review the promotion-ready candidate before a controlled production write"
             ]
             self._write_state(state)
             append_event(self.cycle_dir, "promotion_skipped")
@@ -3360,6 +3493,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--promotion-dry-run", action="store_true")
+    parser.add_argument("--promotion-contract")
     parser.add_argument("--allow-overwrite-final", action="store_true")
     parser.add_argument("--validate-only", action="store_true")
     return parser
@@ -3376,6 +3510,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         source_files=[repo_root / item for item in args.source_file],
         handoff_files=[repo_root / item for item in args.handoff_file],
         prepared_package_path=(repo_root / args.prepared_package if args.prepared_package else None),
+        promotion_contract_path=(
+            repo_root / args.promotion_contract if args.promotion_contract else None
+        ),
         instruction_files=[repo_root / item for item in args.instruction_file],
         writer_instruction_files=[
             repo_root / item for item in args.writer_instruction_file
