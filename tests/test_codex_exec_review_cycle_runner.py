@@ -585,7 +585,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     "scope_slug": "demo-scope",
                     "section_id": "1",
                     "domain_package_id": "WP-01",
+                    "test_design_dir": "fts/demo-ft/work/test-design/1-demo-scope",
                     "test_case_ids": ["TC-DEMO-001"],
+                    "expected_priorities": {"TC-DEMO-001": "High"},
+                    "required_requirement_ids": ["BSR 1"],
                     "required_sections": [
                         "Metadata", "Scope Boundaries", "Coverage Summary", "Coverage Gaps", "Test Cases"
                     ],
@@ -1148,12 +1151,13 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 | scope_slug | `demo-scope` |
 | section_id | `1` |
 | package_id | `WP-01` |
+| test_design_dir | `fts/demo-ft/work/test-design/1-demo-scope` |
 
 ## Scope Boundaries
 Bounded scope.
 
 ## Coverage Summary
-ATOM-001 is covered. GAP-001 is preserved.
+ATOM-001 and BSR 1 are covered. GAP-001 is preserved.
 
 ## Coverage Gaps
 GAP-001 remains open.
@@ -1162,6 +1166,7 @@ GAP-001 remains open.
 
 ## TC-DEMO-001
 **package_id:** WP-01
+**Приоритет:** High
 **Трассировка:** ATOM-001
 """
         executor = ScriptedExecutor(

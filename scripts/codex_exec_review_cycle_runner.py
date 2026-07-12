@@ -1193,7 +1193,10 @@ class CodexExecReviewCycleRunner:
                             "canonical_test_cases": self._promotion_contract.canonical_test_cases,
                             "canonical_title": self._promotion_contract.canonical_title,
                             "domain_package_id": self._promotion_contract.domain_package_id,
+                            "test_design_dir": self._promotion_contract.test_design_dir,
                             "test_case_ids": list(self._promotion_contract.test_case_ids),
+                            "expected_priorities": dict(self._promotion_contract.expected_priorities),
+                            "required_requirement_ids": list(self._promotion_contract.required_requirement_ids),
                             "accepted_candidate_sha256": self._promotion_contract.accepted_candidate_sha256,
                         },
                         ensure_ascii=False,
@@ -1362,16 +1365,25 @@ class CodexExecReviewCycleRunner:
                 f"| ft_slug | `{contract.ft_slug}` |",
                 f"| scope_slug | `{contract.scope_slug}` |",
                 f"| section_id | `{contract.section_id}` |",
-                f"| package_id | `{contract.domain_package_id}` |", "",
+                f"| package_id | `{contract.domain_package_id}` |",
+                f"| test_design_dir | `{contract.test_design_dir}` |", "",
                 "## Scope Boundaries", "", "[SEED:scope boundaries]", "",
                 "## Coverage Summary", "",
-                "| package_id | obligation_id | atom_id | test_case_id | coverage_status |",
-                "| --- | --- | --- | --- | --- |",
+                "| package_id | source_row_id | req_id | obligation_id | atom_id | test_case_id | coverage_status |",
+                "| --- | --- | --- | --- | --- | --- | --- |",
             ]
             for tc_id, obligation in zip(contract.test_case_ids, testable, strict=True):
+                source_row_id = next(
+                    (value for value in obligation.source_refs if value.startswith("SRC-")), "n/a"
+                )
+                req_id = next(
+                    (value for value in obligation.source_refs if re.fullmatch(r"(?:BSR|GSR|DIT)\s+\d+(?:\.\d+)*", value)),
+                    "n/a",
+                )
                 lines.append(
-                    f"| `{contract.domain_package_id}` | `{obligation.obligation_id}` | "
-                    f"`{obligation.traceability_atom_id}` | `{tc_id}` | `covered` |"
+                    f"| `{contract.domain_package_id}` | `{source_row_id}` | `{req_id}` | "
+                    f"`{obligation.obligation_id}` | `{obligation.traceability_atom_id}` | "
+                    f"`{tc_id}` | `covered` |"
                 )
             lines.extend(["", "## Coverage Gaps", "", "[SEED:preserve required gaps]", "", "## Test Cases", ""])
         for index, obligation in enumerate(testable, start=1):
@@ -1386,7 +1398,11 @@ class CodexExecReviewCycleRunner:
                     "",
                     f"**Название:** [SEED:title:{obligation.traceability_atom_id}]",
                     "**Тип:** позитивный",
-                    "**Приоритет:** средний",
+                    (
+                        f"**Приоритет:** {contract.expected_priorities[tc_id]}"
+                        if contract is not None
+                        else "**Приоритет:** средний"
+                    ),
                     (
                         f"**package_id:** {contract.domain_package_id}"
                         if contract is not None

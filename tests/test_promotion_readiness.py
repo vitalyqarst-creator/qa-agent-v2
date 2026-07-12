@@ -27,7 +27,10 @@ class PromotionReadinessTests(unittest.TestCase):
                     "scope_slug": "demo-scope",
                     "section_id": "1",
                     "domain_package_id": "WP-01",
+                    "test_design_dir": "fts/demo/work/test-design/1-demo",
                     "test_case_ids": ["TC-DEMO-001"],
+                    "expected_priorities": {"TC-DEMO-001": "High"},
+                    "required_requirement_ids": ["BSR 1"],
                     "required_sections": ["Metadata", "Coverage Summary", "Coverage Gaps", "Test Cases"],
                     "required_gap_ids": ["GAP-001"],
                     "accepted_candidate": "accepted.md",
@@ -54,9 +57,10 @@ class PromotionReadinessTests(unittest.TestCase):
 | scope_slug | `demo-scope` |
 | section_id | `1` |
 | package_id | `WP-01` |
+| test_design_dir | `fts/demo/work/test-design/1-demo` |
 
 ## Coverage Summary
-GAP-001
+GAP-001; BSR 1
 
 ## Coverage Gaps
 GAP-001 preserved.
@@ -65,6 +69,7 @@ GAP-001 preserved.
 
 ## TC-DEMO-001
 **package_id:** WP-01
+**Приоритет:** High
 """,
             encoding="utf-8",
         )
