@@ -1,0 +1,45 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+current_stage: ft-scope-analyzer
+stage_status: ready-for-gap-review
+current_round: 0
+next_skill: ft-test-case-reviewer
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/mockup-visual-inventory.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/negative-oracle-inventory.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/requiredness-oracle-inventory.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/prompt.scope-gaps-to-reviewer.md
+  - AGENT-NOTES.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  scope_contract: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  source_parity_check: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  source_row_inventory: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
+  mockup_visual_inventory: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/mockup-visual-inventory.md
+  negative_oracle_inventory: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/negative-oracle-inventory.md
+  requiredness_oracle_inventory: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/requiredness-oracle-inventory.md
+  scope_coverage_gaps: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  scope_clarification_requests: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  scope_execution_options: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-execution-options.md
+  active_transition_prompt: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/prompt.scope-gaps-to-reviewer.md
+  final_bsr_evidence: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/final-bsr-evidence.json
+  session_log: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-analyzer-session-log.md
+  decision_log: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/agent-decision-log.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 exact invalid-value UI oracle
+  - GAP-002 empty requiredness UI oracle
+  - GAP-003 integration failure/technical evidence
+blocking_reasons: []
+accepted_risks: []
+notes:
+  - Historical signed-off is regression evidence only; current-source sign-off requires a new cycle.
+  - Canonical test cases remain unchanged during scope analysis.
