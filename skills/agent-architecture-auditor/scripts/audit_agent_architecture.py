@@ -368,6 +368,36 @@ def audit(root:Path):
     if not review_cycle_runner.exists():
         add_finding(findings,"codex-review-cycle-runner-missing","error","scripts","Codex review-cycle runner is missing","The session-based review-cycle contract requires scripts/codex_review_cycle_runner.py for validation, dry-run orchestration and snapshots.","Create the runner or remove the SDK orchestration contract until it exists.",[rel(review_cycle_runner,root)])
 
+    exec_runner=root/"scripts"/"codex_exec_review_cycle_runner.py"
+    readme=root/"README.md"
+    readme_content=txt(readme).lower()
+    exec_is_experimental=(
+        exec_runner.exists()
+        and "codex_exec_review_cycle_runner.py" in readme_content
+        and "экспериментальный" in readme_content
+        and "остаётся основным sdk" in readme_content
+    )
+    add_check(
+        checks,
+        "codex-exec-default-activation",
+        "warn" if exec_is_experimental else ("pass" if exec_runner.exists() else "fail"),
+        "Exec backend is still experimental while the SDK runner remains the documented default."
+        if exec_is_experimental else "Exec backend activation check.",
+        [rel(exec_runner,root),rel(readme,root)],
+    )
+    if exec_is_experimental:
+        add_finding(
+            findings,
+            "codex-exec-backend-not-default",
+            "warning",
+            "orchestration",
+            "Codex exec exists but is not the default review-cycle backend",
+            "The repository contains an exec runner, but the documented production route still selects the SDK runner by default.",
+            ["README.md documents SDK as primary and codex exec as experimental."],
+            "Add an explicit backend dispatcher and make exec the verified default, with SDK retained only as a declared fallback.",
+            [rel(exec_runner,root),rel(review_cycle_runner,root),rel(readme,root)],
+        )
+
     searchable=[txt(p) for p in [root/"AGENTS.md",root/"skills"/"README.md"] if p.exists()]
     searchable+=[txt(p) for p in [
         root/"references"/"agent"/"instruction-loading-manifest.md",

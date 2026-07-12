@@ -15445,6 +15445,40 @@ def validate_test_case_file(
             )
         )
 
+    titles_by_normalized: dict[str, list[str]] = {}
+    title_display: dict[str, str] = {}
+    for test_case_id, block in blocks:
+        title = extract_test_case_field_block(block, ["Title", "title", "Название"])
+        normalized_title = re.sub(r"\s+", " ", title).strip().casefold()
+        if not normalized_title:
+            continue
+        titles_by_normalized.setdefault(normalized_title, []).append(test_case_id)
+        title_display.setdefault(normalized_title, re.sub(r"\s+", " ", title).strip())
+    duplicate_titles = [
+        f"{title_display[normalized]}: {', '.join(test_case_ids)}"
+        for normalized, test_case_ids in titles_by_normalized.items()
+        if len(test_case_ids) > 1
+    ]
+    if duplicate_titles:
+        findings.append(
+            Finding(
+                id="test-case-duplicate-title",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case file contains duplicate titles",
+                details=(
+                    "Each test-case title must identify the concrete check. Distinct boundary or equivalence "
+                    "classes must not share the same title."
+                ),
+                path=display_path,
+                evidence=duplicate_titles[:20],
+                recommended_action=(
+                    "Rewrite duplicate titles to include the field/action and the exact boundary, invalid class "
+                    "or dependency being checked."
+                ),
+            )
+        )
+
     numbering_issues = test_case_numbering_issues(test_case_ids)
     if numbering_issues:
         findings.append(

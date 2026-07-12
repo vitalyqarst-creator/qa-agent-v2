@@ -9246,6 +9246,29 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-duplicate-id", finding_ids)
 
+    def test_duplicate_test_case_titles_warn(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "test-cases" / "duplicate-titles.md"
+            self.write_minimal_test_case_file(test_case_path, "TC-SAMPLE-001")
+            second_case = self.write_minimal_test_case_file
+            second_path = fixture_root / "second.md"
+            second_case(second_path, "TC-SAMPLE-002")
+            test_case_path.write_text(
+                test_case_path.read_text(encoding="utf-8")
+                + "\n\n"
+                + second_path.read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_path), "--json")
+
+        payload = json.loads(result.stdout)
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        self.assertIn("test-case-duplicate-title", findings)
+        self.assertEqual("warning", findings["test-case-duplicate-title"]["severity"])
+        self.assertIn("TC-SAMPLE-001, TC-SAMPLE-002", " ".join(findings["test-case-duplicate-title"]["evidence"]))
+
     def test_mixed_test_case_schema_duplicates_warn(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
