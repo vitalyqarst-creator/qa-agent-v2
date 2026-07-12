@@ -1,0 +1,23 @@
+# Prepared Stage Instructions
+
+- package_id: `personal-data-character-restrictions-v4`
+- role: `writer`
+- scenario: `writer.session_initial_draft`
+- output_path: `fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md`
+- attempt_root: `fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/attempts/writer-r1/attempt-001`
+- sandbox_policy: `read_only`
+- hard_timeout_seconds: `900`
+- idle_timeout_seconds: `180`
+- command_budget: `0`
+
+## Structured Standard Path
+
+1. Use only the runner-embedded verified projection; do not reread workspace files.
+2. Do not call shell or file tools; the command budget is zero.
+3. Return the complete unsigned draft in the schema-constrained final contract.
+4. The runner alone materializes output_path and applies deterministic gates.
+5. Return blocked-input when inline evidence is insufficient; use a new explicit assisted cycle for targeted fallback.
+
+## Targeted Fallback
+
+Structured mode has no source fallback; return blocked-input when inline evidence is insufficient.

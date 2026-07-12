@@ -1,0 +1,246 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-001",
+      "handling": "Сохранить как coverage gap.",
+      "problem": "Table 4; `BSR 48, 51, 54`.",
+      "source_refs": [
+        "SRC-002..SRC-004",
+        "ATOM-003",
+        "ATOM-004",
+        "ATOM-007",
+        "ATOM-008",
+        "ATOM-011",
+        "ATOM-012",
+        "OBL-003",
+        "OBL-004",
+        "OBL-007",
+        "OBL-008",
+        "OBL-011",
+        "OBL-012"
+      ]
+    }
+  ],
+  "digest": "a614fd649c397a1c0d43354426c8751a0a06f6f0900d3ac9c35585aec3a85c8e",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Поле `Фамилия` допускает ввод текстовых символов.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "`Фамилия` принимает текстовое значение `Иванов`.",
+      "planned_test_case_id": "TC-PDCR-001",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P06"
+      ],
+      "test_intent": "Ввести `Иванов` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Поле `Фамилия` допускает специальный символ `-` в текстовом значении.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "`Фамилия` принимает текстовое значение `Иванов-Петров` с дефисом.",
+      "planned_test_case_id": "TC-PDCR-002",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P06"
+      ],
+      "test_intent": "Ввести `Иванов-Петров` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Поле `Фамилия` не допускает цифры.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "Цифра в значении `Иванов2` не принимается как допустимое значение `Фамилия`.",
+      "planned_test_case_id": "TC-PDCR-003",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P06"
+      ],
+      "test_intent": "Ввести `Иванов2` в поле `Фамилия` и зафиксировать фактический механизм отклонения."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "Поле `Фамилия` не допускает специальные символы, кроме `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "Символ `@` в значении `Иванов@` не принимается как допустимое значение `Фамилия`.",
+      "planned_test_case_id": "TC-PDCR-004",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P06"
+      ],
+      "test_intent": "Ввести `Иванов@` в поле `Фамилия` и зафиксировать фактический механизм отклонения."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "Поле `Имя` допускает ввод текстовых символов.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-005",
+      "observable_oracle": "`Имя` принимает текстовое значение `Иван`.",
+      "planned_test_case_id": "TC-PDCR-005",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P06"
+      ],
+      "test_intent": "Ввести `Иван` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-006",
+      "atomic_statement": "Поле `Имя` допускает специальный символ `-` в текстовом значении.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-006",
+      "observable_oracle": "`Имя` принимает текстовое значение `Анна-Мария` с дефисом.",
+      "planned_test_case_id": "TC-PDCR-006",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P06"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-007",
+      "atomic_statement": "Поле `Имя` не допускает цифры.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-007",
+      "observable_oracle": "Цифра в значении `Иван2` не принимается как допустимое значение `Имя`.",
+      "planned_test_case_id": "TC-PDCR-007",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P06"
+      ],
+      "test_intent": "Ввести `Иван2` в поле `Имя` и зафиксировать фактический механизм отклонения."
+    },
+    {
+      "atom_id": "ATOM-008",
+      "atomic_statement": "Поле `Имя` не допускает специальные символы, кроме `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-008",
+      "observable_oracle": "Символ `@` в значении `Иван@` не принимается как допустимое значение `Имя`.",
+      "planned_test_case_id": "TC-PDCR-008",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P06"
+      ],
+      "test_intent": "Ввести `Иван@` в поле `Имя` и зафиксировать фактический механизм отклонения."
+    },
+    {
+      "atom_id": "ATOM-009",
+      "atomic_statement": "Поле `Отчество` допускает ввод текстовых символов.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-009",
+      "observable_oracle": "`Отчество` принимает текстовое значение `Иванович`.",
+      "planned_test_case_id": "TC-PDCR-009",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P06"
+      ],
+      "test_intent": "Ввести `Иванович` в поле `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "Поле `Отчество` допускает специальный символ `-` в текстовом значении.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-010",
+      "observable_oracle": "`Отчество` принимает текстовое значение `Иванович-Петрович` с дефисом.",
+      "planned_test_case_id": "TC-PDCR-010",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P06"
+      ],
+      "test_intent": "Ввести `Иванович-Петрович` в поле `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-011",
+      "atomic_statement": "Поле `Отчество` не допускает цифры.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-011",
+      "observable_oracle": "Цифра в значении `Иванович2` не принимается как допустимое значение `Отчество`.",
+      "planned_test_case_id": "TC-PDCR-011",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P06"
+      ],
+      "test_intent": "Ввести `Иванович2` в поле `Отчество` и зафиксировать фактический механизм отклонения."
+    },
+    {
+      "atom_id": "ATOM-012",
+      "atomic_statement": "Поле `Отчество` не допускает специальные символы, кроме `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-012",
+      "observable_oracle": "Символ `@` в значении `Иванович@` не принимается как допустимое значение `Отчество`.",
+      "planned_test_case_id": "TC-PDCR-012",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P06"
+      ],
+      "test_intent": "Ввести `Иванович@` в поле `Отчество` и зафиксировать фактический механизм отклонения."
+    }
+  ],
+  "package_id": "personal-data-character-restrictions-v4",
+  "package_version": 5
+}

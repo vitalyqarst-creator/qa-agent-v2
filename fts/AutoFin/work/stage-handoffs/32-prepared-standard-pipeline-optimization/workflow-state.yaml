@@ -1,0 +1,29 @@
+ft_slug: AutoFin
+scope_slug: prepared-standard-pipeline-optimization
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/32-prepared-standard-pipeline-optimization/iteration-summary.md
+  - work/stage-handoffs/32-prepared-standard-pipeline-optimization/prompt.scope-to-iteration.md
+latest_artifacts:
+  architecture_baseline: work/stage-handoffs/32-prepared-standard-pipeline-optimization/architecture-baseline.md
+  validate_only_report: work/stage-handoffs/32-prepared-standard-pipeline-optimization/validate-only-report.v4.json
+  dispatcher_config: work/stage-handoffs/32-prepared-standard-pipeline-optimization/dispatcher-config.v4.json
+  prepared_package: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/prepared-input/personal-data-character-restrictions-v4/stage-package.json
+  iteration_summary: work/stage-handoffs/32-prepared-standard-pipeline-optimization/iteration-summary.md
+  session_log: work/stage-handoffs/32-prepared-standard-pipeline-optimization/iteration-session-log.md
+  decision_log: work/stage-handoffs/32-prepared-standard-pipeline-optimization/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/32-prepared-standard-pipeline-optimization/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 1
+open_questions:
+  - GAP-001 remains awaiting UI calibration.
+blocking_reasons: []
+accepted_risks:
+  - V4 reviewer time/tokens are not measured until the separately authorized live acceptance run.
