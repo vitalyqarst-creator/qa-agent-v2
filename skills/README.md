@@ -16,7 +16,7 @@
 - Если FT-пакет уже выбран, но еще не определен точный фрагмент требований или нужно разбить большое ФТ на scope-ы: `ft-scope-analyzer`.
 - Если scope уже зафиксирован и нужно написать новые кейсы одним writer-pass без review-cycle: `ft-test-case-writer`.
 - Если scope уже зафиксирован и нужно пройти writer-reviewer iteration: `ft-test-case-iteration`.
-- Если нужен новый session-based writer/reviewer cycle в отдельных Codex sessions с двумя semantic review rounds и versioned snapshots: `ft-test-case-reviewer` в режиме `scope_gap_review`, если scope gaps есть, затем `ft-test-case-writer` -> `ft-test-case-reviewer` через SDK runner по `session-based-review-cycle-format.md`.
+- Если нужен новый session-based writer/reviewer cycle в отдельных Codex sessions: `ft-test-case-iteration` через `scripts/review_cycle_backend_dispatcher.py --backend auto`; SDK используется только как явно выбранный fallback.
 - Если кейсы уже существуют и нужен review: `ft-test-case-reviewer`.
   По умолчанию он работает в режиме `full` и последовательно выполняет `traceability` -> `structure` -> `test-design`.
 - Если набор уже получил `signed-off` и нужно сверить его с реальным UI перед подготовкой к автотестам: `ft-ui-automation-prep`.
@@ -26,7 +26,7 @@
 
 - Новый набор тест-кейсов: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer`
 - Новый набор тест-кейсов с session-based review-cycle: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration`
-- Новый session-based review cycle: `ft-source-locator` -> `ft-scope-analyzer` -> optional `ft-test-case-reviewer` scope gap review -> `ft-test-case-writer` -> `ft-test-case-reviewer` через `scripts/codex_review_cycle_runner.py`
+- Новый session-based review cycle: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` через `scripts/review_cycle_backend_dispatcher.py --backend auto`
 - Подготовка automation-ready версии после sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` -> `ft-ui-automation-prep`
 - Review существующих кейсов: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
 - Аудит agent-layer: `agent-architecture-auditor` со script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)

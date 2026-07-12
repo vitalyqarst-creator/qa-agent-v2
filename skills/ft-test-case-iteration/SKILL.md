@@ -1,6 +1,6 @@
 ---
 name: ft-test-case-iteration
-description: Orchestrate the session-based writer/reviewer cycle for an already confirmed FT package and scope. Use it to prepare or run the Codex SDK review-cycle runner, not to perform writer or reviewer work inside the same session.
+description: Orchestrate the session-based writer/reviewer cycle for an already confirmed FT package and scope. Use the backend dispatcher with verified Codex exec by default; keep SDK as an explicit fallback. Do not perform writer or reviewer work inside the same session.
 ---
 
 # FT Test Case Iteration
@@ -20,7 +20,7 @@ If these inputs are missing, return to `ft-source-locator` or `ft-scope-analyzer
 
 Do not run writer and reviewer work inside this same chat/session.
 
-`ft-test-case-iteration` prepares and validates the cycle state, then uses `scripts/codex_review_cycle_runner.py` to start separate Codex SDK sessions for writer and reviewer stages.
+`ft-test-case-iteration` prepares and validates the cycle inputs, then uses `scripts/review_cycle_backend_dispatcher.py --backend auto` to select verified Codex exec and start writer and reviewer in separate processes and sessions. The SDK runner is an explicit v1 fallback, never a silent default.
 
 The source of truth for active lifecycle state is:
 
@@ -78,11 +78,15 @@ For a new cycle, ensure these locations exist or are created by the runner:
 .\scripts\run_cycle.ps1 start --state <cycle-state.yaml> --dry-run
 ```
 
-7. Start or continue the chain through the SDK runner:
+7. Start a fresh immutable cycle through the dispatcher using a reviewed JSON config:
 
 ```powershell
-.\scripts\run_cycle.ps1 run-until-terminal --state <cycle-state.yaml>
+.\.venv\Scripts\python.exe scripts\review_cycle_backend_dispatcher.py --backend auto --config <dispatcher-config.json> --selection-output <backend-selection.json>
 ```
+
+Use `--backend sdk` only for an explicit v1 diagnostic/fallback run. Use `--allow-sdk-fallback` only when the caller has deliberately authorized fallback after a failed exec capability probe.
+
+For `simple-field-property`, keep the default `prepared_fast_writer_mode=structured`: the writer is read-only and the runner materializes its schema-constrained draft. Select `workspace` only as an explicit legacy experiment; never use it as automatic recovery from a failed structured attempt.
 
 8. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.
 
@@ -101,14 +105,14 @@ For a new cycle, ensure these locations exist or are created by the runner:
 
 - Writer sessions may edit canonical test cases and writer test-design artifacts.
 - Reviewer sessions may write findings, matrices, summaries, prompts and self-checks, but must not edit canonical test cases.
-- The SDK runner may update `cycle-state.yaml`, `codex-session-map.yaml`, lock/heartbeat files and snapshots, but must not invent review decisions.
+- The exec runner owns v2 cycle transitions and immutable attempt artifacts. The SDK runner may update v1 `cycle-state.yaml`, `codex-session-map.yaml`, lock/heartbeat files and snapshots only on an explicit fallback route; neither runner may invent review decisions.
 - Snapshots follow `references/qa/test-case-versioning-policy.md`.
 - Session metadata follows `references/agent/codex-sdk-orchestration-format.md`.
 
 ## Canonical References
 
 - Session-based lifecycle: [../../references/agent/session-based-review-cycle-format.md](../../references/agent/session-based-review-cycle-format.md)
-- Codex SDK orchestration: [../../references/agent/codex-sdk-orchestration-format.md](../../references/agent/codex-sdk-orchestration-format.md)
+- Backend and SDK fallback orchestration: [../../references/agent/codex-sdk-orchestration-format.md](../../references/agent/codex-sdk-orchestration-format.md)
 - Test-case versioning: [../../references/qa/test-case-versioning-policy.md](../../references/qa/test-case-versioning-policy.md)
 - Workflow state compatibility: [../../references/agent/workflow-state-format.md](../../references/agent/workflow-state-format.md)
 - Stage handoff model: [../../references/agent/stage-handoff-model.md](../../references/agent/stage-handoff-model.md)
@@ -120,5 +124,5 @@ For a new cycle, ensure these locations exist or are created by the runner:
 ## Ограничения
 
 - Do not use this skill for FT package discovery or primary scope selection.
-- Do not perform writer or reviewer domain work here when a separate SDK session should own the stage.
+- Do not perform writer or reviewer domain work here when a separate backend session should own the stage.
 - Do not solve a stuck runner by launching another runner against the same `cycle-state.yaml`; inspect `runner.lock.yaml` and use the recovery policy in `codex-sdk-orchestration-format.md`.

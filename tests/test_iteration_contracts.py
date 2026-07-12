@@ -34,7 +34,8 @@ class IterationContractTests(unittest.TestCase):
         lifecycle = (ROOT_DIR / "references" / "agent" / "session-based-review-cycle-format.md").read_text(encoding="utf-8")
 
         self.assertIn("session-based writer/reviewer cycle", iteration)
-        self.assertIn("scripts/codex_review_cycle_runner.py", iteration)
+        self.assertIn("scripts/review_cycle_backend_dispatcher.py --backend auto", iteration)
+        self.assertIn("SDK runner is an explicit v1 fallback", iteration)
         self.assertIn("structure_preflight", lifecycle)
         self.assertIn("semantic_traceability_test_design", lifecycle)
         self.assertIn("structure_format_final", lifecycle)

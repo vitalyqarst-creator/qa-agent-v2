@@ -160,6 +160,12 @@ coverage_gaps:
         )
         self.assertEqual(obligations.obligations[0].dictionary_refs, ("DICT-001",))
         self.assertEqual(obligations.obligations[1].gap_id, "GAP-001")
+        instructions = (result.stage_package.parent / "stage-instructions.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("sandbox_policy: `read_only`", instructions)
+        self.assertIn("command_budget: `0`", instructions)
+        self.assertIn("runner alone materializes", instructions)
 
     def test_embeds_mandatory_package_notes_in_prepared_evidence(self) -> None:
         (self.ft / "AGENT-NOTES.md").write_text(

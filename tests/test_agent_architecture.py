@@ -86,7 +86,8 @@ class AgentArchitectureTests(unittest.TestCase):
         content = (SKILLS_DIR / "README.md").read_text(encoding="utf-8")
         self.assertIn("script-first workflow", content)
         self.assertIn("audit_agent_architecture.py", content)
-        self.assertIn("scripts/codex_review_cycle_runner.py", content)
+        self.assertIn("scripts/review_cycle_backend_dispatcher.py", content)
+        self.assertIn("SDK используется только как явно выбранный fallback", content)
         self.assertIn("session-based-review-cycle-format.md", content)
         self.assertIn("codex-sdk-orchestration-format.md", content)
 

@@ -74,7 +74,8 @@ Default sandbox by stage:
 
 - reviewer stages: `read_only`; the reviewer returns structured findings and the runner persists reviewer artifacts/state.
 - `reviewer.scope_gap_review`, `reviewer.semantic_traceability_test_design`, `reviewer.structure_format_final` and `reviewer.semantic_regression` run as bounded read-only SDK turns; `reviewer.structure_preflight` is deterministic runner-owned.
-- `writer-*`: `workspace_write`.
+- v1 SDK `writer-*` and standard exec writers: `workspace_write`.
+- prepared-fast exec writer: `read_only` with schema-constrained output and runner-owned draft materialization; `workspace_write` is an explicit legacy mode only.
 - `snapshot` and `validate`: local file write/read only.
 
 `full_access` is not a default for this process.

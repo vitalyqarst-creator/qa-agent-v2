@@ -659,13 +659,28 @@ class StageInstructionConfig:
         _identifier(self.scenario, "instruction scenario")
         _path(self.output_path, "instruction output_path")
         _path(self.attempt_root, "instruction attempt_root")
-        expected_sandbox = "workspace_write" if self.role == "writer" else "read_only"
-        if self.sandbox_policy != expected_sandbox:
-            raise StageRuntimeError(f"{self.role} prepared stage requires {expected_sandbox}")
-        for name in ("timeout_seconds", "idle_timeout_seconds", "command_budget"):
+        allowed_sandboxes = (
+            {"workspace_write", "read_only"} if self.role == "writer" else {"read_only"}
+        )
+        if self.sandbox_policy not in allowed_sandboxes:
+            raise StageRuntimeError(
+                f"{self.role} prepared stage requires sandbox_policy in "
+                f"{sorted(allowed_sandboxes)}"
+            )
+        for name in ("timeout_seconds", "idle_timeout_seconds"):
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 1:
                 raise StageRuntimeError(f"{name} must be a positive integer")
+        if (
+            not isinstance(self.command_budget, int)
+            or isinstance(self.command_budget, bool)
+            or self.command_budget < 0
+        ):
+            raise StageRuntimeError("command_budget must be a non-negative integer")
+        if self.sandbox_policy == "workspace_write" and self.command_budget < 1:
+            raise StageRuntimeError(
+                "workspace_write prepared stage requires a positive command_budget"
+            )
         if self.idle_timeout_seconds >= self.timeout_seconds:
             raise StageRuntimeError("idle_timeout_seconds must be lower than timeout_seconds")
 
@@ -901,22 +916,47 @@ class PreparedPackageBuilder:
     @staticmethod
     def _render_instructions(package_id: str, config: StageInstructionConfig) -> str:
         fast_path = config.scenario == "writer.session_prepared_initial_draft"
-        section_title = "Fast Path" if fast_path else "Prepared Standard Context"
-        execution_rules = (
-            [
+        structured_fast = fast_path and config.sandbox_policy == "read_only"
+        section_title = (
+            "Structured Fast Path"
+            if structured_fast
+            else "Fast Path"
+            if fast_path
+            else "Prepared Standard Context"
+        )
+        if structured_fast:
+            execution_rules = [
+                "1. Use only the runner-embedded verified projection; do not reread workspace files.",
+                "2. Do not call shell or file tools; the command budget is zero.",
+                "3. Return the complete unsigned draft in the schema-constrained final contract.",
+                "4. The runner alone materializes output_path and applies deterministic gates.",
+                "5. Return blocked-input when inline evidence is insufficient; do not open full sources.",
+            ]
+        elif fast_path:
+            execution_rules = [
                 "1. Use the runner-embedded verified projection; do not reread package files in the stage.",
                 "2. Do not rerun source locator, scope analyzer, source parity, DOCX extraction or PDF rendering.",
                 "3. Write a structurally complete minimum output before optional refinement.",
                 "4. Keep output and scratch inside attempt_root.",
                 "5. Do not read generated test cases, earlier cycles or canary artifacts as evidence.",
             ]
-            if fast_path
-            else [
+        else:
+            execution_rules = [
                 "1. Load the full standard writer instruction scenario selected by the runner.",
                 "2. Use the runner-embedded verified projection as the primary scope evidence.",
                 "3. Do not rerun source locator, scope analyzer or broad full-document discovery.",
                 "4. Keep output and scratch inside attempt_root.",
                 "5. Do not read generated test cases, earlier cycles or canary artifacts as evidence.",
+            ]
+        fallback_rules = (
+            [
+                "Structured fast mode has no source fallback; return blocked-input when inline evidence is insufficient."
+            ]
+            if structured_fast
+            else [
+                "Use a registered full source only when one named ATOM/source locator is unresolved by the package.",
+                "Record targeted_source_fallback with the reason, source path and exact locator.",
+                "Do not scan a complete document or use external scratch paths. Return blocked if evidence stays insufficient.",
             ]
         )
         return "\n".join(
@@ -939,9 +979,7 @@ class PreparedPackageBuilder:
                 "",
                 "## Targeted Fallback",
                 "",
-                "Use a registered full source only when one named ATOM/source locator is unresolved by the package.",
-                "Record targeted_source_fallback with the reason, source path and exact locator.",
-                "Do not scan a complete document or use external scratch paths. Return blocked if evidence stays insufficient.",
+                *fallback_rules,
                 "",
             ]
         )

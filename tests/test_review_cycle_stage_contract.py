@@ -104,6 +104,35 @@ class ReviewCycleStageContractTests(unittest.TestCase):
             forbidden_write_roots=["fts/demo/test-cases"],
         )
 
+    def read_only_writer_manifest(self) -> StageInputManifest:
+        attempt_root = "fts/demo/work/review-cycles/scope/attempts/writer-r1/attempt-001"
+        return StageInputManifest.create(
+            cycle_id="cycle-001",
+            stage_id="writer-r1",
+            attempt_id="attempt-001",
+            session_id="session-writer-001",
+            role="writer",
+            scenario="writer.session_prepared_initial_draft",
+            semantic_round=0,
+            sandbox_policy="read_only",
+            timeout_seconds=180,
+            attempt_root=attempt_root,
+            canonical_test_cases="fts/demo/test-cases/1-scope.md",
+            prompt_artifact=self.artifact(f"{attempt_root}/prompt.md", "prompt", HASH_B),
+            instruction_artifacts=[self.artifact("AGENTS.md", "instruction")],
+            source_artifacts=[self.artifact("fts/demo/work/source-evidence.md")],
+            handoff_artifacts=[self.artifact("fts/demo/work/obligations.json", "handoff")],
+            expected_outputs=[
+                ExpectedOutput(
+                    path=f"{attempt_root}/stage-output/draft.md",
+                    kind="writer-draft",
+                    producer="runner",
+                )
+            ],
+            allowed_write_roots=[],
+            forbidden_write_roots=["fts/demo/test-cases"],
+        )
+
     def writer_result(self, manifest: StageInputManifest) -> StageResult:
         return StageResult(
             contract_version=CONTRACT_VERSION,
@@ -193,11 +222,17 @@ class ReviewCycleStageContractTests(unittest.TestCase):
         self.assertEqual((), manifest.allowed_write_roots)
         self.assertTrue(all(output.producer == "runner" for output in manifest.expected_outputs))
 
+    def test_writer_manifest_can_be_read_only_when_runner_persists_outputs(self) -> None:
+        manifest = self.read_only_writer_manifest()
+        self.assertEqual("read_only", manifest.sandbox_policy)
+        self.assertEqual((), manifest.allowed_write_roots)
+        self.assertTrue(all(output.producer == "runner" for output in manifest.expected_outputs))
+
     def test_reviewer_manifest_rejects_stage_produced_file(self) -> None:
         payload = self.reviewer_manifest().to_dict()
         payload["expected_outputs"][0]["producer"] = "stage"
         payload["input_digest"] = "0" * 64
-        with self.assertRaisesRegex(ContractValidationError, "reviewer outputs"):
+        with self.assertRaisesRegex(ContractValidationError, "read-only stage outputs"):
             StageInputManifest.from_dict(payload)
 
     def test_manifest_rejects_runner_output_outside_attempt_root(self) -> None:

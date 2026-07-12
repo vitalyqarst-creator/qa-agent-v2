@@ -369,23 +369,25 @@ def audit(root:Path):
         add_finding(findings,"codex-review-cycle-runner-missing","error","scripts","Codex review-cycle runner is missing","The session-based review-cycle contract requires scripts/codex_review_cycle_runner.py for validation, dry-run orchestration and snapshots.","Create the runner or remove the SDK orchestration contract until it exists.",[rel(review_cycle_runner,root)])
 
     exec_runner=root/"scripts"/"codex_exec_review_cycle_runner.py"
+    backend_dispatcher=root/"scripts"/"review_cycle_backend_dispatcher.py"
     readme=root/"README.md"
     readme_content=txt(readme).lower()
-    exec_is_experimental=(
+    exec_default_activated=(
         exec_runner.exists()
-        and "codex_exec_review_cycle_runner.py" in readme_content
-        and "экспериментальный" in readme_content
-        and "остаётся основным sdk" in readme_content
+        and backend_dispatcher.exists()
+        and "review_cycle_backend_dispatcher.py" in readme_content
+        and "--backend auto" in readme_content
+        and "--backend sdk" in readme_content
     )
     add_check(
         checks,
         "codex-exec-default-activation",
-        "warn" if exec_is_experimental else ("pass" if exec_runner.exists() else "fail"),
-        "Exec backend is still experimental while the SDK runner remains the documented default."
-        if exec_is_experimental else "Exec backend activation check.",
-        [rel(exec_runner,root),rel(readme,root)],
+        "pass" if exec_default_activated else ("warn" if exec_runner.exists() else "fail"),
+        "Verified exec backend dispatcher is the documented default."
+        if exec_default_activated else "Exec backend default activation is incomplete.",
+        [rel(exec_runner,root),rel(backend_dispatcher,root),rel(readme,root)],
     )
-    if exec_is_experimental:
+    if exec_runner.exists() and not exec_default_activated:
         add_finding(
             findings,
             "codex-exec-backend-not-default",
@@ -393,9 +395,38 @@ def audit(root:Path):
             "orchestration",
             "Codex exec exists but is not the default review-cycle backend",
             "The repository contains an exec runner, but the documented production route still selects the SDK runner by default.",
-            ["README.md documents SDK as primary and codex exec as experimental."],
+            ["Dispatcher file or explicit auto/SDK fallback documentation is missing."],
             "Add an explicit backend dispatcher and make exec the verified default, with SDK retained only as a declared fallback.",
-            [rel(exec_runner,root),rel(review_cycle_runner,root),rel(readme,root)],
+            [rel(exec_runner,root),rel(backend_dispatcher,root),rel(review_cycle_runner,root),rel(readme,root)],
+        )
+
+    prepared_writer_profile=root/"references"/"agent"/"prepared-writer-runtime-profile.md"
+    exec_content=txt(exec_runner)
+    profile_content=txt(prepared_writer_profile).lower()
+    structured_writer_default=(
+        'DEFAULT_PREPARED_FAST_WRITER_MODE = "structured"' in exec_content
+        and "runner alone atomically materializes" in profile_content
+        and "zero-command budget" in profile_content
+    )
+    add_check(
+        checks,
+        "prepared-fast-structured-writer-default",
+        "pass" if structured_writer_default else "warn",
+        "Prepared-fast writer is read-only and runner-materialized by default."
+        if structured_writer_default else "Prepared-fast structured writer activation is incomplete.",
+        [rel(exec_runner,root),rel(prepared_writer_profile,root)],
+    )
+    if not structured_writer_default:
+        add_finding(
+            findings,
+            "prepared-fast-structured-writer-not-default",
+            "warning",
+            "orchestration",
+            "Prepared-fast writer still requires workspace interaction",
+            "The simple-field-property route should return a structured draft from a read-only stage and let the runner materialize it.",
+            ["Structured default constant, zero-command profile, or runner-owned materialization rule is missing."],
+            "Restore the structured writer default or explicitly document and measure a replacement optimization.",
+            [rel(exec_runner,root),rel(prepared_writer_profile,root)],
         )
 
     searchable=[txt(p) for p in [root/"AGENTS.md",root/"skills"/"README.md"] if p.exists()]

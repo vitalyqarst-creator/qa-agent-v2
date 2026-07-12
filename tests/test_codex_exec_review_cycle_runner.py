@@ -266,6 +266,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         stderr: str = "",
         timed_out: bool = False,
         launch_error: bool = False,
+        command_count: int = 0,
+        command_budget_exceeded: bool = False,
     ):
         return runner_module.ProcessResult(
             exit_code=exit_code,
@@ -273,6 +275,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             stderr=stderr,
             timed_out=timed_out,
             launch_error=launch_error,
+            command_count=command_count,
+            command_budget_exceeded=command_budget_exceeded,
             duration_seconds=0.25,
         )
 
@@ -404,6 +408,39 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 ),
                 stderr=stderr,
                 timed_out=timed_out,
+            )
+
+        return step
+
+    def structured_writer_step(
+        self,
+        *,
+        status: str = "draft-ready",
+        draft_text: str | None = None,
+        blocking_reasons=(),
+        payload_override=None,
+        command_count: int = 0,
+        command_budget_exceeded: bool = False,
+    ):
+        def step(_request):
+            payload = payload_override or {
+                "contract_version": 1,
+                "status": status,
+                "draft_markdown": (
+                    draft_text
+                    or "# Test cases\n\n## TC-DEMO-001\n\n**Traceability:** ATOM-001\n\nDraft body.\n"
+                )
+                if status == "draft-ready"
+                else "",
+                "blocking_reasons": list(blocking_reasons),
+            }
+            return self.process_result(
+                stdout=self.json_event(
+                    json.dumps(payload, ensure_ascii=False),
+                    session_id="writer-session",
+                ),
+                command_count=command_count,
+                command_budget_exceeded=command_budget_exceeded,
             )
 
         return step
@@ -542,7 +579,12 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         return package_root / "stage-package.json"
 
     def make_prepared_runner(
-        self, executor, package_path: Path, *, promotion_contract_path: Path | None = None
+        self,
+        executor,
+        package_path: Path,
+        *,
+        promotion_contract_path: Path | None = None,
+        writer_mode: str = "workspace",
     ):
         return runner_module.CodexExecReviewCycleRunner(
             repo_root=self.repo_root,
@@ -553,6 +595,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             handoff_files=[],
             prepared_package_path=package_path,
             promotion_contract_path=promotion_contract_path,
+            prepared_fast_writer_mode=writer_mode,
             command_config=runner_module.ExecCommandConfig(
                 executable="codex-test",
                 sandbox_flag="--sandbox-contract",
@@ -616,6 +659,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             runner_module.CodexExecReviewCycleRunner.__dataclass_fields__[
                 "writer_first_artifact_deadline_seconds"
             ].default,
+        )
+        self.assertEqual(
+            "structured",
+            parser.get_default("prepared_fast_writer_mode"),
         )
 
     def test_prepared_writer_uses_embedded_runtime_limits_not_standard_defaults(self) -> None:
@@ -710,6 +757,143 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("accepted-not-promoted", result.status)
         self.assertTrue(self.draft_path.is_file())
         self.assertTrue((self.writer_attempt / "runner-input" / "draft-seed.md").is_file())
+
+    def test_prepared_structured_writer_returns_draft_without_workspace_write(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.structured_writer_step(),
+            self.reviewer_step(decision="accepted"),
+        )
+
+        result = self.make_prepared_runner(
+            executor,
+            package_path,
+            writer_mode="structured",
+        ).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertTrue(self.draft_path.is_file())
+        writer_request = executor.requests[0]
+        self.assertEqual(0, writer_request.command_budget)
+        self.assertIsNone(writer_request.progress_path)
+        self.assertIsNone(writer_request.first_artifact_deadline_seconds)
+        self.assertIn("reviewer-read-only", writer_request.command)
+        self.assertNotIn("writer-workspace-write", writer_request.command)
+        self.assertIn("--output-schema-contract", writer_request.command)
+        schema_path = Path(
+            writer_request.command[
+                writer_request.command.index("--output-schema-contract") + 1
+            ]
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        self.assertNotIn("oneOf", schema)
+        self.assertEqual(
+            ["draft-ready", "blocked-input"],
+            schema["properties"]["status"]["enum"],
+        )
+        manifest = json.loads(
+            (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("read_only", manifest["sandbox_policy"])
+        self.assertEqual([], manifest["allowed_write_roots"])
+        draft_output = next(
+            item for item in manifest["expected_outputs"] if item["kind"] == "test-case-draft"
+        )
+        self.assertEqual("runner", draft_output["producer"])
+        events = (self.cycle_dir / "runner-events.ndjson").read_text(encoding="utf-8")
+        self.assertIn("structured_writer_draft_materialized", events)
+
+    def test_prepared_structured_writer_can_return_blocked_input(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.structured_writer_step(
+                status="blocked-input",
+                blocking_reasons=("ATOM-001 has insufficient inline evidence",),
+            )
+        )
+
+        result = self.make_prepared_runner(
+            executor,
+            package_path,
+            writer_mode="structured",
+        ).run()
+
+        self.assertEqual("blocked-input", result.status)
+        self.assertFalse(self.draft_path.exists())
+        self.assertEqual(1, len(executor.requests))
+
+    def test_prepared_structured_writer_rejects_invalid_contract(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.structured_writer_step(
+                payload_override={
+                    "contract_version": 1,
+                    "status": "draft-ready",
+                    "draft_markdown": "# Cases",
+                    "blocking_reasons": [],
+                    "output_path": "fts/demo-ft/test-cases/unsafe.md",
+                }
+            )
+        )
+
+        result = self.make_prepared_runner(
+            executor,
+            package_path,
+            writer_mode="structured",
+        ).run()
+
+        self.assertEqual("blocked-invalid-output", result.status)
+        self.assertFalse(self.draft_path.exists())
+        self.assertFalse(self.final_path.exists())
+
+    def test_prepared_structured_writer_stops_on_any_command(self) -> None:
+        package_path = self.build_prepared_package()
+        executor = ScriptedExecutor(
+            self.structured_writer_step(
+                command_count=1,
+                command_budget_exceeded=True,
+            )
+        )
+
+        result = self.make_prepared_runner(
+            executor,
+            package_path,
+            writer_mode="structured",
+        ).run()
+
+        self.assertEqual("blocked-command-budget", result.status)
+        self.assertFalse(self.draft_path.exists())
+        self.assertEqual(1, len(executor.requests))
+
+    def test_prepared_structured_writer_rejects_file_change_event(self) -> None:
+        package_path = self.build_prepared_package()
+
+        def file_changing_writer(_request):
+            payload = {
+                "contract_version": 1,
+                "status": "draft-ready",
+                "draft_markdown": "# Cases\n\n## TC-DEMO-001\n\n**Traceability:** ATOM-001\n",
+                "blocking_reasons": [],
+            }
+            stdout = self.json_event(
+                json.dumps(payload),
+                session_id="writer-session",
+            )
+            stdout += json.dumps(
+                {"type": "item.completed", "item": {"type": "file_change"}}
+            ) + "\n"
+            return self.process_result(stdout=stdout)
+
+        executor = ScriptedExecutor(file_changing_writer)
+        result = self.make_prepared_runner(
+            executor,
+            package_path,
+            writer_mode="structured",
+        ).run()
+
+        self.assertEqual("blocked-forbidden-workspace-change", result.status)
+        self.assertFalse(self.draft_path.exists())
+        self.assertEqual(1, len(executor.requests))
 
     def test_prepared_reviewer_prompt_budget_blocks_oversized_inline_handoff(self) -> None:
         package_path = self.build_prepared_package()

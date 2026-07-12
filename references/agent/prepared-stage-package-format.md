@@ -87,13 +87,13 @@ Do not copy whole DOCX/PDF documents, unrelated sections, historical reports or 
 This is a short operational contract. It states role, scenario, allowed inputs, output path, sandbox, timeout, command budget, idle timeout and fallback rules. `simple-field-property` uses `writer.session_prepared_initial_draft`; `standard-required` uses `writer.session_initial_draft`. It must require the stage to:
 
 1. use the prepared projection without rerunning source locator, scope analyzer or full source parity; fast packages use the compact fast runtime profile, while standard packages load the full standard instruction scenario;
-2. write a structurally complete minimum output before optional refinement;
-3. keep scratch and outputs inside the attempt root;
+2. for structured fast mode, return a complete schema-constrained draft for runner-owned materialization; standard and explicit legacy workspace modes write only inside the attempt root;
+3. use `read_only` with command budget `0` for structured fast mode and `workspace_write` only for standard or explicit legacy execution;
 4. access a registered full source only for one named obligation/source locator when package evidence is insufficient;
 5. record a `targeted_source_fallback` event with reason, source path and locator;
 6. stop as `blocked` rather than invent evidence.
 
-Prepared writer output is absent at stage start. `runner-input/draft-seed.md` is a template, not an output placeholder. The first mutation must create output (`Add File` or equivalent); update-only patch is invalid.
+Prepared writer output is absent at stage start. `runner-input/draft-seed.md` is a template, not an output placeholder. In structured fast mode the writer does not mutate it or create output; the runner validates the JSON contract and atomically materializes the draft. The first-mutation rule applies only to explicit legacy workspace mode.
 
 ## Prototype Budgets
 
@@ -103,11 +103,11 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 | --- | ---: | ---: |
 | package artifact bytes | 512000 | 512000 |
 | hard timeout seconds | 180 | 90 |
-| idle timeout seconds | 60 | disabled; hard deadline applies |
-| command executions | 12 | 1 |
-| first meaningful draft deadline seconds | 120 (experimental) | n/a |
+| idle timeout seconds | disabled; hard deadline applies | disabled; hard deadline applies |
+| command executions | 0 | 1 |
+| first meaningful draft deadline seconds | n/a | n/a |
 
-Before the first meaningful draft write, the writer is governed by the experimental `120 s` first-artifact deadline rather than the post-write idle timeout. The separate writer hard timeout remains `180 s`; after a meaningful write, draft changes and JSONL events refresh the `60 s` idle clock. Exceeding a hard technical budget produces `blocked-package-budget`, `blocked-command-budget`, `blocked-first-artifact-deadline`, `blocked-idle-timeout` or `blocked-timeout`. Increasing a budget is an explicit experiment decision, not automatic recovery.
+Structured fast writer and reviewer are bounded by hard terminal deadlines because their first semantic output may be the final schema-constrained object. Any writer command produces `blocked-command-budget`; timeout or malformed/partial JSON cannot be treated as progress. The explicit legacy workspace mode retains first-artifact and idle budgets. Increasing a budget is an explicit experiment decision, not automatic recovery.
 
 ## Fast Path And Fallback
 
@@ -116,7 +116,7 @@ The runner verifies the four package files and embeds a compact projection into 
 ## Recovery And Replay
 
 - A package is bound to one exact cycle, writer attempt root and output path. It is never replayed against another attempt.
-- If writer execution is interrupted after a meaningful draft exists, the runner may continue only when the structural, seed, obligation and evidence-access gates all pass; the stage is recorded as `completed-with-progress`.
+- Structured writer interruption never yields progress because the runner materializes only a complete valid contract. Explicit legacy workspace execution may continue after interruption only when the structural, seed, obligation and evidence-access gates all pass; that stage is recorded as `completed-with-progress`.
 - Missing/invalid draft, package drift, validator failure or evidence-access failure stops the cycle. Recovery creates a new cycle and recompiles a new target-bound package.
 - Reviewer timeout, idle timeout or command-budget interruption never yields a semantic verdict. Partial reviewer output is discarded and recovery starts a new immutable cycle with fresh writer/reviewer sessions.
 - Re-running a terminal or blocked cycle directory is rejected before LLM launch; existing state and evidence remain unchanged.
@@ -135,7 +135,7 @@ For prepared reviewer turns, the output schema binds every allowed `obligation_i
 
 Before writer output can reach reviewer:
 
-- required output exists under the attempt root;
+- required runner-materialized output exists under the attempt root;
 - draft differs from the runner-owned seed and contains no seed sentinel/placeholders;
 - structural validator passes;
 - every testable obligation is referenced by at least one `TC-*`;
@@ -143,7 +143,7 @@ Before writer output can reach reviewer:
 - `gap` and `unclear` obligations are not represented as executable coverage;
 - source/package/input hashes remain unchanged;
 - no forbidden evidence root was used;
-- a stage may read its exact runner-declared current `stage-output` root for local self-checks; this allowance must not extend to the attempt's `runner-output`, sibling attempts, historical cycles or any other part of a forbidden evidence root, and path traversal must remain blocked;
+- structured fast writer is read-only and performs no workspace reads; explicit legacy workspace mode may read only its exact runner-declared current `stage-output` root for local self-checks;
 - JSONL command evidence contains no broad repository scan or registered full-source access without a prior exact `targeted_source_fallback` authorization;
 - command, idle and hard-time budgets were respected or the explicit timeout-with-progress policy passed all deterministic gates.
 

@@ -14,7 +14,7 @@ The existing SDK runner remains on the v1 stage-updated-state contract until a d
 
 - `cycle-state.yaml`, session maps, runner events, snapshots and promotion receipts are runner-owned.
 - A v2 stage must not edit runner-owned orchestration state.
-- Writer stages may write only declared stage-produced outputs under an allowed attempt root.
+- Workspace writer stages may write only declared stage-produced outputs under an allowed attempt root. A structured prepared writer is read-only and returns a schema-constrained draft contract that the runner materializes.
 - Reviewer stages are read-only; the runner persists their findings, stream captures and status artifacts.
 - Production `test-cases/` is always a forbidden write root for a stage.
 - A stage returns a semantic outcome; the runner validates it and applies an allowlisted transition.
@@ -52,9 +52,9 @@ An attempt must not reuse runner-owned outputs from an earlier attempt. `StageAt
 
 The schema is strict. Unknown fields, absolute/traversing paths, duplicate paths, overlapping input/output paths, invalid hashes, role/sandbox mismatches and digest mismatches are blocking contract errors. It intentionally has no previous-thread or resume-context field: each LLM stage must receive a fresh session.
 
-Writer stage-produced outputs must stay under both `attempt_root` and an allowed write root. Reviewer manifests declare no allowed write roots and no stage-produced files. All expected outputs, including runner-produced captures/status, stay under the attempt root. The canonical test-case path must be under a forbidden write root.
+Writer stage-produced outputs must stay under both `attempt_root` and an allowed write root. Read-only writer and reviewer manifests declare no allowed write roots and no stage-produced files; their outputs are persisted by the runner. All expected outputs, including runner-produced captures/status, stay under the attempt root. The canonical test-case path must be under a forbidden write root.
 
-Prepared writer attempts may include a runner-owned draft seed under `runner-input/`. The seed is an immutable template artifact outside allowed write roots; it is not pre-created at the declared stage output path. The output file is absent at stage start and remains stage-owned, so the writer must create it on the first file write rather than issue an update-only patch. A non-blocked result requires a distinct draft, no seed sentinels, a recorded first meaningful write, and the normal structure/obligation gates.
+Prepared writer attempts may include a runner-owned draft seed under `runner-input/`. In the default structured fast mode, the writer uses a read-only sandbox and zero-command budget, returns `contract_version`, `status`, `draft_markdown` and `blocking_reasons`, and never chooses an output path. The runner validates the exact contract, atomically materializes the declared draft and applies the normal seed, structure and obligation gates. Malformed, partial, timed-out or command-using results block without workspace fallback. The legacy workspace mode remains explicit and keeps the first-write rules for recovery experiments.
 
 Prepared obligation gate version `2` scopes traceability to Markdown TC sections. A TC ends at the next `TC-*` heading or the next heading of the same/higher level; nested headings remain inside the case and fenced code blocks are ignored. Set-level coverage gaps and other sections after the last TC must not be attributed to that TC. Bulleted and unbulleted bold traceability fields are equivalent inside the scoped case.
 
@@ -78,9 +78,9 @@ Allowed outcomes:
 - writer: `draft-ready`, `blocked`;
 - reviewer: `accepted`, `changes-required`, `blocked`.
 
-An eligible prepared reviewer returns structured review contract version `2`: the exact reviewed draft SHA-256, one verdict for every supplied atomic obligation, referenced `TC-*`, structured findings and a summary. The runner rejects missing/duplicate/unknown atoms, unknown test-case ids, hash mismatch, verdicts incompatible with `coverage_status`, blocking verdicts without an `error` finding, and `accepted` with an error or incomplete obligation result. The runner, not the read-only reviewer, renders `findings.md`. Standard reviewer scenarios retain their existing compatibility contract.
+An eligible prepared writer returns structured writer contract version `1`: `draft-ready` requires non-empty Markdown and no blocking reasons; `blocked-input` requires an empty draft and at least one reason. An eligible prepared reviewer returns structured review contract version `2`: the exact reviewed draft SHA-256, one verdict for every supplied atomic obligation, referenced `TC-*`, structured findings and a summary. The runner rejects missing/duplicate/unknown atoms, unknown test-case ids, hash mismatch, verdicts incompatible with `coverage_status`, blocking verdicts without an `error` finding, and `accepted` with an error or incomplete obligation result. The runner, not either read-only stage, persists draft/findings artifacts. Standard scenarios retain their compatibility contracts.
 
-The API response-format schema intentionally uses only the verified transport-compatible subset and does not rely on `uniqueItems`. Array uniqueness and all semantic cross-field invariants remain mandatory runner-side checks after transport parsing; removing an unsupported transport keyword must not weaken sign-off integrity.
+The API response-format schemas intentionally use only the verified transport-compatible subset and do not rely on root `oneOf` or `uniqueItems`. Array uniqueness and all semantic cross-field invariants remain mandatory runner-side checks after transport parsing; removing an unsupported transport keyword must not weaken sign-off integrity.
 
 A stage must never return `signed-off`. Required outputs must exist for non-blocked results, undeclared outputs are rejected, output kinds must match the manifest, and a backend session id must not have been used by an earlier stage.
 

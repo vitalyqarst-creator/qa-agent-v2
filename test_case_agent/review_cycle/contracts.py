@@ -11,7 +11,10 @@ from typing import Any, Iterable, Mapping, Sequence
 
 CONTRACT_VERSION = 2
 ROLES = {"writer", "reviewer"}
-SANDBOX_BY_ROLE = {"writer": "workspace_write", "reviewer": "read_only"}
+SANDBOX_BY_ROLE = {
+    "writer": {"workspace_write", "read_only"},
+    "reviewer": {"read_only"},
+}
 RESULT_STATUS_BY_OUTCOME = {
     "draft-ready": "completed",
     "accepted": "completed",
@@ -282,9 +285,13 @@ class StageInputManifest:
             _require_identifier(value, field_name)
         if not isinstance(self.role, str) or self.role not in ROLES:
             raise ContractValidationError(f"role must be one of {sorted(ROLES)}")
-        if not isinstance(self.sandbox_policy, str) or self.sandbox_policy != SANDBOX_BY_ROLE[self.role]:
+        if (
+            not isinstance(self.sandbox_policy, str)
+            or self.sandbox_policy not in SANDBOX_BY_ROLE[self.role]
+        ):
             raise ContractValidationError(
-                f"{self.role} stages require sandbox_policy={SANDBOX_BY_ROLE[self.role]}"
+                f"{self.role} stages require sandbox_policy in "
+                f"{sorted(SANDBOX_BY_ROLE[self.role])}"
             )
         if (
             isinstance(self.semantic_round, bool)
@@ -358,11 +365,16 @@ class StageInputManifest:
                     raise ContractValidationError("allowed and forbidden write roots must not overlap")
 
         stage_outputs = [output for output in self.expected_outputs if output.producer == "stage"]
-        if self.role == "reviewer":
+        runner_owned_stage = self.sandbox_policy == "read_only"
+        if self.role == "reviewer" or runner_owned_stage:
             if self.allowed_write_roots:
-                raise ContractValidationError("reviewer stages must not declare allowed write roots")
+                raise ContractValidationError(
+                    "read-only stages must not declare allowed write roots"
+                )
             if stage_outputs:
-                raise ContractValidationError("reviewer outputs must be persisted by the runner")
+                raise ContractValidationError(
+                    "read-only stage outputs must be persisted by the runner"
+                )
         else:
             if not self.allowed_write_roots:
                 raise ContractValidationError("writer stages must declare an allowed work output root")

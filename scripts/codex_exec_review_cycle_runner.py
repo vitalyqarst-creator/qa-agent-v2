@@ -74,6 +74,9 @@ REVIEW_FINDING_CATEGORIES = {
 }
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
+PREPARED_FAST_WRITER_MODES = {"structured", "workspace"}
+DEFAULT_PREPARED_FAST_WRITER_MODE = "structured"
+MAX_STRUCTURED_WRITER_DRAFT_BYTES = 128 * 1024
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
 DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES = 512 * 1024
 DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES = 768 * 1024
@@ -427,8 +430,11 @@ class ExecCommandConfig:
         cwd: Path,
         last_message_path: Path | None = None,
         output_schema_path: Path | None = None,
+        sandbox_override: str | None = None,
     ) -> tuple[str, ...]:
-        sandbox = self.writer_sandbox if role == "writer" else self.reviewer_sandbox
+        sandbox = sandbox_override or (
+            self.writer_sandbox if role == "writer" else self.reviewer_sandbox
+        )
         command = [
             self.executable,
             "exec",
@@ -603,6 +609,14 @@ class ReviewContract:
 
 
 @dataclass(frozen=True)
+class WriterContract:
+    status: str
+    draft_markdown: str
+    blocking_reasons: tuple[str, ...] = ()
+    contract_version: int = 1
+
+
+@dataclass(frozen=True)
 class CycleResult:
     status: str
     final_promoted: bool
@@ -640,6 +654,7 @@ class CodexExecReviewCycleRunner:
     writer_command_budget: int = DEFAULT_STANDARD_WRITER_COMMAND_BUDGET
     reviewer_command_budget: int = DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET
     prepared_reviewer_command_budget: int = 1
+    prepared_fast_writer_mode: str = DEFAULT_PREPARED_FAST_WRITER_MODE
     writer_first_artifact_deadline_seconds: int = (
         DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS
     )
@@ -759,6 +774,14 @@ class CodexExecReviewCycleRunner:
         return self.attempt_root(REVIEWER_STAGE) / "review-contract.schema.json"
 
     @property
+    def writer_schema_path(self) -> Path:
+        return self.attempt_root(WRITER_STAGE) / "writer-contract.schema.json"
+
+    @property
+    def writer_result_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "writer-result.json"
+
+    @property
     def reviewer_evidence_access_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "evidence-access-report.json"
 
@@ -793,6 +816,9 @@ class CodexExecReviewCycleRunner:
             self._prepared_package is not None
             and self._prepared_package.execution_profile == STANDARD_EXECUTION_PROFILE
         )
+
+    def _uses_structured_prepared_writer(self) -> bool:
+        return self._is_prepared_fast() and self.prepared_fast_writer_mode == "structured"
 
     def _standard_instruction_paths(self, role: str) -> tuple[Path, ...]:
         cached = self._standard_instruction_contexts.get(role)
@@ -880,6 +906,11 @@ class CodexExecReviewCycleRunner:
 
     def validate_configuration(self) -> None:
         self.command_config.validate()
+        if self.prepared_fast_writer_mode not in PREPARED_FAST_WRITER_MODES:
+            raise RunnerError(
+                "prepared_fast_writer_mode must be one of "
+                f"{sorted(PREPARED_FAST_WRITER_MODES)}"
+            )
         if self.promote_final and self.promotion_dry_run:
             raise RunnerError("promotion and promotion dry-run are mutually exclusive")
         if self.promotion_dry_run and self.allow_overwrite_final:
@@ -1298,11 +1329,12 @@ class CodexExecReviewCycleRunner:
                 f"role={role}, primary_context_bytes={total_bytes}, limit_bytes={limit_bytes}"
             )
 
-    def _prepared_writer_payload(self) -> str:
+    def _prepared_writer_payload(self, *, structured: bool = False) -> str:
         if self._prepared_package is None:
             raise RunnerError("Prepared package is not loaded")
         if not self.prepared_writer_profile_path.is_file():
             raise RunnerError("Prepared writer runtime profile is missing")
+        profile = self.prepared_writer_profile_path.read_text(encoding="utf-8").strip()
         metadata = {
             "package_version": self._prepared_package.package_version,
             "package_id": self._prepared_package.package_id,
@@ -1313,19 +1345,26 @@ class CodexExecReviewCycleRunner:
             "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
             "fallback_policy": self._prepared_package.fallback_policy,
         }
-        return "\n".join(
-            [
-                "<!-- PREPARED-STAGE-PAYLOAD:BEGIN -->",
-                "## Verified package metadata",
-                "",
-                "```json",
-                json.dumps(metadata, ensure_ascii=False, indent=2),
-                "```",
-                "",
-                self.prepared_writer_profile_path.read_text(encoding="utf-8").strip(),
-                "",
+        lines = [
+            "<!-- PREPARED-STAGE-PAYLOAD:BEGIN -->",
+            "## Verified package metadata",
+            "",
+            "```json",
+            json.dumps(metadata, ensure_ascii=False, indent=2),
+            "```",
+            "",
+            profile,
+            "",
+        ]
+        if not structured:
+            lines.extend(
+                [
                 self._prepared_artifact("stage-instructions").read_text(encoding="utf-8").strip(),
                 "",
+                ]
+            )
+        lines.extend(
+            [
                 self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
                 "",
                 "## Atomic obligations",
@@ -1336,9 +1375,25 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Draft seed template (not an existing output file)",
                 "",
-                "The declared output file does not exist at stage start. Create it as the first file write.",
-                "Use `Add File` or an equivalent atomic create; do not use an update-only patch against the absent output.",
-                "Use this inline seed only as a template and remove every seed sentinel in the created draft.",
+            ]
+        )
+        if structured:
+            lines.extend(
+                [
+                    "Return a complete draft based on this template; the runner writes it after validating the JSON contract.",
+                    "Do not copy seed sentinels or placeholders into draft_markdown.",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "The declared output file does not exist at stage start. Create it as the first file write.",
+                    "Use `Add File` or an equivalent atomic create; do not use an update-only patch against the absent output.",
+                    "Use this inline seed only as a template and remove every seed sentinel in the created draft.",
+                ]
+            )
+        lines.extend(
+            [
                 "",
                 "```markdown",
                 self._draft_seed_text().strip(),
@@ -1346,6 +1401,7 @@ class CodexExecReviewCycleRunner:
                 "<!-- PREPARED-STAGE-PAYLOAD:END -->",
             ]
         )
+        return "\n".join(lines)
 
     def _draft_seed_text(self) -> str:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
@@ -1568,8 +1624,12 @@ class CodexExecReviewCycleRunner:
         if role == "writer":
             if self._is_prepared_fast():
                 timeout = self._prepared_instruction_int("hard_timeout_seconds")
-                idle_timeout = self._prepared_instruction_int("idle_timeout_seconds")
-                command_budget = self._prepared_instruction_int("command_budget")
+                if self._uses_structured_prepared_writer():
+                    idle_timeout = None
+                    command_budget = 0
+                else:
+                    idle_timeout = self._prepared_instruction_int("idle_timeout_seconds")
+                    command_budget = self._prepared_instruction_int("command_budget")
             else:
                 timeout = self.writer_timeout_seconds or self.timeout_seconds
                 idle_timeout = self.writer_idle_timeout_seconds
@@ -1605,7 +1665,11 @@ class CodexExecReviewCycleRunner:
             stage=WRITER_STAGE,
             role="writer",
             prompt=writer_prompt,
-            last_message_path=self.stage_output_dir(WRITER_STAGE) / "last-message.txt",
+            last_message_path=(
+                self.writer_result_path
+                if self._uses_structured_prepared_writer()
+                else self.stage_output_dir(WRITER_STAGE) / "last-message.txt"
+            ),
         )
         if self._prepared_package is not None:
             evidence_access = validate_evidence_access(
@@ -1665,6 +1729,77 @@ class CodexExecReviewCycleRunner:
                 status="blocked-process-exit",
                 reasons=[f"writer process exited with code {writer_result.exit_code}"],
             )
+        if self._uses_structured_prepared_writer():
+            if file_change_count_from_events(writer_result.stdout):
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-forbidden-workspace-change",
+                    reasons=[
+                        "read-only structured writer emitted a file-change event"
+                    ],
+                )
+            if (
+                writer_result.timed_out
+                or writer_result.idle_timed_out
+                or writer_result.command_budget_exceeded
+                or writer_result.first_artifact_deadline_exceeded
+            ):
+                reason = (
+                    "structured writer attempted a command"
+                    if writer_result.command_budget_exceeded
+                    else "structured writer did not return a complete contract within its runtime budget"
+                )
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status=(
+                        "blocked-command-budget"
+                        if writer_result.command_budget_exceeded
+                        else "blocked-timeout"
+                    ),
+                    reasons=[reason],
+                )
+            writer_message = self._reviewer_message(writer_result.stdout)
+            if not writer_message.strip():
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-missing-output",
+                    reasons=["structured writer completed without a final JSON contract"],
+                )
+            try:
+                writer_contract = parse_prepared_writer_contract(writer_message)
+            except RunnerError as exc:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-invalid-output",
+                    reasons=[str(exc)],
+                )
+            if writer_contract.status == "blocked-input":
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-input",
+                    reasons=list(writer_contract.blocking_reasons),
+                )
+            self._materialize_structured_writer_draft(writer_contract.draft_markdown)
         if not self.draft_path.is_file():
             if writer_result.command_budget_exceeded:
                 status = "blocked-command-budget"
@@ -2193,6 +2328,13 @@ class CodexExecReviewCycleRunner:
                     "writer_context_budget": self._context_budget_reports.get(
                         WRITER_STAGE, {}
                     ),
+                    "prepared_fast_writer_mode": self.prepared_fast_writer_mode,
+                    "writer_sandbox_policy": (
+                        "read_only"
+                        if self._uses_structured_prepared_writer()
+                        else "workspace_write"
+                    ),
+                    "writer_command_budget": self._stage_limits("writer")[2],
                 }
             )
         return report
@@ -2242,7 +2384,46 @@ class CodexExecReviewCycleRunner:
             blocking_reasons=reasons,
         )
 
+    def _materialize_structured_writer_draft(self, draft_markdown: str) -> None:
+        self.draft_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.draft_path.with_suffix(self.draft_path.suffix + ".tmp")
+        if temporary.exists():
+            raise RunnerError(
+                "structured writer temporary draft already exists; recovery must be explicit"
+            )
+        try:
+            temporary.write_text(draft_markdown.rstrip() + "\n", encoding="utf-8")
+            temporary.replace(self.draft_path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        append_event(
+            self.cycle_dir,
+            "structured_writer_draft_materialized",
+            draft=relative_path(self.draft_path, self.repo_root),
+            draft_bytes=self.draft_path.stat().st_size,
+            draft_sha256=sha256_file(self.draft_path),
+        )
+
     def _writer_prompt(self) -> str:
+        if self._uses_structured_prepared_writer() and self.prepared_package_path is not None:
+            return "\n".join(
+                [
+                    "# Codex exec prepared writer structured fast path",
+                    "",
+                    "The upstream package already applied the full source, scope and writer policy.",
+                    "Use only the embedded Prepared Writer Runtime Profile below; do not load the full ft-test-case-writer skill or reread package/project reference files.",
+                    "This stage is read-only. Do not call shell or file tools and do not create or modify workspace files.",
+                    "Return the complete unsigned draft inside the schema-constrained final JSON object. The runner alone materializes and validates draft.md.",
+                    "Do not read existing/generated test cases, earlier cycle artifacts or production test-cases as evidence.",
+                    "If the embedded evidence is insufficient, return blocked-input with a precise reason. Do not open a full source in this mode.",
+                    "",
+                    self._prepared_writer_payload(structured=True),
+                    "",
+                    "Return exactly one JSON object and no commentary outside it.",
+                    "Use status=draft-ready with a complete draft_markdown and empty blocking_reasons, or status=blocked-input with empty draft_markdown and at least one blocking reason.",
+                    "",
+                ]
+            )
         if self._is_prepared_fast() and self.prepared_package_path is not None:
             return "\n".join(
                 [
@@ -2432,6 +2613,8 @@ class CodexExecReviewCycleRunner:
                 self.draft_seed_path.parent.mkdir(parents=True, exist_ok=True)
                 self.draft_seed_path.write_text(self._draft_seed_text(), encoding="utf-8")
                 self._draft_seed_sha256 = sha256_file(self.draft_seed_path)
+            if self._uses_structured_prepared_writer():
+                write_json(self.writer_schema_path, self._writer_contract_schema())
         else:
             write_json(self.reviewer_schema_path, self._review_contract_schema())
         manifest = self._build_stage_manifest(stage=stage, role=role, prompt_path=prompt_path)
@@ -2449,7 +2632,18 @@ class CodexExecReviewCycleRunner:
             role=role,
             cwd=self.repo_root,
             last_message_path=last_message_path,
-            output_schema_path=(self.reviewer_schema_path if role == "reviewer" else None),
+            output_schema_path=(
+                self.reviewer_schema_path
+                if role == "reviewer"
+                else self.writer_schema_path
+                if self._uses_structured_prepared_writer()
+                else None
+            ),
+            sandbox_override=(
+                self.command_config.reviewer_sandbox
+                if role == "writer" and self._uses_structured_prepared_writer()
+                else None
+            ),
         )
         timeout_seconds, idle_timeout_seconds, command_budget = self._stage_limits(role)
         request = ProcessRequest(
@@ -2463,11 +2657,19 @@ class CodexExecReviewCycleRunner:
             command_budget=command_budget,
             stdout_path=stdout_path,
             stderr_path=stderr_path,
-            progress_path=(self.draft_path if role == "writer" and self._prepared_package else None),
+            progress_path=(
+                self.draft_path
+                if role == "writer"
+                and self._prepared_package
+                and not self._uses_structured_prepared_writer()
+                else None
+            ),
             progress_forbidden_marker=(SEED_MARKER if role == "writer" else ""),
             first_artifact_deadline_seconds=(
                 self.writer_first_artifact_deadline_seconds
-                if role == "writer" and self._prepared_package
+                if role == "writer"
+                and self._prepared_package
+                and not self._uses_structured_prepared_writer()
                 else None
             ),
         )
@@ -2485,7 +2687,9 @@ class CodexExecReviewCycleRunner:
             command_budget=command_budget,
             first_artifact_deadline_seconds=(
                 self.writer_first_artifact_deadline_seconds
-                if role == "writer" and self._prepared_package
+                if role == "writer"
+                and self._prepared_package
+                and not self._uses_structured_prepared_writer()
                 else None
             ),
         )
@@ -2600,6 +2804,8 @@ class CodexExecReviewCycleRunner:
                 handoff_paths.append(self._prepared_artifact("stage-instructions"))
             if role == "writer":
                 handoff_paths.append(self.draft_seed_path)
+                if self._uses_structured_prepared_writer():
+                    handoff_paths.append(self.writer_schema_path)
         else:
             instruction_paths = list(self._standard_instruction_paths(role))
             source_paths = list(self.source_files)
@@ -2611,7 +2817,9 @@ class CodexExecReviewCycleRunner:
                     ExpectedOutput(
                         path=relative_path(self.draft_path, self.repo_root),
                         kind="test-case-draft",
-                        producer="stage",
+                        producer=(
+                            "runner" if self._uses_structured_prepared_writer() else "stage"
+                        ),
                     ),
                     ExpectedOutput(
                         path=relative_path(self.validator_path, self.repo_root),
@@ -2638,15 +2846,29 @@ class CodexExecReviewCycleRunner:
                     ),
                     ExpectedOutput(
                         path=relative_path(
-                            self.stage_output_dir(stage) / "last-message.txt", self.repo_root
+                            (
+                                self.writer_result_path
+                                if self._uses_structured_prepared_writer()
+                                else self.stage_output_dir(stage) / "last-message.txt"
+                            ),
+                            self.repo_root,
                         ),
-                        kind="last-message",
-                        producer="stage",
+                        kind=(
+                            "writer-result"
+                            if self._uses_structured_prepared_writer()
+                            else "last-message"
+                        ),
+                        producer=(
+                            "runner" if self._uses_structured_prepared_writer() else "stage"
+                        ),
                         required=False,
                     ),
                 ]
             )
-            allowed_write_roots.append(relative_path(self.stage_output_dir(stage), self.repo_root))
+            if not self._uses_structured_prepared_writer():
+                allowed_write_roots.append(
+                    relative_path(self.stage_output_dir(stage), self.repo_root)
+                )
         else:
             handoff_paths.extend((self.draft_path, self.validator_path))
             if self._prepared_package is not None:
@@ -2700,7 +2922,11 @@ class CodexExecReviewCycleRunner:
                 )
             ),
             semantic_round=0,
-            sandbox_policy="workspace_write" if role == "writer" else "read_only",
+            sandbox_policy=(
+                "read_only"
+                if role == "reviewer" or self._uses_structured_prepared_writer()
+                else "workspace_write"
+            ),
             timeout_seconds=timeout_seconds,
             attempt_root=relative_path(attempt_root, self.repo_root),
             canonical_test_cases=relative_path(self.final_path, self.repo_root),
@@ -2719,6 +2945,34 @@ class CodexExecReviewCycleRunner:
             allowed_write_roots=allowed_write_roots,
             forbidden_write_roots=[relative_path(self.ft_root / "test-cases", self.repo_root)],
         )
+
+    def _writer_contract_schema(self) -> dict[str, Any]:
+        return {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "object",
+            "additionalProperties": False,
+            "required": [
+                "contract_version",
+                "status",
+                "draft_markdown",
+                "blocking_reasons",
+            ],
+            "properties": {
+                "contract_version": {"type": "integer", "const": 1},
+                "status": {
+                    "type": "string",
+                    "enum": ["draft-ready", "blocked-input"],
+                },
+                "draft_markdown": {
+                    "type": "string",
+                    "maxLength": MAX_STRUCTURED_WRITER_DRAFT_BYTES,
+                },
+                "blocking_reasons": {
+                    "type": "array",
+                    "items": {"type": "string", "minLength": 1},
+                },
+            },
+        }
 
     def _review_contract_schema(
         self,
@@ -3091,6 +3345,21 @@ def backend_session_id_from_events(text: str) -> str:
     return ""
 
 
+def file_change_count_from_events(text: str) -> int:
+    count = 0
+    for raw_line in text.splitlines():
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        item = event.get("item")
+        if isinstance(item, dict) and item.get("type") == "file_change":
+            count += 1
+    return count
+
+
 def usage_from_events(text: str) -> dict[str, int] | None:
     aliases = {
         "input_tokens": ("input_tokens", "prompt_tokens"),
@@ -3145,6 +3414,79 @@ def agent_message_from_event(event: Any) -> str:
         if isinstance(event.get(key), str):
             return event[key]
     return ""
+
+
+def parse_prepared_writer_contract(text: str) -> WriterContract:
+    candidate = text.strip()
+    fenced = re.fullmatch(
+        r"```(?:json)?\s*(\{.*\})\s*```",
+        candidate,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+    if fenced:
+        candidate = fenced.group(1)
+    try:
+        payload = json.loads(candidate)
+    except json.JSONDecodeError as exc:
+        raise RunnerError(
+            f"structured writer final output is not valid JSON: {exc.msg}"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise RunnerError("structured writer final output must be one JSON object")
+    expected = {"contract_version", "status", "draft_markdown", "blocking_reasons"}
+    if set(payload) != expected:
+        missing = sorted(expected - set(payload))
+        unknown = sorted(set(payload) - expected)
+        raise RunnerError(
+            "structured writer final output has invalid fields: "
+            f"missing={missing}, unknown={unknown}"
+        )
+    if payload.get("contract_version") != 1:
+        raise RunnerError("structured writer contract_version must be 1")
+    status = payload.get("status")
+    if status not in {"draft-ready", "blocked-input"}:
+        raise RunnerError(
+            "structured writer status must be draft-ready or blocked-input"
+        )
+    draft_markdown = payload.get("draft_markdown")
+    if not isinstance(draft_markdown, str):
+        raise RunnerError("structured writer draft_markdown must be a string")
+    reasons = payload.get("blocking_reasons")
+    if not isinstance(reasons, list) or any(
+        not isinstance(item, str) or not item.strip() for item in reasons
+    ):
+        raise RunnerError(
+            "structured writer blocking_reasons must be an array of non-empty strings"
+        )
+    normalized_reasons = tuple(item.strip() for item in reasons)
+    if len(normalized_reasons) != len(set(normalized_reasons)):
+        raise RunnerError("structured writer blocking_reasons must not contain duplicates")
+    if status == "draft-ready":
+        if not draft_markdown.strip():
+            raise RunnerError("draft-ready structured writer contract requires draft_markdown")
+        if normalized_reasons:
+            raise RunnerError(
+                "draft-ready structured writer contract requires empty blocking_reasons"
+            )
+        if len(draft_markdown.encode("utf-8")) > MAX_STRUCTURED_WRITER_DRAFT_BYTES:
+            raise RunnerError(
+                "structured writer draft_markdown exceeds the byte budget"
+            )
+    else:
+        if draft_markdown:
+            raise RunnerError(
+                "blocked-input structured writer contract requires empty draft_markdown"
+            )
+        if not normalized_reasons:
+            raise RunnerError(
+                "blocked-input structured writer contract requires blocking_reasons"
+            )
+    return WriterContract(
+        contract_version=1,
+        status=str(status),
+        draft_markdown=draft_markdown,
+        blocking_reasons=normalized_reasons,
+    )
 
 
 def parse_review_contract(text: str) -> ReviewContract:
@@ -3488,6 +3830,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--prepared-reviewer-command-budget", type=int, default=1)
     parser.add_argument(
+        "--prepared-fast-writer-mode",
+        choices=sorted(PREPARED_FAST_WRITER_MODES),
+        default=DEFAULT_PREPARED_FAST_WRITER_MODE,
+    )
+    parser.add_argument(
         "--writer-first-artifact-deadline-seconds",
         type=int,
         default=DEFAULT_STANDARD_WRITER_FIRST_ARTIFACT_DEADLINE_SECONDS,
@@ -3560,6 +3907,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         writer_command_budget=args.writer_command_budget,
         reviewer_command_budget=args.reviewer_command_budget,
         prepared_reviewer_command_budget=args.prepared_reviewer_command_budget,
+        prepared_fast_writer_mode=args.prepared_fast_writer_mode,
         writer_first_artifact_deadline_seconds=args.writer_first_artifact_deadline_seconds,
         prepared_reviewer_prompt_max_bytes=args.prepared_reviewer_prompt_max_bytes,
         prepared_standard_writer_context_max_bytes=(
