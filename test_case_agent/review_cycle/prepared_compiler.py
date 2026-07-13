@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -469,6 +470,40 @@ def _clean_cell(value: str) -> str:
     return value.replace("<br>", "; ").strip()
 
 
+def _parse_dictionary_active_values(value: str, *, dictionary_id: str) -> tuple[str, ...]:
+    """Parse the canonical semicolon-delimited inventory cell exactly once.
+
+    ``_clean_cell`` removes the first and last Markdown backticks from a full
+    cell.  For a canonical cell such as `` `A`; `B` ``, that intentionally
+    leaves ``A`; `B``.  Splitting on the canonical delimiter before trimming
+    only boundary backticks preserves both values without treating the
+    separator punctuation as a value.
+    """
+    raw_parts = re.split(r"\s*;\s*", value.strip())
+    if not value.strip() or not raw_parts or any(not item.strip() for item in raw_parts):
+        raise StageRuntimeError(
+            f"semantic degradation: {dictionary_id} has malformed active values"
+        )
+    parsed: list[str] = []
+    for raw in raw_parts:
+        item = raw.strip()
+        if item.startswith("`"):
+            item = item[1:]
+        if item.endswith("`"):
+            item = item[:-1]
+        item = item.strip()
+        if "`" in item or not item or not any(character.isalnum() for character in item):
+            raise StageRuntimeError(
+                f"semantic degradation: {dictionary_id} has malformed active values"
+            )
+        parsed.append(item)
+    if len(parsed) != len(set(parsed)):
+        raise StageRuntimeError(
+            f"semantic degradation: {dictionary_id} has duplicate active values"
+        )
+    return tuple(parsed)
+
+
 def markdown_tables(path: Path) -> list[list[dict[str, str]]]:
     lines = path.read_text(encoding="utf-8").splitlines()
     tables: list[list[dict[str, str]]] = []
@@ -924,17 +959,19 @@ def compile_workflow_package(
     )
     known_gaps = _gap_sections(gaps_path)
     dictionary_rows: dict[str, dict[str, str]] = {}
+    dictionary_active_values: dict[str, tuple[str, ...]] = {}
     if dictionary_path is not None:
         for row in _table_with(dictionary_path, {"dictionary_id", "active_values"}):
-            if not row["active_values"].strip():
-                raise StageRuntimeError(
-                    f"semantic degradation: {row['dictionary_id']} has no active values"
-                )
             if row["dictionary_id"] in dictionary_rows:
                 raise StageRuntimeError(
                     f"semantic degradation: duplicate dictionary {row['dictionary_id']}"
                 )
             dictionary_rows[row["dictionary_id"]] = row
+            dictionary_active_values[row["dictionary_id"]] = (
+                _parse_dictionary_active_values(
+                    row["active_values"], dictionary_id=row["dictionary_id"]
+                )
+            )
 
     obligations: list[PreparedObligation] = []
     used_gaps: set[str] = set()
@@ -1420,8 +1457,25 @@ def compile_workflow_package(
                 used_dicts.add(child_id)
                 pending_dictionary_ids.append(child_id)
     for dictionary_id in sorted(used_dicts):
+        record = dictionary_rows[dictionary_id]
+        structured_record = {
+            "dictionary_id": dictionary_id,
+            "dictionary_name": record.get("dictionary_name", ""),
+            "source_file": record.get("source_file", ""),
+            "source_location": record.get("source_location", ""),
+            "extraction_status": record.get("extraction_status", ""),
+            "active_values": list(dictionary_active_values[dictionary_id]),
+            "archived_values": record.get("archived_values", ""),
+        }
         evidence_rows.extend(
-            [f"## {dictionary_id}", "", " | ".join(dictionary_rows[dictionary_id].values()), ""]
+            [
+                f"## {dictionary_id}",
+                "",
+                "```json",
+                json.dumps(structured_record, ensure_ascii=False, separators=(",", ":")),
+                "```",
+                "",
+            ]
         )
 
     evidence_text = "\n".join(evidence_rows).rstrip() + "\n"

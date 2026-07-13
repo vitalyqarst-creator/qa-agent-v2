@@ -564,6 +564,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         test_case_count: int = 1,
         first_observable_oracle: str = "The visible result matches the requirement.",
         dictionary_values: tuple[str, ...] = (),
+        structured_dictionary_evidence: bool = False,
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
@@ -573,12 +574,34 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         dictionary_evidence = ""
         if dictionary_values:
             rendered_values = "; ".join(f"`{value}`" for value in dictionary_values)
-            dictionary_evidence = (
-                "\n## DICT-001\n\n"
-                "DICT-001 | Demo dictionary | support/demo.md | demo.gender | "
-                f"extracted | {rendered_values} | none_required | SRC-1 | "
-                "none_required | Test dictionary.\n"
-            )
+            if structured_dictionary_evidence:
+                dictionary_evidence = (
+                    "\n## DICT-001\n\n```json\n"
+                    + json.dumps(
+                        {
+                            "dictionary_id": "DICT-001",
+                            "dictionary_name": "Demo dictionary",
+                            "source_file": "support/demo.md",
+                            "source_location": "demo.gender",
+                            "extraction_status": "extracted",
+                            "active_values": list(dictionary_values),
+                            "archived_values": "none_required",
+                            "used_by_source_properties": "SRC-1",
+                            "gap_id": "none_required",
+                            "notes": "Test dictionary.",
+                        },
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    )
+                    + "\n```\n"
+                )
+            else:
+                dictionary_evidence = (
+                    "\n## DICT-001\n\n"
+                    "DICT-001 | Demo dictionary | support/demo.md | demo.gender | "
+                    f"extracted | {rendered_values} | none_required | SRC-1 | "
+                    "none_required | Test dictionary.\n"
+                )
         self.handoff_path.write_text(
             "# Scope contract\n\nSRC-1: observable requirement.\n"
             + gap_evidence
@@ -735,6 +758,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         standard_writer_mode: str = "structured",
         repair_draft_path: Path | None = None,
         repair_findings_path: Path | None = None,
+        reviewer_rebind_draft_path: Path | None = None,
     ):
         return runner_module.CodexExecReviewCycleRunner(
             repo_root=self.repo_root,
@@ -746,6 +770,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             prepared_package_path=package_path,
             prepared_repair_draft_path=repair_draft_path,
             prepared_repair_findings_path=repair_findings_path,
+            prepared_reviewer_rebind_draft_path=reviewer_rebind_draft_path,
             promotion_contract_path=promotion_contract_path,
             prepared_fast_writer_mode=writer_mode,
             prepared_standard_writer_mode=standard_writer_mode,
@@ -1976,6 +2001,172 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         ):
             runner._verify_repair_inputs()
 
+    def test_reviewer_rebind_skips_writer_llm_and_preserves_test_semantics(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        prior_draft = (
+            self.ft_root
+            / "work"
+            / "review-cycles"
+            / "prior-v8"
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+            / "stage-output"
+            / "draft.md"
+        )
+        prior_draft.parent.mkdir(parents=True)
+        source_text = "# Тест-кейсы\n\n" + "\n\n".join(
+            self.complete_test_case_section(index).replace(
+                "pkg-exec-001", "pkg-exec-v8"
+            )
+            for index in range(1, 4)
+        ).rstrip() + "\n"
+        prior_draft.write_text(source_text, encoding="utf-8")
+        source_sha256 = hashlib.sha256(prior_draft.read_bytes()).hexdigest()
+        executor = ScriptedExecutor(self.prepared_reviewer_step_for_count(3))
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            reviewer_rebind_draft_path=prior_draft,
+        )
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(1, len(executor.requests))
+        self.assertEqual("reviewer", executor.requests[0].role)
+        self.assertFalse((self.writer_attempt / "prompt.md").exists())
+        self.assertFalse((self.writer_attempt / "metrics.json").exists())
+        self.assertEqual(source_sha256, hashlib.sha256(prior_draft.read_bytes()).hexdigest())
+        rebound = self.draft_path.read_text(encoding="utf-8")
+        self.assertNotIn("pkg-exec-v8", rebound)
+        self.assertEqual(3, rebound.count("**package_id:** pkg-exec-001"))
+        report = json.loads(
+            (self.cycle_dir / "reviewer-rebind.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(report["passed"])
+        self.assertTrue(report["deterministic_gates_passed"])
+        self.assertTrue(report["all_test_semantics_preserved"])
+        self.assertFalse(report["writer_llm_started"])
+        self.assertEqual(
+            ["TC-DEMO-001", "TC-DEMO-002", "TC-DEMO-003"],
+            report["metadata_migrated_test_case_ids"],
+        )
+        state = (self.cycle_dir / "cycle-state.yaml").read_text(encoding="utf-8")
+        self.assertIn("writer_stage_status: skipped-reviewer-rebind", state)
+
+    def test_reviewer_rebind_rejects_input_hash_drift(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=2,
+        )
+        prior_draft = (
+            self.ft_root / "work" / "review-cycles" / "prior-v8" / "draft.md"
+        )
+        prior_draft.parent.mkdir(parents=True)
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n"
+            + "\n\n".join(
+                (self.complete_test_case_section(1), self.complete_test_case_section(2))
+            ).rstrip()
+            + "\n",
+            encoding="utf-8",
+        )
+        runner = self.make_prepared_runner(
+            ScriptedExecutor(),
+            package_path,
+            reviewer_rebind_draft_path=prior_draft,
+        )
+        runner.validate_configuration()
+        prior_draft.write_text(
+            prior_draft.read_text(encoding="utf-8") + "<!-- drift -->\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "reviewer rebind source draft changed after preflight",
+        ):
+            runner._verify_reviewer_rebind_input()
+
+    def test_reviewer_rebind_validate_only_starts_no_stage(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=2,
+        )
+        prior_draft = (
+            self.ft_root / "work" / "review-cycles" / "prior-v8" / "draft.md"
+        )
+        prior_draft.parent.mkdir(parents=True)
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n"
+            + "\n\n".join(
+                (self.complete_test_case_section(1), self.complete_test_case_section(2))
+            ).rstrip()
+            + "\n",
+            encoding="utf-8",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            reviewer_rebind_draft_path=prior_draft,
+        )
+
+        report = runner.validate_only_report()
+
+        self.assertEqual("runner.prepared_reviewer_rebind", report["writer_scenario"])
+        self.assertFalse(report["writer_llm_required"])
+        self.assertEqual(0, report["writer_command_budget"])
+        self.assertEqual([], executor.requests)
+        self.assertFalse((self.cycle_dir / "reviewer-rebind.json").exists())
+        self.assertFalse(self.writer_attempt.exists())
+        self.assertFalse(self.reviewer_attempt.exists())
+
+    def test_reviewer_rebind_gate_failure_blocks_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=2,
+        )
+        prior_draft = (
+            self.ft_root / "work" / "review-cycles" / "prior-v8" / "draft.md"
+        )
+        prior_draft.parent.mkdir(parents=True)
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n"
+            + "\n\n".join(
+                (self.complete_test_case_section(1), self.complete_test_case_section(2))
+            ).rstrip()
+            + "\n",
+            encoding="utf-8",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            reviewer_rebind_draft_path=prior_draft,
+        )
+        runner.validator = FakeValidator(passed=False)
+
+        result = runner.run()
+
+        self.assertEqual("blocked-validator", result.status)
+        self.assertEqual([], executor.requests)
+        report = json.loads(
+            (self.cycle_dir / "reviewer-rebind.json").read_text(encoding="utf-8")
+        )
+        self.assertFalse(report["passed"])
+        self.assertFalse(report["deterministic_gates_passed"])
+        self.assertFalse(report["writer_llm_started"])
+        self.assertEqual("blocked-validator", report["status"])
+
     def test_sharded_writer_uses_fresh_sessions_and_merges_before_reviewer(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -2391,6 +2582,7 @@ Draft body.
             execution_profile="standard-required",
             unsupported_dimensions=("dictionary",),
             dictionary_values=("Мужчина", "Женщина"),
+            structured_dictionary_evidence=True,
         )
         runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
         runner.validate_configuration()
@@ -2432,6 +2624,69 @@ Draft body.
         with self.assertRaisesRegex(
             runner_module.RunnerError,
             "Prepared dictionary evidence is missing or malformed: DICT-001",
+        ):
+            runner._prepared_dictionary_evidence_projection(obligations)
+
+    def test_standard_reviewer_projection_blocks_punctuation_only_active_values(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dictionary",),
+            dictionary_values=(";",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        obligations = runner_module.load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        ).obligations
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "no valid active values: DICT-001",
+        ):
+            runner._prepared_dictionary_evidence_projection(obligations)
+
+    def test_standard_reviewer_projection_blocks_empty_structured_active_values(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dictionary",),
+            dictionary_values=("Мужчина", "Женщина"),
+            structured_dictionary_evidence=True,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        evidence_path = runner._prepared_artifact("source-evidence")
+        evidence_path.write_text(
+            evidence_path.read_text(encoding="utf-8").replace(
+                '"active_values":["Мужчина","Женщина"]',
+                '"active_values":[]',
+            ),
+            encoding="utf-8",
+        )
+        obligations = runner_module.load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        ).obligations
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "no valid active values: DICT-001",
+        ):
+            runner._prepared_dictionary_evidence_projection(obligations)
+
+    def test_standard_reviewer_projection_blocks_malformed_active_values(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dictionary",),
+            dictionary_values=("A`;; `B",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        obligations = runner_module.load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        ).obligations
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "no valid active values: DICT-001",
         ):
             runner._prepared_dictionary_evidence_projection(obligations)
 

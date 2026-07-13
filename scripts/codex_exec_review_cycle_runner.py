@@ -807,6 +807,7 @@ class CodexExecReviewCycleRunner:
     prepared_package_path: Path | None = None
     prepared_repair_draft_path: Path | None = None
     prepared_repair_findings_path: Path | None = None
+    prepared_reviewer_rebind_draft_path: Path | None = None
     promotion_contract_path: Path | None = None
     instruction_files: Sequence[Path] = ()
     writer_instruction_files: Sequence[Path] = ()
@@ -870,6 +871,9 @@ class CodexExecReviewCycleRunner:
     _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_oracle_quality_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_repair_plan: dict[str, Any] = field(default_factory=dict, init=False)
+    _prepared_reviewer_rebind_plan: dict[str, Any] = field(
+        default_factory=dict, init=False
+    )
     _reviewer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _reviewer_context_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
 
@@ -893,6 +897,10 @@ class CodexExecReviewCycleRunner:
             self.prepared_repair_draft_path = self.prepared_repair_draft_path.resolve()
         if self.prepared_repair_findings_path is not None:
             self.prepared_repair_findings_path = self.prepared_repair_findings_path.resolve()
+        if self.prepared_reviewer_rebind_draft_path is not None:
+            self.prepared_reviewer_rebind_draft_path = (
+                self.prepared_reviewer_rebind_draft_path.resolve()
+            )
         if self.promotion_contract_path is not None:
             self.promotion_contract_path = self.promotion_contract_path.resolve()
         configured_instructions = tuple(path.resolve() for path in self.instruction_files)
@@ -1016,6 +1024,10 @@ class CodexExecReviewCycleRunner:
         return self.cycle_dir / "writer-targeted-repair-plan.json"
 
     @property
+    def reviewer_rebind_path(self) -> Path:
+        return self.cycle_dir / "reviewer-rebind.json"
+
+    @property
     def repair_draft_path(self) -> Path:
         return self.stage_output_dir(WRITER_STAGE) / "repair.md"
 
@@ -1049,6 +1061,7 @@ class CodexExecReviewCycleRunner:
             self.writer_shard_plan_path,
             self.prepared_oracle_quality_path,
             self.prepared_repair_plan_path,
+            self.reviewer_rebind_path,
         ]
         return tuple(paths)
 
@@ -1094,10 +1107,18 @@ class CodexExecReviewCycleRunner:
             and self._prepared_repair_plan.get("passed")
         )
 
+    def _uses_prepared_reviewer_rebind(self) -> bool:
+        return bool(
+            self._uses_structured_prepared_writer()
+            and self.prepared_reviewer_rebind_draft_path is not None
+            and self._prepared_reviewer_rebind_plan.get("passed")
+        )
+
     def _uses_generic_bounded_reviewer_schema(self) -> bool:
         return bool(
             self._uses_sharded_prepared_writer()
             or self._uses_targeted_prepared_repair()
+            or self._uses_prepared_reviewer_rebind()
             or len(self._prepared_writer_groups())
             > self.prepared_structured_writer_single_session_tc_limit
         )
@@ -1312,6 +1333,83 @@ class CodexExecReviewCycleRunner:
         ]:
             raise RunnerError("Prepared targeted repair findings changed after preflight")
 
+    def _build_prepared_reviewer_rebind_plan(self) -> dict[str, Any]:
+        path = self.prepared_reviewer_rebind_draft_path
+        if path is None:
+            raise RunnerError("prepared reviewer rebind requires a draft input")
+        if not path.is_file():
+            raise RunnerError(f"Prepared reviewer rebind draft does not exist: {path}")
+        prior_cycles = self.ft_root / "work" / "review-cycles"
+        if not is_relative_to(path, prior_cycles) or is_relative_to(path, self.cycle_dir):
+            raise RunnerError(
+                "Prepared reviewer rebind draft must come from a prior immutable review cycle"
+            )
+        source_text = path.read_text(encoding="utf-8")
+        spans = test_case_section_spans(source_text)
+        planned_ids = [test_case_id for test_case_id, _ in self._prepared_writer_groups()]
+        actual_ids = [test_case_id for test_case_id, _, _, _ in spans]
+        if actual_ids != planned_ids:
+            raise RunnerError(
+                "Prepared reviewer rebind draft test-case set/order does not match the current package"
+            )
+        sections: list[dict[str, Any]] = []
+        source_package_ids: set[str] = set()
+        for test_case_id, _, _, section in spans:
+            package_ids = PACKAGE_ID_LINE_RE.findall(section)
+            if len(package_ids) != 1:
+                raise RunnerError(
+                    "Prepared reviewer rebind source section must contain exactly one "
+                    f"package_id: {test_case_id}"
+                )
+            source_package_ids.add(package_ids[0])
+            normalized = PACKAGE_ID_LINE_RE.sub(
+                "**package_id:** <PACKAGE_ID>", section, count=1
+            )
+            sections.append(
+                {
+                    "test_case_id": test_case_id,
+                    "source_sha256": sha256_text(section),
+                    "source_semantic_sha256": sha256_text(normalized),
+                    "source_package_id": package_ids[0],
+                }
+            )
+        report: dict[str, Any] = {
+            "passed": True,
+            "validator": "prepared-reviewer-rebind-plan-v1",
+            "package_id": self._prepared_package.package_id if self._prepared_package else "",
+            "package_digest": (
+                self._prepared_package.package_digest if self._prepared_package else ""
+            ),
+            "source_draft": relative_path(path, self.repo_root),
+            "source_draft_sha256": sha256_file(path),
+            "source_package_ids": sorted(source_package_ids),
+            "test_case_count": len(actual_ids),
+            "test_case_ids": actual_ids,
+            "sections": sections,
+            "allowed_mutation": "per-test-case-package-id-only",
+            "writer_llm_required": False,
+        }
+        report["plan_digest"] = hashlib.sha256(
+            json.dumps(
+                report,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return report
+
+    def _verify_reviewer_rebind_input(self) -> None:
+        if not self._uses_prepared_reviewer_rebind():
+            return
+        assert self.prepared_reviewer_rebind_draft_path is not None
+        if sha256_file(self.prepared_reviewer_rebind_draft_path) != (
+            self._prepared_reviewer_rebind_plan["source_draft_sha256"]
+        ):
+            raise RunnerError(
+                "Prepared reviewer rebind source draft changed after preflight"
+            )
+
     def _build_writer_output_capacity_plan(self) -> dict[str, Any]:
         groups = self._prepared_writer_groups()
         if self._prepared_repair_plan.get("passed"):
@@ -1445,6 +1543,7 @@ class CodexExecReviewCycleRunner:
     def _uses_sharded_prepared_writer(self) -> bool:
         return bool(
             self._uses_structured_prepared_writer()
+            and not self._uses_prepared_reviewer_rebind()
             and self._writer_output_capacity_plan.get("passed")
             and self._writer_output_capacity_plan.get("mode") == "sharded"
         )
@@ -1697,6 +1796,18 @@ class CodexExecReviewCycleRunner:
             )
         if self.prepared_repair_draft_path is not None and self.prepared_package_path is None:
             raise RunnerError("targeted repair is supported only for prepared routes")
+        if (
+            self.prepared_reviewer_rebind_draft_path is not None
+            and self.prepared_package_path is None
+        ):
+            raise RunnerError("reviewer rebind is supported only for prepared routes")
+        if (
+            self.prepared_reviewer_rebind_draft_path is not None
+            and self.prepared_repair_draft_path is not None
+        ):
+            raise RunnerError(
+                "reviewer rebind and targeted repair are mutually exclusive"
+            )
         if self.prepared_package_path is not None:
             if not self.command_config.output_schema_flag:
                 raise RunnerError(
@@ -1775,6 +1886,14 @@ class CodexExecReviewCycleRunner:
                         "targeted repair requires a structured prepared writer"
                     )
                 self._prepared_repair_plan = self._build_prepared_repair_plan()
+            if self.prepared_reviewer_rebind_draft_path is not None:
+                if not self._uses_structured_prepared_writer():
+                    raise RunnerError(
+                        "reviewer rebind requires a structured prepared route"
+                    )
+                self._prepared_reviewer_rebind_plan = (
+                    self._build_prepared_reviewer_rebind_plan()
+                )
         else:
             if not self.source_files:
                 raise RunnerError("At least one explicit source file is required")
@@ -1786,6 +1905,8 @@ class CodexExecReviewCycleRunner:
         if self.promotion_contract_path is not None:
             if self.prepared_repair_draft_path is not None:
                 raise RunnerError("targeted repair cannot be combined with promotion")
+            if self.prepared_reviewer_rebind_draft_path is not None:
+                raise RunnerError("reviewer rebind cannot be combined with promotion")
             if self._prepared_package is None:
                 raise RunnerError("Promotion contract is supported only for prepared routes")
             if not is_relative_to(self.promotion_contract_path, self.ft_root):
@@ -1816,15 +1937,16 @@ class CodexExecReviewCycleRunner:
         elif self._prepared_package is not None and (self.promote_final or self.promotion_dry_run):
             raise RunnerError("Prepared promotion requires an explicit promotion contract")
         if self._uses_structured_prepared_writer():
-            self._writer_output_capacity_plan = self._build_writer_output_capacity_plan()
-            if not self._writer_output_capacity_plan["passed"]:
-                raise RunnerError(
-                    "blocked-prepared-writer-output-capacity: "
-                    f"test_case_count={self._writer_output_capacity_plan['test_case_count']}, "
-                    f"single_session_limit={self.prepared_structured_writer_single_session_tc_limit}, "
-                    f"shard_size={self.prepared_structured_writer_shard_size}, "
-                    f"max_shards={self.prepared_structured_writer_max_shards}"
-                )
+            if not self._uses_prepared_reviewer_rebind():
+                self._writer_output_capacity_plan = self._build_writer_output_capacity_plan()
+                if not self._writer_output_capacity_plan["passed"]:
+                    raise RunnerError(
+                        "blocked-prepared-writer-output-capacity: "
+                        f"test_case_count={self._writer_output_capacity_plan['test_case_count']}, "
+                        f"single_session_limit={self.prepared_structured_writer_single_session_tc_limit}, "
+                        f"shard_size={self.prepared_structured_writer_shard_size}, "
+                        f"max_shards={self.prepared_structured_writer_max_shards}"
+                    )
             self._reviewer_output_capacity_plan = (
                 self._build_reviewer_output_capacity_plan()
             )
@@ -1857,11 +1979,19 @@ class CodexExecReviewCycleRunner:
                 *self._prepared_role_instruction_paths("reviewer"),
             )
         )
+        recovery_inputs = tuple(
+            path
+            for path in (
+                self.prepared_reviewer_rebind_draft_path,
+            )
+            if path is not None
+        )
         for input_path in (
             *instruction_inputs,
             *self.source_files,
             *self.handoff_files,
             *prepared_inputs,
+            *recovery_inputs,
         ):
             if not input_path.is_file():
                 raise RunnerError(f"Stage input does not exist: {input_path}")
@@ -1968,6 +2098,12 @@ class CodexExecReviewCycleRunner:
             "execution_profile": self._prepared_package.execution_profile,
             "context_profile": self._prepared_context_profile(),
             "writer_mode": self.prepared_standard_writer_mode,
+            "draft_origin": (
+                "runner-owned-reviewer-rebind"
+                if self._uses_prepared_reviewer_rebind()
+                else "writer-stage"
+            ),
+            "writer_llm_started": not self._uses_prepared_reviewer_rebind(),
             "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
             "fallback_policy": self._prepared_package.fallback_policy,
             "source_registry": [
@@ -2210,21 +2346,74 @@ class CodexExecReviewCycleRunner:
         )
         for dictionary_id in referenced_ids:
             block = blocks.get(dictionary_id, "")
-            row = next((line.strip() for line in block.splitlines() if line.strip()), "")
-            values = [value.strip() for value in row.split(" | ")]
-            if len(values) != len(columns) or values[0].strip("`") != dictionary_id:
-                raise RunnerError(
-                    "Prepared dictionary evidence is missing or malformed: " + dictionary_id
+            structured_match = re.search(
+                r"```json\s*(\{.*?\})\s*```", block, flags=re.DOTALL
+            )
+            if structured_match is not None:
+                try:
+                    structured = json.loads(structured_match.group(1))
+                except json.JSONDecodeError as exc:
+                    raise RunnerError(
+                        "Prepared dictionary evidence is missing or malformed: "
+                        + dictionary_id
+                    ) from exc
+                if (
+                    not isinstance(structured, dict)
+                    or structured.get("dictionary_id") != dictionary_id
+                ):
+                    raise RunnerError(
+                        "Prepared dictionary evidence is missing or malformed: "
+                        + dictionary_id
+                    )
+                record = {
+                    column: str(structured.get(column, "")) for column in columns
+                }
+                raw_active_values = structured.get("active_values")
+                active_values = (
+                    [value.strip() for value in raw_active_values]
+                    if isinstance(raw_active_values, list)
+                    and all(isinstance(value, str) for value in raw_active_values)
+                    else []
                 )
-            record = dict(zip(columns, values, strict=True))
-            active_values = [
-                value.strip()
-                for value in re.findall(r"`([^`]+)`", record["active_values"])
-                if value.strip()
-            ]
-            if not active_values:
+            else:
+                # Compatibility only for immutable packages compiled before the
+                # structured dictionary projection.  Canonical new packages use
+                # the JSON record above and are never reparsed from Markdown.
+                row = next(
+                    (line.strip() for line in block.splitlines() if line.strip()),
+                    "",
+                )
+                values = [value.strip() for value in row.split(" | ")]
+                if len(values) != len(columns) or values[0].strip("`") != dictionary_id:
+                    raise RunnerError(
+                        "Prepared dictionary evidence is missing or malformed: "
+                        + dictionary_id
+                    )
+                record = dict(zip(columns, values, strict=True))
+                legacy_parts = re.split(r"\s*;\s*", record["active_values"].strip())
+                active_values = []
+                if legacy_parts and all(item.strip() for item in legacy_parts):
+                    for raw in legacy_parts:
+                        value = raw.strip().strip("`").strip()
+                        if (
+                            not value
+                            or "`" in value
+                            or not any(character.isalnum() for character in value)
+                        ):
+                            active_values = []
+                            break
+                        active_values.append(value)
+            if (
+                not active_values
+                or len(active_values) != len(set(active_values))
+                or any(
+                    not value or not any(character.isalnum() for character in value)
+                    for value in active_values
+                )
+            ):
                 raise RunnerError(
-                    "Prepared dictionary evidence has no active values: " + dictionary_id
+                    "Prepared dictionary evidence has no valid active values: "
+                    + dictionary_id
                 )
             projection.append(
                 {
@@ -3495,7 +3684,8 @@ class CodexExecReviewCycleRunner:
         production_before = self._production_snapshot()
         sharded_writer = self._uses_sharded_prepared_writer()
         repair_writer = self._uses_targeted_prepared_repair()
-        writer_prompt = "" if sharded_writer else self._writer_prompt()
+        reviewer_rebind = self._uses_prepared_reviewer_rebind()
+        writer_prompt = "" if sharded_writer or reviewer_rebind else self._writer_prompt()
         state = self._initial_state()
         self._write_state(state)
         if self._prepared_oracle_quality_plan:
@@ -3514,7 +3704,35 @@ class CodexExecReviewCycleRunner:
                 write_json(self.writer_shard_plan_path, self._writer_output_capacity_plan)
         append_event(self.cycle_dir, "cycle_started", backend="codex-exec")
 
-        if sharded_writer:
+        if reviewer_rebind:
+            writer_result = ProcessResult(
+                exit_code=0,
+                termination_reason="runner-owned-reviewer-rebind",
+            )
+            writer_artifacts = {
+                "command": [],
+                "stdout": "",
+                "stderr": "",
+                "events": "",
+                "last_message": "",
+                "_runner_owned_rebind": True,
+            }
+            self.draft_seed_path.parent.mkdir(parents=True, exist_ok=True)
+            self.draft_seed_path.write_text(self._draft_seed_text(), encoding="utf-8")
+            self._draft_seed_sha256 = sha256_file(self.draft_seed_path)
+            try:
+                self._materialize_prepared_reviewer_rebind()
+            except RunnerError as exc:
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-reviewer-rebind",
+                    reasons=[str(exc)],
+                )
+        elif sharded_writer:
             sharded_result = self._run_structured_writer_shards(state)
             if isinstance(sharded_result, CycleResult):
                 return sharded_result
@@ -3530,7 +3748,11 @@ class CodexExecReviewCycleRunner:
                     else self.stage_output_dir(WRITER_STAGE) / "last-message.txt"
                 ),
             )
-        if self._prepared_package is not None and not sharded_writer:
+        if (
+            self._prepared_package is not None
+            and not sharded_writer
+            and not reviewer_rebind
+        ):
             evidence_access = validate_evidence_access(
                 events_text=writer_result.stdout,
                 forbidden_roots=self._prepared_package.forbidden_evidence_roots,
@@ -3580,7 +3802,7 @@ class CodexExecReviewCycleRunner:
                 reasons=["writer modified production test-cases", *production_changes],
             )
 
-        if writer_result.launch_error:
+        if not reviewer_rebind and writer_result.launch_error:
             return self._block_stage(
                 state,
                 stage=WRITER_STAGE,
@@ -3590,7 +3812,7 @@ class CodexExecReviewCycleRunner:
                 status="blocked-process-launch",
                 reasons=["writer process could not be started"],
             )
-        if writer_result.exit_code not in (None, 0):
+        if not reviewer_rebind and writer_result.exit_code not in (None, 0):
             return self._block_stage(
                 state,
                 stage=WRITER_STAGE,
@@ -3600,7 +3822,11 @@ class CodexExecReviewCycleRunner:
                 status="blocked-process-exit",
                 reasons=[f"writer process exited with code {writer_result.exit_code}"],
             )
-        if self._uses_structured_prepared_writer() and not sharded_writer:
+        if (
+            self._uses_structured_prepared_writer()
+            and not sharded_writer
+            and not reviewer_rebind
+        ):
             if file_change_count_from_events(writer_result.stdout):
                 return self._block_stage(
                     state,
@@ -3728,7 +3954,7 @@ class CodexExecReviewCycleRunner:
             )
 
         if self._prepared_package is not None:
-            if repair_writer:
+            if repair_writer or reviewer_rebind:
                 package_metadata_validation = self._validate_draft_package_metadata()
                 write_json(
                     self.package_metadata_gate_path,
@@ -3863,7 +4089,9 @@ class CodexExecReviewCycleRunner:
                     validation=validation,
                 )
 
-        writer_session_issue = self._backend_session_issue(writer_artifacts)
+        writer_session_issue = (
+            "" if reviewer_rebind else self._backend_session_issue(writer_artifacts)
+        )
         if writer_session_issue:
             return self._block_stage(
                 state,
@@ -3883,28 +4111,65 @@ class CodexExecReviewCycleRunner:
             or writer_result.command_budget_exceeded
             or writer_result.first_artifact_deadline_exceeded
         )
-        writer_status = "completed-with-progress" if writer_interrupted else "completed"
-        self._write_stage_status(
-            stage=WRITER_STAGE,
-            role="writer",
-            status=writer_status,
-            result=writer_result,
-            artifacts=writer_artifacts,
-            reason=(
-                "process was stopped by a runtime budget, but the required draft exists and deterministic validation passed"
-                if writer_interrupted
-                else "required draft exists and deterministic validation passed"
-            ),
-            validation=validation,
-            draft_sha256=draft_sha256,
+        writer_status = (
+            "skipped-reviewer-rebind"
+            if reviewer_rebind
+            else "completed-with-progress"
+            if writer_interrupted
+            else "completed"
         )
-        self._write_contract_result(
-            stage=WRITER_STAGE,
-            role="writer",
-            outcome="draft-ready",
-            result=writer_result,
-            artifacts=writer_artifacts,
-        )
+        if reviewer_rebind:
+            rebind = json.loads(self.reviewer_rebind_path.read_text(encoding="utf-8"))
+            rebind.update(
+                {
+                    "status": "validated-reviewer-ready",
+                    "passed": True,
+                    "deterministic_gates_passed": True,
+                    "writer_llm_started": False,
+                    "gate_artifacts": [
+                        relative_path(path, self.repo_root)
+                        for path in (
+                            self.package_metadata_gate_path,
+                            self.seed_gate_path,
+                            self.validator_path,
+                            self.obligation_gate_path,
+                            self.semantic_overlap_path,
+                            self.calibration_lifecycle_path,
+                            self.quality_gate_bundle_path,
+                            self.evidence_access_path,
+                        )
+                    ],
+                }
+            )
+            write_json(self.reviewer_rebind_path, rebind)
+            append_event(
+                self.cycle_dir,
+                "prepared_reviewer_rebind_validated",
+                draft_sha256=draft_sha256,
+                writer_llm_started=False,
+            )
+        else:
+            self._write_stage_status(
+                stage=WRITER_STAGE,
+                role="writer",
+                status=writer_status,
+                result=writer_result,
+                artifacts=writer_artifacts,
+                reason=(
+                    "process was stopped by a runtime budget, but the required draft exists and deterministic validation passed"
+                    if writer_interrupted
+                    else "required draft exists and deterministic validation passed"
+                ),
+                validation=validation,
+                draft_sha256=draft_sha256,
+            )
+            self._write_contract_result(
+                stage=WRITER_STAGE,
+                role="writer",
+                outcome="draft-ready",
+                result=writer_result,
+                artifacts=writer_artifacts,
+            )
         writer_completion_state = {
             "writer_stage_status": writer_status,
             "draft_test_cases": relative_path(self.draft_path, self.ft_root),
@@ -3938,6 +4203,11 @@ class CodexExecReviewCycleRunner:
             "evidence_access_report": (
                 relative_path(self.evidence_access_path, self.ft_root)
                 if self._prepared_package is not None
+                else ""
+            ),
+            "reviewer_rebind_report": (
+                relative_path(self.reviewer_rebind_path, self.ft_root)
+                if reviewer_rebind
                 else ""
             ),
         }
@@ -3987,7 +4257,15 @@ class CodexExecReviewCycleRunner:
             }
         )
         self._write_state(state)
-        append_event(self.cycle_dir, "writer_stage_completed", stage_status=writer_status)
+        append_event(
+            self.cycle_dir,
+            (
+                "reviewer_rebind_stage_completed"
+                if reviewer_rebind
+                else "writer_stage_completed"
+            ),
+            stage_status=writer_status,
+        )
 
         reviewer_result, reviewer_artifacts = self._run_stage(
             stage=REVIEWER_STAGE,
@@ -4311,7 +4589,12 @@ class CodexExecReviewCycleRunner:
     def validate_only_report(self) -> dict[str, Any]:
         """Validate the first transition without creating cycle or attempt artifacts."""
         self.validate_configuration()
-        if self._uses_sharded_prepared_writer():
+        if self._uses_prepared_reviewer_rebind():
+            obligations = load_obligations(
+                self._prepared_artifact("atomic-obligations")
+            ).obligations
+            self._prepared_dictionary_evidence_projection(obligations)
+        elif self._uses_sharded_prepared_writer():
             for shard in self._writer_output_capacity_plan["shards"]:
                 self._writer_shard_prompt(shard)
         else:
@@ -4327,15 +4610,19 @@ class CodexExecReviewCycleRunner:
             "status": "validated",
             "route": route,
             "writer_scenario": (
-                "writer.session_prepared_targeted_repair"
-                if self._uses_targeted_prepared_repair()
+                "runner.prepared_reviewer_rebind"
+                if self._uses_prepared_reviewer_rebind()
                 else (
-                    "writer.session_prepared_initial_draft"
-                    if self._is_prepared_fast()
+                    "writer.session_prepared_targeted_repair"
+                    if self._uses_targeted_prepared_repair()
                     else (
-                        "writer.session_prepared_standard_structured"
-                        if self._uses_structured_prepared_writer()
-                        else self._standard_scenario("writer")
+                        "writer.session_prepared_initial_draft"
+                        if self._is_prepared_fast()
+                        else (
+                            "writer.session_prepared_standard_structured"
+                            if self._uses_structured_prepared_writer()
+                            else self._standard_scenario("writer")
+                        )
                     )
                 )
             ),
@@ -4377,6 +4664,8 @@ class CodexExecReviewCycleRunner:
                     "prepared_oracle_quality": self._prepared_oracle_quality_plan,
                     "targeted_repair": self._prepared_repair_plan,
                     "writer_targeted_repair": self._uses_targeted_prepared_repair(),
+                    "reviewer_rebind": self._prepared_reviewer_rebind_plan,
+                    "writer_llm_required": not self._uses_prepared_reviewer_rebind(),
                     "reviewer_output_capacity": self._reviewer_output_capacity_plan,
                     "reviewer_context_capacity": self._reviewer_context_capacity_plan,
                     "writer_sharded": self._uses_sharded_prepared_writer(),
@@ -4385,11 +4674,17 @@ class CodexExecReviewCycleRunner:
                     "context_profile": self._prepared_context_profile(),
                     "compact_reviewer": self._uses_compact_prepared_reviewer(),
                     "writer_sandbox_policy": (
-                        "read_only"
+                        "not-applicable-runner-owned-rebind"
+                        if self._uses_prepared_reviewer_rebind()
+                        else "read_only"
                         if self._uses_structured_prepared_writer()
                         else "workspace_write"
                     ),
-                    "writer_command_budget": self._stage_limits("writer")[2],
+                    "writer_command_budget": (
+                        0
+                        if self._uses_prepared_reviewer_rebind()
+                        else self._stage_limits("writer")[2]
+                    ),
                     "reviewer_command_budget": self._stage_limits("reviewer")[2],
                     "preflight_checks": [
                         "package-digest",
@@ -4399,6 +4694,10 @@ class CodexExecReviewCycleRunner:
                         "prepared-oracle-quality",
                         "targeted-repair-input-hashes",
                         "targeted-repair-test-case-set",
+                        "reviewer-rebind-input-hash",
+                        "reviewer-rebind-test-case-set",
+                        "reviewer-rebind-semantic-preservation",
+                        "structured-dictionary-projection",
                         "context-budget",
                         "output-capacity",
                         "reviewer-output-capacity",
@@ -4412,17 +4711,24 @@ class CodexExecReviewCycleRunner:
         return report
 
     def _initial_state(self) -> dict[str, Any]:
+        reviewer_rebind = self._uses_prepared_reviewer_rebind()
         return {
             "cycle_id": self.cycle_dir.name,
             "ft_slug": self.ft_root.name,
             "scope_slug": self.cycle_dir.name,
             "backend": "codex-exec",
-            "workflow_status": "writer-ready",
-            "stage_status": "scope-ready-for-writer",
-            "current_stage": WRITER_STAGE,
+            "workflow_status": (
+                "reviewer-rebind-ready" if reviewer_rebind else "writer-ready"
+            ),
+            "stage_status": (
+                "reviewer-rebind-ready" if reviewer_rebind else "scope-ready-for-writer"
+            ),
+            "current_stage": "reviewer-rebind" if reviewer_rebind else WRITER_STAGE,
             "semantic_round": 0,
             "max_semantic_rounds": 2,
-            "writer_stage_status": "pending",
+            "writer_stage_status": (
+                "skipped-reviewer-rebind" if reviewer_rebind else "pending"
+            ),
             "reviewer_stage_status": "pending",
             "draft_test_cases": "",
             "canonical_test_cases": relative_path(self.final_path, self.ft_root),
@@ -4437,8 +4743,10 @@ class CodexExecReviewCycleRunner:
             "final_promoted": False,
             "draft_or_unsigned": True,
             "promotion_status": "pending",
-            "active_transition_prompt": relative_path(
-                self.prompt_path(WRITER_STAGE), self.ft_root
+            "active_transition_prompt": (
+                ""
+                if reviewer_rebind
+                else relative_path(self.prompt_path(WRITER_STAGE), self.ft_root)
             ),
             "blocking_reasons": [],
         }
@@ -4475,6 +4783,97 @@ class CodexExecReviewCycleRunner:
             draft=relative_path(self.draft_path, self.repo_root),
             draft_bytes=self.draft_path.stat().st_size,
             draft_sha256=sha256_file(self.draft_path),
+        )
+
+    def _materialize_prepared_reviewer_rebind(self) -> None:
+        self._verify_reviewer_rebind_input()
+        assert self.prepared_reviewer_rebind_draft_path is not None
+        source_text = self.prepared_reviewer_rebind_draft_path.read_text(
+            encoding="utf-8"
+        )
+        source_spans = test_case_section_spans(source_text)
+        expected_package_id = self._prepared_package.package_id if self._prepared_package else ""
+        prefix = source_text[: source_spans[0][1]] if source_spans else source_text
+        chunks = [prefix]
+        migrated_ids: list[str] = []
+        for test_case_id, _, _, source_section in source_spans:
+            source_package_ids = PACKAGE_ID_LINE_RE.findall(source_section)
+            if len(source_package_ids) != 1:
+                raise RunnerError(
+                    "Prepared reviewer rebind source section must contain exactly one "
+                    f"package_id: {test_case_id}"
+                )
+            rebound = PACKAGE_ID_LINE_RE.sub(
+                f"**package_id:** {expected_package_id}", source_section, count=1
+            )
+            if source_package_ids[0] != expected_package_id:
+                migrated_ids.append(test_case_id)
+            chunks.append(rebound)
+        self._materialize_structured_writer_draft("".join(chunks).rstrip() + "\n")
+        output_sections = {
+            test_case_id: section
+            for test_case_id, _, _, section in test_case_section_spans(
+                self.draft_path.read_text(encoding="utf-8")
+            )
+        }
+        section_results: list[dict[str, Any]] = []
+        semantics_preserved = True
+        for source in self._prepared_reviewer_rebind_plan["sections"]:
+            test_case_id = source["test_case_id"]
+            output_section = output_sections.get(test_case_id, "")
+            output_semantics = PACKAGE_ID_LINE_RE.sub(
+                "**package_id:** <PACKAGE_ID>", output_section, count=1
+            )
+            semantic_sha256 = sha256_text(output_semantics)
+            preserved = semantic_sha256 == source["source_semantic_sha256"]
+            semantics_preserved = semantics_preserved and preserved
+            section_results.append(
+                {
+                    **source,
+                    "output_sha256": sha256_text(output_section),
+                    "output_semantic_sha256": semantic_sha256,
+                    "metadata_migrated": test_case_id in migrated_ids,
+                    "semantic_body_preserved": preserved,
+                }
+            )
+        payload = {
+            **self._prepared_reviewer_rebind_plan,
+            "status": "materialized-awaiting-gates",
+            "output_draft": relative_path(self.draft_path, self.repo_root),
+            "output_draft_sha256": sha256_file(self.draft_path),
+            "metadata_migrated_test_case_ids": migrated_ids,
+            "all_test_semantics_preserved": semantics_preserved,
+            "sections": section_results,
+            "deterministic_gates_passed": False,
+        }
+        write_json(self.reviewer_rebind_path, payload)
+        if not semantics_preserved:
+            raise RunnerError(
+                "Prepared reviewer rebind changed test semantics outside package_id metadata"
+            )
+        write_json(
+            self.evidence_access_path,
+            {
+                "passed": True,
+                "validator": "prepared-reviewer-rebind-evidence-access-v1",
+                "writer_llm_started": False,
+                "source_draft": self._prepared_reviewer_rebind_plan["source_draft"],
+                "source_draft_sha256": self._prepared_reviewer_rebind_plan[
+                    "source_draft_sha256"
+                ],
+                "allowed_mutation": "per-test-case-package-id-only",
+                "findings": [],
+            },
+        )
+        append_event(
+            self.cycle_dir,
+            "prepared_reviewer_rebind_materialized",
+            source_draft_sha256=self._prepared_reviewer_rebind_plan[
+                "source_draft_sha256"
+            ],
+            output_draft_sha256=sha256_file(self.draft_path),
+            metadata_migrated_test_case_ids=migrated_ids,
+            writer_llm_started=False,
         )
 
     def _materialize_targeted_repair(self, draft_markdown: str) -> ValidationResult:
@@ -5431,6 +5830,8 @@ class CodexExecReviewCycleRunner:
                 )
                 if self.package_metadata_gate_path.is_file():
                     handoff_paths.append(self.package_metadata_gate_path)
+                if self.reviewer_rebind_path.is_file():
+                    handoff_paths.append(self.reviewer_rebind_path)
             handoff_paths.append(self.reviewer_schema_path)
             expected_outputs.append(
                 ExpectedOutput(
@@ -5837,6 +6238,42 @@ class CodexExecReviewCycleRunner:
         reasons: Sequence[str],
         validation: ValidationResult | None = None,
     ) -> CycleResult:
+        if artifacts.get("_runner_owned_rebind"):
+            payload = dict(self._prepared_reviewer_rebind_plan)
+            if self.reviewer_rebind_path.is_file():
+                try:
+                    payload.update(
+                        json.loads(self.reviewer_rebind_path.read_text(encoding="utf-8"))
+                    )
+                except json.JSONDecodeError:
+                    pass
+            payload.update(
+                {
+                    "status": status,
+                    "passed": False,
+                    "deterministic_gates_passed": False,
+                    "blocking_reasons": list(reasons),
+                    "writer_llm_started": False,
+                }
+            )
+            if validation is not None:
+                payload["blocking_validator"] = validation.validator
+            write_json(self.reviewer_rebind_path, payload)
+            state["workflow_status"] = status
+            state["stage_status"] = "blocked-input"
+            state["current_stage"] = "reviewer-rebind"
+            state["writer_stage_status"] = "skipped-reviewer-rebind"
+            state["reviewer_rebind_status"] = status
+            state["blocking_reasons"] = list(reasons)
+            state["active_transition_prompt"] = ""
+            self._write_state(state)
+            append_event(
+                self.cycle_dir,
+                "reviewer_rebind_blocked",
+                status=status,
+                reasons=list(reasons),
+            )
+            return self._result(state)
         self._write_stage_status(
             stage=stage,
             role=role,
@@ -6410,6 +6847,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prepared-package")
     parser.add_argument("--prepared-repair-draft")
     parser.add_argument("--prepared-repair-findings")
+    parser.add_argument("--prepared-reviewer-rebind-draft")
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--sandbox-flag", required=True)
     parser.add_argument("--writer-sandbox", required=True)
@@ -6540,6 +6978,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         prepared_repair_findings_path=(
             repo_root / args.prepared_repair_findings
             if args.prepared_repair_findings
+            else None
+        ),
+        prepared_reviewer_rebind_draft_path=(
+            repo_root / args.prepared_reviewer_rebind_draft
+            if args.prepared_reviewer_rebind_draft
             else None
         ),
         promotion_contract_path=(

@@ -1,0 +1,43 @@
+{
+  "status": "passed",
+  "package_id": "application-card-client-personal-data-v9",
+  "package_version": 5,
+  "package_digest": "81a3f3ae32d77fcd8109a897f989b2db5153cbc0c07a7f43c8940e9863c61003",
+  "atomic_obligations_sha256": "41c37b12e1a8accffd125f948241198004d71181b2a668ae2ef8390f216c853f",
+  "obligation_count": 65,
+  "test_case_count": 47,
+  "coverage_gap_count": 3,
+  "dictionary_ref_count": 1,
+  "dictionary_projection": {
+    "dictionary_id": "DICT-001",
+    "active_values": [
+      "Мужчина",
+      "Женщина"
+    ],
+    "punctuation_only_value_present": false
+  },
+  "reviewer_rebind": {
+    "source_draft_sha256": "cd8cf5c8ab9cedfe5d2358e9f13a1341d12eb8805f62430f6fee63aabd8f5884",
+    "plan_digest": "04ab3c97076b4bf4ef68bc5cbff741b7553e19b8a2b6b691063aa6e8913f078f",
+    "source_package_id": "application-card-client-personal-data-v8",
+    "target_package_id": "application-card-client-personal-data-v9",
+    "allowed_mutation": "per-test-case-package-id-only",
+    "writer_llm_required": false
+  },
+  "capacity": {
+    "logical_evidence_bytes": 48999,
+    "logical_evidence_limit_bytes": 49152,
+    "reviewer_estimated_context_bytes": 118578,
+    "reviewer_context_limit_bytes": 196608,
+    "reviewer_obligation_count": 65,
+    "reviewer_obligation_limit": 100
+  },
+  "validate_only": {
+    "status": "validated",
+    "writer_scenario": "runner.prepared_reviewer_rebind",
+    "reviewer_scenario": "reviewer.session_prepared_standard_semantic",
+    "writer_llm_required": false,
+    "writer_command_budget": 0,
+    "cycle_artifacts_created": false
+  }
+}

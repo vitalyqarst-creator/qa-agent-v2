@@ -941,6 +941,57 @@ coverage_gaps:
 
         self.assertEqual(result.dictionary_ref_count, 2)
 
+    def test_compiler_structures_exact_canonical_dictionary_values(self) -> None:
+        inventory = self.design / "dictionary-inventory.md"
+        inventory.write_text(
+            """| dictionary_id | active_values |
+| --- | --- |
+| `DICT-001` | `Мужчина`; `Женщина` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+        evidence = (result.stage_package.parent / "source-evidence.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            '"active_values":["Мужчина","Женщина"]',
+            evidence,
+        )
+        self.assertNotIn('"active_values":[";"]', evidence)
+
+    def test_blocks_punctuation_only_dictionary_values(self) -> None:
+        inventory = self.design / "dictionary-inventory.md"
+        inventory.write_text(
+            "| dictionary_id | active_values |\n| --- | --- |\n| `DICT-001` | `;` |\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "malformed active values"):
+            self.compile()
+
+    def test_blocks_empty_dictionary_values(self) -> None:
+        inventory = self.design / "dictionary-inventory.md"
+        inventory.write_text(
+            "| dictionary_id | active_values |\n| --- | --- |\n| `DICT-001` |  |\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "malformed active values"):
+            self.compile()
+
+    def test_blocks_malformed_dictionary_delimiters(self) -> None:
+        inventory = self.design / "dictionary-inventory.md"
+        inventory.write_text(
+            "| dictionary_id | active_values |\n| --- | --- |\n| `DICT-001` | `A`;; `B` |\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "malformed active values"):
+            self.compile()
+
     def test_routes_evidence_qualified_dimension_to_standard(self) -> None:
         matrix = self.design / "test-design-applicability-matrix.md"
         matrix.write_text(
