@@ -57,6 +57,7 @@
 | 3 | Реализованы oracle preflight и targeted repair | Bad inputs блокируются; splice сохраняет non-target bytes | runner; tests; evals |
 | 4 | Собран и проверен V7 package | `65` oracle pass; repair `4/47` | package/preflight reports |
 | 5 | Пройден pre-live regression и exec dry-run | Готовность к checkpoint | pre-live report/stop gate |
+| 6 | Checkpoint отправлен в origin | Local/remote SHA совпали; разрешён один live | `bb52aa86552af76ca684851829d9d6193e3cd625`; authorization |
 
 ## Quality Checkpoints
 

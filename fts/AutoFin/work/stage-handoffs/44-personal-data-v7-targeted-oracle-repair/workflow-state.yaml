@@ -2,7 +2,7 @@ ft_slug: AutoFin
 prepared_compiler_contract_version: 2
 scope_slug: application-card-client-personal-data
 current_stage: ft-test-case-iteration
-stage_status: blocked-input
+stage_status: scope-ready-for-writer
 current_round: 1
 next_skill: ft-test-case-iteration
 required_inputs:
@@ -29,6 +29,7 @@ latest_artifacts:
   backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-authorization.md
   atomic_requirements_ledger: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/atomic-requirements-ledger.md
   coverage_obligation_table: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/coverage-obligation-table.md
   package_test_design_plan: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/package-test-design-plan.md
@@ -47,7 +48,6 @@ open_questions:
   - GAP-001 — точная UI-реакция на недопустимое значение.
   - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
   - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
-blocking_reasons:
-  - Checkpoint commit/push and explicit one-dispatcher authorization are pending.
+blocking_reasons: []
 accepted_risks:
   - UI-specific oracle calibration остаётся за ft-ui-automation-prep.
