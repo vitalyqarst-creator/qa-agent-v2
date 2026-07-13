@@ -1,0 +1,46 @@
+{
+  "cycle_id": "application-card-client-personal-data-shadow-v9-20260713",
+  "status": "accepted-not-promoted",
+  "terminal": true,
+  "retry_or_resume_allowed": false,
+  "backend": "exec",
+  "contract_version": 2,
+  "fallback_used": false,
+  "writer": {
+    "llm_started": false,
+    "stage_status": "skipped-reviewer-rebind",
+    "source_draft_sha256": "cd8cf5c8ab9cedfe5d2358e9f13a1341d12eb8805f62430f6fee63aabd8f5884",
+    "output_draft_sha256": "c99d6d2f24bc40c39788258e451eddc624f654cf364db79dcc881cc3d71a3349",
+    "test_case_count": 47,
+    "metadata_migrated_test_case_count": 47,
+    "all_test_semantics_preserved": true,
+    "deterministic_gates_passed": true
+  },
+  "reviewer": {
+    "session_id": "019f5b64-069f-7ae0-9a16-08f576bc43ef",
+    "duration_ms": 78313,
+    "decision": "accepted",
+    "covered_obligations": 65,
+    "blocking_findings": 0,
+    "dictionary_id": "DICT-001",
+    "transported_dictionary_active_values": [
+      "Мужчина",
+      "Женщина"
+    ]
+  },
+  "performance": {
+    "stage_count": 1,
+    "duration_ms_total": 78313,
+    "total_tokens": 46919,
+    "uncached_input_tokens_total": 42939,
+    "output_tokens_total": 3980,
+    "command_executions": 0,
+    "file_changes": 0
+  },
+  "production": {
+    "ft_first_baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "shadow_exists": false,
+    "final_promoted": false
+  },
+  "terminal_reason": "reviewer accepted all 65 obligations; promotion remained disabled by the authorized V9 boundary"
+}

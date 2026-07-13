@@ -2,9 +2,9 @@ ft_slug: AutoFin
 prepared_compiler_contract_version: 2
 scope_slug: application-card-client-personal-data
 current_stage: ft-test-case-iteration
-stage_status: blocked-input
+stage_status: ready-for-next-stage
 current_round: 1
-next_skill: ft-test-case-iteration
+next_skill: ft-scope-analyzer
 required_inputs:
   - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
   - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
@@ -29,9 +29,21 @@ latest_artifacts:
   pre_live_test_report: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/pre-live-stop-gate.md
   pre_live_authorization: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/pre-live-authorization.md
+  backend_selection: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/backend-selection.json
+  cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/cycle-state.yaml
+  reviewer_rebind: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/reviewer-rebind.json
+  candidate_draft: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  package_metadata_gate: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/attempts/writer-r1/attempt-001/runner-output/package-metadata-gate.json
+  reviewer_findings: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  reviewer_stage_status: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json
+  performance: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/performance.json
+  live_result: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/live-result.v9.json
+  performance_analysis: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/performance-analysis.v9.md
+  iteration_summary: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/iteration-summary.md
+  terminal_stop_gate: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/stop-gate.md
   session_log: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/iteration-session-log.md
   decision_log: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/agent-decision-log.md
-  active_transition_prompt: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/prompt.scope-to-iteration.md
+  active_transition_prompt: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/prompt.iteration-to-scope-rebase.md
 coverage_gaps:
   blocking: 0
   non_blocking: 3
@@ -39,7 +51,6 @@ open_questions:
   - GAP-001 — точная UI-реакция на недопустимое значение.
   - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
   - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
-blocking_reasons:
-  - V9 live remains forbidden until this separate authorization commit is pushed; after push exactly one dispatcher is allowed.
+blocking_reasons: []
 accepted_risks:
   - UI-specific oracle calibration остаётся за ft-ui-automation-prep.

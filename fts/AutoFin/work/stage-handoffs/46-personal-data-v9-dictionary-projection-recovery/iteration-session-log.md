@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `stage-handoffs/45-personal-data-v8-reviewer-contract/workflow-state.yaml` |
-| status_after | `ready-after-authorization` |
+| status_after | `ready-for-next-stage` |
 
 ## Inputs Read
 
@@ -42,6 +42,9 @@
 - H46 artifact validator: 0 errors, 0 warnings, 3 inherited info.
 - Baseline hash unchanged; production shadow absent.
 - Pre-live checkpoint `7b0743f5a23e594e574994ccb9ffd5a86140eccc` pushed; separate one-dispatcher authorization issued.
+- Единственный V9 dispatcher: writer skipped, reviewer `accepted`; `46,919` tokens, `78.313 s`.
+- Post-live boundary: baseline hash unchanged; production shadow absent.
+- Terminal H46 validator: `0 errors / 0 warnings`; isolated cycle-dir diagnostic: `0 errors / 1` expected warning because a review-cycle directory does not contain `workflow-state.yaml`.
 
 ## Contamination Check
 
@@ -59,6 +62,9 @@
 | 6 | Ran validate-only and exec dry-run | No writer LLM; exec v2 verified | pre-live reports |
 | 7 | Passed pre-live regression and artifact gates | 196 tests; 0 errors/warnings | `pre-live-test-report.md` |
 | 8 | Pushed immutable pre-live checkpoint and issued separate authorization | Exactly one reviewer-only dispatcher allowed after authorization push | `pre-live-authorization.md` |
+| 9 | Ran the only V9 dispatcher | Writer LLM skipped; reviewer accepted 65/65 obligations | V9 cycle; `live-result.v9.json` |
+| 10 | Verified live transport and rebind | Exact DICT values; 47/47 semantics preserved; all gates passed | `reviewer-rebind.json`; reviewer prompt/findings |
+| 11 | Closed V9 terminally without promotion | Baseline unchanged; no shadow; route to independent scope benchmark | `stop-gate.md`; `prompt.iteration-to-scope-rebase.md` |
 
 ## Quality Checkpoints
 
@@ -67,6 +73,10 @@
 | Structured DICT projection | pass | exact/empty/punctuation/malformed tests | verify compiled V9 payload |
 | Reviewer-only semantic preservation | pass | runner regression | verify all 47 live sections |
 | Production boundary | pass-pre-live | baseline SHA unchanged; shadow absent | repeat after live |
+| Live dictionary transport | pass | reviewer prompt and finding OBL-025 use exact active values | immutable V9 evidence |
+| Reviewer-only rebind | pass | writer not started; 47/47 semantics preserved; deterministic gates pass | restrict route to source-correct recovery |
+| V9 reviewer | accepted | 65/65 obligations; 0 blocking findings | no retry; no automatic promotion |
+| Production boundary post-live | pass | baseline SHA unchanged; shadow absent | preserve for separate promotion decision |
 
 ## Artifact Write Strategy
 
@@ -86,4 +96,5 @@
 ## Handoff Notes For Next Session
 
 - Do not launch V9 before pushed checkpoint and separate authorization.
-- On acceptance, do not promote; route to a new-scope benchmark.
+- V9 is terminal accepted-not-promoted; never retry or resume it.
+- Continue only through `prompt.iteration-to-scope-rebase.md` to an independent benchmark scope.

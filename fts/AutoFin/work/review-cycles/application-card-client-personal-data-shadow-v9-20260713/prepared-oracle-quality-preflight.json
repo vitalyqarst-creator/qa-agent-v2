@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-observable-oracle-preflight-v1",
+  "error_code": "",
+  "package_id": "application-card-client-personal-data-v9",
+  "atomic_obligations_sha256": "41c37b12e1a8accffd125f948241198004d71181b2a668ae2ef8390f216c853f",
+  "testable_obligations_checked": 65,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "52a7f962800bd3c4f8671544bc94c9ab148c32f4354cf316262c4be2753b132a"
+}
