@@ -1,0 +1,39 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/40-personal-data-v3-reviewer-recovery/reviewer-outcome-analysis.md
+  - work/stage-handoffs/40-personal-data-v3-reviewer-recovery/stop-gate.md
+  - work/stage-handoffs/40-personal-data-v3-reviewer-recovery/prompt.scope-to-iteration.md
+  - work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/cycle-state.yaml
+  - work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+latest_artifacts:
+  prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/prepared-input/application-card-client-personal-data-v3/stage-package.json
+  raw_cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/cycle-state.yaml
+  unsigned_draft: work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  reviewer_findings: work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  performance_report: work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/performance.json
+  reviewer_outcome_analysis: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/reviewer-outcome-analysis.md
+  performance_analysis: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/performance-analysis.v3.md
+  stop_gate: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/stop-gate.md
+  iteration_summary: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/iteration-summary.md
+  session_log: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/iteration-session-log.md
+  decision_log: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/40-personal-data-v3-reviewer-recovery/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 exact invalid-value UI oracle.
+  - GAP-002 empty requiredness UI oracle.
+  - GAP-003 integration failure/technical evidence.
+blocking_reasons:
+  - V3 reviewer returned changes-required with four blocking findings across 11 obligations and 9 test cases.
+  - Prepared design permits generic fixtures, undefined continuation actions and non-observable expected results that escaped deterministic writer gates.
+accepted_risks:
+  - GAP-001 remains a non-blocking UI calibration risk.
+  - GAP-002 remains a non-blocking UI calibration risk; remediation must not invent an exact UI reaction.
+  - GAP-003 remains a non-blocking integration-evidence risk; ABS and DaData fixtures may require explicit calibration contracts.

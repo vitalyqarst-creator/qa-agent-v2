@@ -1,0 +1,2706 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "decision",
+    "reviewed_draft_sha256",
+    "obligation_reviews",
+    "findings",
+    "summary"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "changes-required"
+      ]
+    },
+    "reviewed_draft_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "obligation_reviews": {
+      "type": "array",
+      "minItems": 65,
+      "maxItems": 65,
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-001"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-001"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-002"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-002"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-003"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-003"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-004"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-004"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-005"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-005"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-006"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-005"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-007"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-005"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-008"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-006"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-009"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-007"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-010"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-008"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-011"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-009"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-012"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-010"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-013"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-010"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-014"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-010"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-015"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-011"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-016"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-012"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-017"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-013"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-018"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-014"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-019"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-015"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-020"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-015"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-021"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-015"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-022"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-016"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-023"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-017"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-024"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-018"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-025"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-019"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-026"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-019"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-027"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-020"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-028"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-021"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-029"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-021"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-030"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-022"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-031"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-022"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-032"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-023"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-033"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-024"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-034"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-024"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-035"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-025"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-036"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-025"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-037"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-025"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-038"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-025"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-039"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-025"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-040"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-026"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-041"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-027"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-042"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-028"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-043"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-028"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-044"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-029"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-045"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-030"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-046"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-030"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-047"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-030"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-048"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-031"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-049"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-032"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-050"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-033"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-051"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-033"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-052"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-034"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-053"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-035"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-054"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-035"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-055"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-035"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-056"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-036"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-057"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-037"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-058"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-038"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-059"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-038"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-060"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-039"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-061"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-040"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-062"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-040"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-063"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-040"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-064"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-041"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-065"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-042"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "category",
+          "atom_ids",
+          "test_case_ids",
+          "problem",
+          "required_change"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "info",
+              "warning"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "atomarity",
+              "coverage",
+              "duplication",
+              "expected-result",
+              "scope",
+              "test-design"
+            ]
+          },
+          "atom_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "test_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_change": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

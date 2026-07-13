@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/39-personal-data-full-scope-recovery-rollout/workflow-state.yaml` |
-| status_after | `in-progress` |
+| status_after | `ready-for-next-stage` |
 
 ## Inputs Read
 
@@ -38,6 +38,8 @@
 - `GAP-001..003` остаются non-blocking calibration/evidence risks.
 - Первый compile preflight отклонил parent `prepared-input` как output root до записи package; исправленный путь обязан включать package-id (`TF-001`).
 - Public V2 `validate_configuration()` корректно запретил replay завершённого immutable cycle; transport replay выполнен pure read-only методом после hash-verified package load (`TF-002`).
+- Первый read-only поиск findings использовал неверный подкаталог `stage-output`; канонический `runner-output/findings.md` после этого прочитан в UTF-8 (`TF-003`).
+- Inline Python diagnostic с literal `\n` не запустился; хеши runner artifacts проверены native PowerShell без записи файлов (`TF-004`).
 
 ## Validation
 
@@ -48,7 +50,14 @@
 - Validate-only: writer context 96 886 / 131 072 bytes, pass; no attempt artifacts.
 - Reviewer transport replay: 117 439 / 131 072 bytes, pass; exact review index present.
 - Dispatcher dry-run: verified exec, contract v2, no fallback.
-- Pending: pre-live checkpoint and exactly one V3 live outcome.
+- Pre-live checkpoint: commit `2bda035`.
+- Exactly one V3 dispatcher live: writer `draft-ready`, reviewer `changes-required`.
+- Writer deterministic gates: structure pass, obligations 65/65, quality bundle pass, semantic overlap clean, seed/evidence gates pass.
+- Reviewer live context: 120 519 / 131 072 bytes; separate writer/reviewer exec sessions confirmed.
+- Reviewer result: 4 blocking findings, 11 incorrect obligations, 9 unique affected TC; sign-off and promotion denied.
+- Runtime integrity: all 23 stage-result artifacts exist and match recorded SHA-256; draft has 47 unique IDs and 47 unique titles.
+- Canonical scoped validation: 0 findings for handoff 40 and V3 cycle under audit/strict log policies.
+- Production boundary: target remains absent; V1/V2/production diff count is zero.
 
 ## Contamination Check
 
@@ -82,6 +91,15 @@
 | 11 | Pure V2 transport replay | Reviewer context 117 439 / 131 072, compact payload checks pass | `reviewer-transport-replay.v3.json` |
 | 12 | Dispatcher dry-run | Verified exec selected; no fallback | V3 `backend-selection.dry-run.json` |
 | 13 | Pre-live gate decision | All required checks pass; exactly one live authorized | `pre-live-authorization.md` |
+| 14 | Pre-live checkpoint | V3 package and preflight evidence committed without user-owned files | commit `2bda035` |
+| 15 | Exactly one V3 dispatcher live | Writer completed; compact reviewer started in a separate exec session and returned `changes-required` | V3 `cycle-state.yaml`; `performance.json`; findings |
+| 16 | First findings lookup | Read-only lookup used `stage-output/findings.md`, which does not exist | `TF-003` |
+| 17 | Canonical findings analysis | Four errors affect 11 obligations and 9 unique TC; reviewer summary prose says eight, but structured rows prove 11 | `reviewer-outcome-analysis.md` |
+| 18 | Root-cause analysis | Prepared obligations already contain undefined continuation actions and lack reproducible ABS/DaData fixtures; deterministic gates do not reject these smells | `reviewer-outcome-analysis.md` |
+| 19 | Stop and route | No retry, V3 mutation or promotion; next iteration must improve design/package/gates before a new V4 live | `stop-gate.md`; next-stage prompt; eval candidate |
+| 20 | First integrity diagnostic | Inline Python command failed on literal newline before reading any artifact | `TF-004` |
+| 21 | Native integrity validation | 23/23 output artifact hashes match; 47/47 IDs and titles are unique | stage results; draft SHA |
+| 22 | Canonical artifact validation | 0 current-scope findings under `session-log-policy=audit` and `decision-log-policy=strict` | `scripts/validate_agent_artifacts.py` |
 
 ## Quality Checkpoints
 
@@ -89,9 +107,10 @@
 | --- | --- | --- | --- |
 | Compiler mapping | pass | 42 atoms / 65 obligations / 47 TC from unchanged inputs | none |
 | Numeric seed order | pass | exact unique `TC-ACPD-001..047` | none |
-| Writer live | pending | no V3 live session | require all deterministic gates pass |
-| Reviewer live | pending | no V3 reviewer session | require `accepted`, zero blocking findings |
-| Production boundary | pass | target absent before V3 | keep promotion/overwrite disabled |
+| Writer live | pass | `draft-ready`; all deterministic gates pass | preserve immutable V3 evidence |
+| Reviewer transport/state | pass | 120 519 bytes; separate reviewer session; persisted `changes-required` state | no transport retry needed |
+| Reviewer semantic sign-off | fail | 4 errors / 11 obligations / 9 TC | remediate upstream design and gates before V4 |
+| Production boundary | pass | target absent before and after V3; V1/V2 diffs zero | keep promotion/overwrite disabled |
 
 ## Technical Fallbacks
 
@@ -99,8 +118,11 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `TF-001` | Compiler rejected parent `prepared-input` output root before package write | `--output-root <cycle>/prepared-input` | Use `--output-root <cycle>/prepared-input/application-card-client-personal-data-v3` | `n/a` | `n/a` | `none`; failed command produced no package evidence | Verify only one V3 package directory exists and retain corrected command in session evidence |
 | `TF-002` | Public runner configuration guard rejected read-only replay of completed V2 because runner-owned artifacts exist | Call `validate_configuration()` on immutable V2 | Load the hash-verified prepared package with `_verify_prepared_package()` and call only pure `_reviewer_prompt()`; no run/state/write methods | `reviewer-transport-replay.v3.json` | `yes` | `internal replay helper`; no V2 artifact was changed and V2 was not used as requirement evidence | Require exact V3 reviewer live confirmation |
+| `TF-003` | Findings were first looked up under the wrong runner subdirectory | Read `attempt-001/stage-output/findings.md` | Read canonical UTF-8 source with `Get-Content -Encoding UTF8` from `attempt-001/runner-output/findings.md` | `reviewer-outcome-analysis.md` | `yes` | `none`; distorted stdout not used as evidence; only the explicit UTF-8 reread informed analysis/traceability | Use `cycle-state.yaml.reviewer_findings` as the locator |
+| `TF-004` | Inline Python integrity diagnostic contained literal newline escapes that Python parsed as invalid syntax | Inline `python -c` loop | Native PowerShell JSON/hash loop and focused draft-field queries | V3 `stage-result.json`; session log validation | `yes` | `none`; failed command produced no evidence or writes | Prefer native PowerShell loop or a checked-in helper for multiline diagnostics |
 
 ## Handoff Notes For Next Session
 
-- Пока V3 live не завершён, никакой draft не считается reviewed или production-ready.
-- При новом blocker остановить текущий cycle; не выполнять второй live и не исправлять V3 state вручную.
+- V3 доказал исправление reviewer transport/state, но не получил semantic sign-off.
+- Не выполнять второй V3 live, не менять V3 draft/state/findings и не продвигать draft в production.
+- Перед V4 сначала устранить generic fixture, undefined continuation action и non-observable oracle в design/package/gate контуре.

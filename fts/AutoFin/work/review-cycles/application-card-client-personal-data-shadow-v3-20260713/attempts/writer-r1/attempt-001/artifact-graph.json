@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "cycle_id": "application-card-client-personal-data-shadow-v3-20260713",
+  "stage_id": "writer-r1",
+  "role": "writer",
+  "context_profile": "character-restriction-calibration",
+  "input_digest": "8ab72af59a72cc1d46dc4a7aecf77f84dd8e6ef5f77c3b0d829ac2ad28886182",
+  "input_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/prompt.md",
+      "sha256": "8d95849f987900530e2745b7a6ae8ab0ed8bc1f75da3027a80b0ba0fd73691eb",
+      "kind": "prompt",
+      "group": "prompt",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "references/agent/prepared-writer-runtime-profile.md",
+      "sha256": "e1dc5a749ffbd25023b59541d33945ed2d0ebdf49fdd2926f000c46ed30178be",
+      "kind": "instruction",
+      "group": "instruction",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/prepared-input/application-card-client-personal-data-v3/source-evidence.md",
+      "sha256": "af5864b435f609cc86f8036134a720b4511940c0cfaa1ba8a17b3d60cba69ad7",
+      "kind": "source",
+      "group": "source",
+      "lifecycle": "source",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/prepared-input/application-card-client-personal-data-v3/stage-package.json",
+      "sha256": "0b82d57e8fe128a1a6cb107892292bd31cb161ab00ce69a1bd3836f752372093",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/prepared-input/application-card-client-personal-data-v3/atomic-obligations.json",
+      "sha256": "813542a83464ec7dc8130d23877390552f2d690e6798719a1a8b48d51f78afd9",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-input/draft-seed.md",
+      "sha256": "d8e2d72cbc5ba5b3ab948c5727043481129ba5c1e388cec3da9f1ebc35f30e7d",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/writer-contract.schema.json",
+      "sha256": "92f0dd91ab78e3ac859514a4eddc66d3fc4641120ccb43151c447397caa4d816",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    }
+  ],
+  "output_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "kind": "stdout",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "kind": "stderr",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "kind": "events",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "kind": "stage-status",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "kind": "artifact-graph",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "kind": "test-case-draft",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "kind": "validator-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "kind": "obligation-gate",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "kind": "semantic-overlap-diagnostic",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "kind": "quality-gate-bundle",
+      "lifecycle": "reviewed",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "kind": "calibration-lifecycle",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "kind": "seed-gate",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "kind": "evidence-access-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "kind": "writer-result",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v3-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "kind": "context-budget",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    }
+  ],
+  "access_policy": {
+    "sandbox": "read_only",
+    "allowed_write_roots": [],
+    "forbidden_write_roots": [
+      "fts/AutoFin/test-cases"
+    ],
+    "fallback_policy": "targeted-only"
+  },
+  "graph_digest": "0d7019982902af24b6777dc195c32d3d3c9173d29bdfd825891196cc98c6fe64"
+}
