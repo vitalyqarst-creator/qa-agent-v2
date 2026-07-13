@@ -22,3 +22,4 @@
 | `DEC-007` | 7 | `immutability` | Compiler fix changes package content | Preserve V1 and compile a new V2 cycle | Existing prepared package must never be overwritten | V2 cycle | high | applied |
 | `DEC-008` | 8 | `validation` | V2 pre-live evidence | Accept package as pre-live ready | 108 clean tests; validate-only and artifact gates pass | pre-live reports | high | applied |
 | `DEC-009` | 9 | `routing` | Pre-live gate passed | Stop before live until checkpoint and separate authorization are pushed | Exactly-once boundary is mandatory | `pre-live-stop-gate.md` | high | applied |
+| `DEC-010` | 10 | `authorization` | Checkpoint matches origin | Authorize exactly one V2 exec dispatcher after authorization push | All pre-live and production-boundary gates passed | `pre-live-authorization.md` | high | applied |

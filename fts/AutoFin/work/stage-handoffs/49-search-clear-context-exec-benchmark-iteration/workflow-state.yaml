@@ -27,6 +27,7 @@ latest_artifacts:
   backend_selection_dry_run: work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/pre-live-authorization.md
   session_log: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/iteration-session-log.md
   decision_log: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/agent-decision-log.md
   active_transition_prompt: work/stage-handoffs/48-search-clear-context-exec-benchmark/prompt.scope-to-iteration.md
@@ -34,7 +35,6 @@ coverage_gaps:
   blocking: 0
   non_blocking: 0
 open_questions: []
-blocking_reasons:
-  - Live remains forbidden until checkpoint and separate authorization are pushed.
+blocking_reasons: []
 accepted_risks:
   - Small-scope benchmark does not prove medium-scope scaling.

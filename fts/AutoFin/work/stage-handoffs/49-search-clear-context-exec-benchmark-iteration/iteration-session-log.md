@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `search-clear-context-exec-benchmark-v1` |
 | started_from | `work/stage-handoffs/48-search-clear-context-exec-benchmark/prompt.scope-to-iteration.md` |
-| status_after | `pre-live-ready-awaiting-checkpoint` |
+| status_after | `authorized-awaiting-authorization-push` |
 
 ## Inputs Read
 
@@ -59,6 +59,7 @@
 | 7 | Ran validate-only and exec dry-run | Structured writer/reviewer gates pass; exec v2 verified; fallback false | `pre-live-test-report.md` |
 | 8 | Ran targeted regressions and artifact gates | 108 clean tests; H47/H48/H49 0 errors/0 warnings | `pre-live-test-report.md` |
 | 9 | Applied pre-live stop gate | Live awaits checkpoint push and separate authorization | `pre-live-stop-gate.md` |
+| 10 | Pushed checkpoint and created separate authorization | Exactly one V2 dispatcher allowed only after authorization push | `pre-live-authorization.md` |
 
 ## Quality Checkpoints
 
@@ -68,7 +69,7 @@
 | Fresh-input boundary | pass | H19 generated artifacts excluded | recheck after live |
 | Requirement-code projection | pass after remediation | focused compiler regression `2 passed` | verify V2 package contains `BSR 32` |
 | Production boundary | pass | baselines hashed; shadow target absent | recheck after live |
-| Live authorization | pending | checkpoint and separate authorization required | do not launch yet |
+| Live authorization | pass-after-push | checkpoint matches origin; separate authorization created | push authorization, then launch once |
 
 ## Artifact Write Strategy
 
