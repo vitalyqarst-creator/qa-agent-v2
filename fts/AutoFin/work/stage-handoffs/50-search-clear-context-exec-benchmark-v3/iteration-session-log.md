@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `search-clear-context-exec-benchmark-v1` |
 | started_from | `work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/prompt.scope-to-iteration.md` |
-| status_after | `ready-for-next-stage` |
+| status_after | `authorized-awaiting-authorization-push` |
 
 ## Inputs Read
 
@@ -65,6 +65,7 @@
 | 7 | Ran clean target suites and dry-run | 237 tests pass; exec available/verified | pre-live report |
 | 8 | Applied pre-live stop gate | Live waits for checkpoint push and separate authorization | `pre-live-stop-gate.md` |
 | 9 | First validator-remediation patch mixed two target files | No partial edit; prompt and session-log fixes were applied separately | `TF-004` |
+| 10 | Pushed checkpoint and created separate authorization | One V3 dispatcher permitted only after authorization push | `pre-live-authorization.md` |
 
 ## Quality Checkpoints
 
@@ -96,5 +97,5 @@
 
 ## Handoff Notes For Next Session
 
-- Live is forbidden until the pre-live checkpoint is pushed and a separate authorization commit binds that SHA.
-- After authorization, invoke only `dispatcher-config.v3.json` once; any blocker is terminal.
+- Checkpoint is pushed; live remains forbidden until the separate authorization commit is pushed.
+- After authorization push, invoke only `dispatcher-config.v3.json` once; any blocker is terminal.
