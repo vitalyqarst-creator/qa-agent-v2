@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `search-clear-context-exec-benchmark-v1` |
 | started_from | `work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/prompt.scope-to-iteration.md` |
-| status_after | `authorized-awaiting-authorization-push` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -30,13 +30,14 @@
 - Added an explicit v6 reset state-change contract instead of relying on prompt wording.
 - Fixed all four reset plan rows relative to captured initial state; no exact product defaults were introduced.
 - Kept standard prepared routing because `state` remains an unsupported fast-path dimension.
-- Stopped before live pending checkpoint and separate authorization.
+- Stopped the one authorised live run at the writer `blocked-input`; no retry or reviewer launch was allowed.
 
 ## Risks And Fallbacks
 
 - V3 still benchmarks a small four-obligation scope; medium-scope scaling remains unproven.
-- Writer/reviewer token efficiency can only be measured after the one authorised live run.
+- Writer/reviewer token efficiency and semantic quality remain unmeasured because the live run stopped before draft/reviewer.
 - Runtime probe printed Cyrillic mojibake under cp1251; every semantic Markdown/source read used explicit UTF-8 and distorted probe output was not used as evidence.
+- The package-v6 migration was incomplete: the static writer profile remained on v5 and the embedded metadata lacked `package_digest`.
 
 ## Validation
 
@@ -45,6 +46,8 @@
 - V3 compile: 4 obligations, 0 gaps, package v6, `standard-required`.
 - Validate-only: state-change `4/4`, oracle `4/4`, context/output/reviewer capacities pass.
 - Dispatcher dry-run: verified exec, contract v2, no fallback.
+- Live dispatcher: exactly one invocation; writer `blocked-input` after `13.453 s`, reviewer not started, no retry/fallback.
+- Terminal H50 artifact validation: 0 errors, 0 warnings, 3 inherited source-quality info findings; strict warning gate passed.
 
 ## Contamination Check
 
@@ -66,6 +69,10 @@
 | 8 | Applied pre-live stop gate | Live waits for checkpoint push and separate authorization | `pre-live-stop-gate.md` |
 | 9 | First validator-remediation patch mixed two target files | No partial edit; prompt and session-log fixes were applied separately | `TF-004` |
 | 10 | Pushed checkpoint and created separate authorization | One V3 dispatcher permitted only after authorization push | `pre-live-authorization.md` |
+| 11 | Invoked the authorised V3 dispatcher once | Fresh writer stopped on package v6 versus profile v5 and missing digest; no draft | `live-result.v3.json` |
+| 12 | Applied terminal stop gate | Reviewer, retry, resume, rebind, fallback and promotion remain forbidden | `stop-gate.md` |
+| 13 | Localized the protocol mismatch | Static writer profile duplicated v5; writer metadata projection omitted package digest | `live-blocker-analysis.md` |
+| 14 | Prepared next immutable routing | V4 must centralize identity metadata and test profile/runtime agreement before live | `prompt.scope-to-iteration.md` |
 
 ## Quality Checkpoints
 
@@ -76,6 +83,8 @@
 | Runner pre-live state-change gate | pass | positive/negative runner tests; V3 4/4 report | include in live evidence |
 | Source/traceability preservation | pass | BSR 32 in 4/4 obligations | reviewer must retain |
 | Production boundary | pass | baseline hashes; target absent | recheck after live |
+| Writer runtime eligibility | fail | v6 metadata versus static v5 allowlist; digest absent | remediate only in a new V4 |
+| Live reviewer verdict | not reached | writer produced no draft | new V4 required |
 
 ## Artifact Write Strategy
 
@@ -94,8 +103,10 @@
 | `TF-002` | manual validate-only lacked `--cli-contract-verified` | direct runner command without verified flag | use verified capability evidence and rerun with explicit flag | `backend-selection.dry-run.json` | `yes` | `none; runner blocked before attempt creation` | live uses dispatcher capability injection |
 | `TF-003` | runtime probe Cyrillic rendered as mojibake under cp1251 | console Cyrillic probe | explicit `Get-Content -Encoding UTF8` and UTF-8 Python environment for semantic reads/tests | `scripts/probe_environment.py` | `yes` | `none; distorted stdout was not used as source or decision evidence` | preserve explicit UTF-8 policy |
 | `TF-004` | apply-patch context combined prompt and session-log rows | one multi-file patch with a context from the wrong target | apply separate bounded patches per target file | `n/a` | `n/a` | `none; failed patch made no partial edit` | artifact validator rerun required |
+| `TF-005` | local PowerShell does not support `Get-Date -AsUTC` | unsupported parameter while reading diagnostic timestamp | omit nonessential timestamp; use stored runner timestamps as evidence | `n/a; no helper artifact was required` | `n/a` | `none; no artifact depended on the failed command` | use `[DateTime]::UtcNow` only if a new UTC timestamp is required |
 
 ## Handoff Notes For Next Session
 
-- Checkpoint is pushed; live remains forbidden until the separate authorization commit is pushed.
-- After authorization push, invoke only `dispatcher-config.v3.json` once; any blocker is terminal.
+- V3 is terminal `blocked-input`; its authorization is consumed and `dispatcher-config.v3.json` must not be invoked again.
+- Start only the immutable V4 remediation described in `prompt.scope-to-iteration.md`.
+- Preserve V3 package/attempt evidence and both protected FT-first baselines byte-for-byte.

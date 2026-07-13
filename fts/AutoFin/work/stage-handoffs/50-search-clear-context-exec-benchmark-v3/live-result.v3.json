@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cycle_id": "search-clear-context-exec-benchmark-v3-20260713",
+  "package_id": "search-clear-context-exec-benchmark-v3",
+  "package_version": 6,
+  "package_digest": "880e4ec00bd6f3cb6e2d04dde04967beab2387c541ef3bead3da3acfe827895d",
+  "backend": "exec",
+  "contract_version": 2,
+  "status": "blocked-input",
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "fallback_used": false,
+  "writer": {
+    "status": "blocked-input",
+    "session_id": "019f5bbe-fe2f-7e33-a879-3ad4dfdc74ad",
+    "duration_ms": 13453,
+    "total_tokens": 20160,
+    "uncached_input_tokens": 20026,
+    "command_count": 0,
+    "draft_created": false
+  },
+  "reviewer": {
+    "status": "not-started",
+    "session_id": null,
+    "reason": "writer stage did not produce a gate-passing draft"
+  },
+  "fresh_session_isolation": "not-assessable",
+  "duration_ms_total": 13453,
+  "total_tokens": 20160,
+  "uncached_input_tokens_total": 20026,
+  "test_case_count": 0,
+  "testable_obligations_in_package": 4,
+  "accepted_terminal_state": false,
+  "final_promoted": false,
+  "promotion_target_exists": false,
+  "blocking_reasons": [
+    "prepared writer runtime profile still allowlists package version 5 while the current package contract is version 6",
+    "writer embedded metadata omits package_digest although the runtime profile requires a digest"
+  ]
+}

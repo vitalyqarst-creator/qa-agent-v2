@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019f5bbe-fe2f-7e33-a879-3ad4dfdc74ad"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\"contract_version\":1,\"status\":\"blocked-input\",\"draft_markdown\":\"\",\"blocking_reasons\":[\"Профиль не проходит собственную eligibility-проверку: указан package_version 6, тогда как разрешён только package_version 5; valid package digest в embedded payload отсутствует.\"]}"}}
+{"type":"turn.completed","usage":{"input_tokens":20026,"cached_input_tokens":0,"output_tokens":134,"reasoning_output_tokens":64}}

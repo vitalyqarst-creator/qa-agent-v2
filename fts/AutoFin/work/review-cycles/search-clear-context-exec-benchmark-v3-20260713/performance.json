@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "backend": "exec",
+  "cycle_dir": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v3-20260713",
+  "stage_count": 1,
+  "duration_ms_total": 13453,
+  "total_tokens": 20160,
+  "uncached_input_tokens_total": 20026,
+  "input_artifact_bytes_total": 52779,
+  "output_artifact_bytes_total": 13919,
+  "validator_invocations": 0,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f5bbe-fe2f-7e33-a879-3ad4dfdc74ad"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "search-clear-context-exec-benchmark-v3-20260713",
+      "duration_ms": 13453,
+      "input_artifact_bytes": 52779,
+      "input_artifact_count": 7,
+      "input_tokens": 20026,
+      "outcome": "blocked",
+      "output_artifact_bytes": 13919,
+      "output_artifact_count": 8,
+      "output_tokens": 134,
+      "role": "writer",
+      "scenario": "writer.session_prepared_standard_structured",
+      "stage_id": "writer-r1",
+      "total_tokens": 20160
+    }
+  ],
+  "stage_attribution": [
+    {
+      "stage_id": "writer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    }
+  ],
+  "context_efficiency": {
+    "primary_context_bytes_total": 26465,
+    "prompt_bytes_total": 22232,
+    "instruction_bytes_total": 4233,
+    "instruction_artifact_count_total": 1,
+    "command_executions_total": 0,
+    "file_changes_total": 0,
+    "test_case_count": 0,
+    "testable_obligations": 0,
+    "uncached_tokens_per_obligation": null,
+    "commands_per_test_case": null
+  }
+}

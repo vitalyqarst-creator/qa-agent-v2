@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-observable-oracle-preflight-v1",
+  "error_code": "",
+  "package_id": "search-clear-context-exec-benchmark-v3",
+  "atomic_obligations_sha256": "ceb9f4613525caac27179060c07fdef4572d113c8f871c68f01102e96c5c9e7c",
+  "testable_obligations_checked": 4,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "ae87a1bbf925faf0054aa4a1cb6f033bde0168204a2c5bb0b4f53ceca1a36d8e"
+}
