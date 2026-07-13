@@ -2634,6 +2634,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertNotIn("workflow-state-scope-analyzer-invalid-negative-oracle-inventory", finding_ids)
+        self.assertNotIn("oracle-candidate-obligation-without-test-case", finding_ids)
 
     def test_writer_candidate_ui_calibration_tc_passes_structural_check(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

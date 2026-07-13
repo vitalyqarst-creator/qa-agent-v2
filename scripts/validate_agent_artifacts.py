@@ -19447,13 +19447,32 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
-        candidate_findings, candidate_checks = validate_candidate_oracle_obligation_coverage(
-            root,
-            oracle_inventories,
-            test_case_files,
+        workflow_state_payloads = [parse_workflow_state(path) for path in workflow_states]
+        scope_analysis_before_writer = (
+            not test_case_files
+            and any(
+                state.get("current_stage") == "ft-scope-analyzer"
+                and state.get("current_round") == 0
+                for state in workflow_state_payloads
+            )
         )
-        findings.extend(candidate_findings)
-        checks.extend(candidate_checks)
+        if scope_analysis_before_writer:
+            checks.append(
+                Check(
+                    "oracle-candidate-obligation-coverage",
+                    "pass",
+                    "Candidate TC coverage is deferred until writer output exists; scope-stage inventory planning is validated separately.",
+                    rel(root, root),
+                )
+            )
+        else:
+            candidate_findings, candidate_checks = validate_candidate_oracle_obligation_coverage(
+                root,
+                oracle_inventories,
+                test_case_files,
+            )
+            findings.extend(candidate_findings)
+            checks.extend(candidate_checks)
 
     blocked_writer_gate_suppression_paths = blocked_writer_gate_suppression_test_case_paths(
         workflow_states,
