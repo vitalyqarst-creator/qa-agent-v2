@@ -1,0 +1,29 @@
+{
+  "validator": "prepared-v8-package-preflight-v1",
+  "passed": true,
+  "package_id": "application-card-client-personal-data-v8",
+  "package_digest": "3ac15bc3d846e71f5a8b5bf6fccb2f937b98c277b3570659ed0c9b80ec1a2ea7",
+  "stage_package_sha256": "97571ea49871867caa46dae654513faff39de37aaefce042bb47e1edb028b847",
+  "section_id": "14",
+  "execution_profile": "standard-required",
+  "obligations": 65,
+  "planned_test_cases": 47,
+  "coverage_gaps": [
+    "GAP-001",
+    "GAP-002",
+    "GAP-003"
+  ],
+  "dictionary_refs": [
+    "DICT-001"
+  ],
+  "compiled_evidence_logical_utf8_bytes": 49104,
+  "compiled_evidence_budget_bytes": 49152,
+  "source_evidence_artifact_bytes_with_windows_newlines": 49431,
+  "package_artifact_hashes_match_manifest": true,
+  "prepared_oracle_quality": {
+    "passed": true,
+    "testable_obligations_checked": 65,
+    "finding_count": 0,
+    "digest": "05730d7cd9099f9275cbad89f9135eba80c4a5f0521ef6cd3bfe1489eba775de"
+  }
+}

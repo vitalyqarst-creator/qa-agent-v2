@@ -115,7 +115,7 @@ Structured fast writer and reviewer are bounded by hard terminal deadlines becau
 
 Input budget is not output-capacity proof. Above the single-session TC limit, preflight must route complete `planned_test_case_id` groups to disjoint bounded shards or block before live. Each shard gets only its source-backed obligations and partial seed; the immutable package remains authoritative for merge gates and reviewer. The plan proves exact TC/OBL membership, digests, complete union and disjointness.
 
-Bounded targeted repair uses a new package/cycle, hash-bound unsigned prior inputs, byte-preserving runner splice and the ordinary full-set gates/reviewer. Prior drafts are never requirement evidence or sign-off.
+Targeted repair uses a new cycle and hash-bound inputs. Only per-TC `package_id` may change in non-target sections; record byte and normalized-semantic hashes. Any other change blocks. Prior drafts are not requirement evidence or sign-off.
 
 ## Fast Path And Fallback
 
@@ -137,7 +137,7 @@ A `standard-required` package keeps the same immutable package, obligation, seed
 
 Role-specific `stage-input.json` manifests must list the selected standard instruction files, compact source evidence, obligations and runner-owned gate artifacts. The runner enforces separate primary-context budgets before each LLM stage and writes `context-budget.json`; registered DOCX/XHTML/PDF sources are excluded from primary-context byte totals and remain fallback evidence.
 
-Ordinary reviewer schemas bind every `obligation_id -> atom_id` pair and status-specific verdict. Large sharded reviews use generic bounded shapes to avoid duplicating the full set in the schema; the compact projection supplies exact mappings and the parser enforces them once-only. Testable verdicts are `covered | missing | incorrect`; `gap | unclear` use `gap-preserved | invented-coverage`. The parser also verifies draft hash, TC ids and finding linkage.
+Reviewer schemas bind verdicts to `coverage_status`. Generic shapes group obligation ids by status; projection and parser enforce every `obligation_id -> atom_id` once. Testable verdicts are `covered | missing | incorrect`; gaps use `gap-preserved | invented-coverage`. Referenced `DICT-* active_values` must be projected; absence blocks. Parser also verifies draft hash, TC ids and findings.
 
 ## Completion Gates
 

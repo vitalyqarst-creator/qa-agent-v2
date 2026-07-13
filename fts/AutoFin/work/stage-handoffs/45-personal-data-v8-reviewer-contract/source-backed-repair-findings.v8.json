@@ -1,0 +1,73 @@
+{
+  "contract_version": 1,
+  "source_cycle": "application-card-client-personal-data-shadow-v7-20260713",
+  "source_draft_sha256": "17c9bd80c2cff3d19939831f9d42503aebdbd10dc9268d98299896e98dbac23e",
+  "diagnostic_findings_authoritative": false,
+  "verification_artifact": "fts/AutoFin/work/stage-handoffs/45-personal-data-v8-reviewer-contract/source-backed-diagnostic-verification.md",
+  "findings": [
+    {
+      "id": "undefined-execution-action",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-012"
+      ],
+      "source_refs": [
+        "OBL-027",
+        "ATOM-020",
+        "SRC-006.P02",
+        "BSR 59"
+      ]
+    },
+    {
+      "id": "non-observable-expected-result",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-014",
+        "TC-ACPD-015"
+      ],
+      "source_refs": [
+        "OBL-030",
+        "OBL-033",
+        "OBL-035",
+        "OBL-036",
+        "ATOM-022",
+        "ATOM-024",
+        "ATOM-025",
+        "SRC-007.P02",
+        "SRC-007.P04",
+        "SRC-007.P05",
+        "BSR 61-63"
+      ]
+    },
+    {
+      "id": "missing-branch-precondition",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-034",
+        "TC-ACPD-037",
+        "TC-ACPD-038",
+        "TC-ACPD-039",
+        "TC-ACPD-040",
+        "TC-ACPD-042",
+        "TC-ACPD-043",
+        "TC-ACPD-044",
+        "TC-ACPD-045",
+        "TC-ACPD-046"
+      ],
+      "source_refs": [
+        "SRC-009.P01",
+        "SRC-010.P01",
+        "SRC-011.P01",
+        "BSR 66",
+        "BSR 70",
+        "BSR 74"
+      ]
+    }
+  ],
+  "excluded_diagnostics": [
+    {
+      "id": "F-002",
+      "reason": "DICT-001 source evidence contains active values Мужчина and Женщина; transport projection, not draft semantics, caused the diagnostic."
+    }
+  ]
+}

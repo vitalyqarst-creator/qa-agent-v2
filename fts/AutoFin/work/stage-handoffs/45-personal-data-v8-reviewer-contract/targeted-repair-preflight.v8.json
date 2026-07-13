@@ -1,0 +1,49 @@
+{
+  "validator": "personal-data-v8-targeted-repair-preflight-v1",
+  "passed": true,
+  "cycle_artifacts_created": false,
+  "repair": {
+    "mode": "targeted-repair",
+    "plan_digest": "80fbb773372e037e4cdb3455af920791263f8430c23eba925273e588833648f6",
+    "source_draft_sha256": "17c9bd80c2cff3d19939831f9d42503aebdbd10dc9268d98299896e98dbac23e",
+    "source_findings_sha256": "13a783ac14daf5a8ace8378b9d36b3828c7b4f6e1bfab58f5d8c042683e286f2",
+    "full_test_case_count": 47,
+    "target_test_case_count": 13,
+    "preserved_test_case_count": 34,
+    "target_test_case_ids": [
+      "TC-ACPD-012",
+      "TC-ACPD-014",
+      "TC-ACPD-015",
+      "TC-ACPD-034",
+      "TC-ACPD-037",
+      "TC-ACPD-038",
+      "TC-ACPD-039",
+      "TC-ACPD-040",
+      "TC-ACPD-042",
+      "TC-ACPD-043",
+      "TC-ACPD-044",
+      "TC-ACPD-045",
+      "TC-ACPD-046"
+    ],
+    "target_obligation_count": 15,
+    "single_writer_session_limit": 13,
+    "writer_context_bytes": 74597,
+    "writer_context_limit_bytes": 131072
+  },
+  "reviewer": {
+    "fresh_session_after_full_gates": true,
+    "obligation_count": 65,
+    "obligation_limit": 100,
+    "estimated_output_bytes": 18688,
+    "estimated_output_limit_bytes": 65536,
+    "output_schema_bytes": 2270,
+    "schema_mode": "generic-status-bound-parser-verified",
+    "estimated_primary_context_bytes": 118548,
+    "context_limit_bytes": 196608
+  },
+  "production": {
+    "ft_first_baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "shadow_exists": false,
+    "promotion_enabled": false
+  }
+}

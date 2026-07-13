@@ -563,14 +563,26 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         out_of_order_planned_ids: bool = False,
         test_case_count: int = 1,
         first_observable_oracle: str = "The visible result matches the requirement.",
+        dictionary_values: tuple[str, ...] = (),
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
             if include_gap or constraint_gap
             else ""
         )
+        dictionary_evidence = ""
+        if dictionary_values:
+            rendered_values = "; ".join(f"`{value}`" for value in dictionary_values)
+            dictionary_evidence = (
+                "\n## DICT-001\n\n"
+                "DICT-001 | Demo dictionary | support/demo.md | demo.gender | "
+                f"extracted | {rendered_values} | none_required | SRC-1 | "
+                "none_required | Test dictionary.\n"
+            )
         self.handoff_path.write_text(
-            "# Scope contract\n\nSRC-1: observable requirement.\n" + gap_evidence,
+            "# Scope contract\n\nSRC-1: observable requirement.\n"
+            + gap_evidence
+            + dictionary_evidence,
             encoding="utf-8",
         )
         prepared_obligations = [
@@ -582,7 +594,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 test_intent="Verify the visible result.",
                 coverage_status="testable",
                 gap_id="",
-                dictionary_refs=(),
+                dictionary_refs=("DICT-001",) if dictionary_values else (),
                 notes="",
                 constraint_gap_ids=(("GAP-001",) if constraint_gap else ()),
                 planned_test_case_id=(
@@ -682,7 +694,13 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 (self.source_path, "machine-readable", "SRC-1"),
             ),
             evidence_inputs=(
-                EvidenceInput(self.handoff_path, "Confirmed scope", selectors=("SRC-1",)),
+                EvidenceInput(
+                    self.handoff_path,
+                    "Confirmed scope",
+                    selectors=("SRC-1", "DICT-001")
+                    if dictionary_values
+                    else ("SRC-1",),
+                ),
             ),
             obligations=obligations,
             instructions=StageInstructionConfig(
@@ -1742,6 +1760,110 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(preserved["source_sha256"], preserved["output_sha256"])
         self.assertFalse(self.final_path.exists())
 
+    def test_targeted_repair_migrates_only_package_metadata_in_preserved_sections(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        prior_root = self.ft_root / "work" / "review-cycles" / "prior-v7"
+        prior_draft = prior_root / "draft.md"
+        prior_draft.parent.mkdir(parents=True)
+        prior_sections = [
+            self.complete_test_case_section(index).replace(
+                "pkg-exec-001", "pkg-exec-v7"
+            )
+            for index in range(1, 4)
+        ]
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n" + "\n\n".join(prior_sections).rstrip() + "\n",
+            encoding="utf-8",
+        )
+        findings_path = prior_root / "quality-gate-bundle.json"
+        findings_path.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "id": "non-observable-expected-result",
+                            "severity": "error",
+                            "test_case_ids": ["TC-DEMO-001", "TC-DEMO-003"],
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        replacement = "\n\n".join(
+            (self.complete_test_case_section(1), self.complete_test_case_section(3))
+        )
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=replacement),
+            self.prepared_reviewer_step_for_count(3),
+        )
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            repair_draft_path=prior_draft,
+            repair_findings_path=findings_path,
+        )
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        splice = json.loads(
+            (self.writer_attempt / "runner-output" / "repair-splice.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(splice["passed"])
+        self.assertFalse(splice["all_non_target_sections_byte_preserved"])
+        self.assertTrue(splice["all_non_target_test_semantics_preserved"])
+        self.assertEqual(
+            ["TC-DEMO-002"], splice["metadata_migrated_test_case_ids"]
+        )
+        preserved = next(
+            item for item in splice["sections"] if item["test_case_id"] == "TC-DEMO-002"
+        )
+        self.assertFalse(preserved["byte_preserved"])
+        self.assertTrue(preserved["semantic_body_preserved"])
+        metadata_gate = json.loads(
+            (self.writer_attempt / "runner-output" / "package-metadata-gate.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(metadata_gate["passed"])
+        merged = self.draft_path.read_text(encoding="utf-8")
+        self.assertNotIn("pkg-exec-v7", merged)
+        self.assertEqual(3, merged.count("**package_id:** pkg-exec-001"))
+
+    def test_prepared_package_metadata_gate_rejects_wrong_package_id(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        self.draft_path.parent.mkdir(parents=True)
+        self.draft_path.write_text(
+            "# Тест-кейсы\n\n"
+            + self.complete_test_case_section(1).replace(
+                "**package_id:** pkg-exec-001",
+                "**package_id:** pkg-exec-v7",
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        validation = runner._validate_draft_package_metadata()
+
+        self.assertFalse(validation.passed)
+        self.assertEqual("prepared-package-metadata-gate-v1", validation.validator)
+        self.assertEqual("package-id-mismatch", validation.findings[0]["id"])
+        self.assertEqual("pkg-exec-001", validation.findings[0]["expected_package_id"])
+        self.assertEqual("pkg-exec-v7", validation.findings[0]["actual_package_id"])
+
     def test_targeted_repair_blocks_extra_test_case_before_reviewer(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -2219,6 +2341,99 @@ Draft body.
             r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
             variants[0]["properties"]["test_case_ids"]["items"]["pattern"],
         )
+
+    def test_generic_review_schema_restricts_all_testable_verdicts(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        runner._uses_generic_bounded_reviewer_schema = lambda: True
+
+        schema = runner._review_contract_schema()
+        item = schema["properties"]["obligation_reviews"]["items"]
+
+        self.assertEqual(
+            ["covered", "incorrect", "missing"],
+            item["properties"]["verdict"]["enum"],
+        )
+        self.assertNotIn("invented-coverage", item["properties"]["verdict"]["enum"])
+        self.assertEqual(
+            ["ATOM-001", "OBL-002", "OBL-003"],
+            item["properties"]["obligation_id"]["enum"],
+        )
+
+    def test_generic_review_schema_groups_mixed_status_verdicts(self) -> None:
+        package_path = self.build_prepared_package(include_gap=True)
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        runner._uses_generic_bounded_reviewer_schema = lambda: True
+
+        schema = runner._review_contract_schema()
+        variants = schema["properties"]["obligation_reviews"]["items"]["anyOf"]
+
+        self.assertEqual(["ATOM-001"], variants[0]["properties"]["obligation_id"]["enum"])
+        self.assertEqual(
+            ["covered", "incorrect", "missing"],
+            variants[0]["properties"]["verdict"]["enum"],
+        )
+        self.assertEqual(["OBL-002"], variants[1]["properties"]["obligation_id"]["enum"])
+        self.assertEqual(
+            ["gap-preserved", "invented-coverage"],
+            variants[1]["properties"]["verdict"]["enum"],
+        )
+        self.assertEqual(0, variants[1]["properties"]["test_case_ids"]["maxItems"])
+
+    def test_standard_reviewer_projection_embeds_dictionary_active_values(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dictionary",),
+            dictionary_values=("Мужчина", "Женщина"),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        projection = json.loads(
+            runner._prepared_standard_reviewer_semantic_projection()
+        )
+
+        self.assertEqual(
+            [
+                {
+                    "dictionary_id": "DICT-001",
+                    "dictionary_name": "Demo dictionary",
+                    "source_file": "support/demo.md",
+                    "source_location": "demo.gender",
+                    "extraction_status": "extracted",
+                    "active_values": ["Мужчина", "Женщина"],
+                    "archived_values": "none_required",
+                }
+            ],
+            projection["dictionary_evidence"],
+        )
+
+    def test_standard_reviewer_projection_blocks_missing_dictionary_evidence(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dictionary",),
+            dictionary_values=("Мужчина", "Женщина"),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        evidence_path = runner._prepared_artifact("source-evidence")
+        evidence = evidence_path.read_text(encoding="utf-8")
+        evidence_path.write_text(evidence.split("## DICT-001", 1)[0], encoding="utf-8")
+        obligations = runner_module.load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        ).obligations
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "Prepared dictionary evidence is missing or malformed: DICT-001",
+        ):
+            runner._prepared_dictionary_evidence_projection(obligations)
 
     def test_prepared_promotion_contract_produces_promotion_ready_terminal_state(self) -> None:
         package_path = self.build_prepared_package(execution_profile="standard-required", unsupported_dimensions=("state-transition",))

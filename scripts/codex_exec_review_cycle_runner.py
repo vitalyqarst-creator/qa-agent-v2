@@ -128,9 +128,13 @@ NON_OBSERVABLE_EXPECTED_RESULT_RE = re.compile(
 )
 REPAIRABLE_QUALITY_FINDING_IDS = {
     "generic-execution-fixture",
+    "missing-branch-precondition",
     "undefined-execution-action",
     "non-observable-expected-result",
 }
+PACKAGE_ID_LINE_RE = re.compile(
+    r"(?m)^\*\*package_id:\*\*\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$"
+)
 
 InstructionContextResolver = Callable[..., dict[str, Any]]
 
@@ -936,6 +940,10 @@ class CodexExecReviewCycleRunner:
     @property
     def obligation_gate_path(self) -> Path:
         return self.runner_output_dir(WRITER_STAGE) / "obligation-gate.json"
+
+    @property
+    def package_metadata_gate_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "package-metadata-gate.json"
 
     @property
     def semantic_overlap_path(self) -> Path:
@@ -2143,6 +2151,9 @@ class CodexExecReviewCycleRunner:
                 "obligation_count": len(obligations.obligations),
                 "semantic_evidence_source": "selected-source-evidence",
                 "coverage_gaps": [item.to_dict() for item in obligations.coverage_gaps],
+                "dictionary_evidence": self._prepared_dictionary_evidence_projection(
+                    obligations.obligations
+                ),
                 "obligations": [
                     {
                         "obligation_id": item.obligation_id,
@@ -2163,6 +2174,70 @@ class CodexExecReviewCycleRunner:
             ensure_ascii=False,
             separators=(",", ":"),
         )
+
+    def _prepared_dictionary_evidence_projection(
+        self, obligations: Sequence[Any]
+    ) -> list[dict[str, Any]]:
+        referenced_ids = sorted(
+            {
+                dictionary_id
+                for obligation in obligations
+                for dictionary_id in obligation.dictionary_refs
+            }
+        )
+        if not referenced_ids:
+            return []
+        evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
+        blocks: dict[str, str] = {}
+        headings = list(
+            re.finditer(r"(?m)^##\s+(DICT-[A-Za-z0-9._-]+)\s*$", evidence)
+        )
+        for index, match in enumerate(headings):
+            end = headings[index + 1].start() if index + 1 < len(headings) else len(evidence)
+            blocks[match.group(1)] = evidence[match.end() : end].strip()
+        projection: list[dict[str, Any]] = []
+        columns = (
+            "dictionary_id",
+            "dictionary_name",
+            "source_file",
+            "source_location",
+            "extraction_status",
+            "active_values",
+            "archived_values",
+            "used_by_source_properties",
+            "gap_id",
+            "notes",
+        )
+        for dictionary_id in referenced_ids:
+            block = blocks.get(dictionary_id, "")
+            row = next((line.strip() for line in block.splitlines() if line.strip()), "")
+            values = [value.strip() for value in row.split(" | ")]
+            if len(values) != len(columns) or values[0].strip("`") != dictionary_id:
+                raise RunnerError(
+                    "Prepared dictionary evidence is missing or malformed: " + dictionary_id
+                )
+            record = dict(zip(columns, values, strict=True))
+            active_values = [
+                value.strip()
+                for value in re.findall(r"`([^`]+)`", record["active_values"])
+                if value.strip()
+            ]
+            if not active_values:
+                raise RunnerError(
+                    "Prepared dictionary evidence has no active values: " + dictionary_id
+                )
+            projection.append(
+                {
+                    "dictionary_id": dictionary_id,
+                    "dictionary_name": record["dictionary_name"].strip("`"),
+                    "source_file": record["source_file"].strip("`"),
+                    "source_location": record["source_location"].strip("`"),
+                    "extraction_status": record["extraction_status"].strip("`"),
+                    "active_values": active_values,
+                    "archived_values": record["archived_values"].strip("`"),
+                }
+            )
+        return projection
 
     def _prepared_shared_context_projection(self) -> str:
         evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
@@ -2210,6 +2285,12 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
             self._prepared_gate_summary("quality-bundle", self.quality_gate_bundle_path),
         ]
+        if self.package_metadata_gate_path.is_file():
+            gates.append(
+                self._prepared_gate_summary(
+                    "package-metadata", self.package_metadata_gate_path
+                )
+            )
         if self._promotion_contract is not None:
             gates.append(
                 self._prepared_gate_summary("promotion-readiness", self.promotion_readiness_path)
@@ -2979,6 +3060,12 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
             self._prepared_gate_summary("quality-bundle", self.quality_gate_bundle_path),
         ]
+        if self.package_metadata_gate_path.is_file():
+            gates.append(
+                self._prepared_gate_summary(
+                    "package-metadata", self.package_metadata_gate_path
+                )
+            )
         if self._is_prepared_standard():
             obligation_heading = "## Verified obligation review index"
             obligation_note = (
@@ -3056,8 +3143,53 @@ class CodexExecReviewCycleRunner:
                 "## Required final contract",
                 "",
                 "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation with its exact obligation_id and atom_id, structured findings and a non-empty summary. Classify every semantic-overlap group: accept only when the shared body is justified as one observable multi-obligation check; otherwise require consolidation with a duplication finding. Use only schema enum values. Do not emit commentary outside the final JSON object.",
+                "Dictionary evidence in the verified obligation projection is authoritative. Before claiming that a DICT-* value is absent, compare it with the exact active_values array supplied there.",
                 "<!-- PREPARED-REVIEW-PAYLOAD:END -->",
             ]
+        )
+
+    def _validate_draft_package_metadata(self) -> ValidationResult:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        expected = self._prepared_package.package_id
+        findings: list[dict[str, Any]] = []
+        for test_case_id, _, _, section in test_case_section_spans(
+            self.draft_path.read_text(encoding="utf-8")
+        ):
+            values = PACKAGE_ID_LINE_RE.findall(section)
+            if not values:
+                findings.append(
+                    {
+                        "id": "package-id-missing",
+                        "severity": "error",
+                        "test_case_ids": [test_case_id],
+                        "expected_package_id": expected,
+                    }
+                )
+            elif len(values) > 1:
+                findings.append(
+                    {
+                        "id": "package-id-duplicate",
+                        "severity": "error",
+                        "test_case_ids": [test_case_id],
+                        "actual_package_ids": values,
+                    }
+                )
+            elif values[0] != expected:
+                findings.append(
+                    {
+                        "id": "package-id-mismatch",
+                        "severity": "error",
+                        "test_case_ids": [test_case_id],
+                        "expected_package_id": expected,
+                        "actual_package_id": values[0],
+                    }
+                )
+        return ValidationResult(
+            passed=not findings,
+            findings=tuple(findings),
+            checked_paths=(relative_path(self.draft_path, self.repo_root),),
+            validator="prepared-package-metadata-gate-v1",
         )
 
     def _validate_draft_seed(self) -> ValidationResult:
@@ -3596,6 +3728,26 @@ class CodexExecReviewCycleRunner:
             )
 
         if self._prepared_package is not None:
+            if repair_writer:
+                package_metadata_validation = self._validate_draft_package_metadata()
+                write_json(
+                    self.package_metadata_gate_path,
+                    package_metadata_validation.as_dict(),
+                )
+                if not package_metadata_validation.passed:
+                    return self._block_stage(
+                        state,
+                        stage=WRITER_STAGE,
+                        role="writer",
+                        result=writer_result,
+                        artifacts=writer_artifacts,
+                        status="blocked-package-metadata-gate",
+                        reasons=[
+                            "prepared package metadata gate reported findings",
+                            relative_path(self.package_metadata_gate_path, self.repo_root),
+                        ],
+                        validation=package_metadata_validation,
+                    )
             seed_validation = self._validate_draft_seed()
             write_json(self.seed_gate_path, seed_validation.as_dict())
             if not seed_validation.passed:
@@ -4355,11 +4507,26 @@ class CodexExecReviewCycleRunner:
             for test_case_id, _, _, section in replacement_spans
         }
         target_ids = set(self._prepared_repair_plan["target_test_case_ids"])
+        expected_package_id = self._prepared_package.package_id if self._prepared_package else ""
+        metadata_migrated_test_case_ids: list[str] = []
         prefix = source_text[: source_spans[0][1]] if source_spans else source_text
         chunks = [prefix]
         for test_case_id, _, _, source_section in source_spans:
             if test_case_id not in target_ids:
-                chunks.append(source_section)
+                source_package_ids = PACKAGE_ID_LINE_RE.findall(source_section)
+                if len(source_package_ids) != 1:
+                    raise RunnerError(
+                        "Prepared targeted repair source section must contain exactly one "
+                        f"package_id: {test_case_id}"
+                    )
+                migrated_section = PACKAGE_ID_LINE_RE.sub(
+                    f"**package_id:** {expected_package_id}",
+                    source_section,
+                    count=1,
+                )
+                if source_package_ids[0] != expected_package_id:
+                    metadata_migrated_test_case_ids.append(test_case_id)
+                chunks.append(migrated_section)
                 continue
             trailing_match = re.search(r"(\s*)\Z", source_section)
             trailing = trailing_match.group(1) if trailing_match else ""
@@ -4372,27 +4539,43 @@ class CodexExecReviewCycleRunner:
             )
         }
         section_results = []
-        preservation_passed = True
+        byte_preservation_passed = True
+        semantic_preservation_passed = True
         for test_case_id, _, _, source_section in source_spans:
             output_section = output_sections.get(test_case_id, "")
-            preserved = (
-                test_case_id in target_ids
-                or sha256_text(source_section) == sha256_text(output_section)
+            byte_preserved = sha256_text(source_section) == sha256_text(output_section)
+            source_semantics = PACKAGE_ID_LINE_RE.sub(
+                "**package_id:** <PACKAGE_ID>", source_section
             )
-            if test_case_id not in target_ids and not preserved:
-                preservation_passed = False
+            output_semantics = PACKAGE_ID_LINE_RE.sub(
+                "**package_id:** <PACKAGE_ID>", output_section
+            )
+            semantic_body_preserved = sha256_text(source_semantics) == sha256_text(
+                output_semantics
+            )
+            preserved = test_case_id in target_ids or semantic_body_preserved
+            if test_case_id not in target_ids and not byte_preserved:
+                byte_preservation_passed = False
+            if test_case_id not in target_ids and not semantic_body_preserved:
+                semantic_preservation_passed = False
             section_results.append(
                 {
                     "test_case_id": test_case_id,
                     "repair_target": test_case_id in target_ids,
                     "source_sha256": sha256_text(source_section),
                     "output_sha256": sha256_text(output_section),
+                    "source_semantic_sha256": sha256_text(source_semantics),
+                    "output_semantic_sha256": sha256_text(output_semantics),
+                    "byte_preserved": byte_preserved,
+                    "semantic_body_preserved": semantic_body_preserved,
+                    "metadata_migrated": test_case_id
+                    in metadata_migrated_test_case_ids,
                     "preserved": preserved,
                 }
             )
         splice = {
-            "passed": preservation_passed,
-            "validator": "prepared-targeted-repair-splice-v1",
+            "passed": semantic_preservation_passed,
+            "validator": "prepared-targeted-repair-splice-v2",
             "plan_digest": self._prepared_repair_plan["plan_digest"],
             "source_draft_sha256": self._prepared_repair_plan[
                 "source_draft_sha256"
@@ -4405,11 +4588,13 @@ class CodexExecReviewCycleRunner:
             "preserved_test_case_count": self._prepared_repair_plan[
                 "preserved_test_case_count"
             ],
-            "all_non_target_sections_byte_preserved": preservation_passed,
+            "all_non_target_sections_byte_preserved": byte_preservation_passed,
+            "all_non_target_test_semantics_preserved": semantic_preservation_passed,
+            "metadata_migrated_test_case_ids": metadata_migrated_test_case_ids,
             "sections": section_results,
         }
         write_json(self.repair_splice_path, splice)
-        if not preservation_passed:
+        if not semantic_preservation_passed:
             return ValidationResult(
                 passed=False,
                 findings=(
@@ -4419,7 +4604,7 @@ class CodexExecReviewCycleRunner:
                     },
                 ),
                 checked_paths=(relative_path(self.draft_path, self.repo_root),),
-                validator="prepared-targeted-repair-splice-v1",
+                validator="prepared-targeted-repair-splice-v2",
             )
         append_event(
             self.cycle_dir,
@@ -4429,6 +4614,7 @@ class CodexExecReviewCycleRunner:
             preserved_test_case_count=self._prepared_repair_plan[
                 "preserved_test_case_count"
             ],
+            metadata_migrated_test_case_ids=metadata_migrated_test_case_ids,
             draft_sha256=sha256_file(self.draft_path),
         )
         return validation
@@ -5185,6 +5371,13 @@ class CodexExecReviewCycleRunner:
                             kind="writer-targeted-repair-splice",
                             producer="runner",
                         ),
+                        ExpectedOutput(
+                            path=relative_path(
+                                self.package_metadata_gate_path, self.repo_root
+                            ),
+                            kind="package-metadata-gate",
+                            producer="runner",
+                        ),
                     ]
                 )
         elif role == "writer":
@@ -5236,6 +5429,8 @@ class CodexExecReviewCycleRunner:
                         self.evidence_access_path,
                     )
                 )
+                if self.package_metadata_gate_path.is_file():
+                    handoff_paths.append(self.package_metadata_gate_path)
             handoff_paths.append(self.reviewer_schema_path)
             expected_outputs.append(
                 ExpectedOutput(
@@ -5364,39 +5559,62 @@ class CodexExecReviewCycleRunner:
                 self, "_uses_generic_bounded_reviewer_schema", lambda: False
             )()
             if uses_generic_schema:
-                obligation_review_item: dict[str, Any] = {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": [
-                        "obligation_id",
-                        "atom_id",
-                        "verdict",
-                        "test_case_ids",
-                        "note",
-                    ],
-                    "properties": {
-                        "obligation_id": {
+                grouped_variants: list[dict[str, Any]] = []
+                for is_testable in (True, False):
+                    selected_ids = [
+                        obligation.obligation_id
+                        for obligation in obligations
+                        if (obligation.coverage_status == "testable") is is_testable
+                    ]
+                    if not selected_ids:
+                        continue
+                    test_case_ids_schema: dict[str, Any] = {
+                        "type": "array",
+                        "items": {
                             "type": "string",
-                            "pattern": r"^(?:ATOM|OBL)-[A-Za-z0-9._-]+$",
+                            "pattern": r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
                         },
-                        "atom_id": {
-                            "type": "string",
-                            "pattern": r"^ATOM-[A-Za-z0-9._-]+$",
-                        },
-                        "verdict": {
-                            "type": "string",
-                            "enum": sorted(PREPARED_REVIEW_VERDICTS),
-                        },
-                        "test_case_ids": {
-                            "type": "array",
-                            "items": {
-                                "type": "string",
-                                "pattern": r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
+                    }
+                    if not is_testable:
+                        test_case_ids_schema["maxItems"] = 0
+                    grouped_variants.append(
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "obligation_id",
+                                "atom_id",
+                                "verdict",
+                                "test_case_ids",
+                                "note",
+                            ],
+                            "properties": {
+                                "obligation_id": {
+                                    "type": "string",
+                                    "enum": selected_ids,
+                                },
+                                "atom_id": {
+                                    "type": "string",
+                                    "pattern": r"^ATOM-[A-Za-z0-9._-]+$",
+                                },
+                                "verdict": {
+                                    "type": "string",
+                                    "enum": (
+                                        ["covered", "incorrect", "missing"]
+                                        if is_testable
+                                        else ["gap-preserved", "invented-coverage"]
+                                    ),
+                                },
+                                "test_case_ids": test_case_ids_schema,
+                                "note": {"type": "string", "minLength": 1},
                             },
-                        },
-                        "note": {"type": "string", "minLength": 1},
-                    },
-                }
+                        }
+                    )
+                obligation_review_item = (
+                    grouped_variants[0]
+                    if len(grouped_variants) == 1
+                    else {"anyOf": grouped_variants}
+                )
             else:
                 variants: list[dict[str, Any]] = []
                 for obligation in obligations:
