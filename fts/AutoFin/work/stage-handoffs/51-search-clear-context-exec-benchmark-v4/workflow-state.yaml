@@ -17,6 +17,7 @@ required_inputs:
   - work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/prepared-input/search-clear-context-exec-benchmark-v4/stage-package.json
   - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-test-report.md
   - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-stop-gate.md
+  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-authorization.md
   - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/prompt.scope-to-iteration.md
   - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/agent-decision-log.md
 latest_artifacts:
@@ -31,6 +32,7 @@ latest_artifacts:
   backend_selection_dry_run: work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-authorization.md
   session_log: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/iteration-session-log.md
   decision_log: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/agent-decision-log.md
   active_transition_prompt: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/prompt.scope-to-iteration.md

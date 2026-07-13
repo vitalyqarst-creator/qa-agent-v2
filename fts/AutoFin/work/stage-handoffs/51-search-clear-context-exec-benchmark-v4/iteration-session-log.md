@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `search-clear-context-exec-benchmark-v1` |
 | started_from | `work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/prompt.scope-to-iteration.md` |
-| status_after | `pre-live-checkpoint-required` |
+| status_after | `authorized-awaiting-authorization-push` |
 
 ## Inputs Read
 
@@ -66,6 +66,8 @@
 | 6 | Ran validate-only and target suites | Runtime identity, state/oracle/capacity and 254 tests pass; no attempts | pre-live report |
 | 7 | Verified exec dry-run and production boundary | Exec available; no fallback; baselines unchanged; target absent | dry-run; pre-live report |
 | 8 | Applied pre-live stop gate | Live waits for pushed checkpoint and separate authorization | `pre-live-stop-gate.md` |
+| 9 | Pushed checkpoint and verified remote equality | Local and origin SHA both `40641ad...` | Git remote evidence |
+| 10 | Created separate one-shot authorization | One V4 dispatcher is permitted only after authorization push | `pre-live-authorization.md` |
 
 ## Quality Checkpoints
 
@@ -94,5 +96,6 @@
 
 ## Handoff Notes For Next Session
 
-- Pre-live gates pass, but dispatcher is forbidden until checkpoint push and separate authorization push.
+- Checkpoint is pushed; dispatcher remains forbidden until the separate authorization commit is pushed.
+- After authorization push, invoke only `dispatcher-config.v4.json` once; any outcome is terminal for V4.
 - V3 must not be retried, resumed, rebound or edited.
