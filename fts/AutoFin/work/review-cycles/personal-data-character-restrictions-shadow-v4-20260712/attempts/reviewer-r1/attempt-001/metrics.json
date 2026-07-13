@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 0,
+  "contract_version": 2,
+  "cycle_id": "personal-data-character-restrictions-shadow-v4-20260712",
+  "duration_ms": 23469,
+  "input_artifact_bytes": 114802,
+  "input_artifact_count": 14,
+  "input_tokens": 27421,
+  "outcome": "accepted",
+  "output_artifact_bytes": 22807,
+  "output_artifact_count": 8,
+  "output_tokens": 972,
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "stage_id": "reviewer-r1",
+  "total_tokens": 28393
+}

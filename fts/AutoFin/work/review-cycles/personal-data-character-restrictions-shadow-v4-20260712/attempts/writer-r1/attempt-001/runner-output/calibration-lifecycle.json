@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "context_profile": "character-restriction-calibration",
+  "items": [
+    {
+      "obligation_id": "OBL-003",
+      "atom_id": "ATOM-003",
+      "test_case_id": "TC-PDCR-003",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-004",
+      "atom_id": "ATOM-004",
+      "test_case_id": "TC-PDCR-004",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-007",
+      "atom_id": "ATOM-007",
+      "test_case_id": "TC-PDCR-007",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-008",
+      "atom_id": "ATOM-008",
+      "test_case_id": "TC-PDCR-008",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-011",
+      "atom_id": "ATOM-011",
+      "test_case_id": "TC-PDCR-011",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-012",
+      "atom_id": "ATOM-012",
+      "test_case_id": "TC-PDCR-012",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    }
+  ],
+  "open_count": 6,
+  "resolved_count": 0
+}

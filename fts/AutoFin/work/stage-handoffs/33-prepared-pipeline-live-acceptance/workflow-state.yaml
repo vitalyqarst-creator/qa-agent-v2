@@ -1,0 +1,34 @@
+ft_slug: AutoFin
+scope_slug: prepared-pipeline-live-acceptance
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/33-prepared-pipeline-live-acceptance/eval-matrix.md
+  - work/stage-handoffs/33-prepared-pipeline-live-acceptance/live-acceptance-report.md
+  - work/stage-handoffs/33-prepared-pipeline-live-acceptance/prompt.scope-to-iteration.md
+latest_artifacts:
+  eval_matrix: work/stage-handoffs/33-prepared-pipeline-live-acceptance/eval-matrix.md
+  stop_gate: work/stage-handoffs/33-prepared-pipeline-live-acceptance/stop-gate.md
+  cycle_state: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/cycle-state.yaml
+  accepted_draft: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/attempts/writer-r1/attempt-001/stage-output/draft.md
+  final_findings: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  quality_gate_bundle: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json
+  calibration_lifecycle: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json
+  performance_report: work/review-cycles/personal-data-character-restrictions-shadow-v4-20260712/performance.json
+  live_acceptance_report: work/stage-handoffs/33-prepared-pipeline-live-acceptance/live-acceptance-report.md
+  session_log: work/stage-handoffs/33-prepared-pipeline-live-acceptance/iteration-session-log.md
+  decision_log: work/stage-handoffs/33-prepared-pipeline-live-acceptance/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/33-prepared-pipeline-live-acceptance/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 1
+open_questions:
+  - GAP-001 remains awaiting UI calibration on six negative cases.
+blocking_reasons: []
+accepted_risks:
+  - Accepted shadow draft is not regression-ready and is not promoted.
