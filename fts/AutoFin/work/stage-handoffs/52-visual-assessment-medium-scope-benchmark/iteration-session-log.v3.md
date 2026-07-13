@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `visual-assessment-medium-scope-benchmark` |
 | started_from | `live-result.v2.json` and `benchmark-protocol.v3.md` |
-| status_after | `ready-for-live-authorization` |
+| status_after | `accepted-not-promoted` |
 
 ## Inputs Read
 
@@ -30,6 +30,7 @@
 - Implement compiler preflight plus runner defense-in-depth instead of manually repairing V2 draft.
 - Create fresh package/cycle V3 and preserve V1/V2 as immutable comparison evidence.
 - Make V3 the final live invocation of this iteration regardless of result.
+- Close V3 after 13/13 reviewer acceptance; do not promote inside the process benchmark.
 
 ## Risks And Fallbacks
 
@@ -45,6 +46,8 @@
 - V3 compiler: 13 obligations, 9 dictionary refs, zero gaps.
 - Validate-only: runtime/context/output/oracle/reviewer capacity pass; target absent; no attempt created.
 - Exec dry-run: exec selected, no fallback.
+- Live V3: writer deterministic gates pass with zero findings; semantic reviewer accepts 13/13 obligations.
+- Performance: 124,532 ms fails duration by 4,532 ms; 3,110.31 uncached tokens/OBL, one validator and 1.48% overhead pass.
 
 ## Contamination Check
 
@@ -52,6 +55,7 @@
 - Package source registry contains only current AutoFin DOCX/XHTML/PDF.
 - V1/V2 outputs are benchmark comparison evidence, not V3 source evidence.
 - Production target absent and three baseline hashes unchanged.
+- Exactly one V3 cycle start and two backend session ids exist; commands/file changes are 0/0.
 
 ## Event Timeline
 
@@ -66,6 +70,11 @@
 | 7 | Prepared stop gate | live blocked pending checkpoint and authorization pushes | `pre-live-stop-gate.v3.md` |
 | 8 | Pushed remediation checkpoint | local/origin `7e1c6ae...` match | Git evidence |
 | 9 | Created final hash-bound authorization | invocation budget 1; later live budget 0 | `pre-live-authorization.v3.md` |
+| 10 | Pushed final authorization | local/origin `67bf5d3...` match | Git evidence |
+| 11 | Invoked V3 dispatcher once | exec selected; no fallback | runner events |
+| 12 | Completed writer gates | zero findings; dictionary/calibration preserved | quality bundle |
+| 13 | Completed semantic reviewer | accepted; 13/13 covered | findings |
+| 14 | Applied terminal stop | no promotion and no later live | `stop-gate.v3.md` |
 
 ## Quality Checkpoints
 
@@ -76,7 +85,9 @@
 | Alternative action guard | pass | negative test blocked | verify V3 draft |
 | Dictionary group locator | pass | compiler and runner negative tests blocked | verify V3 draft |
 | Full regression | pass | 462 tests | none |
-| Semantic reviewer | not-applicable before V3 live | no attempt exists | run once after authorization |
+| Semantic reviewer after live | pass | 13 covered / 0 incorrect / 0 findings | none |
+| Duration target | fail | 124.532 s >= 120 s | offline performance stabilization |
+| Token/validator/orchestration targets | pass | 3,110.31 tokens/OBL; 1 validator; 1.48% | preserve |
 | Production boundary | pass | hashes unchanged; target absent | recheck post-live |
 
 ## Artifact Write Strategy
@@ -95,6 +106,6 @@
 
 ## Handoff Notes For Next Session
 
-- Do not invoke V3 before checkpoint and separate authorization commits are pushed and verified.
-- The first V3 dispatcher invocation consumes the final live budget of this iteration.
-- Verify both ambiguity findings are absent, all 13 obligations are covered, performance targets and production boundary post-live.
+- V3 authorization is consumed; no retry or further live is permitted in this iteration.
+- Preserve V3 package, draft, reviewer acceptance and metrics as immutable benchmark evidence.
+- Continue from `prompt.iteration-to-performance-stabilization.md` with offline architecture/performance work only.

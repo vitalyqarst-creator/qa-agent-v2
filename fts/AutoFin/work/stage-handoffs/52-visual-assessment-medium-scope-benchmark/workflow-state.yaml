@@ -3,8 +3,8 @@ prepared_compiler_contract_version: 2
 scope_slug: visual-assessment-medium-scope-benchmark
 current_stage: ft-test-case-iteration
 stage_status: ready-for-next-stage
-current_round: 0
-next_skill: ft-test-case-iteration
+current_round: 1
+next_skill: agent-architecture-auditor
 required_inputs:
   - AGENT-NOTES.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/source-selection.md
@@ -46,6 +46,15 @@ required_inputs:
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v3.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v3.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v3.md
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/cycle-state.yaml
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/performance.v3.json
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/live-result.v3.json
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/performance-analysis.v3.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-summary.v3.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/stop-gate.v3.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.iteration-to-performance-stabilization.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v3.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v2.md
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json
@@ -107,22 +116,30 @@ latest_artifacts:
   pre_live_test_report_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v3.md
   pre_live_stop_gate_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v3.md
   pre_live_authorization_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v3.md
+  cycle_state_v3: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/cycle-state.yaml
+  candidate_draft_v3: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  reviewer_findings_v3: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  performance_v3: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/performance.v3.json
+  live_result_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/live-result.v3.json
+  performance_analysis_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/performance-analysis.v3.md
+  iteration_summary_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-summary.v3.md
+  terminal_stop_gate_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/stop-gate.v3.md
   prepared_package: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v3/stage-package.json
   dispatcher_config: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v3.json
   backend_selection_dry_run: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v3.md
   pre_live_stop_gate: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v3.md
   pre_live_authorization: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v3.md
-  cycle_state: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/cycle-state.yaml
-  candidate_draft: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
-  reviewer_findings: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
-  performance: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/performance.json
-  live_result: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/live-result.v1.json
-  performance_analysis: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/performance-analysis.v1.md
-  iteration_summary: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-summary.md
-  terminal_stop_gate: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/stop-gate.md
+  cycle_state: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/cycle-state.yaml
+  candidate_draft: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  reviewer_findings: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  performance: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/performance.v3.json
+  live_result: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/live-result.v3.json
+  performance_analysis: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/performance-analysis.v3.md
+  iteration_summary: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-summary.v3.md
+  terminal_stop_gate: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/stop-gate.v3.md
   session_log: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v3.md
-  active_transition_prompt: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.scope-to-iteration.md
+  active_transition_prompt: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.iteration-to-performance-stabilization.md
   eval_candidate: ../../evals/candidates/2026-07-13-prepared-dictionary-values-not-materialized-visual-assessment.md
 coverage_gaps:
   blocking: 0
@@ -132,3 +149,4 @@ blocking_reasons: []
 accepted_risks:
   - SO-REQ-001 and SO-REQ-002 require later UI calibration; no exact UI reaction is asserted in FT-first benchmark.
   - V1 draft remains unsigned and must not be promoted; it is comparison evidence only.
+  - V3 is reviewer-accepted but intentionally not promoted; benchmark duration remains 4.532 seconds above the provisional single-run target.

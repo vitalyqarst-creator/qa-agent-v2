@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "validator": "runner-owned-dictionary-projection-v1",
+  "materialized_count": 2,
+  "items": [
+    {
+      "obligation_id": "OBL-006",
+      "atom_id": "ATOM-006",
+      "test_case_id": "TC-VAMB-005",
+      "requirements": [
+        {
+          "dictionary_id": "DICT-001",
+          "coverage_mode": "full-hierarchy",
+          "required_value_count": 47
+        }
+      ]
+    },
+    {
+      "obligation_id": "OBL-007",
+      "atom_id": "ATOM-007",
+      "test_case_id": "TC-VAMB-006",
+      "requirements": [
+        {
+          "dictionary_id": "DICT-001",
+          "coverage_mode": "all-leaf-values",
+          "required_value_count": 39
+        }
+      ]
+    }
+  ],
+  "draft_changed": true
+}

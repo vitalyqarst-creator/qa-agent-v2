@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "context_profile": "character-restriction-calibration",
+  "items": [
+    {
+      "obligation_id": "OBL-008",
+      "atom_id": "ATOM-008",
+      "test_case_id": "TC-VAMB-007",
+      "constraint_gap_ids": [],
+      "calibration_status": "ui-calibration-required",
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-010",
+      "atom_id": "ATOM-010",
+      "test_case_id": "TC-VAMB-009",
+      "constraint_gap_ids": [],
+      "calibration_status": "ui-calibration-required",
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    }
+  ],
+  "open_count": 2,
+  "resolved_count": 0
+}

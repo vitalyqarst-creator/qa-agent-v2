@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "status": "accepted-not-promoted",
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "further_live_budget_this_iteration": 0,
+  "backend": "exec",
+  "fallback_used": false,
+  "package_version": 7,
+  "package_id": "visual-assessment-medium-scope-benchmark-v3",
+  "package_digest": "d949590e68181f7c4a7ac5962e99b90bb6fb998748dccceff36ef8c20061a346",
+  "input_fingerprint": "56628223343eb6e9dedab5cdd98b6af336112fdc36d7035b94a7b4508cd5c85f",
+  "draft_sha256": "d26e38c5369c8dcb31e50f0df52da1b0f05c34ef29c78c76c1cdca5841e40fe2",
+  "writer": {
+    "status": "draft-ready",
+    "duration_ms": 86969,
+    "total_tokens": 29564,
+    "commands": 0,
+    "deterministic_gates_passed": true,
+    "quality_findings": 0,
+    "dictionary_projection_materialized": 2,
+    "calibration_lifecycle_open": 2
+  },
+  "reviewer": {
+    "status": "accepted",
+    "duration_ms": 37563,
+    "total_tokens": 29887,
+    "cached_input_tokens": 13568,
+    "commands": 0,
+    "covered_obligations": 13,
+    "incorrect_obligations": 0,
+    "finding_count": 0
+  },
+  "performance": {
+    "duration_ms_total": 124532,
+    "total_tokens": 59451,
+    "uncached_input_tokens_total": 40434,
+    "uncached_tokens_per_obligation": 3110.31,
+    "test_case_count": 12,
+    "testable_obligations": 13,
+    "validator_invocations": 1,
+    "orchestration_overhead_percent": 1.48,
+    "duration_target_passed": false,
+    "duration_target_over_ms": 4532,
+    "token_efficiency_target_passed": true,
+    "validator_budget_passed": true,
+    "orchestration_target_passed": true,
+    "semantic_acceptance_passed": true
+  },
+  "quality_regressions_closed": [
+    "V1 prepared dictionary values are materialized for OBL-006 and OBL-007",
+    "V1 calibration lifecycle loss is closed for OBL-008 and OBL-010",
+    "V2 ambiguous alternative action is absent from TC-VAMB-004",
+    "V2 ambiguous duplicated dictionary label is group-qualified in TC-VAMB-012"
+  ],
+  "production_boundary": {
+    "existing_visual_assessment_unchanged": true,
+    "existing_personal_data_unchanged": true,
+    "existing_section_4_2_unchanged": true,
+    "promotion_target_exists": false,
+    "final_promoted": false
+  },
+  "retry_permitted": false,
+  "next_action": "offline-writer-latency-and-dictionary-projection-deduplication-analysis"
+}

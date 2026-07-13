@@ -7,7 +7,7 @@
 - `source_signal`: `H52 live reviewer F-001`
 - `affected_skill`: `ft-test-case-iteration; ft-test-case-writer`
 - `failure_class`: `prepared-dictionary-values-not-materialized`
-- `status`: `implemented`
+- `status`: `verified-live`
 
 ## Failure Signal
 
@@ -53,7 +53,7 @@
 
 - `decision`: `accepted-eval-proposal`
 - `reason`: clear blocking defect with deterministic expected output; package already contains complete source-backed values.
-- `next_action`: exercise the enforced v7 contract in the next authorized medium-scope benchmark; no live rerun was performed in this iteration.
+- `next_action`: preserve the verified contract; optimize only duplicate rendering, never completeness.
 
 ## Implementation Notes
 
@@ -61,4 +61,4 @@
 - `gate_behavior`: exhaustive obligations carry exact group/leaf/path values; the runner inserts them into the assigned TC and the deterministic gate reports exact missing or unexpected values.
 - `legacy_compatibility`: only stable legacy dictionary obligation classes are mapped; free-form prose is never used to infer exhaustive coverage.
 - `calibration_fix`: source-backed UI calibration now has an explicit lifecycle status independent of `GAP-*`.
-- `verification`: the H52 package was recompiled diagnostically without a live LLM run; targeted positive and one-leaf-omitted regressions pass.
+- `verification`: H52 V2 and V3 live runs materialized 47 full-hierarchy values for OBL-006 and 39 leaf values for OBL-007; both obligations were reviewer-covered. V3 reached 13/13 semantic acceptance with the protected baseline unchanged.
