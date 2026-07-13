@@ -1,0 +1,152 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/18-prepared-shadow-visual-assessment-conditional.md",
+  "contract_version": 2,
+  "cycle_id": "visual-assessment-conditional-shadow-v1-20260713",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "quality-gate-bundle",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "calibration-lifecycle",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "producer": "runner",
+      "required": true
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/prepared-input/visual-assessment-conditional-v1/stage-package.json",
+      "sha256": "888685ed76031dbc869e38ad1c41d8e786b34204c28fec52196b5a195ce05d81"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/prepared-input/visual-assessment-conditional-v1/atomic-obligations.json",
+      "sha256": "bd0b7ad8841641b4114f05a3a471c99d4f0920f00dd651c66a81b8ac25a27639"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-input/draft-seed.md",
+      "sha256": "87c8a099e03141ea59f10090f8d8134a1b77e8e1fbd9455737f9920d627e26a1"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/writer-contract.schema.json",
+      "sha256": "92f0dd91ab78e3ac859514a4eddc66d3fc4641120ccb43151c447397caa4d816"
+    }
+  ],
+  "input_digest": "a80c46292048ca8dc58e613f767681435974a3a941990f0287ce44ec357524a2",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-writer-runtime-profile.md",
+      "sha256": "e1dc5a749ffbd25023b59541d33945ed2d0ebdf49fdd2926f000c46ed30178be"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/prompt.md",
+    "sha256": "6889ce15dcdba8d6aebc137f225807532ed78226737cadf85e8de39f6918bac4"
+  },
+  "role": "writer",
+  "sandbox_policy": "read_only",
+  "scenario": "writer.session_prepared_standard_structured",
+  "semantic_round": 0,
+  "session_id": "session-writer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/prepared-input/visual-assessment-conditional-v1/source-evidence.md",
+      "sha256": "07a9bfe83beba7a20d2da1c5e80ce7be9650ad03b2e3edc45d06e3c403028506"
+    }
+  ],
+  "stage_id": "writer-r1",
+  "timeout_seconds": 600
+}

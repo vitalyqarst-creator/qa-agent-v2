@@ -1,0 +1,61 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f593d-977d-7783-9fb2-1aceedd0aa22",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "visual-assessment-conditional-shadow-v1-20260713",
+  "duration_ms": 16516,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T02:10:52.860110+00:00",
+  "input_digest": "53c89a438b3728ae924d162e7c366588b863f42fd9efef52e220d162ec9a19f5",
+  "outcome": "accepted",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "cb24888ba6af54a16716633e78e80b2add8940b157204241cd80fdf080bc30e1"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "eb78b25b823f10ae2cb0495a56b87fb30b136e8e498a045782e942fafe39e7a0"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "cb24888ba6af54a16716633e78e80b2add8940b157204241cd80fdf080bc30e1"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "36c9b3d4acf9fcb45c51d8618bef6444e1df8a0631b851a2e0637ccf1376617d"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "sha256": "58e63683d9d9f6bbcf7ed81f89230c15c99d8b3f4eba2fa4f67b9a11f958f1e9"
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "sha256": "f1b38a0bfb9a1c820667b35ff4426d6c6de8df14578ffefed569ece52e69c441"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "6daad12ab41f94cca393028b41fed41f2d8c579378ab676c22d47d045a7e25e6"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-13T02:10:36.342183+00:00",
+  "status": "completed",
+  "timed_out": false
+}

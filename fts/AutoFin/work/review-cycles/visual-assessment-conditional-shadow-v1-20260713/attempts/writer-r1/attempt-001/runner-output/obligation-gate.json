@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "validator": "prepared-package-obligation-gate-v2",
+  "package_id": "visual-assessment-conditional-v1",
+  "test_case_count": 5,
+  "testable_obligations": 5,
+  "covered_obligations": [
+    "OBL-COND-001",
+    "OBL-COND-002",
+    "OBL-COND-003",
+    "OBL-COND-004",
+    "OBL-COND-005"
+  ],
+  "checked_paths": [
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\visual-assessment-conditional-shadow-v1-20260713\\attempts\\writer-r1\\attempt-001\\stage-output\\draft.md",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\visual-assessment-conditional-shadow-v1-20260713\\prepared-input\\visual-assessment-conditional-v1\\atomic-obligations.json"
+  ],
+  "findings": []
+}

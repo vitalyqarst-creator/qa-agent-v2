@@ -1,0 +1,39 @@
+ft_slug: AutoFin
+scope_slug: visual-assessment-conditional-state-shadow
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/scope-contract.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/scope-coverage-gaps.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/scope-clarification-requests.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/source-parity-check.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/source-row-inventory.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/mockup-visual-inventory.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/traceability-gate-finding.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/agent-decision-log.md
+  - work/stage-handoffs/35-visual-assessment-conditional-canary/prompt.scope-to-iteration.md
+latest_artifacts:
+  cycle_state: work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/cycle-state.yaml
+  defective_draft: work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  final_findings: work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  traceability_gate_finding: work/stage-handoffs/35-visual-assessment-conditional-canary/traceability-gate-finding.md
+  live_acceptance_report: work/stage-handoffs/35-visual-assessment-conditional-canary/live-acceptance-report.md
+  source_parity_check: work/stage-handoffs/35-visual-assessment-conditional-canary/source-parity-check.md
+  source_row_inventory: work/stage-handoffs/35-visual-assessment-conditional-canary/source-row-inventory.md
+  mockup_visual_inventory: work/stage-handoffs/35-visual-assessment-conditional-canary/mockup-visual-inventory.md
+  scope_clarification_requests: work/stage-handoffs/35-visual-assessment-conditional-canary/scope-clarification-requests.md
+  stop_gate: work/stage-handoffs/35-visual-assessment-conditional-canary/stop-gate.md
+  session_log: work/stage-handoffs/35-visual-assessment-conditional-canary/iteration-session-log.md
+  decision_log: work/stage-handoffs/35-visual-assessment-conditional-canary/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/35-visual-assessment-conditional-canary/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 1
+open_questions:
+  - GAP-COND-001 requires an observable requiredness mechanism before negative TC creation.
+blocking_reasons:
+  - FIND-COND-TRACE-001: built-in gates accepted five TC without mandatory SRC/BSR/DICT traceability.
+accepted_risks: []

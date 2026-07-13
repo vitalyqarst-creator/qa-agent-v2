@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "validator": "semantic-overlap-diagnostic-v1",
+  "status": "clean",
+  "blocking": false,
+  "test_case_count": 5,
+  "findings": [],
+  "checked_paths": [
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\visual-assessment-conditional-shadow-v1-20260713\\attempts\\writer-r1\\attempt-001\\stage-output\\draft.md"
+  ]
+}

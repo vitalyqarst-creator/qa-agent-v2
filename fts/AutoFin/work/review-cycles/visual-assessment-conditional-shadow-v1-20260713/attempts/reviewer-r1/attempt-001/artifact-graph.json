@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "cycle_id": "visual-assessment-conditional-shadow-v1-20260713",
+  "stage_id": "reviewer-r1",
+  "role": "reviewer",
+  "context_profile": "conditional-state",
+  "input_digest": "53c89a438b3728ae924d162e7c366588b863f42fd9efef52e220d162ec9a19f5",
+  "input_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/prompt.md",
+      "sha256": "7b7ece3e323a2f39dd47617e499554e322e5423b58bad172a6992c151a47c0e3",
+      "kind": "prompt",
+      "group": "prompt",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "e10d316e583daf3bb544eb2a30fa749ec08eb714400cb708ba02fc1c42267e33",
+      "kind": "instruction",
+      "group": "instruction",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/prepared-input/visual-assessment-conditional-v1/source-evidence.md",
+      "sha256": "07a9bfe83beba7a20d2da1c5e80ce7be9650ad03b2e3edc45d06e3c403028506",
+      "kind": "source",
+      "group": "source",
+      "lifecycle": "source",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/prepared-input/visual-assessment-conditional-v1/stage-package.json",
+      "sha256": "888685ed76031dbc869e38ad1c41d8e786b34204c28fec52196b5a195ce05d81",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/prepared-input/visual-assessment-conditional-v1/atomic-obligations.json",
+      "sha256": "bd0b7ad8841641b4114f05a3a471c99d4f0920f00dd651c66a81b8ac25a27639",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "9e5d26946afa948b176041428f7c7d0028ba8ed9950db4a45bffc06ba265028a",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "4d095119b69d7c24a61c2ae0e611e956be29263767049a92fefdcd627dd84022",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "20668cc32f04e3b47992d21b19fb5ba7103498afce607ad11bc73d87b2c88d68",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "4f8c5d8822db480ce1ae466b88b73284bf1777658448f9bc56de32f66c4e6f08",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "2530d36b26b521ac5c6081cafb205174431c913a80941284fca8f2b6f0e1da68",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "8e216a49fd15ddef0c1e2678a3a44ac86771877fbd960196702549c5e3f4e064",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "faa338426ae5615b8e05ffba7da3ca9a3c249ee958e96e2d6f1033f4417aa298",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "d992a87ab70a636ea2b5454f5857b4d1fcaed150bfd4412038b190abe36f6c8c",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    }
+  ],
+  "output_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "kind": "stdout",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "kind": "stderr",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "kind": "events",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "kind": "stage-status",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "kind": "artifact-graph",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "kind": "review-findings",
+      "lifecycle": "reviewed",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "kind": "evidence-access-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "kind": "context-budget",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    }
+  ],
+  "access_policy": {
+    "sandbox": "read_only",
+    "allowed_write_roots": [],
+    "forbidden_write_roots": [
+      "fts/AutoFin/test-cases"
+    ],
+    "fallback_policy": "targeted-only"
+  },
+  "graph_digest": "468f8d49b2529eebc65b34a582f326691780ec3dde50c8b37b0d26cd3680f771"
+}
