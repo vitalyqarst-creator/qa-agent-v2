@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `visual-assessment-medium-scope-benchmark` |
 | started_from | `work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.iteration-to-dictionary-projection-remediation.md` |
-| status_after | `ready-for-live-authorization` |
+| status_after | `changes-required-not-promoted` |
 
 ## Inputs Read
 
@@ -31,6 +31,7 @@
 - Preserve the exact V1 scope and performance protocol while changing only the prepared-package/runtime contracts under test.
 - Remove hard-coded package version from the writer runtime profile; package-version ownership belongs to the runner.
 - Require an immutable pushed checkpoint and a separate hash-bound authorization before one live invocation.
+- Close V2 without promotion after reviewer F-001/F-002 and route only one fresh cycle through a general action-unambiguity fix.
 
 ## Risks And Fallbacks
 
@@ -49,10 +50,13 @@
 - Architecture audit: 7 skills, 61 checks, zero findings, all budgets pass.
 - Six dictionary/calibration negative-mutation regressions passed.
 - Three protected baseline hashes unchanged; promotion target absent.
+- Live: one writer and one reviewer session; deterministic gates pass; reviewer changes-required on OBL-005/013.
+- Performance: 129,765 ms fails duration; 4,090.23 uncached tokens/OBL, one validator and 1.55% orchestration overhead pass.
 
 ## Contamination Check
 
-- V2 has no live attempt, cycle state, writer draft or reviewer findings before authorization.
+- Before authorization V2 had no live attempt, cycle state, writer draft or reviewer findings.
+- After authorization exactly one cycle-start event and two backend session ids exist; commands/file changes are 0/0.
 - Package source registry contains only the current AutoFin DOCX/XHTML/PDF family.
 - V1 output is comparison evidence only and is not listed as V2 source evidence.
 - User-owned untracked files remain outside the staged write set.
@@ -75,6 +79,11 @@
 | 12 | Prepared pre-live stop gate | live remains blocked pending two pushes | `pre-live-stop-gate.v2.md` |
 | 13 | Pushed immutable V2 checkpoint | local/origin `8223d580...` match | Git evidence |
 | 14 | Created hash-bound one-shot authorization | invocation budget `1`; live still awaits authorization push | `pre-live-authorization.v2.md` |
+| 15 | Pushed V2 authorization | local/origin `f7e2c7e...` match | Git evidence |
+| 16 | Invoked V2 dispatcher once | exec selected; no fallback | backend selection; runner events |
+| 17 | Completed writer/deterministic gates | dictionary projection and calibration lifecycle pass | V2 gate bundle |
+| 18 | Completed semantic reviewer | 11 covered, OBL-005/013 incorrect | V2 findings |
+| 19 | Applied V2 terminal stop | no promotion or same-cycle retry | `stop-gate.v2.md` |
 
 ## Quality Checkpoints
 
@@ -86,7 +95,10 @@
 | Deterministic regressions | pass | six positive/negative tests | preserve |
 | Architecture | pass | 61 checks, zero findings | none |
 | Production boundary | pass | three hashes unchanged; target absent | recheck post-live |
-| Semantic reviewer | not-applicable before live | no V2 attempt exists | run once after authorization |
+| Semantic reviewer after live | fail | F-001/F-002 on TC-VAMB-004/012 | general action-unambiguity fix |
+| V1 dictionary/calibration regression | pass | OBL-006/007 covered; lifecycle open_count=2 | preserve |
+| Duration target | fail | 129.765 s >= 120 s | report separately from quality |
+| Token/validator/orchestration targets | pass | 4,090.23 tokens/OBL; 1 validator; 1.55% | preserve |
 
 ## Artifact Write Strategy
 
@@ -107,7 +119,6 @@
 
 ## Handoff Notes For Next Session
 
-- Do not invoke live until checkpoint and separate authorization commits are both pushed and local/remote SHAs match.
-- The first dispatcher invocation consumes V2 authorization regardless of outcome.
-- Verify exact dictionary values, calibration lifecycle, reviewer verdict, performance targets and protected hashes after live.
-- A second live cycle is prohibited unless one new defect is isolated, fixed and separately checkpointed/authorized.
+- V2 authorization is consumed; never retry/resume/rebind/repair or promote V2.
+- Preserve V2 package, draft, findings and metrics as immutable evidence.
+- Continue only through the bounded V3 action-unambiguity protocol and separate checkpoint/authorization.

@@ -1143,6 +1143,34 @@ coverage_gaps:
             ],
         )
 
+    def test_rejects_dictionary_group_locator_lost_between_data_and_action(self) -> None:
+        (self.design / "dictionary-inventory.md").write_text(
+            """| dictionary_id | dictionary_name | active_values |
+| --- | --- | --- |
+| `DICT-001` | `Корневой справочник` | `DICT-101` |
+| `DICT-101` | `Группа один` | `Значение A`; `Значение B` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "package-test-design-plan.md").write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | test_data | single_expected_behavior | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Последовательно выбрать два значения. | два значения `DICT-101` | Оба значения выбраны. | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | `none_required` | none_required:blocked | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as caught:
+            self.compile()
+
+        self.assertEqual(
+            "dictionary-group-locator-not-preserved",
+            caught.exception.code,
+        )
+
     def test_preserves_source_backed_ui_calibration_without_gap(self) -> None:
         ledger_path = self.design / "atomic-requirements-ledger.md"
         ledger_path.write_text(

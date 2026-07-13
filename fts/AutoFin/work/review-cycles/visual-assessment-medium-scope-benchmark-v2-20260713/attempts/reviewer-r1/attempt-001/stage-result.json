@@ -1,0 +1,61 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5c85-355a-7231-8e6c-f8a91e16034f",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "visual-assessment-medium-scope-benchmark-v2-20260713",
+  "duration_ms": 59875,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T17:28:41.330056+00:00",
+  "input_digest": "3b86a25034241d0837171673150f8f343577bd1a56432e11682c7eb6ec68cb62",
+  "outcome": "changes-required",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "e54574cdeb2e1cfccff8cd517c5c048ce85e1706273d15564b0fead088a90517"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "2726c7669985830309763f0a9c7c360009f479996b258897ad2428969924491b"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "e54574cdeb2e1cfccff8cd517c5c048ce85e1706273d15564b0fead088a90517"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "c282363f602585dc24d011222f1bba56b827850b291bbcf9cf69a8029e585e0f"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "sha256": "7e8954aec9da7d6b49bbf08a359fb16eca3cc077a982f833ce070d623c614ce5"
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "sha256": "f1ab7a2d90bb0fbb60613aa198885f93e467651103f71033ed7ef446ac6efaf4"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "69ef0d159edea6d8394c330a16ddd927ed1d6eaa9306852eb1b6092fbec7452f"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-13T17:27:41.449945+00:00",
+  "status": "changes-required",
+  "timed_out": false
+}

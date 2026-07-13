@@ -120,6 +120,21 @@ UNDEFINED_EXECUTION_ACTION_RE = re.compile(
     r")",
     flags=re.IGNORECASE,
 )
+AMBIGUOUS_EXECUTION_ACTION_RE = re.compile(
+    r"(?:"
+    r"(?:выбрать|установить|ввести|нажать|сохранить|открыть|закрыть|"
+    r"перейти|очистить|заполнить)\s+или\s+"
+    r"(?:выбрать|установить|ввести|нажать|сохранить|открыть|закрыть|"
+    r"перейти|очистить|заполнить)|"
+    r"(?:select|set|enter|click|save|open|close|navigate|clear|fill)\s+or\s+"
+    r"(?:select|set|enter|click|save|open|close|navigate|clear|fill)"
+    r")",
+    flags=re.IGNORECASE,
+)
+ANY_DICTIONARY_GROUP_RE = re.compile(
+    r"(?:в\s+люб\w*\s+групп\w*|any\s+(?:available\s+)?group)",
+    flags=re.IGNORECASE,
+)
 NON_OBSERVABLE_EXPECTED_RESULT_RE = re.compile(
     r"(?:"
     r"(?:точн\w*|конкретн\w*)\s+ui[- ]реакц\w*\s+"
@@ -139,6 +154,8 @@ CAPTURED_INITIAL_STATE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 REPAIRABLE_QUALITY_FINDING_IDS = {
+    "ambiguous-dictionary-value-path",
+    "ambiguous-execution-action",
     "generic-execution-fixture",
     "missing-branch-precondition",
     "undefined-execution-action",
@@ -3297,6 +3314,26 @@ class CodexExecReviewCycleRunner:
             )
         }
         findings: list[dict[str, Any]] = []
+        dictionary_groups: dict[tuple[str, tuple[str, ...]], str] = {}
+        dictionary_leaf_paths: dict[
+            tuple[str, str], list[tuple[tuple[str, ...], str]]
+        ] = {}
+        for obligation in obligations.obligations:
+            for requirement in obligation.dictionary_requirements:
+                for value in requirement.required_values:
+                    identity = (requirement.dictionary_id, value.hierarchy_path)
+                    if value.value_kind == "group":
+                        dictionary_groups[identity] = value.value
+                    elif value.value_kind == "leaf":
+                        dictionary_leaf_paths.setdefault(
+                            (requirement.dictionary_id, value.value.casefold()),
+                            [],
+                        ).append((value.hierarchy_path, value.value))
+        ambiguous_dictionary_values = {
+            key: tuple(dict.fromkeys(paths))
+            for key, paths in dictionary_leaf_paths.items()
+            if len({path for path, _ in paths}) > 1
+        }
         titles: dict[str, list[str]] = {}
         for tc_id, section in sections.items():
             match = re.search(r"(?m)^\*\*Название:\*\*\s*(.+?)\s*$", section)
@@ -3329,6 +3366,14 @@ class CodexExecReviewCycleRunner:
                 findings.append(
                     {
                         "id": "undefined-execution-action",
+                        "severity": "error",
+                        "test_case_ids": [tc_id],
+                    }
+                )
+            if AMBIGUOUS_EXECUTION_ACTION_RE.search(steps):
+                findings.append(
+                    {
+                        "id": "ambiguous-execution-action",
                         "severity": "error",
                         "test_case_ids": [tc_id],
                     }
@@ -3379,6 +3424,42 @@ class CodexExecReviewCycleRunner:
                                 "marker": marker,
                             }
                         )
+            for requirement in obligation.dictionary_requirements:
+                if requirement.coverage_mode != "reference-only":
+                    continue
+                for (dictionary_id, _), paths in ambiguous_dictionary_values.items():
+                    if dictionary_id != requirement.dictionary_id:
+                        continue
+                    value = paths[0][1]
+                    if value.casefold() not in section.casefold():
+                        continue
+                    if ANY_DICTIONARY_GROUP_RE.search(section):
+                        continue
+                    qualifiers = {
+                        qualifier
+                        for path, _ in paths
+                        for qualifier in (
+                            path[-1],
+                            dictionary_groups.get((dictionary_id, path), ""),
+                        )
+                        if qualifier
+                    }
+                    if any(
+                        qualifier.casefold() in section.casefold()
+                        for qualifier in qualifiers
+                    ):
+                        continue
+                    findings.append(
+                        {
+                            "id": "ambiguous-dictionary-value-path",
+                            "severity": "error",
+                            "obligation_id": obligation.obligation_id,
+                            "test_case_ids": [obligation.planned_test_case_id],
+                            "dictionary_id": dictionary_id,
+                            "value": value,
+                            "candidate_paths": [list(path) for path, _ in paths],
+                        }
+                    )
         return {
             "passed": not findings,
             "validator": "prepared-quality-gate-bundle-v1",
@@ -3391,6 +3472,8 @@ class CodexExecReviewCycleRunner:
                 "deterministic-structure",
                 "obligation-traceability",
                 "dictionary-value-completeness",
+                "execution-action-unambiguity",
+                "dictionary-value-path-unambiguity",
                 "semantic-overlap",
                 "evidence-access",
                 "execution-oracle-quality",

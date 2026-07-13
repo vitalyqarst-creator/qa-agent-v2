@@ -1366,6 +1366,42 @@ def compile_workflow_package(
                         for item in undefined_action_rows
                     ),
                 )
+            missing_dictionary_group_locators: list[tuple[dict[str, str], str]] = []
+            for item in mapped_viable:
+                planned_check = item.get("planned_check", "")
+                for dictionary_id in dict.fromkeys(
+                    token
+                    for token in TOKEN.findall(item.get("test_data", ""))
+                    if token.startswith("DICT-") and token in dictionary_rows
+                ):
+                    dictionary_name = dictionary_rows[dictionary_id].get(
+                        "dictionary_name", ""
+                    ).strip()
+                    if dictionary_id in planned_check or (
+                        dictionary_name
+                        and dictionary_name.casefold() in planned_check.casefold()
+                    ):
+                        continue
+                    missing_dictionary_group_locators.append((item, dictionary_id))
+            if missing_dictionary_group_locators:
+                raise PreparedCompilerDiagnostic(
+                    "dictionary-group-locator-not-preserved",
+                    "semantic degradation: design-plan test_data names a dictionary group "
+                    f"that is absent from the executable action: {atom_id}",
+                    details=tuple(
+                        {
+                            "kind": "dictionary-group-locator-not-preserved",
+                            "atom_id": atom_id,
+                            "dictionary_id": dictionary_id,
+                            **_artifact_anchor(
+                                plan_path,
+                                item.get("design_item_id") or atom_id,
+                                repo_root,
+                            ),
+                        }
+                        for item, dictionary_id in missing_dictionary_group_locators
+                    ),
+                )
             fixtureless = [
                 item
                 for item in mapped_viable

@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "status": "changes-required-not-promoted",
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "backend": "exec",
+  "fallback_used": false,
+  "package_version": 7,
+  "package_id": "visual-assessment-medium-scope-benchmark-v2",
+  "package_digest": "1bfc73af25743222eefb336d8408d1d7593ff96f370ee3feb2f4e0e859e3ba01",
+  "input_fingerprint": "ce50c8b1b5051f032c56915e75831bcfe7ec7ac4790b62f85828867af99eda4b",
+  "draft_sha256": "ca5bce17ff653c2fdd4d4a18315296ccc25b706a4c3aec1cb2845d9125424e7a",
+  "writer": {
+    "status": "draft-ready",
+    "duration_ms": 69890,
+    "total_tokens": 28677,
+    "commands": 0,
+    "deterministic_gates_passed": true,
+    "dictionary_projection_materialized": 2,
+    "calibration_lifecycle_open": 2
+  },
+  "reviewer": {
+    "status": "changes-required",
+    "duration_ms": 59875,
+    "total_tokens": 30312,
+    "commands": 0,
+    "covered_obligations": 11,
+    "incorrect_obligations": 2,
+    "finding_count": 2
+  },
+  "performance": {
+    "duration_ms_total": 129765,
+    "total_tokens": 58989,
+    "uncached_input_tokens_total": 53173,
+    "uncached_tokens_per_obligation": 4090.23,
+    "test_case_count": 12,
+    "testable_obligations": 13,
+    "validator_invocations": 1,
+    "orchestration_overhead_percent": 1.55,
+    "duration_target_passed": false,
+    "token_efficiency_target_passed": true,
+    "validator_budget_passed": true,
+    "orchestration_target_passed": true,
+    "semantic_acceptance_passed": false
+  },
+  "resolved_v1_defects": [
+    "OBL-006 full DICT-001 hierarchy is materialized and reviewer-covered",
+    "OBL-007 all required leaf values are materialized and reviewer-covered",
+    "OBL-008 and OBL-010 are registered in calibration-lifecycle.json"
+  ],
+  "blocking_findings": [
+    {
+      "finding_id": "F-001",
+      "severity": "error",
+      "category": "test-design",
+      "atom_ids": ["ATOM-005"],
+      "test_case_ids": ["TC-VAMB-004"],
+      "failure_class": "ambiguous-execution-action"
+    },
+    {
+      "finding_id": "F-002",
+      "severity": "error",
+      "category": "test-design",
+      "atom_ids": ["ATOM-013"],
+      "test_case_ids": ["TC-VAMB-012"],
+      "failure_class": "ambiguous-dictionary-value-path"
+    }
+  ],
+  "process_gaps": [
+    "The deterministic quality gate did not reject alternative user actions in one step.",
+    "The compiler and deterministic quality gate did not require a child dictionary path for a duplicated label."
+  ],
+  "production_boundary": {
+    "existing_visual_assessment_unchanged": true,
+    "existing_personal_data_unchanged": true,
+    "existing_section_4_2_unchanged": true,
+    "promotion_target_exists": false,
+    "final_promoted": false
+  },
+  "same_cycle_retry_permitted": false,
+  "fresh_cycle_permitted_after_fix_checkpoint": true,
+  "next_action": "bounded-action-unambiguity-remediation-before-v3"
+}

@@ -573,6 +573,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         first_execution_semantics: str = "direct",
         first_state_change: PreparedStateChange | None = None,
         dictionary_values: tuple[str, ...] = (),
+        prepared_dictionary_values: tuple[PreparedDictionaryValue, ...] = (),
+        extra_prepared_obligations: tuple[PreparedObligation, ...] = (),
         structured_dictionary_evidence: bool = False,
         dictionary_coverage_mode: str = "reference-only",
         calibration_status: str = "none",
@@ -583,8 +585,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             else ""
         )
         dictionary_evidence = ""
-        if dictionary_values:
-            rendered_values = "; ".join(f"`{value}`" for value in dictionary_values)
+        if dictionary_values or prepared_dictionary_values:
+            evidence_values = dictionary_values or tuple(
+                dict.fromkeys(value.value for value in prepared_dictionary_values)
+            )
+            rendered_values = "; ".join(f"`{value}`" for value in evidence_values)
             if structured_dictionary_evidence:
                 dictionary_evidence = (
                     "\n## DICT-001\n\n```json\n"
@@ -595,7 +600,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                             "source_file": "support/demo.md",
                             "source_location": "demo.gender",
                             "extraction_status": "extracted",
-                            "active_values": list(dictionary_values),
+                            "active_values": list(evidence_values),
                             "archived_values": "none_required",
                             "used_by_source_properties": "SRC-1",
                             "gap_id": "none_required",
@@ -619,6 +624,15 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             + dictionary_evidence,
             encoding="utf-8",
         )
+        compiled_dictionary_values = (
+            ()
+            if dictionary_coverage_mode == "reference-only"
+            else prepared_dictionary_values
+            or tuple(
+                PreparedDictionaryValue(("DICT-001",), "leaf", value)
+                for value in dictionary_values
+            )
+        )
         prepared_obligations = [
             PreparedObligation(
                 obligation_id="ATOM-001",
@@ -628,7 +642,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 test_intent="Verify the visible result.",
                 coverage_status="testable",
                 gap_id="",
-                dictionary_refs=("DICT-001",) if dictionary_values else (),
+                dictionary_refs=(
+                    ("DICT-001",)
+                    if dictionary_values or prepared_dictionary_values
+                    else ()
+                ),
                 notes="",
                 constraint_gap_ids=(("GAP-001",) if constraint_gap else ()),
                 execution_semantics=first_execution_semantics,
@@ -638,21 +656,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                         PreparedDictionaryRequirement(
                             dictionary_id="DICT-001",
                             coverage_mode=dictionary_coverage_mode,
-                            required_values=(
-                                tuple(
-                                    PreparedDictionaryValue(
-                                        ("DICT-001",),
-                                        "leaf",
-                                        value,
-                                    )
-                                    for value in dictionary_values
-                                )
-                                if dictionary_coverage_mode != "reference-only"
-                                else ()
-                            ),
+                            required_values=compiled_dictionary_values,
                         ),
                     )
-                    if dictionary_values
+                    if dictionary_values or prepared_dictionary_values
                     else ()
                 ),
                 calibration_status=calibration_status,
@@ -669,6 +676,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 ),
             )
         ]
+        prepared_obligations.extend(extra_prepared_obligations)
         for index in range(2, test_case_count + 1):
             prepared_obligations.append(
                 PreparedObligation(
@@ -2599,6 +2607,136 @@ Draft body.
         )
         self.assertFalse(report["passed"])
         self.assertIn("calibration-marker-missing", {item["id"] for item in report["findings"]})
+
+    def test_quality_gate_blocks_alternative_execution_action(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+        )
+        draft = """# Test cases
+
+## TC-DEMO-001
+
+**Название:** Скрытие зависимого списка
+**Трассировка:** ATOM-001; SRC-1
+
+### Предусловия
+
+1. Открыта тестовая форма.
+
+### Тестовые данные
+
+- Значение `Нет`.
+
+### Шаги
+
+1. Установить или сохранить значение `Нет`.
+
+### Итоговый ожидаемый результат
+
+Зависимый список не отображается.
+"""
+        executor = ScriptedExecutor(self.structured_writer_step(draft_text=draft))
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-quality-gate", result.status)
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn(
+            "ambiguous-execution-action",
+            {item["id"] for item in report["findings"]},
+        )
+
+    def test_quality_gate_blocks_unqualified_duplicate_dictionary_value(self) -> None:
+        duplicate_value = "Повторяющееся значение"
+        prepared_values = (
+            PreparedDictionaryValue(("DICT-001", "DICT-101"), "group", "Группа один"),
+            PreparedDictionaryValue(("DICT-001", "DICT-101"), "leaf", duplicate_value),
+            PreparedDictionaryValue(("DICT-001", "DICT-102"), "group", "Группа два"),
+            PreparedDictionaryValue(("DICT-001", "DICT-102"), "leaf", duplicate_value),
+        )
+        reference_obligation = PreparedObligation(
+            obligation_id="OBL-002",
+            atom_id="ATOM-002",
+            source_refs=("SRC-1", "DICT-001"),
+            atomic_statement="Можно выбрать значение справочника.",
+            observable_oracle="Выбранный checkbox остаётся выбранным.",
+            test_intent="Выбрать повторяющееся значение.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=("DICT-001",),
+            notes="",
+            dictionary_requirements=(
+                PreparedDictionaryRequirement("DICT-001", "reference-only"),
+            ),
+            planned_test_case_id="TC-DEMO-002",
+        )
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+            dictionary_values=(duplicate_value,),
+            prepared_dictionary_values=prepared_values,
+            structured_dictionary_evidence=True,
+            dictionary_coverage_mode="full-hierarchy",
+            extra_prepared_obligations=(reference_obligation,),
+        )
+        draft = f"""# Test cases
+
+## TC-DEMO-001
+
+**Название:** Полный состав справочника
+**Трассировка:** ATOM-001; SRC-1; DICT-001
+
+### Тестовые данные
+
+- Полный `DICT-001`.
+
+### Шаги
+
+1. Открыть список.
+
+### Итоговый ожидаемый результат
+
+Отображается полный справочник.
+
+## TC-DEMO-002
+
+**Название:** Выбор повторяющегося значения
+**Трассировка:** OBL-002; ATOM-002; SRC-1; DICT-001
+
+### Тестовые данные
+
+- `{duplicate_value}`.
+
+### Шаги
+
+1. Выбрать checkbox `{duplicate_value}`.
+
+### Итоговый ожидаемый результат
+
+Выбранный checkbox остаётся выбранным.
+"""
+        executor = ScriptedExecutor(self.structured_writer_step(draft_text=draft))
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-quality-gate", result.status)
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        finding = next(
+            item
+            for item in report["findings"]
+            if item["id"] == "ambiguous-dictionary-value-path"
+        )
+        self.assertEqual("OBL-002", finding["obligation_id"])
+        self.assertEqual(2, len(finding["candidate_paths"]))
 
     def test_execution_oracle_eval_rejects_v3_shapes_before_reviewer(self) -> None:
         package_path = self.build_prepared_package(

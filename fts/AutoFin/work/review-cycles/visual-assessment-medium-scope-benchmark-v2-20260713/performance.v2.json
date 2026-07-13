@@ -1,0 +1,99 @@
+{
+  "version": 2,
+  "backend": "exec",
+  "run_profile": "benchmark",
+  "benchmark_details_included": true,
+  "cycle_dir": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713",
+  "stage_count": 2,
+  "duration_ms_total": 129765,
+  "total_tokens": 58989,
+  "uncached_input_tokens_total": 53173,
+  "input_artifact_bytes_total": 322508,
+  "output_artifact_bytes_total": 122413,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f5c84-2201-7233-937d-2c5885a4c0ca",
+    "019f5c85-355a-7231-8e6c-f8a91e16034f"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "visual-assessment-medium-scope-benchmark-v2-20260713",
+      "duration_ms": 69890,
+      "input_artifact_bytes": 136219,
+      "input_artifact_count": 7,
+      "input_tokens": 25267,
+      "outcome": "draft-ready",
+      "output_artifact_bytes": 94661,
+      "output_artifact_count": 16,
+      "output_tokens": 3410,
+      "role": "writer",
+      "scenario": "writer.session_prepared_standard_structured",
+      "stage_id": "writer-r1",
+      "total_tokens": 28677
+    },
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "visual-assessment-medium-scope-benchmark-v2-20260713",
+      "duration_ms": 59875,
+      "input_artifact_bytes": 186289,
+      "input_artifact_count": 15,
+      "input_tokens": 27906,
+      "outcome": "changes-required",
+      "output_artifact_bytes": 27752,
+      "output_artifact_count": 8,
+      "output_tokens": 2406,
+      "role": "reviewer",
+      "scenario": "reviewer.session_prepared_standard_semantic",
+      "stage_id": "reviewer-r1",
+      "total_tokens": 30312
+    }
+  ],
+  "stage_attribution": [
+    {
+      "stage_id": "reviewer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    },
+    {
+      "stage_id": "writer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    }
+  ],
+  "context_efficiency": {
+    "primary_context_bytes_total": 109598,
+    "prompt_bytes_total": 101943,
+    "instruction_bytes_total": 7655,
+    "instruction_artifact_count_total": 2,
+    "command_executions_total": 0,
+    "file_changes_total": 0,
+    "test_case_count": 12,
+    "testable_obligations": 13,
+    "uncached_tokens_per_obligation": 4090.23,
+    "commands_per_test_case": 0.0
+  },
+  "timing_breakdown": {
+    "capability_probe_ms": 77,
+    "runner_preflight_ms": 875,
+    "runner_wall_ms": 131812,
+    "stage_execution_ms": 129765,
+    "runner_orchestration_overhead_ms": 2047,
+    "reporting_ms": 45,
+    "dispatcher_wall_ms": 132842
+  }
+}

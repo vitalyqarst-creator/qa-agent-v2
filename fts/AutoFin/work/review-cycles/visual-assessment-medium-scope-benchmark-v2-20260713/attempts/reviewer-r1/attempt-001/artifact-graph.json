@@ -1,0 +1,281 @@
+{
+  "version": 1,
+  "cycle_id": "visual-assessment-medium-scope-benchmark-v2-20260713",
+  "stage_id": "reviewer-r1",
+  "role": "reviewer",
+  "context_profile": "character-restriction-calibration",
+  "input_digest": "3b86a25034241d0837171673150f8f343577bd1a56432e11682c7eb6ec68cb62",
+  "input_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/prompt.md",
+      "sha256": "6d011199f50557d20fc2e4edea1a312fcb9a500589799c2c7367864876360d12",
+      "kind": "prompt",
+      "group": "prompt",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "175dceff807f883f73c7b9822a221a9f7bb1e8157ba0036c3d59934a656f4035",
+      "kind": "instruction",
+      "group": "instruction",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v2/source-evidence.md",
+      "sha256": "0b69dc64ff1bb6efa7b8261e8e885539ce9900bc7e5d6f1c18962fb078f345e2",
+      "kind": "source",
+      "group": "source",
+      "lifecycle": "source",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v2/stage-package.json",
+      "sha256": "ce30bb3e60e7722282eaf0f7e8ab0da2e19fed80128d5cc760a894daa1d54776",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v2/atomic-obligations.json",
+      "sha256": "8f337e9684acc2a63bcda3c55a74cbfe9832e87709bf9d701fedfbeed1c95960",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "ca5bce17ff653c2fdd4d4a18315296ccc25b706a4c3aec1cb2845d9125424e7a",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "7c6050fcd45f83af7b91f311d830f3e86e229f4c7395aedb9c75beb87ec47cfa",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "27443ed2cc4d162e950582a06c7a68f620ecd0aad0d27f94f2dd8999cdd62f39",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "19435fa99753c3eb300a2570a39e17c8ea850fbc820875a16168f4fd63ea57a9",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "9561cb658dbc2505da59f9d93cb2da516851d766b53d8d055450e0961d6982d5",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "3535b3ee9c9a3fdb82550daccee5a712e0d743fdfbfbb2e6307677dc255fe378",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/dictionary-projection.json",
+      "sha256": "ec6c4915a94c1239ff2cf5622eecf71a52807f893df4f7ce863865f501c878f3",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "61fc28aed0c548fd114ca781cfbbc60ddd6f436788d56e6dff420d97609b28ec",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "83ce31b07fae70df15c39b0a85ef70c56fd55ae6a0385a86fd120644b3de2dc3",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    }
+  ],
+  "output_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "kind": "stdout",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "kind": "stderr",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "kind": "events",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "kind": "stage-status",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "kind": "artifact-graph",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "kind": "review-findings",
+      "lifecycle": "reviewed",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "kind": "evidence-access-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "kind": "context-budget",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    }
+  ],
+  "access_policy": {
+    "sandbox": "read_only",
+    "allowed_write_roots": [],
+    "forbidden_write_roots": [
+      "fts/AutoFin/test-cases"
+    ],
+    "fallback_policy": "targeted-only"
+  },
+  "graph_digest": "3f50b5eb961164a9c1d68d23d4be8dde2fa83377a2f3582cb723834de006b1c1"
+}

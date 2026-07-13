@@ -1,0 +1,3 @@
+2026-07-13T17:26:31.310308Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-13T17:26:36.127612Z ERROR codex_models_manager::manager: failed to refresh available models: timeout waiting for child process to exit
+2026-07-13T17:27:38.750347Z  WARN codex_core::hook_runtime: after_agent hook failed; continuing turn_id=019f5c84-2362-74e0-87cc-c9ecb9751355 hook_name=legacy_notify error=Имя файла или его расширение имеет слишком большую длину. (os error 206)
