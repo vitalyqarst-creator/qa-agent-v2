@@ -61,6 +61,11 @@ class AgentArchitectureTests(unittest.TestCase):
         actual = {path.name for path in SKILLS_DIR.iterdir() if path.is_dir()}
         self.assertEqual(EXPECTED_SKILLS, actual)
 
+    def test_workflow_validator_allows_every_active_skill_as_next_route(self) -> None:
+        from scripts.validate_agent_artifacts import ALLOWED_NEXT_SKILLS
+
+        self.assertTrue(EXPECTED_SKILLS.issubset(ALLOWED_NEXT_SKILLS))
+
     def test_each_skill_has_required_files(self) -> None:
         for skill_name in EXPECTED_SKILLS:
             skill_dir = SKILLS_DIR / skill_name

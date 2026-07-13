@@ -29,6 +29,7 @@ ALLOWED_CURRENT_STAGES = {
     "ft-test-case-reviewer",
     "ft-test-case-iteration",
     "ft-ui-automation-prep",
+    "agent-architecture-auditor",
 }
 ALLOWED_STAGE_STATUSES = {
     "ready-for-next-stage",
@@ -19447,21 +19448,12 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
-        workflow_state_payloads = [parse_workflow_state(path) for path in workflow_states]
-        scope_analysis_before_writer = (
-            not test_case_files
-            and any(
-                state.get("current_stage") == "ft-scope-analyzer"
-                and state.get("current_round") == 0
-                for state in workflow_state_payloads
-            )
-        )
-        if scope_analysis_before_writer:
+        if not test_case_files:
             checks.append(
                 Check(
                     "oracle-candidate-obligation-coverage",
                     "pass",
-                    "Candidate TC coverage is deferred until writer output exists; scope-stage inventory planning is validated separately.",
+                    "Candidate TC coverage is deferred until a test-case output exists; oracle inventory planning is validated separately.",
                     rel(root, root),
                 )
             )

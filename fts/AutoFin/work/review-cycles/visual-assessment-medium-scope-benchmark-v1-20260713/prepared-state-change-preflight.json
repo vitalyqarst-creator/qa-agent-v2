@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-state-change-preflight-v1",
+  "error_code": "",
+  "package_id": "visual-assessment-medium-scope-benchmark-v1",
+  "atomic_obligations_sha256": "209fd75663b86f9c5a5da7dcbc51599dc70c1e1d64948b471262121b17ce8086",
+  "reset_obligations_checked": 0,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "d14607da1d5a01a51a02eef20e9db6ba8d5efd2719bd4ddbdb5f3e3bc292e2d4"
+}

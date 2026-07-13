@@ -1,0 +1,145 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/section-18-visual-assessment-medium-scope-benchmark.md",
+  "contract_version": 2,
+  "cycle_id": "visual-assessment-medium-scope-benchmark-v1-20260713",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "producer": "runner",
+      "required": true
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json",
+      "sha256": "0728918306d8bcc6f40fa1cc1517fffebe381a4ab067af6935137f5ba19b65ac"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/atomic-obligations.json",
+      "sha256": "209fd75663b86f9c5a5da7dcbc51599dc70c1e1d64948b471262121b17ce8086"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "8611460fcab2c0f02ce92a44bc1b14f1a9271c3de7071473fa2eb9f5910b9aa3"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "62049905c28fcbe02feca3ac5610347a6baec3f6c5c852ff113a93e27c1a15b3"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "902a2cb5f6dc639f90b056e919302f7ed7942d9d9052f5f23aaf81bc9fe3f086"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "bae71213bb278f3f1862b99b2e7c6e3d791d9bdba9f1ce8a46028bc94be83a6a"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "bceb767c0ef2d14393648bbb6ad24aa9209a63aed91308b4a0f7bf9876d163b2"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "145ea71cddae9505bb7e617a81578facf7a1a6cf133245bd3ec39eb6d8535781"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "eb4acb7ec80600571bb1c98e354ef0ddf867ae6cfa57310df60b75dbf7c7ecb6"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "83ce31b07fae70df15c39b0a85ef70c56fd55ae6a0385a86fd120644b3de2dc3"
+    }
+  ],
+  "input_digest": "ab53921e4ac6f08a6f86c2e4dd103b40dc981575a678335b4c70520e6dd44f85",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "e1762e396b37d2809a09b516ef654b95096e02ea1c9f7eadef1c75925e0fd839"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/prompt.md",
+    "sha256": "6bcd2b8d2ca8d96f1aa69ad9aa1476dc1d82c1f5149c1a330a2c90b13043daab"
+  },
+  "role": "reviewer",
+  "sandbox_policy": "read_only",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "semantic_round": 0,
+  "session_id": "session-reviewer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/source-evidence.md",
+      "sha256": "07317849274e46fb0510a2d7bfae962e6d25cf89e11814b6a9dc30a49a40dac6"
+    }
+  ],
+  "stage_id": "reviewer-r1",
+  "timeout_seconds": 450
+}

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "status": "changes-required-not-promoted",
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "backend": "exec",
+  "fallback_used": false,
+  "package_version": 6,
+  "package_id": "visual-assessment-medium-scope-benchmark-v1",
+  "package_digest": "ffb7a7a8a44bd8ee53b76b6f8745fa0c8653eabbdfa7ef20bb0166c592be8d35",
+  "draft_sha256": "8611460fcab2c0f02ce92a44bc1b14f1a9271c3de7071473fa2eb9f5910b9aa3",
+  "writer": {
+    "status": "draft-ready",
+    "duration_ms": 65594,
+    "total_tokens": 28419,
+    "commands": 0,
+    "deterministic_gates_passed": true
+  },
+  "reviewer": {
+    "status": "changes-required",
+    "duration_ms": 43219,
+    "total_tokens": 26779,
+    "commands": 0,
+    "covered_obligations": 11,
+    "incorrect_obligations": 2,
+    "finding_count": 1
+  },
+  "performance": {
+    "duration_ms_total": 108813,
+    "total_tokens": 55198,
+    "uncached_input_tokens_total": 49970,
+    "uncached_tokens_per_obligation": 3843.85,
+    "test_case_count": 12,
+    "testable_obligations": 13,
+    "duration_target_passed": true,
+    "token_efficiency_target_passed": true,
+    "semantic_acceptance_passed": false
+  },
+  "blocking_findings": [
+    {
+      "finding_id": "F-001",
+      "severity": "error",
+      "category": "test-design",
+      "atom_ids": ["ATOM-006", "ATOM-007"],
+      "test_case_ids": ["TC-VAMB-005", "TC-VAMB-006"],
+      "failure_class": "prepared-dictionary-values-not-materialized"
+    }
+  ],
+  "process_gaps": [
+    "Deterministic draft gates did not compare claimed full DICT-001 coverage with concrete leaf values in the draft.",
+    "Calibration lifecycle remained empty although two draft cases carried ui-calibration-required markers without constraint_gap_ids."
+  ],
+  "production_boundary": {
+    "existing_visual_assessment_unchanged": true,
+    "existing_personal_data_unchanged": true,
+    "existing_section_4_2_unchanged": true,
+    "promotion_target_exists": false,
+    "final_promoted": false
+  },
+  "retry_permitted": false,
+  "next_action": "bounded-agent-remediation-before-fresh-immutable-cycle"
+}
