@@ -184,6 +184,25 @@ coverage_gaps:
             "# Coverage Gaps\n\nNo gaps.\n", encoding="utf-8"
         )
 
+    def enable_decision_table(self, *, atom_001_tc: str = "TC-001") -> None:
+        (self.design / "test-design-decision-table.md").write_text(
+            f"""# Test Design Decision Table
+
+| decision_id | linked_atom_id | planned_tc_or_gap |
+| --- | --- | --- |
+| `DD-001` | `ATOM-001` | `{atom_001_tc}` |
+| `DD-002` | `ATOM-002` | `GAP-001` |
+""",
+            encoding="utf-8",
+        )
+        text = self.state.read_text(encoding="utf-8")
+        text = text.replace(
+            "  test_design_applicability_matrix: work/test-design/demo-scope/test-design-applicability-matrix.md\n",
+            "  test_design_applicability_matrix: work/test-design/demo-scope/test-design-applicability-matrix.md\n"
+            "  test_design_decision_table: work/test-design/demo-scope/test-design-decision-table.md\n",
+        )
+        self.state.write_text(text, encoding="utf-8")
+
     def test_compiles_obligations_gaps_dictionaries_and_sources(self) -> None:
         result = self.compile()
         self.assertEqual(result.obligation_count, 2)
@@ -217,6 +236,64 @@ coverage_gaps:
         self.assertIn("sandbox_policy: `read_only`", instructions)
         self.assertIn("command_budget: `0`", instructions)
         self.assertIn("runner alone materializes", instructions)
+
+    def test_accepts_aligned_optional_decision_table_mapping(self) -> None:
+        self.enable_decision_table()
+
+        result = self.compile()
+
+        self.assertEqual(result.obligation_count, 2)
+
+    def test_blocks_stale_decision_table_mapping(self) -> None:
+        self.enable_decision_table(atom_001_tc="TC-STALE-001")
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as raised:
+            self.compile()
+
+        self.assertEqual(raised.exception.code, "tc-mapping-inconsistency")
+        self.assertTrue(
+            any(
+                item["mapping_artifact_kind"] == "test-design-decision-table"
+                and item["atom_id"] == "ATOM-001"
+                for item in raised.exception.details
+            )
+        )
+
+    def test_blocks_obligation_mapping_drift_from_ledger(self) -> None:
+        path = self.design / "coverage-obligation-table.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("TC-001", "TC-STALE-001"),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as raised:
+            self.compile()
+
+        self.assertEqual(raised.exception.code, "tc-mapping-inconsistency")
+        self.assertTrue(
+            any(
+                item["mapping_artifact_kind"] == "coverage-obligation-table"
+                for item in raised.exception.details
+            )
+        )
+
+    def test_blocks_plan_mapping_drift_from_ledger(self) -> None:
+        path = self.design / "package-test-design-plan.md"
+        path.write_text(
+            path.read_text(encoding="utf-8").replace("TC-001", "TC-STALE-001"),
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as raised:
+            self.compile()
+
+        self.assertEqual(raised.exception.code, "tc-mapping-inconsistency")
+        self.assertTrue(
+            any(
+                item["mapping_artifact_kind"] == "package-test-design-plan"
+                for item in raised.exception.details
+            )
+        )
 
     def test_embeds_mandatory_package_notes_in_prepared_evidence(self) -> None:
         (self.ft / "AGENT-NOTES.md").write_text(

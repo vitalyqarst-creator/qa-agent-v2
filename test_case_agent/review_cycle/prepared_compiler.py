@@ -194,6 +194,108 @@ def _validate_planned_test_case_groups(
         )
 
 
+def _test_case_mapping_by_atom(
+    rows: Sequence[Mapping[str, str]],
+    *,
+    atom_field: str,
+    mapping_field: str,
+) -> dict[str, set[str]]:
+    result: dict[str, set[str]] = {}
+    for row in rows:
+        atom_ids = {
+            token
+            for token in TOKEN.findall(row.get(atom_field, ""))
+            if token.startswith("ATOM-")
+        }
+        tc_ids = set(TC_TOKEN.findall(row.get(mapping_field, "")))
+        for atom_id in atom_ids:
+            result.setdefault(atom_id, set()).update(tc_ids)
+    return result
+
+
+def _validate_test_case_mapping_consistency(
+    *,
+    ledger_rows: Sequence[Mapping[str, str]],
+    obligation_rows: Sequence[Mapping[str, str]],
+    plan_rows: Sequence[Mapping[str, str]],
+    ledger_path: Path,
+    obligations_path: Path,
+    plan_path: Path,
+    decision_rows: Sequence[Mapping[str, str]] | None,
+    decision_path: Path | None,
+    repo_root: Path,
+) -> None:
+    if not ledger_rows or "covered_by_tc" not in ledger_rows[0]:
+        return
+    ledger_mapping = _test_case_mapping_by_atom(
+        ledger_rows,
+        atom_field="atom_id",
+        mapping_field="covered_by_tc",
+    )
+    compared = [
+        (
+            "coverage-obligation-table",
+            _test_case_mapping_by_atom(
+                obligation_rows,
+                atom_field="linked_atom_id",
+                mapping_field="planned_tc_or_gap",
+            ),
+            obligations_path,
+        ),
+        (
+            "package-test-design-plan",
+            _test_case_mapping_by_atom(
+                plan_rows,
+                atom_field="linked_atoms",
+                mapping_field="planned_tc_or_gap",
+            ),
+            plan_path,
+        ),
+    ]
+    if decision_rows is not None and decision_path is not None:
+        compared.append(
+            (
+                "test-design-decision-table",
+                _test_case_mapping_by_atom(
+                    decision_rows,
+                    atom_field="linked_atom_id",
+                    mapping_field="planned_tc_or_gap",
+                ),
+                decision_path,
+            )
+        )
+    findings: list[dict[str, object]] = []
+    known_atoms = {row.get("atom_id", "") for row in ledger_rows}
+    for artifact_kind, actual_mapping, artifact_path in compared:
+        for atom_id in sorted(known_atoms | set(actual_mapping)):
+            expected = sorted(ledger_mapping.get(atom_id, set()))
+            actual = sorted(actual_mapping.get(atom_id, set()))
+            if expected == actual:
+                continue
+            findings.append(
+                {
+                    "kind": "tc-mapping-inconsistency",
+                    "atom_id": atom_id,
+                    "mapping_artifact_kind": artifact_kind,
+                    "expected_test_case_ids": expected,
+                    "actual_test_case_ids": actual,
+                    "ledger_artifact": _artifact_anchor(
+                        ledger_path, atom_id, repo_root
+                    ),
+                    "mapping_artifact": _artifact_anchor(
+                        artifact_path, atom_id, repo_root
+                    ),
+                }
+            )
+    if findings:
+        raise PreparedCompilerDiagnostic(
+            "tc-mapping-inconsistency",
+            "semantic degradation: TC mappings differ between the atomic ledger "
+            "and prepared design artifacts",
+            details=findings,
+        )
+
+
 class PreparedCompilerDiagnostic(StageRuntimeError):
     """Machine-readable compiler failure with bounded artifact anchors."""
 
@@ -643,6 +745,9 @@ def compile_workflow_package(
     obligations_path = _artifact(ft_root, state, "coverage_obligation_table")
     plan_path = _artifact(ft_root, state, "package_test_design_plan")
     applicability_path = _artifact(ft_root, state, "test_design_applicability_matrix")
+    decision_path = _artifact(
+        ft_root, state, "test_design_decision_table", required=False
+    )
     gaps_path = _artifact(ft_root, state, "coverage_gaps", required=False)
     dictionary_path = _artifact(ft_root, state, "dictionary_inventory", required=False)
     assert (
@@ -675,6 +780,11 @@ def compile_workflow_package(
     )
     routed_unsupported_dimensions = set(unsupported_dimensions)
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
+    decision_rows = (
+        _table_with(decision_path, {"linked_atom_id", "planned_tc_or_gap"})
+        if decision_path is not None
+        else None
+    )
     ledger_by_atom: dict[str, dict[str, str]] = {}
     for row in ledger:
         atom_id = row["atom_id"]
@@ -688,6 +798,17 @@ def compile_workflow_package(
         for atom in TOKEN.findall(row.get("linked_atoms", "")):
             if atom.startswith("ATOM-"):
                 plan_by_atom.setdefault(atom, []).append(row)
+    _validate_test_case_mapping_consistency(
+        ledger_rows=ledger,
+        obligation_rows=obligation_rows,
+        plan_rows=plan,
+        ledger_path=ledger_path,
+        obligations_path=obligations_path,
+        plan_path=plan_path,
+        decision_rows=decision_rows,
+        decision_path=decision_path,
+        repo_root=repo_root,
+    )
     _validate_planned_test_case_groups(
         obligation_rows=obligation_rows,
         plan_rows=plan,
