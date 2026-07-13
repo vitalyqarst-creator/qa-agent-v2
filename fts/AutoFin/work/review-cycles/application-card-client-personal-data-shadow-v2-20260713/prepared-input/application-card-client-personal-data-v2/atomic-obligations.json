@@ -1,0 +1,1269 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-001",
+      "handling": "Keep calibration candidates; do not invent a message, highlight, filtering, blocked save, or transition.",
+      "problem": "`BSR 48, 51, 54, 61–63, 67, 71, 75`; `SRC-002..SRC-004`; `SRC-007`; `SRC-009..SRC-011`.",
+      "source_refs": [
+        "SRC-002..SRC-004",
+        "SRC-007",
+        "SRC-009..SRC-011",
+        "ATOM-005",
+        "ATOM-010",
+        "ATOM-015",
+        "ATOM-022",
+        "ATOM-023",
+        "ATOM-024",
+        "ATOM-025",
+        "ATOM-030",
+        "ATOM-035",
+        "ATOM-040"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-002",
+      "handling": "Preserve requiredness calibration candidates and do not infer a message or save behavior.",
+      "problem": "Table 4 column `О`; `BSR 68, 72, 76`; `SRC-002`; `SRC-003`; `SRC-006`; `SRC-007`; `SRC-009..SRC-011`.",
+      "source_refs": [
+        "SRC-002",
+        "SRC-003",
+        "SRC-006",
+        "SRC-007",
+        "SRC-009..SRC-011",
+        "ATOM-003",
+        "ATOM-008",
+        "ATOM-019",
+        "ATOM-021",
+        "ATOM-031",
+        "ATOM-036",
+        "ATOM-041"
+      ]
+    },
+    {
+      "blocking": false,
+      "gap_id": "GAP-003",
+      "handling": "Cover only source-backed UI-visible success effects; retain the technical-attribution limitation.",
+      "problem": "`BSR 49, 52, 55, 57, 59, 69, 73, 77`; `SRC-002..SRC-006`; `SRC-009..SRC-011`.",
+      "source_refs": [
+        "SRC-002..SRC-006",
+        "SRC-009..SRC-011",
+        "ATOM-006",
+        "ATOM-011",
+        "ATOM-016",
+        "ATOM-018",
+        "ATOM-020",
+        "ATOM-032",
+        "ATOM-037",
+        "ATOM-042"
+      ]
+    }
+  ],
+  "digest": "ae40f01bfcb8d6f595d3ca848b18742409c82cb1f1b6a5113eafeab145062b21",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Блок `Персональные данные` отображается в карточке заявки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Блок `Персональные данные` отображается в карточке заявки.",
+      "planned_test_case_id": "TC-ACPD-001",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить блок и три поля."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Поле `Фамилия` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "Поле `Фамилия` отображается всегда.",
+      "planned_test_case_id": "TC-ACPD-001",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить блок и три поля."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Поле `Фамилия` является обязательным.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "Для `Фамилия` обязательность задана колонкой `О=Да`; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-022",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P02"
+      ],
+      "test_intent": "Оставить `Фамилия` пустым при попытке продолжить сценарий."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "Поле `Фамилия` редактируемо.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "Поле `Фамилия` доступно для редактирования.",
+      "planned_test_case_id": "TC-ACPD-002",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P03"
+      ],
+      "test_intent": "Указать валидные значения в три ФИО-поля."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "В поле `Фамилия` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-005",
+      "observable_oracle": "Поле `Фамилия` допускает текстовые символы и символ `-`.",
+      "planned_test_case_id": "TC-ACPD-003",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P04"
+      ],
+      "test_intent": "Ввести `Иванов-Петров` в поле `Фамилия`.; Ввести `Иванов2` в поле `Фамилия`.; Ввести `Иванов@` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "В поле `Фамилия` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-006",
+      "observable_oracle": "Значение с цифрой не является допустимым для `Фамилия`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-016",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P04"
+      ],
+      "test_intent": "Ввести `Иванов-Петров` в поле `Фамилия`.; Ввести `Иванов2` в поле `Фамилия`.; Ввести `Иванов@` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "В поле `Фамилия` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-007",
+      "observable_oracle": "Значение со спецсимволом кроме `-` не является допустимым для `Фамилия`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-017",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P04"
+      ],
+      "test_intent": "Ввести `Иванов-Петров` в поле `Фамилия`.; Ввести `Иванов2` в поле `Фамилия`.; Ввести `Иванов@` в поле `Фамилия`."
+    },
+    {
+      "atom_id": "ATOM-006",
+      "atomic_statement": "Для поля `Фамилия` при интеграции DaData допускаются подсказки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-008",
+      "observable_oracle": "Для `Фамилия` допускаются подсказки DaData при доступной интеграции.",
+      "planned_test_case_id": "TC-ACPD-004",
+      "source_refs": [
+        "SRC-002",
+        "SRC-002.P05"
+      ],
+      "test_intent": "Начать ввод `Иван` в поле `Фамилия` при доступной интеграции."
+    },
+    {
+      "atom_id": "ATOM-007",
+      "atomic_statement": "Поле `Имя` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-009",
+      "observable_oracle": "Поле `Имя` отображается всегда.",
+      "planned_test_case_id": "TC-ACPD-001",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить блок и три поля."
+    },
+    {
+      "atom_id": "ATOM-008",
+      "atomic_statement": "Поле `Имя` является обязательным.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-010",
+      "observable_oracle": "Для `Имя` обязательность задана колонкой `О=Да`; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-023",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P02"
+      ],
+      "test_intent": "Оставить `Имя` пустым при попытке продолжить сценарий."
+    },
+    {
+      "atom_id": "ATOM-009",
+      "atomic_statement": "Поле `Имя` редактируемо.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-011",
+      "observable_oracle": "Поле `Имя` доступно для редактирования.",
+      "planned_test_case_id": "TC-ACPD-002",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P03"
+      ],
+      "test_intent": "Указать валидные значения в три ФИО-поля."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "В поле `Имя` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-012",
+      "observable_oracle": "Поле `Имя` допускает текстовые символы и символ `-`.",
+      "planned_test_case_id": "TC-ACPD-005",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P04"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Имя`.; Ввести `Иван2` в поле `Имя`.; Ввести `Иван@` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "В поле `Имя` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-013",
+      "observable_oracle": "Значение с цифрой не является допустимым для `Имя`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-018",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P04"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Имя`.; Ввести `Иван2` в поле `Имя`.; Ввести `Иван@` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "В поле `Имя` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-014",
+      "observable_oracle": "Значение со спецсимволом кроме `-` не является допустимым для `Имя`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-019",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P04"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Имя`.; Ввести `Иван2` в поле `Имя`.; Ввести `Иван@` в поле `Имя`."
+    },
+    {
+      "atom_id": "ATOM-011",
+      "atomic_statement": "Для поля `Имя` при интеграции DaData допускаются подсказки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-015",
+      "observable_oracle": "Для `Имя` допускаются подсказки DaData при доступной интеграции.",
+      "planned_test_case_id": "TC-ACPD-006",
+      "source_refs": [
+        "SRC-003",
+        "SRC-003.P05"
+      ],
+      "test_intent": "Начать ввод `Анна` в поле `Имя` при доступной интеграции."
+    },
+    {
+      "atom_id": "ATOM-012",
+      "atomic_statement": "Поле `Отчество` отображается всегда.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-016",
+      "observable_oracle": "Поле `Отчество` отображается всегда.",
+      "planned_test_case_id": "TC-ACPD-001",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и проверить блок и три поля."
+    },
+    {
+      "atom_id": "ATOM-013",
+      "atomic_statement": "Поле `Отчество` не является обязательным.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-017",
+      "observable_oracle": "Поле `Отчество` не является обязательным.",
+      "planned_test_case_id": "TC-ACPD-047",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P02"
+      ],
+      "test_intent": "Оставить поле `Отчество` пустым при заполненных обязательных полях."
+    },
+    {
+      "atom_id": "ATOM-014",
+      "atomic_statement": "Поле `Отчество` редактируемо.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-018",
+      "observable_oracle": "Поле `Отчество` доступно для редактирования.",
+      "planned_test_case_id": "TC-ACPD-002",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P03"
+      ],
+      "test_intent": "Указать валидные значения в три ФИО-поля."
+    },
+    {
+      "atom_id": "ATOM-015",
+      "atomic_statement": "В поле `Отчество` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-019",
+      "observable_oracle": "Поле `Отчество` допускает текстовые символы и символ `-`.",
+      "planned_test_case_id": "TC-ACPD-007",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P04"
+      ],
+      "test_intent": "Ввести `Иванович-Петрович` в поле `Отчество`.; Ввести `Иванович2` в поле `Отчество`.; Ввести `Иванович@` в поле `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-015",
+      "atomic_statement": "В поле `Отчество` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-020",
+      "observable_oracle": "Значение с цифрой не является допустимым для `Отчество`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-020",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P04"
+      ],
+      "test_intent": "Ввести `Иванович-Петрович` в поле `Отчество`.; Ввести `Иванович2` в поле `Отчество`.; Ввести `Иванович@` в поле `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-015",
+      "atomic_statement": "В поле `Отчество` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-021",
+      "observable_oracle": "Значение со спецсимволом кроме `-` не является допустимым для `Отчество`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-021",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P04"
+      ],
+      "test_intent": "Ввести `Иванович-Петрович` в поле `Отчество`.; Ввести `Иванович2` в поле `Отчество`.; Ввести `Иванович@` в поле `Отчество`."
+    },
+    {
+      "atom_id": "ATOM-016",
+      "atomic_statement": "Для поля `Отчество` при интеграции DaData допускаются подсказки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-022",
+      "observable_oracle": "Для `Отчество` допускаются подсказки DaData при доступной интеграции.",
+      "planned_test_case_id": "TC-ACPD-008",
+      "source_refs": [
+        "SRC-004",
+        "SRC-004.P05"
+      ],
+      "test_intent": "Начать ввод `Иванович` в поле `Отчество` при доступной интеграции."
+    },
+    {
+      "atom_id": "ATOM-017",
+      "atomic_statement": "Поле `ID клиента` отображается всегда и недоступно для ручного редактирования.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-023",
+      "observable_oracle": "`ID клиента` отображается всегда и недоступен для ручного редактирования.",
+      "planned_test_case_id": "TC-ACPD-009",
+      "source_refs": [
+        "SRC-005",
+        "SRC-005.P01"
+      ],
+      "test_intent": "Открыть карточку заявки и попытаться изменить `ID клиента`."
+    },
+    {
+      "atom_id": "ATOM-018",
+      "atomic_statement": "Поле `ID клиента` заполняется автоматически системой ID клиента из АБС после сохранения заявки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-024",
+      "observable_oracle": "После сохранения заявки поле `ID клиента` заполняется системой значением ID из АБС.",
+      "planned_test_case_id": "TC-ACPD-010",
+      "source_refs": [
+        "SRC-005",
+        "SRC-005.P02"
+      ],
+      "test_intent": "Сохранить валидную заявку и наблюдать поле `ID клиента`."
+    },
+    {
+      "atom_id": "ATOM-019",
+      "atomic_statement": "Поле `Пол` отображается всегда, обязательно, редактируемо и использует справочник `Пол клиента`.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-025",
+      "observable_oracle": "Поле `Пол` отображается, редактируемо и использует активные значения `DICT-001`.",
+      "planned_test_case_id": "TC-ACPD-011",
+      "source_refs": [
+        "SRC-006",
+        "SRC-006.P01",
+        "DICT-001"
+      ],
+      "test_intent": "Открыть переключатель `Пол`.; Не выбирать значение в поле `Пол` при попытке продолжить сценарий."
+    },
+    {
+      "atom_id": "ATOM-019",
+      "atomic_statement": "Поле `Пол` отображается всегда, обязательно, редактируемо и использует справочник `Пол клиента`.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-026",
+      "observable_oracle": "Для `Пол` обязательность задана колонкой `О=Да`; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-024",
+      "source_refs": [
+        "SRC-006",
+        "SRC-006.P01",
+        "DICT-001"
+      ],
+      "test_intent": "Открыть переключатель `Пол`.; Не выбирать значение в поле `Пол` при попытке продолжить сценарий."
+    },
+    {
+      "atom_id": "ATOM-020",
+      "atomic_statement": "Поле `Пол` должно обновляться данными DaData после заполнения ФИО через подсказку DaData.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-027",
+      "observable_oracle": "После заполнения ФИО через подсказку DaData поле `Пол` обновляется данными DaData.",
+      "planned_test_case_id": "TC-ACPD-012",
+      "source_refs": [
+        "SRC-006",
+        "SRC-006.P02"
+      ],
+      "test_intent": "Выбрать подсказку DaData после заполнения ФИО."
+    },
+    {
+      "atom_id": "ATOM-021",
+      "atomic_statement": "Поле `Дата рождения` отображается всегда, обязательно, редактируемо и имеет тип `Дата`.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-028",
+      "observable_oracle": "`Дата рождения` отображается, обязательна, редактируема и имеет тип `Дата`.",
+      "planned_test_case_id": "TC-ACPD-013",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P01"
+      ],
+      "test_intent": "Открыть поле `Дата рождения`.; Оставить `Дата рождения` пустой при попытке продолжить сценарий."
+    },
+    {
+      "atom_id": "ATOM-021",
+      "atomic_statement": "Поле `Дата рождения` отображается всегда, обязательно, редактируемо и имеет тип `Дата`.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-029",
+      "observable_oracle": "Для `Дата рождения` обязательность задана колонкой `О=Да`; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-025",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P01"
+      ],
+      "test_intent": "Открыть поле `Дата рождения`.; Оставить `Дата рождения` пустой при попытке продолжить сценарий."
+    },
+    {
+      "atom_id": "ATOM-022",
+      "atomic_statement": "Дата рождения не может быть позже чем `D-18 лет`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-030",
+      "observable_oracle": "Дата `D-18 лет` соответствует верхней возрастной границе.",
+      "planned_test_case_id": "TC-ACPD-014",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P02"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-18 лет + 1 день`."
+    },
+    {
+      "atom_id": "ATOM-022",
+      "atomic_statement": "Дата рождения не может быть позже чем `D-18 лет`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-031",
+      "observable_oracle": "Дата позже `D-18 лет` не соответствует ограничению; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-026",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P02"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-18 лет + 1 день`."
+    },
+    {
+      "atom_id": "ATOM-023",
+      "atomic_statement": "Дата рождения не может быть больше текущей даты `D`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-032",
+      "observable_oracle": "Дата больше текущей даты `D` не соответствует ограничению; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-027",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P03"
+      ],
+      "test_intent": "Ввести дату `D+1 день`."
+    },
+    {
+      "atom_id": "ATOM-024",
+      "atomic_statement": "Дата рождения не может быть меньше чем `D-100 лет`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-033",
+      "observable_oracle": "Дата `D-100 лет` соответствует нижней возрастной границе.",
+      "planned_test_case_id": "TC-ACPD-015",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P04"
+      ],
+      "test_intent": "Ввести дату `D-100 лет`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-024",
+      "atomic_statement": "Дата рождения не может быть меньше чем `D-100 лет`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-034",
+      "observable_oracle": "Дата раньше `D-100 лет` не соответствует ограничению; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-028",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P04"
+      ],
+      "test_intent": "Ввести дату `D-100 лет`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-025",
+      "atomic_statement": "Границы даты рождения проверяются относительно текущей даты приложения `D`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-035",
+      "observable_oracle": "Граница `D-18 лет` вычисляется относительно текущей даты приложения `D`.",
+      "planned_test_case_id": "TC-ACPD-014",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P05"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-100 лет`.; Ввести дату `D-18 лет + 1 день`.; Ввести дату `D+1 день`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-025",
+      "atomic_statement": "Границы даты рождения проверяются относительно текущей даты приложения `D`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-036",
+      "observable_oracle": "Граница `D-100 лет` вычисляется относительно текущей даты приложения `D`.",
+      "planned_test_case_id": "TC-ACPD-015",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P05"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-100 лет`.; Ввести дату `D-18 лет + 1 день`.; Ввести дату `D+1 день`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-025",
+      "atomic_statement": "Границы даты рождения проверяются относительно текущей даты приложения `D`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-037",
+      "observable_oracle": "Проверка значения позже `D-18 лет` использует текущую дату приложения `D`.",
+      "planned_test_case_id": "TC-ACPD-026",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P05"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-100 лет`.; Ввести дату `D-18 лет + 1 день`.; Ввести дату `D+1 день`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-025",
+      "atomic_statement": "Границы даты рождения проверяются относительно текущей даты приложения `D`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-038",
+      "observable_oracle": "Проверка значения больше `D` использует текущую дату приложения `D`.",
+      "planned_test_case_id": "TC-ACPD-027",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P05"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-100 лет`.; Ввести дату `D-18 лет + 1 день`.; Ввести дату `D+1 день`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-025",
+      "atomic_statement": "Границы даты рождения проверяются относительно текущей даты приложения `D`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-039",
+      "observable_oracle": "Проверка значения раньше `D-100 лет` использует текущую дату приложения `D`.",
+      "planned_test_case_id": "TC-ACPD-028",
+      "source_refs": [
+        "SRC-007",
+        "SRC-007.P05"
+      ],
+      "test_intent": "Ввести дату `D-18 лет`.; Ввести дату `D-100 лет`.; Ввести дату `D-18 лет + 1 день`.; Ввести дату `D+1 день`.; Ввести дату `D-100 лет - 1 день`."
+    },
+    {
+      "atom_id": "ATOM-026",
+      "atomic_statement": "Поле `Клиент менял ФИО` отображается всегда как переключатель `Да/Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-040",
+      "observable_oracle": "`Клиент менял ФИО` отображается всегда как переключатель `Да/Нет`.",
+      "planned_test_case_id": "TC-ACPD-029",
+      "source_refs": [
+        "SRC-008",
+        "SRC-008.P01"
+      ],
+      "test_intent": "Открыть переключатель `Клиент менял ФИО`."
+    },
+    {
+      "atom_id": "ATOM-027",
+      "atomic_statement": "Значение по умолчанию для `Клиент менял ФИО` равно `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-041",
+      "observable_oracle": "Значение по умолчанию `Клиент менял ФИО` равно `Нет`.",
+      "planned_test_case_id": "TC-ACPD-030",
+      "source_refs": [
+        "SRC-008",
+        "SRC-008.P02"
+      ],
+      "test_intent": "Открыть новую карточку заявки."
+    },
+    {
+      "atom_id": "ATOM-028",
+      "atomic_statement": "Поле `Предыдущая фамилия` отображается при `Клиент менял ФИО = Да` и не отображается при `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-042",
+      "observable_oracle": "`Предыдущая фамилия` отображается при `Клиент менял ФИО=Да`.",
+      "planned_test_case_id": "TC-ACPD-031",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P01"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да`.; Установить `Клиент менял ФИО=Нет`."
+    },
+    {
+      "atom_id": "ATOM-028",
+      "atomic_statement": "Поле `Предыдущая фамилия` отображается при `Клиент менял ФИО = Да` и не отображается при `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-043",
+      "observable_oracle": "`Предыдущая фамилия` не отображается при `Клиент менял ФИО=Нет`.",
+      "planned_test_case_id": "TC-ACPD-032",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P01"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да`.; Установить `Клиент менял ФИО=Нет`."
+    },
+    {
+      "atom_id": "ATOM-029",
+      "atomic_statement": "Поле `Предыдущая фамилия` редактируемо при выполнении условия видимости.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-044",
+      "observable_oracle": "`Предыдущая фамилия` редактируема при выполнении условия видимости.",
+      "planned_test_case_id": "TC-ACPD-033",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P02"
+      ],
+      "test_intent": "При `Клиент менял ФИО=Да` указать валидные значения в три предыдущих ФИО-поля."
+    },
+    {
+      "atom_id": "ATOM-030",
+      "atomic_statement": "В поле `Предыдущая фамилия` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-045",
+      "observable_oracle": "`Предыдущая фамилия` допускает текстовые символы и символ `-`.",
+      "planned_test_case_id": "TC-ACPD-034",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P03"
+      ],
+      "test_intent": "Ввести `Петрова-Сидорова` в поле `Предыдущая фамилия`.; Ввести `Петрова2` в поле `Предыдущая фамилия`.; Ввести `Петрова@` в поле `Предыдущая фамилия`."
+    },
+    {
+      "atom_id": "ATOM-030",
+      "atomic_statement": "В поле `Предыдущая фамилия` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-046",
+      "observable_oracle": "Значение с цифрой не является допустимым для `Предыдущая фамилия`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-035",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P03"
+      ],
+      "test_intent": "Ввести `Петрова-Сидорова` в поле `Предыдущая фамилия`.; Ввести `Петрова2` в поле `Предыдущая фамилия`.; Ввести `Петрова@` в поле `Предыдущая фамилия`."
+    },
+    {
+      "atom_id": "ATOM-030",
+      "atomic_statement": "В поле `Предыдущая фамилия` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-047",
+      "observable_oracle": "Значение со спецсимволом кроме `-` не является допустимым для `Предыдущая фамилия`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-036",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P03"
+      ],
+      "test_intent": "Ввести `Петрова-Сидорова` в поле `Предыдущая фамилия`.; Ввести `Петрова2` в поле `Предыдущая фамилия`.; Ввести `Петрова@` в поле `Предыдущая фамилия`."
+    },
+    {
+      "atom_id": "ATOM-031",
+      "atomic_statement": "Если `Клиент менял ФИО = Да`, должно быть заполнено хотя бы одно поле из группы предыдущей ФИО.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-048",
+      "observable_oracle": "При `Клиент менял ФИО=Да` заполняется хотя бы одно поле группы предыдущей ФИО; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-041",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P04"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да` и оставить три предыдущих ФИО-поля пустыми."
+    },
+    {
+      "atom_id": "ATOM-032",
+      "atomic_statement": "Для поля `Предыдущая фамилия` при интеграции DaData допускаются подсказки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-049",
+      "observable_oracle": "Для `Предыдущая фамилия` допускаются подсказки DaData при доступной интеграции.",
+      "planned_test_case_id": "TC-ACPD-037",
+      "source_refs": [
+        "SRC-009",
+        "SRC-009.P05"
+      ],
+      "test_intent": "Начать ввод `Петрова` в поле `Предыдущая фамилия` при доступной интеграции."
+    },
+    {
+      "atom_id": "ATOM-033",
+      "atomic_statement": "Поле `Предыдущее имя` отображается при `Клиент менял ФИО = Да` и не отображается при `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-050",
+      "observable_oracle": "`Предыдущее имя` отображается при `Клиент менял ФИО=Да`.",
+      "planned_test_case_id": "TC-ACPD-031",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P01"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да`.; Установить `Клиент менял ФИО=Нет`."
+    },
+    {
+      "atom_id": "ATOM-033",
+      "atomic_statement": "Поле `Предыдущее имя` отображается при `Клиент менял ФИО = Да` и не отображается при `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-051",
+      "observable_oracle": "`Предыдущее имя` не отображается при `Клиент менял ФИО=Нет`.",
+      "planned_test_case_id": "TC-ACPD-032",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P01"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да`.; Установить `Клиент менял ФИО=Нет`."
+    },
+    {
+      "atom_id": "ATOM-034",
+      "atomic_statement": "Поле `Предыдущее имя` редактируемо при выполнении условия видимости.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-052",
+      "observable_oracle": "`Предыдущее имя` редактируемо при выполнении условия видимости.",
+      "planned_test_case_id": "TC-ACPD-033",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P02"
+      ],
+      "test_intent": "При `Клиент менял ФИО=Да` указать валидные значения в три предыдущих ФИО-поля."
+    },
+    {
+      "atom_id": "ATOM-035",
+      "atomic_statement": "В поле `Предыдущее имя` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-053",
+      "observable_oracle": "`Предыдущее имя` допускает текстовые символы и символ `-`.",
+      "planned_test_case_id": "TC-ACPD-038",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P03"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Предыдущее имя`.; Ввести `Анна2` в поле `Предыдущее имя`.; Ввести `Анна@` в поле `Предыдущее имя`."
+    },
+    {
+      "atom_id": "ATOM-035",
+      "atomic_statement": "В поле `Предыдущее имя` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-054",
+      "observable_oracle": "Значение с цифрой не является допустимым для `Предыдущее имя`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-039",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P03"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Предыдущее имя`.; Ввести `Анна2` в поле `Предыдущее имя`.; Ввести `Анна@` в поле `Предыдущее имя`."
+    },
+    {
+      "atom_id": "ATOM-035",
+      "atomic_statement": "В поле `Предыдущее имя` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-055",
+      "observable_oracle": "Значение со спецсимволом кроме `-` не является допустимым для `Предыдущее имя`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-040",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P03"
+      ],
+      "test_intent": "Ввести `Анна-Мария` в поле `Предыдущее имя`.; Ввести `Анна2` в поле `Предыдущее имя`.; Ввести `Анна@` в поле `Предыдущее имя`."
+    },
+    {
+      "atom_id": "ATOM-036",
+      "atomic_statement": "Если `Клиент менял ФИО = Да`, должно быть заполнено хотя бы одно поле из группы предыдущей ФИО.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-056",
+      "observable_oracle": "При `Клиент менял ФИО=Да` заполняется хотя бы одно поле группы предыдущей ФИО; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-041",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P04"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да` и оставить три предыдущих ФИО-поля пустыми."
+    },
+    {
+      "atom_id": "ATOM-037",
+      "atomic_statement": "Для поля `Предыдущее имя` при интеграции DaData допускаются подсказки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-057",
+      "observable_oracle": "Для `Предыдущее имя` допускаются подсказки DaData при доступной интеграции.",
+      "planned_test_case_id": "TC-ACPD-042",
+      "source_refs": [
+        "SRC-010",
+        "SRC-010.P05"
+      ],
+      "test_intent": "Начать ввод `Анна` в поле `Предыдущее имя` при доступной интеграции."
+    },
+    {
+      "atom_id": "ATOM-038",
+      "atomic_statement": "Поле `Предыдущее отчество` отображается при `Клиент менял ФИО = Да` и не отображается при `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-058",
+      "observable_oracle": "`Предыдущее отчество` отображается при `Клиент менял ФИО=Да`.",
+      "planned_test_case_id": "TC-ACPD-031",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P01"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да`.; Установить `Клиент менял ФИО=Нет`."
+    },
+    {
+      "atom_id": "ATOM-038",
+      "atomic_statement": "Поле `Предыдущее отчество` отображается при `Клиент менял ФИО = Да` и не отображается при `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-059",
+      "observable_oracle": "`Предыдущее отчество` не отображается при `Клиент менял ФИО=Нет`.",
+      "planned_test_case_id": "TC-ACPD-032",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P01"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да`.; Установить `Клиент менял ФИО=Нет`."
+    },
+    {
+      "atom_id": "ATOM-039",
+      "atomic_statement": "Поле `Предыдущее отчество` редактируемо при выполнении условия видимости.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-060",
+      "observable_oracle": "`Предыдущее отчество` редактируемо при выполнении условия видимости.",
+      "planned_test_case_id": "TC-ACPD-033",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P02"
+      ],
+      "test_intent": "При `Клиент менял ФИО=Да` указать валидные значения в три предыдущих ФИО-поля."
+    },
+    {
+      "atom_id": "ATOM-040",
+      "atomic_statement": "В поле `Предыдущее отчество` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-061",
+      "observable_oracle": "`Предыдущее отчество` допускает текстовые символы и символ `-`.",
+      "planned_test_case_id": "TC-ACPD-043",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P03"
+      ],
+      "test_intent": "Ввести `Ивановна-Петровна` в поле `Предыдущее отчество`.; Ввести `Ивановна2` в поле `Предыдущее отчество`.; Ввести `Ивановна@` в поле `Предыдущее отчество`."
+    },
+    {
+      "atom_id": "ATOM-040",
+      "atomic_statement": "В поле `Предыдущее отчество` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-062",
+      "observable_oracle": "Значение с цифрой не является допустимым для `Предыдущее отчество`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-044",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P03"
+      ],
+      "test_intent": "Ввести `Ивановна-Петровна` в поле `Предыдущее отчество`.; Ввести `Ивановна2` в поле `Предыдущее отчество`.; Ввести `Ивановна@` в поле `Предыдущее отчество`."
+    },
+    {
+      "atom_id": "ATOM-040",
+      "atomic_statement": "В поле `Предыдущее отчество` возможен ввод только текстовых символов и символа `-`.",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-001.",
+      "obligation_id": "OBL-063",
+      "observable_oracle": "Значение со спецсимволом кроме `-` не является допустимым для `Предыдущее отчество`; механизм UI-отклонения не задан.",
+      "planned_test_case_id": "TC-ACPD-045",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P03"
+      ],
+      "test_intent": "Ввести `Ивановна-Петровна` в поле `Предыдущее отчество`.; Ввести `Ивановна2` в поле `Предыдущее отчество`.; Ввести `Ивановна@` в поле `Предыдущее отчество`."
+    },
+    {
+      "atom_id": "ATOM-041",
+      "atomic_statement": "Если `Клиент менял ФИО = Да`, должно быть заполнено хотя бы одно поле из группы предыдущей ФИО.",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-002.",
+      "obligation_id": "OBL-064",
+      "observable_oracle": "При `Клиент менял ФИО=Да` заполняется хотя бы одно поле группы предыдущей ФИО; точная UI-реакция не определена.",
+      "planned_test_case_id": "TC-ACPD-041",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P04"
+      ],
+      "test_intent": "Установить `Клиент менял ФИО=Да` и оставить три предыдущих ФИО-поля пустыми."
+    },
+    {
+      "atom_id": "ATOM-042",
+      "atomic_statement": "Для поля `Предыдущее отчество` при интеграции DaData допускаются подсказки.",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-065",
+      "observable_oracle": "Для `Предыдущее отчество` допускаются подсказки DaData при доступной интеграции.",
+      "planned_test_case_id": "TC-ACPD-046",
+      "source_refs": [
+        "SRC-011",
+        "SRC-011.P05"
+      ],
+      "test_intent": "Начать ввод `Ивановна` в поле `Предыдущее отчество` при доступной интеграции."
+    }
+  ],
+  "package_id": "application-card-client-personal-data-v2",
+  "package_version": 5
+}

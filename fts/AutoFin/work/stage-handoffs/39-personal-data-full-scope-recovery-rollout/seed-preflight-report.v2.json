@@ -1,0 +1,10 @@
+{
+  "validator": "prepared-draft-seed-order-preflight-v1",
+  "passed": true,
+  "test_case_count": 47,
+  "first_test_case_id": "TC-ACPD-001",
+  "last_test_case_id": "TC-ACPD-047",
+  "contiguous_exact": true,
+  "seed_sha256": "a6f278be5d31bd2dd9615a01584a2e714e3f6e9372cddc169c15b8f147265463",
+  "production_target_exists": false
+}

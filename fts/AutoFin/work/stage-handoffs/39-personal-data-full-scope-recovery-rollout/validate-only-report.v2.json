@@ -1,0 +1,46 @@
+{
+  "status": "validated",
+  "route": "prepared-standard",
+  "writer_scenario": "writer.session_prepared_standard_structured",
+  "reviewer_scenario": "reviewer.session_prepared_standard_semantic",
+  "final_artifact": "fts/AutoFin/test-cases/14-prepared-shadow-application-card-client-personal-data.md",
+  "final_exists": false,
+  "cycle_artifacts_created": false,
+  "package_version": 5,
+  "execution_profile": "standard-required",
+  "unsupported_dimensions": [
+    "dependency-state",
+    "input-boundaries",
+    "integration-persistence",
+    "numeric-boundaries"
+  ],
+  "writer_context_budget": {
+    "passed": true,
+    "validator": "prepared-standard-context-budget-v1",
+    "error_code": "",
+    "role": "writer",
+    "scenario": "writer.session_initial_draft",
+    "prompt_bytes": 93697,
+    "instruction_bytes": 3189,
+    "primary_context_bytes": 96886,
+    "limit_bytes": 131072,
+    "instruction_artifact_count": 1
+  },
+  "prepared_fast_writer_mode": "structured",
+  "prepared_standard_writer_mode": "structured",
+  "context_profile": "character-restriction-calibration",
+  "compact_reviewer": true,
+  "writer_sandbox_policy": "read_only",
+  "writer_command_budget": 0,
+  "reviewer_command_budget": 1,
+  "preflight_checks": [
+    "package-digest",
+    "attempt-binding",
+    "profile-route",
+    "instruction-allowlist",
+    "context-budget",
+    "command-budget",
+    "sandbox-policy",
+    "production-boundary"
+  ]
+}

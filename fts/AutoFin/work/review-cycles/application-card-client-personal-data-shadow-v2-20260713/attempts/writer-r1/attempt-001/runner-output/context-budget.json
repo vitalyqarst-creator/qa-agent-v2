@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-standard-context-budget-v1",
+  "error_code": "",
+  "role": "writer",
+  "scenario": "writer.session_initial_draft",
+  "prompt_bytes": 93697,
+  "instruction_bytes": 3189,
+  "primary_context_bytes": 96886,
+  "limit_bytes": 131072,
+  "instruction_artifact_count": 1
+}

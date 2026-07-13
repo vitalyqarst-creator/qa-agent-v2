@@ -1,0 +1,36 @@
+schema_version: 1
+artifact_kind: cycle-state-integrity-warning
+observed_at: "2026-07-13T04:42:50.9715065Z"
+cycle_id: application-card-client-personal-data-shadow-v2-20260713
+status: quarantined-stale-state
+immutable_cycle: true
+must_not_resume: true
+authoritative_process_state: work/stage-handoffs/39-personal-data-full-scope-recovery-rollout/workflow-state.yaml
+stale_artifact:
+  path: work/review-cycles/application-card-client-personal-data-shadow-v2-20260713/cycle-state.yaml
+  sha256: 2161801d1f218dd653ec4c41f303fa244524c8877d66185dc216d57507146a1f
+  recorded_workflow_status: writer-ready
+  recorded_writer_stage_status: pending
+contradicting_evidence:
+  writer_stage_result:
+    path: work/review-cycles/application-card-client-personal-data-shadow-v2-20260713/attempts/writer-r1/attempt-001/stage-result.json
+    sha256: 360d4f4ef3e30935e1e82e115f108a5af86530f6094a0cc9a93a98f1ed3eaa57
+    status: completed
+    outcome: draft-ready
+  reviewer_context_blocker:
+    path: work/stage-handoffs/39-personal-data-full-scope-recovery-rollout/reviewer-context-blocker-report.md
+    sha256: 4722b0745931ec333d2a5102c63a301cbb9530a84f292b01f9048c3f4d415fd2
+    primary_context_bytes: 183402
+    limit_bytes: 131072
+  reviewer_attempt_present: false
+  reviewer_context_budget_artifact_present: false
+assessment:
+  cause: "До исправления runner завершал процесс на reviewer context-budget preflight до сохранения writer transition в cycle-state.yaml."
+  impact: "Потребитель только cycle-state.yaml может ошибочно решить, что V2 находится до writer и допускает продолжение."
+  evidence_policy: "V2 не исправляется задним числом; stale state сохраняется как неизменённое свидетельство дефекта persistence."
+required_action: "Создать новый immutable V3 cycle на commit 15889ad или новее и выполнить ровно один разрешённый live run."
+forbidden_actions:
+  - resume-v2
+  - rewrite-v2-cycle-state
+  - promote-v2-draft
+  - treat-v2-as-signed-off

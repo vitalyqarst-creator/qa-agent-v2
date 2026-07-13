@@ -1,0 +1,60 @@
+{
+  "version": 1,
+  "backend": "exec",
+  "cycle_dir": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v2-20260713",
+  "stage_count": 1,
+  "duration_ms_total": 220125,
+  "total_tokens": 49768,
+  "uncached_input_tokens_total": 37862,
+  "input_artifact_bytes_total": 254301,
+  "output_artifact_bytes_total": 235036,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f59b0-18f6-73d2-bd40-b66faba29cf8"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "application-card-client-personal-data-shadow-v2-20260713",
+      "duration_ms": 220125,
+      "input_artifact_bytes": 254301,
+      "input_artifact_count": 7,
+      "input_tokens": 37862,
+      "outcome": "draft-ready",
+      "output_artifact_bytes": 235036,
+      "output_artifact_count": 15,
+      "output_tokens": 11906,
+      "role": "writer",
+      "scenario": "writer.session_prepared_standard_structured",
+      "stage_id": "writer-r1",
+      "total_tokens": 49768
+    }
+  ],
+  "stage_attribution": [
+    {
+      "stage_id": "writer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    }
+  ],
+  "context_efficiency": {
+    "primary_context_bytes_total": 96886,
+    "prompt_bytes_total": 93697,
+    "instruction_bytes_total": 3189,
+    "instruction_artifact_count_total": 1,
+    "command_executions_total": 0,
+    "file_changes_total": 0,
+    "test_case_count": 47,
+    "testable_obligations": 65,
+    "uncached_tokens_per_obligation": 582.49,
+    "commands_per_test_case": 0.0
+  }
+}
