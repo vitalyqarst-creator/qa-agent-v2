@@ -357,6 +357,43 @@ coverage_gaps:
 
         self.assertEqual("simple-field-property", result.execution_profile)
 
+    def test_accepts_runtime_selected_provider_fixture_for_ft_first_draft(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Ввести синтетический префикс и выбрать фактически возвращённую подсказку с известным полом. | Видимое значение поля совпадает со значением выбранной подсказки. | `runtime-selected:provider-suggestion-with-known-gender` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual("simple-field-property", result.execution_profile)
+
+    def test_blocks_environment_bound_fixture_before_package_build(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            """# Package Test Design Plan
+
+- `FIX-001`: stand-registered application record.
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Ввести значение из `FIX-001`. | Значение отображается. | `fixture-id:FIX-001` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("environment-bound-fixture", context.exception.code)
+
     def test_blocks_generic_named_fixture_before_package_build(self) -> None:
         plan = self.design / "package-test-design-plan.md"
         plan.write_text(
@@ -427,6 +464,8 @@ coverage_gaps:
         (self.design / "package-test-design-plan.md").write_text(
             """# Package Test Design Plan
 
+- `FIX-001`: portable synthetic source-backed card with the target field present.
+
 | design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
 | --- | --- | --- | --- | --- | --- | --- |
 | `PLAN-001` | `ATOM-001` | Открыть карточку и проверить поле. | Поле отображается. | `n/a` | `TC-001` | `covered` |
@@ -450,6 +489,24 @@ coverage_gaps:
             ],
             [item.test_intent for item in obligations],
         )
+
+    def test_blocks_named_fixture_without_inline_contract(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | По `FIX-404` ввести значение. | Значение отображается. | `fixture-id:FIX-404` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("missing-fixture-contract", context.exception.code)
 
     def test_accepts_one_shared_plan_row_for_grouped_obligations(self) -> None:
         self.write_grouped_plan()

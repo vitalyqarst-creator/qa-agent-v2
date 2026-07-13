@@ -939,6 +939,26 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("blocked-input", result.status)
         self.assertFalse(self.draft_path.exists())
         self.assertEqual(1, len(executor.requests))
+        state = (self.cycle_dir / "cycle-state.yaml").read_text(encoding="utf-8")
+        self.assertIn('draft_test_cases: ""', state)
+
+    def test_prepared_structured_writer_prompt_defers_environment_binding_to_ui_prep(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("integration-persistence",),
+        )
+        executor = ScriptedExecutor(
+            self.structured_writer_step(),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        writer_prompt = executor.requests[0].prompt
+        self.assertIn("runtime-selected integration response", writer_prompt)
+        self.assertIn("Do not require a stand record ID", writer_prompt)
+        self.assertIn("observable oracle without invention", writer_prompt)
 
     def test_prepared_structured_writer_rejects_invalid_contract(self) -> None:
         package_path = self.build_prepared_package()

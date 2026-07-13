@@ -1,0 +1,39 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 0
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
+  - work/stage-handoffs/41-personal-data-v4-quality-remediation/blocker-outcome-analysis.md
+  - work/stage-handoffs/42-personal-data-v5-source-first-recovery/source-first-boundary.md
+  - work/stage-handoffs/42-personal-data-v5-source-first-recovery/dadata-fio-contract.md
+  - work/stage-handoffs/42-personal-data-v5-source-first-recovery/agent-decision-log.md
+latest_artifacts:
+  prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/prepared-input/application-card-client-personal-data-v5/stage-package.json
+  compiler_input: work/stage-handoffs/42-personal-data-v5-source-first-recovery/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
+  package_preflight: work/stage-handoffs/42-personal-data-v5-source-first-recovery/package-preflight-report.v5.json
+  seed_preflight: work/stage-handoffs/42-personal-data-v5-source-first-recovery/seed-preflight-report.v5.json
+  validate_only_report: work/stage-handoffs/42-personal-data-v5-source-first-recovery/validate-only-report.v5.json
+  backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/backend-selection.dry-run.json
+  pre_live_stop_gate: work/stage-handoffs/42-personal-data-v5-source-first-recovery/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/42-personal-data-v5-source-first-recovery/pre-live-authorization.md
+  session_log: work/stage-handoffs/42-personal-data-v5-source-first-recovery/iteration-session-log.md
+  decision_log: work/stage-handoffs/42-personal-data-v5-source-first-recovery/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/42-personal-data-v5-source-first-recovery/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 — точная UI-реакция на недопустимое значение.
+  - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
+  - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
+blocking_reasons: []
+accepted_risks:
+  - Поля вне scope связываются с source-backed fixture соответствующего scope только при UI-prep.

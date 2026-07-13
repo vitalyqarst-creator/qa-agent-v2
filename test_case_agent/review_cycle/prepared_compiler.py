@@ -20,6 +20,7 @@ from .runtime import StageRuntimeError
 
 TOKEN = re.compile(r"\b(?:ATOM|OBL|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\bGSR\s+\d+\b")
 TC_TOKEN = re.compile(r"\bTC-[A-Za-z0-9_.-]+\b")
+FIXTURE_TOKEN = re.compile(r"\bFIX-[A-Za-z0-9_.-]+\b")
 COMPILER_CONTRACT_VERSION = 2
 SECTION_PREFIX = re.compile(r"^(?P<section>(?:section-)?\d+(?:[-.]\d+)*)-")
 FAST_PROFILE = "simple-field-property"
@@ -96,6 +97,14 @@ GENERIC_FIXTURE_VALUE = re.compile(
     r")",
     flags=re.IGNORECASE,
 )
+ENVIRONMENT_BOUND_FIXTURE = re.compile(
+    r"(?:"
+    r"stand-accepted|stand-registered|environment-registered|"
+    r"стендов\w*\s+(?:id|идентификатор|запис\w*|заявк\w*)|"
+    r"заранее\s+зарегистрирован\w*\s+(?:на\s+)?стенд\w*"
+    r")",
+    flags=re.IGNORECASE,
+)
 UNDEFINED_EXECUTION_ACTION = re.compile(
     r"(?:"
     r"(?:попытаться|попытк\w*|продолжить)\s+(?:дальнейш\w*\s+)?сценар\w*|"
@@ -150,6 +159,26 @@ def _plan_has_concrete_fixture(row: Mapping[str, str]) -> bool:
             )
         )
     )
+
+
+def _environment_bound_fixture_lines(plan_path: Path) -> tuple[tuple[int, str], ...]:
+    return tuple(
+        (line_no, text.strip())
+        for line_no, text in enumerate(
+            plan_path.read_text(encoding="utf-8").splitlines(), 1
+        )
+        if ENVIRONMENT_BOUND_FIXTURE.search(text)
+    )
+
+
+def _fixture_contract_lines(plan_path: Path) -> tuple[tuple[str, str], ...]:
+    contracts: list[tuple[str, str]] = []
+    for text in plan_path.read_text(encoding="utf-8").splitlines():
+        stripped = text.strip()
+        fixture_ids = FIXTURE_TOKEN.findall(stripped)
+        if stripped.startswith("-") and fixture_ids and ":" in stripped:
+            contracts.extend((fixture_id, stripped) for fixture_id in fixture_ids)
+    return tuple(contracts)
 
 
 def _validate_planned_test_case_groups(
@@ -816,7 +845,47 @@ def compile_workflow_package(
         obligation_rows, unsupported_dimensions
     )
     routed_unsupported_dimensions = set(unsupported_dimensions)
+    environment_bound_fixtures = _environment_bound_fixture_lines(plan_path)
+    if environment_bound_fixtures:
+        raise PreparedCompilerDiagnostic(
+            "environment-bound-fixture",
+            "semantic degradation: FT-first package requires an environment-bound fixture; "
+            "use a portable synthetic, relative-date or runtime-selected fixture and defer "
+            "stand binding to UI automation preparation",
+            details=tuple(
+                {
+                    "kind": "environment-bound-fixture",
+                    "artifact": plan_path.relative_to(repo_root).as_posix(),
+                    "line": line_no,
+                    "text": text,
+                }
+                for line_no, text in environment_bound_fixtures
+            ),
+        )
+    fixture_contract_lines = _fixture_contract_lines(plan_path)
+    fixture_contracts = {fixture_id: text for fixture_id, text in fixture_contract_lines}
     plan = _table_with(plan_path, {"linked_atoms", "planned_check", "single_expected_behavior"})
+    referenced_fixtures = {
+        fixture_id
+        for row in plan
+        for value in row.values()
+        for fixture_id in FIXTURE_TOKEN.findall(value)
+    }
+    missing_fixture_contracts = sorted(referenced_fixtures - fixture_contracts.keys())
+    if missing_fixture_contracts:
+        raise PreparedCompilerDiagnostic(
+            "missing-fixture-contract",
+            "semantic degradation: named fixture is referenced without an inline portable "
+            "contract in the design plan",
+            details=tuple(
+                {
+                    "kind": "missing-fixture-contract",
+                    "fixture_id": fixture_id,
+                    **_artifact_anchor(plan_path, fixture_id, repo_root),
+                }
+                for fixture_id in missing_fixture_contracts
+            ),
+        )
     decision_rows = (
         _table_with(decision_path, {"linked_atom_id", "planned_tc_or_gap"})
         if decision_path is not None
@@ -885,6 +954,15 @@ def compile_workflow_package(
                 f"source_path: {package_notes_path.relative_to(repo_root).as_posix()}",
                 "",
                 package_notes,
+                "",
+            ]
+        )
+    if fixture_contract_lines:
+        evidence_rows.extend(
+            [
+                "## Portable fixture contracts",
+                "",
+                *dict.fromkeys(text for _, text in fixture_contract_lines),
                 "",
             ]
         )

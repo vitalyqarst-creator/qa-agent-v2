@@ -10,7 +10,7 @@ Continue only when the embedded payload confirms:
 - `execution_profile = simple-field-property` or `standard-required`;
 - an explicit context profile and unsupported dimensions;
 - scope-local source evidence and atomic obligations;
-- every testable obligation has a concrete intent, fixture and observable oracle;
+- every testable obligation has a concrete intent, a portable fixture contract and observable oracle;
 - every unresolved or non-blocking constraint is linked to an explicit `GAP-*`;
 - a runner-owned draft seed and schema-constrained output contract.
 
@@ -27,7 +27,8 @@ Return `blocked-input` when these conditions do not hold. Do not open project in
 6. Preserve every `constraint_gap_ids` marker in the linked TC. When the context profile requires UI calibration, label it `ui-calibration-required` and `candidate-ui-calibration`.
 7. Do not invent screens, fields, dictionaries, values, messages, validation mechanisms, setup, API/DB effects, state transitions or persistence.
 8. Keep one primary check and one main observable result per TC. Use unique titles that name the field/action and exact positive, boundary or invalid class.
-9. Return `blocked-input` with empty `draft_markdown` and precise reasons when inline evidence is insufficient.
+9. A concrete FT-first fixture may be a synthetic value, relative date or runtime-selected integration response with source-defined observable properties. A stand record ID, locator, token, session or prerecorded provider response is not required until UI-prep.
+10. Return `blocked-input` with empty `draft_markdown` and precise reasons only when inline evidence cannot define the test intent or observable oracle without invention.
 
 ## Assisted Fallback
 

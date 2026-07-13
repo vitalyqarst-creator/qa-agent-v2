@@ -1395,7 +1395,8 @@ class CodexExecReviewCycleRunner:
             ),
             "integration-persistence": (
                 "Separate trigger, observable response and persistence obligations.",
-                "Return blocked-input when the supplied package does not define a reproducible integration fixture or oracle.",
+                "Treat a portable synthetic value or runtime-selected provider response with source-defined observable properties as a reproducible FT-first fixture.",
+                "Do not require a stand record ID, locator, token, session or prerecorded provider response; return blocked-input only when the trigger or observable oracle cannot be derived without invention.",
             ),
             "conditional-state": (
                 "Preserve branch preconditions and state transitions exactly as supplied.",
@@ -2592,6 +2593,7 @@ class CodexExecReviewCycleRunner:
         )
         writer_completion_state = {
             "writer_stage_status": writer_status,
+            "draft_test_cases": relative_path(self.draft_path, self.ft_root),
             "writer_draft_sha256": draft_sha256,
             "validator_report": relative_path(self.validator_path, self.ft_root),
             "obligation_gate_report": (
@@ -3077,7 +3079,7 @@ class CodexExecReviewCycleRunner:
             "max_semantic_rounds": 2,
             "writer_stage_status": "pending",
             "reviewer_stage_status": "pending",
-            "draft_test_cases": relative_path(self.draft_path, self.ft_root),
+            "draft_test_cases": "",
             "canonical_test_cases": relative_path(self.final_path, self.ft_root),
             "validator_report": "",
             "obligation_gate_report": "",
@@ -3211,7 +3213,8 @@ class CodexExecReviewCycleRunner:
                     "This stage is read-only. Do not call shell or file tools and do not create or modify workspace files.",
                     "Return the complete unsigned draft inside the schema-constrained final JSON object. The runner alone materializes and validates draft.md.",
                     "Do not read existing/generated test cases, earlier cycle artifacts or production test-cases as evidence.",
-                    "If the embedded evidence is insufficient, return blocked-input with a precise reason. Do not open a full source in this mode.",
+                    "FT-first boundary: a portable synthetic value, relative date or runtime-selected integration response with source-defined observable properties is a reproducible fixture. Do not require a stand record ID, locator, token, session or prerecorded provider response.",
+                    "Return blocked-input only when the embedded evidence cannot define the test intent or observable oracle without invention. Do not open a full source in this mode.",
                     "",
                     self._prepared_writer_payload(structured=True),
                     "",
@@ -3254,6 +3257,7 @@ class CodexExecReviewCycleRunner:
                     "Use the verified inline projection as primary evidence. Do not repeat source discovery or broad document analysis.",
                     "A registered full source may be inspected only for a named OBL/ATOM whose inline evidence is insufficient; record the source path, locator and reason in the final summary.",
                     "Angle-bracket test-data placeholders are forbidden. Bind concrete values or a named reproducible fixture with explicit selection/setup conditions; return blocked if neither is source-safe.",
+                    "A portable synthetic value, relative date or runtime-selected integration response with source-defined observable properties is source-safe; stand IDs, locators, tokens, sessions and prerecorded provider responses are deferred to UI-prep.",
                     "Do not use generated test cases, previous cycles or canary artifacts as requirement evidence.",
                     "Do not write under any production test-cases directory.",
                     f"Write the complete unsigned draft only to `{relative_path(self.draft_path, self.repo_root)}`.",
