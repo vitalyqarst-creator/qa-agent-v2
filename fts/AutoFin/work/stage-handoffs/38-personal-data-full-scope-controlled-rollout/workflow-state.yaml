@@ -1,0 +1,53 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
+  - work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
+  - work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/compiler-inputs/application-card-client-personal-data/mapping-consistency-report.md
+  - work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/live-blocker-report.md
+  - work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/stop-gate.md
+  - work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/prompt.scope-to-iteration.md
+latest_artifacts:
+  scope_contract: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  scope_coverage_gaps: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  source_parity_check: work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  compiler_input: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
+  mapping_consistency: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/compiler-inputs/application-card-client-personal-data/mapping-consistency-report.md
+  prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v1-20260713/prepared-input/application-card-client-personal-data-v1/stage-package.json
+  validate_only_report: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/validate-only-report.v1.json
+  cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v1-20260713/cycle-state.yaml
+  blocked_draft: work/review-cycles/application-card-client-personal-data-shadow-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  validator_report: work/review-cycles/application-card-client-personal-data-shadow-v1-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json
+  performance_report: work/review-cycles/application-card-client-personal-data-shadow-v1-20260713/performance.json
+  compiler_remediation_summary: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/compiler-remediation-summary.md
+  live_blocker_report: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/live-blocker-report.md
+  performance_analysis: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/performance-analysis.md
+  stop_gate: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/stop-gate.md
+  iteration_summary: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/iteration-summary.md
+  session_log: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/iteration-session-log.md
+  decision_log: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/38-personal-data-full-scope-controlled-rollout/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 exact invalid-value UI oracle.
+  - GAP-002 empty requiredness UI oracle.
+  - GAP-003 integration failure/technical evidence.
+blocking_reasons:
+  - V1 live cycle stopped before reviewer because the runner-generated seed ordered planned TC groups by atom order instead of numeric TC id.
+  - The code fix is tested, but acceptance requires a new immutable target-bound package and live cycle.
+accepted_risks:
+  - GAP-001 remains a non-blocking UI calibration risk.
+  - GAP-002 remains a non-blocking UI calibration risk.
+  - GAP-003 remains a non-blocking integration-evidence risk.
+  - Generic compiler-input preparation is a performance debt and must be replaced by deterministic consolidation.
