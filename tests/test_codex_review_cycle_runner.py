@@ -1544,6 +1544,8 @@ class CodexReviewCycleRunnerTests(unittest.TestCase):
             "--prompt-source",
             "bounded-semantic",
             "--dry-run",
+            "--output-dir",
+            str(self.root / "bounded-semantic-sdk-diagnostic"),
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
