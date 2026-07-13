@@ -82,6 +82,11 @@ MAX_STRUCTURED_WRITER_DRAFT_BYTES = 128 * 1024
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
 DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES = 512 * 1024
 DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES = 768 * 1024
+DEFAULT_PREPARED_STRUCTURED_WRITER_SINGLE_SESSION_TC_LIMIT = 12
+DEFAULT_PREPARED_STRUCTURED_WRITER_SHARD_SIZE = 12
+DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS = 8
+DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT = 100
+MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES = 64 * 1024
 DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 80
 DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET = 48
 DEFAULT_STANDARD_WRITER_TIMEOUT_SECONDS = 900
@@ -797,6 +802,18 @@ class CodexExecReviewCycleRunner:
     prepared_standard_reviewer_context_max_bytes: int = (
         DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES
     )
+    prepared_structured_writer_single_session_tc_limit: int = (
+        DEFAULT_PREPARED_STRUCTURED_WRITER_SINGLE_SESSION_TC_LIMIT
+    )
+    prepared_structured_writer_shard_size: int = (
+        DEFAULT_PREPARED_STRUCTURED_WRITER_SHARD_SIZE
+    )
+    prepared_structured_writer_max_shards: int = (
+        DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS
+    )
+    prepared_structured_reviewer_obligation_limit: int = (
+        DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT
+    )
     promote_final: bool = False
     promotion_dry_run: bool = False
     allow_overwrite_final: bool = False
@@ -812,6 +829,9 @@ class CodexExecReviewCycleRunner:
     _context_budget_reports: dict[str, dict[str, Any]] = field(
         default_factory=dict, init=False
     )
+    _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
+    _reviewer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
+    _reviewer_context_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
 
     def __post_init__(self) -> None:
         self.repo_root = self.repo_root.resolve()
@@ -925,6 +945,20 @@ class CodexExecReviewCycleRunner:
     def writer_result_path(self) -> Path:
         return self.runner_output_dir(WRITER_STAGE) / "writer-result.json"
 
+    def writer_result_path_for(self, stage: str) -> Path:
+        return self.runner_output_dir(stage) / "writer-result.json"
+
+    def writer_shard_draft_path(self, stage: str) -> Path:
+        return self.stage_output_dir(stage) / "shard.md"
+
+    @property
+    def writer_output_capacity_path(self) -> Path:
+        return self.cycle_dir / "writer-output-capacity-preflight.json"
+
+    @property
+    def writer_shard_plan_path(self) -> Path:
+        return self.cycle_dir / "writer-shard-plan.json"
+
     @property
     def reviewer_evidence_access_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "evidence-access-report.json"
@@ -943,6 +977,8 @@ class CodexExecReviewCycleRunner:
             self.attempt_root(REVIEWER_STAGE),
             self.cycle_dir / "outputs",
             self.cycle_dir / "stage-inputs",
+            self.writer_output_capacity_path,
+            self.writer_shard_plan_path,
         ]
         return tuple(paths)
 
@@ -979,6 +1015,194 @@ class CodexExecReviewCycleRunner:
             self._is_prepared_standard()
             and self.prepared_standard_writer_mode == "structured"
         )
+
+    def _prepared_writer_groups(self) -> list[tuple[str, list[Any]]]:
+        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+        grouped: dict[str, list[Any]] = {}
+        for index, obligation in enumerate(
+            (item for item in obligations.obligations if item.coverage_status == "testable"),
+            start=1,
+        ):
+            test_case_id = obligation.planned_test_case_id or f"TC-PREP-{index:03d}"
+            grouped.setdefault(test_case_id, []).append(obligation)
+        return sorted(grouped.items(), key=lambda item: self._test_case_id_sort_key(item[0]))
+
+    def _build_writer_output_capacity_plan(self) -> dict[str, Any]:
+        groups = self._prepared_writer_groups()
+        obligation_count = sum(len(items) for _, items in groups)
+        test_case_count = len(groups)
+        limit = self.prepared_structured_writer_single_session_tc_limit
+        shard_size = self.prepared_structured_writer_shard_size
+        requires_sharding = test_case_count > limit
+        shards: list[dict[str, Any]] = []
+        if requires_sharding and shard_size > 0:
+            for offset in range(0, test_case_count, shard_size):
+                selected = groups[offset : offset + shard_size]
+                test_case_ids = [test_case_id for test_case_id, _ in selected]
+                selected_obligations = [item for _, items in selected for item in items]
+                shard_payload = {
+                    "index": len(shards) + 1,
+                    "stage": (
+                        WRITER_STAGE
+                        if not shards
+                        else f"{WRITER_STAGE}-shard-{len(shards) + 1:03d}"
+                    ),
+                    "test_case_ids": test_case_ids,
+                    "obligation_ids": [item.obligation_id for item in selected_obligations],
+                    "atom_ids": list(
+                        dict.fromkeys(
+                            item.traceability_atom_id for item in selected_obligations
+                        )
+                    ),
+                }
+                shard_payload["digest"] = hashlib.sha256(
+                    json.dumps(
+                        shard_payload,
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest()
+                shards.append(shard_payload)
+        shard_count = len(shards)
+        planned_tc_ids = [test_case_id for test_case_id, _ in groups]
+        planned_obligation_ids = [
+            item.obligation_id for _, items in groups for item in items
+        ]
+        sharded_tc_ids = [
+            test_case_id for shard in shards for test_case_id in shard["test_case_ids"]
+        ]
+        sharded_obligation_ids = [
+            obligation_id for shard in shards for obligation_id in shard["obligation_ids"]
+        ]
+        union_complete = (
+            not requires_sharding
+            or (
+                sharded_tc_ids == planned_tc_ids
+                and sharded_obligation_ids == planned_obligation_ids
+            )
+        )
+        disjoint = (
+            len(sharded_tc_ids) == len(set(sharded_tc_ids))
+            and len(sharded_obligation_ids) == len(set(sharded_obligation_ids))
+        )
+        passed = (
+            not requires_sharding
+            or (
+                shard_size > 0
+                and shard_size <= limit
+                and shard_count <= self.prepared_structured_writer_max_shards
+                and union_complete
+                and disjoint
+            )
+        )
+        report: dict[str, Any] = {
+            "passed": passed,
+            "validator": "prepared-structured-writer-output-capacity-v1",
+            "error_code": "" if passed else "prepared-structured-writer-output-capacity-exceeded",
+            "mode": "sharded" if requires_sharding and passed else "single-session",
+            "package_id": self._prepared_package.package_id if self._prepared_package else "",
+            "atomic_obligations_sha256": sha256_file(
+                self._prepared_artifact("atomic-obligations")
+            ),
+            "test_case_count": test_case_count,
+            "obligation_count": obligation_count,
+            "single_session_test_case_limit": limit,
+            "configured_shard_size": shard_size,
+            "max_shards": self.prepared_structured_writer_max_shards,
+            "shard_count": shard_count,
+            "union_complete": union_complete,
+            "disjoint": disjoint,
+            "full_seed_bytes": len(self._draft_seed_text().encode("utf-8")),
+            "shards": shards,
+        }
+        report["plan_digest"] = hashlib.sha256(
+            json.dumps(
+                report,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return report
+
+    def _uses_sharded_prepared_writer(self) -> bool:
+        return bool(
+            self._uses_structured_prepared_writer()
+            and self._writer_output_capacity_plan.get("passed")
+            and self._writer_output_capacity_plan.get("mode") == "sharded"
+        )
+
+    def _build_reviewer_output_capacity_plan(self) -> dict[str, Any]:
+        obligation_count = len(
+            load_obligations(
+                self._prepared_artifact("atomic-obligations")
+            ).obligations
+        )
+        estimated_output_bytes = 2048 + obligation_count * 256
+        schema_bytes = len(
+            json.dumps(
+                self._review_contract_schema(),
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        passed = (
+            obligation_count <= self.prepared_structured_reviewer_obligation_limit
+            and estimated_output_bytes <= MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES
+        )
+        return {
+            "passed": passed,
+            "validator": "prepared-structured-reviewer-output-capacity-v1",
+            "error_code": "" if passed else "prepared-structured-reviewer-output-capacity-exceeded",
+            "obligation_count": obligation_count,
+            "obligation_limit": self.prepared_structured_reviewer_obligation_limit,
+            "estimated_output_bytes": estimated_output_bytes,
+            "estimated_output_limit_bytes": MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES,
+            "output_schema_bytes": schema_bytes,
+            "schema_mode": "generic-bounded-parser-verified"
+            if self._uses_sharded_prepared_writer()
+            else "exact-obligation-variants",
+        }
+
+    def _build_reviewer_context_capacity_plan(self) -> dict[str, Any]:
+        shared_context_bytes = len(
+            self._prepared_shared_context_projection().encode("utf-8")
+        )
+        semantic_projection_bytes = len(
+            self._prepared_standard_reviewer_semantic_projection().encode("utf-8")
+        )
+        seed_bytes = len(self._draft_seed_text().encode("utf-8"))
+        runtime_profile_bytes = self.prepared_reviewer_profile_path.stat().st_size
+        rule_card_bytes = len(self._prepared_context_rule_card().encode("utf-8"))
+        deterministic_payload_reserve_bytes = 16 * 1024
+        estimated_primary_context_bytes = sum(
+            (
+                shared_context_bytes,
+                semantic_projection_bytes,
+                seed_bytes,
+                runtime_profile_bytes * 2,
+                rule_card_bytes,
+                deterministic_payload_reserve_bytes,
+            )
+        )
+        limit_bytes = self.prepared_standard_reviewer_context_max_bytes
+        return {
+            "passed": estimated_primary_context_bytes <= limit_bytes,
+            "validator": "prepared-sharded-reviewer-context-capacity-v1",
+            "error_code": ""
+            if estimated_primary_context_bytes <= limit_bytes
+            else "prepared-sharded-reviewer-context-capacity-exceeded",
+            "estimate_basis": "full-seed-plus-semantic-projection-and-deterministic-reserve",
+            "shared_context_bytes": shared_context_bytes,
+            "semantic_projection_bytes": semantic_projection_bytes,
+            "full_seed_bytes": seed_bytes,
+            "runtime_profile_bytes_counted_twice": runtime_profile_bytes * 2,
+            "rule_card_bytes": rule_card_bytes,
+            "deterministic_payload_reserve_bytes": deterministic_payload_reserve_bytes,
+            "estimated_primary_context_bytes": estimated_primary_context_bytes,
+            "limit_bytes": limit_bytes,
+        }
 
     def _prepared_context_profile(self) -> str:
         if self._prepared_package is None:
@@ -1122,9 +1346,14 @@ class CodexExecReviewCycleRunner:
             "prepared_reviewer_prompt_max_bytes",
             "prepared_standard_writer_context_max_bytes",
             "prepared_standard_reviewer_context_max_bytes",
+            "prepared_structured_writer_single_session_tc_limit",
+            "prepared_structured_writer_max_shards",
+            "prepared_structured_reviewer_obligation_limit",
         ):
             if getattr(self, name) < 1:
                 raise RunnerError(f"{name} must be >= 1")
+        if self.prepared_structured_writer_shard_size < 0:
+            raise RunnerError("prepared_structured_writer_shard_size must be >= 0")
         for name in (
             "writer_timeout_seconds",
             "reviewer_timeout_seconds",
@@ -1239,6 +1468,36 @@ class CodexExecReviewCycleRunner:
                 )
         elif self._prepared_package is not None and (self.promote_final or self.promotion_dry_run):
             raise RunnerError("Prepared promotion requires an explicit promotion contract")
+        if self._uses_structured_prepared_writer():
+            self._writer_output_capacity_plan = self._build_writer_output_capacity_plan()
+            if not self._writer_output_capacity_plan["passed"]:
+                raise RunnerError(
+                    "blocked-prepared-writer-output-capacity: "
+                    f"test_case_count={self._writer_output_capacity_plan['test_case_count']}, "
+                    f"single_session_limit={self.prepared_structured_writer_single_session_tc_limit}, "
+                    f"shard_size={self.prepared_structured_writer_shard_size}, "
+                    f"max_shards={self.prepared_structured_writer_max_shards}"
+                )
+            self._reviewer_output_capacity_plan = (
+                self._build_reviewer_output_capacity_plan()
+            )
+            if not self._reviewer_output_capacity_plan["passed"]:
+                raise RunnerError(
+                    "blocked-prepared-reviewer-output-capacity: "
+                    f"obligation_count={self._reviewer_output_capacity_plan['obligation_count']}, "
+                    f"obligation_limit={self.prepared_structured_reviewer_obligation_limit}, "
+                    f"estimated_output_bytes={self._reviewer_output_capacity_plan['estimated_output_bytes']}"
+                )
+            if self._uses_sharded_prepared_writer() and self._is_prepared_standard():
+                self._reviewer_context_capacity_plan = (
+                    self._build_reviewer_context_capacity_plan()
+                )
+                if not self._reviewer_context_capacity_plan["passed"]:
+                    raise RunnerError(
+                        "blocked-prepared-reviewer-context-capacity: "
+                        f"estimated_primary_context_bytes={self._reviewer_context_capacity_plan['estimated_primary_context_bytes']}, "
+                        f"limit_bytes={self._reviewer_context_capacity_plan['limit_bytes']}"
+                    )
         prepared_inputs = self._prepared_input_paths()
         instruction_inputs = (
             (
@@ -1535,6 +1794,44 @@ class CodexExecReviewCycleRunner:
             separators=(",", ":"),
         )
 
+    def _prepared_standard_reviewer_semantic_projection(self) -> str:
+        artifact = self._prepared_artifact("atomic-obligations")
+        obligations = load_obligations(artifact)
+        return json.dumps(
+            {
+                "artifact": relative_path(artifact, self.repo_root),
+                "artifact_sha256": sha256_file(artifact),
+                "obligation_count": len(obligations.obligations),
+                "semantic_evidence_source": "selected-source-evidence",
+                "coverage_gaps": [item.to_dict() for item in obligations.coverage_gaps],
+                "obligations": [
+                    {
+                        "obligation_id": item.obligation_id,
+                        "atom_id": item.traceability_atom_id,
+                        "coverage_status": item.coverage_status,
+                        "planned_test_case_id": item.planned_test_case_id,
+                        "source_refs": list(item.source_refs),
+                        "atomic_statement": item.atomic_statement,
+                        "observable_oracle": item.observable_oracle,
+                        "test_intent": item.test_intent,
+                        "dictionary_refs": list(item.dictionary_refs),
+                        "gap_id": item.gap_id,
+                        "constraint_gap_ids": list(item.constraint_gap_ids),
+                    }
+                    for item in obligations.obligations
+                ],
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+    def _prepared_shared_context_projection(self) -> str:
+        evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
+        first_obligation = re.search(r"(?m)^- OBL-[A-Za-z0-9_.-]+:", evidence)
+        if first_obligation is None:
+            return evidence.strip()
+        return evidence[: first_obligation.start()].rstrip()
+
     def _prepared_standard_reviewer_calibration_summary(self) -> str:
         artifact = self.calibration_lifecycle_path
         payload = json.loads(artifact.read_text(encoding="utf-8"))
@@ -1634,7 +1931,13 @@ class CodexExecReviewCycleRunner:
             ]
         )
 
-    def _enforce_prepared_standard_context_budget(self, *, role: str, prompt: str) -> None:
+    def _enforce_prepared_standard_context_budget(
+        self,
+        *,
+        role: str,
+        prompt: str,
+        stage: str | None = None,
+    ) -> None:
         instruction_paths = self._prepared_role_instruction_paths(role)
         instruction_bytes = sum(path.stat().st_size for path in instruction_paths)
         prompt_bytes = len(prompt.encode("utf-8"))
@@ -1644,7 +1947,7 @@ class CodexExecReviewCycleRunner:
             if role == "writer"
             else self.prepared_standard_reviewer_context_max_bytes
         )
-        stage = WRITER_STAGE if role == "writer" else REVIEWER_STAGE
+        stage = stage or (WRITER_STAGE if role == "writer" else REVIEWER_STAGE)
         report = {
             "passed": total_bytes <= limit_bytes,
             "validator": "prepared-standard-context-budget-v1",
@@ -1766,28 +2069,164 @@ class CodexExecReviewCycleRunner:
         )
         return "\n".join(lines)
 
-    def _draft_seed_text(self) -> str:
-        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
-        testable = [item for item in obligations.obligations if item.coverage_status == "testable"]
-        grouped_testable: list[tuple[str, list[Any]]] = []
-        group_positions: dict[str, int] = {}
-        for index, obligation in enumerate(testable, start=1):
-            group_id = obligation.planned_test_case_id or f"TC-PREP-{index:03d}"
-            if group_id not in group_positions:
-                group_positions[group_id] = len(grouped_testable)
-                grouped_testable.append((group_id, []))
-            grouped_testable[group_positions[group_id]][1].append(obligation)
-        grouped_testable.sort(key=lambda item: self._test_case_id_sort_key(item[0]))
+    def _prepared_writer_shard_projection(self, shard: dict[str, Any]) -> str:
+        obligation_set = load_obligations(self._prepared_artifact("atomic-obligations"))
+        selected_ids = set(shard["obligation_ids"])
+        selected = [
+            item for item in obligation_set.obligations if item.obligation_id in selected_ids
+        ]
+        if {item.obligation_id for item in selected} != selected_ids:
+            raise RunnerError("writer shard plan references unknown obligations")
+        relevant_gap_ids = {
+            gap_id
+            for item in selected
+            for gap_id in (item.gap_id, *item.constraint_gap_ids)
+            if gap_id
+        }
+        gaps = [
+            item.to_dict()
+            for item in obligation_set.coverage_gaps
+            if item.gap_id in relevant_gap_ids
+        ]
+        payload = {
+            "package_version": obligation_set.package_version,
+            "package_id": obligation_set.package_id,
+            "source_artifact_sha256": sha256_file(
+                self._prepared_artifact("atomic-obligations")
+            ),
+            "shard_digest": shard["digest"],
+            "test_case_ids": list(shard["test_case_ids"]),
+            "obligations": [
+                item.to_dict(include_constraints=True, include_atom_id=True)
+                for item in selected
+            ],
+            "coverage_gaps": gaps,
+        }
+        return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+    def _prepared_writer_shard_evidence(self, shard: dict[str, Any]) -> str:
+        evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
+        first_obligation = re.search(r"(?m)^- OBL-[A-Za-z0-9_.-]+:", evidence)
+        if first_obligation is None:
+            return evidence.strip()
+        shared = evidence[: first_obligation.start()].rstrip()
+        selectors = set(shard["obligation_ids"]) | set(shard["test_case_ids"])
+        obligation_set = load_obligations(self._prepared_artifact("atomic-obligations"))
+        for item in obligation_set.obligations:
+            if item.obligation_id not in selectors:
+                continue
+            selectors.update(item.dictionary_refs)
+            selectors.update(item.constraint_gap_ids)
+            if item.gap_id:
+                selectors.add(item.gap_id)
+        blocks = re.split(r"\n\s*\n", evidence[first_obligation.start() :].strip())
+        selected_blocks = [block for block in blocks if any(value in block for value in selectors)]
+        return "\n\n".join((shared, *selected_blocks)).strip()
+
+    def _writer_shard_prompt(self, shard: dict[str, Any]) -> str:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        stage = str(shard["stage"])
+        prompt = "\n".join(
+            [
+                "# Codex exec prepared writer bounded shard",
+                "",
+                "This is one read-only shard of a runner-owned deterministic full-set plan.",
+                "Use only the embedded runtime profile, selected evidence and exact obligation projection below.",
+                "Do not call shell or file tools and do not create or modify workspace files.",
+                "Return only the assigned `## TC-*` sections in the declared order. Do not add an H1 title, metadata, coverage summary or unassigned test case.",
+                "Every assigned obligation_id and atom_id must appear in the traceability of its planned test case.",
+                "Do not read previous cycles, generated drafts, production test cases or full sources.",
+                "FT-first fixtures may be portable synthetic values, relative dates or runtime-selected integration responses with source-defined observable properties.",
+                "Return blocked-input only when this shard's embedded evidence cannot define the test intent or observable oracle without invention.",
+                "",
+                self.prepared_writer_profile_path.read_text(encoding="utf-8").strip(),
+                "",
+                self._prepared_context_rule_card(),
+                "",
+                "## Verified shard metadata",
+                "",
+                "```json",
+                json.dumps(
+                    {
+                        "package_id": self._prepared_package.package_id,
+                        "stage": stage,
+                        "shard_index": shard["index"],
+                        "shard_count": self._writer_output_capacity_plan["shard_count"],
+                        "shard_digest": shard["digest"],
+                        "test_case_count": len(shard["test_case_ids"]),
+                        "obligation_count": len(shard["obligation_ids"]),
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "```",
+                "",
+                "## Selected source-backed evidence",
+                "",
+                self._prepared_writer_shard_evidence(shard),
+                "",
+                "## Exact shard obligation projection",
+                "",
+                "```json",
+                self._prepared_writer_shard_projection(shard),
+                "```",
+                "",
+                "## Shard draft seed",
+                "",
+                "Replace every seed placeholder. Return these sections only.",
+                "",
+                "```markdown",
+                self._draft_seed_text(
+                    test_case_ids=shard["test_case_ids"],
+                    include_document_header=False,
+                ).strip(),
+                "```",
+                "",
+                "Return exactly one schema-constrained JSON object and no commentary outside it.",
+                "Use status=draft-ready with the complete shard in draft_markdown and empty blocking_reasons, or status=blocked-input with empty draft_markdown and at least one reason.",
+                "",
+            ]
+        )
+        if self._is_prepared_standard():
+            self._enforce_prepared_standard_context_budget(
+                role="writer", prompt=prompt, stage=stage
+            )
+        return prompt
+
+    def _draft_seed_text(
+        self,
+        *,
+        test_case_ids: Sequence[str] | None = None,
+        include_document_header: bool = True,
+    ) -> str:
+        grouped_testable = self._prepared_writer_groups()
+        selected_ids = set(test_case_ids or ())
+        if test_case_ids is not None:
+            grouped_testable = [
+                item for item in grouped_testable if item[0] in selected_ids
+            ]
+            actual_ids = {item[0] for item in grouped_testable}
+            if actual_ids != selected_ids:
+                raise RunnerError(
+                    "writer shard seed references unknown test-case ids: "
+                    + ", ".join(sorted(selected_ids - actual_ids))
+                )
+        testable = [item for _, group in self._prepared_writer_groups() for item in group]
         contract = self._promotion_contract
+        if contract is not None and test_case_ids is not None:
+            raise RunnerError("promotion contract does not support writer sharding")
         if contract is not None and len(grouped_testable) != len(testable):
             raise RunnerError(
                 "promotion contract does not support grouped prepared obligations"
             )
-        if contract is None:
+        if contract is None and include_document_header:
             lines = [
                 "# Тест-кейсы", "",
                 f"<!-- {SEED_MARKER}: replace all [SEED:*] values before completion -->", "",
             ]
+        elif contract is None:
+            lines = []
         else:
             lines = [
                 f"# {contract.canonical_title}", "",
@@ -2104,16 +2543,21 @@ class CodexExecReviewCycleRunner:
             obligation_heading = "## Verified obligation review index"
             obligation_note = (
                 "The immutable full obligations artifact is identified by digest below. "
-                "Its semantic statements and oracles are supplied in selected source evidence; "
-                "this index supplies every exact review-contract ID, status, reference and gap."
+                "This compact projection contains every exact review-contract ID plus its source-backed "
+                "statement, oracle, intent, reference and gap; the runner validates the final contract "
+                "against the immutable artifact."
             )
-            obligation_payload = self._prepared_standard_reviewer_obligation_index()
+            obligation_payload = self._prepared_standard_reviewer_semantic_projection()
+            source_evidence = self._prepared_shared_context_projection()
             calibration_heading = "## Calibration lifecycle summary"
             calibration_payload = self._prepared_standard_reviewer_calibration_summary()
         else:
             obligation_heading = "## Atomic obligations"
             obligation_note = ""
             obligation_payload = self._prepared_artifact("atomic-obligations").read_text(
+                encoding="utf-8"
+            ).strip()
+            source_evidence = self._prepared_artifact("source-evidence").read_text(
                 encoding="utf-8"
             ).strip()
             calibration_heading = "## Calibration lifecycle"
@@ -2135,7 +2579,7 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Selected source evidence",
                 "",
-                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                source_evidence,
                 "",
                 obligation_heading,
                 "",
@@ -2262,25 +2706,251 @@ class CodexExecReviewCycleRunner:
             command_budget,
         )
 
+    def _run_structured_writer_shards(
+        self,
+        state: dict[str, Any],
+    ) -> tuple[ProcessResult, dict[str, Any]] | CycleResult:
+        shards = list(self._writer_output_capacity_plan.get("shards") or [])
+        if not shards:
+            raise RunnerError("sharded writer route has no shards")
+        first_result: ProcessResult | None = None
+        first_artifacts: dict[str, Any] | None = None
+        seen_backend_ids: set[str] = set()
+        evidence_reports: list[dict[str, Any]] = []
+        for shard in shards:
+            stage = str(shard["stage"])
+            result, artifacts = self._run_stage(
+                stage=stage,
+                role="writer",
+                prompt=self._writer_shard_prompt(shard),
+                last_message_path=self.writer_result_path_for(stage),
+            )
+            evidence_access = validate_evidence_access(
+                events_text=result.stdout,
+                forbidden_roots=self._prepared_package.forbidden_evidence_roots,
+                source_registry=self._prepared_package.source_registry,
+                allowed_stage_roots=(
+                    relative_path(self.stage_output_dir(stage), self.repo_root),
+                ),
+                reject_unlisted_commands=True,
+                require_source_fallback_authorization=False,
+            )
+            evidence_path = self.runner_output_dir(stage) / "evidence-access-report.json"
+            write_json(evidence_path, evidence_access.as_dict())
+            evidence_reports.append(
+                {
+                    "stage": stage,
+                    "path": relative_path(evidence_path, self.repo_root),
+                    "passed": evidence_access.passed,
+                }
+            )
+            if not evidence_access.passed:
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-evidence-access",
+                    reasons=[
+                        "prepared writer shard evidence-access gate reported findings",
+                        relative_path(evidence_path, self.repo_root),
+                    ],
+                )
+            if result.launch_error:
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-process-launch",
+                    reasons=["writer shard process could not be started"],
+                )
+            if result.exit_code not in (None, 0):
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-process-exit",
+                    reasons=[f"writer shard process exited with code {result.exit_code}"],
+                )
+            if file_change_count_from_events(result.stdout):
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-forbidden-workspace-change",
+                    reasons=["read-only structured writer shard emitted a file-change event"],
+                )
+            if (
+                result.timed_out
+                or result.idle_timed_out
+                or result.command_budget_exceeded
+                or result.first_artifact_deadline_exceeded
+            ):
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status=(
+                        "blocked-command-budget"
+                        if result.command_budget_exceeded
+                        else "blocked-timeout"
+                    ),
+                    reasons=[
+                        "structured writer shard attempted a command"
+                        if result.command_budget_exceeded
+                        else "structured writer shard did not return a complete contract within its runtime budget"
+                    ],
+                )
+            message = self._reviewer_message(result.stdout)
+            if not message.strip():
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-missing-output",
+                    reasons=["structured writer shard completed without a final JSON contract"],
+                )
+            try:
+                contract = parse_prepared_writer_contract(message)
+            except RunnerError as exc:
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-invalid-output",
+                    reasons=[str(exc)],
+                )
+            if contract.status == "blocked-input":
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-input",
+                    reasons=list(contract.blocking_reasons),
+                )
+            path = self._materialize_writer_shard(stage, contract.draft_markdown)
+            validation = self._validate_writer_shard(shard=shard, path=path)
+            validation_path = self.runner_output_dir(stage) / "shard-validator.json"
+            write_json(validation_path, validation.as_dict())
+            if not validation.passed:
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-shard-validator",
+                    reasons=[
+                        "prepared writer shard validator reported findings",
+                        relative_path(validation_path, self.repo_root),
+                    ],
+                )
+            execution = artifacts.get("_execution")
+            backend_id = (
+                execution.backend_session_id
+                if isinstance(execution, BackendStageExecution)
+                else ""
+            )
+            session_issue = self._backend_session_issue(artifacts)
+            if not session_issue and backend_id in seen_backend_ids:
+                session_issue = (
+                    "codex exec reused a backend session/thread id across writer shards: "
+                    + backend_id
+                )
+            if session_issue:
+                return self._block_stage(
+                    state,
+                    stage=stage,
+                    role="writer",
+                    result=result,
+                    artifacts=artifacts,
+                    status="blocked-contract",
+                    reasons=[session_issue],
+                )
+            seen_backend_ids.add(backend_id)
+            if stage == WRITER_STAGE:
+                first_result = result
+                first_artifacts = artifacts
+            else:
+                self._write_stage_status(
+                    stage=stage,
+                    role="writer",
+                    status="completed",
+                    result=result,
+                    artifacts=artifacts,
+                    reason="assigned writer shard passed its deterministic validator",
+                    draft_sha256=sha256_file(path),
+                )
+                self._write_contract_result(
+                    stage=stage,
+                    role="writer",
+                    outcome="draft-ready",
+                    result=result,
+                    artifacts=artifacts,
+                )
+        if first_result is None or first_artifacts is None:
+            raise RunnerError("writer shard plan did not execute the primary writer stage")
+        self._merge_writer_shards(shards)
+        write_json(
+            self.evidence_access_path,
+            {
+                "passed": True,
+                "validator": "prepared-writer-shard-evidence-access-aggregate-v1",
+                "shard_count": len(shards),
+                "reports": evidence_reports,
+                "findings": [],
+            },
+        )
+        return first_result, first_artifacts
+
     def run(self) -> CycleResult:
         self.validate_configuration()
         production_before = self._production_snapshot()
-        writer_prompt = self._writer_prompt()
+        sharded_writer = self._uses_sharded_prepared_writer()
+        writer_prompt = "" if sharded_writer else self._writer_prompt()
         state = self._initial_state()
         self._write_state(state)
+        if self._writer_output_capacity_plan:
+            write_json(
+                self.writer_output_capacity_path,
+                self._writer_output_capacity_plan,
+            )
+            if sharded_writer:
+                write_json(self.writer_shard_plan_path, self._writer_output_capacity_plan)
         append_event(self.cycle_dir, "cycle_started", backend="codex-exec")
 
-        writer_result, writer_artifacts = self._run_stage(
-            stage=WRITER_STAGE,
-            role="writer",
-            prompt=writer_prompt,
-            last_message_path=(
-                self.writer_result_path
-                if self._uses_structured_prepared_writer()
-                else self.stage_output_dir(WRITER_STAGE) / "last-message.txt"
-            ),
-        )
-        if self._prepared_package is not None:
+        if sharded_writer:
+            sharded_result = self._run_structured_writer_shards(state)
+            if isinstance(sharded_result, CycleResult):
+                return sharded_result
+            writer_result, writer_artifacts = sharded_result
+        else:
+            writer_result, writer_artifacts = self._run_stage(
+                stage=WRITER_STAGE,
+                role="writer",
+                prompt=writer_prompt,
+                last_message_path=(
+                    self.writer_result_path
+                    if self._uses_structured_prepared_writer()
+                    else self.stage_output_dir(WRITER_STAGE) / "last-message.txt"
+                ),
+            )
+        if self._prepared_package is not None and not sharded_writer:
             evidence_access = validate_evidence_access(
                 events_text=writer_result.stdout,
                 forbidden_roots=self._prepared_package.forbidden_evidence_roots,
@@ -2350,7 +3020,7 @@ class CodexExecReviewCycleRunner:
                 status="blocked-process-exit",
                 reasons=[f"writer process exited with code {writer_result.exit_code}"],
             )
-        if self._uses_structured_prepared_writer():
+        if self._uses_structured_prepared_writer() and not sharded_writer:
             if file_change_count_from_events(writer_result.stdout):
                 return self._block_stage(
                     state,
@@ -2997,7 +3667,11 @@ class CodexExecReviewCycleRunner:
     def validate_only_report(self) -> dict[str, Any]:
         """Validate the first transition without creating cycle or attempt artifacts."""
         self.validate_configuration()
-        self._writer_prompt()
+        if self._uses_sharded_prepared_writer():
+            for shard in self._writer_output_capacity_plan["shards"]:
+                self._writer_shard_prompt(shard)
+        else:
+            self._writer_prompt()
         route = (
             "prepared-fast"
             if self._is_prepared_fast()
@@ -3041,6 +3715,20 @@ class CodexExecReviewCycleRunner:
                     "writer_context_budget": self._context_budget_reports.get(
                         WRITER_STAGE, {}
                     ),
+                    "writer_shard_context_budgets": [
+                        self._context_budget_reports[stage]
+                        for stage in (
+                            shard["stage"]
+                            for shard in self._writer_output_capacity_plan.get(
+                                "shards", []
+                            )
+                        )
+                        if stage in self._context_budget_reports
+                    ],
+                    "writer_output_capacity": self._writer_output_capacity_plan,
+                    "reviewer_output_capacity": self._reviewer_output_capacity_plan,
+                    "reviewer_context_capacity": self._reviewer_context_capacity_plan,
+                    "writer_sharded": self._uses_sharded_prepared_writer(),
                     "prepared_fast_writer_mode": self.prepared_fast_writer_mode,
                     "prepared_standard_writer_mode": self.prepared_standard_writer_mode,
                     "context_profile": self._prepared_context_profile(),
@@ -3058,6 +3746,9 @@ class CodexExecReviewCycleRunner:
                         "profile-route",
                         "instruction-allowlist",
                         "context-budget",
+                        "output-capacity",
+                        "reviewer-output-capacity",
+                        "shard-union-disjointness",
                         "command-budget",
                         "sandbox-policy",
                         "production-boundary",
@@ -3131,6 +3822,128 @@ class CodexExecReviewCycleRunner:
             draft_bytes=self.draft_path.stat().st_size,
             draft_sha256=sha256_file(self.draft_path),
         )
+
+    def _materialize_writer_shard(self, stage: str, draft_markdown: str) -> Path:
+        path = self.writer_shard_draft_path(stage)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        if path.exists() or temporary.exists():
+            raise RunnerError(
+                f"writer shard output already exists; recovery must be explicit: {path}"
+            )
+        try:
+            temporary.write_text(draft_markdown.rstrip() + "\n", encoding="utf-8")
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return path
+
+    def _validate_writer_shard(
+        self,
+        *,
+        shard: dict[str, Any],
+        path: Path,
+    ) -> ValidationResult:
+        text = path.read_text(encoding="utf-8")
+        findings: list[dict[str, Any]] = []
+        headings = re.findall(
+            r"(?m)^##\s+(TC-[A-Za-z0-9][A-Za-z0-9_.-]*)\s*$", text
+        )
+        expected_ids = list(shard["test_case_ids"])
+        if headings != expected_ids:
+            findings.append(
+                {
+                    "id": "writer-shard-test-case-set-mismatch",
+                    "severity": "error",
+                    "message": f"expected={expected_ids}, actual={headings}",
+                }
+            )
+        if re.search(r"(?m)^#\s+", text):
+            findings.append(
+                {
+                    "id": "writer-shard-document-header-forbidden",
+                    "severity": "error",
+                    "message": "Shard output must contain only assigned H2 test-case sections.",
+                }
+            )
+        if SEED_MARKER in text or "[SEED:" in text:
+            findings.append(
+                {
+                    "id": "writer-shard-seed-placeholder-remains",
+                    "severity": "error",
+                    "message": "Shard output contains a seed sentinel or placeholder.",
+                }
+            )
+        obligation_set = load_obligations(self._prepared_artifact("atomic-obligations"))
+        by_tc: dict[str, list[Any]] = {}
+        for item in obligation_set.obligations:
+            if item.obligation_id in set(shard["obligation_ids"]):
+                by_tc.setdefault(item.planned_test_case_id, []).append(item)
+        sections = {
+            match.group(1): match.group(2)
+            for match in re.finditer(
+                r"(?ms)^##\s+(TC-[A-Za-z0-9_.-]+)\s*$\s*(.*?)(?=^##\s+TC-[A-Za-z0-9_.-]+\s*$|\Z)",
+                text,
+            )
+        }
+        for test_case_id, obligations in by_tc.items():
+            section = sections.get(test_case_id, "")
+            for obligation in obligations:
+                for reference in (
+                    obligation.obligation_id,
+                    obligation.traceability_atom_id,
+                ):
+                    if reference not in section:
+                        findings.append(
+                            {
+                                "id": "writer-shard-traceability-missing",
+                                "severity": "error",
+                                "test_case_id": test_case_id,
+                                "reference": reference,
+                                "message": "Assigned obligation/atom is absent from the TC section.",
+                            }
+                        )
+        return ValidationResult(
+            passed=not findings,
+            findings=tuple(findings),
+            checked_paths=(relative_path(path, self.repo_root),),
+            validator="prepared-writer-shard-v1",
+        )
+
+    def _merge_writer_shards(self, shards: Sequence[dict[str, Any]]) -> None:
+        sections: list[str] = []
+        for shard in shards:
+            path = self.writer_shard_draft_path(str(shard["stage"]))
+            if not path.is_file():
+                raise RunnerError(f"writer shard output is missing: {path}")
+            sections.append(path.read_text(encoding="utf-8").strip())
+        self._materialize_structured_writer_draft(
+            "# Тест-кейсы\n\n" + "\n\n".join(sections)
+        )
+        merge = {
+            "passed": True,
+            "validator": "prepared-writer-shard-merge-v1",
+            "plan_digest": self._writer_output_capacity_plan["plan_digest"],
+            "shard_count": len(shards),
+            "test_case_count": self._writer_output_capacity_plan["test_case_count"],
+            "obligation_count": self._writer_output_capacity_plan["obligation_count"],
+            "merged_draft": relative_path(self.draft_path, self.repo_root),
+            "merged_draft_sha256": sha256_file(self.draft_path),
+            "shards": [
+                {
+                    "stage": shard["stage"],
+                    "digest": shard["digest"],
+                    "draft": relative_path(
+                        self.writer_shard_draft_path(str(shard["stage"])), self.repo_root
+                    ),
+                    "draft_sha256": sha256_file(
+                        self.writer_shard_draft_path(str(shard["stage"]))
+                    ),
+                }
+                for shard in shards
+            ],
+        }
+        write_json(self.runner_output_dir(WRITER_STAGE) / "shard-merge.json", merge)
 
     def _write_artifact_graph(self, manifest: StageInputManifest) -> None:
         def lifecycle(path: str, kind: str) -> str:
@@ -3421,10 +4234,12 @@ class CodexExecReviewCycleRunner:
             self.stage_output_dir(stage).mkdir(parents=True)
             if self._prepared_package is not None:
                 self.draft_seed_path.parent.mkdir(parents=True, exist_ok=True)
-                self.draft_seed_path.write_text(self._draft_seed_text(), encoding="utf-8")
+                if not self.draft_seed_path.exists():
+                    self.draft_seed_path.write_text(self._draft_seed_text(), encoding="utf-8")
                 self._draft_seed_sha256 = sha256_file(self.draft_seed_path)
             if self._uses_structured_prepared_writer():
-                write_json(self.writer_schema_path, self._writer_contract_schema())
+                if not self.writer_schema_path.exists():
+                    write_json(self.writer_schema_path, self._writer_contract_schema())
         else:
             write_json(self.reviewer_schema_path, self._review_contract_schema())
         manifest = self._build_stage_manifest(stage=stage, role=role, prompt_path=prompt_path)
@@ -3620,7 +4435,9 @@ class CodexExecReviewCycleRunner:
             source_paths = list(self.source_files)
             handoff_paths = list(self.handoff_files)
         allowed_write_roots: list[str] = []
-        if role == "writer":
+        if role == "writer" and (
+            stage == WRITER_STAGE or not self._uses_sharded_prepared_writer()
+        ):
             expected_outputs.extend(
                 [
                     ExpectedOutput(
@@ -3674,7 +4491,7 @@ class CodexExecReviewCycleRunner:
                     ExpectedOutput(
                         path=relative_path(
                             (
-                                self.writer_result_path
+                                self.writer_result_path_for(stage)
                                 if self._uses_structured_prepared_writer()
                                 else self.stage_output_dir(stage) / "last-message.txt"
                             ),
@@ -3696,6 +4513,73 @@ class CodexExecReviewCycleRunner:
                 allowed_write_roots.append(
                     relative_path(self.stage_output_dir(stage), self.repo_root)
                 )
+            uses_sharded_writer = getattr(
+                self, "_uses_sharded_prepared_writer", lambda: False
+            )()
+            if uses_sharded_writer:
+                expected_outputs.extend(
+                    [
+                        ExpectedOutput(
+                            path=relative_path(
+                                self.writer_shard_draft_path(stage), self.repo_root
+                            ),
+                            kind="writer-shard-draft",
+                            producer="runner",
+                        ),
+                        ExpectedOutput(
+                            path=relative_path(
+                                self.runner_output_dir(stage) / "shard-validator.json",
+                                self.repo_root,
+                            ),
+                            kind="writer-shard-validator",
+                            producer="runner",
+                        ),
+                        ExpectedOutput(
+                            path=relative_path(
+                                self.runner_output_dir(stage) / "shard-merge.json",
+                                self.repo_root,
+                            ),
+                            kind="writer-shard-merge",
+                            producer="runner",
+                        ),
+                    ]
+                )
+        elif role == "writer":
+            expected_outputs.extend(
+                [
+                    ExpectedOutput(
+                        path=relative_path(
+                            self.writer_shard_draft_path(stage), self.repo_root
+                        ),
+                        kind="writer-shard-draft",
+                        producer="runner",
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(
+                            self.writer_result_path_for(stage), self.repo_root
+                        ),
+                        kind="writer-result",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(
+                            self.runner_output_dir(stage) / "shard-validator.json",
+                            self.repo_root,
+                        ),
+                        kind="writer-shard-validator",
+                        producer="runner",
+                    ),
+                    ExpectedOutput(
+                        path=relative_path(
+                            self.runner_output_dir(stage) / "evidence-access-report.json",
+                            self.repo_root,
+                        ),
+                        kind="evidence-access-report",
+                        producer="runner",
+                    ),
+                ]
+            )
         else:
             handoff_paths.extend((self.draft_path, self.validator_path))
             if self._prepared_package is not None:
@@ -3829,54 +4713,90 @@ class CodexExecReviewCycleRunner:
                     self._prepared_artifact("atomic-obligations")
                 ).obligations
             )
-            obligation_review_variants = []
-            for obligation in obligations:
-                is_testable = obligation.coverage_status == "testable"
-                allowed_verdicts = (
-                    ["covered", "incorrect", "missing"]
-                    if is_testable
-                    else ["gap-preserved", "invented-coverage"]
-                )
-                test_case_ids_schema: dict[str, Any] = {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "pattern": r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
+            uses_sharded_writer = getattr(
+                self, "_uses_sharded_prepared_writer", lambda: False
+            )()
+            if uses_sharded_writer:
+                obligation_review_item: dict[str, Any] = {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "obligation_id",
+                        "atom_id",
+                        "verdict",
+                        "test_case_ids",
+                        "note",
+                    ],
+                    "properties": {
+                        "obligation_id": {
+                            "type": "string",
+                            "pattern": r"^(?:ATOM|OBL)-[A-Za-z0-9._-]+$",
+                        },
+                        "atom_id": {
+                            "type": "string",
+                            "pattern": r"^ATOM-[A-Za-z0-9._-]+$",
+                        },
+                        "verdict": {
+                            "type": "string",
+                            "enum": sorted(PREPARED_REVIEW_VERDICTS),
+                        },
+                        "test_case_ids": {
+                            "type": "array",
+                            "items": {
+                                "type": "string",
+                                "pattern": r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
+                            },
+                        },
+                        "note": {"type": "string", "minLength": 1},
                     },
                 }
-                if not is_testable:
-                    # Gap identifiers belong in the obligation note. A
-                    # non-testable obligation never references executable TCs.
-                    test_case_ids_schema["maxItems"] = 0
-                obligation_review_variants.append(
-                    {
-                        "type": "object",
-                        "additionalProperties": False,
-                        "required": [
-                            "obligation_id",
-                            "atom_id",
-                            "verdict",
-                            "test_case_ids",
-                            "note",
-                        ],
-                        "properties": {
-                            "obligation_id": {
-                                "type": "string",
-                                "const": obligation.obligation_id,
-                            },
-                            "atom_id": {
-                                "type": "string",
-                                "const": obligation.traceability_atom_id,
-                            },
-                            "verdict": {
-                                "type": "string",
-                                "enum": allowed_verdicts,
-                            },
-                            "test_case_ids": test_case_ids_schema,
-                            "note": {"type": "string", "minLength": 1},
+            else:
+                variants: list[dict[str, Any]] = []
+                for obligation in obligations:
+                    is_testable = obligation.coverage_status == "testable"
+                    test_case_ids_schema: dict[str, Any] = {
+                        "type": "array",
+                        "items": {
+                            "type": "string",
+                            "pattern": r"^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$",
                         },
                     }
-                )
+                    if not is_testable:
+                        test_case_ids_schema["maxItems"] = 0
+                    variants.append(
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": [
+                                "obligation_id",
+                                "atom_id",
+                                "verdict",
+                                "test_case_ids",
+                                "note",
+                            ],
+                            "properties": {
+                                "obligation_id": {
+                                    "type": "string",
+                                    "const": obligation.obligation_id,
+                                },
+                                "atom_id": {
+                                    "type": "string",
+                                    "const": obligation.traceability_atom_id,
+                                },
+                                "verdict": {
+                                    "type": "string",
+                                    "enum": (
+                                        ["covered", "incorrect", "missing"]
+                                        if is_testable
+                                        else ["gap-preserved", "invented-coverage"]
+                                    ),
+                                },
+                                "test_case_ids": test_case_ids_schema,
+                                "note": {"type": "string", "minLength": 1},
+                            },
+                        }
+                    )
+                obligation_review_item = {"anyOf": variants}
             return {
                 "$schema": "https://json-schema.org/draft/2020-12/schema",
                 "type": "object",
@@ -3900,7 +4820,7 @@ class CodexExecReviewCycleRunner:
                         "type": "array",
                         "minItems": len(obligations),
                         "maxItems": len(obligations),
-                        "items": {"anyOf": obligation_review_variants},
+                        "items": obligation_review_item,
                     },
                     "findings": {
                         "type": "array",
@@ -4701,6 +5621,26 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES,
     )
+    parser.add_argument(
+        "--prepared-structured-writer-single-session-tc-limit",
+        type=int,
+        default=DEFAULT_PREPARED_STRUCTURED_WRITER_SINGLE_SESSION_TC_LIMIT,
+    )
+    parser.add_argument(
+        "--prepared-structured-writer-shard-size",
+        type=int,
+        default=DEFAULT_PREPARED_STRUCTURED_WRITER_SHARD_SIZE,
+    )
+    parser.add_argument(
+        "--prepared-structured-writer-max-shards",
+        type=int,
+        default=DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS,
+    )
+    parser.add_argument(
+        "--prepared-structured-reviewer-obligation-limit",
+        type=int,
+        default=DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT,
+    )
     parser.add_argument("--promote-final", action="store_true")
     parser.add_argument("--promotion-dry-run", action="store_true")
     parser.add_argument("--promotion-contract")
@@ -4763,6 +5703,18 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         prepared_standard_reviewer_context_max_bytes=(
             args.prepared_standard_reviewer_context_max_bytes
+        ),
+        prepared_structured_writer_single_session_tc_limit=(
+            args.prepared_structured_writer_single_session_tc_limit
+        ),
+        prepared_structured_writer_shard_size=(
+            args.prepared_structured_writer_shard_size
+        ),
+        prepared_structured_writer_max_shards=(
+            args.prepared_structured_writer_max_shards
+        ),
+        prepared_structured_reviewer_obligation_limit=(
+            args.prepared_structured_reviewer_obligation_limit
         ),
         promote_final=args.promote_final,
         promotion_dry_run=args.promotion_dry_run,

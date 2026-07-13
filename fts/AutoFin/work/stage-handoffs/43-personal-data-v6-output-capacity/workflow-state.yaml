@@ -1,0 +1,41 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  - work/stage-handoffs/42-personal-data-v5-source-first-recovery/workflow-state.yaml
+  - work/stage-handoffs/42-personal-data-v5-source-first-recovery/live-blocker-analysis.md
+  - work/stage-handoffs/43-personal-data-v6-output-capacity/agent-decision-log.md
+  - work/stage-handoffs/43-personal-data-v6-output-capacity/prompt.scope-to-iteration.md
+latest_artifacts:
+  prior_prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/prepared-input/application-card-client-personal-data-v5/stage-package.json
+  prior_cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/cycle-state.yaml
+  compiler_input: work/stage-handoffs/43-personal-data-v6-output-capacity/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
+  prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/prepared-input/application-card-client-personal-data-v6/stage-package.json
+  package_preflight: work/stage-handoffs/43-personal-data-v6-output-capacity/package-preflight-report.v6.json
+  seed_preflight: work/stage-handoffs/43-personal-data-v6-output-capacity/seed-preflight-report.v6.json
+  output_capacity_preflight: work/stage-handoffs/43-personal-data-v6-output-capacity/output-capacity-preflight.v6.json
+  dispatcher_config: work/stage-handoffs/43-personal-data-v6-output-capacity/dispatcher-config.v6.json
+  backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/backend-selection.dry-run.json
+  pre_live_test_report: work/stage-handoffs/43-personal-data-v6-output-capacity/pre-live-test-report.md
+  pre_live_stop_gate: work/stage-handoffs/43-personal-data-v6-output-capacity/pre-live-stop-gate.md
+  session_log: work/stage-handoffs/43-personal-data-v6-output-capacity/iteration-session-log.md
+  decision_log: work/stage-handoffs/43-personal-data-v6-output-capacity/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/43-personal-data-v6-output-capacity/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 — точная UI-реакция на недопустимое значение.
+  - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
+  - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
+blocking_reasons: []
+accepted_risks:
+  - UI-specific oracle calibration остаётся за ft-ui-automation-prep.

@@ -1,0 +1,67 @@
+{
+  "validator": "personal-data-v6-output-capacity-preflight-v1",
+  "passed": true,
+  "cycle_artifacts_created": false,
+  "writer": {
+    "mode": "sharded",
+    "plan_digest": "54bd09aa80bae457f5283cebeacab13b51e3fc77d2cb926e4968a9d1b610e338",
+    "atomic_obligations_sha256": "eac473e76b09fa7c951e575bd165475509ea4bc4f3f25c155fc7c576c7e1de16",
+    "test_case_count": 47,
+    "obligation_count": 65,
+    "single_session_test_case_limit": 12,
+    "shard_size": 12,
+    "shard_count": 4,
+    "union_complete": true,
+    "disjoint": true,
+    "shards": [
+      {
+        "stage": "writer-r1",
+        "test_case_range": "TC-ACPD-001..012",
+        "test_case_count": 12,
+        "obligation_count": 17,
+        "primary_context_bytes": 53329,
+        "digest": "f6d1b274ff5788f924609f90bcd18e25572843423d743cd1d6ff5da603a8a90c"
+      },
+      {
+        "stage": "writer-r1-shard-002",
+        "test_case_range": "TC-ACPD-013..024",
+        "test_case_count": 12,
+        "obligation_count": 14,
+        "primary_context_bytes": 52412,
+        "digest": "6f3c59c15ba59bd1eeaa3acf5a3206a65becb8fe92311623938a7031ddf5d09b"
+      },
+      {
+        "stage": "writer-r1-shard-003",
+        "test_case_range": "TC-ACPD-025..036",
+        "test_case_count": 12,
+        "obligation_count": 21,
+        "primary_context_bytes": 56593,
+        "digest": "ebda5ea4234cbbd39dd0b36825e5e169a53b6635eae1ef0f2e881e365492db75"
+      },
+      {
+        "stage": "writer-r1-shard-004",
+        "test_case_range": "TC-ACPD-037..047",
+        "test_case_count": 11,
+        "obligation_count": 13,
+        "primary_context_bytes": 48571,
+        "digest": "65548a892c5b963cbf5987bbc47597b497a06771df6464e86d5f540f76a415e6"
+      }
+    ]
+  },
+  "reviewer": {
+    "one_fresh_session_after_merge": true,
+    "obligation_count": 65,
+    "obligation_limit": 100,
+    "estimated_output_bytes": 18688,
+    "estimated_output_limit_bytes": 65536,
+    "output_schema_bytes": 1690,
+    "schema_mode": "generic-bounded-parser-verified",
+    "estimated_primary_context_bytes": 115831,
+    "context_limit_bytes": 196608
+  },
+  "negative_eval": {
+    "configured_shard_size": 0,
+    "status": "blocked-prepared-writer-output-capacity",
+    "attempts_created": false
+  }
+}

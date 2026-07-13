@@ -112,6 +112,8 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 
 Structured fast writer and reviewer are bounded by hard terminal deadlines because their first semantic output may be the final schema-constrained object. Any writer command produces `blocked-command-budget`; timeout or malformed/partial JSON cannot be treated as progress. The explicit legacy workspace mode retains first-artifact and idle budgets. Increasing a budget is an explicit experiment decision, not automatic recovery.
 
+Input budget is not output-capacity proof. Above the single-session TC limit, preflight must route complete `planned_test_case_id` groups to disjoint bounded shards or block before live. Each shard gets only its source-backed obligations and partial seed; the immutable package remains authoritative for merge gates and reviewer. The plan proves exact TC/OBL membership, digests, complete union and disjointness.
+
 ## Fast Path And Fallback
 
 The runner verifies the four package files and embeds a compact projection into the starting prompt. The optimized writer must not spend stage commands rereading package files, the full writer skill or general references. Existing package-level `AGENT-NOTES.md` is embedded by the compiler as mandatory context; it must not introduce behavior outside the confirmed scope. A stage must not load document/PDF processing skills or scan full sources by default.
@@ -132,7 +134,7 @@ A `standard-required` package keeps the same immutable package, obligation, seed
 
 Role-specific `stage-input.json` manifests must list the selected standard instruction files, compact source evidence, obligations and runner-owned gate artifacts. The runner enforces separate primary-context budgets before each LLM stage and writes `context-budget.json`; registered DOCX/XHTML/PDF sources are excluded from primary-context byte totals and remain fallback evidence.
 
-For prepared reviewer turns, the output schema binds every allowed `obligation_id -> atom_id` pair and its verdict enum to the obligation coverage status. Testable obligations may return only `covered | missing | incorrect`; `gap | unclear` obligations may return only `gap-preserved | invented-coverage`. The parser still verifies exact once-only coverage, draft hash, known TC ids and finding linkage after schema validation.
+Ordinary reviewer schemas bind every `obligation_id -> atom_id` pair and status-specific verdict. Large sharded reviews use generic bounded shapes to avoid duplicating the full set in the schema; the compact projection supplies exact mappings and the parser enforces them once-only. Testable verdicts are `covered | missing | incorrect`; `gap | unclear` use `gap-preserved | invented-coverage`. The parser also verifies draft hash, TC ids and finding linkage.
 
 ## Completion Gates
 

@@ -1,0 +1,38 @@
+{
+  "validator": "prepared-v6-package-preflight-v1",
+  "passed": true,
+  "package_id": "application-card-client-personal-data-v6",
+  "package_digest": "cf54e1133261c6385b38988567230f46b9b7697ecb9318ac6f2e2413d3d5b427",
+  "stage_package_sha256": "c5fa4ad68b1edb0504b5fc7b50c0c74925b2a3c05cfbe6146519eb4ed8c1d349",
+  "section_id": "14",
+  "execution_profile": "standard-required",
+  "atoms": 42,
+  "obligations": 65,
+  "planned_test_cases": 47,
+  "coverage_gaps": ["GAP-001", "GAP-002", "GAP-003"],
+  "dictionary_refs": ["DICT-001"],
+  "source_evidence_bytes": 48715,
+  "compiled_evidence_budget_bytes": 49152,
+  "fixture_contracts_embedded": [
+    "FIX-ACPD-PORTABLE-SAVE-001",
+    "FIX-ACPD-RUNTIME-DADATA-001"
+  ],
+  "environment_bound_fixture_markers": 0,
+  "package_artifact_hashes_match_manifest": true,
+  "compiler_input_sha256": {
+    "atomic-requirements-ledger.md": "3432ce9fcf800e480ced4242dcd4aee38971d42e7fbd728e8e13cefd344299c8",
+    "compiler-input.yaml": "d5468a52945830294a8951ebf84ab21a4a8ebbf73be0de15097472fd3484dd3e",
+    "coverage-gaps.md": "524ad97971cacbd5dfafcedc8aeaf537b7ebcd470513a924487e9a3a4f797ea7",
+    "coverage-obligation-table.md": "e1aff10e9943a32a1ad8cf4f9cd43912e9a809b11c3047177f63b9a24865b83f",
+    "dictionary-inventory.md": "79f5d505bdaf5d92a47483eb61deea9bb4ef8e4baaca0e75575dfcee474b9392",
+    "mapping-consistency-report.md": "7c86c165e60e61f527f0a7acfd66c6fb26267a8163d14b36bcaabfa4c08ad510",
+    "package-test-design-plan.md": "177ae413f7b89b3e915b54d74f43bdbd868b94275bfceb03b0449bca5fc69af8",
+    "test-design-applicability-matrix.md": "44e02f40105578811cebfe9c2aa9242034994109e3da36b6234be728b2e2f563",
+    "test-design-decision-table.md": "270199d1598cff5c77abac4d05c64acc5dc3ac593ae79f84040b844f61db018d"
+  },
+  "package_file_sha256": {
+    "source-evidence.md": "234bbc1efea1477e89a15acae618b95f592d7a7b6a107e2340a7576b321fe7de",
+    "atomic-obligations.json": "eac473e76b09fa7c951e575bd165475509ea4bc4f3f25c155fc7c576c7e1de16",
+    "stage-instructions.md": "e42e01899c19cb9c00aa3f169a92282f750176fb7fa2b9f5d79df4dedd0a6c7c"
+  }
+}

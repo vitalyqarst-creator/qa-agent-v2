@@ -90,6 +90,8 @@ For `simple-field-property`, keep the default `prepared_fast_writer_mode=structu
 
 For `standard-required`, keep the default `prepared_standard_writer_mode=structured`: the compiler supplies an explicit context profile, writer/reviewer use bounded embedded runtime profiles, and the runner materializes the draft and deterministic gate bundle. Select `assisted` only in a newly compiled immutable cycle when a named OBL/ATOM needs targeted registered-source fallback; never switch modes inside a failed cycle.
 
+For a structured package above the runner's single-session TC limit, require output-capacity preflight and the canonical bounded-shard route. Keep every `planned_test_case_id` group intact, require complete/disjoint TC and obligation membership, use a fresh session for every shard, and allow only runner-owned deterministic merge. Do not send the same full-scope one-shot prompt as a retry. Run one fresh reviewer only after the merged draft passes all full-set deterministic gates.
+
 8. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.
 
 ## Gates

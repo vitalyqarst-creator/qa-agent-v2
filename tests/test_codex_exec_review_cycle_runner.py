@@ -497,6 +497,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         constraint_gap: bool = False,
         grouped_obligations: bool = False,
         out_of_order_planned_ids: bool = False,
+        test_case_count: int = 1,
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
@@ -524,10 +525,28 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     if out_of_order_planned_ids
                     else "TC-GROUP-001"
                     if grouped_obligations
+                    else "TC-DEMO-001"
+                    if test_case_count > 1
                     else ""
                 ),
             )
         ]
+        for index in range(2, test_case_count + 1):
+            prepared_obligations.append(
+                PreparedObligation(
+                    obligation_id=f"OBL-{index:03d}",
+                    atom_id=f"ATOM-{index:03d}",
+                    source_refs=("SRC-1",),
+                    atomic_statement=f"Observable property {index} is required.",
+                    observable_oracle=f"Visible result {index} is present.",
+                    test_intent=f"Verify visible result {index}.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id=f"TC-DEMO-{index:03d}",
+                )
+            )
         if grouped_obligations or out_of_order_planned_ids:
             prepared_obligations.append(
                 PreparedObligation(
@@ -1445,6 +1464,209 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("read_only", graph["access_policy"]["sandbox"])
         self.assertTrue(all("lifecycle" in item for item in graph["input_nodes"]))
         self.assertTrue(all("consumers" in item for item in graph["output_nodes"]))
+
+    def test_output_capacity_preflight_blocks_unsafe_one_shot_without_sharding(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 2
+        runner.prepared_structured_writer_shard_size = 0
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "blocked-prepared-writer-output-capacity",
+        ):
+            runner.validate_configuration()
+
+        self.assertFalse((self.cycle_dir / "writer-output-capacity-preflight.json").exists())
+        self.assertFalse(self.writer_attempt.exists())
+
+    def test_output_capacity_preflight_builds_disjoint_complete_shards(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 2
+        runner.prepared_structured_writer_shard_size = 2
+
+        report = runner.validate_only_report()
+        capacity = report["writer_output_capacity"]
+
+        self.assertTrue(report["writer_sharded"])
+        self.assertTrue(capacity["passed"])
+        self.assertTrue(capacity["union_complete"])
+        self.assertTrue(capacity["disjoint"])
+        self.assertEqual(2, capacity["shard_count"])
+        self.assertEqual(3, capacity["test_case_count"])
+        self.assertEqual(3, capacity["obligation_count"])
+        self.assertEqual(
+            ["TC-DEMO-001", "TC-DEMO-002"],
+            capacity["shards"][0]["test_case_ids"],
+        )
+        self.assertEqual(
+            ["TC-DEMO-003"], capacity["shards"][1]["test_case_ids"]
+        )
+        self.assertFalse(self.writer_attempt.exists())
+
+    def test_reviewer_output_capacity_blocks_before_writer_live(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.prepared_structured_reviewer_obligation_limit = 2
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "blocked-prepared-reviewer-output-capacity",
+        ):
+            runner.validate_configuration()
+
+        self.assertFalse(self.writer_attempt.exists())
+
+    def test_sharded_writer_uses_fresh_sessions_and_merges_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+
+        def shard_step(test_case_ids, session_id):
+            def step(_request):
+                sections = []
+                for test_case_id in test_case_ids:
+                    index = int(test_case_id.rsplit("-", 1)[1])
+                    obligation_id = "ATOM-001" if index == 1 else f"OBL-{index:03d}"
+                    atom_id = f"ATOM-{index:03d}"
+                    sections.append(
+                        f"""## {test_case_id}
+
+**Название:** Проверка видимого результата {index}
+**Тип:** позитивный
+**Приоритет:** средний
+**package_id:** pkg-exec-001
+**Трассировка:** {obligation_id}; {atom_id}; SRC-1
+
+### Предусловия
+
+1. Открыта тестовая форма {index}.
+
+### Тестовые данные
+
+- Значение: `value-{index}`.
+
+### Шаги
+
+1. Выполнить действие {index} со значением `value-{index}`.
+
+### Итоговый ожидаемый результат
+
+Отображается видимый результат {index}.
+
+### Постусловия
+
+- Дополнительная очистка не требуется.
+"""
+                    )
+                payload = {
+                    "contract_version": 1,
+                    "status": "draft-ready",
+                    "draft_markdown": "\n\n".join(sections),
+                    "blocking_reasons": [],
+                }
+                return self.process_result(
+                    stdout=self.json_event(
+                        json.dumps(payload, ensure_ascii=False),
+                        session_id=session_id,
+                    )
+                )
+
+            return step
+
+        def reviewer_step_for_three(_request):
+            payload = {
+                "contract_version": 2,
+                "decision": "accepted",
+                "reviewed_draft_sha256": hashlib.sha256(
+                    self.draft_path.read_bytes()
+                ).hexdigest(),
+                "obligation_reviews": [
+                    {
+                        "obligation_id": "ATOM-001"
+                        if index == 1
+                        else f"OBL-{index:03d}",
+                        "atom_id": f"ATOM-{index:03d}",
+                        "verdict": "covered",
+                        "test_case_ids": [f"TC-DEMO-{index:03d}"],
+                        "note": f"Observable property {index} is covered.",
+                    }
+                    for index in range(1, 4)
+                ],
+                "findings": [],
+                "summary": "Merged draft accepted.",
+            }
+            return self.process_result(
+                stdout=self.json_event(
+                    json.dumps(payload, ensure_ascii=False),
+                    session_id="reviewer-after-merge",
+                )
+            )
+
+        executor = ScriptedExecutor(
+            shard_step(["TC-DEMO-001", "TC-DEMO-002"], "writer-shard-1"),
+            shard_step(["TC-DEMO-003"], "writer-shard-2"),
+            reviewer_step_for_three,
+        )
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 2
+        runner.prepared_structured_writer_shard_size = 2
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(3, len(executor.requests))
+        self.assertEqual("writer-r1", executor.requests[0].stage)
+        self.assertEqual("writer-r1-shard-002", executor.requests[1].stage)
+        self.assertEqual("reviewer-r1", executor.requests[2].stage)
+        self.assertIn("TC-DEMO-003", executor.requests[2].prompt)
+        self.assertIn(
+            "writer-shard-1",
+            (self.writer_attempt / "runner-output" / "events.ndjson").read_text(
+                encoding="utf-8"
+            ),
+        )
+        self.assertIn(
+            "writer-shard-2",
+            (
+                self.cycle_dir
+                / "attempts"
+                / "writer-r1-shard-002"
+                / "attempt-001"
+                / "runner-output"
+                / "events.ndjson"
+            ).read_text(encoding="utf-8"),
+        )
+        merged = self.draft_path.read_text(encoding="utf-8")
+        self.assertEqual(1, merged.count("# Тест-кейсы"))
+        self.assertEqual(3, merged.count("\n## TC-DEMO-"))
+        plan = json.loads(
+            (self.cycle_dir / "writer-shard-plan.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(plan["union_complete"])
+        self.assertTrue(plan["disjoint"])
+        merge = json.loads(
+            (self.writer_attempt / "runner-output" / "shard-merge.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(3, merge["test_case_count"])
+        self.assertFalse(self.final_path.exists())
 
     def test_character_restriction_seed_and_lifecycle_preserve_constraint_gap(self) -> None:
         package_path = self.build_prepared_package(

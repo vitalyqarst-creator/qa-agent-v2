@@ -1,0 +1,13 @@
+{
+  "eval_id": "prepared-output-capacity-bad-one-shot-v1",
+  "test_case_count": 47,
+  "obligation_count": 65,
+  "single_session_test_case_limit": 12,
+  "configured_shard_size": 0,
+  "max_shards": 8,
+  "expected": {
+    "passed": false,
+    "error_code": "prepared-structured-writer-output-capacity-exceeded",
+    "live_process_count": 0
+  }
+}
