@@ -1467,6 +1467,69 @@ class CodexExecReviewCycleRunner:
             indent=2,
         )
 
+    def _prepared_standard_reviewer_obligation_index(self) -> str:
+        """Return the exact reviewer contract index without repeated semantics."""
+        artifact = self._prepared_artifact("atomic-obligations")
+        obligations = load_obligations(artifact)
+        items: list[dict[str, Any]] = []
+        for item in obligations.obligations:
+            entry: dict[str, Any] = {
+                "obligation_id": item.obligation_id,
+                "atom_id": item.traceability_atom_id,
+                "coverage_status": item.coverage_status,
+                "source_refs": list(item.source_refs),
+            }
+            if item.planned_test_case_id:
+                entry["planned_test_case_id"] = item.planned_test_case_id
+            if item.dictionary_refs:
+                entry["dictionary_refs"] = list(item.dictionary_refs)
+            if item.gap_id:
+                entry["gap_id"] = item.gap_id
+            if item.constraint_gap_ids:
+                entry["constraint_gap_ids"] = list(item.constraint_gap_ids)
+            items.append(entry)
+        return json.dumps(
+            {
+                "artifact": relative_path(artifact, self.repo_root),
+                "artifact_sha256": sha256_file(artifact),
+                "obligation_count": len(items),
+                "coverage_gap_ids": [gap.gap_id for gap in obligations.coverage_gaps],
+                "semantic_evidence_source": "selected-source-evidence",
+                "obligations": items,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
+    def _prepared_standard_reviewer_calibration_summary(self) -> str:
+        artifact = self.calibration_lifecycle_path
+        payload = json.loads(artifact.read_text(encoding="utf-8"))
+        items = payload.get("items") or []
+        status_counts: dict[str, int] = {}
+        gap_ids: list[str] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status") or "unspecified")
+            status_counts[status] = status_counts.get(status, 0) + 1
+            for gap_id in item.get("constraint_gap_ids") or []:
+                if isinstance(gap_id, str) and gap_id not in gap_ids:
+                    gap_ids.append(gap_id)
+        return json.dumps(
+            {
+                "artifact": relative_path(artifact, self.repo_root),
+                "artifact_sha256": sha256_file(artifact),
+                "context_profile": payload.get("context_profile"),
+                "open_count": payload.get("open_count"),
+                "resolved_count": payload.get("resolved_count"),
+                "status_counts": status_counts,
+                "constraint_gap_ids": gap_ids,
+                "per_obligation_mapping_source": "verified-obligation-review-index",
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
+
     def _prepared_standard_reviewer_payload(self) -> str:
         draft_sha256 = sha256_file(self.draft_path)
         gates = [
@@ -1974,6 +2037,26 @@ class CodexExecReviewCycleRunner:
             self._prepared_gate_summary("writer-evidence-access", self.evidence_access_path),
             self._prepared_gate_summary("quality-bundle", self.quality_gate_bundle_path),
         ]
+        if self._is_prepared_standard():
+            obligation_heading = "## Verified obligation review index"
+            obligation_note = (
+                "The immutable full obligations artifact is identified by digest below. "
+                "Its semantic statements and oracles are supplied in selected source evidence; "
+                "this index supplies every exact review-contract ID, status, reference and gap."
+            )
+            obligation_payload = self._prepared_standard_reviewer_obligation_index()
+            calibration_heading = "## Calibration lifecycle summary"
+            calibration_payload = self._prepared_standard_reviewer_calibration_summary()
+        else:
+            obligation_heading = "## Atomic obligations"
+            obligation_note = ""
+            obligation_payload = self._prepared_artifact("atomic-obligations").read_text(
+                encoding="utf-8"
+            ).strip()
+            calibration_heading = "## Calibration lifecycle"
+            calibration_payload = self.calibration_lifecycle_path.read_text(
+                encoding="utf-8"
+            ).strip()
         return "\n".join(
             [
                 "<!-- PREPARED-REVIEW-PAYLOAD:BEGIN -->",
@@ -1991,10 +2074,12 @@ class CodexExecReviewCycleRunner:
                 "",
                 self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
                 "",
-                "## Atomic obligations",
+                obligation_heading,
                 "",
+                obligation_note,
+                "" if obligation_note else "",
                 "```json",
-                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                obligation_payload,
                 "```",
                 "",
                 "## Deterministic gate summaries",
@@ -2009,10 +2094,10 @@ class CodexExecReviewCycleRunner:
                 self.semantic_overlap_path.read_text(encoding="utf-8").strip(),
                 "```",
                 "",
-                "## Calibration lifecycle",
+                calibration_heading,
                 "",
                 "```json",
-                self.calibration_lifecycle_path.read_text(encoding="utf-8").strip(),
+                calibration_payload,
                 "```",
                 "",
                 "## Immutable writer draft",
@@ -2443,45 +2528,81 @@ class CodexExecReviewCycleRunner:
             result=writer_result,
             artifacts=writer_artifacts,
         )
-        reviewer_prompt = self._reviewer_prompt()
+        writer_completion_state = {
+            "writer_stage_status": writer_status,
+            "writer_draft_sha256": draft_sha256,
+            "validator_report": relative_path(self.validator_path, self.ft_root),
+            "obligation_gate_report": (
+                relative_path(self.obligation_gate_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+            "semantic_overlap_diagnostic": (
+                relative_path(self.semantic_overlap_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+            "quality_gate_bundle": (
+                relative_path(self.quality_gate_bundle_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+            "calibration_lifecycle": (
+                relative_path(self.calibration_lifecycle_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+            "seed_gate_report": (
+                relative_path(self.seed_gate_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+            "evidence_access_report": (
+                relative_path(self.evidence_access_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+        }
+        try:
+            reviewer_prompt = self._reviewer_prompt()
+        except RunnerError as exc:
+            if not str(exc).startswith("blocked-prepared-standard-context-budget"):
+                raise
+            report_path = self.cycle_dir / "reviewer-context-budget.json"
+            report = self._context_budget_reports.get(REVIEWER_STAGE)
+            if report is not None:
+                write_json(report_path, report)
+            state.update(writer_completion_state)
+            state.update(
+                {
+                    "workflow_status": "blocked-reviewer-preflight",
+                    "stage_status": "blocked-input",
+                    "current_stage": REVIEWER_STAGE,
+                    "reviewer_stage_status": "blocked-context-budget",
+                    "reviewer_context_budget": (
+                        relative_path(report_path, self.ft_root) if report is not None else ""
+                    ),
+                    "active_transition_prompt": "",
+                    "blocking_reasons": [str(exc)],
+                }
+            )
+            self._write_state(state)
+            append_event(
+                self.cycle_dir,
+                "reviewer_preflight_blocked",
+                status="blocked-context-budget",
+                reason=str(exc),
+                context_budget=(
+                    relative_path(report_path, self.repo_root) if report is not None else ""
+                ),
+            )
+            return self._result(state)
+        state.update(writer_completion_state)
         state.update(
             {
                 "workflow_status": "reviewer-ready",
                 "stage_status": "writer-draft-ready",
                 "current_stage": REVIEWER_STAGE,
-                "writer_stage_status": writer_status,
-                "writer_draft_sha256": draft_sha256,
-                "validator_report": relative_path(self.validator_path, self.ft_root),
-                "obligation_gate_report": (
-                    relative_path(self.obligation_gate_path, self.ft_root)
-                    if self._prepared_package is not None
-                    else ""
-                ),
-                "semantic_overlap_diagnostic": (
-                    relative_path(self.semantic_overlap_path, self.ft_root)
-                    if self._prepared_package is not None
-                    else ""
-                ),
-                "quality_gate_bundle": (
-                    relative_path(self.quality_gate_bundle_path, self.ft_root)
-                    if self._prepared_package is not None
-                    else ""
-                ),
-                "calibration_lifecycle": (
-                    relative_path(self.calibration_lifecycle_path, self.ft_root)
-                    if self._prepared_package is not None
-                    else ""
-                ),
-                "seed_gate_report": (
-                    relative_path(self.seed_gate_path, self.ft_root)
-                    if self._prepared_package is not None
-                    else ""
-                ),
-                "evidence_access_report": (
-                    relative_path(self.evidence_access_path, self.ft_root)
-                    if self._prepared_package is not None
-                    else ""
-                ),
                 "active_transition_prompt": relative_path(
                     self.prompt_path(REVIEWER_STAGE), self.ft_root
                 ),

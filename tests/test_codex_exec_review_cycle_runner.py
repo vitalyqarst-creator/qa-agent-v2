@@ -1363,6 +1363,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("reviewer.semantic_traceability_test_design", reviewer_prompt)
         self.assertIn("reviewer-runtime.md", reviewer_prompt)
         self.assertNotIn("Prepared Reviewer Runtime Profile", reviewer_prompt)
+        self.assertIn("## Atomic obligations", reviewer_prompt)
+        self.assertIn("## Calibration lifecycle", reviewer_prompt)
+        self.assertNotIn("## Verified obligation review index", reviewer_prompt)
         self.assertEqual(300, executor.requests[1].idle_timeout_seconds)
 
         writer_manifest = json.loads(
@@ -1410,6 +1413,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("runner-generated-draft-seed", executor.requests[0].prompt)
         self.assertIn("Prepared Reviewer Runtime Profile", executor.requests[1].prompt)
         self.assertNotIn("reviewer-runtime.md", executor.requests[1].prompt)
+        self.assertIn("## Verified obligation review index", executor.requests[1].prompt)
+        self.assertNotIn("## Atomic obligations", executor.requests[1].prompt)
+        self.assertIn("## Calibration lifecycle summary", executor.requests[1].prompt)
+        self.assertIn('"semantic_evidence_source":"selected-source-evidence"', executor.requests[1].prompt)
+        self.assertIn('"obligation_id":"ATOM-001"', executor.requests[1].prompt)
         self.assertTrue((self.writer_attempt / "artifact-graph.json").is_file())
         self.assertTrue((self.reviewer_attempt / "artifact-graph.json").is_file())
         graph = json.loads((self.writer_attempt / "artifact-graph.json").read_text(encoding="utf-8"))
@@ -1505,6 +1513,32 @@ Draft body.
 
         self.assertEqual([], executor.requests)
         self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
+
+    def test_prepared_standard_reviewer_context_budget_persists_blocked_state(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+        )
+        executor = ScriptedExecutor(self.structured_writer_step())
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_standard_reviewer_context_max_bytes = 1
+
+        result = runner.run()
+
+        self.assertEqual("blocked-reviewer-preflight", result.status)
+        self.assertEqual(1, len(executor.requests))
+        state = self.cycle_dir.joinpath("cycle-state.yaml").read_text(encoding="utf-8")
+        self.assertIn("stage_status: blocked-input", state)
+        self.assertIn("writer_stage_status: completed", state)
+        self.assertIn("reviewer_stage_status: blocked-context-budget", state)
+        self.assertIn("current_stage: reviewer-r1", state)
+        report = json.loads(
+            self.cycle_dir.joinpath("reviewer-context-budget.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(report["passed"])
+        self.assertEqual("reviewer", report["role"])
 
     def test_prepared_standard_validate_only_reports_route_without_cycle_artifacts(self) -> None:
         package_path = self.build_prepared_package(
