@@ -64,6 +64,8 @@
 | 5 | Compiled V3 | package v7; 13 OBL; 0 gaps | V3 prepared-input |
 | 6 | Ran validate-only/dry-run/full suites | all pre-live gates pass | pre-live report |
 | 7 | Prepared stop gate | live blocked pending checkpoint and authorization pushes | `pre-live-stop-gate.v3.md` |
+| 8 | Pushed remediation checkpoint | local/origin `7e1c6ae...` match | Git evidence |
+| 9 | Created final hash-bound authorization | invocation budget 1; later live budget 0 | `pre-live-authorization.v3.md` |
 
 ## Quality Checkpoints
 

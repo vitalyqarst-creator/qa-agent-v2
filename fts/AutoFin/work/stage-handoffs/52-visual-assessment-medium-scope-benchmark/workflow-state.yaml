@@ -45,6 +45,7 @@ required_inputs:
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/backend-selection.dry-run.json
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v3.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v3.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v3.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v3.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v2.md
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json
@@ -105,12 +106,13 @@ latest_artifacts:
   backend_selection_dry_run_v3: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/backend-selection.dry-run.json
   pre_live_test_report_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v3.md
   pre_live_stop_gate_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v3.md
+  pre_live_authorization_v3: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v3.md
   prepared_package: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v3/stage-package.json
   dispatcher_config: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v3.json
   backend_selection_dry_run: work/review-cycles/visual-assessment-medium-scope-benchmark-v3-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v3.md
   pre_live_stop_gate: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v3.md
-  pre_live_authorization: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.md
+  pre_live_authorization: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v3.md
   cycle_state: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/cycle-state.yaml
   candidate_draft: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
   reviewer_findings: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
