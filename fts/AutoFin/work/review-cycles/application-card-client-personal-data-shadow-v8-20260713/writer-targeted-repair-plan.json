@@ -1,0 +1,337 @@
+{
+  "passed": true,
+  "validator": "prepared-targeted-repair-plan-v1",
+  "package_id": "application-card-client-personal-data-v8",
+  "package_digest": "3ac15bc3d846e71f5a8b5bf6fccb2f937b98c277b3570659ed0c9b80ec1a2ea7",
+  "source_draft": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+  "source_draft_sha256": "17c9bd80c2cff3d19939831f9d42503aebdbd10dc9268d98299896e98dbac23e",
+  "source_findings": "fts/AutoFin/work/stage-handoffs/45-personal-data-v8-reviewer-contract/source-backed-repair-findings.v8.json",
+  "source_findings_sha256": "13a783ac14daf5a8ace8378b9d36b3828c7b4f6e1bfab58f5d8c042683e286f2",
+  "full_test_case_count": 47,
+  "target_test_case_count": 13,
+  "preserved_test_case_count": 34,
+  "target_test_case_ids": [
+    "TC-ACPD-012",
+    "TC-ACPD-014",
+    "TC-ACPD-015",
+    "TC-ACPD-034",
+    "TC-ACPD-037",
+    "TC-ACPD-038",
+    "TC-ACPD-039",
+    "TC-ACPD-040",
+    "TC-ACPD-042",
+    "TC-ACPD-043",
+    "TC-ACPD-044",
+    "TC-ACPD-045",
+    "TC-ACPD-046"
+  ],
+  "preserved_test_case_ids": [
+    "TC-ACPD-001",
+    "TC-ACPD-002",
+    "TC-ACPD-003",
+    "TC-ACPD-004",
+    "TC-ACPD-005",
+    "TC-ACPD-006",
+    "TC-ACPD-007",
+    "TC-ACPD-008",
+    "TC-ACPD-009",
+    "TC-ACPD-010",
+    "TC-ACPD-011",
+    "TC-ACPD-013",
+    "TC-ACPD-016",
+    "TC-ACPD-017",
+    "TC-ACPD-018",
+    "TC-ACPD-019",
+    "TC-ACPD-020",
+    "TC-ACPD-021",
+    "TC-ACPD-022",
+    "TC-ACPD-023",
+    "TC-ACPD-024",
+    "TC-ACPD-025",
+    "TC-ACPD-026",
+    "TC-ACPD-027",
+    "TC-ACPD-028",
+    "TC-ACPD-029",
+    "TC-ACPD-030",
+    "TC-ACPD-031",
+    "TC-ACPD-032",
+    "TC-ACPD-033",
+    "TC-ACPD-035",
+    "TC-ACPD-036",
+    "TC-ACPD-041",
+    "TC-ACPD-047"
+  ],
+  "target_obligation_ids": [
+    "OBL-027",
+    "OBL-030",
+    "OBL-035",
+    "OBL-033",
+    "OBL-036",
+    "OBL-045",
+    "OBL-049",
+    "OBL-053",
+    "OBL-054",
+    "OBL-055",
+    "OBL-057",
+    "OBL-061",
+    "OBL-062",
+    "OBL-063",
+    "OBL-065"
+  ],
+  "target_atom_ids": [
+    "ATOM-020",
+    "ATOM-022",
+    "ATOM-025",
+    "ATOM-024",
+    "ATOM-030",
+    "ATOM-032",
+    "ATOM-035",
+    "ATOM-037",
+    "ATOM-040",
+    "ATOM-042"
+  ],
+  "allowed_finding_ids": [
+    "generic-execution-fixture",
+    "missing-branch-precondition",
+    "non-observable-expected-result",
+    "undefined-execution-action"
+  ],
+  "sections": [
+    {
+      "test_case_id": "TC-ACPD-001",
+      "sha256": "de258ddbf862480550c37fdc43943f565e08b6a373b73e9d936bd756fb866a3b",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-002",
+      "sha256": "038be6b0f7fe92539c00250eac6357031ffbbefd417f973815d03bc6d3f2ee08",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-003",
+      "sha256": "d7e0c218ecacd55d80e8b1f03777e075c20e3f42c98ada9b616025886a6fd8cb",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-004",
+      "sha256": "9978a85c6d3a45ffe5e209adffe7d19fd0e2ae8a661f2ba9b4a656c54289774d",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-005",
+      "sha256": "5567bdf83f7d2b4887986d00dc471c2988c84a2c85699b1995458122f667105f",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-006",
+      "sha256": "7d1a68cfc23dabb734e335d3336970c9286ebcf6510b809976c385648972392f",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-007",
+      "sha256": "ef534a7e9b4341537d27bb72b5bf810d7dfd05e0998532aed4428bb6649c06c2",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-008",
+      "sha256": "d60eb77c1aff344c2674df5b476ab930eb2a1f65f31186729a64721bdea44bc2",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-009",
+      "sha256": "67e41a41a53399f93d871ddb4bce578a61d889fbe29460663fe52090cbaa3a8f",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-010",
+      "sha256": "41c36702c6e1c3210f21886583262c19bdee7e5cd70c4f93f09aed14375d1a0b",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-011",
+      "sha256": "54ad575afe59d558a9a93dca8314275136bcb71d379726c27826888ddafa7e65",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-012",
+      "sha256": "78740259f101f6c334b8a29644732b8f8279ef3e1bc3d036416178ca397bae9b",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-013",
+      "sha256": "1f53b179da040c43e8a6c54d18cb971ef48caf88402482dbb20587892cafa71a",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-014",
+      "sha256": "14bb12b19be1315011ae67a958ee7b743f2b42fdb2ff2a61d1117767dc01a3cf",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-015",
+      "sha256": "5eed37bcb3a931e57a2b70ef76e70c0fedde20d8a011d86287b6bf77dd309e44",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-016",
+      "sha256": "43ed2542c699429b95dc79e0648a37526c8930e68362c74593e24deb8ac1d530",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-017",
+      "sha256": "9d2295816f8612ff08495872589f47526cc44f0fb089b1f1ccb701063ed9fdc2",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-018",
+      "sha256": "fc38a233846ff8238f08fb1a8dbfc750e23e52f2149e323acd977d9c4b6bcea4",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-019",
+      "sha256": "7c872710ca8c6c70a0a3285ede7bf031099b81336bdedd5da0d835fa68d98994",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-020",
+      "sha256": "56ce884cf30d034ac79c7a8b0dae6b2bb9ed03422d66c9e08ba803ae9d814ea9",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-021",
+      "sha256": "6cb04784bb9bb4459582de59c1f3c7007b597c9e89b7b1431676b9d97035f3b6",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-022",
+      "sha256": "c118dc908917c7974707fbaf86038b135b548c835b16e5b54c5e145a3cb95284",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-023",
+      "sha256": "dd979d24bddd97b91db763ebab79d1b704a3fa404cc9188f9ecc964682437be0",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-024",
+      "sha256": "5da0c93422977d20ecf5626098e3c1ce53c24a76523f9d87fb205712eb427adb",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-025",
+      "sha256": "40c9eacb26f306dd552ccb82caf9cbd7cee52e267c208467a2622dfe2e56a5e3",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-026",
+      "sha256": "3a7bcc5d3fa062dfd94c249ed793e58b9c91e1032468eff5e6c48896e450739d",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-027",
+      "sha256": "be85d8b0a312c32162fa7af67e08b7ba7cb16baa27a879205130d4bc7d7fd2ab",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-028",
+      "sha256": "ae910e89c4aea140551b34947c2613fe94c94dfa0c978f600630e08db7dc40aa",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-029",
+      "sha256": "5693f56664f8fa768ebb7e1ae7f45eeaada1c3b35e5785102f6392dc116bfb1d",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-030",
+      "sha256": "7ccf3c0fe27672da98e2e1856141f98565d1a02e7dd046beb76b4180588bd477",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-031",
+      "sha256": "fd2c3718a46b03a9c605c4c8a51a8e00b2c38500fe097a5c632f48bdf219a78d",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-032",
+      "sha256": "0728041b00ebd33b515daa7936a4dc6e45f1bb648b21003a4cd138e572d15204",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-033",
+      "sha256": "3e70a85d75928bed4c09831781b42f93b9883c0698d55d13fed1c4d57f419da0",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-034",
+      "sha256": "8d1bd9b7851e0834a868bdc6cfd55cac099fdf893f30e8151936afb1a7457ea3",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-035",
+      "sha256": "91a46b7040c08f6868120a40c10b2f899f15f296a6a7c06e9cb53a9ea0eee448",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-036",
+      "sha256": "94f2eaf1ad5b750bc310ffe504ccd64bbd17cd0443a225eed889fe9aa541c2f6",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-037",
+      "sha256": "298c119e34c5fbc025655a15360b1351188c6f4e7646519eb062a6d1f82191b4",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-038",
+      "sha256": "d61a0f573aaf0d3b46b5f404c8c1c3ff38aa535b2f2a00c9ad8ff8f4677d23b0",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-039",
+      "sha256": "a8799bf1953bc14364ae02630110b99f15cb6a7c5c56986749c2fc008874c11a",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-040",
+      "sha256": "190156a6162fc798585e084b5f9c38dec307cca475db3b3151841678871c3683",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-041",
+      "sha256": "62510f7d77b78a65518182802ecfa75667b82bc6fdff3a0c2e95b46866285fc1",
+      "repair_target": false
+    },
+    {
+      "test_case_id": "TC-ACPD-042",
+      "sha256": "b97f38ed89d43fa7956715b0e936205895aa56f7b0c48f16eb95e6239e1e06a6",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-043",
+      "sha256": "4bb154ea917cc4cbf7e980917e1de585c850c0f26207a84211d32b44d4a5da4d",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-044",
+      "sha256": "7abc665c6a9e14d5037881666506ba6886794e6f03b452d851550488fb90f016",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-045",
+      "sha256": "1a070e03c11d9227158e388663787ccf7a0c284919a92f3645b21d1cd1c51e46",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-046",
+      "sha256": "781b90d3f10951f501e6fd9f2d3869509be667a9495bcec55d4c237a79eecc57",
+      "repair_target": true
+    },
+    {
+      "test_case_id": "TC-ACPD-047",
+      "sha256": "00eed987812fdf178eb8711031507a0a47b379ff28ca86a02d6549455ed4c822",
+      "repair_target": false
+    }
+  ],
+  "plan_digest": "80fbb773372e037e4cdb3455af920791263f8430c23eba925273e588833648f6"
+}

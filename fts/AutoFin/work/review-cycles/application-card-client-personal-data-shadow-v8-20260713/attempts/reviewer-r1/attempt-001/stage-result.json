@@ -1,0 +1,61 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5b0a-3d1d-7852-9a07-6d584619bcd1",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "application-card-client-personal-data-shadow-v8-20260713",
+  "duration_ms": 94875,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T10:35:20.154477+00:00",
+  "input_digest": "467b83f93484e881e5a32a4d4cfa3d6e5dbd2dfed0aedb5d4bbaa5660678ea1b",
+  "outcome": "changes-required",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "67cd115b079333c02d9a044902016de312ff5482239fd96fae1fb21bfc0dcaf2"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "55828ed9b5a6368c778d072062cb8e1d902165c717d5cf4882eca4493ca5674b"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "67cd115b079333c02d9a044902016de312ff5482239fd96fae1fb21bfc0dcaf2"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "12ee9df6216b5028aaa74541d0ea0845e41eccdcefaea907fb094e43dca49b7b"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "sha256": "50086d2e111afe2ca5c568dd768ccd8a20eca5426f3b2d32f15a9d00f1dc6aff"
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "sha256": "3ac1ffc28906aab82ef26ce2458de3b0b09612e2706f971375a03d2b94a8d021"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "e2ec15df52c6573cfed4d6a3f3a19f3d515553c969b5d319b13b9cdd784ed16e"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-13T10:33:45.284647+00:00",
+  "status": "changes-required",
+  "timed_out": false
+}

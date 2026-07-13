@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/workflow-state.yaml` |
-| status_after | `ready-for-live` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -43,6 +43,8 @@
 - Exec dry-run: contract v2, `exec`, fallback `false`.
 - H45 artifact validator: `0 errors / 0 warnings / 3` inherited source-quality info.
 - Baseline SHA-256 сохранён; production shadow отсутствует.
+- Единственный V8 dispatcher: writer completed, reviewer `changes-required`; `83,537` tokens, `188.625 s`.
+- Terminal analysis: DICT projection передала `[";"]` вместо `["Мужчина", "Женщина"]`; draft finding отклонён как source defect, но process outcome остаётся terminal.
 
 ## Contamination Check
 
@@ -62,6 +64,9 @@
 | 6 | Verified exec route | exec contract v2; no SDK fallback | backend-selection dry-run |
 | 7 | Committed and pushed checkpoint | local/origin `fc03115f...` match; staging empty | git evidence |
 | 8 | Recorded separate authorization | exactly one V8 dispatcher allowed after authorization push | pre-live authorization |
+| 9 | Ran the only V8 dispatcher | writer/gates pass; reviewer valid `changes-required` | V8 cycle/live result |
+| 10 | Source-verified reviewer finding | canonical DICT values correct; runner projection parser extracted separator | live blocker analysis |
+| 11 | Closed V8 terminally | no retry/resume/fallback/promotion; H46/V9 successor only | terminal stop gate |
 
 ## Quality Checkpoints
 
@@ -72,10 +77,14 @@
 | Package metadata consistency | pass-preflight | migration/splice/gate regression | inspect live splice proof |
 | V8 package/capacity | pass | compiler and validate-only | no recompile after checkpoint |
 | Production boundary | pass-pre-live | baseline hash recorded; shadow absent | repeat after live |
+| V8 writer/full-set gates | pass | 13 targets; 34 semantics preserved; metadata and 65/65 obligations pass | immutable live evidence |
+| V8 reviewer | terminal changes-required | valid contract; false source conclusion caused by payload `[";"]` | new V9 after parser fix |
+| Production boundary post-live | pass | baseline hash unchanged; shadow absent | preserve in V9 |
 
 ## Handoff Notes For Next Session
 
-- Do not run V8 live before checkpoint and separate authorization.
+- V8 is terminal; do not retry/resume or create a no-op TC repair.
+- Continue only through `prompt.scope-to-iteration.md` in a new H46/V9 boundary.
 
 ## Artifact Write Strategy
 

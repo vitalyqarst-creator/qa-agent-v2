@@ -1,0 +1,53 @@
+{
+  "cycle_id": "application-card-client-personal-data-shadow-v8-20260713",
+  "status": "changes-required",
+  "terminal": true,
+  "retry_or_resume_allowed": false,
+  "backend": "exec",
+  "contract_version": 2,
+  "fallback_used": false,
+  "writer": {
+    "session_id": "019f5b08-cbeb-7640-b6a4-f64827b55703",
+    "duration_ms": 93750,
+    "target_test_case_count": 13,
+    "preserved_test_case_count": 34,
+    "draft_sha256": "cd8cf5c8ab9cedfe5d2358e9f13a1341d12eb8805f62430f6fee63aabd8f5884",
+    "deterministic_gates_passed": true,
+    "metadata_gate_passed": true,
+    "non_target_semantics_preserved": true
+  },
+  "reviewer": {
+    "session_id": "019f5b0a-3d1d-7852-9a07-6d584619bcd1",
+    "duration_ms": 94875,
+    "decision": "changes-required",
+    "covered_obligations": 64,
+    "incorrect_obligations": 1,
+    "finding_ids": [
+      "F-001"
+    ],
+    "finding_test_case_ids": [
+      "TC-ACPD-011"
+    ],
+    "finding_source_backed_after_terminal_analysis": false,
+    "transported_dictionary_active_values": [
+      ";"
+    ],
+    "canonical_dictionary_active_values": [
+      "Мужчина",
+      "Женщина"
+    ]
+  },
+  "performance": {
+    "duration_ms_total": 188625,
+    "total_tokens": 83537,
+    "uncached_input_tokens_total": 73834,
+    "command_executions": 0,
+    "file_changes": 0
+  },
+  "production": {
+    "ft_first_baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "shadow_exists": false,
+    "final_promoted": false
+  },
+  "blocking_reason": "dictionary projection parser converted canonical Markdown values to punctuation-only active_values [\";\"]"
+}

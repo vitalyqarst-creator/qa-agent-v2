@@ -1,8 +1,8 @@
-# Personal Data V8 Reviewer Contract Remediation
+# Personal Data V9 Dictionary Projection Recovery
 
 ## Цель этапа
 
-Устранить V7 reviewer-contract blocker в новом immutable H45/V8: schema-level совместимость verdict, structured dictionary evidence, package-id consistency/migration и source-backed bounded repair без изменения FT-first baseline.
+В новом immutable H46/V9 устранить дефект DICT projection из V8 и провести независимый reviewer recovery без повторного написания source-correct тест-кейсов.
 
 ## Входные артефакты
 
@@ -12,36 +12,34 @@
 - `fts/AutoFin/work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md`
 - `fts/AutoFin/work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md`
 - `fts/AutoFin/work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md`
-- `fts/AutoFin/work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/live-result.v7.json`
-- `fts/AutoFin/work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/live-blocker-analysis.md`
-- `fts/AutoFin/work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/stop-gate.md`
-- `fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/prepared-input/application-card-client-personal-data-v7/stage-package.json`
-- `fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md`
-- `fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt`
 - `fts/AutoFin/work/stage-handoffs/45-personal-data-v8-reviewer-contract/workflow-state.yaml`
+- `fts/AutoFin/work/stage-handoffs/45-personal-data-v8-reviewer-contract/live-result.v8.json`
+- `fts/AutoFin/work/stage-handoffs/45-personal-data-v8-reviewer-contract/live-blocker-analysis.md`
+- `fts/AutoFin/work/stage-handoffs/45-personal-data-v8-reviewer-contract/stop-gate.md`
+- `fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md`
+- `fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/prepared-input/application-card-client-personal-data-v8/stage-package.json`
 
 ## Обязательные действия
 
-1. Keep V7 immutable and implement status-bound generic reviewer schema with mixed-status regression.
-2. Add structured dictionary evidence projection and prove `DICT-001` active values reach reviewer context.
-3. Add deterministic package-id gate and runner-owned metadata migration with semantic-preservation proof.
-4. Source-verify V7 diagnostics, exclude unsupported `F-002`, and build a bounded V8 repair plan only from confirmed TC defects.
-5. Compile/validate immutable V8, run focused regression, artifact validation and verified exec dry-run.
-6. Commit/push pre-live checkpoint, record separate authorization, then allow exactly one dispatcher.
-7. Stop without retry/resume/fallback on any live blocker and record terminal evidence.
+1. Не изменять и не возобновлять V8.
+2. Исправить DICT active-values parser по canonical semicolon-delimited Markdown format либо передавать compiler-owned structured values без повторного Markdown parsing.
+3. Добавить regression на точную compiler-produced форму `` `Мужчина`; `Женщина` `` и отрицательные cases для punctuation-only, empty и malformed values.
+4. Не создавать фиктивный repair finding для `TC-ACPD-011`: draft соответствует source inventory.
+5. Реализовать и проверить новый reviewer-only hash-bound rebind: новый package/cycle, runner-owned package-id migration, полный deterministic gate bundle, fresh reviewer session, без writer LLM. Если безопасный route невозможен, остановиться с доказанным blocker до live.
+6. Выполнить focused tests, validate-only, artifact validator, exec dry-run, checkpoint/push и отдельную authorization.
+7. Допустить ровно один V9 dispatcher; любой blocker терминален.
 
 ## Ограничения
 
-- Не использовать V6/V7 generated drafts или rejected reviewer output как requirement source.
+- V8 draft — unsigned recovery input, а не requirement source.
 - Не изменять `fts/AutoFin/test-cases/14-application-card-client-personal-data.md`.
-- Не создавать production shadow до reviewer sign-off и отдельного promotion decision.
-- Не использовать стенд или runtime DaData для FT-first writing.
+- Не создавать production shadow до reviewer `accepted` и отдельного promotion decision.
 - Не трогать пользовательские untracked diagnostics и соседний addresses/contacts scope.
 
 ## Ожидаемый результат
 
-Либо reviewer-accepted V8 unsigned draft без automatic promotion, либо точный новый terminal blocker. Во всех случаях baseline неизменён и V7 не возобновляется.
+Reviewer получает exact `DICT-001 active_values = ["Мужчина", "Женщина"]` и рассматривает неизменный source-correct draft в новой fresh session. Итог — `accepted-not-promoted` либо новый точный terminal blocker.
 
 ## Gate завершения
 
-До live обязательны чистые schema/dictionary/metadata regressions, bounded repair validate-only, artifact validator, checkpoint/push и отдельная authorization. После авторизации любой blocker терминален без повтора.
+V9 не допускается к live, пока exact dictionary projection regression и безопасный reviewer-only rebind не прошли deterministic gates. После авторизации любой blocker терминален без повтора.
