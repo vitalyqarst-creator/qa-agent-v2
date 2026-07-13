@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "backend": "exec",
+  "cycle_dir": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713",
+  "stage_count": 2,
+  "duration_ms_total": 71985,
+  "total_tokens": 42721,
+  "uncached_input_tokens_total": 40142,
+  "input_artifact_bytes_total": 102598,
+  "output_artifact_bytes_total": 60305,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f5b99-5282-7670-9e83-19a8ff044974",
+    "019f5b99-db8d-7361-a7e3-e753a02e5cb2"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "search-clear-context-exec-benchmark-v2-20260713",
+      "duration_ms": 34610,
+      "input_artifact_bytes": 44476,
+      "input_artifact_count": 7,
+      "input_tokens": 19662,
+      "outcome": "draft-ready",
+      "output_artifact_bytes": 39466,
+      "output_artifact_count": 15,
+      "output_tokens": 1541,
+      "role": "writer",
+      "scenario": "writer.session_prepared_standard_structured",
+      "stage_id": "writer-r1",
+      "total_tokens": 21203
+    },
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "search-clear-context-exec-benchmark-v2-20260713",
+      "duration_ms": 37375,
+      "input_artifact_bytes": 58122,
+      "input_artifact_count": 14,
+      "input_tokens": 20480,
+      "outcome": "changes-required",
+      "output_artifact_bytes": 20839,
+      "output_artifact_count": 8,
+      "output_tokens": 1038,
+      "role": "reviewer",
+      "scenario": "reviewer.session_prepared_standard_semantic",
+      "stage_id": "reviewer-r1",
+      "total_tokens": 21518
+    }
+  ],
+  "stage_attribution": [
+    {
+      "stage_id": "reviewer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    },
+    {
+      "stage_id": "writer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    }
+  ],
+  "context_efficiency": {
+    "primary_context_bytes_total": 50718,
+    "prompt_bytes_total": 43408,
+    "instruction_bytes_total": 7310,
+    "instruction_artifact_count_total": 2,
+    "command_executions_total": 0,
+    "file_changes_total": 0,
+    "test_case_count": 4,
+    "testable_obligations": 4,
+    "uncached_tokens_per_obligation": 10035.5,
+    "commands_per_test_case": 0.0
+  }
+}

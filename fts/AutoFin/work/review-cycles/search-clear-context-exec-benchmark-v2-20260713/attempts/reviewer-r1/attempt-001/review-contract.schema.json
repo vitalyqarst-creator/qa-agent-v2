@@ -1,0 +1,266 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "decision",
+    "reviewed_draft_sha256",
+    "obligation_reviews",
+    "findings",
+    "summary"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "changes-required"
+      ]
+    },
+    "reviewed_draft_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "obligation_reviews": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-001"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-001"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-002"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-002"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-003"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-003"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "obligation_id",
+              "atom_id",
+              "verdict",
+              "test_case_ids",
+              "note"
+            ],
+            "properties": {
+              "obligation_id": {
+                "type": "string",
+                "const": "OBL-004"
+              },
+              "atom_id": {
+                "type": "string",
+                "const": "ATOM-004"
+              },
+              "verdict": {
+                "type": "string",
+                "enum": [
+                  "covered",
+                  "incorrect",
+                  "missing"
+                ]
+              },
+              "test_case_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+                }
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "category",
+          "atom_ids",
+          "test_case_ids",
+          "problem",
+          "required_change"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "info",
+              "warning"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "atomarity",
+              "coverage",
+              "duplication",
+              "expected-result",
+              "scope",
+              "test-design"
+            ]
+          },
+          "atom_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "test_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_change": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "passed": true,
+  "validator": "prepared-quality-gate-bundle-v1",
+  "context_profile": "conditional-state",
+  "test_case_count": 4,
+  "checks": [
+    "unique-titles",
+    "constraint-gap-preservation",
+    "ui-calibration-lifecycle-markers",
+    "deterministic-structure",
+    "obligation-traceability",
+    "semantic-overlap",
+    "evidence-access",
+    "execution-oracle-quality"
+  ],
+  "findings": []
+}

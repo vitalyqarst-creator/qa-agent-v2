@@ -23,3 +23,6 @@
 | `DEC-008` | 8 | `validation` | V2 pre-live evidence | Accept package as pre-live ready | 108 clean tests; validate-only and artifact gates pass | pre-live reports | high | applied |
 | `DEC-009` | 9 | `routing` | Pre-live gate passed | Stop before live until checkpoint and separate authorization are pushed | Exactly-once boundary is mandatory | `pre-live-stop-gate.md` | high | applied |
 | `DEC-010` | 10 | `authorization` | Checkpoint matches origin | Authorize exactly one V2 exec dispatcher after authorization push | All pre-live and production-boundary gates passed | `pre-live-authorization.md` | high | applied |
+| `DEC-011` | 11 | `terminal-state` | Reviewer returned `changes-required` with F-001/F-002 | Close V2 without retry or promotion | Authorization allows one run; findings are valid semantic blockers | V2 cycle; `live-result.v2.json` | high | applied |
+| `DEC-012` | 12 | `root-cause` | Two reset TCs omit changed-state proof | Attribute defect to upstream design-plan and missing deterministic preflight | Writer followed incomplete plan; reviewer correctly caught it | `live-blocker-analysis.md` | high | applied |
+| `DEC-013` | 13 | `routing` | V2 is terminal but process defect is actionable | Route to new immutable V3 state-change preflight remediation | Fix process before another writer/reviewer run | next prompt | high | applied |

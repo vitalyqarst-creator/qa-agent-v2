@@ -2,8 +2,8 @@ ft_slug: AutoFin
 prepared_compiler_contract_version: 2
 scope_slug: search-clear-context-exec-benchmark-v1
 current_stage: ft-test-case-iteration
-stage_status: ready-for-next-stage
-current_round: 0
+stage_status: blocked-input
+current_round: 1
 next_skill: ft-test-case-iteration
 required_inputs:
   - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
@@ -13,7 +13,12 @@ required_inputs:
   - work/stage-handoffs/48-search-clear-context-exec-benchmark/source-row-inventory.md
   - work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-coverage-gaps.md
   - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/compiler-inputs/search-clear-context-exec-benchmark-v1/compiler-input.yaml
-  - work/stage-handoffs/48-search-clear-context-exec-benchmark/prompt.scope-to-iteration.md
+  - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-result.v2.json
+  - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-blocker-analysis.md
+  - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/performance-analysis.v2.md
+  - work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  - work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/prompt.scope-to-iteration.md
 latest_artifacts:
   source_selection: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
   scope_contract: work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-contract.md
@@ -28,13 +33,25 @@ latest_artifacts:
   pre_live_test_report: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/pre-live-stop-gate.md
   pre_live_authorization: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/pre-live-authorization.md
+  backend_selection: work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/backend-selection.json
+  cycle_state: work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/cycle-state.yaml
+  candidate_draft: work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  reviewer_findings: work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  performance: work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/performance.json
+  live_result: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-result.v2.json
+  live_blocker_analysis: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-blocker-analysis.md
+  performance_analysis: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/performance-analysis.v2.md
+  iteration_summary: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/iteration-summary.md
+  terminal_stop_gate: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/stop-gate.md
   session_log: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/iteration-session-log.md
   decision_log: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/agent-decision-log.md
-  active_transition_prompt: work/stage-handoffs/48-search-clear-context-exec-benchmark/prompt.scope-to-iteration.md
+  active_transition_prompt: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/prompt.scope-to-iteration.md
 coverage_gaps:
   blocking: 0
   non_blocking: 0
 open_questions: []
-blocking_reasons: []
+blocking_reasons:
+  - F-001: TC-SCCB-003 does not prove pagination changed before clear.
+  - F-002: TC-SCCB-004 does not prove row selection changed before clear.
 accepted_risks:
   - Small-scope benchmark does not prove medium-scope scaling.

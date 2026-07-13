@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `search-clear-context-exec-benchmark-v1` |
 | started_from | `work/stage-handoffs/48-search-clear-context-exec-benchmark/prompt.scope-to-iteration.md` |
-| status_after | `authorized-awaiting-authorization-push` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -39,6 +39,8 @@
 
 - V2 immutable compile, validate-only, exec dry-run, `108` clean targeted tests and H47/H48/H49 artifact gates passed.
 - Broad exec-runner suite without a terminal unittest summary is explicitly not counted.
+- Exactly one live dispatcher completed; writer deterministic gates passed, reviewer returned two blocking semantic findings.
+- Production target remains absent and protected baseline hashes are unchanged.
 
 ## Contamination Check
 
@@ -60,6 +62,8 @@
 | 8 | Ran targeted regressions and artifact gates | 108 clean tests; H47/H48/H49 0 errors/0 warnings | `pre-live-test-report.md` |
 | 9 | Applied pre-live stop gate | Live awaits checkpoint push and separate authorization | `pre-live-stop-gate.md` |
 | 10 | Pushed checkpoint and created separate authorization | Exactly one V2 dispatcher allowed only after authorization push | `pre-live-authorization.md` |
+| 11 | Ran the only V2 dispatcher | Writer draft-ready; reviewer changes-required; 2 fresh sessions | V2 cycle; `live-result.v2.json` |
+| 12 | Applied terminal stop gate | V2 cannot retry/resume; route to new V3 remediation | `stop-gate.md`; next prompt |
 
 ## Quality Checkpoints
 
@@ -70,6 +74,9 @@
 | Requirement-code projection | pass after remediation | focused compiler regression `2 passed` | verify V2 package contains `BSR 32` |
 | Production boundary | pass | baselines hashed; shadow target absent | recheck after live |
 | Live authorization | pass-after-push | checkpoint matches origin; separate authorization created | push authorization, then launch once |
+| Live execution | terminal-blocked | reviewer `F-001/F-002` | new V3 only |
+| Session isolation | pass | writer/reviewer session ids differ | preserve evidence |
+| Production boundary after live | pass | target absent; hashes unchanged | no promotion |
 
 ## Artifact Write Strategy
 
@@ -87,5 +94,5 @@ Generated immutable package and live runtime evidence are owned by their canonic
 
 ## Handoff Notes For Next Session
 
-- Live is forbidden until pre-live checkpoint and a separate authorization commit are pushed.
-- Run exactly one dispatcher with backend `exec` and no fallback.
+- V2 authorization is consumed; do not run the dispatcher again.
+- Continue only through `prompt.scope-to-iteration.md` in a new immutable V3 cycle.

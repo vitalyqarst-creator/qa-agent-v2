@@ -1,0 +1,145 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/4.2-prepared-shadow-search-clear-context-exec-benchmark-v1.md",
+  "contract_version": 2,
+  "cycle_id": "search-clear-context-exec-benchmark-v2-20260713",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "producer": "runner",
+      "required": true
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/prepared-input/search-clear-context-exec-benchmark-v2/stage-package.json",
+      "sha256": "3793983739e09d688b36251f05099cf02f48b56c78dc3cbde40a747048073169"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/prepared-input/search-clear-context-exec-benchmark-v2/atomic-obligations.json",
+      "sha256": "bf7ac2d2212d58d1d05cce5f2aa0633a12c7e637407094dca387bae1ac1f1a22"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "d88aa5329150f8ac1cef5e7e10ed0a6aebb53cd9633f13b97980c1bc32bc64c1"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "e845fdfff9a0a8f50fa96e38366873b6365fbada46e8eb2d5be72d7a176cebee"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "2e9e4f45c14729edb7699a0500a966c9800745decb26cfed869f1ac31d7e3758"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "629bebeeab2e46d69b700175879a1bd734208ab893a7e1d7d4de72b5d5df298c"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "9b3df5c60e22a2ffce98c08e92038933e08f8c618def0ab6e4b495d17bf88622"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "8e216a49fd15ddef0c1e2678a3a44ac86771877fbd960196702549c5e3f4e064"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "1957c5845dc0e5b1659bd5d2a6011eae87ed9572330c660223c5ff028c9ded17"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "c294fefd791dd952c79221335d23b68176502b62af604bad098051e2b15a2a98"
+    }
+  ],
+  "input_digest": "090002c6c400f5331e6d98390c5a63db97cb6e6a5c8c0547f7412c1aafb05629",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "65cae2dbcf0eb69a8f70b6c8247218f4fec1d0f7d01eb9c0a9c614b15f0610af"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/attempts/reviewer-r1/attempt-001/prompt.md",
+    "sha256": "c5a03f6c99f27f77ad460d80b6143f0812d73c3881d2766d58b06cfd188490b0"
+  },
+  "role": "reviewer",
+  "sandbox_policy": "read_only",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "semantic_round": 0,
+  "session_id": "session-reviewer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v2-20260713/prepared-input/search-clear-context-exec-benchmark-v2/source-evidence.md",
+      "sha256": "70ad9c41db1308047ff98d2ab3e166d4c89ad20f326e333d6cea176d089bd90f"
+    }
+  ],
+  "stage_id": "reviewer-r1",
+  "timeout_seconds": 450
+}

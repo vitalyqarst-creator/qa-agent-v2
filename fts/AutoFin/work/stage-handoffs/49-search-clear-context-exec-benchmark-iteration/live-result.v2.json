@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "cycle_id": "search-clear-context-exec-benchmark-v2-20260713",
+  "package_id": "search-clear-context-exec-benchmark-v2",
+  "backend": "exec",
+  "contract_version": 2,
+  "status": "changes-required",
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "fallback_used": false,
+  "writer": {
+    "status": "draft-ready",
+    "session_id": "019f5b99-5282-7670-9e83-19a8ff044974",
+    "duration_ms": 34610,
+    "total_tokens": 21203,
+    "command_count": 0,
+    "draft_sha256": "d88aa5329150f8ac1cef5e7e10ed0a6aebb53cd9633f13b97980c1bc32bc64c1"
+  },
+  "reviewer": {
+    "status": "changes-required",
+    "session_id": "019f5b99-db8d-7361-a7e3-e753a02e5cb2",
+    "duration_ms": 37375,
+    "total_tokens": 21518,
+    "command_count": 0,
+    "blocking_findings": ["F-001", "F-002"]
+  },
+  "fresh_session_ids_differ": true,
+  "duration_ms_total": 71985,
+  "total_tokens": 42721,
+  "uncached_input_tokens_total": 40142,
+  "test_case_count": 4,
+  "testable_obligations": 4,
+  "accepted_terminal_state": false,
+  "final_promoted": false,
+  "promotion_target_exists": false,
+  "blocking_reasons": [
+    "F-001: TC-SCCB-003 does not explicitly prove pagination changed before clear",
+    "F-002: TC-SCCB-004 does not explicitly prove row selection changed before clear"
+  ]
+}
