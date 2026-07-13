@@ -1,0 +1,128 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-NUM-001",
+      "handling": "Покрывать только допустимые значения; не создавать negative TC без UI evidence или уточнения требования.",
+      "problem": "ФТ задаёт допустимый числовой формат, но не описывает наблюдаемую реакцию на невалидные символы или неверную длину.",
+      "source_refs": [
+        "GAP-002",
+        "SRC-004.P02",
+        "SRC-011.P02",
+        "SRC-012.P02",
+        "SRC-025.P03",
+        "SRC-026.P02"
+      ]
+    }
+  ],
+  "digest": "e3f1a6a24d9ec7530b68fdd902f940f30e84d8e00d37b2684c2af25514e9c17f",
+  "obligations": [
+    {
+      "atom_id": "ATOM-NUM-001",
+      "atomic_statement": "Поле `Адрес регистрации / Почтовый индекс` допускает ровно 6 числовых символов.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Не проверять неподтверждённую реакцию на неверную длину или нецифровые символы.",
+      "obligation_id": "OBL-NUM-001",
+      "observable_oracle": "После ввода допустимого значения `123456` поле отображает ровно эти 6 цифр.",
+      "planned_test_case_id": "TC-ACNB-001",
+      "source_refs": [
+        "SRC-004.P02",
+        "BSR 116"
+      ],
+      "test_intent": "Проверить допустимое шестизначное числовое значение почтового индекса адреса регистрации."
+    },
+    {
+      "atom_id": "ATOM-NUM-002",
+      "atomic_statement": "Поле `Адрес регистрации / Корпус` допускает только числовые символы.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Длина значения источником не ограничена.",
+      "obligation_id": "OBL-NUM-002",
+      "observable_oracle": "После ввода допустимого значения `12` поле отображает ровно эти цифры.",
+      "planned_test_case_id": "TC-ACNB-002",
+      "source_refs": [
+        "SRC-011.P02",
+        "BSR 124"
+      ],
+      "test_intent": "Проверить допустимое числовое значение корпуса адреса регистрации."
+    },
+    {
+      "atom_id": "ATOM-NUM-003",
+      "atomic_statement": "Поле `Адрес регистрации / Квартира` допускает только числовые символы.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Длина значения источником не ограничена.",
+      "obligation_id": "OBL-NUM-003",
+      "observable_oracle": "После ввода допустимого значения `34` поле отображает ровно эти цифры.",
+      "planned_test_case_id": "TC-ACNB-003",
+      "source_refs": [
+        "SRC-012.P02",
+        "BSR 126"
+      ],
+      "test_intent": "Проверить допустимое числовое значение квартиры адреса регистрации."
+    },
+    {
+      "atom_id": "ATOM-NUM-004",
+      "atomic_statement": "Поле `Фактический адрес / Квартира` допускает только числовые символы.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Длина значения источником не ограничена.",
+      "obligation_id": "OBL-NUM-004",
+      "observable_oracle": "После ввода допустимого значения `56` поле отображает ровно эти цифры.",
+      "planned_test_case_id": "TC-ACNB-004",
+      "source_refs": [
+        "SRC-025.P03",
+        "BSR 151"
+      ],
+      "test_intent": "Проверить допустимое числовое значение квартиры фактического адреса."
+    },
+    {
+      "atom_id": "ATOM-NUM-005",
+      "atomic_statement": "Поле `Фактический адрес / Почтовый индекс` допускает ровно 6 числовых символов.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Не проверять неподтверждённую реакцию на неверную длину или нецифровые символы.",
+      "obligation_id": "OBL-NUM-005",
+      "observable_oracle": "После ввода допустимого значения `654321` поле отображает ровно эти 6 цифр.",
+      "planned_test_case_id": "TC-ACNB-005",
+      "source_refs": [
+        "SRC-026.P02",
+        "BSR 153"
+      ],
+      "test_intent": "Проверить допустимое шестизначное числовое значение почтового индекса фактического адреса."
+    },
+    {
+      "atom_id": "ATOM-NUM-006",
+      "atomic_statement": "ФТ не определяет наблюдаемую реакцию выбранных полей на нецифровые символы и неверную длину почтового индекса.",
+      "constraint_gap_ids": [],
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-NUM-001",
+      "notes": "Gap-obligation сохраняет отрицательную границу без выбора неподтверждённого механизма.",
+      "obligation_id": "OBL-NUM-006",
+      "observable_oracle": "",
+      "source_refs": [
+        "GAP-002",
+        "SRC-004.P02",
+        "SRC-011.P02",
+        "SRC-012.P02",
+        "SRC-025.P03",
+        "SRC-026.P02"
+      ],
+      "test_intent": "Не создавать негативный тест-кейс до появления UI evidence или уточнения требования."
+    }
+  ],
+  "package_id": "client-address-numeric-boundaries-v2",
+  "package_version": 5
+}

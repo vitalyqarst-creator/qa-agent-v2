@@ -1,0 +1,61 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f592e-ee8c-7103-93c1-bffedee76268",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "client-address-numeric-boundary-shadow-v2-20260713",
+  "duration_ms": 17750,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T01:54:53.338726+00:00",
+  "input_digest": "5bc0b7f517a49b41be394a5667034cad93edbc86eb31eeb7590c1600f9087c8b",
+  "outcome": "accepted",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "c91c6821e1c0530da3022a64f4d4d840ba71fdd604522f2b895dd4c53b8d73dd"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "f14a49ce8e30f2e3fc4270d613e52c98138297c1de4f23c8498e781319de954f"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "c91c6821e1c0530da3022a64f4d4d840ba71fdd604522f2b895dd4c53b8d73dd"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "051c5a2045f5e513fddcca8618ef8c4d196c64c64dde97356a0d76f3f4a2a71f"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "sha256": "1f5103aba79e9e8b9340979f340ec24575cb764a7e8fc5c0beb65fba4edbdd44"
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "sha256": "49f6cca58680ea10a490b79c729bb3cbe1d4f6af86f5c6f2addf84ac8b72b767"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "3e32604f3eedf1f6005202ef6718f17caddd651a40701216be847464f1d5c7fa"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-13T01:54:35.586925+00:00",
+  "status": "completed",
+  "timed_out": false
+}

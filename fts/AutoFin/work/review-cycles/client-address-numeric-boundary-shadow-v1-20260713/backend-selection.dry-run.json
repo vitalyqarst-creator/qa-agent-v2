@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "status": "selected",
+  "requested_backend": "auto",
+  "selected_backend": "exec",
+  "contract_version": 2,
+  "fallback_used": false,
+  "fallback_reason": "",
+  "capability": {
+    "command": "C:\\Users\\Пользователь\\.codex\\plugins\\.plugin-appserver\\codex.exe",
+    "available": true,
+    "verified": true,
+    "returncode": 0,
+    "duration_ms": 1031,
+    "missing_flags": [],
+    "error": ""
+  }
+}

@@ -1,0 +1,33 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-address-numeric-boundaries-shadow
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/34-client-address-numeric-boundary-canary/scope-contract.md
+  - work/stage-handoffs/34-client-address-numeric-boundary-canary/scope-coverage-gaps.md
+  - work/stage-handoffs/34-client-address-numeric-boundary-canary/source-parity-check.md
+  - work/stage-handoffs/34-client-address-numeric-boundary-canary/source-row-inventory.md
+  - work/stage-handoffs/34-client-address-numeric-boundary-canary/live-acceptance-report.md
+  - work/stage-handoffs/34-client-address-numeric-boundary-canary/agent-decision-log.md
+latest_artifacts:
+  cycle_state: work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/cycle-state.yaml
+  accepted_draft: work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  final_findings: work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  quality_gate_bundle: work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json
+  performance_report: work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/performance.json
+  live_acceptance_report: work/stage-handoffs/34-client-address-numeric-boundary-canary/live-acceptance-report.md
+  stop_gate: work/stage-handoffs/34-client-address-numeric-boundary-canary/stop-gate.md
+  session_log: work/stage-handoffs/34-client-address-numeric-boundary-canary/iteration-session-log.md
+  decision_log: work/stage-handoffs/34-client-address-numeric-boundary-canary/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/34-client-address-numeric-boundary-canary/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 1
+open_questions:
+  - GAP-NUM-001 remains open for invalid numeric input behavior.
+blocking_reasons: []
+accepted_risks:
+  - Accepted shadow draft is not promoted and does not validate negative UI behavior.

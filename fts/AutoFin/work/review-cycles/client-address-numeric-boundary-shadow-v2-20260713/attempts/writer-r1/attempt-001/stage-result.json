@@ -1,0 +1,96 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f592e-5026-7a80-aa36-c780d0167615",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "client-address-numeric-boundary-shadow-v2-20260713",
+  "duration_ms": 40312,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T01:54:35.075058+00:00",
+  "input_digest": "b9ac743c8052c82902d4795febd4a6ee506ccafda0551e3eca0b1ae245a7828e",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "9fa6f550bdf2ae211fe44f58abac38776ba700df7fd5092e49e791dbabd845e8"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "9f8568badcfbde30a1c45fe0dd7b1773e57dff15230095fdcfe350854e6ad031"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "9fa6f550bdf2ae211fe44f58abac38776ba700df7fd5092e49e791dbabd845e8"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "87811c8b4af2eec7d7f310cbb28279cc3a70d9bc14cb12d1ba9326765177bf54"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "sha256": "2a4ed55bd4f058554f116242380e95dfc9ae8899ba6fd97daf4e37eec584428c"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "1403dec17ce4ca223568c4111d7962845a808aadba98ad1a73cda859fb88f2f8"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "d7ac4ef818a549698cd76a1686dd6f738716f5a4aa23c3bdc881bf40ad7d696c"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "637bb34453930cfd11e04fd73a9efe5e1e79e8a28b7754e1f151e3a9ff1b6b7b"
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "84b6ad6af41e1f84cd3153f0f8d9d9e9bd9334e6424c867a5e312314d75860a8"
+    },
+    {
+      "kind": "quality-gate-bundle",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "fde0210230272571eea8148d74a09750cb00b2e4fcd15c7376f49700207583c7"
+    },
+    {
+      "kind": "calibration-lifecycle",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "eca1a74a90d42043a6fc29a72b1fdfc742a40612cc9e8737a835f4dec6d3e3ca"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "00a13d1cbb12a4725cac9c45b6251e6137a273a81714691de3e0f6e69d0842ae"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "sha256": "3b3ec610f9ee991ba0a9c7a85cfef39b14290a98c8041f6376defc7b842f03d4"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "d384188ba63736b439e8708c20de8fdf9bbbf5be8f8800e39b94606838877f88"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-13T01:53:54.765162+00:00",
+  "status": "completed",
+  "timed_out": false
+}

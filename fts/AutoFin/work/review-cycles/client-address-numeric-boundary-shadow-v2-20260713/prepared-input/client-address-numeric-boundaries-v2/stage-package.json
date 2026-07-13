@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-07-13T01:53:25.098474+00:00",
+  "execution_profile": "standard-required",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/review-cycles",
+    "fts/AutoFin/work/canary-runs"
+  ],
+  "ft_slug": "AutoFin",
+  "package_artifacts": [
+    {
+      "bytes": 33609,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/prepared-input/client-address-numeric-boundaries-v2/source-evidence.md",
+      "sha256": "411504636f9318da2e56b681a4e146007b05abafbaec9c6122dfb8fcc7d9329d"
+    },
+    {
+      "bytes": 6645,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/prepared-input/client-address-numeric-boundaries-v2/atomic-obligations.json",
+      "sha256": "b83b5c858da72ee48dde888eb3531ed0f980ea1ca386faa88c067814cf13e31a"
+    },
+    {
+      "bytes": 1139,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/prepared-input/client-address-numeric-boundaries-v2/stage-instructions.md",
+      "sha256": "9c3409f3086fac2bf7ec9513a08d79c52da9d37c6534cc242820e0ecc7e13bc6"
+    }
+  ],
+  "package_digest": "8735c700c174bddbb93cadf9a7c653d9fe64dfdf2ab2abf344e6025bc185859b",
+  "package_id": "client-address-numeric-boundaries-v2",
+  "package_version": 5,
+  "scope_slug": "application-card-client-address-numeric-boundaries-shadow",
+  "section_id": "14",
+  "source_registry": [
+    {
+      "locator": "section 4.3, Table 4, address rows 35, 42, 43, 56, 57",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "locator": "Table 4, SRC-004, SRC-011, SRC-012, SRC-025, SRC-026",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "locator": "pages 19, 20, 22; BSR 116, 124, 126, 151, 153",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ],
+  "unsupported_dimensions": [
+    "date-boundaries",
+    "negative-feedback",
+    "integration-persistence",
+    "dependency-state",
+    "dictionary-values"
+  ]
+}

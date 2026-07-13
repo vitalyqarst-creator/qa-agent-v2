@@ -1,0 +1,269 @@
+{
+  "version": 1,
+  "cycle_id": "client-address-numeric-boundary-shadow-v2-20260713",
+  "stage_id": "reviewer-r1",
+  "role": "reviewer",
+  "context_profile": "numeric-date-boundary",
+  "input_digest": "5bc0b7f517a49b41be394a5667034cad93edbc86eb31eeb7590c1600f9087c8b",
+  "input_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/prompt.md",
+      "sha256": "7ddb783d47dedc278ae59a4b93d08d36a38bb03313a938e76a556d37686fa83f",
+      "kind": "prompt",
+      "group": "prompt",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "e10d316e583daf3bb544eb2a30fa749ec08eb714400cb708ba02fc1c42267e33",
+      "kind": "instruction",
+      "group": "instruction",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/prepared-input/client-address-numeric-boundaries-v2/source-evidence.md",
+      "sha256": "411504636f9318da2e56b681a4e146007b05abafbaec9c6122dfb8fcc7d9329d",
+      "kind": "source",
+      "group": "source",
+      "lifecycle": "source",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/prepared-input/client-address-numeric-boundaries-v2/stage-package.json",
+      "sha256": "f45013afbb8e7ce20bc6c241d14146f307e3dd490877459a5e9793195e95a8ba",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/prepared-input/client-address-numeric-boundaries-v2/atomic-obligations.json",
+      "sha256": "b83b5c858da72ee48dde888eb3531ed0f980ea1ca386faa88c067814cf13e31a",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "1403dec17ce4ca223568c4111d7962845a808aadba98ad1a73cda859fb88f2f8",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "d7ac4ef818a549698cd76a1686dd6f738716f5a4aa23c3bdc881bf40ad7d696c",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "637bb34453930cfd11e04fd73a9efe5e1e79e8a28b7754e1f151e3a9ff1b6b7b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "84b6ad6af41e1f84cd3153f0f8d9d9e9bd9334e6424c867a5e312314d75860a8",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "fde0210230272571eea8148d74a09750cb00b2e4fcd15c7376f49700207583c7",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "eca1a74a90d42043a6fc29a72b1fdfc742a40612cc9e8737a835f4dec6d3e3ca",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "00a13d1cbb12a4725cac9c45b6251e6137a273a81714691de3e0f6e69d0842ae",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "a8ef397a95164dcba1c81b2e8d01912a50891d2e93ee46a7be0df458a31b8b7e",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    }
+  ],
+  "output_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "kind": "stdout",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "kind": "stderr",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "kind": "events",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "kind": "stage-status",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "kind": "artifact-graph",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "kind": "review-findings",
+      "lifecycle": "reviewed",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "kind": "evidence-access-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/client-address-numeric-boundary-shadow-v2-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "kind": "context-budget",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    }
+  ],
+  "access_policy": {
+    "sandbox": "read_only",
+    "allowed_write_roots": [],
+    "forbidden_write_roots": [
+      "fts/AutoFin/test-cases"
+    ],
+    "fallback_policy": "targeted-only"
+  },
+  "graph_digest": "d725795650bab827e0f8fb4835b8ff3e3fba13c2732d87a17bea058fe6e195d0"
+}
