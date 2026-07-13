@@ -1,0 +1,96 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f595d-3bf6-7e72-ba58-e4dedf0f9466",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "personal-data-character-restrictions-shadow-v5-20260713",
+  "duration_ms": 63688,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T02:46:13.516343+00:00",
+  "input_digest": "fc7869a3d7c3a95fb377e78bd1bce4577c339f719b331f336b240703e4cea27c",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "c05142a53a533e881e987836ee5115f2aaaba9e06a5e0a844fa57daa25869c49"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "eac59060a0538648518c62a35aeae627c9718a21e38714c7a2803824e94df4e1"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "c05142a53a533e881e987836ee5115f2aaaba9e06a5e0a844fa57daa25869c49"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "5c7787d6e03fbb04ab4fcb9733d4f1bfdcf67a1f88443dcfdf2cd8fed20d27aa"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "sha256": "150c09bff415e92496ea4aea2dc4bc64b016d3c70ede8f2594ee03c657f2a584"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "7da0cdb53f7fabc1eb7c17f2e4db449a0cf6424450930afc05eebd58ccbfc20c"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "5fa86af5bd81b22269db5166bf0595b3bf110a909e597c13ef8381d02fe5c000"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "f094fb3478e3d3c2252ce0896ba0cf2f55fa9ec68f8650fdd80f35b515d6ca37"
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "6fa7aba2f3d22c19c99dca108340af18f59973f9565727473cf5c866de0a95e9"
+    },
+    {
+      "kind": "quality-gate-bundle",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "2fa7fe6906868d7de59ffc69962a9d3067121c20d2e9ad3f0a400373aebfcbac"
+    },
+    {
+      "kind": "calibration-lifecycle",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "a44036776f5ae095742a54f5095ff977c343e6dadad2fe934dee3f5acc1a3a41"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "3f24e26faea62cb2e449e7022aa08b3b3ccaa54d6e2c8c021b0a57a3e4ec3fe9"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "sha256": "19c508c873468e17f4884fe053b5c540d248f06eacc0d4cb7950d4456e6f1ddd"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/personal-data-character-restrictions-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "4e88c1e7c1ad54d7eb01411b6e6e742a6e761eabea0fcf362a6cf81ae02e74a2"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-13T02:45:09.831536+00:00",
+  "status": "completed",
+  "timed_out": false
+}
