@@ -50,15 +50,15 @@ class PreparedObligationGateTests(unittest.TestCase):
 
     def test_passes_when_every_testable_atom_is_traced(self) -> None:
         result = self._validate(
-            "## TC-001\n**Трассировка:** ATOM-001\n\n"
-            "## TC-002\n**Traceability:** ATOM-002\n"
+            "## TC-001\n**Трассировка:** ATOM-001; SRC-1\n\n"
+            "## TC-002\n**Traceability:** ATOM-002; SRC-2\n"
         )
         self.assertTrue(result.passed)
         self.assertEqual(("ATOM-001", "ATOM-002"), result.covered_obligations)
 
     def test_reports_missing_unknown_and_non_testable_atoms(self) -> None:
         result = self._validate(
-            "## TC-001\n**Трассировка:** ATOM-001, ATOM-003, ATOM-404\n"
+            "## TC-001\n**Трассировка:** ATOM-001, SRC-1, ATOM-003, ATOM-404\n"
         )
         finding_ids = {item["id"] for item in result.findings}
         self.assertFalse(result.passed)
@@ -80,17 +80,17 @@ class PreparedObligationGateTests(unittest.TestCase):
         result = self._validate(
             "## TC-001\n"
             "### Шаги\n1. Проверить.\n"
-            "**Трассировка:** ATOM-001, ATOM-002\n\n"
+            "**Трассировка:** ATOM-001, SRC-1, ATOM-002, SRC-2\n\n"
             "## Coverage gaps\n"
             "**Трассировка:** ATOM-003\n"
         )
         self.assertTrue(result.passed)
-        self.assertEqual("prepared-package-obligation-gate-v2", result.as_dict()["validator"])
+        self.assertEqual("prepared-package-obligation-gate-v3", result.as_dict()["validator"])
 
     def test_bulleted_traceability_inside_tc_is_supported(self) -> None:
         result = self._validate(
-            "## TC-001\n- **Трассировка:** ATOM-001\n\n"
-            "## TC-002\n* **Traceability:** ATOM-002\n"
+            "## TC-001\n- **Трассировка:** ATOM-001; SRC-1\n\n"
+            "## TC-002\n* **Traceability:** ATOM-002; SRC-2\n"
         )
         self.assertTrue(result.passed)
 
@@ -98,7 +98,7 @@ class PreparedObligationGateTests(unittest.TestCase):
         result = self._validate(
             "### TC-001\n"
             "#### Предусловия\nText.\n"
-            "#### Traceability\n**Трассировка:** ATOM-001, ATOM-002\n\n"
+            "#### Traceability\n**Трассировка:** ATOM-001, SRC-1, ATOM-002, SRC-2\n\n"
             "## Неисполняемые границы покрытия\n"
             "**Трассировка:** ATOM-003\n"
         )
@@ -106,15 +106,15 @@ class PreparedObligationGateTests(unittest.TestCase):
 
     def test_next_tc_ends_previous_even_at_deeper_heading_level(self) -> None:
         result = self._validate(
-            "## TC-001\n**Трассировка:** ATOM-001\n\n"
-            "### TC-002\n**Трассировка:** ATOM-002\n"
+            "## TC-001\n**Трассировка:** ATOM-001; SRC-1\n\n"
+            "### TC-002\n**Трассировка:** ATOM-002; SRC-2\n"
         )
         self.assertTrue(result.passed)
         self.assertEqual(2, result.test_case_count)
 
     def test_headings_and_atoms_inside_fenced_code_are_ignored(self) -> None:
         result = self._validate(
-            "## TC-001\n**Трассировка:** ATOM-001, ATOM-002\n\n"
+            "## TC-001\n**Трассировка:** ATOM-001, SRC-1, ATOM-002, SRC-2\n\n"
             "```markdown\n## TC-FAKE\n**Трассировка:** ATOM-003\n```\n"
         )
         self.assertTrue(result.passed)
@@ -122,7 +122,7 @@ class PreparedObligationGateTests(unittest.TestCase):
 
     def test_real_gap_traceability_inside_tc_still_blocks(self) -> None:
         result = self._validate(
-            "## TC-001\n**Трассировка:** ATOM-001, ATOM-002, ATOM-003\n"
+            "## TC-001\n**Трассировка:** ATOM-001, SRC-1, ATOM-002, SRC-2, ATOM-003\n"
         )
         self.assertFalse(result.passed)
         self.assertIn(
@@ -166,7 +166,7 @@ class PreparedObligationGateTests(unittest.TestCase):
         write_json_atomic(self.obligations_path, obligations.to_dict())
 
         result = self._validate(
-            "## TC-001\n**Трассировка:** OBL-001; ATOM-001\n"
+            "## TC-001\n**Трассировка:** OBL-001; ATOM-001; SRC-1\n"
         )
 
         self.assertTrue(result.passed)
@@ -203,10 +203,110 @@ class PreparedObligationGateTests(unittest.TestCase):
 
     def test_set_level_unknown_atom_does_not_attach_to_last_tc(self) -> None:
         result = self._validate(
-            "## TC-001\n**Трассировка:** ATOM-001, ATOM-002\n\n"
+            "## TC-001\n**Трассировка:** ATOM-001, SRC-1, ATOM-002, SRC-2\n\n"
             "## Coverage gaps\n- **Трассировка:** ATOM-404\n"
         )
         self.assertTrue(result.passed)
+
+    def test_v5_missing_source_ref_is_rejected_inside_linked_tc(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-v5-source",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01", "BSR 101"),
+                    atomic_statement="Visible behavior",
+                    observable_oracle="Visible result",
+                    test_intent="Verify behavior",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            "## TC-001\n**Трассировка:** OBL-001; ATOM-001; SRC-001.P01\n"
+        )
+
+        self.assertFalse(result.passed)
+        finding = next(
+            item for item in result.findings
+            if item["id"] == "missing-obligation-source-reference"
+        )
+        self.assertEqual("TC-001", finding["tc_id"])
+        self.assertEqual(["BSR 101"], finding["missing_references"])
+
+    def test_source_ref_in_wrong_tc_does_not_satisfy_obligation(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-v5-wrong-tc",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001", atom_id="ATOM-001",
+                    source_refs=("SRC-001",), atomic_statement="One",
+                    observable_oracle="One visible", test_intent="Test one",
+                    coverage_status="testable", gap_id="", dictionary_refs=(), notes="",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-002", atom_id="ATOM-002",
+                    source_refs=("SRC-002",), atomic_statement="Two",
+                    observable_oracle="Two visible", test_intent="Test two",
+                    coverage_status="testable", gap_id="", dictionary_refs=(), notes="",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            "## TC-001\n**Трассировка:** OBL-001; ATOM-001; SRC-002\n\n"
+            "## TC-002\n**Трассировка:** OBL-002; ATOM-002; SRC-001; SRC-002\n"
+        )
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "missing-obligation-source-reference",
+            {item["id"] for item in result.findings},
+        )
+
+    def test_dictionary_ref_is_required_and_grouped_union_passes(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-v5-grouped",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001", atom_id="ATOM-001",
+                    source_refs=("SRC-001",), atomic_statement="Dictionary value one",
+                    observable_oracle="One visible", test_intent="Test one",
+                    coverage_status="testable", gap_id="", dictionary_refs=("DICT-001",),
+                    notes="", planned_test_case_id="TC-001",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-002", atom_id="ATOM-002",
+                    source_refs=("SRC-002", "BSR 202"), atomic_statement="Two",
+                    observable_oracle="Two visible", test_intent="Test two",
+                    coverage_status="testable", gap_id="", dictionary_refs=(), notes="",
+                    planned_test_case_id="TC-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        missing_dictionary = self._validate(
+            "## TC-001\n**Трассировка:** OBL-001; ATOM-001; SRC-001; "
+            "OBL-002; ATOM-002; SRC-002; BSR 202\n"
+        )
+        self.assertFalse(missing_dictionary.passed)
+
+        complete = self._validate(
+            "## TC-001\n**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001; "
+            "OBL-002; ATOM-002; SRC-002; BSR 202\n"
+        )
+        self.assertTrue(complete.passed)
 
 
 if __name__ == "__main__":

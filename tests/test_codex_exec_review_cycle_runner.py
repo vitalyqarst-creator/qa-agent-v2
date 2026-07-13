@@ -312,7 +312,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 self.draft_path.parent.mkdir(parents=True, exist_ok=True)
                 self.draft_path.write_text(
                     draft_text
-                    or "# Test cases\n\n## TC-DEMO-001\n\n**Трассировка:** ATOM-001\n\nDraft body.\n",
+                    or "# Test cases\n\n## TC-DEMO-001\n\n**Трассировка:** ATOM-001; SRC-1\n\nDraft body.\n",
                     encoding="utf-8",
                 )
             return self.process_result(
@@ -432,7 +432,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 "status": status,
                 "draft_markdown": (
                     draft_text
-                    or "# Test cases\n\n## TC-DEMO-001\n\n**Traceability:** ATOM-001\n\nDraft body.\n"
+                    or "# Test cases\n\n## TC-DEMO-001\n\n**Traceability:** ATOM-001; SRC-1\n\nDraft body.\n"
                 )
                 if status == "draft-ready"
                 else "",
@@ -835,7 +835,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         seed = runner._draft_seed_text()
 
         self.assertEqual(1, seed.count("## TC-GROUP-001"))
-        self.assertIn("ATOM-001; OBL-002; ATOM-002", seed)
+        self.assertIn("ATOM-001; SRC-1; OBL-002; ATOM-002", seed)
 
     def test_prepared_writer_creates_absent_stage_owned_output_from_template(self) -> None:
         package_path = self.build_prepared_package()
@@ -1411,7 +1411,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 ## TC-DEMO-001
 
 **Название:** Отклонение цифры в поле Фамилия
-**Трассировка:** ATOM-001; GAP-001
+**Трассировка:** ATOM-001; SRC-1; GAP-001
 **Статус oracle:** ui-calibration-required
 **Статус тест-кейса:** candidate-ui-calibration
 
@@ -1451,7 +1451,7 @@ Draft body.
                 draft_text=(
                     "# Test cases\n\n## TC-DEMO-001\n\n"
                     "**Название:** Отклонение цифры\n"
-                    "**Трассировка:** ATOM-001; GAP-001\n\nDraft body.\n"
+                    "**Трассировка:** ATOM-001; SRC-1; GAP-001\n\nDraft body.\n"
                 )
             )
         )
@@ -1563,7 +1563,7 @@ GAP-001 remains open.
 ## TC-DEMO-001
 **package_id:** WP-01
 **Приоритет:** High
-**Трассировка:** ATOM-001
+**Трассировка:** ATOM-001; SRC-1
 """
         executor = ScriptedExecutor(
             self.writer_step(draft_text=draft),

@@ -18,6 +18,40 @@ ATOM_REFERENCE = re.compile(r"\bATOM-[A-Za-z0-9._-]+\b")
 OBLIGATION_REFERENCE = re.compile(r"\bOBL-[A-Za-z0-9._-]+\b")
 
 
+def traceability_references(text: str) -> set[str]:
+    return {
+        item.strip().strip("`").strip()
+        for item in re.split(r"[;,]", text)
+        if item.strip().strip("`").strip()
+    }
+
+
+def missing_obligation_references(obligation: Any, traced_references: set[str]) -> tuple[str, ...]:
+    required_references = tuple(
+        dict.fromkeys((*obligation.source_refs, *obligation.dictionary_refs))
+    )
+    return tuple(
+        reference for reference in required_references if reference not in traced_references
+    )
+
+
+def source_reference_finding(
+    *, tc_id: str, obligation: Any, missing_references: tuple[str, ...]
+) -> dict[str, Any]:
+    return {
+        "id": "missing-obligation-source-reference",
+        "severity": "error",
+        "tc_id": tc_id,
+        "obligation_id": obligation.obligation_id,
+        "atom_id": obligation.traceability_atom_id,
+        "missing_references": list(missing_references),
+        "message": (
+            "TC traceability must preserve every source_refs and "
+            "dictionary_refs value of its prepared obligation."
+        ),
+    }
+
+
 @dataclass(frozen=True)
 class MarkdownHeading:
     offset: int
@@ -110,7 +144,7 @@ class ObligationGateResult:
     def as_dict(self) -> dict[str, Any]:
         return {
             "passed": self.passed,
-            "validator": "prepared-package-obligation-gate-v2",
+            "validator": "prepared-package-obligation-gate-v3",
             "package_id": self.package_id,
             "test_case_count": self.test_case_count,
             "testable_obligations": self.testable_obligations,
@@ -145,6 +179,7 @@ def validate_draft_obligation_coverage(
     for tc_id, block in sections:
         trace_values = TRACEABILITY_FIELD.findall(without_fenced_blocks(block))
         trace_text = " ".join(trace_values)
+        traced_references = traceability_references(trace_text)
         traced_atoms = set(ATOM_REFERENCE.findall(trace_text))
         traced_obligations = set(OBLIGATION_REFERENCE.findall(trace_text))
         for atom_id in sorted(traced_atoms):
@@ -196,6 +231,17 @@ def validate_draft_obligation_coverage(
                     }
                 )
             else:
+                missing_references = missing_obligation_references(
+                    obligation, traced_references
+                )
+                if missing_references:
+                    findings.append(
+                        source_reference_finding(
+                            tc_id=tc_id,
+                            obligation=obligation,
+                            missing_references=missing_references,
+                        )
+                    )
                 covered.add(obligation_id)
 
         for atom_id in sorted(traced_atoms):
@@ -216,6 +262,17 @@ def validate_draft_obligation_coverage(
                             }
                         )
                     else:
+                        missing_references = missing_obligation_references(
+                            obligation, traced_references
+                        )
+                        if missing_references:
+                            findings.append(
+                                source_reference_finding(
+                                    tc_id=tc_id,
+                                    obligation=obligation,
+                                    missing_references=missing_references,
+                                )
+                            )
                         covered.add(obligation.obligation_id)
             elif linked and not any(
                 item.obligation_id in traced_obligations for item in linked

@@ -1676,7 +1676,12 @@ class CodexExecReviewCycleRunner:
                 dict.fromkeys(
                     value
                     for item in obligation_group
-                    for value in (item.obligation_id, item.traceability_atom_id)
+                    for value in (
+                        item.obligation_id,
+                        item.traceability_atom_id,
+                        *item.source_refs,
+                        *item.dictionary_refs,
+                    )
                 )
             )
             observable_oracles = "; ".join(
