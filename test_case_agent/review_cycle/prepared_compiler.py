@@ -836,6 +836,7 @@ def compile_workflow_package(
     used_atoms: set[str] = set()
     seen_obligation_ids: set[str] = set()
     emitted_atom_evidence: set[str] = set()
+    emitted_plan_evidence: set[str] = set()
     evidence_rows: list[str] = ["# Compiled Prepared Evidence", ""]
     package_notes_path = ft_root / "AGENT-NOTES.md"
     if package_notes_path.is_file():
@@ -1089,12 +1090,9 @@ def compile_workflow_package(
         )
         evidence_rows.extend(
             [
-                f"## {obligation_id}",
-                "",
-                "- obligation: "
+                f"- {obligation_id}: "
                 + " | ".join(
                     (
-                        obligation_id,
                         f"property={obligation_row['source_property_id']}",
                         f"source={obligation_row['source_ref']}",
                         "required="
@@ -1107,7 +1105,6 @@ def compile_workflow_package(
                         f"status={obligation_row['status']}",
                     )
                 ),
-                "",
             ]
         )
         if atom_id not in emitted_atom_evidence:
@@ -1139,12 +1136,23 @@ def compile_workflow_package(
                 ]
             )
             for item in linked:
+                plan_id = item.get("design_item_id") or "|".join(
+                    (
+                        item.get("linked_atoms", ""),
+                        item.get("planned_tc_or_gap", ""),
+                        item.get("planned_check", ""),
+                    )
+                )
+                if plan_id in emitted_plan_evidence:
+                    continue
+                emitted_plan_evidence.add(plan_id)
                 evidence_rows.extend(
                     [
                         "- plan: "
                         + " | ".join(
                             (
                                 item.get("design_item_id", "design-item"),
+                                f"atoms={item.get('linked_atoms', atom_id)}",
                                 f"check={item['planned_check']}",
                                 "expected="
                                 + (

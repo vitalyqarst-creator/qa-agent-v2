@@ -1437,6 +1437,36 @@ class CodexExecReviewCycleRunner:
         lines.append("<!-- PREPARED-STANDARD-WRITER-PAYLOAD:END -->")
         return "\n".join(lines)
 
+    def _prepared_structured_obligation_transport(self) -> str:
+        """Describe the verified obligation artifact without duplicating its full payload.
+
+        Structured writers receive the source-backed obligation projection in
+        source-evidence.md and the runner-generated test-case mapping in the draft
+        seed.  Embedding atomic-obligations.json as well repeats the same semantic
+        content and can make otherwise valid full-scope packages exceed the
+        prepared-standard context budget.  The full artifact remains immutable and
+        is consumed by the runner gates and reviewer.
+        """
+        artifact = self._prepared_artifact("atomic-obligations")
+        obligations = load_obligations(artifact)
+        status_counts: dict[str, int] = {}
+        for item in obligations.obligations:
+            status_counts[item.coverage_status] = status_counts.get(item.coverage_status, 0) + 1
+        return json.dumps(
+            {
+                "artifact": relative_path(artifact, self.repo_root),
+                "artifact_sha256": sha256_file(artifact),
+                "obligation_count": len(obligations.obligations),
+                "coverage_status_counts": status_counts,
+                "coverage_gap_count": len(obligations.coverage_gaps),
+                "writer_semantics_source": "selected-source-evidence",
+                "test_case_mapping_source": "runner-generated-draft-seed",
+                "full_artifact_consumers": ["runner-gates", "reviewer"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     def _prepared_standard_reviewer_payload(self) -> str:
         draft_sha256 = sha256_file(self.draft_path)
         gates = [
@@ -1578,12 +1608,37 @@ class CodexExecReviewCycleRunner:
             [
                 self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
                 "",
-                "## Atomic obligations",
-                "",
-                "```json",
-                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
-                "```",
-                "",
+            ]
+        )
+        if structured:
+            lines.extend(
+                [
+                    "## Verified obligation transport",
+                    "",
+                    "The full atomic-obligations artifact is intentionally not repeated here. "
+                    "Its source-backed semantics are present above, its exact test-case mapping "
+                    "is present in the draft seed below, and the runner gates plus reviewer consume "
+                    "the immutable full artifact.",
+                    "",
+                    "```json",
+                    self._prepared_structured_obligation_transport(),
+                    "```",
+                    "",
+                ]
+            )
+        else:
+            lines.extend(
+                [
+                    "## Atomic obligations",
+                    "",
+                    "```json",
+                    self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                    "```",
+                    "",
+                ]
+            )
+        lines.extend(
+            [
                 "## Draft seed template (not an existing output file)",
                 "",
             ]
@@ -1625,6 +1680,7 @@ class CodexExecReviewCycleRunner:
                 group_positions[group_id] = len(grouped_testable)
                 grouped_testable.append((group_id, []))
             grouped_testable[group_positions[group_id]][1].append(obligation)
+        grouped_testable.sort(key=lambda item: self._test_case_id_sort_key(item[0]))
         contract = self._promotion_contract
         if contract is not None and len(grouped_testable) != len(testable):
             raise RunnerError(
@@ -1750,6 +1806,13 @@ class CodexExecReviewCycleRunner:
                 ]
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    @staticmethod
+    def _test_case_id_sort_key(test_case_id: str) -> tuple[str, int, str]:
+        match = re.fullmatch(r"(.+?)(\d+)", test_case_id)
+        if match is None:
+            return (test_case_id, -1, test_case_id)
+        return (match.group(1), int(match.group(2)), test_case_id)
 
     def _build_calibration_lifecycle(self) -> dict[str, Any]:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))

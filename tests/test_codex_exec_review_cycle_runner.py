@@ -496,6 +496,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         include_gap: bool = False,
         constraint_gap: bool = False,
         grouped_obligations: bool = False,
+        out_of_order_planned_ids: bool = False,
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
@@ -518,10 +519,16 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 dictionary_refs=(),
                 notes="",
                 constraint_gap_ids=(("GAP-001",) if constraint_gap else ()),
-                planned_test_case_id=("TC-GROUP-001" if grouped_obligations else ""),
+                planned_test_case_id=(
+                    "TC-GROUP-002"
+                    if out_of_order_planned_ids
+                    else "TC-GROUP-001"
+                    if grouped_obligations
+                    else ""
+                ),
             )
         ]
-        if grouped_obligations:
+        if grouped_obligations or out_of_order_planned_ids:
             prepared_obligations.append(
                 PreparedObligation(
                     obligation_id="OBL-002",
@@ -836,6 +843,15 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual(1, seed.count("## TC-GROUP-001"))
         self.assertIn("ATOM-001; SRC-1; OBL-002; ATOM-002", seed)
+
+    def test_prepared_seed_orders_planned_test_case_ids_numerically(self) -> None:
+        package_path = self.build_prepared_package(out_of_order_planned_ids=True)
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        runner.validate_configuration()
+        seed = runner._draft_seed_text()
+
+        self.assertLess(seed.index("## TC-GROUP-001"), seed.index("## TC-GROUP-002"))
 
     def test_prepared_writer_creates_absent_stage_owned_output_from_template(self) -> None:
         package_path = self.build_prepared_package()
@@ -1341,6 +1357,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("writer.session_initial_draft", writer_prompt)
         self.assertIn("writer-runtime.md", writer_prompt)
         self.assertNotIn("Prepared Writer Runtime Profile", writer_prompt)
+        self.assertIn("## Atomic obligations", writer_prompt)
+        self.assertNotIn("## Verified obligation transport", writer_prompt)
         self.assertIn("prepared-standard reviewer", reviewer_prompt)
         self.assertIn("reviewer.semantic_traceability_test_design", reviewer_prompt)
         self.assertIn("reviewer-runtime.md", reviewer_prompt)
@@ -1387,6 +1405,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )["sandbox_policy"])
         self.assertIn("Prepared Writer Runtime Profile", executor.requests[0].prompt)
         self.assertNotIn("writer-runtime.md", executor.requests[0].prompt)
+        self.assertIn("## Verified obligation transport", executor.requests[0].prompt)
+        self.assertNotIn("## Atomic obligations", executor.requests[0].prompt)
+        self.assertIn("runner-generated-draft-seed", executor.requests[0].prompt)
         self.assertIn("Prepared Reviewer Runtime Profile", executor.requests[1].prompt)
         self.assertNotIn("reviewer-runtime.md", executor.requests[1].prompt)
         self.assertTrue((self.writer_attempt / "artifact-graph.json").is_file())

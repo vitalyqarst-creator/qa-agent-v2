@@ -236,6 +236,14 @@ coverage_gaps:
         self.assertIn("sandbox_policy: `read_only`", instructions)
         self.assertIn("command_budget: `0`", instructions)
         self.assertIn("runner alone materializes", instructions)
+        source_evidence = (result.stage_package.parent / "source-evidence.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "- OBL-001: property=SRC-001.P01 | source=GSR 1; SRC-001.P01; DICT-001",
+            source_evidence,
+        )
+        self.assertNotIn("## OBL-001", source_evidence)
 
     def test_accepts_aligned_optional_decision_table_mapping(self) -> None:
         self.enable_decision_table()
@@ -733,9 +741,10 @@ coverage_gaps:
             encoding="utf-8"
         )
 
-        self.assertEqual(evidence.count("## OBL-001"), 1)
-        self.assertEqual(evidence.count("## OBL-003"), 1)
+        self.assertEqual(evidence.count("- OBL-001:"), 1)
+        self.assertEqual(evidence.count("- OBL-003:"), 1)
         self.assertEqual(evidence.count("- atom: ATOM-001"), 1)
+        self.assertEqual(evidence.count("check=Проверить все значения."), 1)
 
     def test_blocks_atom_and_obligation_gap_mismatch(self) -> None:
         obligations = self.design / "coverage-obligation-table.md"

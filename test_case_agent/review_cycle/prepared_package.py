@@ -781,10 +781,12 @@ class PreparedPackageBuilder:
                 if execution_profile == FAST_EXECUTION_PROFILE
                 else STANDARD_ROUTING_EVIDENCE_MAX_BYTES
             )
-            if len(evidence_text.encode("utf-8")) > evidence_max_bytes:
+            evidence_bytes = len(evidence_text.encode("utf-8"))
+            if evidence_bytes > evidence_max_bytes:
                 raise StageRuntimeError(
                     "blocked-package-budget: source evidence exceeds "
-                    f"{evidence_max_bytes} bytes for {execution_profile}"
+                    f"{evidence_max_bytes} bytes for {execution_profile}: "
+                    f"actual={evidence_bytes}"
                 )
             obligations.validate(evidence_text=evidence_text)
             evidence_path = temporary / "source-evidence.md"
