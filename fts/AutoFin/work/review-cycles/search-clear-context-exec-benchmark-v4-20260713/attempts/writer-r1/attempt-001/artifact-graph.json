@@ -1,0 +1,270 @@
+{
+  "version": 1,
+  "cycle_id": "search-clear-context-exec-benchmark-v4-20260713",
+  "stage_id": "writer-r1",
+  "role": "writer",
+  "context_profile": "conditional-state",
+  "input_digest": "23e780a9943d3a486589b4b5fd97ce0b5e1bcd0d28a4b10b59247858b15cf5f4",
+  "input_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/prompt.md",
+      "sha256": "25a3c5f791ac51d016233572230da1af09e62f4c8c230f5330815d6da3c3826a",
+      "kind": "prompt",
+      "group": "prompt",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "references/agent/prepared-writer-runtime-profile.md",
+      "sha256": "90f07abf2dc823349aa69e8d6df1d02b05a2f3ad4fbb5c24760f8c14da18093d",
+      "kind": "instruction",
+      "group": "instruction",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/prepared-input/search-clear-context-exec-benchmark-v4/source-evidence.md",
+      "sha256": "289e805362625990e3ca6efef9255507287fe434dcf8bf6536d5cd809bc2cfd0",
+      "kind": "source",
+      "group": "source",
+      "lifecycle": "source",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/prepared-input/search-clear-context-exec-benchmark-v4/stage-package.json",
+      "sha256": "486cd1174e0685d07d03a96065a2ac8d98d8cbb19700b7c587c1e86522b5afd0",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/prepared-input/search-clear-context-exec-benchmark-v4/atomic-obligations.json",
+      "sha256": "1e3a6595c66c4c3794eb137642c47c53ed852c7afc573d428077274b11ddd50e",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-input/draft-seed.md",
+      "sha256": "1530f31e66d22c126a230f73a8f465181b58a904aac5c4257902d1836118e498",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/writer-contract.schema.json",
+      "sha256": "92f0dd91ab78e3ac859514a4eddc66d3fc4641120ccb43151c447397caa4d816",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "writer",
+        "runner"
+      ]
+    }
+  ],
+  "output_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "kind": "stdout",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "kind": "stderr",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "kind": "events",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "kind": "stage-status",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "kind": "artifact-graph",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "kind": "test-case-draft",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "kind": "validator-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "kind": "obligation-gate",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "kind": "semantic-overlap-diagnostic",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "kind": "quality-gate-bundle",
+      "lifecycle": "reviewed",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "kind": "calibration-lifecycle",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "kind": "seed-gate",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "kind": "evidence-access-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "kind": "writer-result",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "kind": "context-budget",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner",
+        "reviewer"
+      ],
+      "required": true
+    }
+  ],
+  "access_policy": {
+    "sandbox": "read_only",
+    "allowed_write_roots": [],
+    "forbidden_write_roots": [
+      "fts/AutoFin/test-cases"
+    ],
+    "fallback_policy": "targeted-only"
+  },
+  "graph_digest": "45a8fb8c892b11833d4dcab3a18546a1e8d429f1490d696e3b8af77be48fe64d"
+}

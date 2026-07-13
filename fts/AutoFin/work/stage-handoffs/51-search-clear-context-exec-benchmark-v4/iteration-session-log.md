@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `search-clear-context-exec-benchmark-v1` |
 | started_from | `work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/prompt.scope-to-iteration.md` |
-| status_after | `authorized-awaiting-authorization-push` |
+| status_after | `accepted-not-promoted` |
 
 ## Inputs Read
 
@@ -31,12 +31,14 @@
 - Keep runtime eligibility version-neutral and fail numeric profile allowlists before exec.
 - Reuse unchanged H50 design artifacts and compile a new immutable V4 package/cycle.
 - Preserve exactly-once checkpoint and authorization boundaries.
+- Route the next experiment to medium-scope scaling; do not repeat the accepted small scope.
 
 ## Risks And Fallbacks
 
 - V4 remains a four-obligation small-scope benchmark and does not prove medium-scope scaling.
 - A clean protocol preflight does not guarantee semantic reviewer acceptance.
 - The saved runtime probe reports cp1251 console output; all semantic reads use explicit UTF-8.
+- Token cost remains high: V4 used `10,364.5` uncached tokens per obligation.
 
 ## Validation
 
@@ -47,11 +49,15 @@
 - V4 validate-only: runtime identity pass; state-change/oracle `4/4`; no attempts.
 - Dispatcher dry-run: verified exec, contract v2, no fallback.
 - H51 strict artifact validation: 0 errors, 0 warnings, 3 inherited source-quality info findings.
+- Live writer: draft-ready, `35.078 s`, `21,533` tokens, 0 commands.
+- Live reviewer: accepted `4/4`, `31.484 s`, `22,002` tokens, 0 commands.
+- Fresh backend session ids differ; no retry, fallback, rebind or promotion.
 
 ## Contamination Check
 
 - Protected baselines and absent promotion target will be checked before checkpoint and after live.
 - Pre-checkpoint hashes match the protected values; promotion target is absent.
+- Post-live hashes match the same protected values; promotion target remains absent.
 - User-owned untracked diagnostics and section 4.3 draft remain outside the change set.
 
 ## Event Timeline
@@ -68,6 +74,11 @@
 | 8 | Applied pre-live stop gate | Live waits for pushed checkpoint and separate authorization | `pre-live-stop-gate.md` |
 | 9 | Pushed checkpoint and verified remote equality | Local and origin SHA both `40641ad...` | Git remote evidence |
 | 10 | Created separate one-shot authorization | One V4 dispatcher is permitted only after authorization push | `pre-live-authorization.md` |
+| 11 | Pushed authorization and invoked dispatcher once | Writer produced four TC; reviewer accepted all four obligations | V4 cycle; `live-result.v4.json` |
+| 12 | Verified runtime identity in both live prompts | Version 6, V4 id and exact digest match; no stale v5 allowlist | writer/reviewer prompts |
+| 13 | Applied terminal stop gate | V4 cannot be repeated or promoted inside this benchmark | `stop-gate.md` |
+| 14 | Compared V2/V3/V4 performance | Quality and latency improved; tokens per obligation did not | `performance-analysis.v4.md` |
+| 15 | Prepared medium-scope successor | Next stage is scope analysis, not another small live run | `prompt.iteration-to-medium-scope.md` |
 
 ## Quality Checkpoints
 
@@ -79,6 +90,11 @@
 | V4 immutable package | pass | v6 package digest `5a118072...` | preserve immutable |
 | Validate-only runtime identity | pass | version/id/digest exact; no numeric allowlists | preserve in report |
 | Production boundary | pass | protected hashes; target absent | recheck after live |
+| Live runtime identity | pass | exact version/id/digest in both prompts | none |
+| Deterministic draft gates | pass | structure/seed/obligation/quality/evidence all clean | none |
+| Semantic reviewer | pass | accepted `4/4`, no blocking findings | keep unsigned evidence |
+| Session isolation | pass | two distinct backend session ids | none |
+| Token-efficiency target | fail | `10,364.5` uncached tokens/OBL | medium-scope benchmark |
 
 ## Artifact Write Strategy
 
@@ -96,6 +112,7 @@
 
 ## Handoff Notes For Next Session
 
-- Checkpoint is pushed; dispatcher remains forbidden until the separate authorization commit is pushed.
-- After authorization push, invoke only `dispatcher-config.v4.json` once; any outcome is terminal for V4.
+- V4 is terminal `accepted-not-promoted`; its authorization is consumed and dispatcher must not run again.
+- Start with `ft-scope-analyzer` using `prompt.iteration-to-medium-scope.md`.
+- Preserve V4 draft/evidence and both FT-first baselines; promotion requires a separate explicit task.
 - V3 must not be retried, resumed, rebound or edited.

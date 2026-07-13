@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-state-change-preflight-v1",
+  "error_code": "",
+  "package_id": "search-clear-context-exec-benchmark-v4",
+  "atomic_obligations_sha256": "1e3a6595c66c4c3794eb137642c47c53ed852c7afc573d428077274b11ddd50e",
+  "reset_obligations_checked": 4,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "3f22acba4581c16ff21b94b896205de90a79900388e0149e69549cc58fefb959"
+}

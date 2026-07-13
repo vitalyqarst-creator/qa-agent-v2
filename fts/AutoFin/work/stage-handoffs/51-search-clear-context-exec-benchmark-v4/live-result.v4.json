@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "cycle_id": "search-clear-context-exec-benchmark-v4-20260713",
+  "package_id": "search-clear-context-exec-benchmark-v4",
+  "package_version": 6,
+  "package_digest": "5a11807225be6671176d35bc2cc2a30656d6fe1692e67a97b6ecb2076ea9f97f",
+  "status": "accepted-not-promoted",
+  "terminal": true,
+  "retry_or_resume_allowed": false,
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "backend": "exec",
+  "contract_version": 2,
+  "fallback_used": false,
+  "runtime_identity": {
+    "writer_exact_match": true,
+    "reviewer_exact_match": true,
+    "numeric_profile_allowlist_present": false
+  },
+  "writer": {
+    "session_id": "019f5bde-2abe-75d2-a422-6b209b7b2f98",
+    "stage_status": "draft-ready",
+    "duration_ms": 35078,
+    "total_tokens": 21533,
+    "command_count": 0,
+    "draft_sha256": "4394b115f8fe3c58e70aeaf8370d6145768d1e54128f9b8157346e1c458f2f97",
+    "test_case_count": 4,
+    "deterministic_gates_passed": true
+  },
+  "reviewer": {
+    "session_id": "019f5bde-b548-7aa2-8083-68465e7bd1e1",
+    "stage_status": "accepted",
+    "duration_ms": 31484,
+    "total_tokens": 22002,
+    "command_count": 0,
+    "covered_obligations": 4,
+    "blocking_findings": 0
+  },
+  "fresh_session_ids_differ": true,
+  "performance": {
+    "stage_count": 2,
+    "duration_ms_total": 66562,
+    "total_tokens": 43535,
+    "uncached_input_tokens_total": 41458,
+    "uncached_tokens_per_obligation": 10364.5,
+    "command_executions": 0,
+    "file_changes": 0
+  },
+  "production": {
+    "personal_data_baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "section_4_2_baseline_sha256": "cbc46e9b8d44c8e7c19b887a6a2f59f64d096e6275d2bd45f521132dd133c8a3",
+    "promotion_target_exists": false,
+    "final_promoted": false
+  },
+  "terminal_reason": "fresh reviewer accepted all four obligations; promotion remained disabled by the authorized V4 boundary"
+}

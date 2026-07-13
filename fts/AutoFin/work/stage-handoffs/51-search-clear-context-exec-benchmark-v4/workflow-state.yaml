@@ -3,11 +3,12 @@ prepared_compiler_contract_version: 2
 scope_slug: search-clear-context-exec-benchmark-v1
 current_stage: ft-test-case-iteration
 stage_status: ready-for-next-stage
-current_round: 0
-next_skill: ft-test-case-iteration
+current_round: 1
+next_skill: ft-scope-analyzer
 required_inputs:
   - AGENT-NOTES.md
   - work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
   - work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-contract.md
   - work/stage-handoffs/48-search-clear-context-exec-benchmark/source-parity-check.md
   - work/stage-handoffs/48-search-clear-context-exec-benchmark/source-row-inventory.md
@@ -15,13 +16,19 @@ required_inputs:
   - work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/live-result.v3.json
   - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/compiler-inputs/search-clear-context-exec-benchmark-v4/compiler-input.yaml
   - work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/prepared-input/search-clear-context-exec-benchmark-v4/stage-package.json
-  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-test-report.md
-  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-stop-gate.md
-  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-authorization.md
-  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/prompt.scope-to-iteration.md
+  - work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/cycle-state.yaml
+  - work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  - work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  - work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/performance.json
+  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/live-result.v4.json
+  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/performance-analysis.v4.md
+  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/iteration-summary.md
+  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/stop-gate.md
+  - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/prompt.iteration-to-medium-scope.md
   - work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/agent-decision-log.md
 latest_artifacts:
-  source_selection: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  benchmark_source_selection: work/stage-handoffs/19-iteration-smoke-search-clear-context/source-selection.md
   scope_contract: work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-contract.md
   source_parity_check: work/stage-handoffs/48-search-clear-context-exec-benchmark/source-parity-check.md
   source_row_inventory: work/stage-handoffs/48-search-clear-context-exec-benchmark/source-row-inventory.md
@@ -33,14 +40,23 @@ latest_artifacts:
   pre_live_test_report: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-stop-gate.md
   pre_live_authorization: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/pre-live-authorization.md
+  backend_selection: work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/backend-selection.json
+  cycle_state: work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/cycle-state.yaml
+  candidate_draft: work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  reviewer_findings: work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  performance: work/review-cycles/search-clear-context-exec-benchmark-v4-20260713/performance.json
+  live_result: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/live-result.v4.json
+  performance_analysis: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/performance-analysis.v4.md
+  iteration_summary: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/iteration-summary.md
+  terminal_stop_gate: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/stop-gate.md
   session_log: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/iteration-session-log.md
   decision_log: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/agent-decision-log.md
-  active_transition_prompt: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/prompt.scope-to-iteration.md
+  active_transition_prompt: work/stage-handoffs/51-search-clear-context-exec-benchmark-v4/prompt.iteration-to-medium-scope.md
 coverage_gaps:
   blocking: 0
   non_blocking: 0
 open_questions: []
 blocking_reasons: []
 accepted_risks:
-  - Small-scope benchmark does not prove medium-scope scaling.
-  - Clean deterministic runtime identity does not guarantee semantic reviewer acceptance.
+  - V4 remains unsigned benchmark evidence because promotion was disabled.
+  - Small-scope token cost remains high and medium-scope scaling is unproven.
