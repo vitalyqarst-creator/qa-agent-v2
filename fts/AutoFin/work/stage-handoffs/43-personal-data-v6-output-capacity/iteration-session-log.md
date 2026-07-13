@@ -68,6 +68,7 @@
 | 3 | Compiled V6 | 42 atoms, 65 obligations, 47 TC | `package-preflight-report.v6.json` |
 | 4 | Выполнен pre-live validate-only | 4 bounded shards; reviewer capacity passed; attempts отсутствуют | `output-capacity-preflight.v6.json` |
 | 5 | Подготовлен checkpoint handoff | Live остаётся одноразовым и stop-on-blocker | `pre-live-stop-gate.md`; `prompt.scope-to-iteration.md` |
+| 6 | Checkpoint отправлен в origin и повторно проверены production boundaries | Разрешён ровно один V6 dispatcher | `pre-live-authorization.md` |
 
 ## Quality Checkpoints
 

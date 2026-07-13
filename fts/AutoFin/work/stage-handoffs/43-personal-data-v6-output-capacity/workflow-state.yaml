@@ -26,6 +26,8 @@ latest_artifacts:
   backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/43-personal-data-v6-output-capacity/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/43-personal-data-v6-output-capacity/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/43-personal-data-v6-output-capacity/pre-live-authorization.md
+  pre_live_checkpoint: ee4647c6757a70a24fda228ef88c1fa9651410b5
   session_log: work/stage-handoffs/43-personal-data-v6-output-capacity/iteration-session-log.md
   decision_log: work/stage-handoffs/43-personal-data-v6-output-capacity/agent-decision-log.md
   active_transition_prompt: work/stage-handoffs/43-personal-data-v6-output-capacity/prompt.scope-to-iteration.md
