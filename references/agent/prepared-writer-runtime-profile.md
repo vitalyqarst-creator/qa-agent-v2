@@ -6,7 +6,7 @@ This is the technical execution projection inside `ft-test-case-writer`. It intr
 
 Continue only when the embedded payload confirms:
 
-- package version `5` and valid package digest;
+- runner-validated current package metadata, including a non-empty SHA-256 `package_digest`;
 - `execution_profile = simple-field-property` or `standard-required`;
 - an explicit context profile and unsupported dimensions;
 - scope-local source evidence and atomic obligations;

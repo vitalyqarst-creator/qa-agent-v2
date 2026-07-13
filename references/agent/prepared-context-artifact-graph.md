@@ -49,6 +49,8 @@ Before semantic review, the runner owns:
 
 Reviewer input contains the gate summaries, immutable draft, obligation package, selected evidence and calibration lifecycle. Reviewer does not repeat repository discovery.
 
+Writer and reviewer receive one runner-derived identity projection containing the current `package_version`, `package_id` and validated `package_digest`. Runtime profiles describe eligibility without duplicating a numeric package version; a stale numeric allowlist blocks before an exec attempt is created.
+
 ## UI Calibration Lifecycle
 
 A testable obligation with UI-calibration constraint gaps produces an entry:

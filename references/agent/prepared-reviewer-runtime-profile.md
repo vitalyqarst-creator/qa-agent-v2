@@ -6,7 +6,7 @@ This is the technical execution projection inside `ft-test-case-reviewer`. It in
 
 Continue only when the payload confirms:
 
-- current package version and immutable draft SHA-256;
+- runner-validated current package metadata, including a non-empty SHA-256 `package_digest`, and immutable draft SHA-256;
 - explicit execution/context profiles and unsupported dimensions;
 - scope-local source evidence and atomic obligations;
 - passed structure, seed, obligation, quality and evidence-access gates;

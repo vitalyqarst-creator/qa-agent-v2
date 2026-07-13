@@ -144,6 +144,11 @@ REPAIRABLE_QUALITY_FINDING_IDS = {
 PACKAGE_ID_LINE_RE = re.compile(
     r"(?m)^\*\*package_id:\*\*\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$"
 )
+PACKAGE_VERSION_LITERAL_RE = re.compile(
+    r"\bpackage(?:_|\s+)version\b[^\r\n\d]{0,24}`?(\d+)`?",
+    flags=re.IGNORECASE,
+)
+SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}")
 
 InstructionContextResolver = Callable[..., dict[str, Any]]
 
@@ -1941,6 +1946,16 @@ class CodexExecReviewCycleRunner:
                     f"profile={self._prepared_package.execution_profile}, "
                     f"unsupported_dimensions={dimensions}"
                 )
+            if self._is_prepared_fast() or self._uses_structured_prepared_writer():
+                self._validate_prepared_runtime_profile(
+                    self.prepared_writer_profile_path,
+                    role="writer",
+                )
+            if self._uses_compact_prepared_reviewer():
+                self._validate_prepared_runtime_profile(
+                    self.prepared_reviewer_profile_path,
+                    role="reviewer",
+                )
             if self._is_prepared_fast() and self._prepared_package.unsupported_dimensions:
                 raise RunnerError(
                     "Prepared fast path cannot declare unsupported dimensions"
@@ -2201,17 +2216,52 @@ class CodexExecReviewCycleRunner:
     def prepared_reviewer_profile_path(self) -> Path:
         return self.repo_root / "references" / "agent" / "prepared-reviewer-runtime-profile.md"
 
+    def _validate_prepared_runtime_profile(self, path: Path, *, role: str) -> None:
+        if not path.is_file():
+            raise RunnerError(f"Prepared {role} runtime profile is missing")
+        profile = path.read_text(encoding="utf-8")
+        hard_coded_versions = sorted(
+            {match.group(1) for match in PACKAGE_VERSION_LITERAL_RE.finditer(profile)}
+        )
+        if hard_coded_versions:
+            raise RunnerError(
+                f"Prepared {role} runtime profile must not hard-code package version numbers; "
+                f"PACKAGE_VERSION is runner-owned: found={','.join(hard_coded_versions)}"
+            )
+        if "`package_digest`" not in profile:
+            raise RunnerError(
+                f"Prepared {role} runtime profile must require runner-validated `package_digest`"
+            )
+
+    def _prepared_package_metadata(self) -> dict[str, Any]:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        package = self._prepared_package
+        if package.package_version != PACKAGE_VERSION:
+            raise RunnerError(
+                "Prepared package metadata requires the current package contract: "
+                f"package_version={package.package_version}, "
+                f"required_package_version={PACKAGE_VERSION}"
+            )
+        if not SHA256_HEX_RE.fullmatch(package.package_digest):
+            raise RunnerError("Prepared package metadata requires a valid package_digest")
+        return {
+            "package_version": package.package_version,
+            "package_id": package.package_id,
+            "package_digest": package.package_digest,
+            "ft_slug": package.ft_slug,
+            "scope_slug": package.scope_slug,
+            "section_id": package.section_id,
+            "execution_profile": package.execution_profile,
+            "context_profile": self._prepared_context_profile(),
+            "unsupported_dimensions": list(package.unsupported_dimensions),
+        }
+
     def _prepared_standard_metadata(self, *, draft_sha256: str = "") -> dict[str, Any]:
         if self._prepared_package is None:
             raise RunnerError("Prepared package is not loaded")
         metadata: dict[str, Any] = {
-            "package_version": self._prepared_package.package_version,
-            "package_id": self._prepared_package.package_id,
-            "ft_slug": self._prepared_package.ft_slug,
-            "scope_slug": self._prepared_package.scope_slug,
-            "section_id": self._prepared_package.section_id,
-            "execution_profile": self._prepared_package.execution_profile,
-            "context_profile": self._prepared_context_profile(),
+            **self._prepared_package_metadata(),
             "writer_mode": self.prepared_standard_writer_mode,
             "draft_origin": (
                 "runner-owned-reviewer-rebind"
@@ -2219,7 +2269,6 @@ class CodexExecReviewCycleRunner:
                 else "writer-stage"
             ),
             "writer_llm_started": not self._uses_prepared_reviewer_rebind(),
-            "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
             "fallback_policy": self._prepared_package.fallback_policy,
             "source_registry": [
                 {
@@ -2706,14 +2755,7 @@ class CodexExecReviewCycleRunner:
             raise RunnerError("Prepared writer runtime profile is missing")
         profile = self.prepared_writer_profile_path.read_text(encoding="utf-8").strip()
         metadata = {
-            "package_version": self._prepared_package.package_version,
-            "package_id": self._prepared_package.package_id,
-            "ft_slug": self._prepared_package.ft_slug,
-            "scope_slug": self._prepared_package.scope_slug,
-            "section_id": self._prepared_package.section_id,
-            "execution_profile": self._prepared_package.execution_profile,
-            "context_profile": self._prepared_context_profile(),
-            "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
+            **self._prepared_package_metadata(),
             "fallback_policy": self._prepared_package.fallback_policy,
         }
         lines = [
@@ -3354,14 +3396,7 @@ class CodexExecReviewCycleRunner:
             raise RunnerError("Prepared reviewer runtime profile is missing")
         draft_text = self.draft_path.read_text(encoding="utf-8")
         metadata = {
-            "package_version": self._prepared_package.package_version,
-            "package_id": self._prepared_package.package_id,
-            "ft_slug": self._prepared_package.ft_slug,
-            "scope_slug": self._prepared_package.scope_slug,
-            "section_id": self._prepared_package.section_id,
-            "execution_profile": self._prepared_package.execution_profile,
-            "context_profile": self._prepared_context_profile(),
-            "unsupported_dimensions": list(self._prepared_package.unsupported_dimensions),
+            **self._prepared_package_metadata(),
             "reviewed_draft_sha256": sha256_file(self.draft_path),
         }
         gates = [
@@ -4771,6 +4806,8 @@ class CodexExecReviewCycleRunner:
             report.update(
                 {
                     "package_version": self._prepared_package.package_version,
+                    "package_id": self._prepared_package.package_id,
+                    "package_digest": self._prepared_package.package_digest,
                     "execution_profile": self._prepared_package.execution_profile,
                     "unsupported_dimensions": list(
                         self._prepared_package.unsupported_dimensions
@@ -4815,10 +4852,21 @@ class CodexExecReviewCycleRunner:
                         else self._stage_limits("writer")[2]
                     ),
                     "reviewer_command_budget": self._stage_limits("reviewer")[2],
+                    "runtime_identity": {
+                        "passed": True,
+                        "validator": "prepared-runtime-identity-v1",
+                        "version_source": "runner-PACKAGE_VERSION",
+                        "package_version": self._prepared_package.package_version,
+                        "package_id": self._prepared_package.package_id,
+                        "package_digest": self._prepared_package.package_digest,
+                        "writer_profile_numeric_allowlist": False,
+                        "reviewer_profile_numeric_allowlist": False,
+                    },
                     "preflight_checks": [
                         "package-digest",
                         "attempt-binding",
                         "profile-route",
+                        "runtime-identity",
                         "instruction-allowlist",
                         "prepared-oracle-quality",
                         "prepared-state-change",

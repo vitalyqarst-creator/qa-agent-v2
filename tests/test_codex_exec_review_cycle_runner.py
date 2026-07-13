@@ -226,11 +226,15 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         self.prepared_profile_path.parent.mkdir(parents=True)
         self.prepared_profile_path.write_text(
-            "# Prepared Writer Runtime Profile\n\nWrite the embedded seed immediately.\n",
+            "# Prepared Writer Runtime Profile\n\n"
+            "Require runner-validated current metadata with `package_digest`.\n"
+            "Write the embedded seed immediately.\n",
             encoding="utf-8",
         )
         self.prepared_reviewer_profile_path.write_text(
-            "# Prepared Reviewer Runtime Profile\n\nReview only the embedded payload.\n",
+            "# Prepared Reviewer Runtime Profile\n\n"
+            "Require runner-validated current metadata with `package_digest`.\n"
+            "Review only the embedded payload.\n",
             encoding="utf-8",
         )
         self.validator = FakeValidator()
@@ -859,6 +863,45 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         runner.validate_configuration()
 
         self.assertEqual((180, 60, 12), runner._stage_limits("writer"))
+
+    def test_prepared_runtime_profile_rejects_numeric_package_allowlist_before_attempt(self) -> None:
+        package_path = self.build_prepared_package()
+        self.prepared_profile_path.write_text(
+            "# Prepared Writer Runtime Profile\n\n"
+            "Require package version `5` and `package_digest`.\n",
+            encoding="utf-8",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "must not hard-code package version numbers",
+        ):
+            runner.validate_configuration()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.writer_attempt.exists())
+
+    def test_prepared_package_missing_digest_blocks_before_attempt(self) -> None:
+        package_path = self.build_prepared_package()
+        payload = json.loads(package_path.read_text(encoding="utf-8"))
+        payload.pop("package_digest")
+        package_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "Prepared stage package is invalid",
+        ):
+            runner.validate_configuration()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.writer_attempt.exists())
 
     def test_prepared_fast_path_uses_only_compact_package_artifacts(self) -> None:
         package_path = self.build_prepared_package()
@@ -1558,6 +1601,13 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         result = self.make_prepared_runner(executor, package_path).run()
 
         self.assertEqual("accepted-not-promoted", result.status)
+        package_payload = json.loads(package_path.read_text(encoding="utf-8"))
+        expected_version = f'"package_version": {runner_module.PACKAGE_VERSION}'
+        expected_digest = f'"package_digest": "{package_payload["package_digest"]}"'
+        self.assertIn(expected_version, executor.requests[0].prompt)
+        self.assertIn(expected_digest, executor.requests[0].prompt)
+        self.assertIn(expected_version, executor.requests[1].prompt)
+        self.assertIn(expected_digest, executor.requests[1].prompt)
         self.assertEqual(0, executor.requests[0].command_budget)
         self.assertEqual("read_only", json.loads(
             (self.writer_attempt / "stage-input.json").read_text(encoding="utf-8")
@@ -2557,6 +2607,15 @@ Draft body.
             "reviewer.session_prepared_standard_semantic",
             report["reviewer_scenario"],
         )
+        package_payload = json.loads(package_path.read_text(encoding="utf-8"))
+        self.assertEqual(runner_module.PACKAGE_VERSION, report["package_version"])
+        self.assertEqual(package_payload["package_id"], report["package_id"])
+        self.assertEqual(package_payload["package_digest"], report["package_digest"])
+        self.assertEqual(
+            package_payload["package_digest"],
+            report["runtime_identity"]["package_digest"],
+        )
+        self.assertEqual("runner-PACKAGE_VERSION", report["runtime_identity"]["version_source"])
         self.assertTrue(report["writer_context_budget"]["passed"])
         self.assertFalse(report["cycle_artifacts_created"])
         self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
