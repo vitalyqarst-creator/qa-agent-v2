@@ -7,7 +7,7 @@
 - `source_signal`: V3 prepared reviewer `FIND-001..004`
 - `affected_skill`: `ft-test-case-iteration`, prepared package compiler/quality gates
 - `failure_class`: `action-without-observable-oracle`
-- `status`: `candidate`
+- `status`: `implemented`
 
 ## Failure Signal
 
@@ -53,4 +53,4 @@
 
 - `decision`: accept as bounded candidate for the next iteration
 - `reason`: sign-off blocker has concrete evidence, a stable failure shape and objective pass/fail criteria
-- `next_action`: implement prevention and input remediation before creating or running immutable V4
+- `next_action`: confirm the implemented compiler/runner prevention and remediated inputs in exactly one immutable V4r1 live cycle

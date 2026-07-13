@@ -1496,6 +1496,70 @@ Draft body.
         self.assertFalse(report["passed"])
         self.assertIn("calibration-marker-missing", {item["id"] for item in report["findings"]})
 
+    def test_execution_oracle_eval_rejects_v3_shapes_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+        )
+        fixture = (
+            Path(__file__).resolve().parents[1]
+            / "evals"
+            / "prepared-execution-oracle"
+            / "20260713"
+            / "v3-bad.md"
+        ).read_text(encoding="utf-8")
+        executor = ScriptedExecutor(self.structured_writer_step(draft_text=fixture))
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-quality-gate", result.status)
+        self.assertEqual(1, len(executor.requests))
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            {
+                "generic-execution-fixture",
+                "undefined-execution-action",
+                "non-observable-expected-result",
+            },
+            {item["id"] for item in report["findings"]},
+        )
+
+    def test_execution_oracle_eval_accepts_corrected_calibration_fixture(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=(
+                "negative-oracle",
+                "evidence-qualified-ui-calibration",
+            ),
+            constraint_gap=True,
+        )
+        fixture = (
+            Path(__file__).resolve().parents[1]
+            / "evals"
+            / "prepared-execution-oracle"
+            / "20260713"
+            / "v4-corrected.md"
+        ).read_text(encoding="utf-8")
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=fixture),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(report["passed"])
+        self.assertIn("execution-oracle-quality", report["checks"])
+
     def test_prepared_standard_context_budget_blocks_before_writer_session(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",

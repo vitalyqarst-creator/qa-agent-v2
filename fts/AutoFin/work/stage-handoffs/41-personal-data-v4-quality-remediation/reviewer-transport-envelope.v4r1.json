@@ -1,0 +1,16 @@
+{
+  "validator": "prepared-v4r1-reviewer-envelope-v1",
+  "passed": true,
+  "mode": "conservative-pre-live-envelope",
+  "exact_live_enforcement": true,
+  "v3_prompt_bytes": 117435,
+  "v3_instruction_bytes": 3084,
+  "v4_source_evidence_delta_bytes": 511,
+  "metadata_and_index_growth_allowance_bytes": 1024,
+  "draft_growth_allowance_bytes": 4096,
+  "estimated_prompt_ceiling_bytes": 123066,
+  "estimated_primary_context_ceiling_bytes": 126150,
+  "limit_bytes": 131072,
+  "estimated_headroom_bytes": 4922,
+  "note": "The atomic-obligations artifact is 3647 bytes smaller than V3, but that reduction is intentionally not credited in the conservative envelope. The live runner remains the authoritative exact gate."
+}

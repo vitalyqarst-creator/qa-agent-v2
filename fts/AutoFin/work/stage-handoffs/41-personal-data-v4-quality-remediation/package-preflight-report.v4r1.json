@@ -1,0 +1,35 @@
+{
+  "validator": "prepared-v4r1-package-preflight-v1",
+  "passed": true,
+  "package_id": "application-card-client-personal-data-v4r1",
+  "package_digest": "9f5d1574eea7d85fe09e9b6e7a1b1b8ee2d30febfe5bf958adfd7f3681d78739",
+  "stage_package_sha256": "eef15711dd7dbc5e8adb201458538594c291a909c367c40c0ca3a62d608ef31d",
+  "section_id": "14",
+  "execution_profile": "standard-required",
+  "atoms": 42,
+  "obligations": 65,
+  "planned_test_cases": 47,
+  "coverage_gaps": ["GAP-001", "GAP-002", "GAP-003"],
+  "dictionary_refs": ["DICT-001"],
+  "source_evidence_bytes": 46382,
+  "compiled_evidence_budget_bytes": 49152,
+  "package_artifact_hashes_match_manifest": true,
+  "affected_obligations_inspected": 11,
+  "sibling_tc_intent_contamination": false,
+  "compiler_input_sha256": {
+    "atomic-requirements-ledger.md": "3432ce9fcf800e480ced4242dcd4aee38971d42e7fbd728e8e13cefd344299c8",
+    "compiler-input.yaml": "a75167a5ab1c259d5d3b994ccce0b49e6ddb2cd60931da656753578945f26545",
+    "coverage-gaps.md": "524ad97971cacbd5dfafcedc8aeaf537b7ebcd470513a924487e9a3a4f797ea7",
+    "coverage-obligation-table.md": "e1aff10e9943a32a1ad8cf4f9cd43912e9a809b11c3047177f63b9a24865b83f",
+    "dictionary-inventory.md": "79f5d505bdaf5d92a47483eb61deea9bb4ef8e4baaca0e75575dfcee474b9392",
+    "mapping-consistency-report.md": "7c86c165e60e61f527f0a7acfd66c6fb26267a8163d14b36bcaabfa4c08ad510",
+    "package-test-design-plan.md": "267f60839e81ccc45b5f34a409c0b631fa7ead1107f2ec5f56294893a93b2342",
+    "test-design-applicability-matrix.md": "44e02f40105578811cebfe9c2aa9242034994109e3da36b6234be728b2e2f563",
+    "test-design-decision-table.md": "270199d1598cff5c77abac4d05c64acc5dc3ac593ae79f84040b844f61db018d"
+  },
+  "package_file_sha256": {
+    "source-evidence.md": "f59e7c3f151e6ce371e468577022f5bcfa62e8427d2c32f1f2c98aeec8f0dec3",
+    "atomic-obligations.json": "ca8e23e12b8e4d36918f1deeca75a5b0f3de23d76e7a8cdb8ea720cb1a599d29",
+    "stage-instructions.md": "9ae30c6b586802f82a1012177ab52ee2ecc07176bba60bfa29b5fb1c2d477f8f"
+  }
+}

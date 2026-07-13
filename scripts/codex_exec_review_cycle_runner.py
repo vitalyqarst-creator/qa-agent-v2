@@ -95,6 +95,31 @@ STANDARD_STAGE_SCENARIOS = {
     "writer": "writer.session_initial_draft",
     "reviewer": "reviewer.semantic_traceability_test_design",
 }
+GENERIC_EXECUTION_FIXTURE_RE = re.compile(
+    r"(?:"
+    r"значени\w*\s+заявк\w*[,;:]?\s+необходим\w*\s+для\s+(?:е[ёе]\s+)?сохран|"
+    r"фио,?\s+для\s+котор\w*\s+доступн\w*\s+подсказк\w*|"
+    r"дат\w*\s+в\s+допустим\w*\s+диапазон\w*|"
+    r"values?\s+(?:needed|required)\s+to\s+save"
+    r")",
+    flags=re.IGNORECASE,
+)
+UNDEFINED_EXECUTION_ACTION_RE = re.compile(
+    r"(?:"
+    r"(?:попытаться|попытк\w*|продолжить)\s+(?:дальнейш\w*\s+)?сценар\w*|"
+    r"attempt(?:\s+to)?\s+(?:continue|proceed)\s+(?:the\s+)?scenario"
+    r")",
+    flags=re.IGNORECASE,
+)
+NON_OBSERVABLE_EXPECTED_RESULT_RE = re.compile(
+    r"(?:"
+    r"(?:точн\w*|конкретн\w*)\s+ui[- ]реакц\w*\s+"
+    r"(?:не\s+определ\w*|подлежит\s+калибровк\w*)|"
+    r"предназначен\w*\s+для\s+ввод\w*\s+дат\w*|"
+    r"сам\w*\s+по\s+себе\s+не\s+нарушает\s+требован\w*\s+обязательност\w*"
+    r")",
+    flags=re.IGNORECASE,
+)
 
 InstructionContextResolver = Callable[..., dict[str, Any]]
 
@@ -132,6 +157,14 @@ def relative_path(path: Path, root: Path) -> str:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def markdown_subsection(section: str, heading: str) -> str:
+    match = re.search(
+        rf"(?ms)^###\s+{re.escape(heading)}\s*$\n(.*?)(?=^###\s+|\Z)",
+        section,
+    )
+    return match.group(1).strip() if match else ""
 
 
 def format_yaml_scalar(value: Any) -> str:
@@ -1930,6 +1963,34 @@ class CodexExecReviewCycleRunner:
                         "test_case_ids": duplicate_ids,
                     }
                 )
+        for tc_id, section in sections.items():
+            test_data = markdown_subsection(section, "Тестовые данные")
+            steps = markdown_subsection(section, "Шаги")
+            expected = markdown_subsection(section, "Итоговый ожидаемый результат")
+            if GENERIC_EXECUTION_FIXTURE_RE.search(test_data):
+                findings.append(
+                    {
+                        "id": "generic-execution-fixture",
+                        "severity": "error",
+                        "test_case_ids": [tc_id],
+                    }
+                )
+            if UNDEFINED_EXECUTION_ACTION_RE.search(steps):
+                findings.append(
+                    {
+                        "id": "undefined-execution-action",
+                        "severity": "error",
+                        "test_case_ids": [tc_id],
+                    }
+                )
+            if NON_OBSERVABLE_EXPECTED_RESULT_RE.search(expected):
+                findings.append(
+                    {
+                        "id": "non-observable-expected-result",
+                        "severity": "error",
+                        "test_case_ids": [tc_id],
+                    }
+                )
         calibration_required = (
             self._prepared_context_profile() == "character-restriction-calibration"
         )
@@ -1984,6 +2045,7 @@ class CodexExecReviewCycleRunner:
                 "obligation-traceability",
                 "semantic-overlap",
                 "evidence-access",
+                "execution-oracle-quality",
             ],
             "findings": findings,
         }

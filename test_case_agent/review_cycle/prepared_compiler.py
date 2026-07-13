@@ -86,6 +86,33 @@ INPUT_ACTION = re.compile(
     flags=re.IGNORECASE,
 )
 CONCRETE_INLINE_VALUE = re.compile(r"`[^`\r\n]+`")
+GENERIC_FIXTURE_VALUE = re.compile(
+    r"(?:"
+    r"валидн\w*\s+заявк\w*|"
+    r"значени\w*\s+заявк\w*\s+необходим\w*\s+для\s+сохран|"
+    r"подсказк\w*\s+фио\s+с\s+пол\w*|"
+    r"дат\w*\s+в\s+допустим\w*\s+диапазон\w*|"
+    r"valid\s+application|values?\s+(?:needed|required)\s+to\s+save"
+    r")",
+    flags=re.IGNORECASE,
+)
+UNDEFINED_EXECUTION_ACTION = re.compile(
+    r"(?:"
+    r"(?:попытаться|попытк\w*|продолжить)\s+(?:дальнейш\w*\s+)?сценар\w*|"
+    r"attempt(?:\s+to)?\s+(?:continue|proceed)\s+(?:the\s+)?scenario"
+    r")",
+    flags=re.IGNORECASE,
+)
+UNKNOWN_REQUIREDNESS_ORACLE = re.compile(
+    r"(?:точн\w*|конкретн\w*)\s+ui[- ]реакц\w*\s+"
+    r"(?:не\s+определ\w*|подлежит\s+калибровк\w*)",
+    flags=re.IGNORECASE,
+)
+EVIDENCE_CAPTURE = re.compile(
+    r"зафиксир\w*|записать\s+фактич\w*|"
+    r"скриншот|доказательств\w*|evidence|capture|record\s+the\s+actual",
+    flags=re.IGNORECASE,
+)
 
 
 def _plan_requires_concrete_fixture(row: Mapping[str, str]) -> bool:
@@ -95,7 +122,17 @@ def _plan_requires_concrete_fixture(row: Mapping[str, str]) -> bool:
     return bool(INPUT_ACTION.search(row.get("planned_check", "")))
 
 
+def _plan_generic_fixture_values(row: Mapping[str, str]) -> tuple[str, ...]:
+    candidates = [
+        row.get(key, "").strip()
+        for key in ("fixture_id", "fixture", "test_data", "test_data_ref", "input_class")
+    ]
+    return tuple(value for value in candidates if value and GENERIC_FIXTURE_VALUE.search(value))
+
+
 def _plan_has_concrete_fixture(row: Mapping[str, str]) -> bool:
+    if _plan_generic_fixture_values(row):
+        return False
     for key in ("fixture_id", "fixture", "test_data", "test_data_ref"):
         value = row.get(key, "").strip()
         if value and value.lower() not in {"n/a", "none", "none_required", "-"}:
@@ -966,9 +1003,66 @@ def compile_workflow_package(
             ]
             if not viable:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no testable design-plan row")
-            fixtureless = [
+            planned_tc_id = obligation_row["planned_tc_or_gap"]
+            mapped_viable = [
                 item
                 for item in viable
+                if planned_tc_id in TC_TOKEN.findall(item.get("planned_tc_or_gap", ""))
+            ]
+            if not mapped_viable:
+                raise StageRuntimeError(
+                    f"semantic degradation: {obligation_id} TC link is absent from the design plan"
+                )
+            generic_fixture_rows = [
+                (item, _plan_generic_fixture_values(item))
+                for item in mapped_viable
+                if _plan_generic_fixture_values(item)
+            ]
+            if generic_fixture_rows:
+                raise PreparedCompilerDiagnostic(
+                    "generic-execution-fixture",
+                    "semantic degradation: generic fixture text is not a reproducible "
+                    f"execution contract: {atom_id}",
+                    details=tuple(
+                        {
+                            "kind": "generic-execution-fixture",
+                            "atom_id": atom_id,
+                            "values": list(values),
+                            **_artifact_anchor(
+                                plan_path,
+                                item.get("design_item_id") or atom_id,
+                                repo_root,
+                            ),
+                        }
+                        for item, values in generic_fixture_rows
+                    ),
+                )
+            undefined_action_rows = [
+                item
+                for item in mapped_viable
+                if UNDEFINED_EXECUTION_ACTION.search(item.get("planned_check", ""))
+            ]
+            if undefined_action_rows:
+                raise PreparedCompilerDiagnostic(
+                    "undefined-execution-action",
+                    "semantic degradation: design-plan action names a scenario placeholder "
+                    f"instead of an executable action: {atom_id}",
+                    details=tuple(
+                        {
+                            "kind": "undefined-execution-action",
+                            "atom_id": atom_id,
+                            **_artifact_anchor(
+                                plan_path,
+                                item.get("design_item_id") or atom_id,
+                                repo_root,
+                            ),
+                        }
+                        for item in undefined_action_rows
+                    ),
+                )
+            fixtureless = [
+                item
+                for item in mapped_viable
                 if _plan_requires_concrete_fixture(item)
                 and not _plan_has_concrete_fixture(item)
             ]
@@ -990,17 +1084,35 @@ def compile_workflow_package(
                         for item in fixtureless
                     ),
                 )
-            if not any(
-                obligation_row["planned_tc_or_gap"] in item.get("planned_tc_or_gap", "")
-                for item in viable
-            ):
-                raise StageRuntimeError(
-                    f"semantic degradation: {obligation_id} TC link is absent from the design plan"
-                )
             oracle = obligation_row["required_behavior"]
-            intent = "; ".join(dict.fromkeys(item["planned_check"] for item in viable))
+            intent = "; ".join(
+                dict.fromkeys(item["planned_check"] for item in mapped_viable)
+            )
             if not oracle or "none_required" in oracle.lower():
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no observable plan oracle")
+            if (
+                obligation_row.get("property_type", "").strip().lower()
+                in {"requiredness", "dependency"}
+                and UNKNOWN_REQUIREDNESS_ORACLE.search(oracle)
+                and not EVIDENCE_CAPTURE.search(oracle)
+            ):
+                raise PreparedCompilerDiagnostic(
+                    "non-observable-execution-oracle",
+                    "semantic degradation: calibration-required obligation must define "
+                    f"an observable evidence-capture oracle: {obligation_id}",
+                    details=(
+                        {
+                            "kind": "non-observable-execution-oracle",
+                            "atom_id": atom_id,
+                            "obligation_id": obligation_id,
+                            **_artifact_anchor(
+                                obligations_path,
+                                obligation_id,
+                                repo_root,
+                            ),
+                        },
+                    ),
+                )
             for constraint_gap_id in constraint_gap_tokens:
                 if constraint_gap_id not in known_gaps:
                     raise StageRuntimeError(

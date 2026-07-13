@@ -1,0 +1,12 @@
+cycle_id: application-card-client-personal-data-shadow-v4-20260713
+status: rejected-preflight-package
+live_started: false
+reason:
+  - The first successful V4 package exposed sibling-TC intent contamination for shared atoms during semantic inspection.
+  - The compiler was corrected after this package was built.
+immutable_artifacts:
+  - work/review-cycles/application-card-client-personal-data-shadow-v4-20260713/prepared-input/application-card-client-personal-data-v4/stage-package.json
+prohibited_actions:
+  - do not run, rewrite, resume or use this package as source evidence
+replacement_cycle: application-card-client-personal-data-shadow-v4r1-20260713
+replacement_package: application-card-client-personal-data-v4r1

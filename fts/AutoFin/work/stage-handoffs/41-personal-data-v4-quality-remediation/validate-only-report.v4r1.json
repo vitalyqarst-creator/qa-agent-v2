@@ -1,0 +1,31 @@
+{
+  "status": "validated",
+  "route": "prepared-standard",
+  "writer_scenario": "writer.session_prepared_standard_structured",
+  "reviewer_scenario": "reviewer.session_prepared_standard_semantic",
+  "final_artifact": "fts/AutoFin/test-cases/14-prepared-shadow-application-card-client-personal-data.md",
+  "final_exists": false,
+  "cycle_artifacts_created": false,
+  "package_version": 5,
+  "execution_profile": "standard-required",
+  "unsupported_dimensions": [
+    "dependency-state",
+    "input-boundaries",
+    "integration-persistence",
+    "numeric-boundaries"
+  ],
+  "writer_context_budget": {
+    "passed": true,
+    "prompt_bytes": 94318,
+    "instruction_bytes": 3189,
+    "primary_context_bytes": 97507,
+    "limit_bytes": 131072,
+    "headroom_bytes": 33565
+  },
+  "prepared_standard_writer_mode": "structured",
+  "context_profile": "character-restriction-calibration",
+  "compact_reviewer": true,
+  "writer_sandbox_policy": "read_only",
+  "writer_command_budget": 0,
+  "reviewer_command_budget": 1
+}

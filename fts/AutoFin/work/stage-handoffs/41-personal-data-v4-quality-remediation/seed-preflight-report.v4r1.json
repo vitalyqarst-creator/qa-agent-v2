@@ -1,0 +1,9 @@
+{
+  "validator": "prepared-v4r1-seed-preflight-v1",
+  "passed": true,
+  "planned_test_case_count": 47,
+  "unique_test_case_count": 47,
+  "expected_first": "TC-ACPD-001",
+  "expected_last": "TC-ACPD-047",
+  "exact_contiguous_order": true
+}

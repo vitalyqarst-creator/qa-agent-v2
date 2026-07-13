@@ -357,6 +357,100 @@ coverage_gaps:
 
         self.assertEqual("simple-field-property", result.execution_profile)
 
+    def test_blocks_generic_named_fixture_before_package_build(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Ввести значение из валидной заявки. | Значение отображается. | `fixture:валидная заявка` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("generic-execution-fixture", context.exception.code)
+
+    def test_blocks_undefined_scenario_action_before_package_build(self) -> None:
+        plan = self.design / "package-test-design-plan.md"
+        text = plan.read_text(encoding="utf-8").replace(
+            "Проверить все значения.",
+            "Попытаться продолжить сценарий.",
+        )
+        plan.write_text(text, encoding="utf-8")
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("undefined-execution-action", context.exception.code)
+
+    def test_blocks_requiredness_oracle_without_evidence_capture(self) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        text = obligations.read_text(encoding="utf-8").replace(
+            "| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `dictionary-source` |",
+            "| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `requiredness` |",
+        ).replace(
+            "Отображаются все и только значения DICT-001.",
+            "Поле обязательно; точная UI-реакция не определена.",
+        )
+        obligations.write_text(text, encoding="utf-8")
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as context:
+            self.compile()
+
+        self.assertEqual("non-observable-execution-oracle", context.exception.code)
+
+    def test_obligation_intent_uses_only_its_exact_planned_tc_rows(self) -> None:
+        (self.design / "atomic-requirements-ledger.md").write_text(
+            """# Atomic Requirements Ledger
+
+| atom_id | source_property_id | source_ref | atomic_statement | coverage_status | covered_by_tc |
+| --- | --- | --- | --- | --- | --- |
+| `ATOM-001` | `SRC-001.P01` | `GSR 1` | Поле отображается и обязательно. | `covered` | `TC-001; TC-002` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "coverage-obligation-table.md").write_text(
+            """# Coverage Obligation Table
+
+| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `field-property` | `visible` | Поле отображается. | `GSR 1; SRC-001.P01` | `TC-001` | `covered` | `-` |
+| `OBL-002` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `requiredness` | `required` | Evidence содержит control/action/empty/post-state/persistence. | `GSR 1; SRC-001.P01` | `TC-002` | `covered` | `-` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "package-test-design-plan.md").write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Открыть карточку и проверить поле. | Поле отображается. | `n/a` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-001` | По `FIX-001` очистить поле и записать evidence. | Evidence записан. | `fixture-id:FIX-001` | `TC-002` | `covered` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "coverage-gaps.md").write_text(
+            "# Coverage Gaps\n\nNo gaps.\n", encoding="utf-8"
+        )
+
+        result = self.compile()
+        obligations = load_obligations(
+            result.stage_package.parent / "atomic-obligations.json"
+        ).obligations
+
+        self.assertEqual(
+            [
+                "Открыть карточку и проверить поле.",
+                "По `FIX-001` очистить поле и записать evidence.",
+            ],
+            [item.test_intent for item in obligations],
+        )
+
     def test_accepts_one_shared_plan_row_for_grouped_obligations(self) -> None:
         self.write_grouped_plan()
 
