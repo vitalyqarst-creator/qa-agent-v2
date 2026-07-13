@@ -19,7 +19,9 @@ from .prepared_package import (
 from .runtime import StageRuntimeError
 
 
-TOKEN = re.compile(r"\b(?:ATOM|OBL|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\bGSR\s+\d+\b")
+TOKEN = re.compile(
+    r"\b(?:ATOM|OBL|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\b(?:GSR|BSR|DIT)\s+\d+\b"
+)
 TC_TOKEN = re.compile(r"\bTC-[A-Za-z0-9_.-]+\b")
 FIXTURE_TOKEN = re.compile(r"\bFIX-[A-Za-z0-9_.-]+\b")
 COMPILER_CONTRACT_VERSION = 2
@@ -1086,7 +1088,7 @@ def compile_workflow_package(
         source_tokens = [
             item
             for item in TOKEN.findall(" ".join(row.values()) + " " + " ".join(obligation_row.values()))
-            if item.startswith("SRC-") or item.startswith("GSR")
+            if item.startswith(("SRC-", "GSR ", "BSR ", "DIT "))
         ]
         if status_raw in {"covered", "testable"} or status_raw.startswith("covered_with_"):
             atom_coverage_status = "testable"

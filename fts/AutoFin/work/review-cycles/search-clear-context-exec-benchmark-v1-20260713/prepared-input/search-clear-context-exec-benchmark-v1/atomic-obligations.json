@@ -1,0 +1,76 @@
+{
+  "coverage_gaps": [],
+  "digest": "29e31f64b17f5e8f0b6944e78500f12b236009d4416908b17029e32d21d090e3",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Нажатие `Очистить` очищает применённые фильтры поиска.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "После нажатия `Очистить` изменённое состояние фильтров совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-001",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P01"
+      ],
+      "test_intent": "Capture initial filter state, choose one visible filter value, then click `Очистить`."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Нажатие `Очистить` очищает применённые сортировки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "После нажатия `Очистить` изменённое состояние сортировки совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-002",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P02"
+      ],
+      "test_intent": "Capture initial sort state, click one sortable header until state changes, then click `Очистить`."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Нажатие `Очистить` очищает постраничность.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "После нажатия `Очистить` изменённое состояние постраничности совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-003",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P03"
+      ],
+      "test_intent": "Capture initial page, navigate to `page 2`, then click `Очистить`."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "Нажатие `Очистить` очищает состояние выделения строк.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "После нажатия `Очистить` состояние выделения строк совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-004",
+      "source_refs": [
+        "SRC-001",
+        "SRC-001.P04"
+      ],
+      "test_intent": "Capture initial row-selection state, select the `first displayed row`, then click `Очистить`."
+    }
+  ],
+  "package_id": "search-clear-context-exec-benchmark-v1",
+  "package_version": 5
+}

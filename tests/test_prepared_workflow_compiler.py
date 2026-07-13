@@ -245,6 +245,34 @@ coverage_gaps:
         )
         self.assertNotIn("## OBL-001", source_evidence)
 
+    def test_preserves_bsr_and_dit_requirement_codes_in_obligation_source_refs(self) -> None:
+        ledger_path = self.design / "atomic-requirements-ledger.md"
+        ledger_path.write_text(
+            ledger_path.read_text(encoding="utf-8").replace(
+                "`GSR 1; DICT-001`", "`BSR 32; DIT 7; DICT-001`"
+            ),
+            encoding="utf-8",
+        )
+        obligations_path = self.design / "coverage-obligation-table.md"
+        obligations_path.write_text(
+            obligations_path.read_text(encoding="utf-8").replace(
+                "`GSR 1; SRC-001.P01; DICT-001`",
+                "`BSR 32; DIT 7; SRC-001.P01; DICT-001`",
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        obligation_path = self.root / next(
+            item.path
+            for item in load_prepared_package(result.stage_package, self.root).package_artifacts
+            if item.kind == "atomic-obligations"
+        )
+        compiled = load_obligations(obligation_path).obligations[0]
+        self.assertIn("BSR 32", compiled.source_refs)
+        self.assertIn("DIT 7", compiled.source_refs)
+
     def test_accepts_aligned_optional_decision_table_mapping(self) -> None:
         self.enable_decision_table()
 

@@ -1,0 +1,30 @@
+ft_slug: AutoFin
+scope_slug: application-card-employment-income-gosuslugi-benchmark
+current_stage: ft-scope-analyzer
+stage_status: blocked-input
+current_round: 0
+next_skill: ft-scope-analyzer
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - AGENT-NOTES.md
+  - work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/live-result.v9.json
+  - work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/stop-gate.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  prior_live_result: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/live-result.v9.json
+  prior_stop_gate: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/stop-gate.md
+  session_log: work/stage-handoffs/47-employment-income-gosuslugi-current-source-benchmark/scope-analyzer-session-log.md
+  decision_log: work/stage-handoffs/47-employment-income-gosuslugi-current-source-benchmark/agent-decision-log.md
+  source_extraction: work/stage-handoffs/47-employment-income-gosuslugi-current-source-benchmark/source-extraction/scope-candidates.json
+  candidate_assessment: work/stage-handoffs/47-employment-income-gosuslugi-current-source-benchmark/candidate-assessment.md
+  terminal_stop_gate: work/stage-handoffs/47-employment-income-gosuslugi-current-source-benchmark/stop-gate.md
+coverage_gaps:
+  blocking: 2
+  non_blocking: 1
+open_questions:
+  - Are `Социальный статус` and `Тип занятости` the same field for BSR 265/268/270/272/275-284?
+  - Which value set is authoritative when FT and support dictionaries diverge?
+blocking_reasons:
+  - EMP-BLK-001 — undefined driver-field alias blocks source-backed conditional test steps.
+  - EMP-BLK-002 — FT/support dictionary divergence blocks exact active-value compilation.
+accepted_risks: []
