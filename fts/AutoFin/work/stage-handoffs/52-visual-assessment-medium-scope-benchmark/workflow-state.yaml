@@ -3,8 +3,8 @@ prepared_compiler_contract_version: 2
 scope_slug: visual-assessment-medium-scope-benchmark
 current_stage: ft-test-case-iteration
 stage_status: ready-for-next-stage
-current_round: 1
-next_skill: agent-architecture-auditor
+current_round: 0
+next_skill: ft-test-case-iteration
 required_inputs:
   - AGENT-NOTES.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/source-selection.md
@@ -17,7 +17,19 @@ required_inputs:
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/scope-coverage-gaps.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.scope-to-iteration.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/agent-decision-log.md
-  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/compiler-input.yaml
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v2/compiler-input.yaml
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/atomic-requirements-ledger.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/coverage-obligation-table.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/package-test-design-plan.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/test-design-applicability-matrix.md
+  - work/test-design/section-18-visual-assessment-criteria/dictionary-inventory.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/benchmark-protocol.v2.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v2.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v2/stage-package.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/backend-selection.dry-run.json
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v2.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v2.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v2.md
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v1.json
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/backend-selection.dry-run.json
@@ -47,7 +59,19 @@ latest_artifacts:
   scope_execution_options: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/scope-execution-options.md
   scope_analyzer_session_log: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/scope-analyzer-session-log.md
   decision_log: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/agent-decision-log.md
-  compiler_input: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/compiler-input.yaml
+  compiler_input: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v2/compiler-input.yaml
+  atomic_requirements_ledger: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/atomic-requirements-ledger.md
+  coverage_obligation_table: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/coverage-obligation-table.md
+  package_test_design_plan: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/package-test-design-plan.md
+  test_design_applicability_matrix: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/test-design-applicability-matrix.md
+  coverage_gaps: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/scope-coverage-gaps.md
+  dictionary_inventory: work/test-design/section-18-visual-assessment-criteria/dictionary-inventory.md
+  benchmark_protocol_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/benchmark-protocol.v2.md
+  dispatcher_config_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v2.json
+  prepared_package_v2: work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v2/stage-package.json
+  backend_selection_dry_run_v2: work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/backend-selection.dry-run.json
+  pre_live_test_report_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v2.md
+  pre_live_stop_gate_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v2.md
   prepared_package: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json
   dispatcher_config: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v1.json
   backend_selection_dry_run: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/backend-selection.dry-run.json
@@ -62,8 +86,8 @@ latest_artifacts:
   performance_analysis: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/performance-analysis.v1.md
   iteration_summary: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-summary.md
   terminal_stop_gate: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/stop-gate.md
-  session_log: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.md
-  active_transition_prompt: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.iteration-to-dictionary-projection-remediation.md
+  session_log: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v2.md
+  active_transition_prompt: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.scope-to-iteration.md
   eval_candidate: ../../evals/candidates/2026-07-13-prepared-dictionary-values-not-materialized-visual-assessment.md
 coverage_gaps:
   blocking: 0
@@ -72,5 +96,4 @@ open_questions: []
 blocking_reasons: []
 accepted_risks:
   - SO-REQ-001 and SO-REQ-002 require later UI calibration; no exact UI reaction is asserted in FT-first benchmark.
-  - Two full-suite tests depend on an absent ui-evidence-policy fixture directory; the targeted changed test and all benchmark-critical suites pass.
-  - V1 draft remains unsigned and must not be promoted; OBL-006 and OBL-007 require agent-layer remediation in a fresh cycle.
+  - V1 draft remains unsigned and must not be promoted; it is comparison evidence only.

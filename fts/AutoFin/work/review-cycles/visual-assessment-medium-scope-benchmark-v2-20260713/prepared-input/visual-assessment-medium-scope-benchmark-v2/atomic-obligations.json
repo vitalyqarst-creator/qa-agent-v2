@@ -1,0 +1,1057 @@
+{
+  "coverage_gaps": [],
+  "digest": "86e655b6dc02384db51187bb1727cb81fe809119d659d0beab036a44cde36020",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Поле `Визуальная информация` отображается всегда.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "Поле `Визуальная информация` отображается всегда.",
+      "planned_test_case_id": "TC-VAMB-001",
+      "source_refs": [
+        "SRC-002.P01",
+        "BSR 311",
+        "SRC-001",
+        "SRC-002"
+      ],
+      "state_change": null,
+      "test_intent": "Открыть блок визуальной оценки в доступной анкете клиента."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Для поля `Визуальная информация` значение по умолчанию равно `Нет`.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "Значение по умолчанию равно `Нет`.",
+      "planned_test_case_id": "TC-VAMB-002",
+      "source_refs": [
+        "SRC-002.P02",
+        "BSR 312",
+        "SRC-002"
+      ],
+      "state_change": null,
+      "test_intent": "Открыть блок визуальной оценки до изменения поля."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Выбор `Да` в поле `Визуальная информация` является условием показа параметров визуальной оценки.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "После выбора `Да` отображается список `Параметры визуальной оценки`.",
+      "planned_test_case_id": "TC-VAMB-003",
+      "source_refs": [
+        "SRC-002.P03",
+        "BSR 313",
+        "SRC-002",
+        "BSR 314"
+      ],
+      "state_change": null,
+      "test_intent": "Выбрать `Да` в поле `Визуальная информация`."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "При `Визуальная информация = Да` отображается список `Параметры визуальной оценки`.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "После выбора `Да` отображается список `Параметры визуальной оценки`.",
+      "planned_test_case_id": "TC-VAMB-003",
+      "source_refs": [
+        "SRC-003.P01",
+        "BSR 314",
+        "SRC-003"
+      ],
+      "state_change": null,
+      "test_intent": "Выбрать `Да` в поле `Визуальная информация`."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "Когда `Визуальная информация` не равна `Да`, список `Параметры визуальной оценки` не отображается.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-005",
+      "observable_oracle": "Когда `Визуальная информация` не равна `Да`, список параметров не отображается.",
+      "planned_test_case_id": "TC-VAMB-004",
+      "source_refs": [
+        "SRC-003.P02",
+        "BSR 314",
+        "SRC-003"
+      ],
+      "state_change": null,
+      "test_intent": "Открыть блок при `Визуальная информация = Нет`."
+    },
+    {
+      "atom_id": "ATOM-006",
+      "atomic_statement": "`Параметры визуальной оценки` содержит восемь групп и полный состав значений из `DICT-001`.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "full-hierarchy",
+          "dictionary_id": "DICT-001",
+          "required_values": [
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Признаки алкоголика",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Запах алкоголя / перегара / сильный запах духов, перебивающий перегар",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Отечность, нездоровый цвет лица, синяки под глазами",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Шатающаяся походка, несвязная речь, сильно трясутся руки",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Неадекватная реакция на задаваемые вопросы, плохая ориентация во времени",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Признаки наркомана",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Длинные, спущенные рукава в любую погоду, отрешенный взгляд",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Неоправданно резкие перемены настроения",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Отечность, нездоровый цвет лица, синяки под глазами",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Следы многочисленных уколов на кистях",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Неестественно суженные / расширенные зрачки",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Шатающаяся походка, несвязная речь, плохая координация движений",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Неприятный запах кислоты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Признаки бывшего заключенного",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Татуировки уголовного содержания на кистях, пальцах (например, с изображением перстней, крестов, четырех точек, образующих квадрат с пятой точкой посередине и др.)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Характерный для заключенных жаргон",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Признаки «преображенного» бомжа",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Несоответствие внешнего вида Клиента данным, которые он указывает в анкете (например, в анкете указано, что Клиент - гендиректор крупной организации, однако состояние зубов, волос, лица или кистей рук говорит о том, что ему полностью безразличны его внешний вид и здоровье)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Признаки алкоголика / наркомана / бывшего заключенного",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Несоответствие размеров / стиля одежды",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Сильный макияж / использует парик",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Поведенческие признаки потенциального неплательщика",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Клиент не может внятно объяснить, откуда он узнал о Банке / для чего ему необходим кредит, при этом испытывает волнение / раздражение",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Мнимые семейные пары, часто с детьми (например Клиент называет свою \"супругу\" Надей, а в штампе паспорта имя супруги - Елена)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "неадекватная реакция на вопросы о супруге / детях",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Сильное волнение клиента в ходе анкетирования, особенно при ответах на дополнительные / уточняющие вопросы",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Слишком заострено внимание на последствиях неплатежей",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Сопровождение Клиента",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент находится в сопровождении подозрительных лиц, осуществляющих подсказки по заполнению анкеты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент находится в сопровождении подозрительных лиц, осуществляющих давление на Клиента",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент использовал \"шпаргалку\" при заполнении анкеты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент неоднократно звонил по телефону для выяснения ответов на вопросы анкеты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент замечен в сопровождении лиц, ранее приводивших мошенников / подставных лиц для получения кредитов",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Признаки подделки документов",
+              "value_kind": "group"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Заметны следы подчистки документов, химического травления текста",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Заметны следы подделки подписей, оттисков печатей и штампов",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Наличие в документах дописок, допечаток, исправлений, орфографических ошибок",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Личность заемщика не может быть достоверно подтверждена (заемщик явно не похож по фотографии)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Заметны следы замены фотографии в паспорте, листов в многостраничных документах",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-108"
+              ],
+              "value": "Прочие признаки (комментарий обязателен)",
+              "value_kind": "group"
+            }
+          ]
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-006",
+      "observable_oracle": "Список содержит восемь групп и полный состав значений из `DICT-001`.",
+      "planned_test_case_id": "TC-VAMB-005",
+      "source_refs": [
+        "SRC-003.P03",
+        "BSR 315",
+        "SRC-003-SRC-052",
+        "DICT-001"
+      ],
+      "state_change": null,
+      "test_intent": "Выбрать `Да` и сверить группы и значения списка с полным `DICT-001`."
+    },
+    {
+      "atom_id": "ATOM-007",
+      "atomic_statement": "Каждое обычное значение критерия из `DICT-001` доступно как checkbox value.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "all-leaf-values",
+          "dictionary_id": "DICT-001",
+          "required_values": [
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Запах алкоголя / перегара / сильный запах духов, перебивающий перегар",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Отечность, нездоровый цвет лица, синяки под глазами",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Шатающаяся походка, несвязная речь, сильно трясутся руки",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Неадекватная реакция на задаваемые вопросы, плохая ориентация во времени",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-101"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Длинные, спущенные рукава в любую погоду, отрешенный взгляд",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Неоправданно резкие перемены настроения",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Отечность, нездоровый цвет лица, синяки под глазами",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Следы многочисленных уколов на кистях",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Неестественно суженные / расширенные зрачки",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Шатающаяся походка, несвязная речь, плохая координация движений",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Неприятный запах кислоты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-102"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Татуировки уголовного содержания на кистях, пальцах (например, с изображением перстней, крестов, четырех точек, образующих квадрат с пятой точкой посередине и др.)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Характерный для заключенных жаргон",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-103"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Несоответствие внешнего вида Клиента данным, которые он указывает в анкете (например, в анкете указано, что Клиент - гендиректор крупной организации, однако состояние зубов, волос, лица или кистей рук говорит о том, что ему полностью безразличны его внешний вид и здоровье)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Признаки алкоголика / наркомана / бывшего заключенного",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Несоответствие размеров / стиля одежды",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Сильный макияж / использует парик",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-104"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Клиент не может внятно объяснить, откуда он узнал о Банке / для чего ему необходим кредит, при этом испытывает волнение / раздражение",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Мнимые семейные пары, часто с детьми (например Клиент называет свою \"супругу\" Надей, а в штампе паспорта имя супруги - Елена)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "неадекватная реакция на вопросы о супруге / детях",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Сильное волнение клиента в ходе анкетирования, особенно при ответах на дополнительные / уточняющие вопросы",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Слишком заострено внимание на последствиях неплатежей",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-105"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент находится в сопровождении подозрительных лиц, осуществляющих подсказки по заполнению анкеты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент находится в сопровождении подозрительных лиц, осуществляющих давление на Клиента",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент использовал \"шпаргалку\" при заполнении анкеты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент неоднократно звонил по телефону для выяснения ответов на вопросы анкеты",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Клиент замечен в сопровождении лиц, ранее приводивших мошенников / подставных лиц для получения кредитов",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-106"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Заметны следы подчистки документов, химического травления текста",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Заметны следы подделки подписей, оттисков печатей и штампов",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Наличие в документах дописок, допечаток, исправлений, орфографических ошибок",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Личность заемщика не может быть достоверно подтверждена (заемщик явно не похож по фотографии)",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Заметны следы замены фотографии в паспорте, листов в многостраничных документах",
+              "value_kind": "leaf"
+            },
+            {
+              "hierarchy_path": [
+                "DICT-001",
+                "DICT-107"
+              ],
+              "value": "Другое (комментарий обязателен)",
+              "value_kind": "leaf"
+            }
+          ]
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-007",
+      "observable_oracle": "Каждое обычное значение `DICT-001` доступно как checkbox.",
+      "planned_test_case_id": "TC-VAMB-006",
+      "source_refs": [
+        "SRC-003.P04",
+        "BSR 315",
+        "SRC-005-SRC-050",
+        "DICT-001"
+      ],
+      "state_change": null,
+      "test_intent": "Проверить control type каждого обычного значения `DICT-001`."
+    },
+    {
+      "atom_id": "ATOM-008",
+      "atomic_statement": "При `Визуальная информация = Да` требуется выбрать минимум одно значение; точный UI-механизм подтверждается последующей калибровкой.",
+      "calibration_status": "ui-calibration-required",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-008",
+      "observable_oracle": "`ui-calibration-required`; `candidate-ui-calibration`: при `Визуальная информация = Да` и пустом выборе выполнить следующее доступное действие формы и зафиксировать фактическое видимое состояние блока и результат действия, не утверждая текст сообщения, подсветку или blocked transition.",
+      "planned_test_case_id": "TC-VAMB-007",
+      "source_refs": [
+        "SRC-003.P05",
+        "BSR 316",
+        "SRC-003"
+      ],
+      "state_change": null,
+      "test_intent": "При `Визуальная информация = Да` оставить все параметры невыбранными и выполнить следующее доступное действие формы."
+    },
+    {
+      "atom_id": "ATOM-009",
+      "atomic_statement": "Выбор checkbox `Другое` в группе отображает текстовое поле комментария.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001",
+        "DICT-108"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-001",
+          "required_values": []
+        },
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-108",
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-009",
+      "observable_oracle": "Выбор checkbox `Другое` отображает текстовое поле комментария.",
+      "planned_test_case_id": "TC-VAMB-008",
+      "source_refs": [
+        "SRC-003.P06",
+        "BSR 317",
+        "SRC-009",
+        "SRC-019",
+        "SRC-024",
+        "SRC-030",
+        "SRC-036",
+        "SRC-043",
+        "SRC-050",
+        "DICT-001",
+        "DICT-108"
+      ],
+      "state_change": null,
+      "test_intent": "Выбрать checkbox `Другое` в любой группе, где он предусмотрен."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "При выбранном `Другое` комментарий обязателен; точный UI-механизм подтверждается последующей калибровкой.",
+      "calibration_status": "ui-calibration-required",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-001",
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-010",
+      "observable_oracle": "`ui-calibration-required`; `candidate-ui-calibration`: выбрать `Другое`, оставить открывшийся комментарий пустым, выполнить следующее доступное действие формы и зафиксировать фактическое видимое состояние поля и результат действия, не утверждая текст сообщения, подсветку или blocked transition.",
+      "planned_test_case_id": "TC-VAMB-009",
+      "source_refs": [
+        "SRC-003.P07",
+        "BSR 317",
+        "SRC-009",
+        "SRC-019",
+        "SRC-024",
+        "SRC-030",
+        "SRC-036",
+        "SRC-043",
+        "SRC-050",
+        "DICT-001"
+      ],
+      "state_change": null,
+      "test_intent": "Выбрать `Другое`, оставить открывшийся комментарий пустым и выполнить следующее доступное действие формы."
+    },
+    {
+      "atom_id": "ATOM-011",
+      "atomic_statement": "Standalone-строки `Комментарий` являются отдельными полями ввода и не смешиваются с checkbox `Другое`.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-011",
+      "observable_oracle": "Standalone-строки `Комментарий` отображаются как отдельные поля ввода и не смешиваются с `Другое`.",
+      "planned_test_case_id": "TC-VAMB-010",
+      "source_refs": [
+        "SRC-010.P01",
+        "SRC-010",
+        "SRC-020",
+        "SRC-051",
+        "SRC-052"
+      ],
+      "state_change": null,
+      "test_intent": "Выбрать `Да` и осмотреть standalone-строки `Комментарий`."
+    },
+    {
+      "atom_id": "ATOM-012",
+      "atomic_statement": "Standalone-поле `Комментарий` принимает введённый текст.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-012",
+      "observable_oracle": "После ввода текста `Наблюдение теста` standalone-поле отображает значение `Наблюдение теста`.",
+      "planned_test_case_id": "TC-VAMB-011",
+      "source_refs": [
+        "SRC-010.P02",
+        "SRC-010",
+        "SRC-020",
+        "SRC-051",
+        "SRC-052"
+      ],
+      "state_change": null,
+      "test_intent": "Ввести `Наблюдение теста` в standalone-поле `Комментарий`."
+    },
+    {
+      "atom_id": "ATOM-013",
+      "atomic_statement": "В checkbox list можно одновременно выбрать несколько обычных значений критериев.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-001"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-001",
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-013",
+      "observable_oracle": "После выбора двух обычных значений оба checkbox остаются выбранными одновременно.",
+      "planned_test_case_id": "TC-VAMB-012",
+      "source_refs": [
+        "SRC-003.P08",
+        "BSR 313",
+        "BSR 315",
+        "SRC-002",
+        "SRC-003",
+        "SRC-005-SRC-050",
+        "DICT-001"
+      ],
+      "state_change": null,
+      "test_intent": "Последовательно выбрать два обычных значения: `Запах алкоголя / перегара / сильный запах духов, перебивающий перегар` и `Отечность, нездоровый цвет лица, синяки под глазами`."
+    }
+  ],
+  "package_id": "visual-assessment-medium-scope-benchmark-v2",
+  "package_version": 7
+}

@@ -1,0 +1,13 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: visual-assessment-medium-scope-benchmark
+canonical_test_cases: test-cases/section-18-visual-assessment-medium-scope-benchmark.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/source-selection.md
+  atomic_requirements_ledger: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/atomic-requirements-ledger.md
+  coverage_obligation_table: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/coverage-obligation-table.md
+  package_test_design_plan: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/package-test-design-plan.md
+  test_design_applicability_matrix: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/compiler-inputs/visual-assessment-medium-scope-benchmark-v1/test-design-applicability-matrix.md
+  coverage_gaps: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/scope-coverage-gaps.md
+  dictionary_inventory: work/test-design/section-18-visual-assessment-criteria/dictionary-inventory.md
+blocking_reasons: []

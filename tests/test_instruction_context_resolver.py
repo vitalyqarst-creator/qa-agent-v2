@@ -225,8 +225,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         profile = ROOT_DIR / "references" / "agent" / "prepared-writer-runtime-profile.md"
         self.assertLess(len(profile.read_bytes()), 8 * 1024)
         profile_text = profile.read_text(encoding="utf-8")
-        self.assertIn("package version `7`", profile_text)
-        self.assertNotIn("package version `6`", profile_text)
+        self.assertIn("input_fingerprint", profile_text)
+        self.assertNotIn("package version `", profile_text)
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 
     def test_validator_failure_loads_compact_remediation_map_by_default(self) -> None:
