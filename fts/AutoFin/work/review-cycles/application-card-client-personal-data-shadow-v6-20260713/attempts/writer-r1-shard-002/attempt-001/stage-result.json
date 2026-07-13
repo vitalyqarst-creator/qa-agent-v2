@@ -1,0 +1,71 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5a8b-cbe1-77c3-bc5f-afe14e3b6440",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "application-card-client-personal-data-shadow-v6-20260713",
+  "duration_ms": 80125,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T08:16:58.861140+00:00",
+  "input_digest": "38d9010dad6ece2964ff654950bbf1406dc437b26e13330ca6c2cf9b03610388",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/stdout.txt",
+      "sha256": "032f139fc2645964d172a172f8372c7ccd6880fbd8a6b206c29cd6941ab6f574"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/stderr.txt",
+      "sha256": "1aad424ceb5879d629e286c947a8cf32a7e245b6cf4d262877680dc8348e2161"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/events.ndjson",
+      "sha256": "032f139fc2645964d172a172f8372c7ccd6880fbd8a6b206c29cd6941ab6f574"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/stage-status.json",
+      "sha256": "5c0eb94b23b89c26d817e205ec856d7a2c29195cae1b3e99d8fa8c3800371ea2"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/artifact-graph.json",
+      "sha256": "04461c8422c82efe299dbe3cdb51ae843651e53426738e8245b0698a933a4e29"
+    },
+    {
+      "kind": "writer-shard-draft",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/stage-output/shard.md",
+      "sha256": "3be57fab31c994e4dd06937ec7e3e2aff52f62eb3745861433cb870c03163319"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/writer-result.json",
+      "sha256": "4ace2a69730229bc709beebd2f69aa4df5c0a272eda114a3e876a968cab2566d"
+    },
+    {
+      "kind": "writer-shard-validator",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/shard-validator.json",
+      "sha256": "127638b21018f2f485e57dae6acdd8d61f8aa370692669dae9603d7632556c01"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1-shard-002/attempt-001/runner-output/context-budget.json",
+      "sha256": "31d9ae35fbd34b43f1e342fe507008e2010f731f35195536e6531a3df839c377"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "session_id": "session-writer-r1-shard-002-attempt-001",
+  "stage_id": "writer-r1-shard-002",
+  "started_at": "2026-07-13T08:15:38.737702+00:00",
+  "status": "completed",
+  "timed_out": false
+}

@@ -1,0 +1,2 @@
+2026-07-13T08:18:20.372611Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-13T08:19:33.243079Z  WARN codex_core::hook_runtime: after_agent hook failed; continuing turn_id=019f5a8e-42ee-7633-8ce4-5ecc8bdb474d hook_name=legacy_notify error=Имя файла или его расширение имеет слишком большую длину. (os error 206)

@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 0,
+  "contract_version": 2,
+  "cycle_id": "application-card-client-personal-data-shadow-v6-20260713",
+  "duration_ms": 74110,
+  "input_artifact_bytes": 204277,
+  "input_artifact_count": 7,
+  "input_tokens": 25432,
+  "outcome": "draft-ready",
+  "output_artifact_bytes": 74579,
+  "output_artifact_count": 10,
+  "output_tokens": 3820,
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "stage_id": "writer-r1-shard-004",
+  "total_tokens": 29252
+}

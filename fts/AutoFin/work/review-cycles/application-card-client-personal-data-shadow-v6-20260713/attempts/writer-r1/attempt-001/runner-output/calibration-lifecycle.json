@@ -1,0 +1,548 @@
+{
+  "version": 1,
+  "context_profile": "character-restriction-calibration",
+  "items": [
+    {
+      "obligation_id": "OBL-003",
+      "atom_id": "ATOM-003",
+      "test_case_id": "TC-ACPD-022",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-005",
+      "atom_id": "ATOM-005",
+      "test_case_id": "TC-ACPD-003",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-006",
+      "atom_id": "ATOM-005",
+      "test_case_id": "TC-ACPD-016",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-007",
+      "atom_id": "ATOM-005",
+      "test_case_id": "TC-ACPD-017",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-008",
+      "atom_id": "ATOM-006",
+      "test_case_id": "TC-ACPD-004",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-010",
+      "atom_id": "ATOM-008",
+      "test_case_id": "TC-ACPD-023",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-012",
+      "atom_id": "ATOM-010",
+      "test_case_id": "TC-ACPD-005",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-013",
+      "atom_id": "ATOM-010",
+      "test_case_id": "TC-ACPD-018",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-014",
+      "atom_id": "ATOM-010",
+      "test_case_id": "TC-ACPD-019",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-015",
+      "atom_id": "ATOM-011",
+      "test_case_id": "TC-ACPD-006",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-019",
+      "atom_id": "ATOM-015",
+      "test_case_id": "TC-ACPD-007",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-020",
+      "atom_id": "ATOM-015",
+      "test_case_id": "TC-ACPD-020",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-021",
+      "atom_id": "ATOM-015",
+      "test_case_id": "TC-ACPD-021",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-022",
+      "atom_id": "ATOM-016",
+      "test_case_id": "TC-ACPD-008",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-024",
+      "atom_id": "ATOM-018",
+      "test_case_id": "TC-ACPD-010",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-025",
+      "atom_id": "ATOM-019",
+      "test_case_id": "TC-ACPD-011",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-026",
+      "atom_id": "ATOM-019",
+      "test_case_id": "TC-ACPD-024",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-027",
+      "atom_id": "ATOM-020",
+      "test_case_id": "TC-ACPD-012",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-028",
+      "atom_id": "ATOM-021",
+      "test_case_id": "TC-ACPD-013",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-029",
+      "atom_id": "ATOM-021",
+      "test_case_id": "TC-ACPD-025",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-030",
+      "atom_id": "ATOM-022",
+      "test_case_id": "TC-ACPD-014",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-031",
+      "atom_id": "ATOM-022",
+      "test_case_id": "TC-ACPD-026",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-032",
+      "atom_id": "ATOM-023",
+      "test_case_id": "TC-ACPD-027",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-033",
+      "atom_id": "ATOM-024",
+      "test_case_id": "TC-ACPD-015",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-034",
+      "atom_id": "ATOM-024",
+      "test_case_id": "TC-ACPD-028",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-035",
+      "atom_id": "ATOM-025",
+      "test_case_id": "TC-ACPD-014",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-036",
+      "atom_id": "ATOM-025",
+      "test_case_id": "TC-ACPD-015",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-037",
+      "atom_id": "ATOM-025",
+      "test_case_id": "TC-ACPD-026",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-038",
+      "atom_id": "ATOM-025",
+      "test_case_id": "TC-ACPD-027",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-039",
+      "atom_id": "ATOM-025",
+      "test_case_id": "TC-ACPD-028",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-045",
+      "atom_id": "ATOM-030",
+      "test_case_id": "TC-ACPD-034",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-046",
+      "atom_id": "ATOM-030",
+      "test_case_id": "TC-ACPD-035",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-047",
+      "atom_id": "ATOM-030",
+      "test_case_id": "TC-ACPD-036",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-048",
+      "atom_id": "ATOM-031",
+      "test_case_id": "TC-ACPD-041",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-049",
+      "atom_id": "ATOM-032",
+      "test_case_id": "TC-ACPD-037",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-053",
+      "atom_id": "ATOM-035",
+      "test_case_id": "TC-ACPD-038",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-054",
+      "atom_id": "ATOM-035",
+      "test_case_id": "TC-ACPD-039",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-055",
+      "atom_id": "ATOM-035",
+      "test_case_id": "TC-ACPD-040",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-056",
+      "atom_id": "ATOM-036",
+      "test_case_id": "TC-ACPD-041",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-057",
+      "atom_id": "ATOM-037",
+      "test_case_id": "TC-ACPD-042",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-061",
+      "atom_id": "ATOM-040",
+      "test_case_id": "TC-ACPD-043",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-062",
+      "atom_id": "ATOM-040",
+      "test_case_id": "TC-ACPD-044",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-063",
+      "atom_id": "ATOM-040",
+      "test_case_id": "TC-ACPD-045",
+      "constraint_gap_ids": [
+        "GAP-001"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-064",
+      "atom_id": "ATOM-041",
+      "test_case_id": "TC-ACPD-041",
+      "constraint_gap_ids": [
+        "GAP-002"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    },
+    {
+      "obligation_id": "OBL-065",
+      "atom_id": "ATOM-042",
+      "test_case_id": "TC-ACPD-046",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "status": "awaiting-ui-calibration",
+      "evidence_status": "not-collected",
+      "regression_ready": false,
+      "required_transition": "ui-evidence -> oracle-resolution -> reviewer-sign-off"
+    }
+  ],
+  "open_count": 45,
+  "resolved_count": 0
+}

@@ -1,0 +1,46 @@
+{
+  "passed": false,
+  "validator": "prepared-quality-gate-bundle-v1",
+  "context_profile": "character-restriction-calibration",
+  "test_case_count": 47,
+  "checks": [
+    "unique-titles",
+    "constraint-gap-preservation",
+    "ui-calibration-lifecycle-markers",
+    "deterministic-structure",
+    "obligation-traceability",
+    "semantic-overlap",
+    "evidence-access",
+    "execution-oracle-quality"
+  ],
+  "findings": [
+    {
+      "id": "non-observable-expected-result",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-026"
+      ]
+    },
+    {
+      "id": "non-observable-expected-result",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-027"
+      ]
+    },
+    {
+      "id": "non-observable-expected-result",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-028"
+      ]
+    },
+    {
+      "id": "non-observable-expected-result",
+      "severity": "error",
+      "test_case_ids": [
+        "TC-ACPD-034"
+      ]
+    }
+  ]
+}

@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/42-personal-data-v5-source-first-recovery/workflow-state.yaml` |
-| status_after | `ready-for-next-stage` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -43,6 +43,9 @@
 - V6 validate-only: 4 shards, union/disjoint pass, attempts отсутствуют.
 - Dispatcher dry-run: verified exec, contract v2, no fallback.
 - Full suite и два оставшихся fixture-dependent failures: `pre-live-test-report.md`.
+- Единственный V6 live dispatcher: 4 unique writer sessions, merge `47 TC / 65 obligations`, terminal `blocked-quality-gate`, reviewer sessions `0`.
+- Post-live JSON/YAML parse и `git diff --check`: pass.
+- Post-live artifact validator: H43 active area `0` findings; полный исторический AutoFin-пакет — `78 errors / 1270 warnings / 997 info` вне H43.
 
 ## Contamination Check
 
@@ -69,6 +72,9 @@
 | 4 | Выполнен pre-live validate-only | 4 bounded shards; reviewer capacity passed; attempts отсутствуют | `output-capacity-preflight.v6.json` |
 | 5 | Подготовлен checkpoint handoff | Live остаётся одноразовым и stop-on-blocker | `pre-live-stop-gate.md`; `prompt.scope-to-iteration.md` |
 | 6 | Checkpoint отправлен в origin и повторно проверены production boundaries | Разрешён ровно один V6 dispatcher | `pre-live-authorization.md` |
+| 7 | Выполнен один V6 dispatcher | 4 fresh writer sessions; 47 TC merged; 65/65 obligations | V6 attempts; `shard-merge.json` |
+| 8 | Выполнены full-set deterministic gates | 4 `non-observable-expected-result`; reviewer не запущен | `quality-gate-bundle.json` |
+| 9 | Применён terminal stop gate | V6 не повторяется; production не изменён | `live-result.v6.json`; `stop-gate.md` |
 
 ## Quality Checkpoints
 
@@ -76,8 +82,8 @@
 | --- | --- | --- | --- |
 | Output-capacity negative gate | pass | no-shard config blocked before attempts | none |
 | Shard membership | pass | exact 47 TC / 65 OBL union; disjoint | verify persisted live plan digest |
-| Full-set semantic review | pending-live | reviewer runs only after merge | stop on any finding/blocker |
-| Production boundary | pass-pre-live | baseline unchanged; shadow absent | repeat after live |
+| Full-set semantic review | not-started | quality gate blocked before reviewer | targeted repair in new V7 only |
+| Production boundary | pass-post-live | baseline unchanged; shadow absent | preserve in V7 |
 
 ## Technical Fallbacks
 
@@ -87,9 +93,9 @@
 
 ## Handoff Notes For Next Session
 
-- Проверить checkpoint commit и exact plan digest `54bd09aa80bae457f5283cebeacab13b51e3fc77d2cb926e4968a9d1b610e338` до dispatcher.
+- V6 terminal: не запускать второй dispatcher и не возобновлять sessions.
+- Начать с активного `prompt.scope-to-iteration.md`; ремонтировать только четыре TC в новом V7.
 - Не интерпретировать отсутствие stand ID или prerecorded DaData response как writer blocker.
-- Любой live blocker терминален для V6; не запускать второй dispatcher.
 
 ## Цель
 
@@ -105,9 +111,10 @@
 
 ## Текущее состояние
 
-- Подтверждено: `65` testable obligations, `47` уникальных `TC-ACPD-001..047`.
-- Причина V5 локализована в one-shot output transport, а не в source completeness.
-- Реализация и regression gates выполняются до нового live.
+- V5 one-shot output transport blocker устранён: V6 собрал `47` уникальных `TC-ACPD-001..047` из четырёх sessions.
+- Structure, seed, shard merge и obligation coverage `65/65` прошли.
+- Quality gate заблокировал `TC-ACPD-026`, `027`, `028`, `034`; reviewer не запускался.
+- V6 terminal `blocked-quality-gate`; production baseline неизменён.
 
 ## Реализовано
 
@@ -128,4 +135,4 @@
 
 ## Stop gate
 
-Live V6 запрещён, пока bad/corrected capacity evals, полный regression, package digest, shard union/disjointness, context budget и checkpoint commit не пройдут. После checkpoint разрешён только один новый V6 dispatcher; реальный blocker завершает итерацию без retry.
+Один V6 dispatcher уже выполнен. Его blocker терминален: retry/resume и reviewer запрещены. Разрешён только новый V7 после oracle preflight и targeted repair regression.

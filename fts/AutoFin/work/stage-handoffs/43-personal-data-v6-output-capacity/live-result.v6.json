@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "cycle_id": "application-card-client-personal-data-shadow-v6-20260713",
+  "status": "blocked-quality-gate",
+  "dispatcher_runs": 1,
+  "retry_count": 0,
+  "backend": "codex-exec",
+  "fallback_used": false,
+  "writer": {
+    "plan_digest": "54bd09aa80bae457f5283cebeacab13b51e3fc77d2cb926e4968a9d1b610e338",
+    "shard_count": 4,
+    "test_case_count": 47,
+    "obligation_count": 65,
+    "fresh_session_ids": [
+      "019f5a8a-bc15-7792-bd4d-f7849eada936",
+      "019f5a8b-cbe1-77c3-bc5f-afe14e3b6440",
+      "019f5a8d-0666-73a2-9d82-3b34f7f80161",
+      "019f5a8e-406f-7270-9754-cd13740035e9"
+    ],
+    "all_session_ids_unique": true,
+    "merge_passed": true,
+    "merged_draft_sha256": "3322c6854cd75545f3a9f0e4b140932bfd4ddd4d323aa12f76c9625ea031f849",
+    "structure_gate_passed": true,
+    "obligation_gate_passed": true,
+    "seed_gate_passed": true,
+    "quality_gate_passed": false
+  },
+  "quality_findings": [
+    {"id": "non-observable-expected-result", "test_case_id": "TC-ACPD-026"},
+    {"id": "non-observable-expected-result", "test_case_id": "TC-ACPD-027"},
+    {"id": "non-observable-expected-result", "test_case_id": "TC-ACPD-028"},
+    {"id": "non-observable-expected-result", "test_case_id": "TC-ACPD-034"}
+  ],
+  "reviewer": {
+    "started": false,
+    "reason": "writer full-set quality gate did not pass"
+  },
+  "performance": {
+    "wall_seconds": 305.527,
+    "summed_stage_duration_ms": 303625,
+    "input_tokens": 105980,
+    "cached_input_tokens": 12544,
+    "output_tokens": 15433,
+    "total_tokens": 121413,
+    "dispatcher_performance_artifact_created": true,
+    "dispatcher_performance_artifact": "work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/performance.json"
+  },
+  "production_boundary": {
+    "baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "shadow_created": false,
+    "promoted": false
+  }
+}
