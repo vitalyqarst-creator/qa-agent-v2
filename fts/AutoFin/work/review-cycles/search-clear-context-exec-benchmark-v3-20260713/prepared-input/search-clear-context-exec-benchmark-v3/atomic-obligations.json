@@ -1,0 +1,108 @@
+{
+  "coverage_gaps": [],
+  "digest": "90e5cddf8233f705061f5baf067860ba6c97b4675bd8ca176b275b1a82c58e00",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Нажатие `Очистить` очищает применённые фильтры поиска.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "execution_semantics": "reset-to-captured-initial",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-001",
+      "observable_oracle": "После нажатия `Очистить` доказанно изменённое состояние фильтров совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-001",
+      "source_refs": [
+        "BSR 32",
+        "SRC-001",
+        "SRC-001.P01"
+      ],
+      "state_change": {
+        "changed_state_setup": "Choose a visible filter value whose resulting visible state differs from the captured state; if no such value is available, report fixture-blocked.",
+        "initial_state_capture": "Capture visible values and state markers of the search filters before changing a filter.",
+        "pre_action_state_oracle": "Before `Очистить`, at least one visible filter value or state marker differs from the captured initial filter state.",
+        "relation": "different-from-captured-initial"
+      },
+      "test_intent": "Capture visible values and state markers of the search filters before changing a filter.; Choose a visible filter value whose resulting visible state differs from the captured state; if no such value is available, report fixture-blocked.; Before the target action verify: Before `Очистить`, at least one visible filter value or state marker differs from the captured initial filter state.; Capture the initial visible filter state; create and prove a different visible filter state; click `Очистить`."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Нажатие `Очистить` очищает применённые сортировки.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "execution_semantics": "reset-to-captured-initial",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-002",
+      "observable_oracle": "После нажатия `Очистить` доказанно изменённое состояние сортировки совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-002",
+      "source_refs": [
+        "BSR 32",
+        "SRC-001",
+        "SRC-001.P02"
+      ],
+      "state_change": {
+        "changed_state_setup": "Use a sortable header until its visible sort indicator differs from the captured state; if no different state can be produced, report fixture-blocked.",
+        "initial_state_capture": "Capture visible sort indicators before changing sorting.",
+        "pre_action_state_oracle": "Before `Очистить`, the visible sort indicator differs from the captured initial sort state.",
+        "relation": "different-from-captured-initial"
+      },
+      "test_intent": "Capture visible sort indicators before changing sorting.; Use a sortable header until its visible sort indicator differs from the captured state; if no different state can be produced, report fixture-blocked.; Before the target action verify: Before `Очистить`, the visible sort indicator differs from the captured initial sort state.; Capture the initial visible sort state; create and prove a different visible sort state; click `Очистить`."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Нажатие `Очистить` очищает постраничность.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "execution_semantics": "reset-to-captured-initial",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-003",
+      "observable_oracle": "После нажатия `Очистить` доказанно изменённое состояние постраничности совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-003",
+      "source_refs": [
+        "BSR 32",
+        "SRC-001",
+        "SRC-001.P03"
+      ],
+      "state_change": {
+        "changed_state_setup": "Navigate to any available page whose visible active-page indicator differs from the captured initial page; if none is available, report fixture-blocked.",
+        "initial_state_capture": "Capture the visible active-page indicator before changing pagination.",
+        "pre_action_state_oracle": "Before `Очистить`, the visible active-page indicator differs from the captured initial page.",
+        "relation": "different-from-captured-initial"
+      },
+      "test_intent": "Capture the visible active-page indicator before changing pagination.; Navigate to any available page whose visible active-page indicator differs from the captured initial page; if none is available, report fixture-blocked.; Before the target action verify: Before `Очистить`, the visible active-page indicator differs from the captured initial page.; Capture the initial active-page indicator; create and prove a different active page; click `Очистить`."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "Нажатие `Очистить` очищает состояние выделения строк.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "execution_semantics": "reset-to-captured-initial",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-004",
+      "observable_oracle": "После нажатия `Очистить` доказанно изменённое состояние выделения строк совпадает с зафиксированным initial state.",
+      "planned_test_case_id": "TC-SCCB-004",
+      "source_refs": [
+        "BSR 32",
+        "SRC-001",
+        "SRC-001.P04"
+      ],
+      "state_change": {
+        "changed_state_setup": "Use the available row-selection action to make one displayed row marker differ from its captured value; if no different state can be produced, report fixture-blocked.",
+        "initial_state_capture": "Capture the visible selection marker of each displayed row before changing selection.",
+        "pre_action_state_oracle": "Before `Очистить`, the visible selection marker of at least one displayed row differs from its captured initial value.",
+        "relation": "different-from-captured-initial"
+      },
+      "test_intent": "Capture the visible selection marker of each displayed row before changing selection.; Use the available row-selection action to make one displayed row marker differ from its captured value; if no different state can be produced, report fixture-blocked.; Before the target action verify: Before `Очистить`, the visible selection marker of at least one displayed row differs from its captured initial value.; Capture the initial visible row-selection markers; create and prove a different selection state; click `Очистить`."
+    }
+  ],
+  "package_id": "search-clear-context-exec-benchmark-v3",
+  "package_version": 6
+}

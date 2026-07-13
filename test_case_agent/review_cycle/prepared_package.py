@@ -20,14 +20,16 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 5
-SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, PACKAGE_VERSION}
+PACKAGE_VERSION = 6
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 STANDARD_EXECUTION_PROFILE = "standard-required"
 FAST_EVIDENCE_MAX_BYTES = 32768
 STANDARD_ROUTING_EVIDENCE_MAX_BYTES = 49152
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
+EXECUTION_SEMANTICS = {"direct", "reset-to-captured-initial"}
+CHANGED_STATE_RELATIONS = {"different-from-captured-initial"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 OBLIGATION_ID = re.compile(r"(?:ATOM|OBL)-[A-Za-z0-9._-]+")
@@ -212,6 +214,47 @@ class PreparedGap:
 
 
 @dataclass(frozen=True)
+class PreparedStateChange:
+    initial_state_capture: str
+    changed_state_setup: str
+    pre_action_state_oracle: str
+    relation: str = "different-from-captured-initial"
+
+    def validate(self) -> None:
+        _text(self.initial_state_capture, "state_change.initial_state_capture")
+        _text(self.changed_state_setup, "state_change.changed_state_setup")
+        _text(self.pre_action_state_oracle, "state_change.pre_action_state_oracle")
+        if self.relation not in CHANGED_STATE_RELATIONS:
+            raise StageRuntimeError(
+                "state_change.relation must be different-from-captured-initial"
+            )
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "initial_state_capture": self.initial_state_capture,
+            "changed_state_setup": self.changed_state_setup,
+            "pre_action_state_oracle": self.pre_action_state_oracle,
+            "relation": self.relation,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedStateChange:
+        _exact_fields(
+            payload,
+            {
+                "initial_state_capture",
+                "changed_state_setup",
+                "pre_action_state_oracle",
+                "relation",
+            },
+            "state_change",
+        )
+        item = cls(**payload)
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
 class PreparedObligation:
     obligation_id: str
     source_refs: tuple[str, ...]
@@ -225,6 +268,8 @@ class PreparedObligation:
     constraint_gap_ids: tuple[str, ...] = ()
     atom_id: str = ""
     planned_test_case_id: str = ""
+    execution_semantics: str = "direct"
+    state_change: PreparedStateChange | None = None
 
     @property
     def traceability_atom_id(self) -> str:
@@ -276,12 +321,33 @@ class PreparedObligation:
                 f"{self.obligation_id}.planned_test_case_id",
                 re.compile(r"^TC-[A-Za-z0-9_.-]+$"),
             )
+        if package_version >= 6:
+            if self.execution_semantics not in EXECUTION_SEMANTICS:
+                raise StageRuntimeError(
+                    f"{self.obligation_id}.execution_semantics must be one of "
+                    f"{sorted(EXECUTION_SEMANTICS)}"
+                )
+            if self.execution_semantics == "reset-to-captured-initial":
+                if self.coverage_status != "testable":
+                    raise StageRuntimeError(
+                        f"{self.obligation_id} reset execution semantics require a testable obligation"
+                    )
+                if self.state_change is None:
+                    raise StageRuntimeError(
+                        f"{self.obligation_id} reset execution semantics require state_change"
+                    )
+                self.state_change.validate()
+            elif self.state_change is not None:
+                raise StageRuntimeError(
+                    f"{self.obligation_id} direct execution semantics cannot declare state_change"
+                )
 
     def to_dict(
         self,
         *,
         include_constraints: bool = False,
         include_atom_id: bool = False,
+        include_execution_semantics: bool = False,
     ) -> dict[str, Any]:
         payload = {
             "obligation_id": self.obligation_id,
@@ -300,6 +366,11 @@ class PreparedObligation:
             payload["atom_id"] = self.traceability_atom_id
         if self.planned_test_case_id:
             payload["planned_test_case_id"] = self.planned_test_case_id
+        if include_execution_semantics:
+            payload["execution_semantics"] = self.execution_semantics
+            payload["state_change"] = (
+                self.state_change.to_dict() if self.state_change is not None else None
+            )
         return payload
 
     @classmethod
@@ -321,6 +392,8 @@ class PreparedObligation:
             expected.add("constraint_gap_ids")
         if package_version >= 5:
             expected.add("atom_id")
+        if package_version >= 6:
+            expected.update({"execution_semantics", "state_change"})
         if "planned_test_case_id" in payload:
             expected.add("planned_test_case_id")
         _exact_fields(payload, expected, "obligation")
@@ -347,6 +420,14 @@ class PreparedObligation:
             ),
             atom_id=(payload["atom_id"] if package_version >= 5 else ""),
             planned_test_case_id=payload.get("planned_test_case_id", ""),
+            execution_semantics=(
+                payload["execution_semantics"] if package_version >= 6 else "direct"
+            ),
+            state_change=(
+                PreparedStateChange.from_dict(payload["state_change"])
+                if package_version >= 6 and payload["state_change"] is not None
+                else None
+            ),
         )
         item.validate(package_version=package_version)
         return item
@@ -368,6 +449,7 @@ class PreparedObligationSet:
                 item.to_dict(
                     include_constraints=self.package_version >= 4,
                     include_atom_id=self.package_version >= 5,
+                    include_execution_semantics=self.package_version >= 6,
                 )
                 for item in self.obligations
             ],

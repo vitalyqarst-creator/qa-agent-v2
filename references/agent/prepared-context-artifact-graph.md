@@ -38,6 +38,7 @@ The profile selects a small embedded rule card. It does not remove or replace up
 
 Before semantic review, the runner owns:
 
+- prepared state-change preflight for reset obligations;
 - structure and seed gates;
 - obligation/ATOM traceability gate;
 - semantic-overlap diagnostic;

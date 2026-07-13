@@ -15,6 +15,7 @@ from test_case_agent.review_cycle.prepared_package import (
     PreparedObligation,
     PreparedObligationSet,
     PreparedPackageBuilder,
+    PreparedStateChange,
     StageInstructionConfig,
 )
 
@@ -563,6 +564,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         out_of_order_planned_ids: bool = False,
         test_case_count: int = 1,
         first_observable_oracle: str = "The visible result matches the requirement.",
+        first_execution_semantics: str = "direct",
+        first_state_change: PreparedStateChange | None = None,
         dictionary_values: tuple[str, ...] = (),
         structured_dictionary_evidence: bool = False,
     ) -> Path:
@@ -620,6 +623,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 dictionary_refs=("DICT-001",) if dictionary_values else (),
                 notes="",
                 constraint_gap_ids=(("GAP-001",) if constraint_gap else ()),
+                execution_semantics=first_execution_semantics,
+                state_change=first_state_change,
                 planned_test_case_id=(
                     "TC-GROUP-002"
                     if out_of_order_planned_ids
@@ -1678,6 +1683,56 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(
             1,
             report["prepared_oracle_quality"]["testable_obligations_checked"],
+        )
+        self.assertFalse(self.writer_attempt.exists())
+
+    def test_prepared_state_change_blocks_reset_classification_without_contract(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dependency-state",),
+            first_observable_oracle=(
+                "After Clear the visible state matches the captured initial state."
+            ),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "blocked-prepared-state-change-quality",
+        ):
+            runner.validate_configuration()
+
+        self.assertFalse(self.writer_attempt.exists())
+        self.assertFalse(
+            (self.cycle_dir / "prepared-state-change-preflight.json").exists()
+        )
+
+    def test_prepared_state_change_accepts_explicit_changed_prestate_contract(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("dependency-state",),
+            first_observable_oracle=(
+                "After Clear the visible state matches the captured initial state."
+            ),
+            first_execution_semantics="reset-to-captured-initial",
+            first_state_change=PreparedStateChange(
+                initial_state_capture="Capture the visible initial state.",
+                changed_state_setup=(
+                    "Choose a visible state different from the captured initial state."
+                ),
+                pre_action_state_oracle=(
+                    "Before Clear the visible state differs from the captured initial state."
+                ),
+            ),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        report = runner.validate_only_report()
+
+        self.assertTrue(report["prepared_state_change"]["passed"])
+        self.assertEqual(
+            1,
+            report["prepared_state_change"]["reset_obligations_checked"],
         )
         self.assertFalse(self.writer_attempt.exists())
 

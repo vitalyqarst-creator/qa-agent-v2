@@ -58,6 +58,17 @@ Legacy `CO-*`, `linked_atom` and compact seven-column tables must be migrated be
 
 Do not use constraint gaps to hide an unknown expected result. If the obligation itself is not executable, keep the atom and obligation at `gap` or `unclear`.
 
+## Reset State-Change Extension
+
+When a covered obligation or its mapped plan row is classified as `reset`, `*-reset` or `reset-*`, every mapped executable Package Test Design Plan row must add:
+
+- `initial_state_capture` — the visible initial state captured in the same test;
+- `changed_state_setup` — how to choose a state relative to that capture, without assuming an exact product default;
+- `pre_action_state_oracle` — the visible check proving the prepared state differs before the target action;
+- `state_relation` — exactly `different-from-captured-initial`.
+
+The compiler emits `execution_semantics = reset-to-captured-initial` and a structured `state_change` object. Missing or conflicting fields fail as `state-change-precondition-incomplete` / `state-change-precondition-conflict` before a prepared package or LLM attempt is created.
+
 ## Migration Safety
 
 The migrator is conservative:

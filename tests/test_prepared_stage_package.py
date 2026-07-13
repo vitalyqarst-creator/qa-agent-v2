@@ -12,6 +12,7 @@ from test_case_agent.review_cycle.prepared_package import (
     PreparedObligation,
     PreparedObligationSet,
     PreparedPackageBuilder,
+    PreparedStateChange,
     StageInstructionConfig,
     load_prepared_package,
 )
@@ -133,7 +134,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         with self.assertRaisesRegex(StageRuntimeError, "immutable"):
             self._build()
 
-    def test_legacy_v5_obligation_payload_without_planned_tc_round_trips_unchanged(self) -> None:
+    def test_v6_obligation_payload_without_planned_tc_round_trips_unchanged(self) -> None:
         original = self._obligations()
         payload = original.to_dict()
 
@@ -143,7 +144,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         self.assertEqual(original.digest, restored.digest)
         self.assertEqual(payload, restored.to_dict())
 
-    def test_v5_obligation_payload_with_planned_tc_round_trips(self) -> None:
+    def test_v6_obligation_payload_with_planned_tc_round_trips(self) -> None:
         original = PreparedObligationSet.create(
             package_id="pkg-grouped",
             obligations=(
@@ -170,12 +171,67 @@ class PreparedStagePackageTests(unittest.TestCase):
         self.assertEqual("TC-GROUP-001", restored.obligations[0].planned_test_case_id)
         self.assertEqual(original.digest, restored.digest)
 
-    def test_v5_obligation_payload_still_rejects_unknown_extra_field(self) -> None:
+    def test_v6_obligation_payload_still_rejects_unknown_extra_field(self) -> None:
         payload = self._obligations().to_dict()
         payload["obligations"][0]["unexpected_field"] = "unexpected"
 
         with self.assertRaisesRegex(StageRuntimeError, "unknown=.*unexpected_field"):
             PreparedObligationSet.from_dict(payload)
+
+    def test_v6_reset_obligation_preserves_changed_prestate_contract(self) -> None:
+        obligation = PreparedObligation(
+            obligation_id="OBL-RESET-001",
+            atom_id="ATOM-RESET-001",
+            source_refs=("SRC-1",),
+            atomic_statement="Clear restores the captured initial state.",
+            observable_oracle="After Clear the state matches the captured initial state.",
+            test_intent="Change the state, prove the change, then click Clear.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+            planned_test_case_id="TC-RESET-001",
+            execution_semantics="reset-to-captured-initial",
+            state_change=PreparedStateChange(
+                initial_state_capture="Capture the visible initial state.",
+                changed_state_setup="Choose a visible state different from the captured initial state.",
+                pre_action_state_oracle="Before Clear the visible state differs from the captured initial state.",
+            ),
+        )
+
+        original = PreparedObligationSet.create(
+            package_id="pkg-reset", obligations=(obligation,), coverage_gaps=()
+        )
+        restored = PreparedObligationSet.from_dict(original.to_dict())
+
+        self.assertEqual(
+            "reset-to-captured-initial",
+            restored.obligations[0].execution_semantics,
+        )
+        self.assertEqual(
+            "different-from-captured-initial",
+            restored.obligations[0].state_change.relation,
+        )
+
+    def test_v6_reset_obligation_requires_changed_prestate_contract(self) -> None:
+        obligation = PreparedObligation(
+            obligation_id="OBL-RESET-001",
+            atom_id="ATOM-RESET-001",
+            source_refs=("SRC-1",),
+            atomic_statement="Clear restores the captured initial state.",
+            observable_oracle="After Clear the state matches the captured initial state.",
+            test_intent="Click Clear.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+            execution_semantics="reset-to-captured-initial",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "require state_change"):
+            PreparedObligationSet.create(
+                package_id="pkg-reset", obligations=(obligation,), coverage_gaps=()
+            )
 
     def test_detects_registered_source_and_package_tampering(self) -> None:
         self._build()
@@ -465,7 +521,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         legacy = PreparedObligationSet.from_dict(payload)
 
         self.assertEqual(2, legacy.package_version)
-        with self.assertRaisesRegex(StageRuntimeError, "requires package version 5"):
+        with self.assertRaisesRegex(StageRuntimeError, "requires package version 6"):
             PreparedPackageBuilder(self.root).build(
                 output_root=self.root / "work" / "legacy-fast",
                 package_id="pkg-001",
@@ -491,6 +547,33 @@ class PreparedStagePackageTests(unittest.TestCase):
                 unsupported_dimensions=(),
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
             )
+
+    def test_version_five_obligations_remain_readable_without_state_change_fields(self) -> None:
+        current = self._obligations()
+        payload = {
+            "package_version": 5,
+            "package_id": current.package_id,
+            "obligations": [
+                item.to_dict(include_constraints=True, include_atom_id=True)
+                for item in current.obligations
+            ],
+            "coverage_gaps": [item.to_dict() for item in current.coverage_gaps],
+        }
+        payload["digest"] = hashlib.sha256(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+        legacy = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual(5, legacy.package_version)
+        self.assertEqual("direct", legacy.obligations[0].execution_semantics)
+        self.assertIsNone(legacy.obligations[0].state_change)
+        self.assertEqual(payload, legacy.to_dict())
 
     def test_version_four_obligations_remain_readable_without_explicit_atom_field(self) -> None:
         current = self._obligations()

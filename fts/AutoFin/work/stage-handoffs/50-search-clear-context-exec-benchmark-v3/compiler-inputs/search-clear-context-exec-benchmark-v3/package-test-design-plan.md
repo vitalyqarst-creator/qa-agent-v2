@@ -1,0 +1,20 @@
+# Package Test Design Plan
+
+| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | single_expected_behavior | oracle_source | planned_tc_or_gap | status | initial_state_capture | changed_state_setup | pre_action_state_oracle | state_relation |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PD-001` | `WP-01` | `state` | `BSR 32; SRC-001.P01` | `ATOM-001` | Capture the initial visible filter state; create and prove a different visible filter state; click `Очистить`. | `action-flow` | `filter-reset` | `changed-filter-state: relative to captured initial` | Filter state equals the captured initial state. | `BSR 32` | `TC-SCCB-001` | `covered` | Capture visible values and state markers of the search filters before changing a filter. | Choose a visible filter value whose resulting visible state differs from the captured state; if no such value is available, report fixture-blocked. | Before `Очистить`, at least one visible filter value or state marker differs from the captured initial filter state. | `different-from-captured-initial` |
+| `PD-002` | `WP-01` | `state` | `BSR 32; SRC-001.P02` | `ATOM-002` | Capture the initial visible sort state; create and prove a different visible sort state; click `Очистить`. | `action-flow` | `sorting-reset` | `changed-sort-state: relative to captured initial` | Sort state equals the captured initial state. | `BSR 32` | `TC-SCCB-002` | `covered` | Capture visible sort indicators before changing sorting. | Use a sortable header until its visible sort indicator differs from the captured state; if no different state can be produced, report fixture-blocked. | Before `Очистить`, the visible sort indicator differs from the captured initial sort state. | `different-from-captured-initial` |
+| `PD-003` | `WP-01` | `state` | `BSR 32; SRC-001.P03` | `ATOM-003` | Capture the initial active-page indicator; create and prove a different active page; click `Очистить`. | `action-flow` | `pagination-reset` | `changed-page-state: relative to captured initial` | Pagination state equals the captured initial state. | `BSR 32` | `TC-SCCB-003` | `covered` | Capture the visible active-page indicator before changing pagination. | Navigate to any available page whose visible active-page indicator differs from the captured initial page; if none is available, report fixture-blocked. | Before `Очистить`, the visible active-page indicator differs from the captured initial page. | `different-from-captured-initial` |
+| `PD-004` | `WP-01` | `state` | `BSR 32; SRC-001.P04` | `ATOM-004` | Capture the initial visible row-selection markers; create and prove a different selection state; click `Очистить`. | `action-flow` | `row-selection-reset` | `changed-row-selection: relative to captured initial` | Row-selection state equals the captured initial state. | `BSR 32` | `TC-SCCB-004` | `covered` | Capture the visible selection marker of each displayed row before changing selection. | Use the available row-selection action to make one displayed row marker differ from its captured value; if no different state can be produced, report fixture-blocked. | Before `Очистить`, the visible selection marker of at least one displayed row differs from its captured initial value. | `different-from-captured-initial` |
+
+## Fixture Contracts
+
+- `FIX-SCCB-001`: environment has at least one available visible filter value that can produce a state different from captured initial.
+- `FIX-SCCB-002`: results table contains at least one sortable header and one displayed row with observable selection state.
+- `FIX-SCCB-003`: result set exposes at least one page different from captured initial; otherwise `TC-SCCB-003` is fixture-blocked.
+
+## Plan Notes
+
+- Each planned test changes and verifies one reset dimension only.
+- Initial state is captured in the same test; no exact product default is invented.
+- The target action is forbidden until the changed-state oracle passes.

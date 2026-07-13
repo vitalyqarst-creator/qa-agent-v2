@@ -13,10 +13,11 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Workflow compilation requires an explicit expected FT slug. The workflow state, selected sources, prepared output and attempt root must remain inside that FT package; compiler discovery must not scan or substitute a neighboring `fts/*` package.
 - Source registry entries come only from the workflow-linked `source-selection.md`, never from aggregating historical source selections. DOCX and XHTML/HTML must have the same selected base name; PDF is registered as structural cross-check when selected.
 - Workflow compilation must derive fast-path eligibility from the canonical test-design applicability matrix. Numeric/boundary, dependency/state, integration/persistence, table-parity and any unclassified applicable dimension produce a `standard-required` package with explicit `unsupported_dimensions`; callers cannot opt those dimensions into `simple-field-property` by flag or prompt.
-- Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 5 carries `obligation_id` and `atom_id` as separate machine-readable fields; evidence text alone is not sufficient for this relation.
+- Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 6 carries `obligation_id` and `atom_id` as separate machine-readable fields and adds an explicit changed-prestate contract for reset obligations; evidence text alone is not sufficient for either relation.
 - When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
 - Before package materialization, every input-based design-plan row must bind a concrete synthetic/source-backed value or a stable fixture reference. Abstract classes such as `valid-text` are not execution-ready by themselves and fail compilation with `input-fixture-required`; this preflight prevents spending a live writer turn to discover missing test data.
 - Before live, empty or known non-observable prepared oracles block as `blocked-prepared-oracle-quality`.
+- Reset obligations must declare `execution_semantics = reset-to-captured-initial` plus the captured-initial setup, changed-state setup and observable pre-action inequality check. Missing classification or metadata blocks before LLM as `blocked-prepared-state-change-quality`.
 
 ## Layout
 
@@ -36,7 +37,7 @@ The four files are the default writer/reviewer input capsule. Package-local path
 
 Required fields:
 
-- `package_version`: currently `5`; versions `1` through `4` remain readable as legacy evidence but are not eligible for the optimized writer fast path;
+- `package_version`: currently `6`; versions `1` through `5` remain readable as legacy evidence but are not eligible for a new prepared writer run;
 - stable `package_id`, `ft_slug`, `scope_slug` and `section_id`;
 - `created_at` with timezone;
 - `source_registry`: full source path, role, SHA-256 and scope locator;
@@ -49,7 +50,7 @@ Required fields:
 
 The package is rejected when registered full sources changed after preparation. Full source files are not copied into `prepared-input/`.
 
-Version `5` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
+Version `6` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
 
 The runner must route `standard-required` packages with explicit `unsupported_dimensions` through the prepared-standard writer/reviewer path. Legacy/unclassified profiles remain blocked. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
@@ -60,13 +61,13 @@ Required top-level fields are `package_version`, `package_id`, `obligations`, `c
 Each obligation contains:
 
 - unique `obligation_id` using `OBL-*`; legacy packages may still contain atom ids in this field;
-- unique `atom_id` using `ATOM-*` in package version 5, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
+- unique `atom_id` using `ATOM-*` in package version 6, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
 - non-empty `source_refs` using exact requirement codes and/or `SRC-*` anchors;
 - one independently checkable `atomic_statement`;
 - `observable_oracle` or an explicit linked gap;
 - `test_intent`;
 - `coverage_status`: `testable | gap | unclear | not-applicable`;
-- optional `dictionary_refs`, `constraint_gap_ids`, `notes` and `planned_test_case_id`. The compiler emits `planned_test_case_id` from the Coverage Obligation Table; multiple independently traced obligations may share one id only when exactly one Package Test Design Plan row links every grouped atom with one action, fixture and observable oracle. Accidental duplicate ids, separate/conflicting plan rows and cross-field or cross-package groups without an explicit `grouping-justification:` marker fail as `invalid-planned-test-case-group`. The runner then creates one seed case with all grouped `OBL-*`/`ATOM-*` references instead of duplicating executable bodies. Legacy version `5` packages without this optional field remain readable and retain their original digest. In version `5`, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
+- optional `dictionary_refs`, `constraint_gap_ids`, `notes` and `planned_test_case_id`; version 6 also requires `execution_semantics` and nullable `state_change`. `execution_semantics = direct` requires `state_change = null`. `reset-to-captured-initial` requires `state_change.initial_state_capture`, `changed_state_setup`, `pre_action_state_oracle` and `relation = different-from-captured-initial`. The compiler emits `planned_test_case_id` from the Coverage Obligation Table; multiple independently traced obligations may share one id only when exactly one Package Test Design Plan row links every grouped atom with one action, fixture and observable oracle. Accidental duplicate ids, separate/conflicting plan rows and cross-field or cross-package groups without an explicit `grouping-justification:` marker fail as `invalid-planned-test-case-group`. The runner then creates one seed case with all grouped `OBL-*`/`ATOM-*` references instead of duplicating executable bodies. Legacy version `5` packages remain readable and retain their original digest. In the current package, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 

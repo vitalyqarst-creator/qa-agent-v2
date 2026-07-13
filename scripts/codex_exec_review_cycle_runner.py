@@ -126,6 +126,15 @@ NON_OBSERVABLE_EXPECTED_RESULT_RE = re.compile(
     r")",
     flags=re.IGNORECASE,
 )
+RESET_ACTION_RE = re.compile(
+    r"(?:\bclear\b|\breset\b|очист\w*|сброс\w*)",
+    flags=re.IGNORECASE,
+)
+CAPTURED_INITIAL_STATE_RE = re.compile(
+    r"(?:captured\s+initial|зафиксирован\w*\s+(?:initial|исходн\w*)|"
+    r"исходн\w*\s+состояни\w*)",
+    flags=re.IGNORECASE,
+)
 REPAIRABLE_QUALITY_FINDING_IDS = {
     "generic-execution-fixture",
     "missing-branch-precondition",
@@ -870,6 +879,7 @@ class CodexExecReviewCycleRunner:
     )
     _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_oracle_quality_plan: dict[str, Any] = field(default_factory=dict, init=False)
+    _prepared_state_change_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_repair_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_reviewer_rebind_plan: dict[str, Any] = field(
         default_factory=dict, init=False
@@ -1020,6 +1030,10 @@ class CodexExecReviewCycleRunner:
         return self.cycle_dir / "prepared-oracle-quality-preflight.json"
 
     @property
+    def prepared_state_change_path(self) -> Path:
+        return self.cycle_dir / "prepared-state-change-preflight.json"
+
+    @property
     def prepared_repair_plan_path(self) -> Path:
         return self.cycle_dir / "writer-targeted-repair-plan.json"
 
@@ -1060,6 +1074,7 @@ class CodexExecReviewCycleRunner:
             self.writer_output_capacity_path,
             self.writer_shard_plan_path,
             self.prepared_oracle_quality_path,
+            self.prepared_state_change_path,
             self.prepared_repair_plan_path,
             self.reviewer_rebind_path,
         ]
@@ -1172,6 +1187,92 @@ class CodexExecReviewCycleRunner:
             "package_id": obligations.package_id,
             "atomic_obligations_sha256": sha256_file(obligation_path),
             "testable_obligations_checked": checked,
+            "finding_count": len(findings),
+            "affected_test_case_ids": list(
+                dict.fromkeys(
+                    str(item["test_case_id"])
+                    for item in findings
+                    if item.get("test_case_id")
+                )
+            ),
+            "findings": findings,
+        }
+        report["preflight_digest"] = hashlib.sha256(
+            json.dumps(
+                report,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return report
+
+    def _build_prepared_state_change_plan(self) -> dict[str, Any]:
+        obligation_path = self._prepared_artifact("atomic-obligations")
+        obligations = load_obligations(obligation_path)
+        findings: list[dict[str, Any]] = []
+        checked = 0
+        for obligation in obligations.obligations:
+            if obligation.coverage_status != "testable":
+                continue
+            semantic_text = " ".join(
+                (
+                    obligation.atomic_statement,
+                    obligation.test_intent,
+                    obligation.observable_oracle,
+                )
+            )
+            likely_reset = bool(
+                RESET_ACTION_RE.search(semantic_text)
+                and CAPTURED_INITIAL_STATE_RE.search(semantic_text)
+            )
+            declared_reset = (
+                obligation.execution_semantics == "reset-to-captured-initial"
+            )
+            if not likely_reset and not declared_reset:
+                continue
+            checked += 1
+            if likely_reset and not declared_reset:
+                findings.append(
+                    {
+                        "id": "prepared-state-change-classification-missing",
+                        "severity": "error",
+                        "obligation_id": obligation.obligation_id,
+                        "atom_id": obligation.traceability_atom_id,
+                        "test_case_id": obligation.planned_test_case_id,
+                    }
+                )
+                continue
+            state_change = obligation.state_change
+            if state_change is None:
+                findings.append(
+                    {
+                        "id": "prepared-state-change-contract-missing",
+                        "severity": "error",
+                        "obligation_id": obligation.obligation_id,
+                        "atom_id": obligation.traceability_atom_id,
+                        "test_case_id": obligation.planned_test_case_id,
+                    }
+                )
+                continue
+            if state_change.relation != "different-from-captured-initial":
+                findings.append(
+                    {
+                        "id": "prepared-state-change-relation-invalid",
+                        "severity": "error",
+                        "obligation_id": obligation.obligation_id,
+                        "atom_id": obligation.traceability_atom_id,
+                        "test_case_id": obligation.planned_test_case_id,
+                        "relation": state_change.relation,
+                    }
+                )
+        report: dict[str, Any] = {
+            "passed": not findings,
+            "validator": "prepared-state-change-preflight-v1",
+            "error_code": "" if not findings else "blocked-prepared-state-change-quality",
+            "package_id": obligations.package_id,
+            "atomic_obligations_sha256": sha256_file(obligation_path),
+            "reset_obligations_checked": checked,
             "finding_count": len(findings),
             "affected_test_case_ids": list(
                 dict.fromkeys(
@@ -1880,6 +1981,20 @@ class CodexExecReviewCycleRunner:
                         ]
                     )
                 )
+            self._prepared_state_change_plan = (
+                self._build_prepared_state_change_plan()
+            )
+            if not self._prepared_state_change_plan["passed"]:
+                raise RunnerError(
+                    "blocked-prepared-state-change-quality: "
+                    f"finding_count={self._prepared_state_change_plan['finding_count']}, "
+                    "test_case_ids="
+                    + ",".join(
+                        self._prepared_state_change_plan[
+                            "affected_test_case_ids"
+                        ]
+                    )
+                )
             if self.prepared_repair_draft_path is not None:
                 if not self._uses_structured_prepared_writer():
                     raise RunnerError(
@@ -2263,6 +2378,8 @@ class CodexExecReviewCycleRunner:
                 entry["gap_id"] = item.gap_id
             if item.constraint_gap_ids:
                 entry["constraint_gap_ids"] = list(item.constraint_gap_ids)
+            if item.execution_semantics != "direct":
+                entry["execution_semantics"] = item.execution_semantics
             items.append(entry)
         return json.dumps(
             {
@@ -2300,6 +2417,12 @@ class CodexExecReviewCycleRunner:
                         "atomic_statement": item.atomic_statement,
                         "observable_oracle": item.observable_oracle,
                         "test_intent": item.test_intent,
+                        "execution_semantics": item.execution_semantics,
+                        "state_change": (
+                            item.state_change.to_dict()
+                            if item.state_change is not None
+                            else None
+                        ),
                         "dictionary_refs": list(item.dictionary_refs),
                         "gap_id": item.gap_id,
                         "constraint_gap_ids": list(item.constraint_gap_ids),
@@ -3693,6 +3816,11 @@ class CodexExecReviewCycleRunner:
                 self.prepared_oracle_quality_path,
                 self._prepared_oracle_quality_plan,
             )
+        if self._prepared_state_change_plan:
+            write_json(
+                self.prepared_state_change_path,
+                self._prepared_state_change_plan,
+            )
         if self._prepared_repair_plan:
             write_json(self.prepared_repair_plan_path, self._prepared_repair_plan)
         if self._writer_output_capacity_plan:
@@ -4662,6 +4790,7 @@ class CodexExecReviewCycleRunner:
                     ],
                     "writer_output_capacity": self._writer_output_capacity_plan,
                     "prepared_oracle_quality": self._prepared_oracle_quality_plan,
+                    "prepared_state_change": self._prepared_state_change_plan,
                     "targeted_repair": self._prepared_repair_plan,
                     "writer_targeted_repair": self._uses_targeted_prepared_repair(),
                     "reviewer_rebind": self._prepared_reviewer_rebind_plan,
@@ -4692,6 +4821,7 @@ class CodexExecReviewCycleRunner:
                         "profile-route",
                         "instruction-allowlist",
                         "prepared-oracle-quality",
+                        "prepared-state-change",
                         "targeted-repair-input-hashes",
                         "targeted-repair-test-case-set",
                         "reviewer-rebind-input-hash",

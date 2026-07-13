@@ -283,7 +283,7 @@ def validate_draft_obligation_coverage(
                         "severity": "error",
                         "tc_id": tc_id,
                         "atom_id": atom_id,
-                        "message": "Package version 5 TC traceability must name the linked OBL as well as the ATOM.",
+                        "message": "Current prepared-package TC traceability must name the linked OBL as well as the ATOM.",
                     }
                 )
 

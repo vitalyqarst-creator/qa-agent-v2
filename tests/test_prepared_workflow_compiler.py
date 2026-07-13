@@ -135,6 +135,34 @@ coverage_gaps:
             expected_ft_slug="demo",
         )
 
+    def configure_reset_plan(
+        self,
+        *,
+        property_type: str,
+        include_state_contract: bool,
+        state_relation: str = "different-from-captured-initial",
+    ) -> None:
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
+                "| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `dictionary-source` | `dictionary-values-shown` |",
+                f"| `OBL-001` | `WP-01` | `SRC-001.P01` | `ATOM-001` | `{property_type}` | `clear-state` |",
+            ),
+            encoding="utf-8",
+        )
+        if not include_state_contract:
+            return
+        (self.design / "package-test-design-plan.md").write_text(
+            f"""# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | single_expected_behavior | input_class | coverage_class | initial_state_capture | changed_state_setup | pre_action_state_oracle | state_relation | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Нажать `Очистить` после подготовки изменённого состояния. | Состояние совпадает с зафиксированным исходным. | `changed-state` | `{property_type}` | Зафиксировать видимое исходное состояние. | Выбрать видимое состояние, отличное от зафиксированного исходного. | До `Очистить` видимое состояние отличается от зафиксированного исходного. | `{state_relation}` | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | none_required:blocked | `n/a` | `n/a` | `n/a` | `n/a` | `n/a` | `n/a` | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
     def write_grouped_plan(
         self,
         *,
@@ -272,6 +300,78 @@ coverage_gaps:
         compiled = load_obligations(obligation_path).obligations[0]
         self.assertIn("BSR 32", compiled.source_refs)
         self.assertIn("DIT 7", compiled.source_refs)
+
+    def test_blocks_v2_like_pagination_reset_without_changed_prestate_contract(self) -> None:
+        self.configure_reset_plan(
+            property_type="pagination-reset",
+            include_state_contract=False,
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as raised:
+            self.compile()
+
+        self.assertEqual(
+            "state-change-precondition-incomplete",
+            raised.exception.code,
+        )
+        self.assertIn(
+            "pre_action_state_oracle",
+            raised.exception.details[0]["missing_or_invalid_fields"],
+        )
+
+    def test_blocks_row_selection_reset_with_wrong_changed_state_relation(self) -> None:
+        self.configure_reset_plan(
+            property_type="row-selection-reset",
+            include_state_contract=True,
+            state_relation="same-as-captured-initial",
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as raised:
+            self.compile()
+
+        self.assertEqual(
+            "state-change-precondition-incomplete",
+            raised.exception.code,
+        )
+        self.assertIn(
+            "state_relation=different-from-captured-initial",
+            raised.exception.details[0]["missing_or_invalid_fields"],
+        )
+
+    def test_preserves_changed_prestate_contract_for_pagination_reset(self) -> None:
+        self.configure_reset_plan(
+            property_type="pagination-reset",
+            include_state_contract=True,
+        )
+
+        result = self.compile()
+        compiled = load_obligations(
+            result.stage_package.parent / "atomic-obligations.json"
+        ).obligations[0]
+
+        self.assertEqual("reset-to-captured-initial", compiled.execution_semantics)
+        self.assertEqual(
+            "different-from-captured-initial",
+            compiled.state_change.relation,
+        )
+        self.assertIn("Before the target action verify", compiled.test_intent)
+
+    def test_preserves_changed_prestate_contract_for_row_selection_reset(self) -> None:
+        self.configure_reset_plan(
+            property_type="row-selection-reset",
+            include_state_contract=True,
+        )
+
+        result = self.compile()
+        compiled = load_obligations(
+            result.stage_package.parent / "atomic-obligations.json"
+        ).obligations[0]
+
+        self.assertEqual("reset-to-captured-initial", compiled.execution_semantics)
+        self.assertEqual(
+            "different-from-captured-initial",
+            compiled.state_change.relation,
+        )
 
     def test_accepts_aligned_optional_decision_table_mapping(self) -> None:
         self.enable_decision_table()

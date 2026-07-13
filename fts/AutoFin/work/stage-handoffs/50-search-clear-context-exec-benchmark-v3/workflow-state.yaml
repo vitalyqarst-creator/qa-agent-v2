@@ -1,0 +1,41 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: search-clear-context-exec-benchmark-v1
+current_stage: ft-test-case-iteration
+stage_status: ready-for-next-stage
+current_round: 0
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-contract.md
+  - work/stage-handoffs/48-search-clear-context-exec-benchmark/source-parity-check.md
+  - work/stage-handoffs/48-search-clear-context-exec-benchmark/source-row-inventory.md
+  - work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-coverage-gaps.md
+  - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-result.v2.json
+  - work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-blocker-analysis.md
+  - work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/compiler-inputs/search-clear-context-exec-benchmark-v3/compiler-input.yaml
+  - work/review-cycles/search-clear-context-exec-benchmark-v3-20260713/prepared-input/search-clear-context-exec-benchmark-v3/stage-package.json
+  - work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/pre-live-test-report.md
+  - work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/pre-live-stop-gate.md
+  - work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/prompt.scope-to-iteration.md
+  - work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/agent-decision-log.md
+latest_artifacts:
+  scope_contract: work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-contract.md
+  source_parity_check: work/stage-handoffs/48-search-clear-context-exec-benchmark/source-parity-check.md
+  source_row_inventory: work/stage-handoffs/48-search-clear-context-exec-benchmark/source-row-inventory.md
+  scope_coverage_gaps: work/stage-handoffs/48-search-clear-context-exec-benchmark/scope-coverage-gaps.md
+  prior_live_result: work/stage-handoffs/49-search-clear-context-exec-benchmark-iteration/live-result.v2.json
+  compiler_input: work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/compiler-inputs/search-clear-context-exec-benchmark-v3/compiler-input.yaml
+  prepared_package: work/review-cycles/search-clear-context-exec-benchmark-v3-20260713/prepared-input/search-clear-context-exec-benchmark-v3/stage-package.json
+  backend_selection_dry_run: work/review-cycles/search-clear-context-exec-benchmark-v3-20260713/backend-selection.dry-run.json
+  pre_live_test_report: work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/pre-live-test-report.md
+  pre_live_stop_gate: work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/pre-live-stop-gate.md
+  session_log: work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/iteration-session-log.md
+  decision_log: work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/50-search-clear-context-exec-benchmark-v3/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 0
+open_questions: []
+blocking_reasons: []
+accepted_risks:
+  - Small-scope benchmark does not prove medium-scope scaling.

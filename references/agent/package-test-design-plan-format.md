@@ -37,6 +37,15 @@
 - `planned_tc_or_gap`: будущий/существующий `TC-*` или `GAP-*`.
 - `status`: `planned | covered | gap | unclear | blocked`.
 
+Для reset/state-transition строк поддерживается обязательное расширение таблицы:
+
+- `initial_state_capture`: какое видимое исходное состояние фиксируется в начале этого же теста;
+- `changed_state_setup`: как выбрать состояние относительно зафиксированного исходного;
+- `pre_action_state_oracle`: наблюдаемая проверка отличия до целевого действия;
+- `state_relation`: строго `different-from-captured-initial`.
+
+Эти колонки обязательны для `coverage_class` / `property_type` вида `reset`, `*-reset` или `reset-*`. Нельзя считать `page 2`, первую строку, первый фильтр или первое нажатие на заголовок изменённым состоянием без сравнения с captured initial. Если отличающееся состояние недоступно, TC должен завершаться как fixture-blocked, а не продолжать reset-проверку с недоказанным setup.
+
 ## Правила
 
 - Один `design_item_id` описывает одну проверку или один gap.
@@ -59,6 +68,7 @@
 - Для generated documents plan должен разделять `print-form-generated` и `print-form-content-mapping`; content mapping без source-backed маппинга должен быть `GAP-*`.
 - Для `dictionary-source`, tags и fixed-list rules план должен ссылаться на `DICT-*` из `dictionary-inventory.md`; `input_class` должен быть `active dictionary values`, `archived dictionary values`, `extra value` или другой конкретный класс, а не два случайных примера из ФТ.
 - Для action flows план должен перечислять branches: available action, unavailable/forbidden action, repeated action, cancel/back/refresh, если эти ветки следуют из scope.
+- Для reset action flow до целевого действия план должен отдельно зафиксировать исходное состояние, подготовить состояние `different-from-captured-initial` и проверить видимое отличие. Проверка только post-reset результата не закрывает changed-prestate setup.
 - Для dependency rules план должен ссылаться на `Dependency Matrix` или перечислять controlling value, dependent field и branch.
 - Для internal/API/RabbitMQ/model/database behavior без подтвержденного observable artifact план должен ссылаться на `GAP-*`, а не на `TC-*`.
 - Writer не должен писать `TC-*`, пока для package нет полного `Package Test Design Plan`.

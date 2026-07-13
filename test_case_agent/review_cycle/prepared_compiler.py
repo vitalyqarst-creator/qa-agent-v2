@@ -11,6 +11,7 @@ from .prepared_package import (
     PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
+    PreparedStateChange,
     PreparedPackageBuilder,
     StageInstructionConfig,
     FAST_EVIDENCE_MAX_BYTES,
@@ -125,6 +126,107 @@ EVIDENCE_CAPTURE = re.compile(
     r"скриншот|доказательств\w*|evidence|capture|record\s+the\s+actual",
     flags=re.IGNORECASE,
 )
+RESET_EXECUTION_SEMANTICS = "reset-to-captured-initial"
+STATE_CHANGE_RELATION = "different-from-captured-initial"
+STATE_CHANGE_PLAN_FIELDS = (
+    "initial_state_capture",
+    "changed_state_setup",
+    "pre_action_state_oracle",
+    "state_relation",
+)
+
+
+def _normalized_design_value(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+
+
+def _requires_changed_prestate(
+    obligation_row: Mapping[str, str],
+    plan_rows: Sequence[Mapping[str, str]],
+) -> bool:
+    classified_values = (
+        obligation_row.get("property_type", ""),
+        obligation_row.get("obligation_class", ""),
+        *(row.get("coverage_class", "") for row in plan_rows),
+    )
+    return any(
+        normalized == "reset"
+        or normalized.startswith("reset-")
+        or normalized.endswith("-reset")
+        for normalized in map(_normalized_design_value, classified_values)
+    )
+
+
+def _compile_state_change(
+    *,
+    obligation_row: Mapping[str, str],
+    plan_rows: Sequence[Mapping[str, str]],
+    plan_path: Path,
+    repo_root: Path,
+) -> PreparedStateChange | None:
+    if not _requires_changed_prestate(obligation_row, plan_rows):
+        return None
+    findings: list[dict[str, object]] = []
+    for row in plan_rows:
+        missing = [field for field in STATE_CHANGE_PLAN_FIELDS if not row.get(field, "").strip()]
+        relation = row.get("state_relation", "").strip()
+        if relation and relation != STATE_CHANGE_RELATION:
+            missing.append("state_relation=different-from-captured-initial")
+        if missing:
+            findings.append(
+                {
+                    "kind": "state-change-precondition-incomplete",
+                    "obligation_id": obligation_row.get("obligation_id", ""),
+                    "atom_id": obligation_row.get("linked_atom_id", ""),
+                    "missing_or_invalid_fields": missing,
+                    **_artifact_anchor(
+                        plan_path,
+                        row.get("design_item_id")
+                        or obligation_row.get("linked_atom_id", ""),
+                        repo_root,
+                    ),
+                }
+            )
+    if findings:
+        raise PreparedCompilerDiagnostic(
+            "state-change-precondition-incomplete",
+            "semantic degradation: reset design-plan rows must prove a state "
+            "different from captured initial state before the target action",
+            details=findings,
+        )
+    values_by_field = {
+        field: tuple(dict.fromkeys(row[field].strip() for row in plan_rows))
+        for field in STATE_CHANGE_PLAN_FIELDS
+    }
+    inconsistent = {
+        field: list(values)
+        for field, values in values_by_field.items()
+        if len(values) != 1
+    }
+    if inconsistent:
+        raise PreparedCompilerDiagnostic(
+            "state-change-precondition-conflict",
+            "semantic degradation: one obligation maps to conflicting state-change contracts",
+            details=(
+                {
+                    "kind": "state-change-precondition-conflict",
+                    "obligation_id": obligation_row.get("obligation_id", ""),
+                    "atom_id": obligation_row.get("linked_atom_id", ""),
+                    "conflicting_fields": inconsistent,
+                    **_artifact_anchor(
+                        plan_path,
+                        obligation_row.get("linked_atom_id", ""),
+                        repo_root,
+                    ),
+                },
+            ),
+        )
+    return PreparedStateChange(
+        initial_state_capture=values_by_field["initial_state_capture"][0],
+        changed_state_setup=values_by_field["changed_state_setup"][0],
+        pre_action_state_oracle=values_by_field["pre_action_state_oracle"][0],
+        relation=values_by_field["state_relation"][0],
+    )
 
 
 def _plan_requires_concrete_fixture(row: Mapping[str, str]) -> bool:
@@ -1202,9 +1304,22 @@ def compile_workflow_package(
                     ),
                 )
             oracle = obligation_row["required_behavior"]
-            intent = "; ".join(
-                dict.fromkeys(item["planned_check"] for item in mapped_viable)
+            state_change = _compile_state_change(
+                obligation_row=obligation_row,
+                plan_rows=mapped_viable,
+                plan_path=plan_path,
+                repo_root=repo_root,
             )
+            intent_parts = [item["planned_check"] for item in mapped_viable]
+            if state_change is not None:
+                intent_parts = [
+                    state_change.initial_state_capture,
+                    state_change.changed_state_setup,
+                    "Before the target action verify: "
+                    + state_change.pre_action_state_oracle,
+                    *intent_parts,
+                ]
+            intent = "; ".join(dict.fromkeys(intent_parts))
             if not oracle or "none_required" in oracle.lower():
                 raise StageRuntimeError(f"semantic degradation: {atom_id} has no observable plan oracle")
             if (
@@ -1239,6 +1354,7 @@ def compile_workflow_package(
                 used_gaps.add(constraint_gap_id)
             gap_id = ""
         elif obligation_status in {"gap", "unclear", "blocked"}:
+            state_change = None
             coverage_status = "gap" if obligation_status == "gap" else "unclear"
             if atom_coverage_status == "not-applicable":
                 raise StageRuntimeError(
@@ -1268,6 +1384,7 @@ def compile_workflow_package(
             oracle = ""
             intent = obligation_row["required_behavior"]
         else:
+            state_change = None
             if obligation_status not in {"not-applicable", "n/a"}:
                 raise StageRuntimeError(
                     f"semantic degradation: {obligation_id} has unsupported status {obligation_status}"
@@ -1315,6 +1432,12 @@ def compile_workflow_package(
                     if coverage_status == "testable"
                     else ""
                 ),
+                execution_semantics=(
+                    RESET_EXECUTION_SEMANTICS
+                    if state_change is not None
+                    else "direct"
+                ),
+                state_change=state_change,
             )
         )
         evidence_rows.extend(
@@ -1391,6 +1514,16 @@ def compile_workflow_package(
                                 ),
                                 f"planned={item.get('planned_tc_or_gap', '')}",
                                 f"status={item.get('status', '')}",
+                                *(
+                                    (
+                                        "state_relation=" + item["state_relation"],
+                                        "initial_capture=" + item["initial_state_capture"],
+                                        "changed_setup=" + item["changed_state_setup"],
+                                        "pre_action_oracle=" + item["pre_action_state_oracle"],
+                                    )
+                                    if item.get("state_relation")
+                                    else ()
+                                ),
                             )
                         ),
                         "",
