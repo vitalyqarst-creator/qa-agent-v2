@@ -54,3 +54,10 @@
 - `decision`: accept as bounded candidate for the next iteration
 - `reason`: sign-off blocker has concrete evidence, a stable failure shape and objective pass/fail criteria
 - `next_action`: confirm the implemented compiler/runner prevention and remediated inputs in exactly one immutable V4r1 live cycle
+
+## Runtime Confirmation
+
+- `v4r1_outcome`: `blocked-input` before draft/reviewer because named fixtures were not backed by concrete registered data.
+- `prevention_result`: the original V3 placeholder shapes are now covered by deterministic eval/compiler/runner checks; the live stop exposed a narrower successor failure class rather than reproducing those placeholders.
+- `successor_candidate`: `evals/candidates/2026-07-13-unresolved-fixture-id-prepared-package.md`.
+- `production_effect`: none; no draft was promoted or written to the production target.

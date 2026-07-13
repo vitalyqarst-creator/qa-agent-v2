@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"019f5a0e-2d05-78f3-bb89-d39b04f98efc"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\"contract_version\":1,\"status\":\"blocked-input\",\"draft_markdown\":\"\",\"blocking_reasons\":[\"Недостаточно embedded evidence для полного draft-ready: отсутствует содержимое и конкретные разрешённые данные фикстуры FIX-ACPD-SAVE-001, на которую ссылаются TC-ACPD-010, TC-ACPD-022–025, TC-ACPD-041 и TC-ACPD-047.\",\"Недостаточно embedded evidence для TC-ACPD-012: фикстура FIX-ACPD-DADATA-001 не определяет зарегистрированное ФИО, выбираемую подсказку и ожидаемое значение поля «Пол».\"]}"}}
+{"type":"turn.completed","usage":{"input_tokens":38071,"cached_input_tokens":0,"output_tokens":308,"reasoning_output_tokens":157}}

@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/40-personal-data-v3-reviewer-recovery/workflow-state.yaml` |
-| status_after | `in-progress` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -30,6 +30,8 @@
 - Preserve handoff 38 and V1-V3; build new V4 inputs under handoff 41.
 - Use explicit fixture contracts and evidence-capture oracles where exact UI reaction remains unknown.
 - Authorize at most one V4 live only after bad/corrected eval, regressions, context and integrity gates pass.
+- Stop after the only V4r1 writer reports missing registered fixture data; do not retry or start reviewer.
+- Route the successor work to fixture-catalog resolution plus a fresh V5 package.
 
 ## Risks And Fallbacks
 
@@ -44,6 +46,10 @@
 - Direct validate-only splatting of dispatcher argument pairs made argparse treat the `--sandbox` value as a new option; validation stopped before configuration loading and created no attempts (`TF-008`).
 - The argparse-safe direct validate-only command then omitted the dispatcher's verified-capability assertion; the runner correctly returned `blocked-configuration` before attempts (`TF-009`).
 - Semantic inspection of the first successful V4 package found cross-TC intent contamination for shared atoms (`OBL-028/029` and `OBL-026`); compiler selection was corrected to the obligation's exact planned TC token before continuing.
+- Post-compaction immutable-tree verification first used stale V1/V2/V3 suffixes and the parent H38 compiler directory; failed lookups were discarded and exact paths/subtree were verified (`TF-010`).
+- The live writer proved that a named fixture contract without registered concrete data is still not draft-ready; the compiler currently does not resolve fixture IDs into a catalog.
+- The blocked cycle declares a draft path although no draft file exists; structured writer/cycle state remains complete, but the dangling alias is runner-state debt (`TF-011`).
+- A package-wide validator run wrote a 122 191-line full report after its initial output was not surfaced; the oversized debug dump was excluded and deleted, and the handoff was rechecked with the scoped canonical validator (`TF-012`).
 
 ## Validation
 
@@ -53,6 +59,11 @@
 - V4r1 package/hash/seed: pass, 42 atoms / 65 obligations / 47 TC / 3 gaps / 1 dictionary.
 - Writer context: 97 507 / 131 072 bytes; reviewer conservative envelope: 126 150 / 131 072.
 - Dispatcher dry-run: verified exec, no fallback.
+- Pre-live checkpoint: `a9c05bb079d8f650181b4c3e474ea15ffab722d4`.
+- V4r1 live: exactly one writer attempt, `blocked-input`; reviewer absent; no draft or production output.
+- Performance: 17.172 seconds, 38 379 total tokens, 0 commands, 0 writer file changes.
+- Scoped canonical artifact validation: 0 errors, 0 warnings, 3 source-extraction info findings.
+- Final boundary check: V1/V2/V3/H38 hashes match; V4/V4r1 prepared inputs have 0 post-checkpoint diffs; one live attempt only.
 
 ## Contamination Check
 
@@ -71,7 +82,9 @@
 | `scripts/codex_exec_review_cycle_runner.py` | `small code patch` | `apply_patch` | `yes` | `n/a` | `yes` |
 | focused tests and `evals/prepared-execution-oracle/20260713/` | `small fixtures/tests` | `apply_patch` | `yes` | `unittest` | `yes` |
 | `work/stage-handoffs/41-personal-data-v4-quality-remediation/compiler-inputs/` | `bounded derived inputs` | exact mechanical copy, then `apply_patch` remediation | `yes` | `Copy-Item` for immutable source copies | `yes` |
-| `work/review-cycles/application-card-client-personal-data-shadow-v4-20260713/` | `bounded generated cycle` | compiler/runner per-file writes | `yes` | prepared compiler and exec dispatcher | `yes` |
+| `work/review-cycles/application-card-client-personal-data-shadow-v4-20260713/` | `bounded multi-file compiler output` | compiler per-file writes | `yes` | prepared compiler | `yes` |
+| `work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/` | `bounded multi-file cycle output` | compiler/runner per-file writes | `yes` | prepared compiler and exec dispatcher | `yes` |
+| `work/stage-handoffs/41-personal-data-v4-quality-remediation/*.md|yaml|json` | `small bounded handoff artifacts` | `apply_patch` or owning validator/runner | `yes` | `apply_patch`; validator/runner | `yes` |
 | `test-cases/14-prepared-shadow-application-card-client-personal-data.md` | `production boundary` | no write; must remain absent | `yes` | `n/a` | `yes` |
 
 ## Event Timeline
@@ -99,6 +112,11 @@
 | 19 | Full targeted regression | 124 tests pass | pre-live test report |
 | 20 | Dispatcher dry-run | Verified exec selected, contract v2, no fallback | V4r1 backend selection dry-run |
 | 21 | Pre-live decision | All bounded conditions pass; one live allowed after checkpoint | pre-live authorization |
+| 22 | Pre-live checkpoint | Whitelist-only commit created before live | `a9c05bb079d8f650181b4c3e474ea15ffab722d4` |
+| 23 | Единственный V4r1 live | Writer вернул `blocked-input` по `FIX-ACPD-SAVE-001` и `FIX-ACPD-DADATA-001`; reviewer не запускался | cycle state; writer result |
+| 24 | Post-live stop | Retry запрещён; создан fixture-registration/V5 handoff | stop gate; next-stage prompt |
+| 25 | Canonical handoff validation | 0 errors, 0 warnings; three inherited source-quality info findings | `validate_agent_artifacts.py` |
+| 26 | Final integrity boundary | Immutable hashes match; prepared inputs unchanged; one attempt; reviewer/production absent | contamination check |
 
 ## Quality Checkpoints
 
@@ -108,7 +126,7 @@
 | Bad fixture detection | pass | three exact error IDs | retain regression |
 | Corrected fixture | pass | accepted-not-promoted simulated cycle | retain regression |
 | V4r1 package | pass | hash/budget/intent inspection | checkpoint before live |
-| V4r1 live | pending | no live attempts | one dispatcher max |
+| V4r1 live | blocked-input | one writer attempt; reviewer absent; production absent | register safe fixtures and build fresh V5; no V4r1 retry |
 
 ## Technical Fallbacks
 
@@ -123,8 +141,12 @@
 | `TF-007` | Remediated execution details expanded compiled evidence beyond the 49 152-byte standard budget | First verbose V4 plan/oracle wording | Compact repeated contracts into stable fixture/action/evidence tokens while preserving exact fields and limitations | V4 compiler inputs | `yes` | medium; requires semantic inspection of compiled obligations after successful build | Require package budget pass and verify all 11 affected obligations |
 | `TF-008` | PowerShell splatted `--sandbox-flag`, `--sandbox` as separate tokens in a direct argparse invocation | Reuse dispatcher argument array verbatim with `--validate-only` | Use argparse-safe `--option=--value` syntax for option-looking flag values | `n/a` | `n/a` | none; parser stopped before runner configuration and no attempt artifacts exist | Rerun validate-only and require JSON status `validated` |
 | `TF-009` | Direct runner invocation did not inherit the dispatcher's exec capability assertion | Run argparse-safe command without `--cli-contract-verified` | Add the verified flag set already proven by dispatcher capability preflight | `n/a` | `n/a` | none; runner stopped before attempts | Require validate-only `status=validated`; live still goes through dispatcher |
+| `TF-010` | Post-compaction immutability probe used stale date suffixes and the parent H38 compiler directory | `git rev-parse` against non-existent V1/V2/V3 paths and parent H38 tree | Enumerate actual directories, then verify V1/V2/V3 and exact H38 package subtree | `n/a` | `n/a` | none; failed lookups were not used as evidence | Preserve corrected hashes in final validation |
+| `TF-011` | Blocked-input cycle state declared a draft path although writer emitted no draft | Read the declared `stage-output/draft.md` | Read structured `writer-result.json`, `stage-status.json` and cycle state; record dangling path as runner-state debt | performance analysis | `yes` | low; blocker text and terminal state are complete and consistent | Add a separate runner-state regression in a later bounded iteration |
+| `TF-012` | Package-wide validator output was too large for a bounded handoff and appeared after the initial command output was not surfaced | Retain `artifact-validation.full.json` under handoff 41 | Delete the transient full dump and run the canonical validator against handoff 41 with audit/strict log policies | `n/a` | `no` | none; the full dump was not used as scoped-pass evidence | Retain the scoped 0-error/0-warning result in Validation/Event Timeline only |
 
 ## Handoff Notes For Next Session
 
-- Do not run or mutate V4 until the pre-live stop gate is explicitly satisfied.
+- Do not run, resume or mutate V4/V4r1; the single allowed V4r1 attempt is consumed.
+- Register safe fixtures and add compiler catalog resolution before creating V5.
 - Do not resume V3 or promote any unsigned draft.

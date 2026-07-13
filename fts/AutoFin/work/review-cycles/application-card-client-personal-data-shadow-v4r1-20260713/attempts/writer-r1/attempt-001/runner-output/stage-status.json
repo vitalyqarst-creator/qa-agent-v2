@@ -1,0 +1,39 @@
+{
+  "stage": "writer-r1",
+  "role": "writer",
+  "status": "blocked-input",
+  "reason": "Недостаточно embedded evidence для полного draft-ready: отсутствует содержимое и конкретные разрешённые данные фикстуры FIX-ACPD-SAVE-001, на которую ссылаются TC-ACPD-010, TC-ACPD-022–025, TC-ACPD-041 и TC-ACPD-047.",
+  "exit_code": 0,
+  "timed_out": false,
+  "idle_timed_out": false,
+  "command_budget_exceeded": false,
+  "first_artifact_deadline_exceeded": false,
+  "launch_error": false,
+  "duration_seconds": 17.172,
+  "command_count": 0,
+  "first_output_seconds": 0.765999999945052,
+  "first_artifact_seconds": null,
+  "termination_reason": "completed",
+  "command": [
+    "C:\\Users\\Пользователь\\.codex\\plugins\\.plugin-appserver\\codex.exe",
+    "exec",
+    "--sandbox",
+    "read-only",
+    "--cd",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+    "--json",
+    "--output-last-message",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\application-card-client-personal-data-shadow-v4r1-20260713\\attempts\\writer-r1\\attempt-001\\runner-output\\writer-result.json",
+    "--output-schema",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\application-card-client-personal-data-shadow-v4r1-20260713\\attempts\\writer-r1\\attempt-001\\writer-contract.schema.json",
+    "-"
+  ],
+  "stdout": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+  "stderr": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+  "events": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+  "last_message": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+  "blocking_reasons": [
+    "Недостаточно embedded evidence для полного draft-ready: отсутствует содержимое и конкретные разрешённые данные фикстуры FIX-ACPD-SAVE-001, на которую ссылаются TC-ACPD-010, TC-ACPD-022–025, TC-ACPD-041 и TC-ACPD-047.",
+    "Недостаточно embedded evidence для TC-ACPD-012: фикстура FIX-ACPD-DADATA-001 не определяет зарегистрированное ФИО, выбираемую подсказку и ожидаемое значение поля «Пол»."
+  ]
+}

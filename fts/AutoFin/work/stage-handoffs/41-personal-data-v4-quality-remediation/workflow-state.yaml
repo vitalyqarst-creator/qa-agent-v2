@@ -1,0 +1,44 @@
+ft_slug: AutoFin
+scope_slug: application-card-client-personal-data
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
+  - work/stage-handoffs/41-personal-data-v4-quality-remediation/blocker-outcome-analysis.md
+  - work/stage-handoffs/41-personal-data-v4-quality-remediation/fixture-registration-request.md
+  - work/stage-handoffs/41-personal-data-v4-quality-remediation/stop-gate.md
+  - work/stage-handoffs/41-personal-data-v4-quality-remediation/prompt.scope-to-iteration.md
+latest_artifacts:
+  prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/prepared-input/application-card-client-personal-data-v4r1/stage-package.json
+  cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/cycle-state.yaml
+  writer_result: work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json
+  evidence_access_report: work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json
+  backend_selection: work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/backend-selection.json
+  performance_report: work/review-cycles/application-card-client-personal-data-shadow-v4r1-20260713/performance.json
+  blocker_outcome_analysis: work/stage-handoffs/41-personal-data-v4-quality-remediation/blocker-outcome-analysis.md
+  fixture_registration_request: work/stage-handoffs/41-personal-data-v4-quality-remediation/fixture-registration-request.md
+  performance_analysis: work/stage-handoffs/41-personal-data-v4-quality-remediation/performance-analysis.v4r1.md
+  stop_gate: work/stage-handoffs/41-personal-data-v4-quality-remediation/stop-gate.md
+  iteration_summary: work/stage-handoffs/41-personal-data-v4-quality-remediation/iteration-summary.md
+  session_log: work/stage-handoffs/41-personal-data-v4-quality-remediation/iteration-session-log.md
+  decision_log: work/stage-handoffs/41-personal-data-v4-quality-remediation/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/41-personal-data-v4-quality-remediation/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 — точная UI-реакция на недопустимое значение.
+  - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
+  - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
+blocking_reasons:
+  - FIX-ACPD-SAVE-001 не содержит зарегистрированного resettable baseline и конкретного набора разрешённых значений для сохранения заявки.
+  - FIX-ACPD-DADATA-001 не содержит проверенного на стенде ФИО, точной выбираемой подсказки DaData и ожидаемого значения поля «Пол».
+  - V4r1 завершён как blocked-input; reviewer не запускался, draft не создан, production не изменён.
+accepted_risks: []
