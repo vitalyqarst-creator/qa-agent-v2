@@ -41,7 +41,10 @@ from test_case_agent.review_cycle.prepared_package import (
     load_obligations,
     load_prepared_package,
 )
-from test_case_agent.review_cycle.obligation_gate import validate_draft_obligation_coverage
+from test_case_agent.review_cycle.obligation_gate import (
+    materialize_draft_dictionary_projections,
+    validate_draft_obligation_coverage,
+)
 from test_case_agent.review_cycle.promotion_readiness import (
     PromotionContract,
     validate_promotion_readiness,
@@ -979,6 +982,10 @@ class CodexExecReviewCycleRunner:
     @property
     def calibration_lifecycle_path(self) -> Path:
         return self.runner_output_dir(WRITER_STAGE) / "calibration-lifecycle.json"
+
+    @property
+    def dictionary_projection_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "dictionary-projection.json"
 
     @property
     def promotion_readiness_path(self) -> Path:
@@ -3164,8 +3171,9 @@ class CodexExecReviewCycleRunner:
                     for gap_id in item.constraint_gap_ids
                 )
             )
-            ui_calibration = bool(constraint_gap_ids) and (
-                self._prepared_context_profile() == "character-restriction-calibration"
+            ui_calibration = any(
+                self._obligation_requires_ui_calibration(item)
+                for item in obligation_group
             )
             lines.extend(
                 [
@@ -3229,7 +3237,7 @@ class CodexExecReviewCycleRunner:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
         items = []
         for item in obligations.obligations:
-            if not item.constraint_gap_ids:
+            if not self._obligation_requires_ui_calibration(item):
                 continue
             items.append(
                 {
@@ -3237,6 +3245,7 @@ class CodexExecReviewCycleRunner:
                     "atom_id": item.traceability_atom_id,
                     "test_case_id": item.planned_test_case_id,
                     "constraint_gap_ids": list(item.constraint_gap_ids),
+                    "calibration_status": "ui-calibration-required",
                     "status": "awaiting-ui-calibration",
                     "evidence_status": "not-collected",
                     "regression_ready": False,
@@ -3244,12 +3253,19 @@ class CodexExecReviewCycleRunner:
                 }
             )
         return {
-            "version": 1,
+            "version": 2,
             "context_profile": self._prepared_context_profile(),
             "items": items,
             "open_count": len(items),
             "resolved_count": 0,
         }
+
+    def _obligation_requires_ui_calibration(self, item: Any) -> bool:
+        return item.calibration_status == "ui-calibration-required" or (
+            bool(item.constraint_gap_ids)
+            and self._prepared_context_profile()
+            == "character-restriction-calibration"
+        )
 
     def _build_quality_gate_bundle(self) -> dict[str, Any]:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
@@ -3306,9 +3322,6 @@ class CodexExecReviewCycleRunner:
                         "test_case_ids": [tc_id],
                     }
                 )
-        calibration_required = (
-            self._prepared_context_profile() == "character-restriction-calibration"
-        )
         for obligation in obligations.obligations:
             if obligation.coverage_status != "testable":
                 continue
@@ -3333,7 +3346,7 @@ class CodexExecReviewCycleRunner:
                             "gap_id": gap_id,
                         }
                     )
-            if obligation.constraint_gap_ids and calibration_required:
+            if self._obligation_requires_ui_calibration(obligation):
                 for marker in (
                     "ui-calibration-required",
                     "candidate-ui-calibration",
@@ -3358,6 +3371,7 @@ class CodexExecReviewCycleRunner:
                 "ui-calibration-lifecycle-markers",
                 "deterministic-structure",
                 "obligation-traceability",
+                "dictionary-value-completeness",
                 "semantic-overlap",
                 "evidence-access",
                 "execution-oracle-quality",
@@ -4117,6 +4131,22 @@ class CodexExecReviewCycleRunner:
             )
 
         if self._prepared_package is not None:
+            obligation_set = load_obligations(
+                self._prepared_artifact("atomic-obligations")
+            )
+            draft_before_projection = self.draft_path.read_text(encoding="utf-8")
+            projected_draft, projection_report = (
+                materialize_draft_dictionary_projections(
+                    draft_before_projection,
+                    obligation_set,
+                )
+            )
+            projection_report["draft_changed"] = (
+                projected_draft != draft_before_projection
+            )
+            if projection_report["draft_changed"]:
+                self.draft_path.write_text(projected_draft, encoding="utf-8")
+            write_json(self.dictionary_projection_path, projection_report)
             if repair_writer or reviewer_rebind:
                 package_metadata_validation = self._validate_draft_package_metadata()
                 write_json(
@@ -4298,6 +4328,7 @@ class CodexExecReviewCycleRunner:
                             self.obligation_gate_path,
                             self.semantic_overlap_path,
                             self.calibration_lifecycle_path,
+                            self.dictionary_projection_path,
                             self.quality_gate_bundle_path,
                             self.evidence_access_path,
                         )
@@ -4355,6 +4386,11 @@ class CodexExecReviewCycleRunner:
             ),
             "calibration_lifecycle": (
                 relative_path(self.calibration_lifecycle_path, self.ft_root)
+                if self._prepared_package is not None
+                else ""
+            ),
+            "dictionary_projection": (
+                relative_path(self.dictionary_projection_path, self.ft_root)
                 if self._prepared_package is not None
                 else ""
             ),
@@ -5861,6 +5897,12 @@ class CodexExecReviewCycleRunner:
                         required=False,
                     ),
                     ExpectedOutput(
+                        path=relative_path(self.dictionary_projection_path, self.repo_root),
+                        kind="dictionary-projection",
+                        producer="runner",
+                        required=False,
+                    ),
+                    ExpectedOutput(
                         path=relative_path(self.seed_gate_path, self.repo_root),
                         kind="seed-gate",
                         producer="runner",
@@ -6002,6 +6044,7 @@ class CodexExecReviewCycleRunner:
                         self.semantic_overlap_path,
                         self.quality_gate_bundle_path,
                         self.calibration_lifecycle_path,
+                        self.dictionary_projection_path,
                         self.seed_gate_path,
                         self.evidence_access_path,
                     )

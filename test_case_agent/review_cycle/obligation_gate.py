@@ -16,6 +16,8 @@ TRACEABILITY_FIELD = re.compile(
 )
 ATOM_REFERENCE = re.compile(r"\bATOM-[A-Za-z0-9._-]+\b")
 OBLIGATION_REFERENCE = re.compile(r"\bOBL-[A-Za-z0-9._-]+\b")
+DICTIONARY_PROJECTION_START = "runner-dictionary-projection:start"
+DICTIONARY_PROJECTION_END = "runner-dictionary-projection:end"
 
 
 def traceability_references(text: str) -> set[str]:
@@ -49,6 +51,195 @@ def source_reference_finding(
             "TC traceability must preserve every source_refs and "
             "dictionary_refs value of its prepared obligation."
         ),
+    }
+
+
+def exhaustive_dictionary_requirements(obligation: Any) -> tuple[Any, ...]:
+    return tuple(
+        requirement
+        for requirement in obligation.dictionary_requirements
+        if requirement.coverage_mode != "reference-only"
+    )
+
+
+def dictionary_projection_line(item: Any) -> str:
+    label = "Группа" if item.value_kind == "group" else "Значение"
+    path = " > ".join(item.hierarchy_path)
+    return f"- {label} `{path}`: `{item.value}`"
+
+
+def dictionary_projection_block(obligation: Any) -> str:
+    requirements = exhaustive_dictionary_requirements(obligation)
+    if not requirements:
+        return ""
+    lines = [
+        f"<!-- {DICTIONARY_PROJECTION_START} {obligation.obligation_id} -->",
+    ]
+    for requirement in requirements:
+        lines.append(
+            f"- Полный набор `{requirement.dictionary_id}` "
+            f"(`{requirement.coverage_mode}`):"
+        )
+        lines.extend(
+            dictionary_projection_line(item) for item in requirement.required_values
+        )
+    lines.append(
+        f"<!-- {DICTIONARY_PROJECTION_END} {obligation.obligation_id} -->"
+    )
+    return "\n".join(lines)
+
+
+def dictionary_projection_findings(
+    *, tc_id: str, block: str, obligation: Any
+) -> tuple[dict[str, Any], ...]:
+    findings: list[dict[str, Any]] = []
+    for requirement in exhaustive_dictionary_requirements(obligation):
+        marker = re.compile(
+            rf"(?ms)^<!--\s*{re.escape(DICTIONARY_PROJECTION_START)}\s+"
+            rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
+            rf"(.*?)"
+            rf"^<!--\s*{re.escape(DICTIONARY_PROJECTION_END)}\s+"
+            rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
+        )
+        match = marker.search(block)
+        expected_lines = {
+            dictionary_projection_line(item): item
+            for item in requirement.required_values
+        }
+        if match is None:
+            findings.append(
+                {
+                    "id": "dictionary-projection-missing",
+                    "severity": "error",
+                    "tc_id": tc_id,
+                    "obligation_id": obligation.obligation_id,
+                    "atom_id": obligation.traceability_atom_id,
+                    "dictionary_id": requirement.dictionary_id,
+                    "coverage_mode": requirement.coverage_mode,
+                    "missing_values": [
+                        {
+                            "hierarchy_path": list(item.hierarchy_path),
+                            "value_kind": item.value_kind,
+                            "value": item.value,
+                        }
+                        for item in requirement.required_values
+                    ],
+                    "unexpected_values": [],
+                    "message": (
+                        "An exhaustive dictionary obligation requires the runner-owned "
+                        "value projection inside its linked TC."
+                    ),
+                }
+            )
+            continue
+        actual_lines = {
+            line.strip()
+            for line in match.group(1).splitlines()
+            if line.strip().startswith(("- Группа `", "- Значение `"))
+        }
+        missing_lines = sorted(set(expected_lines) - actual_lines)
+        unexpected_lines = sorted(actual_lines - set(expected_lines))
+        if not missing_lines and not unexpected_lines:
+            continue
+        findings.append(
+            {
+                "id": "dictionary-projection-incomplete",
+                "severity": "error",
+                "tc_id": tc_id,
+                "obligation_id": obligation.obligation_id,
+                "atom_id": obligation.traceability_atom_id,
+                "dictionary_id": requirement.dictionary_id,
+                "coverage_mode": requirement.coverage_mode,
+                "missing_values": [
+                    {
+                        "hierarchy_path": list(expected_lines[line].hierarchy_path),
+                        "value_kind": expected_lines[line].value_kind,
+                        "value": expected_lines[line].value,
+                    }
+                    for line in missing_lines
+                ],
+                "unexpected_values": unexpected_lines,
+                "message": (
+                    "The TC dictionary projection must exactly preserve every required "
+                    "group/leaf value and hierarchy path from the prepared obligation."
+                ),
+            }
+        )
+    return tuple(findings)
+
+
+def materialize_draft_dictionary_projections(
+    text: str, obligations: Any
+) -> tuple[str, dict[str, Any]]:
+    by_test_case: dict[str, list[Any]] = {}
+    for obligation in obligations.obligations:
+        if not exhaustive_dictionary_requirements(obligation):
+            continue
+        if not obligation.planned_test_case_id:
+            continue
+        by_test_case.setdefault(obligation.planned_test_case_id, []).append(obligation)
+
+    result = text
+    materialized: list[dict[str, Any]] = []
+    for tc_id, original_block in test_case_sections(text):
+        linked = by_test_case.get(tc_id, [])
+        if not linked:
+            continue
+        block = original_block
+        for obligation in linked:
+            existing = re.compile(
+                rf"(?ms)^<!--\s*{re.escape(DICTIONARY_PROJECTION_START)}\s+"
+                rf"{re.escape(obligation.obligation_id)}\s*-->.*?"
+                rf"^<!--\s*{re.escape(DICTIONARY_PROJECTION_END)}\s+"
+                rf"{re.escape(obligation.obligation_id)}\s*-->\s*\n?"
+            )
+            block = existing.sub("", block)
+        projection = "\n\n".join(
+            dictionary_projection_block(obligation) for obligation in linked
+        )
+        test_data = re.search(r"(?m)^###\s+Тестовые данные\s*$", block)
+        if test_data is None:
+            steps = re.search(r"(?m)^###\s+Шаги\s*$", block)
+            insertion = steps.start() if steps else len(block)
+            prefix = "### Тестовые данные\n\n"
+        else:
+            following = re.search(r"(?m)^###\s+", block[test_data.end() :])
+            insertion = (
+                test_data.end() + following.start()
+                if following is not None
+                else len(block)
+            )
+            prefix = "\n\n"
+        block = (
+            block[:insertion].rstrip()
+            + "\n\n"
+            + prefix
+            + projection
+            + "\n\n"
+            + block[insertion:].lstrip()
+        )
+        result = result.replace(original_block, block, 1)
+        for obligation in linked:
+            materialized.append(
+                {
+                    "obligation_id": obligation.obligation_id,
+                    "atom_id": obligation.traceability_atom_id,
+                    "test_case_id": tc_id,
+                    "requirements": [
+                        {
+                            "dictionary_id": requirement.dictionary_id,
+                            "coverage_mode": requirement.coverage_mode,
+                            "required_value_count": len(requirement.required_values),
+                        }
+                        for requirement in exhaustive_dictionary_requirements(obligation)
+                    ],
+                }
+            )
+    return result, {
+        "version": 1,
+        "validator": "runner-owned-dictionary-projection-v1",
+        "materialized_count": len(materialized),
+        "items": materialized,
     }
 
 
@@ -144,7 +335,7 @@ class ObligationGateResult:
     def as_dict(self) -> dict[str, Any]:
         return {
             "passed": self.passed,
-            "validator": "prepared-package-obligation-gate-v3",
+            "validator": "prepared-package-obligation-gate-v4",
             "package_id": self.package_id,
             "test_case_count": self.test_case_count,
             "testable_obligations": self.testable_obligations,
@@ -242,6 +433,13 @@ def validate_draft_obligation_coverage(
                             missing_references=missing_references,
                         )
                     )
+                findings.extend(
+                    dictionary_projection_findings(
+                        tc_id=tc_id,
+                        block=block,
+                        obligation=obligation,
+                    )
+                )
                 covered.add(obligation_id)
 
         for atom_id in sorted(traced_atoms):
@@ -273,6 +471,13 @@ def validate_draft_obligation_coverage(
                                     missing_references=missing_references,
                                 )
                             )
+                        findings.extend(
+                            dictionary_projection_findings(
+                                tc_id=tc_id,
+                                block=block,
+                                obligation=obligation,
+                            )
+                        )
                         covered.add(obligation.obligation_id)
             elif linked and not any(
                 item.obligation_id in traced_obligations for item in linked

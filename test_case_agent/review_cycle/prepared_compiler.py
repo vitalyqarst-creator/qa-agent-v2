@@ -9,6 +9,8 @@ from typing import Any, Mapping, Sequence
 from .prepared_package import (
     EvidenceInput,
     PreparedGap,
+    PreparedDictionaryRequirement,
+    PreparedDictionaryValue,
     PreparedObligation,
     PreparedObligationSet,
     PreparedStateChange,
@@ -134,10 +136,92 @@ STATE_CHANGE_PLAN_FIELDS = (
     "pre_action_state_oracle",
     "state_relation",
 )
+DICTIONARY_COVERAGE_MODES = {
+    "reference-only",
+    "all-leaf-values",
+    "full-hierarchy",
+}
+LEGACY_DICTIONARY_COVERAGE_BY_CLASS = {
+    "dictionary-hierarchy-shown": "full-hierarchy",
+    "dictionary-values-shown": "all-leaf-values",
+    "value-has-checkbox": "all-leaf-values",
+}
 
 
 def _normalized_design_value(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", value.strip().lower()).strip("-")
+
+
+def _dictionary_coverage_mode(obligation_row: Mapping[str, str]) -> str:
+    explicit = obligation_row.get("dictionary_coverage", "").strip().lower()
+    if explicit:
+        if explicit not in DICTIONARY_COVERAGE_MODES:
+            raise StageRuntimeError(
+                "semantic degradation: dictionary_coverage must be one of "
+                + ", ".join(sorted(DICTIONARY_COVERAGE_MODES))
+            )
+        return explicit
+    obligation_class = _normalized_design_value(
+        obligation_row.get("obligation_class", "")
+    )
+    return LEGACY_DICTIONARY_COVERAGE_BY_CLASS.get(
+        obligation_class,
+        "reference-only",
+    )
+
+
+def _compile_dictionary_requirement(
+    *,
+    dictionary_id: str,
+    coverage_mode: str,
+    dictionary_rows: Mapping[str, Mapping[str, str]],
+    dictionary_active_values: Mapping[str, tuple[str, ...]],
+) -> PreparedDictionaryRequirement:
+    if coverage_mode == "reference-only":
+        return PreparedDictionaryRequirement(dictionary_id, coverage_mode)
+
+    values: list[PreparedDictionaryValue] = []
+
+    def visit(current_id: str, path: tuple[str, ...], visiting: frozenset[str]) -> None:
+        if current_id in visiting:
+            raise StageRuntimeError(
+                f"semantic degradation: cyclic dictionary hierarchy at {current_id}"
+            )
+        next_visiting = visiting | {current_id}
+        for raw_value in dictionary_active_values[current_id]:
+            if raw_value.startswith("none_required:"):
+                continue
+            if raw_value.startswith("DICT-"):
+                if raw_value not in dictionary_rows:
+                    raise StageRuntimeError(
+                        f"semantic degradation: {current_id} references missing child {raw_value}"
+                    )
+                child_path = (*path, raw_value)
+                if coverage_mode == "full-hierarchy":
+                    child_name = dictionary_rows[raw_value].get(
+                        "dictionary_name", ""
+                    ).strip()
+                    if not child_name:
+                        raise StageRuntimeError(
+                            f"semantic degradation: {raw_value} has no dictionary_name"
+                        )
+                    values.append(
+                        PreparedDictionaryValue(child_path, "group", child_name)
+                    )
+                visit(raw_value, child_path, next_visiting)
+                continue
+            values.append(PreparedDictionaryValue(path, "leaf", raw_value))
+
+    visit(dictionary_id, (dictionary_id,), frozenset())
+    if not values:
+        raise StageRuntimeError(
+            f"semantic degradation: exhaustive {dictionary_id} projection has no values"
+        )
+    return PreparedDictionaryRequirement(
+        dictionary_id=dictionary_id,
+        coverage_mode=coverage_mode,
+        required_values=tuple(values),
+    )
 
 
 def _requires_changed_prestate(
@@ -1401,6 +1485,16 @@ def compile_workflow_package(
             if dictionary_id not in dictionary_rows:
                 raise StageRuntimeError(f"semantic degradation: {atom_id} references missing {dictionary_id}")
             used_dicts.add(dictionary_id)
+        dictionary_coverage = _dictionary_coverage_mode(obligation_row)
+        dictionary_requirements = tuple(
+            _compile_dictionary_requirement(
+                dictionary_id=dictionary_id,
+                coverage_mode=dictionary_coverage,
+                dictionary_rows=dictionary_rows,
+                dictionary_active_values=dictionary_active_values,
+            )
+            for dictionary_id in dict_tokens
+        )
         source_refs = tuple(dict.fromkeys(source_tokens + dict_tokens))
         if not source_refs:
             source_ref = obligation_row.get("source_ref") or row.get("source_ref") or row.get("source_property_id")
@@ -1438,6 +1532,12 @@ def compile_workflow_package(
                     else "direct"
                 ),
                 state_change=state_change,
+                dictionary_requirements=dictionary_requirements,
+                calibration_status=(
+                    "ui-calibration-required"
+                    if status_raw == "covered_with_ui_calibration"
+                    else "none"
+                ),
             )
         )
         evidence_rows.extend(

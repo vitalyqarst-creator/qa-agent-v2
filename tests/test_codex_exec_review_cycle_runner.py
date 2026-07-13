@@ -11,6 +11,8 @@ from pathlib import Path
 
 from test_case_agent.review_cycle.prepared_package import (
     EvidenceInput,
+    PreparedDictionaryRequirement,
+    PreparedDictionaryValue,
     PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
@@ -572,6 +574,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         first_state_change: PreparedStateChange | None = None,
         dictionary_values: tuple[str, ...] = (),
         structured_dictionary_evidence: bool = False,
+        dictionary_coverage_mode: str = "reference-only",
+        calibration_status: str = "none",
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
@@ -629,6 +633,29 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 constraint_gap_ids=(("GAP-001",) if constraint_gap else ()),
                 execution_semantics=first_execution_semantics,
                 state_change=first_state_change,
+                dictionary_requirements=(
+                    (
+                        PreparedDictionaryRequirement(
+                            dictionary_id="DICT-001",
+                            coverage_mode=dictionary_coverage_mode,
+                            required_values=(
+                                tuple(
+                                    PreparedDictionaryValue(
+                                        ("DICT-001",),
+                                        "leaf",
+                                        value,
+                                    )
+                                    for value in dictionary_values
+                                )
+                                if dictionary_coverage_mode != "reference-only"
+                                else ()
+                            ),
+                        ),
+                    )
+                    if dictionary_values
+                    else ()
+                ),
+                calibration_status=calibration_status,
                 planned_test_case_id=(
                     "TC-GROUP-002"
                     if out_of_order_planned_ids
@@ -636,6 +663,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     if grouped_obligations
                     else "TC-DEMO-001"
                     if test_case_count > 1
+                    or calibration_status != "none"
+                    or dictionary_coverage_mode != "reference-only"
                     else ""
                 ),
             )
@@ -2449,6 +2478,97 @@ Draft body.
         )
         self.assertEqual("awaiting-ui-calibration", lifecycle["items"][0]["status"])
         self.assertFalse(lifecycle["items"][0]["regression_ready"])
+
+    def test_source_backed_calibration_without_gap_is_registered(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("evidence-qualified-ui-calibration",),
+            calibration_status="ui-calibration-required",
+        )
+        draft = """# Test cases
+
+## TC-DEMO-001
+
+**Название:** Проверка обязательности выбора
+**Трассировка:** ATOM-001; SRC-1
+**Статус oracle:** ui-calibration-required
+**Статус тест-кейса:** candidate-ui-calibration
+
+Draft body.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        lifecycle = json.loads(
+            (self.writer_attempt / "runner-output" / "calibration-lifecycle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(2, lifecycle["version"])
+        self.assertEqual(1, lifecycle["open_count"])
+        self.assertEqual([], lifecycle["items"][0]["constraint_gap_ids"])
+        self.assertEqual("TC-DEMO-001", lifecycle["items"][0]["test_case_id"])
+        self.assertEqual(
+            "ui-calibration-required",
+            lifecycle["items"][0]["calibration_status"],
+        )
+
+    def test_runner_materializes_exhaustive_dictionary_values_before_gates(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("table-parity",),
+            dictionary_values=("Первое значение", "Второе значение"),
+            structured_dictionary_evidence=True,
+            dictionary_coverage_mode="all-leaf-values",
+        )
+        draft = """# Test cases
+
+## TC-DEMO-001
+
+**Название:** Полный состав справочника
+**Трассировка:** ATOM-001; SRC-1; DICT-001
+
+### Тестовые данные
+
+- Все значения DICT-001.
+
+### Шаги
+
+1. Открыть список.
+
+### Итоговый ожидаемый результат
+
+Список отображается.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        materialized = self.draft_path.read_text(encoding="utf-8")
+        self.assertIn("Первое значение", materialized)
+        self.assertIn("Второе значение", materialized)
+        projection = json.loads(
+            (self.writer_attempt / "runner-output" / "dictionary-projection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(projection["draft_changed"])
+        self.assertEqual(1, projection["materialized_count"])
+        obligation_gate = json.loads(
+            (self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(obligation_gate["passed"])
 
     def test_quality_gate_blocks_lost_calibration_markers(self) -> None:
         package_path = self.build_prepared_package(

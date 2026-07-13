@@ -20,8 +20,8 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 6
-SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, PACKAGE_VERSION}
+PACKAGE_VERSION = 7
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, 6, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 STANDARD_EXECUTION_PROFILE = "standard-required"
 FAST_EVIDENCE_MAX_BYTES = 32768
@@ -30,6 +30,13 @@ PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
 EXECUTION_SEMANTICS = {"direct", "reset-to-captured-initial"}
 CHANGED_STATE_RELATIONS = {"different-from-captured-initial"}
+DICTIONARY_COVERAGE_MODES = {
+    "reference-only",
+    "all-leaf-values",
+    "full-hierarchy",
+}
+DICTIONARY_VALUE_KINDS = {"group", "leaf"}
+CALIBRATION_STATUSES = {"none", "ui-calibration-required"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 OBLIGATION_ID = re.compile(r"(?:ATOM|OBL)-[A-Za-z0-9._-]+")
@@ -255,6 +262,112 @@ class PreparedStateChange:
 
 
 @dataclass(frozen=True)
+class PreparedDictionaryValue:
+    hierarchy_path: tuple[str, ...]
+    value_kind: str
+    value: str
+
+    def validate(self) -> None:
+        if not self.hierarchy_path:
+            raise StageRuntimeError("dictionary value hierarchy_path must not be empty")
+        for item in self.hierarchy_path:
+            _identifier(item, "dictionary value hierarchy_path[]", DICT_ID)
+        if self.value_kind not in DICTIONARY_VALUE_KINDS:
+            raise StageRuntimeError(
+                "dictionary value_kind must be one of "
+                f"{sorted(DICTIONARY_VALUE_KINDS)}"
+            )
+        _text(self.value, "dictionary value")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "hierarchy_path": list(self.hierarchy_path),
+            "value_kind": self.value_kind,
+            "value": self.value,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedDictionaryValue:
+        _exact_fields(
+            payload,
+            {"hierarchy_path", "value_kind", "value"},
+            "dictionary value",
+        )
+        item = cls(
+            hierarchy_path=_string_list(
+                payload["hierarchy_path"],
+                "dictionary value hierarchy_path",
+            ),
+            value_kind=payload["value_kind"],
+            value=payload["value"],
+        )
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PreparedDictionaryRequirement:
+    dictionary_id: str
+    coverage_mode: str
+    required_values: tuple[PreparedDictionaryValue, ...] = ()
+
+    def validate(self) -> None:
+        _identifier(self.dictionary_id, "dictionary requirement dictionary_id", DICT_ID)
+        if self.coverage_mode not in DICTIONARY_COVERAGE_MODES:
+            raise StageRuntimeError(
+                "dictionary requirement coverage_mode must be one of "
+                f"{sorted(DICTIONARY_COVERAGE_MODES)}"
+            )
+        for item in self.required_values:
+            item.validate()
+            if item.hierarchy_path[0] != self.dictionary_id:
+                raise StageRuntimeError(
+                    "dictionary value hierarchy_path must start with its requirement dictionary_id"
+                )
+        identities = [
+            (item.hierarchy_path, item.value_kind, item.value)
+            for item in self.required_values
+        ]
+        if len(identities) != len(set(identities)):
+            raise StageRuntimeError("dictionary requirement values must not contain duplicates")
+        if self.coverage_mode == "reference-only" and self.required_values:
+            raise StageRuntimeError(
+                "reference-only dictionary requirement cannot declare required_values"
+            )
+        if self.coverage_mode != "reference-only" and not self.required_values:
+            raise StageRuntimeError(
+                "exhaustive dictionary requirement must declare required_values"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "dictionary_id": self.dictionary_id,
+            "coverage_mode": self.coverage_mode,
+            "required_values": [item.to_dict() for item in self.required_values],
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedDictionaryRequirement:
+        _exact_fields(
+            payload,
+            {"dictionary_id", "coverage_mode", "required_values"},
+            "dictionary requirement",
+        )
+        if not isinstance(payload["required_values"], list):
+            raise StageRuntimeError("dictionary requirement required_values must be a JSON array")
+        item = cls(
+            dictionary_id=payload["dictionary_id"],
+            coverage_mode=payload["coverage_mode"],
+            required_values=tuple(
+                PreparedDictionaryValue.from_dict(value)
+                for value in payload["required_values"]
+            ),
+        )
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
 class PreparedObligation:
     obligation_id: str
     source_refs: tuple[str, ...]
@@ -270,6 +383,8 @@ class PreparedObligation:
     planned_test_case_id: str = ""
     execution_semantics: str = "direct"
     state_change: PreparedStateChange | None = None
+    dictionary_requirements: tuple[PreparedDictionaryRequirement, ...] = ()
+    calibration_status: str = "none"
 
     @property
     def traceability_atom_id(self) -> str:
@@ -341,6 +456,29 @@ class PreparedObligation:
                 raise StageRuntimeError(
                     f"{self.obligation_id} direct execution semantics cannot declare state_change"
                 )
+        if package_version >= 7:
+            for requirement in self.dictionary_requirements:
+                requirement.validate()
+            requirement_ids = [
+                requirement.dictionary_id for requirement in self.dictionary_requirements
+            ]
+            if len(requirement_ids) != len(set(requirement_ids)):
+                raise StageRuntimeError(
+                    f"{self.obligation_id}.dictionary_requirements must not contain duplicates"
+                )
+            if set(requirement_ids) != set(self.dictionary_refs):
+                raise StageRuntimeError(
+                    f"{self.obligation_id}.dictionary_requirements must map every dictionary_ref exactly"
+                )
+            if self.calibration_status not in CALIBRATION_STATUSES:
+                raise StageRuntimeError(
+                    f"{self.obligation_id}.calibration_status must be one of "
+                    f"{sorted(CALIBRATION_STATUSES)}"
+                )
+            if self.calibration_status != "none" and self.coverage_status != "testable":
+                raise StageRuntimeError(
+                    f"{self.obligation_id} calibration requires a testable obligation"
+                )
 
     def to_dict(
         self,
@@ -348,6 +486,7 @@ class PreparedObligation:
         include_constraints: bool = False,
         include_atom_id: bool = False,
         include_execution_semantics: bool = False,
+        include_dictionary_contract: bool = False,
     ) -> dict[str, Any]:
         payload = {
             "obligation_id": self.obligation_id,
@@ -371,6 +510,11 @@ class PreparedObligation:
             payload["state_change"] = (
                 self.state_change.to_dict() if self.state_change is not None else None
             )
+        if include_dictionary_contract:
+            payload["dictionary_requirements"] = [
+                item.to_dict() for item in self.dictionary_requirements
+            ]
+            payload["calibration_status"] = self.calibration_status
         return payload
 
     @classmethod
@@ -394,6 +538,8 @@ class PreparedObligation:
             expected.add("atom_id")
         if package_version >= 6:
             expected.update({"execution_semantics", "state_change"})
+        if package_version >= 7:
+            expected.update({"dictionary_requirements", "calibration_status"})
         if "planned_test_case_id" in payload:
             expected.add("planned_test_case_id")
         _exact_fields(payload, expected, "obligation")
@@ -428,6 +574,17 @@ class PreparedObligation:
                 if package_version >= 6 and payload["state_change"] is not None
                 else None
             ),
+            dictionary_requirements=(
+                tuple(
+                    PreparedDictionaryRequirement.from_dict(value)
+                    for value in payload["dictionary_requirements"]
+                )
+                if package_version >= 7
+                else ()
+            ),
+            calibration_status=(
+                payload["calibration_status"] if package_version >= 7 else "none"
+            ),
         )
         item.validate(package_version=package_version)
         return item
@@ -450,6 +607,7 @@ class PreparedObligationSet:
                     include_constraints=self.package_version >= 4,
                     include_atom_id=self.package_version >= 5,
                     include_execution_semantics=self.package_version >= 6,
+                    include_dictionary_contract=self.package_version >= 7,
                 )
                 for item in self.obligations
             ],
@@ -540,7 +698,25 @@ class PreparedObligationSet:
         coverage_gaps: Sequence[PreparedGap],
         evidence_text: str | None = None,
     ) -> PreparedObligationSet:
-        value = cls(PACKAGE_VERSION, package_id, tuple(obligations), tuple(coverage_gaps), "")
+        normalized_obligations = tuple(
+            replace(
+                item,
+                dictionary_requirements=tuple(
+                    PreparedDictionaryRequirement(value, "reference-only")
+                    for value in item.dictionary_refs
+                ),
+            )
+            if item.dictionary_refs and not item.dictionary_requirements
+            else item
+            for item in obligations
+        )
+        value = cls(
+            PACKAGE_VERSION,
+            package_id,
+            normalized_obligations,
+            tuple(coverage_gaps),
+            "",
+        )
         completed = replace(value, digest=_canonical_digest(value._without_digest()))
         completed.validate(evidence_text=evidence_text)
         return completed

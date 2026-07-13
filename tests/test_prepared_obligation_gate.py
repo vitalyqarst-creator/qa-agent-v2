@@ -4,8 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from test_case_agent.review_cycle.obligation_gate import validate_draft_obligation_coverage
+from test_case_agent.review_cycle.obligation_gate import (
+    materialize_draft_dictionary_projections,
+    validate_draft_obligation_coverage,
+)
 from test_case_agent.review_cycle.prepared_package import (
+    PreparedDictionaryRequirement,
+    PreparedDictionaryValue,
     PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
@@ -85,7 +90,7 @@ class PreparedObligationGateTests(unittest.TestCase):
             "**Трассировка:** ATOM-003\n"
         )
         self.assertTrue(result.passed)
-        self.assertEqual("prepared-package-obligation-gate-v3", result.as_dict()["validator"])
+        self.assertEqual("prepared-package-obligation-gate-v4", result.as_dict()["validator"])
 
     def test_bulleted_traceability_inside_tc_is_supported(self) -> None:
         result = self._validate(
@@ -307,6 +312,121 @@ class PreparedObligationGateTests(unittest.TestCase):
             "OBL-002; ATOM-002; SRC-002; BSR 202\n"
         )
         self.assertTrue(complete.passed)
+
+    def test_exhaustive_dictionary_claim_requires_exact_leaf_projection(self) -> None:
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-001",
+            coverage_mode="full-hierarchy",
+            required_values=(
+                PreparedDictionaryValue(
+                    ("DICT-001", "DICT-101"),
+                    "group",
+                    "Группа один",
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-001", "DICT-101"),
+                    "leaf",
+                    "Значение один",
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-001", "DICT-101"),
+                    "leaf",
+                    "Значение два",
+                ),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-dictionary-projection",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001", "DICT-001"),
+                    atomic_statement="Полный состав справочника отображается.",
+                    observable_oracle="Отображаются все значения.",
+                    test_intent="Сверить полный состав.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-001",),
+                    notes="",
+                    planned_test_case_id="TC-DICT-001",
+                    dictionary_requirements=(requirement,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+        symbolic_only = (
+            "## TC-DICT-001\n"
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001\n\n"
+            "### Тестовые данные\n\n- Все значения DICT-001.\n\n"
+            "### Шаги\n\n1. Проверить.\n"
+        )
+
+        missing = self._validate(symbolic_only)
+
+        self.assertFalse(missing.passed)
+        finding = next(
+            item
+            for item in missing.findings
+            if item["id"] == "dictionary-projection-missing"
+        )
+        self.assertEqual("DICT-001", finding["dictionary_id"])
+        self.assertEqual(3, len(finding["missing_values"]))
+
+        projected, report = materialize_draft_dictionary_projections(
+            symbolic_only,
+            obligations,
+        )
+        complete = self._validate(projected)
+
+        self.assertTrue(complete.passed)
+        self.assertEqual(1, report["materialized_count"])
+        self.assertIn("Значение два", projected)
+
+        mutated = projected.replace(
+            "- Значение `DICT-001 > DICT-101`: `Значение два`\n",
+            "",
+        )
+        incomplete = self._validate(mutated)
+        incomplete_finding = next(
+            item
+            for item in incomplete.findings
+            if item["id"] == "dictionary-projection-incomplete"
+        )
+        self.assertEqual(
+            ["Значение два"],
+            [item["value"] for item in incomplete_finding["missing_values"]],
+        )
+
+    def test_reference_only_dictionary_does_not_require_value_projection(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-reference-only",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001", "DICT-001"),
+                    atomic_statement="Выбор Другое открывает комментарий.",
+                    observable_oracle="Комментарий отображается.",
+                    test_intent="Выбрать Другое.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-001",),
+                    notes="",
+                    planned_test_case_id="TC-DICT-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            "## TC-DICT-001\n"
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001\n"
+        )
+
+        self.assertTrue(result.passed)
 
 
 if __name__ == "__main__":

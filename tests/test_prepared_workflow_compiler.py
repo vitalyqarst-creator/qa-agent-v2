@@ -257,6 +257,12 @@ coverage_gaps:
         self.assertEqual("TC-001", obligations.obligations[0].planned_test_case_id)
         self.assertEqual("", obligations.obligations[1].planned_test_case_id)
         self.assertEqual(obligations.obligations[0].dictionary_refs, ("DICT-001",))
+        dictionary_requirement = obligations.obligations[0].dictionary_requirements[0]
+        self.assertEqual("all-leaf-values", dictionary_requirement.coverage_mode)
+        self.assertEqual(
+            ["A", "B"],
+            [item.value for item in dictionary_requirement.required_values],
+        )
         self.assertEqual(obligations.obligations[1].gap_id, "GAP-001")
         instructions = (result.stage_package.parent / "stage-instructions.md").read_text(
             encoding="utf-8"
@@ -1068,6 +1074,71 @@ coverage_gaps:
         result = self.compile()
 
         self.assertEqual(result.dictionary_ref_count, 2)
+
+    def test_compiles_full_dictionary_hierarchy_into_obligation_contract(self) -> None:
+        obligations_path = self.design / "coverage-obligation-table.md"
+        obligations_path.write_text(
+            obligations_path.read_text(encoding="utf-8").replace(
+                "`dictionary-values-shown`",
+                "`dictionary-hierarchy-shown`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+        inventory = self.design / "dictionary-inventory.md"
+        inventory.write_text(
+            """| dictionary_id | dictionary_name | active_values |
+| --- | --- | --- |
+| `DICT-001` | `Корневой справочник` | `DICT-101` |
+| `DICT-101` | `Группа один` | `Значение A`; `Значение B` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+        package = load_prepared_package(result.stage_package, self.root)
+        obligation_path = self.root / next(
+            item.path
+            for item in package.package_artifacts
+            if item.kind == "atomic-obligations"
+        )
+        requirement = load_obligations(obligation_path).obligations[0].dictionary_requirements[0]
+
+        self.assertEqual("full-hierarchy", requirement.coverage_mode)
+        self.assertEqual(
+            [
+                ("group", ("DICT-001", "DICT-101"), "Группа один"),
+                ("leaf", ("DICT-001", "DICT-101"), "Значение A"),
+                ("leaf", ("DICT-001", "DICT-101"), "Значение B"),
+            ],
+            [
+                (item.value_kind, item.hierarchy_path, item.value)
+                for item in requirement.required_values
+            ],
+        )
+
+    def test_preserves_source_backed_ui_calibration_without_gap(self) -> None:
+        ledger_path = self.design / "atomic-requirements-ledger.md"
+        ledger_path.write_text(
+            ledger_path.read_text(encoding="utf-8").replace(
+                "| `covered` | `TC-001` |",
+                "| `covered_with_ui_calibration` | `TC-001` |",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+        package = load_prepared_package(result.stage_package, self.root)
+        obligation_path = self.root / next(
+            item.path
+            for item in package.package_artifacts
+            if item.kind == "atomic-obligations"
+        )
+        obligation = load_obligations(obligation_path).obligations[0]
+
+        self.assertEqual("ui-calibration-required", obligation.calibration_status)
+        self.assertEqual((), obligation.constraint_gap_ids)
 
     def test_compiler_structures_exact_canonical_dictionary_values(self) -> None:
         inventory = self.design / "dictionary-inventory.md"
