@@ -2,7 +2,7 @@ ft_slug: AutoFin
 prepared_compiler_contract_version: 2
 scope_slug: application-card-client-personal-data
 current_stage: ft-test-case-iteration
-stage_status: blocked-input
+stage_status: ready-for-next-stage
 current_round: 1
 next_skill: ft-test-case-iteration
 required_inputs:
@@ -34,6 +34,7 @@ latest_artifacts:
   backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v8-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/45-personal-data-v8-reviewer-contract/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/45-personal-data-v8-reviewer-contract/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/45-personal-data-v8-reviewer-contract/pre-live-authorization.md
   session_log: work/stage-handoffs/45-personal-data-v8-reviewer-contract/iteration-session-log.md
   decision_log: work/stage-handoffs/45-personal-data-v8-reviewer-contract/agent-decision-log.md
   active_transition_prompt: work/stage-handoffs/45-personal-data-v8-reviewer-contract/prompt.scope-to-iteration.md
@@ -44,8 +45,6 @@ open_questions:
   - GAP-001 — точная UI-реакция на недопустимое значение.
   - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
   - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
-blocking_reasons:
-  - Pre-live checkpoint is not committed and pushed yet.
-  - Separate pre-live authorization is absent; live dispatcher remains forbidden.
+blocking_reasons: []
 accepted_risks:
   - UI-specific oracle calibration остаётся за ft-ui-automation-prep.

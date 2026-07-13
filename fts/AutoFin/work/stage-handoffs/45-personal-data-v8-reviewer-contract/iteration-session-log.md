@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/workflow-state.yaml` |
-| status_after | `pre-live-checkpoint` |
+| status_after | `ready-for-live` |
 
 ## Inputs Read
 
@@ -60,6 +60,8 @@
 | 4 | Source-verified diagnostics | `F-003/F-004/F-005` confirmed; `F-002` rejected | source-backed diagnostic verification |
 | 5 | Compiled and validated V8 | 13 targets, 34 preserved, 65/65 oracle pass | V8 package and validate-only |
 | 6 | Verified exec route | exec contract v2; no SDK fallback | backend-selection dry-run |
+| 7 | Committed and pushed checkpoint | local/origin `fc03115f...` match; staging empty | git evidence |
+| 8 | Recorded separate authorization | exactly one V8 dispatcher allowed after authorization push | pre-live authorization |
 
 ## Quality Checkpoints
 
