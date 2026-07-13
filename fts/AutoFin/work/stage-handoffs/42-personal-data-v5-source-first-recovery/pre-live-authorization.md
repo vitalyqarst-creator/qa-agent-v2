@@ -2,7 +2,7 @@
 
 ## Decision
 
-`CONDITIONAL — authorize exactly one dispatcher after checkpoint commit`
+`AUTHORIZED — exactly one dispatcher`
 
 ## Conditions already satisfied
 
@@ -13,9 +13,10 @@
 - Verified exec selected; SDK fallback is disabled.
 - Production baseline is unchanged and shadow target is absent.
 
-## Remaining condition
+## Checkpoint
 
-- Create and record the pre-live checkpoint commit.
+- Commit: `8bf43729e38762b615e531e9b5be99058a6af0a1`.
+- Checkpoint created after all listed gates passed and before any V5 live attempt.
 
 ## Stop rule
 

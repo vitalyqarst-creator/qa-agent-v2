@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/41-personal-data-v4-quality-remediation/workflow-state.yaml` |
-| status_after | `ready-for-next-stage` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -48,6 +48,7 @@
 - V5 package digest/hash verification через runner validate-only — pass.
 - Writer context — 100 811 / 131 072 bytes, pass; attempts не созданы.
 - Dispatcher dry-run — verified exec, contract v2, no SDK fallback.
+- Единственный live writer — `blocked-input`, 19.609 s, 39 125 tokens, 0 commands, 0 file changes; reviewer не запускался.
 - Production baseline SHA-256 — `98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc`, unchanged; shadow absent.
 
 ## Contamination Check
@@ -67,6 +68,7 @@
 | 4 | Собран V5 package | Digest-valid immutable package | `prepared-input/application-card-client-personal-data-v5/` |
 | 5 | Выполнены pre-live checks | validate-only и exec dry-run pass | preflight reports |
 | 6 | Подготовлена checkpoint authorization | Один live после commit | `pre-live-authorization.md` |
+| 7 | Выполнен единственный V5 dispatcher | Writer заблокирован transport-capacity risk; retry не выполнялся | `live-blocker-analysis.md` |
 
 ## Quality Checkpoints
 
@@ -78,6 +80,7 @@
 | Draft state integrity | pass | regression requires empty draft alias before materialization | inspect live state |
 | Pre-live context | pass | 100 811 / 131 072 bytes | stop on any live blocker |
 | Production boundary | pass | baseline unchanged; shadow absent | no promotion |
+| Live writer output | fail | 47-TC draft не помещён в one-shot schema contract | redesign transport before V6 |
 
 ## Technical Fallbacks
 
@@ -87,8 +90,8 @@
 
 ## Handoff Notes For Next Session
 
-- If live writer still requests a concrete stand record, stop without retry and inspect the exact embedded fixture section/prompt rather than registering PII-bearing data.
-- If draft passes but reviewer requires changes, runner may use its single semantic round only; do not mutate V5 package or production baseline.
+- V5 live quota израсходован; не запускать и не возобновлять этот cycle.
+- Следующая итерация должна добавить output-capacity preflight и альтернативный transport до V6 live.
 
 ## Artifact Write Strategy
 

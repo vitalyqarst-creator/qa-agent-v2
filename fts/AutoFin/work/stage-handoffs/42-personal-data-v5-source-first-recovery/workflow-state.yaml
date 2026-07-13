@@ -1,8 +1,8 @@
 ft_slug: AutoFin
 scope_slug: application-card-client-personal-data
 current_stage: ft-test-case-iteration
-stage_status: ready-for-next-stage
-current_round: 0
+stage_status: blocked-input
+current_round: 1
 next_skill: ft-test-case-iteration
 required_inputs:
   - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
@@ -15,6 +15,7 @@ required_inputs:
   - work/stage-handoffs/42-personal-data-v5-source-first-recovery/source-first-boundary.md
   - work/stage-handoffs/42-personal-data-v5-source-first-recovery/dadata-fio-contract.md
   - work/stage-handoffs/42-personal-data-v5-source-first-recovery/agent-decision-log.md
+  - work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/cycle-state.yaml
 latest_artifacts:
   prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/prepared-input/application-card-client-personal-data-v5/stage-package.json
   compiler_input: work/stage-handoffs/42-personal-data-v5-source-first-recovery/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
@@ -22,6 +23,14 @@ latest_artifacts:
   seed_preflight: work/stage-handoffs/42-personal-data-v5-source-first-recovery/seed-preflight-report.v5.json
   validate_only_report: work/stage-handoffs/42-personal-data-v5-source-first-recovery/validate-only-report.v5.json
   backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/backend-selection.dry-run.json
+  cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/cycle-state.yaml
+  writer_result: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json
+  backend_selection: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/backend-selection.json
+  performance_report: work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/performance.json
+  live_blocker_analysis: work/stage-handoffs/42-personal-data-v5-source-first-recovery/live-blocker-analysis.md
+  performance_analysis: work/stage-handoffs/42-personal-data-v5-source-first-recovery/performance-analysis.v5.md
+  stop_gate: work/stage-handoffs/42-personal-data-v5-source-first-recovery/stop-gate.md
+  iteration_summary: work/stage-handoffs/42-personal-data-v5-source-first-recovery/iteration-summary.md
   pre_live_stop_gate: work/stage-handoffs/42-personal-data-v5-source-first-recovery/pre-live-stop-gate.md
   pre_live_authorization: work/stage-handoffs/42-personal-data-v5-source-first-recovery/pre-live-authorization.md
   session_log: work/stage-handoffs/42-personal-data-v5-source-first-recovery/iteration-session-log.md
@@ -34,6 +43,9 @@ open_questions:
   - GAP-001 — точная UI-реакция на недопустимое значение.
   - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
   - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
-blocking_reasons: []
+blocking_reasons:
+  - Structured one-shot writer не сформировал полный draft из 47 TC из-за output-capacity/traceability risk.
+  - Текущий writer contract ошибочно представляет transport-capacity failure как blocked-input; до нового live нужен отдельный output-budget route.
+  - V5 live quota израсходован; reviewer не запускался, draft и production output отсутствуют.
 accepted_risks:
   - Поля вне scope связываются с source-backed fixture соответствующего scope только при UI-prep.

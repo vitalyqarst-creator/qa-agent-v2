@@ -1,0 +1,63 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5a3b-8168-7852-9fc2-3c2265330f2f",
+  "blocking_reasons": [
+    "Полный draft из 47 тест-кейсов не может быть безопасно сформирован в этом ответе без риска неполноты или нарушения обязательной точной трассировки из seed-шаблона. Требуется запуск подготовленного runner, который материализует и валидирует draft.md из immutable package."
+  ],
+  "contract_version": 2,
+  "cycle_id": "application-card-client-personal-data-shadow-v5-20260713",
+  "duration_ms": 19609,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T06:48:16.166726+00:00",
+  "input_digest": "4a7f120f4c42fa9a21e6861cf41c0f124221655e9398790ccca1ba0885bc04a7",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "957ee751ce413ff64c23e1cc81f1d054cf048b1da1745bb52d57be71dc8681b6"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "59462acde51b9944bd399a4b493e73ae79d73433a06750177fab4f083026a3a6"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "957ee751ce413ff64c23e1cc81f1d054cf048b1da1745bb52d57be71dc8681b6"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "dd1d0fa7c4e71945ef8beca86ba10c5de291c477399809a08438dc72541dfac9"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "sha256": "955990d3dc7f1aa57134f41737691ef04a1cba089b8ac52a1d17eaaddee1238e"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "sha256": "395cd219189f489ff58830b51ff0e9cd514bd385cc759011d7db0cf6addf069d"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v5-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "20ebf233ece4d92235782bd204ca0abf466e68cf5327fae5c92f225f3b698aeb"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-13T06:47:56.555692+00:00",
+  "status": "blocked",
+  "timed_out": false
+}
