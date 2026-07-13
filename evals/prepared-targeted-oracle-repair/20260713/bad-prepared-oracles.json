@@ -1,0 +1,19 @@
+{
+  "cases": [
+    {
+      "id": "empty-oracle",
+      "oracle": "",
+      "expected_error": "prepared-observable-oracle-missing"
+    },
+    {
+      "id": "undefined-ui-reaction",
+      "oracle": "Точная UI-реакция не определена.",
+      "expected_error": "prepared-non-observable-oracle"
+    },
+    {
+      "id": "deferred-ui-reaction",
+      "oracle": "Конкретная UI-реакция подлежит калибровке.",
+      "expected_error": "prepared-non-observable-oracle"
+    }
+  ]
+}

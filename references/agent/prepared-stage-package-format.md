@@ -16,6 +16,7 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 5 carries `obligation_id` and `atom_id` as separate machine-readable fields; evidence text alone is not sufficient for this relation.
 - When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
 - Before package materialization, every input-based design-plan row must bind a concrete synthetic/source-backed value or a stable fixture reference. Abstract classes such as `valid-text` are not execution-ready by themselves and fail compilation with `input-fixture-required`; this preflight prevents spending a live writer turn to discover missing test data.
+- Before live, empty or known non-observable prepared oracles block as `blocked-prepared-oracle-quality`.
 
 ## Layout
 
@@ -113,6 +114,8 @@ Defaults for a small prepared-package smoke are configurable technical guardrail
 Structured fast writer and reviewer are bounded by hard terminal deadlines because their first semantic output may be the final schema-constrained object. Any writer command produces `blocked-command-budget`; timeout or malformed/partial JSON cannot be treated as progress. The explicit legacy workspace mode retains first-artifact and idle budgets. Increasing a budget is an explicit experiment decision, not automatic recovery.
 
 Input budget is not output-capacity proof. Above the single-session TC limit, preflight must route complete `planned_test_case_id` groups to disjoint bounded shards or block before live. Each shard gets only its source-backed obligations and partial seed; the immutable package remains authoritative for merge gates and reviewer. The plan proves exact TC/OBL membership, digests, complete union and disjointness.
+
+Bounded targeted repair uses a new package/cycle, hash-bound unsigned prior inputs, byte-preserving runner splice and the ordinary full-set gates/reviewer. Prior drafts are never requirement evidence or sign-off.
 
 ## Fast Path And Fallback
 

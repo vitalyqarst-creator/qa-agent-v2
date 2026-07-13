@@ -1,0 +1,48 @@
+{
+  "validator": "personal-data-v7-targeted-repair-preflight-v1",
+  "passed": true,
+  "cycle_artifacts_created": false,
+  "prepared_oracle_quality": {
+    "validator": "prepared-observable-oracle-preflight-v1",
+    "passed": true,
+    "testable_obligations_checked": 65,
+    "finding_count": 0,
+    "digest": "7f22a2ea326356bfc17aa2bdc808e8128184910ce1c8dd46d644cf9505d54357"
+  },
+  "repair": {
+    "mode": "targeted-repair",
+    "plan_digest": "56e5b935404ae230cd16360af5a8877b5628c35882e0835fe173fac5275f4930",
+    "source_draft_sha256": "3322c6854cd75545f3a9f0e4b140932bfd4ddd4d323aa12f76c9625ea031f849",
+    "source_findings_sha256": "057ff193d0ce82896ada0eb5bd52367aa6774979b723d5ba3f11d8f0ff685f43",
+    "full_test_case_count": 47,
+    "target_test_case_count": 4,
+    "preserved_test_case_count": 43,
+    "target_test_case_ids": [
+      "TC-ACPD-026",
+      "TC-ACPD-027",
+      "TC-ACPD-028",
+      "TC-ACPD-034"
+    ],
+    "target_obligation_count": 7,
+    "writer_session_count": 1,
+    "writer_context_bytes": 40889,
+    "writer_context_limit_bytes": 131072,
+    "non_target_sections_require_byte_preservation": true
+  },
+  "reviewer": {
+    "fresh_session_after_full_gates": true,
+    "obligation_count": 65,
+    "obligation_limit": 100,
+    "estimated_output_bytes": 18688,
+    "estimated_output_limit_bytes": 65536,
+    "output_schema_bytes": 1690,
+    "schema_mode": "generic-bounded-parser-verified",
+    "estimated_primary_context_bytes": 117260,
+    "context_limit_bytes": 196608
+  },
+  "production": {
+    "ft_first_baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "shadow_exists": false,
+    "promotion_enabled": false
+  }
+}

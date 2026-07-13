@@ -1,0 +1,38 @@
+{
+  "validator": "prepared-v7-package-preflight-v1",
+  "passed": true,
+  "package_id": "application-card-client-personal-data-v7",
+  "package_digest": "93b3ebf9c1c3c999026f91df94ecc2f72057a4ecb4335d9e75a03b6041b873a3",
+  "stage_package_sha256": "67aa1623cb9645cc55cba33c4be027abf0c7f27fcf4a2053810f18c3e6e44182",
+  "section_id": "14",
+  "execution_profile": "standard-required",
+  "atoms": 42,
+  "obligations": 65,
+  "planned_test_cases": 47,
+  "coverage_gaps": ["GAP-001", "GAP-002", "GAP-003"],
+  "dictionary_refs": ["DICT-001"],
+  "compiled_evidence_logical_utf8_bytes": 49134,
+  "compiled_evidence_budget_bytes": 49152,
+  "source_evidence_artifact_bytes_with_windows_newlines": 49461,
+  "fixture_contracts_embedded": [
+    "FIX-ACPD-PORTABLE-SAVE-001",
+    "FIX-ACPD-RUNTIME-DADATA-001"
+  ],
+  "package_artifact_hashes_match_manifest": true,
+  "compiler_input_sha256": {
+    "atomic-requirements-ledger.md": "3432ce9fcf800e480ced4242dcd4aee38971d42e7fbd728e8e13cefd344299c8",
+    "compiler-input.yaml": "37ddc148615b2d056c7979672bfdf12b46ba2be12d984e76a120c4a11e8fba7e",
+    "coverage-gaps.md": "524ad97971cacbd5dfafcedc8aeaf537b7ebcd470513a924487e9a3a4f797ea7",
+    "coverage-obligation-table.md": "1ae9d6693caa9d742a85c13ce2bd763760fddae90700ca5d4928d179ff4c7cc1",
+    "dictionary-inventory.md": "79f5d505bdaf5d92a47483eb61deea9bb4ef8e4baaca0e75575dfcee474b9392",
+    "mapping-consistency-report.md": "7c86c165e60e61f527f0a7acfd66c6fb26267a8163d14b36bcaabfa4c08ad510",
+    "package-test-design-plan.md": "447f92b79f490f6528c05d114dbb1df7932503ba3ff1708582f48d6561236314",
+    "test-design-applicability-matrix.md": "44e02f40105578811cebfe9c2aa9242034994109e3da36b6234be728b2e2f563",
+    "test-design-decision-table.md": "270199d1598cff5c77abac4d05c64acc5dc3ac593ae79f84040b844f61db018d"
+  },
+  "package_file_sha256": {
+    "source-evidence.md": "d37cebc6540820eab1184adaf879e3acc024e15d26e59e5fffb577f5d625eaa0",
+    "atomic-obligations.json": "b707a1df47fa6b2b0804fab90009baf5acf6088f955a7b6bed60743ac09dd055",
+    "stage-instructions.md": "0e156eb17688e1fc225be935fd50dfa48390fd47d6f4b8016faffce6900bf282"
+  }
+}

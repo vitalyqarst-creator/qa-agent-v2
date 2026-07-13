@@ -92,6 +92,8 @@ For `standard-required`, keep the default `prepared_standard_writer_mode=structu
 
 For a structured package above the runner's single-session TC limit, require output-capacity preflight and the canonical bounded-shard route. Keep every `planned_test_case_id` group intact, require complete/disjoint TC and obligation membership, use a fresh session for every shard, and allow only runner-owned deterministic merge. Do not send the same full-scope one-shot prompt as a retry. Run one fresh reviewer only after the merged draft passes all full-set deterministic gates.
 
+Before any prepared live writer, require the runner's observable-oracle preflight. If a terminal prior cycle has a complete unsigned draft and only allowlisted deterministic execution-oracle findings, recovery may compile one new immutable package/cycle and use the exec runner's hash-bound targeted-repair route. Pass the prior draft/findings only as unsigned repair input, repair only the named TC subset in one fresh read-only writer session, require runner-owned byte-preserving splice, then run the ordinary full-set gates and one fresh reviewer. Never retry/resume the terminal cycle or treat its draft as requirement evidence.
+
 8. Stop at `signed-off`, `round-cap-reached`, `blocked-input` or any non-runnable status. Do not manually advance semantic verdicts.
 
 ## Gates

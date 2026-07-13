@@ -449,6 +449,70 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         return step
 
+    @staticmethod
+    def complete_test_case_section(index: int, *, expected: str | None = None) -> str:
+        obligation_id = "ATOM-001" if index == 1 else f"OBL-{index:03d}"
+        return f"""## TC-DEMO-{index:03d}
+
+**Название:** Проверка видимого результата {index}
+**Тип:** позитивный
+**Приоритет:** средний
+**package_id:** pkg-exec-001
+**Трассировка:** {obligation_id}; ATOM-{index:03d}; SRC-1
+
+### Предусловия
+
+1. Открыта тестовая форма {index}.
+
+### Тестовые данные
+
+- Значение: `value-{index}`.
+
+### Шаги
+
+1. Ввести `value-{index}` в поле {index}.
+
+### Итоговый ожидаемый результат
+
+{expected or f'Поле {index} визуально содержит `value-{index}`.'}
+
+### Постусловия
+
+- Дополнительная очистка не требуется.
+"""
+
+    def prepared_reviewer_step_for_count(self, count: int):
+        def step(_request):
+            payload = {
+                "contract_version": 2,
+                "decision": "accepted",
+                "reviewed_draft_sha256": hashlib.sha256(
+                    self.draft_path.read_bytes()
+                ).hexdigest(),
+                "obligation_reviews": [
+                    {
+                        "obligation_id": (
+                            "ATOM-001" if index == 1 else f"OBL-{index:03d}"
+                        ),
+                        "atom_id": f"ATOM-{index:03d}",
+                        "verdict": "covered",
+                        "test_case_ids": [f"TC-DEMO-{index:03d}"],
+                        "note": f"Видимый результат {index} покрыт.",
+                    }
+                    for index in range(1, count + 1)
+                ],
+                "findings": [],
+                "summary": "Точечно исправленный draft принят.",
+            }
+            return self.process_result(
+                stdout=self.json_event(
+                    json.dumps(payload, ensure_ascii=False),
+                    session_id="reviewer-after-targeted-repair",
+                )
+            )
+
+        return step
+
     def make_runner(
         self,
         executor,
@@ -498,6 +562,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         grouped_obligations: bool = False,
         out_of_order_planned_ids: bool = False,
         test_case_count: int = 1,
+        first_observable_oracle: str = "The visible result matches the requirement.",
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
@@ -513,7 +578,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 obligation_id="ATOM-001",
                 source_refs=("SRC-1",),
                 atomic_statement="The requirement is observable.",
-                observable_oracle="The visible result matches the requirement.",
+                observable_oracle=first_observable_oracle,
                 test_intent="Verify the visible result.",
                 coverage_status="testable",
                 gap_id="",
@@ -650,6 +715,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         promotion_contract_path: Path | None = None,
         writer_mode: str = "workspace",
         standard_writer_mode: str = "structured",
+        repair_draft_path: Path | None = None,
+        repair_findings_path: Path | None = None,
     ):
         return runner_module.CodexExecReviewCycleRunner(
             repo_root=self.repo_root,
@@ -659,6 +726,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             source_files=[],
             handoff_files=[],
             prepared_package_path=package_path,
+            prepared_repair_draft_path=repair_draft_path,
+            prepared_repair_findings_path=repair_findings_path,
             promotion_contract_path=promotion_contract_path,
             prepared_fast_writer_mode=writer_mode,
             prepared_standard_writer_mode=standard_writer_mode,
@@ -1529,6 +1598,261 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             runner.validate_configuration()
 
         self.assertFalse(self.writer_attempt.exists())
+
+    def test_prepared_oracle_quality_blocks_non_observable_oracle_before_attempt(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            first_observable_oracle="Точная UI-реакция не определена.",
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "blocked-prepared-oracle-quality",
+        ):
+            runner.validate_configuration()
+
+        self.assertFalse(self.writer_attempt.exists())
+        self.assertFalse(
+            (self.cycle_dir / "prepared-oracle-quality-preflight.json").exists()
+        )
+
+    def test_prepared_oracle_quality_accepts_observable_evidence_record(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            first_observable_oracle=(
+                "Создан evidence record: введённое значение, "
+                "точное действие, видимое состояние поля и outcome."
+            ),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        report = runner.validate_only_report()
+
+        self.assertTrue(report["prepared_oracle_quality"]["passed"])
+        self.assertEqual(
+            1,
+            report["prepared_oracle_quality"]["testable_obligations_checked"],
+        )
+        self.assertFalse(self.writer_attempt.exists())
+
+    def test_targeted_repair_replaces_only_findings_and_uses_fresh_sessions(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        prior_root = (
+            self.ft_root
+            / "work"
+            / "review-cycles"
+            / "prior-v6"
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+        )
+        prior_draft = prior_root / "stage-output" / "draft.md"
+        prior_draft.parent.mkdir(parents=True)
+        prior_sections = [
+            self.complete_test_case_section(
+                1,
+                expected="Точная UI-реакция не определена.",
+            ),
+            self.complete_test_case_section(2),
+            self.complete_test_case_section(
+                3,
+                expected="Точная UI-реакция не определена.",
+            ),
+        ]
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n" + "\n\n".join(prior_sections).rstrip() + "\n",
+            encoding="utf-8",
+        )
+        findings_path = prior_root / "runner-output" / "quality-gate-bundle.json"
+        findings_path.parent.mkdir(parents=True)
+        findings_path.write_text(
+            json.dumps(
+                {
+                    "passed": False,
+                    "findings": [
+                        {
+                            "id": "non-observable-expected-result",
+                            "severity": "error",
+                            "test_case_ids": ["TC-DEMO-001", "TC-DEMO-003"],
+                        }
+                    ],
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        replacement = (
+            ROOT_DIR
+            / "evals"
+            / "prepared-targeted-oracle-repair"
+            / "20260713"
+            / "corrected-repair-sections.md"
+        ).read_text(encoding="utf-8")
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=replacement),
+            self.prepared_reviewer_step_for_count(3),
+        )
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            repair_draft_path=prior_draft,
+            repair_findings_path=findings_path,
+        )
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(2, len(executor.requests))
+        self.assertEqual("writer-r1", executor.requests[0].stage)
+        self.assertEqual("reviewer-r1", executor.requests[1].stage)
+        self.assertIn("unsigned repair input only", executor.requests[0].prompt)
+        self.assertIn("selected source-backed evidence", executor.requests[0].prompt)
+        self.assertNotEqual(
+            executor.requests[0].prompt,
+            executor.requests[1].prompt,
+        )
+        capacity = json.loads(
+            (self.cycle_dir / "writer-output-capacity-preflight.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("targeted-repair", capacity["mode"])
+        self.assertEqual(
+            ["TC-DEMO-001", "TC-DEMO-003"],
+            capacity["target_test_case_ids"],
+        )
+        splice = json.loads(
+            (self.writer_attempt / "runner-output" / "repair-splice.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(splice["passed"])
+        self.assertTrue(splice["all_non_target_sections_byte_preserved"])
+        preserved = next(
+            item for item in splice["sections"] if item["test_case_id"] == "TC-DEMO-002"
+        )
+        self.assertEqual(preserved["source_sha256"], preserved["output_sha256"])
+        self.assertFalse(self.final_path.exists())
+
+    def test_targeted_repair_blocks_extra_test_case_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=2,
+        )
+        prior_root = self.ft_root / "work" / "review-cycles" / "prior-v6"
+        prior_draft = prior_root / "draft.md"
+        prior_draft.parent.mkdir(parents=True)
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n"
+            + "\n\n".join(
+                (self.complete_test_case_section(1), self.complete_test_case_section(2))
+            ).rstrip()
+            + "\n",
+            encoding="utf-8",
+        )
+        findings_path = prior_root / "quality-gate-bundle.json"
+        findings_path.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "id": "non-observable-expected-result",
+                            "severity": "error",
+                            "test_case_ids": ["TC-DEMO-001"],
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        invalid_replacement = "\n\n".join(
+            (self.complete_test_case_section(1), self.complete_test_case_section(2))
+        )
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=invalid_replacement)
+        )
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            repair_draft_path=prior_draft,
+            repair_findings_path=findings_path,
+        )
+
+        result = runner.run()
+
+        self.assertEqual("blocked-repair-gate", result.status)
+        self.assertEqual(1, len(executor.requests))
+        repair_validation = json.loads(
+            (self.writer_attempt / "runner-output" / "repair-validator.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(repair_validation["passed"])
+        self.assertIn(
+            "writer-shard-test-case-set-mismatch",
+            {item["id"] for item in repair_validation["findings"]},
+        )
+
+    def test_targeted_repair_rejects_input_hash_drift(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=2,
+        )
+        prior_root = self.ft_root / "work" / "review-cycles" / "prior-v6"
+        prior_draft = prior_root / "draft.md"
+        prior_draft.parent.mkdir(parents=True)
+        prior_draft.write_text(
+            "# Тест-кейсы\n\n"
+            + "\n\n".join(
+                (self.complete_test_case_section(1), self.complete_test_case_section(2))
+            ).rstrip()
+            + "\n",
+            encoding="utf-8",
+        )
+        findings_path = prior_root / "quality-gate-bundle.json"
+        findings_path.write_text(
+            json.dumps(
+                {
+                    "findings": [
+                        {
+                            "id": "non-observable-expected-result",
+                            "severity": "error",
+                            "test_case_ids": ["TC-DEMO-001"],
+                        }
+                    ]
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        runner = self.make_prepared_runner(
+            ScriptedExecutor(),
+            package_path,
+            repair_draft_path=prior_draft,
+            repair_findings_path=findings_path,
+        )
+        runner.validate_configuration()
+        prior_draft.write_text(
+            prior_draft.read_text(encoding="utf-8") + "<!-- drift -->\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "repair source draft changed after preflight",
+        ):
+            runner._verify_repair_inputs()
 
     def test_sharded_writer_uses_fresh_sessions_and_merges_before_reviewer(self) -> None:
         package_path = self.build_prepared_package(

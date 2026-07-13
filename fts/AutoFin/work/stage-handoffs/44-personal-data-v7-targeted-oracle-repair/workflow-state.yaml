@@ -1,0 +1,53 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: application-card-client-personal-data
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 1
+next_skill: ft-test-case-iteration
+required_inputs:
+  - work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-contract.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-coverage-gaps.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/scope-clarification-requests.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-parity-check.md
+  - work/stage-handoffs/29-application-card-client-personal-data-current-source-rebase/source-row-inventory.md
+  - work/stage-handoffs/43-personal-data-v6-output-capacity/workflow-state.yaml
+  - work/stage-handoffs/43-personal-data-v6-output-capacity/live-blocker-analysis.md
+  - work/stage-handoffs/43-personal-data-v6-output-capacity/stop-gate.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  prior_cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/cycle-state.yaml
+  prior_prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/prepared-input/application-card-client-personal-data-v6/stage-package.json
+  repair_input_draft: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  repair_input_findings: work/review-cycles/application-card-client-personal-data-shadow-v6-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json
+  compiler_input: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
+  prepared_package: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/prepared-input/application-card-client-personal-data-v7/stage-package.json
+  package_preflight: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/package-preflight-report.v7.json
+  targeted_repair_preflight: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/targeted-repair-preflight.v7.json
+  dispatcher_config: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/dispatcher-config.v7.json
+  backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/backend-selection.dry-run.json
+  pre_live_test_report: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-test-report.md
+  pre_live_stop_gate: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-stop-gate.md
+  atomic_requirements_ledger: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/atomic-requirements-ledger.md
+  coverage_obligation_table: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/coverage-obligation-table.md
+  package_test_design_plan: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/package-test-design-plan.md
+  test_design_applicability_matrix: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/test-design-applicability-matrix.md
+  test_design_decision_table: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/test-design-decision-table.md
+  coverage_gaps: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/coverage-gaps.md
+  dictionary_inventory: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/dictionary-inventory.md
+  mapping_consistency_report: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/mapping-consistency-report.md
+  session_log: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/iteration-session-log.md
+  decision_log: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/agent-decision-log.md
+  active_transition_prompt: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/prompt.scope-to-iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 3
+open_questions:
+  - GAP-001 — точная UI-реакция на недопустимое значение.
+  - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
+  - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
+blocking_reasons:
+  - Checkpoint commit/push and explicit one-dispatcher authorization are pending.
+accepted_risks:
+  - UI-specific oracle calibration остаётся за ft-ui-automation-prep.

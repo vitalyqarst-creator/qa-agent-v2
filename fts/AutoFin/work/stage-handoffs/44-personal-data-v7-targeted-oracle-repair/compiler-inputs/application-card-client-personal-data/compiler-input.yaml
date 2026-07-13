@@ -1,0 +1,16 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: application-card-client-personal-data
+canonical_test_cases: test-cases/14-prepared-shadow-application-card-client-personal-data.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/20-prepared-autofin-cross-scope/source-selection.md
+  compiler_input: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/compiler-input.yaml
+  atomic_requirements_ledger: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/atomic-requirements-ledger.md
+  coverage_obligation_table: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/coverage-obligation-table.md
+  package_test_design_plan: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/package-test-design-plan.md
+  test_design_applicability_matrix: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/test-design-applicability-matrix.md
+  test_design_decision_table: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/test-design-decision-table.md
+  coverage_gaps: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/coverage-gaps.md
+  dictionary_inventory: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/dictionary-inventory.md
+  mapping_consistency_report: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/compiler-inputs/application-card-client-personal-data/mapping-consistency-report.md
+blocking_reasons: []

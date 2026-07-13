@@ -30,6 +30,10 @@ Return `blocked-input` when these conditions do not hold. Do not open project in
 9. A concrete FT-first fixture may be a synthetic value, relative date or runtime-selected integration response with source-defined observable properties. A stand record ID, locator, token, session or prerecorded provider response is not required until UI-prep.
 10. Return `blocked-input` with empty `draft_markdown` and precise reasons only when inline evidence cannot define the test intent or observable oracle without invention.
 
+## Targeted Repair Projection
+
+When the runner declares a hash-bound targeted-repair plan, return only the assigned `## TC-*` replacement sections in the declared order. Treat prior unsigned sections as repair input, never as requirement evidence; source-backed evidence and the exact obligation projection remain authoritative. Preserve assigned OBL/ATOM and gap markers. For calibration candidates, make the expected result an evidence record containing the exact input/action, visible state and outcome without inventing a UI mechanism. For permitted-value checks, state the exact visible value. Do not add an H1 or any unassigned TC; the runner owns byte-preserving splice and full-set validation.
+
 ## Assisted Fallback
 
 `prepared-standard --prepared-standard-writer-mode assisted` is an explicit recovery route, never an automatic retry. It may use only manifest-listed instruction artifacts and a single targeted registered-source fallback for a named unresolved OBL/ATOM. Record the path, locator and reason. Broad discovery, production test cases, prior cycles and generated drafts remain forbidden.

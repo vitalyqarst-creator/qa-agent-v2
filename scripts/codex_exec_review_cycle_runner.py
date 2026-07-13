@@ -85,6 +85,7 @@ DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES = 768 * 1024
 DEFAULT_PREPARED_STRUCTURED_WRITER_SINGLE_SESSION_TC_LIMIT = 12
 DEFAULT_PREPARED_STRUCTURED_WRITER_SHARD_SIZE = 12
 DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS = 8
+DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES = 12
 DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT = 100
 MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES = 64 * 1024
 DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 80
@@ -125,6 +126,11 @@ NON_OBSERVABLE_EXPECTED_RESULT_RE = re.compile(
     r")",
     flags=re.IGNORECASE,
 )
+REPAIRABLE_QUALITY_FINDING_IDS = {
+    "generic-execution-fixture",
+    "undefined-execution-action",
+    "non-observable-expected-result",
+}
 
 InstructionContextResolver = Callable[..., dict[str, Any]]
 
@@ -162,6 +168,29 @@ def relative_path(path: Path, root: Path) -> str:
 
 def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def sha256_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def test_case_section_spans(text: str) -> list[tuple[str, int, int, str]]:
+    matches = list(
+        re.finditer(r"(?m)^##\s+(TC-[A-Za-z0-9][A-Za-z0-9_.-]*)\s*$", text)
+    )
+    return [
+        (
+            match.group(1),
+            match.start(),
+            matches[index + 1].start() if index + 1 < len(matches) else len(text),
+            text[
+                match.start() : (
+                    matches[index + 1].start() if index + 1 < len(matches) else len(text)
+                )
+            ],
+        )
+        for index, match in enumerate(matches)
+    ]
 
 
 def markdown_subsection(section: str, heading: str) -> str:
@@ -772,6 +801,8 @@ class CodexExecReviewCycleRunner:
     handoff_files: Sequence[Path]
     command_config: ExecCommandConfig
     prepared_package_path: Path | None = None
+    prepared_repair_draft_path: Path | None = None
+    prepared_repair_findings_path: Path | None = None
     promotion_contract_path: Path | None = None
     instruction_files: Sequence[Path] = ()
     writer_instruction_files: Sequence[Path] = ()
@@ -811,6 +842,9 @@ class CodexExecReviewCycleRunner:
     prepared_structured_writer_max_shards: int = (
         DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS
     )
+    prepared_targeted_repair_max_test_cases: int = (
+        DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES
+    )
     prepared_structured_reviewer_obligation_limit: int = (
         DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT
     )
@@ -830,6 +864,8 @@ class CodexExecReviewCycleRunner:
         default_factory=dict, init=False
     )
     _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
+    _prepared_oracle_quality_plan: dict[str, Any] = field(default_factory=dict, init=False)
+    _prepared_repair_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _reviewer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _reviewer_context_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
 
@@ -849,6 +885,10 @@ class CodexExecReviewCycleRunner:
         )
         if self.prepared_package_path is not None:
             self.prepared_package_path = self.prepared_package_path.resolve()
+        if self.prepared_repair_draft_path is not None:
+            self.prepared_repair_draft_path = self.prepared_repair_draft_path.resolve()
+        if self.prepared_repair_findings_path is not None:
+            self.prepared_repair_findings_path = self.prepared_repair_findings_path.resolve()
         if self.promotion_contract_path is not None:
             self.promotion_contract_path = self.promotion_contract_path.resolve()
         configured_instructions = tuple(path.resolve() for path in self.instruction_files)
@@ -960,6 +1000,26 @@ class CodexExecReviewCycleRunner:
         return self.cycle_dir / "writer-shard-plan.json"
 
     @property
+    def prepared_oracle_quality_path(self) -> Path:
+        return self.cycle_dir / "prepared-oracle-quality-preflight.json"
+
+    @property
+    def prepared_repair_plan_path(self) -> Path:
+        return self.cycle_dir / "writer-targeted-repair-plan.json"
+
+    @property
+    def repair_draft_path(self) -> Path:
+        return self.stage_output_dir(WRITER_STAGE) / "repair.md"
+
+    @property
+    def repair_validator_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "repair-validator.json"
+
+    @property
+    def repair_splice_path(self) -> Path:
+        return self.runner_output_dir(WRITER_STAGE) / "repair-splice.json"
+
+    @property
     def reviewer_evidence_access_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "evidence-access-report.json"
 
@@ -979,6 +1039,8 @@ class CodexExecReviewCycleRunner:
             self.cycle_dir / "stage-inputs",
             self.writer_output_capacity_path,
             self.writer_shard_plan_path,
+            self.prepared_oracle_quality_path,
+            self.prepared_repair_plan_path,
         ]
         return tuple(paths)
 
@@ -1016,6 +1078,22 @@ class CodexExecReviewCycleRunner:
             and self.prepared_standard_writer_mode == "structured"
         )
 
+    def _uses_targeted_prepared_repair(self) -> bool:
+        return bool(
+            self._uses_structured_prepared_writer()
+            and self.prepared_repair_draft_path is not None
+            and self.prepared_repair_findings_path is not None
+            and self._prepared_repair_plan.get("passed")
+        )
+
+    def _uses_generic_bounded_reviewer_schema(self) -> bool:
+        return bool(
+            self._uses_sharded_prepared_writer()
+            or self._uses_targeted_prepared_repair()
+            or len(self._prepared_writer_groups())
+            > self.prepared_structured_writer_single_session_tc_limit
+        )
+
     def _prepared_writer_groups(self) -> list[tuple[str, list[Any]]]:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
         grouped: dict[str, list[Any]] = {}
@@ -1027,8 +1105,238 @@ class CodexExecReviewCycleRunner:
             grouped.setdefault(test_case_id, []).append(obligation)
         return sorted(grouped.items(), key=lambda item: self._test_case_id_sort_key(item[0]))
 
+    def _build_prepared_oracle_quality_plan(self) -> dict[str, Any]:
+        obligation_path = self._prepared_artifact("atomic-obligations")
+        obligations = load_obligations(obligation_path)
+        findings: list[dict[str, Any]] = []
+        checked = 0
+        for obligation in obligations.obligations:
+            if obligation.coverage_status != "testable":
+                continue
+            checked += 1
+            oracle = obligation.observable_oracle.strip()
+            if not oracle:
+                findings.append(
+                    {
+                        "id": "prepared-observable-oracle-missing",
+                        "severity": "error",
+                        "obligation_id": obligation.obligation_id,
+                        "atom_id": obligation.traceability_atom_id,
+                        "test_case_id": obligation.planned_test_case_id,
+                    }
+                )
+            elif NON_OBSERVABLE_EXPECTED_RESULT_RE.search(oracle):
+                findings.append(
+                    {
+                        "id": "prepared-non-observable-oracle",
+                        "severity": "error",
+                        "obligation_id": obligation.obligation_id,
+                        "atom_id": obligation.traceability_atom_id,
+                        "test_case_id": obligation.planned_test_case_id,
+                        "oracle_sha256": sha256_text(oracle),
+                    }
+                )
+        report: dict[str, Any] = {
+            "passed": not findings,
+            "validator": "prepared-observable-oracle-preflight-v1",
+            "error_code": "" if not findings else "blocked-prepared-oracle-quality",
+            "package_id": obligations.package_id,
+            "atomic_obligations_sha256": sha256_file(obligation_path),
+            "testable_obligations_checked": checked,
+            "finding_count": len(findings),
+            "affected_test_case_ids": list(
+                dict.fromkeys(
+                    str(item["test_case_id"])
+                    for item in findings
+                    if item.get("test_case_id")
+                )
+            ),
+            "findings": findings,
+        }
+        report["preflight_digest"] = hashlib.sha256(
+            json.dumps(
+                report,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return report
+
+    def _build_prepared_repair_plan(self) -> dict[str, Any]:
+        if self.prepared_repair_draft_path is None or self.prepared_repair_findings_path is None:
+            raise RunnerError("targeted repair requires both draft and findings inputs")
+        for path, label in (
+            (self.prepared_repair_draft_path, "repair draft"),
+            (self.prepared_repair_findings_path, "repair findings"),
+        ):
+            if not path.is_file():
+                raise RunnerError(f"Prepared {label} input does not exist: {path}")
+            if not is_relative_to(path, self.ft_root):
+                raise RunnerError(f"Prepared {label} input must be under the FT package")
+            if is_relative_to(path, self.cycle_dir):
+                raise RunnerError(f"Prepared {label} input must come from a prior immutable cycle")
+        try:
+            findings_payload = json.loads(
+                self.prepared_repair_findings_path.read_text(encoding="utf-8")
+            )
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RunnerError(f"Prepared repair findings are invalid JSON: {exc}") from exc
+        raw_findings = findings_payload.get("findings")
+        if not isinstance(raw_findings, list) or not raw_findings:
+            raise RunnerError("Prepared repair findings must contain at least one finding")
+        unsupported = sorted(
+            {
+                str(item.get("id", ""))
+                for item in raw_findings
+                if item.get("severity") == "error"
+                and item.get("id") not in REPAIRABLE_QUALITY_FINDING_IDS
+            }
+        )
+        if unsupported:
+            raise RunnerError(
+                "Prepared targeted repair does not support finding ids: "
+                + ", ".join(unsupported)
+            )
+        finding_tc_ids = {
+            str(test_case_id)
+            for item in raw_findings
+            if item.get("severity") == "error"
+            and item.get("id") in REPAIRABLE_QUALITY_FINDING_IDS
+            for test_case_id in (item.get("test_case_ids") or [])
+        }
+        groups = self._prepared_writer_groups()
+        planned_ids = [test_case_id for test_case_id, _ in groups]
+        target_ids = [test_case_id for test_case_id in planned_ids if test_case_id in finding_tc_ids]
+        unknown_ids = sorted(finding_tc_ids - set(planned_ids))
+        if unknown_ids:
+            raise RunnerError(
+                "Prepared repair findings reference unknown test cases: "
+                + ", ".join(unknown_ids)
+            )
+        if not target_ids:
+            raise RunnerError("Prepared targeted repair has no repairable test-case ids")
+        if len(target_ids) > self.prepared_targeted_repair_max_test_cases:
+            raise RunnerError(
+                "blocked-prepared-targeted-repair-capacity: "
+                f"target_count={len(target_ids)}, "
+                f"limit={self.prepared_targeted_repair_max_test_cases}"
+            )
+        source_text = self.prepared_repair_draft_path.read_text(encoding="utf-8")
+        spans = test_case_section_spans(source_text)
+        actual_ids = [item[0] for item in spans]
+        if actual_ids != planned_ids:
+            raise RunnerError(
+                "Prepared repair draft test-case set/order does not match the current package"
+            )
+        group_by_id = dict(groups)
+        target_obligations = [
+            obligation
+            for test_case_id in target_ids
+            for obligation in group_by_id[test_case_id]
+        ]
+        sections = [
+            {
+                "test_case_id": test_case_id,
+                "sha256": sha256_text(section),
+                "repair_target": test_case_id in finding_tc_ids,
+            }
+            for test_case_id, _, _, section in spans
+        ]
+        report: dict[str, Any] = {
+            "passed": True,
+            "validator": "prepared-targeted-repair-plan-v1",
+            "package_id": self._prepared_package.package_id if self._prepared_package else "",
+            "package_digest": self._prepared_package.package_digest if self._prepared_package else "",
+            "source_draft": relative_path(self.prepared_repair_draft_path, self.repo_root),
+            "source_draft_sha256": sha256_file(self.prepared_repair_draft_path),
+            "source_findings": relative_path(self.prepared_repair_findings_path, self.repo_root),
+            "source_findings_sha256": sha256_file(self.prepared_repair_findings_path),
+            "full_test_case_count": len(planned_ids),
+            "target_test_case_count": len(target_ids),
+            "preserved_test_case_count": len(planned_ids) - len(target_ids),
+            "target_test_case_ids": target_ids,
+            "preserved_test_case_ids": [
+                test_case_id for test_case_id in planned_ids if test_case_id not in finding_tc_ids
+            ],
+            "target_obligation_ids": [
+                item.obligation_id for item in target_obligations
+            ],
+            "target_atom_ids": list(
+                dict.fromkeys(item.traceability_atom_id for item in target_obligations)
+            ),
+            "allowed_finding_ids": sorted(REPAIRABLE_QUALITY_FINDING_IDS),
+            "sections": sections,
+        }
+        report["plan_digest"] = hashlib.sha256(
+            json.dumps(
+                report,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        return report
+
+    def _repair_shard(self) -> dict[str, Any]:
+        if not self._prepared_repair_plan.get("passed"):
+            raise RunnerError("Prepared targeted repair plan is unavailable")
+        return {
+            "index": 1,
+            "stage": WRITER_STAGE,
+            "test_case_ids": list(self._prepared_repair_plan["target_test_case_ids"]),
+            "obligation_ids": list(self._prepared_repair_plan["target_obligation_ids"]),
+            "atom_ids": list(self._prepared_repair_plan["target_atom_ids"]),
+            "digest": self._prepared_repair_plan["plan_digest"],
+        }
+
+    def _verify_repair_inputs(self) -> None:
+        if not self._uses_targeted_prepared_repair():
+            return
+        assert self.prepared_repair_draft_path is not None
+        assert self.prepared_repair_findings_path is not None
+        if sha256_file(self.prepared_repair_draft_path) != self._prepared_repair_plan[
+            "source_draft_sha256"
+        ]:
+            raise RunnerError("Prepared targeted repair source draft changed after preflight")
+        if sha256_file(self.prepared_repair_findings_path) != self._prepared_repair_plan[
+            "source_findings_sha256"
+        ]:
+            raise RunnerError("Prepared targeted repair findings changed after preflight")
+
     def _build_writer_output_capacity_plan(self) -> dict[str, Any]:
         groups = self._prepared_writer_groups()
+        if self._prepared_repair_plan.get("passed"):
+            target_ids = list(self._prepared_repair_plan["target_test_case_ids"])
+            target_obligation_ids = list(
+                self._prepared_repair_plan["target_obligation_ids"]
+            )
+            passed = len(target_ids) <= self.prepared_structured_writer_single_session_tc_limit
+            return {
+                "passed": passed,
+                "validator": "prepared-structured-writer-output-capacity-v1",
+                "error_code": ""
+                if passed
+                else "prepared-structured-writer-output-capacity-exceeded",
+                "mode": "targeted-repair",
+                "package_id": self._prepared_package.package_id if self._prepared_package else "",
+                "atomic_obligations_sha256": sha256_file(
+                    self._prepared_artifact("atomic-obligations")
+                ),
+                "test_case_count": len(target_ids),
+                "full_test_case_count": len(groups),
+                "obligation_count": len(target_obligation_ids),
+                "single_session_test_case_limit": self.prepared_structured_writer_single_session_tc_limit,
+                "configured_shard_size": self.prepared_structured_writer_shard_size,
+                "max_shards": self.prepared_structured_writer_max_shards,
+                "shard_count": 0,
+                "union_complete": True,
+                "disjoint": True,
+                "full_seed_bytes": len(self._draft_seed_text().encode("utf-8")),
+                "target_test_case_ids": target_ids,
+                "plan_digest": self._prepared_repair_plan["plan_digest"],
+                "shards": [],
+            }
         obligation_count = sum(len(items) for _, items in groups)
         test_case_count = len(groups)
         limit = self.prepared_structured_writer_single_session_tc_limit
@@ -1161,7 +1469,7 @@ class CodexExecReviewCycleRunner:
             "estimated_output_limit_bytes": MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES,
             "output_schema_bytes": schema_bytes,
             "schema_mode": "generic-bounded-parser-verified"
-            if self._uses_sharded_prepared_writer()
+            if self._uses_generic_bounded_reviewer_schema()
             else "exact-obligation-variants",
         }
 
@@ -1348,6 +1656,7 @@ class CodexExecReviewCycleRunner:
             "prepared_standard_reviewer_context_max_bytes",
             "prepared_structured_writer_single_session_tc_limit",
             "prepared_structured_writer_max_shards",
+            "prepared_targeted_repair_max_test_cases",
             "prepared_structured_reviewer_obligation_limit",
         ):
             if getattr(self, name) < 1:
@@ -1372,6 +1681,14 @@ class CodexExecReviewCycleRunner:
             raise RunnerError(f"Final artifact must be a Markdown file directly under {production_dir}")
         if self.final_path.name.lower() == "readme.md":
             raise RunnerError("README.md cannot be used as the promoted final artifact")
+        if (self.prepared_repair_draft_path is None) != (
+            self.prepared_repair_findings_path is None
+        ):
+            raise RunnerError(
+                "targeted repair requires both --prepared-repair-draft and --prepared-repair-findings"
+            )
+        if self.prepared_repair_draft_path is not None and self.prepared_package_path is None:
+            raise RunnerError("targeted repair is supported only for prepared routes")
         if self.prepared_package_path is not None:
             if not self.command_config.output_schema_flag:
                 raise RunnerError(
@@ -1430,6 +1747,26 @@ class CodexExecReviewCycleRunner:
                     f"unsupported_dimensions={dimensions}"
                 )
             self._validate_prepared_attempt_binding()
+            self._prepared_oracle_quality_plan = (
+                self._build_prepared_oracle_quality_plan()
+            )
+            if not self._prepared_oracle_quality_plan["passed"]:
+                raise RunnerError(
+                    "blocked-prepared-oracle-quality: "
+                    f"finding_count={self._prepared_oracle_quality_plan['finding_count']}, "
+                    "test_case_ids="
+                    + ",".join(
+                        self._prepared_oracle_quality_plan[
+                            "affected_test_case_ids"
+                        ]
+                    )
+                )
+            if self.prepared_repair_draft_path is not None:
+                if not self._uses_structured_prepared_writer():
+                    raise RunnerError(
+                        "targeted repair requires a structured prepared writer"
+                    )
+                self._prepared_repair_plan = self._build_prepared_repair_plan()
         else:
             if not self.source_files:
                 raise RunnerError("At least one explicit source file is required")
@@ -1439,6 +1776,8 @@ class CodexExecReviewCycleRunner:
             self._standard_instruction_paths("reviewer")
             self._validate_standard_command_budgets()
         if self.promotion_contract_path is not None:
+            if self.prepared_repair_draft_path is not None:
+                raise RunnerError("targeted repair cannot be combined with promotion")
             if self._prepared_package is None:
                 raise RunnerError("Promotion contract is supported only for prepared routes")
             if not is_relative_to(self.promotion_contract_path, self.ft_root):
@@ -1488,7 +1827,7 @@ class CodexExecReviewCycleRunner:
                     f"obligation_limit={self.prepared_structured_reviewer_obligation_limit}, "
                     f"estimated_output_bytes={self._reviewer_output_capacity_plan['estimated_output_bytes']}"
                 )
-            if self._uses_sharded_prepared_writer() and self._is_prepared_standard():
+            if self._uses_generic_bounded_reviewer_schema() and self._is_prepared_standard():
                 self._reviewer_context_capacity_plan = (
                     self._build_reviewer_context_capacity_plan()
                 )
@@ -2191,6 +2530,107 @@ class CodexExecReviewCycleRunner:
         if self._is_prepared_standard():
             self._enforce_prepared_standard_context_budget(
                 role="writer", prompt=prompt, stage=stage
+            )
+        return prompt
+
+    def _targeted_repair_input_sections(self) -> str:
+        if not self._uses_targeted_prepared_repair():
+            raise RunnerError("Prepared targeted repair is not active")
+        assert self.prepared_repair_draft_path is not None
+        target_ids = set(self._prepared_repair_plan["target_test_case_ids"])
+        sections = [
+            section.rstrip()
+            for test_case_id, _, _, section in test_case_section_spans(
+                self.prepared_repair_draft_path.read_text(encoding="utf-8")
+            )
+            if test_case_id in target_ids
+        ]
+        if len(sections) != len(target_ids):
+            raise RunnerError("Prepared targeted repair source sections are incomplete")
+        return "\n\n".join(sections)
+
+    def _targeted_repair_prompt(self) -> str:
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        shard = self._repair_shard()
+        prompt = "\n".join(
+            [
+                "# Codex exec prepared writer targeted repair",
+                "",
+                "This is one fresh read-only repair session over a runner-owned hash-bound plan.",
+                "Use only the selected source-backed evidence and obligation projection as requirement evidence.",
+                "The prior generated sections below are unsigned repair input only; do not treat their wording as requirements.",
+                "Do not call shell or file tools and do not create or modify workspace files.",
+                "Return exactly the assigned `## TC-*` replacement sections in the declared order. Do not add an H1 or any unassigned test case.",
+                "Preserve exact assigned OBL/ATOM traceability and coverage-gap lifecycle markers.",
+                "Every final expected result must be observable. For a calibration candidate, define the evidence record produced by the exact action, input value, visible state and outcome without inventing a message, highlight, filtering mechanism, blocked save or transition.",
+                "For a positive permitted-value check, state the exact visible field value; do not append that the UI reaction is undefined or deferred.",
+                "Return blocked-input only when the selected evidence still cannot define an executable ordinary oracle or calibration evidence record without invention.",
+                "",
+                self.prepared_writer_profile_path.read_text(encoding="utf-8").strip(),
+                "",
+                self._prepared_context_rule_card(),
+                "",
+                "## Verified repair metadata",
+                "",
+                "```json",
+                json.dumps(
+                    {
+                        "package_id": self._prepared_package.package_id,
+                        "plan_digest": self._prepared_repair_plan["plan_digest"],
+                        "source_draft_sha256": self._prepared_repair_plan[
+                            "source_draft_sha256"
+                        ],
+                        "source_findings_sha256": self._prepared_repair_plan[
+                            "source_findings_sha256"
+                        ],
+                        "target_test_case_ids": self._prepared_repair_plan[
+                            "target_test_case_ids"
+                        ],
+                        "preserved_test_case_count": self._prepared_repair_plan[
+                            "preserved_test_case_count"
+                        ],
+                    },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "```",
+                "",
+                "## Selected source-backed evidence",
+                "",
+                self._prepared_writer_shard_evidence(shard),
+                "",
+                "## Exact repair obligation projection",
+                "",
+                "```json",
+                self._prepared_writer_shard_projection(shard),
+                "```",
+                "",
+                "## Prior unsigned sections to replace",
+                "",
+                "```markdown",
+                self._targeted_repair_input_sections(),
+                "```",
+                "",
+                "## Corrected source-backed repair seed",
+                "",
+                "Replace every seed placeholder and return these sections only.",
+                "",
+                "```markdown",
+                self._draft_seed_text(
+                    test_case_ids=shard["test_case_ids"],
+                    include_document_header=False,
+                ).strip(),
+                "```",
+                "",
+                "Return exactly one schema-constrained JSON object and no commentary outside it.",
+                "Use status=draft-ready with all replacement sections in draft_markdown and empty blocking_reasons, or status=blocked-input with empty draft_markdown and at least one reason.",
+                "",
+            ]
+        )
+        if self._is_prepared_standard():
+            self._enforce_prepared_standard_context_budget(
+                role="writer", prompt=prompt, stage=WRITER_STAGE
             )
         return prompt
 
@@ -2922,9 +3362,17 @@ class CodexExecReviewCycleRunner:
         self.validate_configuration()
         production_before = self._production_snapshot()
         sharded_writer = self._uses_sharded_prepared_writer()
+        repair_writer = self._uses_targeted_prepared_repair()
         writer_prompt = "" if sharded_writer else self._writer_prompt()
         state = self._initial_state()
         self._write_state(state)
+        if self._prepared_oracle_quality_plan:
+            write_json(
+                self.prepared_oracle_quality_path,
+                self._prepared_oracle_quality_plan,
+            )
+        if self._prepared_repair_plan:
+            write_json(self.prepared_repair_plan_path, self._prepared_repair_plan)
         if self._writer_output_capacity_plan:
             write_json(
                 self.writer_output_capacity_path,
@@ -3090,7 +3538,37 @@ class CodexExecReviewCycleRunner:
                     status="blocked-input",
                     reasons=list(writer_contract.blocking_reasons),
                 )
-            self._materialize_structured_writer_draft(writer_contract.draft_markdown)
+            if repair_writer:
+                try:
+                    repair_validation = self._materialize_targeted_repair(
+                        writer_contract.draft_markdown
+                    )
+                except RunnerError as exc:
+                    return self._block_stage(
+                        state,
+                        stage=WRITER_STAGE,
+                        role="writer",
+                        result=writer_result,
+                        artifacts=writer_artifacts,
+                        status="blocked-repair-contract",
+                        reasons=[str(exc)],
+                    )
+                if not repair_validation.passed:
+                    return self._block_stage(
+                        state,
+                        stage=WRITER_STAGE,
+                        role="writer",
+                        result=writer_result,
+                        artifacts=writer_artifacts,
+                        status="blocked-repair-gate",
+                        reasons=[
+                            "prepared targeted repair validator reported findings",
+                            relative_path(self.repair_validator_path, self.repo_root),
+                        ],
+                        validation=repair_validation,
+                    )
+            else:
+                self._materialize_structured_writer_draft(writer_contract.draft_markdown)
         if not self.draft_path.is_file():
             if writer_result.command_budget_exceeded:
                 status = "blocked-command-budget"
@@ -3197,6 +3675,20 @@ class CodexExecReviewCycleRunner:
                     ],
                     validation=validation,
                 )
+            if repair_writer:
+                try:
+                    self._verify_repair_inputs()
+                except RunnerError as exc:
+                    return self._block_stage(
+                        state,
+                        stage=WRITER_STAGE,
+                        role="writer",
+                        result=writer_result,
+                        artifacts=writer_artifacts,
+                        status="blocked-repair-contract",
+                        reasons=[str(exc)],
+                        validation=validation,
+                    )
 
         if self._promotion_contract is not None:
             promotion_readiness = validate_promotion_readiness(
@@ -3683,12 +4175,16 @@ class CodexExecReviewCycleRunner:
             "status": "validated",
             "route": route,
             "writer_scenario": (
-                "writer.session_prepared_initial_draft"
-                if self._is_prepared_fast()
+                "writer.session_prepared_targeted_repair"
+                if self._uses_targeted_prepared_repair()
                 else (
-                    "writer.session_prepared_standard_structured"
-                    if self._uses_structured_prepared_writer()
-                    else self._standard_scenario("writer")
+                    "writer.session_prepared_initial_draft"
+                    if self._is_prepared_fast()
+                    else (
+                        "writer.session_prepared_standard_structured"
+                        if self._uses_structured_prepared_writer()
+                        else self._standard_scenario("writer")
+                    )
                 )
             ),
             "reviewer_scenario": (
@@ -3726,6 +4222,9 @@ class CodexExecReviewCycleRunner:
                         if stage in self._context_budget_reports
                     ],
                     "writer_output_capacity": self._writer_output_capacity_plan,
+                    "prepared_oracle_quality": self._prepared_oracle_quality_plan,
+                    "targeted_repair": self._prepared_repair_plan,
+                    "writer_targeted_repair": self._uses_targeted_prepared_repair(),
                     "reviewer_output_capacity": self._reviewer_output_capacity_plan,
                     "reviewer_context_capacity": self._reviewer_context_capacity_plan,
                     "writer_sharded": self._uses_sharded_prepared_writer(),
@@ -3745,6 +4244,9 @@ class CodexExecReviewCycleRunner:
                         "attempt-binding",
                         "profile-route",
                         "instruction-allowlist",
+                        "prepared-oracle-quality",
+                        "targeted-repair-input-hashes",
+                        "targeted-repair-test-case-set",
                         "context-budget",
                         "output-capacity",
                         "reviewer-output-capacity",
@@ -3822,6 +4324,114 @@ class CodexExecReviewCycleRunner:
             draft_bytes=self.draft_path.stat().st_size,
             draft_sha256=sha256_file(self.draft_path),
         )
+
+    def _materialize_targeted_repair(self, draft_markdown: str) -> ValidationResult:
+        path = self.repair_draft_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        if path.exists() or temporary.exists():
+            raise RunnerError(
+                "targeted repair output already exists; recovery must be explicit"
+            )
+        try:
+            temporary.write_text(draft_markdown.rstrip() + "\n", encoding="utf-8")
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        validation = self._validate_writer_shard(
+            shard=self._repair_shard(),
+            path=path,
+        )
+        write_json(self.repair_validator_path, validation.as_dict())
+        if not validation.passed:
+            return validation
+        self._verify_repair_inputs()
+        assert self.prepared_repair_draft_path is not None
+        source_text = self.prepared_repair_draft_path.read_text(encoding="utf-8")
+        source_spans = test_case_section_spans(source_text)
+        replacement_spans = test_case_section_spans(path.read_text(encoding="utf-8"))
+        replacement_by_id = {
+            test_case_id: section.rstrip()
+            for test_case_id, _, _, section in replacement_spans
+        }
+        target_ids = set(self._prepared_repair_plan["target_test_case_ids"])
+        prefix = source_text[: source_spans[0][1]] if source_spans else source_text
+        chunks = [prefix]
+        for test_case_id, _, _, source_section in source_spans:
+            if test_case_id not in target_ids:
+                chunks.append(source_section)
+                continue
+            trailing_match = re.search(r"(\s*)\Z", source_section)
+            trailing = trailing_match.group(1) if trailing_match else ""
+            chunks.append(replacement_by_id[test_case_id] + (trailing or "\n\n"))
+        self._materialize_structured_writer_draft("".join(chunks).rstrip() + "\n")
+        output_sections = {
+            test_case_id: section
+            for test_case_id, _, _, section in test_case_section_spans(
+                self.draft_path.read_text(encoding="utf-8")
+            )
+        }
+        section_results = []
+        preservation_passed = True
+        for test_case_id, _, _, source_section in source_spans:
+            output_section = output_sections.get(test_case_id, "")
+            preserved = (
+                test_case_id in target_ids
+                or sha256_text(source_section) == sha256_text(output_section)
+            )
+            if test_case_id not in target_ids and not preserved:
+                preservation_passed = False
+            section_results.append(
+                {
+                    "test_case_id": test_case_id,
+                    "repair_target": test_case_id in target_ids,
+                    "source_sha256": sha256_text(source_section),
+                    "output_sha256": sha256_text(output_section),
+                    "preserved": preserved,
+                }
+            )
+        splice = {
+            "passed": preservation_passed,
+            "validator": "prepared-targeted-repair-splice-v1",
+            "plan_digest": self._prepared_repair_plan["plan_digest"],
+            "source_draft_sha256": self._prepared_repair_plan[
+                "source_draft_sha256"
+            ],
+            "replacement_draft_sha256": sha256_file(path),
+            "merged_draft_sha256": sha256_file(self.draft_path),
+            "target_test_case_ids": list(
+                self._prepared_repair_plan["target_test_case_ids"]
+            ),
+            "preserved_test_case_count": self._prepared_repair_plan[
+                "preserved_test_case_count"
+            ],
+            "all_non_target_sections_byte_preserved": preservation_passed,
+            "sections": section_results,
+        }
+        write_json(self.repair_splice_path, splice)
+        if not preservation_passed:
+            return ValidationResult(
+                passed=False,
+                findings=(
+                    {
+                        "id": "targeted-repair-non-target-section-changed",
+                        "severity": "error",
+                    },
+                ),
+                checked_paths=(relative_path(self.draft_path, self.repo_root),),
+                validator="prepared-targeted-repair-splice-v1",
+            )
+        append_event(
+            self.cycle_dir,
+            "targeted_repair_spliced",
+            plan_digest=self._prepared_repair_plan["plan_digest"],
+            target_test_case_ids=self._prepared_repair_plan["target_test_case_ids"],
+            preserved_test_case_count=self._prepared_repair_plan[
+                "preserved_test_case_count"
+            ],
+            draft_sha256=sha256_file(self.draft_path),
+        )
+        return validation
 
     def _materialize_writer_shard(self, stage: str, draft_markdown: str) -> Path:
         path = self.writer_shard_draft_path(stage)
@@ -4016,6 +4626,8 @@ class CodexExecReviewCycleRunner:
         write_json(self.artifact_graph_path(manifest.stage_id), payload)
 
     def _writer_prompt(self) -> str:
+        if self._uses_targeted_prepared_repair():
+            return self._targeted_repair_prompt()
         if self._uses_structured_prepared_writer() and self.prepared_package_path is not None:
             prompt = "\n".join(
                 [
@@ -4430,6 +5042,15 @@ class CodexExecReviewCycleRunner:
                 handoff_paths.append(self.draft_seed_path)
                 if self._uses_structured_prepared_writer():
                     handoff_paths.append(self.writer_schema_path)
+                if self._uses_targeted_prepared_repair():
+                    assert self.prepared_repair_draft_path is not None
+                    assert self.prepared_repair_findings_path is not None
+                    handoff_paths.extend(
+                        (
+                            self.prepared_repair_draft_path,
+                            self.prepared_repair_findings_path,
+                        )
+                    )
         else:
             instruction_paths = list(self._standard_instruction_paths(role))
             source_paths = list(self.source_files)
@@ -4544,6 +5165,28 @@ class CodexExecReviewCycleRunner:
                         ),
                     ]
                 )
+            if self._uses_targeted_prepared_repair():
+                expected_outputs.extend(
+                    [
+                        ExpectedOutput(
+                            path=relative_path(self.repair_draft_path, self.repo_root),
+                            kind="writer-targeted-repair",
+                            producer="runner",
+                        ),
+                        ExpectedOutput(
+                            path=relative_path(
+                                self.repair_validator_path, self.repo_root
+                            ),
+                            kind="writer-targeted-repair-validator",
+                            producer="runner",
+                        ),
+                        ExpectedOutput(
+                            path=relative_path(self.repair_splice_path, self.repo_root),
+                            kind="writer-targeted-repair-splice",
+                            producer="runner",
+                        ),
+                    ]
+                )
         elif role == "writer":
             expected_outputs.extend(
                 [
@@ -4628,12 +5271,16 @@ class CodexExecReviewCycleRunner:
             role=role,
             scenario=(
                 (
-                    "writer.session_prepared_initial_draft"
-                    if self._is_prepared_fast()
+                    "writer.session_prepared_targeted_repair"
+                    if self._uses_targeted_prepared_repair()
                     else (
-                        "writer.session_prepared_standard_structured"
-                        if self._uses_structured_prepared_writer()
-                        else self._standard_scenario("writer")
+                        "writer.session_prepared_initial_draft"
+                        if self._is_prepared_fast()
+                        else (
+                            "writer.session_prepared_standard_structured"
+                            if self._uses_structured_prepared_writer()
+                            else self._standard_scenario("writer")
+                        )
                     )
                 )
                 if role == "writer"
@@ -4713,10 +5360,10 @@ class CodexExecReviewCycleRunner:
                     self._prepared_artifact("atomic-obligations")
                 ).obligations
             )
-            uses_sharded_writer = getattr(
-                self, "_uses_sharded_prepared_writer", lambda: False
+            uses_generic_schema = getattr(
+                self, "_uses_generic_bounded_reviewer_schema", lambda: False
             )()
-            if uses_sharded_writer:
+            if uses_generic_schema:
                 obligation_review_item: dict[str, Any] = {
                     "type": "object",
                     "additionalProperties": False,
@@ -5543,6 +6190,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--writer-instruction-file", action="append", default=[])
     parser.add_argument("--reviewer-instruction-file", action="append", default=[])
     parser.add_argument("--prepared-package")
+    parser.add_argument("--prepared-repair-draft")
+    parser.add_argument("--prepared-repair-findings")
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--sandbox-flag", required=True)
     parser.add_argument("--writer-sandbox", required=True)
@@ -5637,6 +6286,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS,
     )
     parser.add_argument(
+        "--prepared-targeted-repair-max-test-cases",
+        type=int,
+        default=DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES,
+    )
+    parser.add_argument(
         "--prepared-structured-reviewer-obligation-limit",
         type=int,
         default=DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT,
@@ -5660,6 +6314,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         source_files=[repo_root / item for item in args.source_file],
         handoff_files=[repo_root / item for item in args.handoff_file],
         prepared_package_path=(repo_root / args.prepared_package if args.prepared_package else None),
+        prepared_repair_draft_path=(
+            repo_root / args.prepared_repair_draft
+            if args.prepared_repair_draft
+            else None
+        ),
+        prepared_repair_findings_path=(
+            repo_root / args.prepared_repair_findings
+            if args.prepared_repair_findings
+            else None
+        ),
         promotion_contract_path=(
             repo_root / args.promotion_contract if args.promotion_contract else None
         ),
@@ -5712,6 +6376,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         prepared_structured_writer_max_shards=(
             args.prepared_structured_writer_max_shards
+        ),
+        prepared_targeted_repair_max_test_cases=(
+            args.prepared_targeted_repair_max_test_cases
         ),
         prepared_structured_reviewer_obligation_limit=(
             args.prepared_structured_reviewer_obligation_limit

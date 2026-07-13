@@ -1,0 +1,11 @@
+{
+  "prepared_oracle_preflight": "blocks-before-attempt",
+  "repair_target_test_case_ids": [
+    "TC-DEMO-001",
+    "TC-DEMO-003"
+  ],
+  "writer_session_count": 1,
+  "reviewer_session_count": 1,
+  "non_target_sections": "byte-identical",
+  "promotion": false
+}
