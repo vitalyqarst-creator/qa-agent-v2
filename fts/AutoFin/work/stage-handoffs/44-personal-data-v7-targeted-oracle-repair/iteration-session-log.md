@@ -9,7 +9,7 @@
 | ft_slug | `AutoFin` |
 | scope_slug | `application-card-client-personal-data` |
 | started_from | `work/stage-handoffs/43-personal-data-v6-output-capacity/workflow-state.yaml` |
-| status_after | `in-progress` |
+| status_after | `blocked-input` |
 
 ## Inputs Read
 
@@ -40,12 +40,15 @@
 - V7 validate-only: `65/65` oracle pass; target set `026/027/028/034`; attempts отсутствуют.
 - Dispatcher dry-run: verified `exec`, contract v2, fallback `false`.
 - H44 artifact validator: `0 errors / 0 warnings / 3 inherited source-quality info`.
+- Единственный V7 dispatcher: targeted writer и reviewer в двух fresh sessions; terminal `blocked-invalid-output`.
+- Repair/splice/full-set gates: pass; `4` target TC изменены, `43` non-target sections byte-preserved, `65/65` obligations covered.
+- Reviewer parser: blocked на `OBL-025 -> invented-coverage`; sign-off отсутствует.
 
 ## Contamination Check
 
 - FT-first baseline SHA-256: `98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc`.
 - V6 repair draft/findings SHA-256: `3322c6854cd75545f3a9f0e4b140932bfd4ddd4d323aa12f76c9625ea031f849` / `057ff193d0ce82896ada0eb5bd52367aa6774979b723d5ba3f11d8f0ff685f43`.
-- Production shadow, V7 attempts и `cycle-state.yaml` отсутствуют.
+- После live FT-first baseline hash неизменён; production shadow отсутствует.
 - Пользовательские untracked diagnostics и addresses/contacts file не изменялись.
 
 ## Event Timeline
@@ -58,6 +61,10 @@
 | 4 | Собран и проверен V7 package | `65` oracle pass; repair `4/47` | package/preflight reports |
 | 5 | Пройден pre-live regression и exec dry-run | Готовность к checkpoint | pre-live report/stop gate |
 | 6 | Checkpoint отправлен в origin | Local/remote SHA совпали; разрешён один live | `bb52aa86552af76ca684851829d9d6193e3cd625`; authorization |
+| 7 | Выполнен единственный V7 dispatcher | Targeted writer исправил exact 4 TC в fresh session | V7 writer attempt |
+| 8 | Выполнены repair/splice/full-set gates | `43` sections byte-preserved; `65/65`; quality pass | repair/quality reports |
+| 9 | Выполнен независимый reviewer | Fresh session вернула полный, но contract-invalid JSON | reviewer stdout/stage status |
+| 10 | Применён terminal stop gate | `blocked-invalid-output`; retry/resume/promotion отсутствуют | live result; blocker analysis; stop gate |
 
 ## Quality Checkpoints
 
@@ -65,13 +72,14 @@
 | --- | --- | --- | --- |
 | Prepared oracle preflight | pass | `65/65`, `0 findings`; bad eval blocked | none |
 | Targeted repair preservation | pass-regression | repair plan/splice tests | verify live proof |
-| Full-set reviewer | pending | V7 live only after gates | stop on blocker |
-| Production boundary | pass-start | baseline unchanged; shadow absent | repeat pre/post live |
+| Full-set reviewer | blocked-invalid-output | `OBL-025` получил несовместимый `invented-coverage` | новый V8 после contract remediation |
+| Production boundary | pass-post-live | baseline unchanged; shadow absent | сохранить в V8 |
 
 ## Handoff Notes For Next Session
 
-- Не запускать live до checkpoint.
-- Не возобновлять V6 и не использовать его draft как requirement source.
+- Не повторять и не возобновлять V7; reviewer sign-off отсутствует.
+- Начать только с обновлённого `prompt.scope-to-iteration.md` и нового immutable V8.
+- Не использовать V6/V7 draft или отклонённые reviewer findings как requirement source.
 
 ## Artifact Write Strategy
 

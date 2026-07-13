@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contract_version",
+    "decision",
+    "reviewed_draft_sha256",
+    "obligation_reviews",
+    "findings",
+    "summary"
+  ],
+  "properties": {
+    "contract_version": {
+      "type": "integer",
+      "const": 2
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "changes-required"
+      ]
+    },
+    "reviewed_draft_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "obligation_reviews": {
+      "type": "array",
+      "minItems": 65,
+      "maxItems": 65,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "obligation_id",
+          "atom_id",
+          "verdict",
+          "test_case_ids",
+          "note"
+        ],
+        "properties": {
+          "obligation_id": {
+            "type": "string",
+            "pattern": "^(?:ATOM|OBL)-[A-Za-z0-9._-]+$"
+          },
+          "atom_id": {
+            "type": "string",
+            "pattern": "^ATOM-[A-Za-z0-9._-]+$"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "covered",
+              "gap-preserved",
+              "incorrect",
+              "invented-coverage",
+              "missing"
+            ]
+          },
+          "test_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^TC-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+            }
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "severity",
+          "category",
+          "atom_ids",
+          "test_case_ids",
+          "problem",
+          "required_change"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "info",
+              "warning"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "atomarity",
+              "coverage",
+              "duplication",
+              "expected-result",
+              "scope",
+              "test-design"
+            ]
+          },
+          "atom_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "test_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 1
+          },
+          "required_change": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1
+    }
+  }
+}

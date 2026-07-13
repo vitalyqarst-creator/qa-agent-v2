@@ -2,7 +2,7 @@ ft_slug: AutoFin
 prepared_compiler_contract_version: 2
 scope_slug: application-card-client-personal-data
 current_stage: ft-test-case-iteration
-stage_status: scope-ready-for-writer
+stage_status: blocked-input
 current_round: 1
 next_skill: ft-test-case-iteration
 required_inputs:
@@ -27,6 +27,19 @@ latest_artifacts:
   targeted_repair_preflight: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/targeted-repair-preflight.v7.json
   dispatcher_config: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/dispatcher-config.v7.json
   backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/backend-selection.dry-run.json
+  backend_selection: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/backend-selection.json
+  cycle_state: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/cycle-state.yaml
+  repaired_draft: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md
+  repair_validator: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/writer-r1/attempt-001/runner-output/repair-validator.json
+  repair_splice: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/writer-r1/attempt-001/runner-output/repair-splice.json
+  reviewer_stage_status: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json
+  reviewer_diagnostic_stdout: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt
+  performance: work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/performance.json
+  live_result: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/live-result.v7.json
+  live_blocker_analysis: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/live-blocker-analysis.md
+  performance_analysis: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/performance-analysis.v7.md
+  iteration_summary: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/iteration-summary.md
+  terminal_stop_gate: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/stop-gate.md
   pre_live_test_report: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-stop-gate.md
   pre_live_authorization: work/stage-handoffs/44-personal-data-v7-targeted-oracle-repair/pre-live-authorization.md
@@ -48,6 +61,8 @@ open_questions:
   - GAP-001 — точная UI-реакция на недопустимое значение.
   - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
   - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
-blocking_reasons: []
+blocking_reasons:
+  - V7 reviewer output is invalid because testable OBL-025 used verdict invented-coverage.
+  - Reviewer sign-off is absent; V7 is terminal and must not be retried or resumed.
 accepted_risks:
   - UI-specific oracle calibration остаётся за ft-ui-automation-prep.

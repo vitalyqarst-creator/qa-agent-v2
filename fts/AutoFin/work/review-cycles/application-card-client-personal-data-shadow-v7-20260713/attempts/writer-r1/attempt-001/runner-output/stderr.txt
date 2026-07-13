@@ -1,0 +1,3 @@
+2026-07-13T09:35:42.799981Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-13T09:35:46.836684Z  WARN codex_core_plugins::manager: failed to load recommended plugins error=failed to send remote plugin catalog request to https://chatgpt.com/backend-api/ps/plugins/suggested: error sending request for url (https://chatgpt.com/backend-api/ps/plugins/suggested?scope=GLOBAL)
+2026-07-13T09:36:26.444628Z  WARN codex_core::hook_runtime: after_agent hook failed; continuing turn_id=019f5ad5-1af1-7793-a831-c913f4da7203 hook_name=legacy_notify error=Имя файла или его расширение имеет слишком большую длину. (os error 206)

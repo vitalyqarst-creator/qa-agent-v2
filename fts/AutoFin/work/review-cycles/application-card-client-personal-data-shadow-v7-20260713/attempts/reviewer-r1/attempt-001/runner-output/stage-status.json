@@ -1,0 +1,36 @@
+{
+  "stage": "reviewer-r1",
+  "role": "reviewer",
+  "status": "blocked-invalid-output",
+  "reason": "testable obligation OBL-025 has incompatible verdict invented-coverage",
+  "exit_code": 0,
+  "timed_out": false,
+  "idle_timed_out": false,
+  "command_budget_exceeded": false,
+  "first_artifact_deadline_exceeded": false,
+  "launch_error": false,
+  "duration_seconds": 130.828,
+  "command_count": 0,
+  "first_output_seconds": 1.1559999999590218,
+  "first_artifact_seconds": null,
+  "termination_reason": "completed",
+  "command": [
+    "C:\\Users\\Пользователь\\.codex\\plugins\\.plugin-appserver\\codex.exe",
+    "exec",
+    "--sandbox",
+    "read-only",
+    "--cd",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2",
+    "--json",
+    "--output-schema",
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\application-card-client-personal-data-shadow-v7-20260713\\attempts\\reviewer-r1\\attempt-001\\review-contract.schema.json",
+    "-"
+  ],
+  "stdout": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+  "stderr": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+  "events": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+  "last_message": "",
+  "blocking_reasons": [
+    "testable obligation OBL-025 has incompatible verdict invented-coverage"
+  ]
+}

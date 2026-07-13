@@ -1,0 +1,58 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5ad5-d0a4-79b1-ade3-4f05f6b9c449",
+  "blocking_reasons": [
+    "testable obligation OBL-025 has incompatible verdict invented-coverage"
+  ],
+  "contract_version": 2,
+  "cycle_id": "application-card-client-personal-data-shadow-v7-20260713",
+  "duration_ms": 130828,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T09:38:40.392011+00:00",
+  "input_digest": "6e5593b68f395885d3dd68cc86741a02d989c9248e271dba0360b9956b640de2",
+  "outcome": "blocked",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "fa9a56eef7833387ea59f6bb9c87a3607daa33dab8bfaa3922772054fc2fad72"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "e2e3a9abd11513e990b467abda47c4abb45b22791d8a158ce65799868b149217"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "fa9a56eef7833387ea59f6bb9c87a3607daa33dab8bfaa3922772054fc2fad72"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "d896ea70f744f667d42a90739bb276ca5b35cafb1f68e85e684cb283e73f02ab"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "sha256": "f6d2bff1ebdc448b1949522f09d4efa71846f0fe1090242a5d273f7a0717f672"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-personal-data-shadow-v7-20260713/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "aecb53e13b3ecc6021f3cef29581e059cb59e116d06b250140148f030c92e6ab"
+    }
+  ],
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "session_id": "session-reviewer-r1-attempt-001",
+  "stage_id": "reviewer-r1",
+  "started_at": "2026-07-13T09:36:29.564722+00:00",
+  "status": "blocked",
+  "timed_out": false
+}

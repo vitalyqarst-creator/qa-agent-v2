@@ -1,0 +1,66 @@
+{
+  "version": 1,
+  "cycle_id": "application-card-client-personal-data-shadow-v7-20260713",
+  "status": "blocked-invalid-output",
+  "final_promoted": false,
+  "dispatcher_runs": 1,
+  "backend": {
+    "selected": "exec",
+    "contract_version": 2,
+    "fallback_used": false,
+    "verified": true
+  },
+  "writer": {
+    "scenario": "writer.session_prepared_targeted_repair",
+    "backend_session_id": "019f5ad5-1550-7440-a6ed-cb077e0d8f10",
+    "outcome": "draft-ready",
+    "duration_ms": 47578,
+    "total_tokens": 25175,
+    "target_test_case_ids": [
+      "TC-ACPD-026",
+      "TC-ACPD-027",
+      "TC-ACPD-028",
+      "TC-ACPD-034"
+    ],
+    "preserved_test_case_count": 43,
+    "all_non_target_sections_byte_preserved": true,
+    "merged_draft_sha256": "17c9bd80c2cff3d19939831f9d42503aebdbd10dc9268d98299896e98dbac23e",
+    "deterministic_gates_passed": true
+  },
+  "reviewer": {
+    "scenario": "reviewer.session_prepared_standard_semantic",
+    "backend_session_id": "019f5ad5-d0a4-79b1-ade3-4f05f6b9c449",
+    "outcome": "blocked",
+    "duration_ms": 130828,
+    "total_tokens": 48671,
+    "blocking_reason": "testable obligation OBL-025 has incompatible verdict invented-coverage",
+    "diagnostic_decision": "changes-required",
+    "diagnostic_obligation_verdict_counts": {
+      "covered": 49,
+      "incorrect": 15,
+      "invented-coverage": 1
+    },
+    "diagnostic_finding_ids": [
+      "F-001",
+      "F-002",
+      "F-003",
+      "F-004",
+      "F-005"
+    ],
+    "diagnostic_findings_authoritative": false,
+    "reviewer_sign_off": false
+  },
+  "performance": {
+    "duration_ms_total": 178406,
+    "total_tokens": 73846,
+    "uncached_input_tokens_total": 64991,
+    "stage_count": 2
+  },
+  "production_boundary": {
+    "baseline_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "shadow_exists": false,
+    "baseline_changed": false
+  },
+  "stop_rule_applied": true,
+  "retry_or_resume_performed": false
+}
