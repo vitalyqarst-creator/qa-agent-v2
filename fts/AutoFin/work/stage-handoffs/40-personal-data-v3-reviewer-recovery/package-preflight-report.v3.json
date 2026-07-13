@@ -1,0 +1,44 @@
+{
+  "validator": "prepared-v3-package-preflight-v1",
+  "passed": true,
+  "compile_duration_ms": 1031,
+  "package_id": "application-card-client-personal-data-v3",
+  "section_id": "14",
+  "execution_profile": "standard-required",
+  "atoms": 42,
+  "obligations": 65,
+  "planned_test_cases": 47,
+  "coverage_gaps": ["GAP-001", "GAP-002", "GAP-003"],
+  "dictionary_refs": ["DICT-001"],
+  "unsupported_dimensions": [
+    "dependency-state",
+    "input-boundaries",
+    "integration-persistence",
+    "numeric-boundaries"
+  ],
+  "package_artifact_hashes_match_manifest": true,
+  "semantic_equivalence_to_v2": {
+    "passed": true,
+    "source_evidence_differences": ["package_id", "compiled source_path"],
+    "atomic_obligation_differences": ["package_id", "derived digest"],
+    "stage_instruction_differences": ["package_id", "V3 attempt paths"],
+    "obligation_content_changed": false
+  },
+  "compiler_input_sha256": {
+    "atomic-requirements-ledger.md": "3432ce9fcf800e480ced4242dcd4aee38971d42e7fbd728e8e13cefd344299c8",
+    "compiler-input.yaml": "bdc440879c2c5c85e5671c107cad44d048de439b4aa75902053ac0dca55c68c3",
+    "coverage-gaps.md": "524ad97971cacbd5dfafcedc8aeaf537b7ebcd470513a924487e9a3a4f797ea7",
+    "coverage-obligation-table.md": "b3fa619b202710ff71ab46480bdbc1cde77995d0d12c3dd133fc5ae4105fcad9",
+    "dictionary-inventory.md": "79f5d505bdaf5d92a47483eb61deea9bb4ef8e4baaca0e75575dfcee474b9392",
+    "mapping-consistency-report.md": "7c86c165e60e61f527f0a7acfd66c6fb26267a8163d14b36bcaabfa4c08ad510",
+    "package-test-design-plan.md": "5950921def13a5ca7153fe6ffcf3ae2ca744414155059c1de7e51e3c2296323b",
+    "test-design-applicability-matrix.md": "44e02f40105578811cebfe9c2aa9242034994109e3da36b6234be728b2e2f563",
+    "test-design-decision-table.md": "270199d1598cff5c77abac4d05c64acc5dc3ac593ae79f84040b844f61db018d"
+  },
+  "package_file_sha256": {
+    "atomic-obligations.json": "813542a83464ec7dc8130d23877390552f2d690e6798719a1a8b48d51f78afd9",
+    "source-evidence.md": "af5864b435f609cc86f8036134a720b4511940c0cfaa1ba8a17b3d60cba69ad7",
+    "stage-instructions.md": "dd610542dd81dd9facb5b1497b49c9887d1ac502b9aa3afe395736a836dbbad4",
+    "stage-package.json": "0b82d57e8fe128a1a6cb107892292bd31cb161ab00ce69a1bd3836f752372093"
+  }
+}

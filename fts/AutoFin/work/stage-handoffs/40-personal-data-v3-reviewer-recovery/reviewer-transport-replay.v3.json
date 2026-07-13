@@ -1,0 +1,16 @@
+{
+  "validator": "prepared-standard-reviewer-transport-replay-v1",
+  "passed": true,
+  "evidence_cycle": "application-card-client-personal-data-shadow-v2-20260713",
+  "mode": "immutable-v2-pure-prompt-replay",
+  "prompt_bytes": 114355,
+  "instruction_bytes": 3084,
+  "primary_context_bytes": 117439,
+  "limit_bytes": 131072,
+  "headroom_bytes": 13633,
+  "exact_review_index_present": true,
+  "calibration_summary_present": true,
+  "full_obligations_payload_absent": true,
+  "live_reviewer_confirmed": false,
+  "note": "V2 is read only and is used only for transport-size regression, not as requirement evidence."
+}
