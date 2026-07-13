@@ -29,6 +29,7 @@ required_inputs:
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/backend-selection.dry-run.json
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v2.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v2.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v2.md
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/iteration-session-log.v2.md
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json
   - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v1.json
@@ -72,6 +73,7 @@ latest_artifacts:
   backend_selection_dry_run_v2: work/review-cycles/visual-assessment-medium-scope-benchmark-v2-20260713/backend-selection.dry-run.json
   pre_live_test_report_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-test-report.v2.md
   pre_live_stop_gate_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-stop-gate.v2.md
+  pre_live_authorization_v2: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/pre-live-authorization.v2.md
   prepared_package: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/prepared-input/visual-assessment-medium-scope-benchmark-v1/stage-package.json
   dispatcher_config: work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/dispatcher-config.v1.json
   backend_selection_dry_run: work/review-cycles/visual-assessment-medium-scope-benchmark-v1-20260713/backend-selection.dry-run.json

@@ -73,6 +73,8 @@
 | 10 | Initial ad-hoc unittest list contained two nonexistent modules | result rejected as operator selection error | unittest import errors |
 | 11 | Used the canonical agent-layer suite | 460 passed, 1 skipped | `scripts/run_tests.py --suite agent-layer` |
 | 12 | Prepared pre-live stop gate | live remains blocked pending two pushes | `pre-live-stop-gate.v2.md` |
+| 13 | Pushed immutable V2 checkpoint | local/origin `8223d580...` match | Git evidence |
+| 14 | Created hash-bound one-shot authorization | invocation budget `1`; live still awaits authorization push | `pre-live-authorization.v2.md` |
 
 ## Quality Checkpoints
 
