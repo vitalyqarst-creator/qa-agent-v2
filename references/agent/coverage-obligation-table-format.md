@@ -36,6 +36,8 @@
 
 ## Статусы
 
+Для новой строки с `DICT-*` добавляй колонку `dictionary_coverage` со значением `reference-only | all-leaf-values | full-hierarchy`. `reference-only` используется, когда TC проверяет отдельное значение/зависимость, но не заявляет полный состав. `all-leaf-values` требует все активные leaf-значения. `full-hierarchy` дополнительно требует названия групп и пути к leaf-значениям. Для строки без `DICT-*` указывай `none_required`. Старые contract-v2 таблицы без колонки читаются через ограниченное сопоставление стабильных `obligation_class`, описанное в `prepared-compiler-input-contract.md`.
+
 `status` - закрытый enum: `covered | gap | unclear | blocked | not-applicable | n/a`.
 
 Не используй `planned`, `pass`, `pass-with-gap`, `ok`, `yes` или локальные варианты. `Coverage Obligation Table` фиксирует итоговый routing obligation row после design decision: строка либо покрыта `TC-*`, либо указывает конкретный `GAP-*`, либо явно не применима. Намерение написать TC позже хранится в `planned_tc_or_gap`, но не в `status`.

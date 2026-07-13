@@ -123,6 +123,93 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
 
         self.assertEqual("--validate-only", mocked.call_args.args[0][-1])
 
+    def test_production_profile_is_default_and_skips_benchmark_detail_scans(self) -> None:
+        module = load_module()
+        args = module.build_parser().parse_args(
+            ["--selection-output", "selection.json", "--dry-run"]
+        )
+        self.assertEqual("production", args.run_profile)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            cycle = Path(tmp_dir)
+            (cycle / "stage-metrics.ndjson").write_text(
+                json.dumps({"duration_ms": 12, "input_tokens": 4}) + "\n",
+                encoding="utf-8",
+            )
+            event = (
+                cycle
+                / "attempts"
+                / "writer-r1"
+                / "attempt-001"
+                / "runner-output"
+                / "events.ndjson"
+            )
+            event.parent.mkdir(parents=True)
+            event.write_text(
+                json.dumps(
+                    {"type": "item.completed", "item": {"type": "command_execution"}}
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            report = module.summarize_exec_cycle(
+                cycle,
+                run_profile="production",
+            )
+
+        self.assertEqual("production", report["run_profile"])
+        self.assertFalse(report["benchmark_details_included"])
+        self.assertEqual([], report["stage_attribution"])
+        self.assertEqual(12, report["duration_ms_total"])
+
+    def test_benchmark_profile_requires_performance_output(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir)
+            config = root / "dispatcher.json"
+            config.write_text(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "cycle_dir": "fts/demo/work/review-cycles/cycle",
+                        "exec_runner_args": [],
+                        "sdk_runner_args": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(
+                module.DispatcherError,
+                "--performance-output is required",
+            ):
+                module.main(
+                    [
+                        "--config",
+                        str(config),
+                        "--selection-output",
+                        str(root / "selection.json"),
+                        "--run-profile",
+                        "benchmark",
+                    ]
+                )
+
+    def test_timing_breakdown_separates_stage_and_orchestration_time(self) -> None:
+        module = load_module()
+
+        breakdown = module.build_timing_breakdown(
+            capability_probe_ms=10,
+            runner_preflight_ms=20,
+            runner_wall_ms=1000,
+            stage_execution_ms=850,
+            reporting_ms=5,
+            dispatcher_wall_ms=1040,
+        )
+
+        self.assertEqual(850, breakdown["stage_execution_ms"])
+        self.assertEqual(150, breakdown["runner_orchestration_overhead_ms"])
+        self.assertEqual(1040, breakdown["dispatcher_wall_ms"])
+
     def test_exec_performance_report_enforces_validator_budget(self) -> None:
         module = load_module()
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -167,6 +254,8 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
         self.assertEqual(1, report["stage_attribution"][0]["turns_started"])
         self.assertEqual(100, report["context_efficiency"]["primary_context_bytes_total"])
         self.assertEqual(5.0, report["context_efficiency"]["uncached_tokens_per_obligation"])
+        self.assertEqual("benchmark", report["run_profile"])
+        self.assertTrue(report["benchmark_details_included"])
 
 
 if __name__ == "__main__":

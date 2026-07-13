@@ -8,14 +8,14 @@ This reference defines the compact, source-backed input used by fresh writer and
 - A writer or reviewer must not rewrite its package.
 - Full DOCX/XHTML/PDF files stay in the source registry with repository-relative paths and SHA-256 values; they are fallback evidence, not default stage inputs.
 - The package contains scoped evidence already checked against DOCX/XHTML and, when available, source parity evidence for PDF.
-- Every package artifact is immutable and covered by one package digest. The runner verifies both package artifacts and registered full-source hashes before and after a stage.
+- Every package artifact is immutable and covered by one digest. The runner verifies artifact and registered-source hashes before and after each stage.
 - Existing generated test cases, previous cycle outputs and canary artifacts must never enter the package as requirement evidence.
-- Workflow compilation requires an explicit expected FT slug. The workflow state, selected sources, prepared output and attempt root must remain inside that FT package; compiler discovery must not scan or substitute a neighboring `fts/*` package.
-- Source registry entries come only from the workflow-linked `source-selection.md`, never from aggregating historical source selections. DOCX and XHTML/HTML must have the same selected base name; PDF is registered as structural cross-check when selected.
-- Workflow compilation must derive fast-path eligibility from the canonical test-design applicability matrix. Numeric/boundary, dependency/state, integration/persistence, table-parity and any unclassified applicable dimension produce a `standard-required` package with explicit `unsupported_dimensions`; callers cannot opt those dimensions into `simple-field-property` by flag or prompt.
-- Workflow compilation uses contract v2 from `prepared-compiler-input-contract.md` and preserves explicit `OBL-* -> ATOM-* -> TC/GAP` traceability. Package version 6 carries `obligation_id` and `atom_id` as separate machine-readable fields and adds an explicit changed-prestate contract for reset obligations; evidence text alone is not sufficient for either relation.
+- Workflow compilation requires an expected FT slug; state, sources, output and attempt root stay inside that package. Neighboring `fts/*` packages are never substitutes.
+- Registry entries come only from the linked `source-selection.md`. DOCX and XHTML/HTML use the same base name; selected PDF is structural cross-check evidence.
+- The canonical applicability matrix decides routing. Numeric/boundary, dependency/state, integration/persistence, table-parity and unclassified applicable dimensions produce `standard-required` plus explicit `unsupported_dimensions`; flags and prompts cannot force the fast path.
+- Compiler contract v2 preserves explicit `OBL-* -> ATOM-* -> TC/GAP`. Package v7 adds exact dictionary requirements, source-backed calibration status and an input fingerprint; evidence prose cannot replace these fields.
 - When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
-- Before package materialization, every input-based design-plan row must bind a concrete synthetic/source-backed value or a stable fixture reference. Abstract classes such as `valid-text` are not execution-ready by themselves and fail compilation with `input-fixture-required`; this preflight prevents spending a live writer turn to discover missing test data.
+- Every input-based design-plan row binds a concrete synthetic/source-backed value or stable fixture. Abstract classes such as `valid-text` fail with `input-fixture-required`.
 - Before live, empty or known non-observable prepared oracles block as `blocked-prepared-oracle-quality`.
 - Reset obligations must declare `execution_semantics = reset-to-captured-initial` plus the captured-initial setup, changed-state setup and observable pre-action inequality check. Missing classification or metadata blocks before LLM as `blocked-prepared-state-change-quality`.
 
@@ -37,9 +37,10 @@ The four files are the default writer/reviewer input capsule. Package-local path
 
 Required fields:
 
-- `package_version`: currently `6`; versions `1` through `5` remain readable as legacy evidence but are not eligible for a new prepared writer run;
+- `package_version`: currently `7`; versions `1` through `6` remain readable as legacy evidence but are not eligible for a new prepared writer run;
 - stable `package_id`, `ft_slug`, `scope_slug` and `section_id`;
 - `created_at` with timezone;
+- `input_fingerprint`: SHA-256 over source registry hashes, compiler evidence, obligations, attempt-bound instructions and routing inputs; it intentionally excludes `created_at`;
 - `source_registry`: full source path, role, SHA-256 and scope locator;
 - `package_artifacts`: the other three package files with path, kind, SHA-256 and byte size;
 - `execution_profile`: `simple-field-property` selects the optimized fast path; `standard-required` selects compact prepared transport with the full standard writer/reviewer instruction scenarios;
@@ -50,7 +51,7 @@ Required fields:
 
 The package is rejected when registered full sources changed after preparation. Full source files are not copied into `prepared-input/`.
 
-Version `6` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
+Version `7` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
 
 The runner must route `standard-required` packages with explicit `unsupported_dimensions` through the prepared-standard writer/reviewer path. Legacy/unclassified profiles remain blocked. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
@@ -61,13 +62,19 @@ Required top-level fields are `package_version`, `package_id`, `obligations`, `c
 Each obligation contains:
 
 - unique `obligation_id` using `OBL-*`; legacy packages may still contain atom ids in this field;
-- unique `atom_id` using `ATOM-*` in package version 6, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
+- unique `atom_id` using `ATOM-*` in package version 7, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
 - non-empty `source_refs` using exact requirement codes and/or `SRC-*` anchors;
 - one independently checkable `atomic_statement`;
 - `observable_oracle` or an explicit linked gap;
 - `test_intent`;
 - `coverage_status`: `testable | gap | unclear | not-applicable`;
-- optional `dictionary_refs`, `constraint_gap_ids`, `notes` and `planned_test_case_id`; version 6 also requires `execution_semantics` and nullable `state_change`. `execution_semantics = direct` requires `state_change = null`. `reset-to-captured-initial` requires `state_change.initial_state_capture`, `changed_state_setup`, `pre_action_state_oracle` and `relation = different-from-captured-initial`. The compiler emits `planned_test_case_id` from the Coverage Obligation Table; multiple independently traced obligations may share one id only when exactly one Package Test Design Plan row links every grouped atom with one action, fixture and observable oracle. Accidental duplicate ids, separate/conflicting plan rows and cross-field or cross-package groups without an explicit `grouping-justification:` marker fail as `invalid-planned-test-case-group`. The runner then creates one seed case with all grouped `OBL-*`/`ATOM-*` references instead of duplicating executable bodies. Legacy version `5` packages remain readable and retain their original digest. In the current package, a testable claim about dictionary/reference-list provenance must link exact `DICT-*` inventory evidence; otherwise that claim stays a linked gap. Every declared gap must be linked from at least one obligation either as its executable gap or as a non-blocking constraint, reference matching is token-exact, and a fast-path package cannot contain blocking gaps.
+- optional `dictionary_refs`, `constraint_gap_ids`, `notes` and `planned_test_case_id`;
+- v7 `execution_semantics` and nullable `state_change`: `direct` requires null; `reset-to-captured-initial` requires captured/changed setup, a pre-action oracle and `different-from-captured-initial`;
+- v7 `dictionary_requirements`: exactly one per `dictionary_ref`, with `coverage_mode = reference-only | all-leaf-values | full-hierarchy`. Exhaustive modes carry exact group/leaf values and hierarchy paths; the runner materializes and obligation gate v4 compares them, so symbolic “all values” text cannot pass;
+- v7 `calibration_status`; `ui-calibration-required` remains active without a `constraint_gap_id`;
+- `planned_test_case_id` from the Coverage Obligation Table. A shared TC requires one design-plan row that links all grouped atoms to one action, fixture and oracle. Conflicts or unjustified cross-field/package groups fail as `invalid-planned-test-case-group`.
+
+Versions 1–6 remain readable with their original digests. Every gap must be token-exact and linked as executable or non-blocking; fast packages cannot contain blocking gaps.
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 
@@ -118,27 +125,23 @@ Input budget is not output-capacity proof. Above the single-session TC limit, pr
 
 Targeted repair uses a new cycle and hash-bound inputs. Only per-TC `package_id` may change in non-target sections; record byte and normalized-semantic hashes. Any other change blocks. Prior drafts are not requirement evidence or sign-off.
 
-## Fast Path And Fallback
-
-The runner verifies the four package files and embeds a compact projection into the starting prompt. The optimized writer must not spend stage commands rereading package files, the full writer skill or general references. Existing package-level `AGENT-NOTES.md` is embedded by the compiler as mandatory context; it must not introduce behavior outside the confirmed scope. A stage must not load document/PDF processing skills or scan full sources by default.
-
 ## Recovery And Replay
 
-- A package is bound to one exact cycle, writer attempt root and output path. It is never replayed against another attempt.
-- Structured writer interruption never yields progress because the runner materializes only a complete valid contract. Explicit legacy workspace execution may continue after interruption only when the structural, seed, obligation and evidence-access gates all pass; that stage is recorded as `completed-with-progress`.
-- Missing/invalid draft, package drift, validator failure or evidence-access failure stops the cycle. Recovery creates a new cycle and recompiles a new target-bound package.
-- Reviewer timeout, idle timeout or command-budget interruption never yields a semantic verdict. Partial reviewer output is discarded and recovery starts a new immutable cycle with fresh writer/reviewer sessions.
+- A package is bound to one exact cycle, writer attempt root and output path. It is never replayed against another attempt. `compile_prepared_stage_package.py --reuse-if-current` may return the same immutable package only when its v7 `input_fingerprint` and registered source hashes still match; any input or attempt-binding change requires a new package id/output root.
+- Structured interruption yields no progress because only a complete contract is materialized. Legacy workspace interruption is `completed-with-progress` only after all deterministic gates pass.
+- Invalid/missing draft, drift or gate failure stops the cycle; recovery uses a fresh cycle and target-bound package.
+- Interrupted reviewer output is discarded; recovery uses fresh writer/reviewer sessions.
 - Re-running a terminal or blocked cycle directory is rejected before LLM launch; existing state and evidence remain unchanged.
 
 Targeted fallback is allowed only when a named obligation cannot be resolved from the capsule. It must be limited to an exact XHTML/DOCX locator. PDF remains structural evidence only. An unbounded source scan, full document re-analysis or external scratch path blocks the prepared-package run.
 
 ## Prepared Standard Route
 
-A `standard-required` package keeps the same immutable package, obligation, seed, structure and production-mutation gates, but does not use the reduced fast writer/reviewer profiles. The runner loads `writer.session_initial_draft` and `reviewer.semantic_traceability_test_design`, supplies the compact projection as primary evidence and records registered full-source access. Standard semantic review remains mandatory; compact transport does not make an unsupported dimension fast-eligible.
+A `standard-required` package keeps all immutable package, obligation, seed, structure and mutation gates, but loads `writer.session_initial_draft` and `reviewer.semantic_traceability_test_design`. Compact transport never makes an unsupported dimension fast-eligible.
 
 Role-specific `stage-input.json` manifests must list the selected standard instruction files, compact source evidence, obligations and runner-owned gate artifacts. The runner enforces separate primary-context budgets before each LLM stage and writes `context-budget.json`; registered DOCX/XHTML/PDF sources are excluded from primary-context byte totals and remain fallback evidence.
 
-Reviewer schemas bind verdicts to `coverage_status`. Generic shapes group obligation ids by status; projection and parser enforce every `obligation_id -> atom_id` once. Testable verdicts are `covered | missing | incorrect`; gaps use `gap-preserved | invented-coverage`. Referenced `DICT-* active_values` must be projected; absence blocks. Parser also verifies draft hash, TC ids and findings.
+Reviewer schemas bind verdicts to `coverage_status` and enforce every `obligation_id -> atom_id` once. Testable verdicts are `covered | missing | incorrect`; gaps use `gap-preserved | invented-coverage`. Missing referenced dictionary values block. The parser also verifies draft hash, TC ids and findings.
 
 ## Completion Gates
 
@@ -151,6 +154,7 @@ Before writer output can reach reviewer:
 - every TC traceability id exists in the package;
 - `gap` and `unclear` obligations are not represented as executable coverage;
 - source/package/input hashes remain unchanged;
+- every exhaustive `dictionary_requirement` is materialized by the runner in its linked TC and passes exact group/leaf/path comparison;
 - no forbidden evidence root was used;
 - structured fast writer is read-only and performs no workspace reads; explicit legacy workspace mode may read only its exact runner-declared current `stage-output` root for local self-checks;
 - JSONL command evidence contains no broad repository scan or registered full-source access without a prior exact `targeted_source_fallback` authorization;

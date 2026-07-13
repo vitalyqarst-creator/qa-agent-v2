@@ -19,6 +19,7 @@ REQUIRED_EXEC_HELP_FLAGS = (
     "--output-schema",
     "--output-last-message",
 )
+RUN_PROFILES = ("production", "benchmark")
 
 RUNNER_OPTION_VALUE_FLAGS = frozenset(
     {
@@ -160,7 +161,8 @@ def load_config(path: Path) -> dict[str, Any]:
     return payload
 
 
-def preflight_exec_runner(command_line: Sequence[str], *, repo_root: Path) -> None:
+def preflight_exec_runner(command_line: Sequence[str], *, repo_root: Path) -> int:
+    started = time.monotonic()
     preflight = list(command_line)
     if "--validate-only" not in preflight:
         preflight.append("--validate-only")
@@ -174,7 +176,7 @@ def preflight_exec_runner(command_line: Sequence[str], *, repo_root: Path) -> No
         check=False,
     )
     if completed.returncode == 0:
-        return
+        return int((time.monotonic() - started) * 1000)
     detail = (completed.stdout or completed.stderr or "runner preflight failed").strip()
     raise DispatcherError(f"blocked-configuration-preflight: {detail[-2000:]}")
 
@@ -186,7 +188,37 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     temporary.replace(path)
 
 
-def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[str, Any]:
+def build_timing_breakdown(
+    *,
+    capability_probe_ms: int,
+    runner_preflight_ms: int,
+    runner_wall_ms: int,
+    stage_execution_ms: int,
+    reporting_ms: int,
+    dispatcher_wall_ms: int,
+) -> dict[str, int]:
+    return {
+        "capability_probe_ms": capability_probe_ms,
+        "runner_preflight_ms": runner_preflight_ms,
+        "runner_wall_ms": runner_wall_ms,
+        "stage_execution_ms": stage_execution_ms,
+        "runner_orchestration_overhead_ms": max(
+            0, runner_wall_ms - stage_execution_ms
+        ),
+        "reporting_ms": reporting_ms,
+        "dispatcher_wall_ms": dispatcher_wall_ms,
+    }
+
+
+def summarize_exec_cycle(
+    cycle_dir: Path,
+    *,
+    validator_budget: int = 5,
+    run_profile: str = "benchmark",
+) -> dict[str, Any]:
+    if run_profile not in RUN_PROFILES:
+        raise DispatcherError(f"run_profile must be one of {RUN_PROFILES}")
+    benchmark_details = run_profile == "benchmark"
     metric_records: list[dict[str, Any]] = []
     ledger = cycle_dir / "stage-metrics.ndjson"
     if ledger.exists():
@@ -196,12 +228,17 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
     validator_reports = tuple(cycle_dir.glob("attempts/*/*/runner-output/validator.json"))
     events_path = cycle_dir / "runner-events.ndjson"
     events: list[dict[str, Any]] = []
-    if events_path.exists():
+    if benchmark_details and events_path.exists():
         for raw in events_path.read_text(encoding="utf-8").splitlines():
             if raw.strip():
                 events.append(json.loads(raw))
     stage_attribution: list[dict[str, Any]] = []
-    for event_file in sorted(cycle_dir.glob("attempts/*/*/runner-output/events.ndjson")):
+    event_files = (
+        sorted(cycle_dir.glob("attempts/*/*/runner-output/events.ndjson"))
+        if benchmark_details
+        else ()
+    )
+    for event_file in event_files:
         counts = {
             "turns_started": 0,
             "agent_messages": 0,
@@ -235,7 +272,12 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
             }
         )
     context_records: list[dict[str, Any]] = []
-    for context_path in sorted(cycle_dir.glob("attempts/*/*/runner-output/context-budget.json")):
+    context_paths = (
+        sorted(cycle_dir.glob("attempts/*/*/runner-output/context-budget.json"))
+        if benchmark_details
+        else ()
+    )
+    for context_path in context_paths:
         try:
             payload = json.loads(context_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -268,8 +310,10 @@ def summarize_exec_cycle(cycle_dir: Path, *, validator_budget: int = 5) -> dict[
     command_total = sum(item["command_executions"] for item in stage_attribution)
     file_change_total = sum(item["file_changes"] for item in stage_attribution)
     report = {
-        "version": 1,
+        "version": 2,
         "backend": "exec",
+        "run_profile": run_profile,
+        "benchmark_details_included": benchmark_details,
         "cycle_dir": cycle_dir.as_posix(),
         "stage_count": len(metric_records),
         "duration_ms_total": sum(int(item.get("duration_ms") or 0) for item in metric_records),
@@ -370,11 +414,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--config", type=Path)
     parser.add_argument("--selection-output", type=Path, required=True)
     parser.add_argument("--performance-output", type=Path)
+    parser.add_argument("--run-profile", choices=RUN_PROFILES, default="production")
     parser.add_argument("--dry-run", action="store_true")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    dispatcher_started = time.monotonic()
     args = build_parser().parse_args(argv)
     repo_root = Path(__file__).resolve().parents[1]
     config: dict[str, Any] | None = None
@@ -382,6 +428,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.config is None:
             raise DispatcherError("--config is required unless --dry-run is used")
         config = load_config(args.config)
+        if args.run_profile == "benchmark" and args.performance_output is None:
+            raise DispatcherError(
+                "--performance-output is required for run-profile benchmark"
+            )
     command = resolve_exec_command(args.codex_command)
     capability = probe_exec_capability(command)
     try:
@@ -396,6 +446,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             {
                 "version": 1,
                 "status": "blocked-exec-runtime",
+                "run_profile": args.run_profile,
                 "requested_backend": args.backend,
                 "selected_backend": "",
                 "capability": asdict(capability),
@@ -405,7 +456,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
     if args.dry_run:
-        payload = {"version": 1, "status": "selected", **asdict(selection)}
+        payload = {
+            "version": 1,
+            "status": "selected",
+            "run_profile": args.run_profile,
+            **asdict(selection),
+        }
         write_json(args.selection_output, payload)
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
@@ -416,11 +472,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         repo_root=repo_root,
         exec_command=capability.command,
     )
+    preflight_ms = 0
     if selection.selected_backend == "exec":
-        preflight_exec_runner(command_line, repo_root=repo_root)
-    payload = {"version": 1, "status": "selected", **asdict(selection)}
+        preflight_ms = preflight_exec_runner(command_line, repo_root=repo_root)
+    payload = {
+        "version": 1,
+        "status": "selected",
+        "run_profile": args.run_profile,
+        **asdict(selection),
+    }
     write_json(args.selection_output, payload)
+    runner_started = time.monotonic()
     completed = subprocess.run(command_line, cwd=repo_root, check=False)
+    runner_wall_ms = int((time.monotonic() - runner_started) * 1000)
     if selection.selected_backend == "exec" and args.performance_output:
         cycle_dir_value = config.get("cycle_dir")
         if not isinstance(cycle_dir_value, str) or not cycle_dir_value:
@@ -428,8 +492,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         cycle_dir = Path(cycle_dir_value)
         if not cycle_dir.is_absolute():
             cycle_dir = repo_root / cycle_dir
-        performance = summarize_exec_cycle(cycle_dir)
+        reporting_started = time.monotonic()
+        performance = summarize_exec_cycle(
+            cycle_dir,
+            run_profile=args.run_profile,
+        )
         performance["cycle_dir"] = Path(cycle_dir_value).as_posix()
+        stage_execution_ms = int(performance["duration_ms_total"])
+        performance["timing_breakdown"] = build_timing_breakdown(
+            capability_probe_ms=capability.duration_ms,
+            runner_preflight_ms=preflight_ms,
+            runner_wall_ms=runner_wall_ms,
+            stage_execution_ms=stage_execution_ms,
+            reporting_ms=int((time.monotonic() - reporting_started) * 1000),
+            dispatcher_wall_ms=int(
+                (time.monotonic() - dispatcher_started) * 1000
+            ),
+        )
         write_json(args.performance_output, performance)
         if not performance["validator_budget_passed"]:
             return 3

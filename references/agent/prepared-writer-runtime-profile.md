@@ -7,6 +7,7 @@ This is the technical execution projection inside `ft-test-case-writer`. It intr
 Continue only when the embedded payload confirms:
 
 - runner-validated current package metadata, including a non-empty SHA-256 `package_digest`;
+- package version `7` and a valid `input_fingerprint`;
 - `execution_profile = simple-field-property` or `standard-required`;
 - an explicit context profile and unsupported dimensions;
 - scope-local source evidence and atomic obligations;
@@ -24,7 +25,7 @@ Return `blocked-input` when these conditions do not hold. Do not open project in
 3. Create executable `TC-*` only for `coverage_status = testable` and implement the supplied `test_intent`, concrete fixture and `observable_oracle`.
 4. Preserve exact `OBL-* -> ATOM-* -> TC-*` traceability. Use a shared planned TC only when the package already groups those obligations.
 5. Never turn `gap`, `unclear` or `not-applicable` into executable coverage.
-6. Preserve every `constraint_gap_ids` marker in the linked TC. When the context profile requires UI calibration, label it `ui-calibration-required` and `candidate-ui-calibration`.
+6. Preserve every `constraint_gap_ids` marker in the linked TC. Independently preserve `calibration_status = ui-calibration-required` with both `ui-calibration-required` and `candidate-ui-calibration`, even when no GAP exists.
 7. Do not invent screens, fields, dictionaries, values, messages, validation mechanisms, setup, API/DB effects, state transitions or persistence.
 8. Keep one primary check and one main observable result per TC. Use unique titles that name the field/action and exact positive, boundary or invalid class.
 9. A concrete FT-first fixture may be a synthetic value, relative date or runtime-selected integration response with source-defined observable properties. A stand record ID, locator, token, session or prerecorded provider response is not required until UI-prep.
@@ -45,6 +46,6 @@ When the runner declares a hash-bound targeted-repair plan, return only the assi
 - numbered user actions and one final observable expected result;
 - exact requirement/OBL/ATOM traceability;
 - unique IDs and titles;
-- explicit calibration lifecycle for constraint gaps;
+- explicit calibration lifecycle for every package-declared calibration candidate, with or without a constraint gap;
 - no workspace mutation by the structured writer;
 - no production write or promotion.

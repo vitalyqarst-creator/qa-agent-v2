@@ -24,7 +24,7 @@ Return a blocking finding when the payload is insufficient or inconsistent. Do n
 6. Reject invented UI, literals, messages, API/DB effects or internal state; validate dictionary claims against projected `active_values`.
 7. Reject non-atomic cases, generic fixtures, placeholder steps, source-rule-only expected results, duplicate titles and nominal traceability.
 8. Classify every semantic-overlap group. Accept a shared body only when the package explicitly groups one observable multi-obligation check.
-9. For UI-calibration candidates, require `ui-calibration-required`, `candidate-ui-calibration`, the linked GAP and a neutral expected result that does not preselect filtering/message/highlight/save behavior.
+9. For UI-calibration candidates, require `ui-calibration-required`, `candidate-ui-calibration`, every linked constraint GAP when present, and a neutral expected result that does not preselect filtering/message/highlight/save behavior. Package-declared calibration without a GAP remains a valid lifecycle item.
 10. Return exactly the structured review contract requested by the runner. Do not write files.
 
 ## Decision Floor

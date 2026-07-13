@@ -29,6 +29,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--expected-ft-slug", required=True)
     result.add_argument("--section-id")
     result.add_argument("--repo-root", default=".")
+    result.add_argument("--reuse-if-current", action="store_true")
     return result
 
 
@@ -44,6 +45,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             attempt_root=(repo_root / args.attempt_root),
             expected_ft_slug=args.expected_ft_slug,
             section_id=args.section_id,
+            reuse_if_current=args.reuse_if_current,
         )
     except (OSError, StageRuntimeError, ValueError) as exc:
         payload: dict[str, object] = {"status": "blocked", "reason": str(exc)}
@@ -55,7 +57,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(
         json.dumps(
             {
-                "status": "built",
+                "status": "reused" if compiled.cache_reused else "built",
                 "stage_package": compiled.stage_package.relative_to(repo_root).as_posix(),
                 "obligations": compiled.obligation_count,
                 "coverage_gaps": compiled.gap_count,
@@ -64,6 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "execution_profile": compiled.execution_profile,
                 "unsupported_dimensions": list(compiled.unsupported_dimensions),
                 "fast_path_eligible": not compiled.unsupported_dimensions,
+                "cache_reused": compiled.cache_reused,
             },
             ensure_ascii=False,
         )

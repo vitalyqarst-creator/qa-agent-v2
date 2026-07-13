@@ -977,6 +977,7 @@ class CompileResult:
     section_id: str
     execution_profile: str
     unsupported_dimensions: tuple[str, ...]
+    cache_reused: bool
 
 
 def compile_workflow_package(
@@ -988,11 +989,13 @@ def compile_workflow_package(
     attempt_root: Path,
     expected_ft_slug: str,
     section_id: str | None = None,
+    reuse_if_current: bool = False,
 ) -> CompileResult:
     repo_root = repo_root.resolve()
     workflow_state = workflow_state.resolve()
     output_root = output_root.resolve()
     attempt_root = attempt_root.resolve()
+    output_existed = output_root.exists()
     expected_ft_root = (repo_root / "fts" / expected_ft_slug).resolve()
     if not expected_ft_root.is_dir():
         raise StageRuntimeError(f"expected FT package is missing: fts/{expected_ft_slug}")
@@ -1781,6 +1784,7 @@ def compile_workflow_package(
                 (ft_root / "test-cases").relative_to(repo_root).as_posix(),
                 (ft_root / "work" / "review-cycles").relative_to(repo_root).as_posix(),
             ),
+            reuse_if_current=reuse_if_current,
         )
     finally:
         temp_evidence.unlink(missing_ok=True)
@@ -1792,4 +1796,5 @@ def compile_workflow_package(
         section_id=section_id,
         execution_profile=execution_profile,
         unsupported_dimensions=unsupported_dimensions,
+        cache_reused=output_existed and reuse_if_current,
     )

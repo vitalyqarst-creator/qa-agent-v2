@@ -757,6 +757,7 @@ class PreparedStagePackage:
     scope_slug: str
     section_id: str
     created_at: str
+    input_fingerprint: str
     source_registry: tuple[SourceRegistryEntry, ...]
     package_artifacts: tuple[PackageArtifact, ...]
     execution_profile: str
@@ -779,6 +780,8 @@ class PreparedStagePackage:
         if self.package_version >= 2:
             payload["execution_profile"] = self.execution_profile
             payload["unsupported_dimensions"] = list(self.unsupported_dimensions)
+        if self.package_version >= 7:
+            payload["input_fingerprint"] = self.input_fingerprint
         payload["forbidden_evidence_roots"] = list(self.forbidden_evidence_roots)
         payload["fallback_policy"] = self.fallback_policy
         return payload
@@ -797,6 +800,8 @@ class PreparedStagePackage:
             raise StageRuntimeError("created_at must be ISO-8601 timestamp") from exc
         if timestamp.tzinfo is None:
             raise StageRuntimeError("created_at must include timezone")
+        if self.package_version >= 7:
+            _sha(self.input_fingerprint, "input_fingerprint")
         if not self.source_registry:
             raise StageRuntimeError("source_registry must not be empty")
         source_paths = [item.path for item in self.source_registry]
@@ -869,6 +874,8 @@ class PreparedStagePackage:
         package_version = payload.get("package_version")
         if isinstance(package_version, int) and package_version >= 2:
             expected.update({"execution_profile", "unsupported_dimensions"})
+        if isinstance(package_version, int) and package_version >= 7:
+            expected.add("input_fingerprint")
         _exact_fields(payload, expected, "prepared stage package")
         if not isinstance(payload["source_registry"], list) or not isinstance(payload["package_artifacts"], list):
             raise StageRuntimeError("source_registry and package_artifacts must be JSON arrays")
@@ -879,6 +886,11 @@ class PreparedStagePackage:
             scope_slug=payload["scope_slug"],
             section_id=payload["section_id"],
             created_at=payload["created_at"],
+            input_fingerprint=(
+                payload["input_fingerprint"]
+                if isinstance(package_version, int) and package_version >= 7
+                else ""
+            ),
             source_registry=tuple(SourceRegistryEntry.from_dict(item) for item in payload["source_registry"]),
             package_artifacts=tuple(PackageArtifact.from_dict(item) for item in payload["package_artifacts"]),
             execution_profile=(
@@ -977,6 +989,7 @@ class PreparedPackageBuilder:
         execution_profile: str,
         unsupported_dimensions: Sequence[str],
         forbidden_evidence_roots: Sequence[str],
+        reuse_if_current: bool = False,
     ) -> PreparedStagePackage:
         _identifier(package_id, "package_id")
         _identifier(ft_slug, "ft_slug")
@@ -1011,8 +1024,6 @@ class PreparedPackageBuilder:
             resolved_output.relative_to(self.repo_root)
         except ValueError as exc:
             raise StageRuntimeError("prepared package output must be inside repository") from exc
-        if resolved_output.exists():
-            raise StageRuntimeError("prepared package output already exists and is immutable")
         if not evidence_inputs:
             raise StageRuntimeError("at least one evidence input is required")
         registry = tuple(
@@ -1028,6 +1039,59 @@ class PreparedPackageBuilder:
             raise StageRuntimeError("at least one full source registry entry is required")
         for item in registry:
             item.validate()
+        input_fingerprint = _canonical_digest(
+            {
+                "contract": f"prepared-package-input-v{PACKAGE_VERSION}",
+                "package_id": package_id,
+                "ft_slug": ft_slug,
+                "scope_slug": scope_slug,
+                "section_id": section_id,
+                "source_registry": [item.to_dict() for item in registry],
+                "evidence_inputs": [
+                    {
+                        "path": repository_relative(item.path, self.repo_root),
+                        "sha256": sha256_path(item.path),
+                        "title": item.title,
+                        "selectors": list(item.selectors),
+                        "include_full": item.include_full,
+                        "max_bytes": item.max_bytes,
+                    }
+                    for item in evidence_inputs
+                ],
+                "obligations": obligations.to_dict(),
+                "instructions": {
+                    "role": instructions.role,
+                    "scenario": instructions.scenario,
+                    "output_path": instructions.output_path,
+                    "attempt_root": instructions.attempt_root,
+                    "sandbox_policy": instructions.sandbox_policy,
+                    "timeout_seconds": instructions.timeout_seconds,
+                    "idle_timeout_seconds": instructions.idle_timeout_seconds,
+                    "command_budget": instructions.command_budget,
+                },
+                "execution_profile": execution_profile,
+                "unsupported_dimensions": list(normalized_unsupported),
+                "forbidden_evidence_roots": list(forbidden_evidence_roots),
+            }
+        )
+        if resolved_output.exists():
+            if not reuse_if_current:
+                raise StageRuntimeError(
+                    "prepared package output already exists and is immutable"
+                )
+            existing = load_prepared_package(
+                resolved_output / "stage-package.json",
+                self.repo_root,
+            )
+            if (
+                existing.package_version != PACKAGE_VERSION
+                or existing.input_fingerprint != input_fingerprint
+            ):
+                raise StageRuntimeError(
+                    "stale prepared package cache: input fingerprint changed; "
+                    "compile a new immutable package id/output root"
+                )
+            return existing
         temporary = resolved_output.with_name(f".{resolved_output.name}.building-{os.getpid()}")
         if temporary.exists():
             raise StageRuntimeError(f"prepared package temporary path already exists: {temporary}")
@@ -1075,6 +1139,7 @@ class PreparedPackageBuilder:
                 scope_slug=scope_slug,
                 section_id=section_id,
                 created_at=utc_timestamp(),
+                input_fingerprint=input_fingerprint,
                 source_registry=registry,
                 package_artifacts=artifacts,
                 execution_profile=execution_profile,

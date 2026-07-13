@@ -124,7 +124,7 @@ coverage_gaps:
     def tearDown(self) -> None:
         self.temp.cleanup()
 
-    def compile(self):
+    def compile(self, *, reuse_if_current: bool = False):
         cycle = self.ft / "work" / "review-cycles" / "compiled-cycle"
         return compile_workflow_package(
             workflow_state=self.state,
@@ -133,6 +133,7 @@ coverage_gaps:
             package_id="demo-package",
             attempt_root=cycle / "attempts" / "writer-r1" / "attempt-001",
             expected_ft_slug="demo",
+            reuse_if_current=reuse_if_current,
         )
 
     def configure_reset_plan(
@@ -278,6 +279,31 @@ coverage_gaps:
             source_evidence,
         )
         self.assertNotIn("## OBL-001", source_evidence)
+
+    def test_compiler_reuses_only_identical_target_bound_package(self) -> None:
+        original = self.compile()
+
+        reused = self.compile(reuse_if_current=True)
+
+        self.assertFalse(original.cache_reused)
+        self.assertTrue(reused.cache_reused)
+        original_package = load_prepared_package(original.stage_package, self.root)
+        reused_package = load_prepared_package(reused.stage_package, self.root)
+        self.assertEqual(
+            original_package.input_fingerprint,
+            reused_package.input_fingerprint,
+        )
+
+        plan_path = self.design / "package-test-design-plan.md"
+        plan_path.write_text(
+            plan_path.read_text(encoding="utf-8").replace(
+                "Проверить все значения.",
+                "Проверить все значения повторно.",
+            ),
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "stale prepared package cache"):
+            self.compile(reuse_if_current=True)
 
     def test_preserves_bsr_and_dit_requirement_codes_in_obligation_source_refs(self) -> None:
         ledger_path = self.design / "atomic-requirements-ledger.md"

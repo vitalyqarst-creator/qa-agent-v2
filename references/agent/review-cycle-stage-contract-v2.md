@@ -4,7 +4,16 @@ This reference is the canonical backend-independent contract for one writer or r
 
 Fresh sessions may use the compact prepared-input capsule defined in `prepared-stage-package-format.md`. The capsule keeps full binary sources in a verified fallback registry instead of declaring them as default stage inputs.
 
-The optimized prepared writer and reviewer are allowlisted only for package version 6 with `execution_profile = simple-field-property`, no unsupported dimensions and no blocking coverage gaps. Versions 1 through 5 remain readable as immutable legacy evidence but are not runnable as the current prepared contract. Package version 6 preserves explicit machine-readable `OBL-* -> ATOM-* -> TC/GAP` relations, non-blocking constraint gaps and changed-prestate contracts for reset obligations. All table-parity, numeric-boundary, integration/persistence and dependency/state packages route to the standard writer/reviewer contracts. Prepared execution uses the compact technical projections in `prepared-writer-runtime-profile.md` and `prepared-reviewer-runtime-profile.md`; the full skills and deep reviewer rubric remain authoritative outside this narrow allowlist.
+The optimized prepared writer and reviewer are allowlisted only for package version 7 with `execution_profile = simple-field-property`, no unsupported dimensions and no blocking coverage gaps. Versions 1 through 6 remain readable as immutable legacy evidence but are not runnable as the current prepared contract. Package version 7 preserves explicit machine-readable `OBL-* -> ATOM-* -> TC/GAP` relations, non-blocking constraint gaps and changed-prestate contracts for reset obligations, and adds exact dictionary projections, explicit calibration status and an input fingerprint. All table-parity, numeric-boundary, integration/persistence and dependency/state packages route to the standard writer/reviewer contracts. Prepared execution uses the compact technical projections in `prepared-writer-runtime-profile.md` and `prepared-reviewer-runtime-profile.md`; the full skills and deep reviewer rubric remain authoritative outside this narrow allowlist.
+
+## Operational Run Profiles
+
+`review_cycle_backend_dispatcher.py` uses a separate `--run-profile` contract; this is not the prepared package `execution_profile`:
+
+- `production` is the default real-work route. It keeps capability preflight, fresh writer/reviewer sessions and every deterministic/semantic gate, but never scans detailed event/context attribution. Its optional performance output contains compact stage metrics and the dispatcher timing breakdown.
+- `benchmark` keeps the same quality gates and additionally requires `--performance-output`, detailed event/context attribution and benchmark metrics.
+
+Performance output version 2 separates capability probe, runner preflight, runner wall time, summed stage execution, runner orchestration overhead and reporting time. Profile selection must never weaken writer/reviewer acceptance gates.
 
 ## Compatibility
 

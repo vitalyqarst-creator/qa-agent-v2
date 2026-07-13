@@ -2252,10 +2252,13 @@ class CodexExecReviewCycleRunner:
             )
         if not SHA256_HEX_RE.fullmatch(package.package_digest):
             raise RunnerError("Prepared package metadata requires a valid package_digest")
+        if not SHA256_HEX_RE.fullmatch(package.input_fingerprint):
+            raise RunnerError("Prepared package metadata requires a valid input_fingerprint")
         return {
             "package_version": package.package_version,
             "package_id": package.package_id,
             "package_digest": package.package_digest,
+            "input_fingerprint": package.input_fingerprint,
             "ft_slug": package.ft_slug,
             "scope_slug": package.scope_slug,
             "section_id": package.section_id,
@@ -2299,7 +2302,7 @@ class CodexExecReviewCycleRunner:
             ),
             "character-restriction-calibration": (
                 "Keep each invalid class and field independent.",
-                "For obligations with constraint_gap_ids, preserve every GAP-* marker and label the case candidate-ui-calibration.",
+                "Preserve every constraint_gap_ids marker. Independently preserve calibration_status=ui-calibration-required with ui-calibration-required and candidate-ui-calibration, even without a GAP.",
                 "Do not choose a validation message, filtering, highlight, save or transition mechanism that the evidence does not define.",
             ),
             "numeric-date-boundary": (
@@ -2430,10 +2433,20 @@ class CodexExecReviewCycleRunner:
                 entry["planned_test_case_id"] = item.planned_test_case_id
             if item.dictionary_refs:
                 entry["dictionary_refs"] = list(item.dictionary_refs)
+                entry["dictionary_requirements"] = [
+                    {
+                        "dictionary_id": requirement.dictionary_id,
+                        "coverage_mode": requirement.coverage_mode,
+                        "required_value_count": len(requirement.required_values),
+                    }
+                    for requirement in item.dictionary_requirements
+                ]
             if item.gap_id:
                 entry["gap_id"] = item.gap_id
             if item.constraint_gap_ids:
                 entry["constraint_gap_ids"] = list(item.constraint_gap_ids)
+            if item.calibration_status != "none":
+                entry["calibration_status"] = item.calibration_status
             if item.execution_semantics != "direct":
                 entry["execution_semantics"] = item.execution_semantics
             items.append(entry)
@@ -3194,7 +3207,13 @@ class CodexExecReviewCycleRunner:
                     f"**Трассировка:** {traceability}",
                     *(
                         [
-                            f"**Coverage gap:** {'; '.join(constraint_gap_ids)}",
+                            *(
+                                [
+                                    f"**Coverage gap:** {'; '.join(constraint_gap_ids)}"
+                                ]
+                                if constraint_gap_ids
+                                else []
+                            ),
                             "**Статус oracle:** ui-calibration-required",
                             "**Статус тест-кейса:** candidate-ui-calibration",
                         ]
@@ -4844,6 +4863,7 @@ class CodexExecReviewCycleRunner:
                     "package_version": self._prepared_package.package_version,
                     "package_id": self._prepared_package.package_id,
                     "package_digest": self._prepared_package.package_digest,
+                    "input_fingerprint": self._prepared_package.input_fingerprint,
                     "execution_profile": self._prepared_package.execution_profile,
                     "unsupported_dimensions": list(
                         self._prepared_package.unsupported_dimensions
@@ -4895,6 +4915,7 @@ class CodexExecReviewCycleRunner:
                         "package_version": self._prepared_package.package_version,
                         "package_id": self._prepared_package.package_id,
                         "package_digest": self._prepared_package.package_digest,
+                        "input_fingerprint": self._prepared_package.input_fingerprint,
                         "writer_profile_numeric_allowlist": False,
                         "reviewer_profile_numeric_allowlist": False,
                     },

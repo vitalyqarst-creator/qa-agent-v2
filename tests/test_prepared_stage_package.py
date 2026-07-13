@@ -74,7 +74,13 @@ class PreparedStagePackageTests(unittest.TestCase):
             ),
         )
 
-    def _build(self, *, max_package_bytes: int = 512000, output_name: str = "prepared"):
+    def _build(
+        self,
+        *,
+        max_package_bytes: int = 512000,
+        output_name: str = "prepared",
+        reuse_if_current: bool = False,
+    ):
         return PreparedPackageBuilder(
             self.root, max_package_bytes=max_package_bytes
         ).build(
@@ -104,6 +110,7 @@ class PreparedStagePackageTests(unittest.TestCase):
             execution_profile="simple-field-property",
             unsupported_dimensions=(),
             forbidden_evidence_roots=("fts/demo-ft/test-cases", "work/previous-cycle"),
+            reuse_if_current=reuse_if_current,
         )
 
     def test_builds_compact_immutable_package_and_round_trips(self) -> None:
@@ -112,6 +119,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         loaded = load_prepared_package(package_root / "stage-package.json", self.root)
 
         self.assertEqual(package.package_digest, loaded.package_digest)
+        self.assertEqual(64, len(loaded.input_fingerprint))
         self.assertEqual(
             {path.name for path in package_root.iterdir()},
             {
@@ -134,6 +142,22 @@ class PreparedStagePackageTests(unittest.TestCase):
         with self.assertRaisesRegex(StageRuntimeError, "immutable"):
             self._build()
 
+    def test_reuses_only_identical_current_package_input(self) -> None:
+        original = self._build()
+
+        reused = self._build(reuse_if_current=True)
+
+        self.assertEqual(original.package_digest, reused.package_digest)
+        self.assertEqual(original.created_at, reused.created_at)
+        self.assertEqual(original.input_fingerprint, reused.input_fingerprint)
+
+        self.evidence.write_text(
+            self.evidence.read_text(encoding="utf-8") + "\nSRC-1: changed context.\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "stale prepared package cache"):
+            self._build(reuse_if_current=True)
+
     def test_v6_obligation_payload_without_planned_tc_round_trips_unchanged(self) -> None:
         original = self._obligations()
         payload = original.to_dict()
@@ -143,6 +167,30 @@ class PreparedStagePackageTests(unittest.TestCase):
 
         self.assertEqual(original.digest, restored.digest)
         self.assertEqual(payload, restored.to_dict())
+
+    def test_legacy_v6_obligation_payload_remains_readable(self) -> None:
+        payload = self._obligations().to_dict()
+        payload["package_version"] = 6
+        for obligation in payload["obligations"]:
+            obligation.pop("dictionary_requirements")
+            obligation.pop("calibration_status")
+        without_digest = {
+            key: value for key, value in payload.items() if key != "digest"
+        }
+        payload["digest"] = hashlib.sha256(
+            json.dumps(
+                without_digest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+
+        restored = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual(6, restored.package_version)
+        self.assertEqual((), restored.obligations[0].dictionary_requirements)
+        self.assertEqual("none", restored.obligations[0].calibration_status)
 
     def test_v6_obligation_payload_with_planned_tc_round_trips(self) -> None:
         original = PreparedObligationSet.create(
@@ -477,6 +525,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         payload["package_version"] = 1
         payload.pop("execution_profile")
         payload.pop("unsupported_dimensions")
+        payload.pop("input_fingerprint")
         without_digest = {key: value for key, value in payload.items() if key != "package_digest"}
         payload["package_digest"] = hashlib.sha256(
             json.dumps(

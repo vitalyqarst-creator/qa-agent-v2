@@ -46,9 +46,17 @@ Required invariants:
 
 ## Coverage Obligation Table
 
-The compiler accepts only the canonical columns from `references/agent/coverage-obligation-table-format.md`:
+The compiler requires the canonical columns from `references/agent/coverage-obligation-table-format.md`:
 
 `obligation_id`, `package_id`, `source_property_id`, `linked_atom_id`, `property_type`, `obligation_class`, `required_behavior`, `source_ref`, `planned_tc_or_gap`, `status`, `review_notes`.
+
+Dictionary-backed rows may add `dictionary_coverage` with the closed enum:
+
+- `reference-only` — the scenario uses one named dictionary value or dependency and does not claim exhaustive composition;
+- `all-leaf-values` — every active leaf value must be present in the linked TC;
+- `full-hierarchy` — every child group name and active leaf value must be present with its hierarchy path.
+
+New exhaustive rows should set this column explicitly. For existing contract-v2 artifacts only, the compiler maps the stable legacy classes `dictionary-hierarchy-shown`, `dictionary-values-shown` and `value-has-checkbox` to the corresponding exhaustive mode; all other dictionary references remain `reference-only`. It does not infer exhaustive coverage from free-form Russian/English prose.
 
 Legacy `CO-*`, `linked_atom` and compact seven-column tables must be migrated before compilation. The migrator handles only recognized one-atom legacy rows. Missing obligation tables, unknown atoms and scope-exclusion rows without an atom require semantic review and are not auto-generated.
 
@@ -79,4 +87,4 @@ The migrator is conservative:
 - recognized schema aliases only;
 - refuses to invent obligations or attach rows without one known atom.
 
-After migration, compile into a new immutable cycle directory. Do not overwrite an existing prepared package.
+After migration, compile into a new immutable cycle directory. Do not overwrite an existing prepared package. `--reuse-if-current` is allowed only for an identical v7 target-bound package: source registry, compiler evidence, obligations, instructions and attempt binding must produce the same `input_fingerprint`; otherwise compilation blocks and requires a new package id/output root.
