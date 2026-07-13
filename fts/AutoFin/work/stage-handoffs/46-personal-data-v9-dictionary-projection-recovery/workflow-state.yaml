@@ -28,6 +28,7 @@ latest_artifacts:
   backend_selection_dry_run: work/review-cycles/application-card-client-personal-data-shadow-v9-20260713/backend-selection.dry-run.json
   pre_live_test_report: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/pre-live-test-report.md
   pre_live_stop_gate: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/pre-live-stop-gate.md
+  pre_live_authorization: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/pre-live-authorization.md
   session_log: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/iteration-session-log.md
   decision_log: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/agent-decision-log.md
   active_transition_prompt: work/stage-handoffs/46-personal-data-v9-dictionary-projection-recovery/prompt.scope-to-iteration.md
@@ -39,6 +40,6 @@ open_questions:
   - GAP-002 — точная UI-реакция при незаполненном обязательном поле.
   - GAP-003 — наблюдаемое подтверждение ошибки интеграции.
 blocking_reasons:
-  - V9 live is forbidden until the pre-live checkpoint is pushed and a separate authorization commit is pushed.
+  - V9 live remains forbidden until this separate authorization commit is pushed; after push exactly one dispatcher is allowed.
 accepted_risks:
   - UI-specific oracle calibration остаётся за ft-ui-automation-prep.

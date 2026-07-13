@@ -41,6 +41,7 @@
 - Exec dry-run: v2/exec verified, fallback false.
 - H46 artifact validator: 0 errors, 0 warnings, 3 inherited info.
 - Baseline hash unchanged; production shadow absent.
+- Pre-live checkpoint `7b0743f5a23e594e574994ccb9ffd5a86140eccc` pushed; separate one-dispatcher authorization issued.
 
 ## Contamination Check
 
@@ -57,6 +58,7 @@
 | 5 | Compiled immutable V9 package | 65 obligations, 47 TC, exact DICT array | `package-preflight-report.v9.json` |
 | 6 | Ran validate-only and exec dry-run | No writer LLM; exec v2 verified | pre-live reports |
 | 7 | Passed pre-live regression and artifact gates | 196 tests; 0 errors/warnings | `pre-live-test-report.md` |
+| 8 | Pushed immutable pre-live checkpoint and issued separate authorization | Exactly one reviewer-only dispatcher allowed after authorization push | `pre-live-authorization.md` |
 
 ## Quality Checkpoints
 
