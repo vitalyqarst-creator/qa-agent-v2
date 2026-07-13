@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "validator": "codex_review_cycle_runner.evaluate_test_case_markdown_structure",
+  "checked_paths": [
+    "work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md"
+  ],
+  "findings": []
+}

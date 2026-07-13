@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-07-13T02:32:46.516598+00:00",
+  "execution_profile": "standard-required",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/review-cycles",
+    "fts/AutoFin/work/canary-runs"
+  ],
+  "ft_slug": "AutoFin",
+  "package_artifacts": [
+    {
+      "bytes": 27843,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/prepared-input/visual-assessment-conditional-v2/source-evidence.md",
+      "sha256": "aaf50c27e29d5a0e0a829134adea84a296b559d1991deb71338dc8360be99d1b"
+    },
+    {
+      "bytes": 6876,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/prepared-input/visual-assessment-conditional-v2/atomic-obligations.json",
+      "sha256": "e96e3f220607567ab2a5c75c81a2fae2cf3a66b353dcdc9c52ceb8b213b98947"
+    },
+    {
+      "bytes": 1131,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/prepared-input/visual-assessment-conditional-v2/stage-instructions.md",
+      "sha256": "20b987708fa532847ec1009b9017cc742690e11d437737750a57fd60ce5b4b2d"
+    }
+  ],
+  "package_digest": "0c6aa96c43e97de0cf8e4d923cb2c79ea8e0a8fd8f70b1b99772c33804e12e4c",
+  "package_id": "visual-assessment-conditional-v2",
+  "package_version": 5,
+  "scope_slug": "visual-assessment-conditional-state-shadow",
+  "section_id": "18",
+  "source_registry": [
+    {
+      "locator": "section 4.3 Table 4 visual information rows and Appendix 1",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "locator": "SRC-002, SRC-003, SRC-005, SRC-006, SRC-009; BSR 312-317",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "locator": "Final PDF pages for BSR 312-317 and Appendix 1",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ],
+  "unsupported_dimensions": [
+    "negative-feedback",
+    "conditional-requiredness-feedback",
+    "full-dictionary-audit",
+    "backend-effects",
+    "standalone-comment-fields"
+  ]
+}

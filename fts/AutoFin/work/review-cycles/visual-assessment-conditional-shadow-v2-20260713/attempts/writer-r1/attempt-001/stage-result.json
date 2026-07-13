@@ -1,0 +1,96 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5952-535b-72d2-870f-488edfe94790",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "visual-assessment-conditional-shadow-v2-20260713",
+  "duration_ms": 39219,
+  "exit_code": 0,
+  "finished_at": "2026-07-13T02:33:54.346957+00:00",
+  "input_digest": "47ad9c4b3c44d92cbb006c36884435b0205414990b70f841c7fb03aae3dd2b6d",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "7b8a3e0e6d5cf1aebba29a06c17a699559850f5d3c73aaae59a3175181b5e5de"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "33a14c47939e17da024d8b905227ffaf8b707d82519b49be3aaf850eb8503a2a"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "7b8a3e0e6d5cf1aebba29a06c17a699559850f5d3c73aaae59a3175181b5e5de"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "02f955d6a1c001e813e81cfb91ea3c0a864cbcea6ab87b0bd70908f48cb4b6c6"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "sha256": "4a96f8d72396f12d3d18e4c84ea1c236d90ec01a3d3734a8832ed920742ae313"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "37f5563e42a7794dae2a9e3ea4a943d627c045ad95655359932d55a4b67451c0"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "d4935cb5b8e47da510bc8cac812b220f14acd46994ef9b95c41b2b412bdce3f9"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "acab6113ca2d66465c426d7046ab4530ee3a0b8ebe751780bce659d7670bb3c3"
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "de5cb703dffe7f13f287a283b96a94e29b828075504581949dd81019a48dd405"
+    },
+    {
+      "kind": "quality-gate-bundle",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "2530d36b26b521ac5c6081cafb205174431c913a80941284fca8f2b6f0e1da68"
+    },
+    {
+      "kind": "calibration-lifecycle",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "8e216a49fd15ddef0c1e2678a3a44ac86771877fbd960196702549c5e3f4e064"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "b73fcc3ef76fa92c1764bfe9f490e03a7745d502c7313aaaf20a0451b86ace45"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "sha256": "413a0a5890fc5a41e6d602f71a1e9db1ef6323974e4a21233332d2b3e572b3ab"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/visual-assessment-conditional-shadow-v2-20260713/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "42e974bdda79d37d3c9387d7d6374064cee69bbb152a98e7fa05cf7412e9df74"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-13T02:33:15.119899+00:00",
+  "status": "completed",
+  "timed_out": false
+}

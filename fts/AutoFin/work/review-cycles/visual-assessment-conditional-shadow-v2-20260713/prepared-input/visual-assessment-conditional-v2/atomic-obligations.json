@@ -1,0 +1,135 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-COND-001",
+      "handling": "Сохранить как gap; закрывать через UI evidence или уточнение требования до negative TC.",
+      "problem": "Не определены текст/подсветка ошибки, момент валидации и блокируемое действие для requiredness.",
+      "source_refs": [
+        "SRC-003.P05",
+        "SRC-003.P07",
+        "BSR 316",
+        "BSR 317"
+      ]
+    }
+  ],
+  "digest": "a2e19317ce70d76ac23f623a0b54dc879666a41146955f3c5f53537b8520d9d3",
+  "obligations": [
+    {
+      "atom_id": "ATOM-COND-001",
+      "atomic_statement": "Для поля `Визуальная информация` начальное значение равно `Нет`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Не добавлять persistence-проверку значения.",
+      "obligation_id": "OBL-COND-001",
+      "observable_oracle": "При первом открытии блока поле `Визуальная информация` отображает значение `Нет`.",
+      "planned_test_case_id": "TC-VACS-001",
+      "source_refs": [
+        "SRC-002.P02",
+        "BSR 312"
+      ],
+      "test_intent": "Проверить начальное состояние управляющего поля до взаимодействия."
+    },
+    {
+      "atom_id": "ATOM-COND-002",
+      "atomic_statement": "При `Визуальная информация = Да` отображается список `Параметры визуальной оценки`.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Проверяется только видимое состояние списка.",
+      "obligation_id": "OBL-COND-002",
+      "observable_oracle": "После выбора `Да` список `Параметры визуальной оценки` видим.",
+      "planned_test_case_id": "TC-VACS-002",
+      "source_refs": [
+        "SRC-003.P01",
+        "BSR 314"
+      ],
+      "test_intent": "Проверить положительную ветку условной видимости."
+    },
+    {
+      "atom_id": "ATOM-COND-003",
+      "atomic_statement": "При `Визуальная информация = Нет` список `Параметры визуальной оценки` не отображается.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "gap_id": "",
+      "notes": "Не делать вывод о сохранении ранее выбранных значений.",
+      "obligation_id": "OBL-COND-003",
+      "observable_oracle": "После выбора `Нет` список `Параметры визуальной оценки` отсутствует на форме.",
+      "planned_test_case_id": "TC-VACS-003",
+      "source_refs": [
+        "SRC-003.P02",
+        "BSR 314"
+      ],
+      "test_intent": "Проверить явно заданную обратную ветку условной видимости."
+    },
+    {
+      "atom_id": "ATOM-COND-004",
+      "atomic_statement": "Выбор `Другое (комментарий обязателен)` в категории `Признаки алкоголика` отображает текстовое поле комментария.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-101"
+      ],
+      "gap_id": "",
+      "notes": "Обязательность комментария не проверяется без source-defined feedback mechanism.",
+      "obligation_id": "OBL-COND-004",
+      "observable_oracle": "После выбора `Другое (комментарий обязателен)` в категории `Признаки алкоголика` видно связанное текстовое поле комментария.",
+      "planned_test_case_id": "TC-VACS-004",
+      "source_refs": [
+        "SRC-003.P06",
+        "SRC-009",
+        "BSR 317",
+        "DICT-101"
+      ],
+      "test_intent": "Проверить conditional display поля комментария на конкретном dictionary fixture."
+    },
+    {
+      "atom_id": "ATOM-COND-005",
+      "atomic_statement": "Список параметров визуальной оценки допускает одновременный выбор нескольких обычных значений.",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-101"
+      ],
+      "gap_id": "",
+      "notes": "Полнота всего словаря находится вне canary.",
+      "obligation_id": "OBL-COND-005",
+      "observable_oracle": "После выбора двух значений категории `Признаки алкоголика` — `Запах алкоголя / перегара / сильный запах духов, перебивающий перегар` и `Отечность, нездоровый цвет лица, синяки под глазами` — оба значения одновременно отмечены.",
+      "planned_test_case_id": "TC-VACS-005",
+      "source_refs": [
+        "SRC-002.P04",
+        "SRC-003.P08",
+        "SRC-005",
+        "SRC-006",
+        "BSR 313",
+        "BSR 315",
+        "DICT-101"
+      ],
+      "test_intent": "Проверить multiple-selection на двух конкретных source-backed значениях."
+    },
+    {
+      "atom_id": "ATOM-COND-006",
+      "atomic_statement": "ФТ задаёт обязательность минимум одного параметра и комментария при `Другое`, но не задаёт наблюдаемый validation feedback.",
+      "constraint_gap_ids": [],
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "gap_id": "GAP-COND-001",
+      "notes": "Requiredness preserved without invented error, highlight or transition blocking.",
+      "obligation_id": "OBL-COND-006",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-003.P05",
+        "SRC-003.P07",
+        "BSR 316",
+        "BSR 317"
+      ],
+      "test_intent": "Не создавать negative TC до появления наблюдаемого механизма проверки."
+    }
+  ],
+  "package_id": "visual-assessment-conditional-v2",
+  "package_version": 5
+}
