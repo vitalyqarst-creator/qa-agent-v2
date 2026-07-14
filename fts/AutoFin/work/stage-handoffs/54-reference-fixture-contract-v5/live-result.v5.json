@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "status": "accepted-not-promoted-terminal",
+  "authorization_consumed": true,
+  "dispatcher_invocations": 1,
+  "further_live_budget_this_iteration": 0,
+  "backend": "exec",
+  "fallback_used": false,
+  "dispatcher_exit_code": 1,
+  "dispatcher_exit_interpretation": "expected non-promotion terminal boundary",
+  "package_version": 8,
+  "package_id": "visual-assessment-medium-scope-benchmark-v5",
+  "package_digest": "83ee169e8e5d338f8dfd9cd977d8c3bf2443538b553a47b7365d40d083fe51ab",
+  "input_fingerprint": "7c59d70707bc2156c5adc93e8391bff3a55dc4e1e360a82db515149b54913cb3",
+  "draft_sha256": "02107211f064d6bc2e39760b9dc823af7b793501f267bd3b1a81c853d2427fb8",
+  "writer": {
+    "status": "draft-ready",
+    "duration_ms": 72687,
+    "total_tokens": 28729,
+    "commands": 0,
+    "deterministic_gates_passed": true,
+    "reference_fixture_projection_passed": true,
+    "reference_fixture_materialized": 1,
+    "reference_fixture_entries_obl_013": 3,
+    "dictionary_writer_ownership_passed": true,
+    "dictionary_projection_materialized": 2,
+    "dictionary_projection_hierarchy_entries_obl_006": 47,
+    "dictionary_projection_leaf_entries_obl_007": 39,
+    "calibration_lifecycle_open": 2
+  },
+  "reviewer": {
+    "status": "accepted",
+    "duration_ms": 29204,
+    "total_tokens": 29042,
+    "commands": 0,
+    "covered_obligations": 13,
+    "incorrect_obligations": 0,
+    "finding_count": 0,
+    "error_findings": 0,
+    "obl_013_exact_fixture_accepted": true
+  },
+  "performance_observation": {
+    "duration_ms_total": 101891,
+    "total_tokens": 57771,
+    "uncached_input_tokens_total": 53028,
+    "uncached_tokens_per_obligation": 4079.08,
+    "validator_invocations": 1,
+    "orchestration_overhead_percent": 4.49,
+    "duration_target_passed": true,
+    "token_efficiency_target_passed": false,
+    "semantic_acceptance_passed": true,
+    "overall_performance_verdict": "not-calculated-single-canary"
+  },
+  "production_boundary": {
+    "existing_visual_assessment_sha256": "3761f32df5babc77c22acb765ba0cb97925a7183dfcb81f1afc0c3be1ce577dc",
+    "existing_personal_data_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "existing_section_4_2_sha256": "cbc46e9b8d44c8e7c19b887a6a2f59f64d096e6275d2bd45f521132dd133c8a3",
+    "promotion_target_exists": false,
+    "final_promoted": false
+  },
+  "retry_permitted": false,
+  "next_action": "offline-transfer-and-token-efficiency-v6"
+}

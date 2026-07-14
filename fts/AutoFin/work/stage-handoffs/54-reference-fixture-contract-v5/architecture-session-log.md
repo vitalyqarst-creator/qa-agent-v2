@@ -8,7 +8,7 @@
 | mode | `reference-fixture-contract-v5` |
 | ft_slug | `AutoFin` |
 | scope_slug | `visual-assessment-medium-scope-benchmark-v5` |
-| status_after | `authorized-canary-pending` |
+| status_after | `ready-for-next-stage` |
 
 ## Inputs Read
 
@@ -79,6 +79,8 @@
 | 8 | Ran architecture audit | 61 checks, 0 findings | audit output |
 | 9 | Created and pushed offline checkpoint | local/origin match at `25ba4a4` | Git checkpoint |
 | 10 | Bound one V5 live invocation | retry/fallback/promotion prohibited | `pre-live-authorization.v5.md` |
+| 11 | Executed V5 exactly once through exec | writer gates passed; reviewer accepted 13/13 | `live-result.v5.json` |
+| 12 | Applied terminal non-promotion boundary | budget 0; protected baselines unchanged | `terminal-stop-gate.v5.md` |
 
 ## Quality Checkpoints
 
@@ -86,6 +88,7 @@
 | --- | --- | --- | --- |
 | Package backward compatibility | pass | full package tests | retain v8 boundary |
 | Exact reference fixture | pass offline | positive/negative/replay tests | one live canary |
+| Exact reference fixture live | pass | OBL-013 accepted with group + 2 exact leaves | transfer canary next |
 | Exhaustive dictionary ownership | pass | existing V4 regressions retained | inspect live projection |
 | Production boundary | pass | three known hashes and absent target | verify after live |
 | Architecture consistency | pass | 61 checks, 0 findings | rerun after terminal docs |
@@ -95,3 +98,4 @@
 - Do not run V5 before pushed offline checkpoint and separate hash-bound authorization.
 - Run exactly once through dispatcher; do not retry or use SDK fallback.
 - Never promote or modify the FT-first baseline in this benchmark.
+- V5 live budget is exhausted; use the active transition prompt for offline V6 planning.

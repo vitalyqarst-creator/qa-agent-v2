@@ -2,7 +2,7 @@
 
 ## Status
 
-`open-for-one-authorized-canary`
+`closed-by-terminal-accepted-result`
 
 ## До live обязательно
 
@@ -21,3 +21,7 @@ Live до выполнения всех условий; повтор после 
 ## Authorization
 
 Все offline-условия выполнены. Offline checkpoint `25ba4a45cb0edfb7cf6574fbd9bbd182d02b16b1` отправлен; authorization: `pre-live-authorization.v5.md`. Разрешён ровно один invocation после push authorization checkpoint.
+
+## Terminal outcome
+
+Budget израсходован. Канонический результат: `terminal-stop-gate.v5.md`; повтор V5 запрещён.

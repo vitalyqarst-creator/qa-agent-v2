@@ -1,0 +1,3 @@
+2026-07-14T03:04:37.994418Z  WARN codex_core::shell_snapshot: Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell
+2026-07-14T03:04:41.318284Z  WARN codex_core_plugins::manager: failed to warm remote plugin catalog cache error=remote plugin catalog request to https://chatgpt.com/backend-api/ps/plugins/list failed with status 400 Bad Request: {"detail":"Invalid pageToken"}
+2026-07-14T03:05:04.074125Z  WARN codex_core::hook_runtime: after_agent hook failed; continuing turn_id=019f5e95-6a38-7153-ad22-16b5cd7f1a58 hook_name=legacy_notify error=Имя файла или его расширение имеет слишком большую длину. (os error 206)
