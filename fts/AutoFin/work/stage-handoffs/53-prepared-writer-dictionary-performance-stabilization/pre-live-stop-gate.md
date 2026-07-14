@@ -2,7 +2,7 @@
 
 ## Status
 
-`authorized-conditional-sequence`
+`closed-by-terminal-quality-gate`
 
 ## До первого live обязательно
 
@@ -15,6 +15,10 @@
 - Отдельный authorization artifact связывает user instruction, checkpoint SHA и три invocation budgets.
 
 Все условия выполнены. Authorization: `pre-live-authorization.v4.md`; offline checkpoint: `c9dcbebe5ddba6215deb55324dfe9b31201022d5`.
+
+## Terminal outcome
+
+r1 завершён как `changes-required`; условные бюджеты r2/r3 отозваны. Канонический итог: `terminal-stop-gate.v4.md`.
 
 ## Запрещено
 

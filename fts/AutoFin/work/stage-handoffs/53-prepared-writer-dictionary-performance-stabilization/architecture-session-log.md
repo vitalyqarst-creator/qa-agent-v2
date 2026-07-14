@@ -17,6 +17,7 @@
 - `fts/AutoFin/AGENT-NOTES.md` — mandatory package context.
 - H52 V3 prompt, raw writer result, draft, metrics and dictionary projection — performance evidence.
 - Runner, obligation gate and focused tests — implementation boundary.
+- V4 r1 writer draft, deterministic reports, reviewer findings and performance — live canary evidence.
 
 ## Inputs Not Used
 
@@ -32,6 +33,7 @@
 
 - Model may ignore symbolic ownership instruction; deterministic canary gate stops before reviewer.
 - Three live measurements cost more tokens; r2/r3 conditional on r1 quality pass.
+- r1 exposed prompt-adherence variance for exact reference-only fixtures; r2/r3 were revoked.
 
 ## Validation
 
@@ -63,6 +65,9 @@
 | 10 | Completed offline regression | agent-layer, architecture, budgets and H53 audit pass | `pre-live-test-report.v4.md` |
 | 11 | Created and pushed offline checkpoint | local/origin SHA match at `c9dcbeb` | Git checkpoint |
 | 12 | Bound live authorization | one invocation per run; r2/r3 conditional on prior quality pass | `pre-live-authorization.v4.md` |
+| 13 | Executed r1 once through exec | writer completed; reviewer returned changes-required | `live-result.v4-r1.json` |
+| 14 | Applied terminal quality stop | r2/r3 not run; no retry/fallback/promotion | `terminal-stop-gate.v4.md` |
+| 15 | Isolated follow-up architecture gap | exact test_intent values need structured seed/gate | `prompt.v4-canary-to-reference-fixture-contract-v5.md` |
 
 ## Quality Checkpoints
 
@@ -73,6 +78,9 @@
 | Writer duplication rejection | pass | positive/negative unit and runner tests | canary |
 | Production boundary | pass | target absent; baselines unchanged | recheck after every live |
 | Full offline gate | pass | 464 + 391 tests; 61 architecture checks | checkpoint and push |
+| V4 r1 exhaustive ownership | pass | raw writer 13 210 bytes; projection 47/39 | preserve in V5 |
+| V4 r1 semantic review | fail | OBL-013 incorrect; F-001 error | terminal stop; offline fixture contract |
+| V4 r1 production boundary | pass | target absent; protected SHA unchanged | preserve in V5 |
 
 ## Technical Fallbacks
 
@@ -92,6 +100,6 @@
 
 ## Handoff Notes For Next Session
 
-- Live is forbidden until checkpoint push and hash-bound authorization.
-- Stop after r1 if any quality or boundary gate fails; duration failure alone is terminal evidence, not retry permission.
-- Authorization conditions are now fulfilled; consume each budget at most once and persist terminal evidence before continuing.
+- V4 is terminal after r1 quality failure; no V4 live budget remains.
+- Do not hand-edit or promote the rejected draft.
+- Continue only through the offline V5 fixture-contract prompt; any new live requires new immutable packages, checkpoint and authorization.

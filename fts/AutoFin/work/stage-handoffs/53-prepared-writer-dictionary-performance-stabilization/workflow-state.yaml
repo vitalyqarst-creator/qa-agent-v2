@@ -3,7 +3,7 @@ prepared_compiler_contract_version: 2
 scope_slug: visual-assessment-medium-scope-benchmark-v4
 current_stage: agent-architecture-auditor
 stage_status: ready-for-next-stage
-current_round: 0
+current_round: 1
 next_skill: agent-architecture-auditor
 required_inputs:
   - AGENT-NOTES.md
@@ -29,6 +29,11 @@ required_inputs:
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r1-20260714/backend-selection.dry-run.json
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r2-20260714/backend-selection.dry-run.json
   - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/backend-selection.dry-run.json
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/live-result.v4-r1.json
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/performance-analysis.v4.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/terminal-stop-gate.v4.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/iteration-summary.v4.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.v4-canary-to-reference-fixture-contract-v5.md
 latest_artifacts:
   performance_baseline: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/performance-baseline.md
   architecture_decision: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-decision.md
@@ -36,7 +41,6 @@ latest_artifacts:
   pre_live_stop_gate: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-stop-gate.md
   decision_log: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/agent-decision-log.md
   session_log: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-session-log.md
-  active_transition_prompt: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.performance-stabilization-to-v4-live.md
   pre_live_test_report: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-test-report.v4.md
   pre_live_authorization: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-authorization.v4.md
   dispatcher_config_v4_r1: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r1.json
@@ -48,6 +52,11 @@ latest_artifacts:
   backend_selection_dry_run_v4_r1: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r1-20260714/backend-selection.dry-run.json
   backend_selection_dry_run_v4_r2: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r2-20260714/backend-selection.dry-run.json
   backend_selection_dry_run_v4_r3: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/backend-selection.dry-run.json
+  live_result_v4_r1: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/live-result.v4-r1.json
+  performance_analysis_v4: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/performance-analysis.v4.md
+  terminal_stop_gate_v4: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/terminal-stop-gate.v4.md
+  iteration_summary_v4: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/iteration-summary.v4.md
+  active_transition_prompt: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.v4-canary-to-reference-fixture-contract-v5.md
 coverage_gaps:
   blocking: 0
   non_blocking: 0
@@ -56,3 +65,5 @@ blocking_reasons: []
 accepted_risks:
   - V4 requires up to three live invocations to calculate a comparable median; r2/r3 remain conditional on canary quality.
   - The accepted V3 draft is immutable benchmark evidence and is not promoted.
+  - V4 has no overall performance verdict because r1 failed quality and r2/r3 were not run.
+  - The V4 r1 draft is rejected immutable evidence and is not promoted.

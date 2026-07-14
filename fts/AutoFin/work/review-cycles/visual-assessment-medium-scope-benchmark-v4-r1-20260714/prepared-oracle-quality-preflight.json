@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-observable-oracle-preflight-v1",
+  "error_code": "",
+  "package_id": "visual-assessment-medium-scope-benchmark-v4",
+  "atomic_obligations_sha256": "6fd49ada148da93d1ad059988b898eeeca70a00ddf16a7eb0b18748c2eb7bd0f",
+  "testable_obligations_checked": 13,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "422b578434934c04569b34a4c4fd97689433c6092dc92152fb7ced681cc24f54"
+}

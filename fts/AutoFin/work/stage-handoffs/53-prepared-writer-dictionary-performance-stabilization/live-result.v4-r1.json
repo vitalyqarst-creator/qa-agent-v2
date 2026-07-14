@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "status": "changes-required-terminal",
+  "authorization_consumed": true,
+  "dispatcher_invocations": {
+    "r1": 1,
+    "r2": 0,
+    "r3": 0
+  },
+  "further_live_budget_this_iteration": 0,
+  "backend": "exec",
+  "fallback_used": false,
+  "package_version": 7,
+  "package_id": "visual-assessment-medium-scope-benchmark-v4",
+  "package_digest": "0ef00ba00344229211375efcd280e7c3d2940e68e4f2af248d106c8181cb64ae",
+  "input_fingerprint": "3bb4ae09be3b241aa119e15b3a62d5d8ecf36d556d579cd14f16e7568aff9871",
+  "draft_sha256": "0c512ea4369680a536dcdc3d065390667dc6bfaf61af0d1e660f110da8311cb5",
+  "writer": {
+    "status": "draft-ready",
+    "duration_ms": 63547,
+    "total_tokens": 28227,
+    "commands": 0,
+    "deterministic_gates_passed": true,
+    "dictionary_writer_ownership_passed": true,
+    "raw_writer_markdown_bytes": 13210,
+    "materialized_draft_bytes": 28041,
+    "dictionary_projection_materialized": 2,
+    "dictionary_projection_hierarchy_entries_obl_006": 47,
+    "dictionary_projection_leaf_entries_obl_007": 39,
+    "calibration_lifecycle_open": 2
+  },
+  "reviewer": {
+    "status": "changes-required",
+    "duration_ms": 38344,
+    "total_tokens": 29416,
+    "commands": 0,
+    "covered_obligations": 12,
+    "incorrect_obligations": 1,
+    "finding_count": 1,
+    "error_findings": 1,
+    "failed_obligation": "OBL-013",
+    "failed_test_case": "TC-VAMB-012"
+  },
+  "performance_observation": {
+    "duration_ms_total": 101891,
+    "total_tokens": 57643,
+    "uncached_input_tokens_total": 52597,
+    "uncached_tokens_per_obligation": 4045.92,
+    "validator_invocations": 1,
+    "orchestration_overhead_percent": 4.15,
+    "duration_target_passed": true,
+    "writer_vs_v3_duration_delta_ms": -23422,
+    "writer_vs_v3_duration_percent": -26.93,
+    "token_efficiency_target_passed": false,
+    "orchestration_target_passed": true,
+    "semantic_acceptance_passed": false,
+    "overall_performance_verdict": "not-calculated-single-failed-canary"
+  },
+  "quality_blocker": {
+    "category": "reference-only-fixture-fidelity",
+    "summary": "TC-VAMB-012 replaced two exact values supplied in test_intent with a generic instruction to choose two ordinary values.",
+    "source_values_present_in_writer_prompt": true,
+    "deterministic_pre_reviewer_gate_present": false
+  },
+  "production_boundary": {
+    "existing_visual_assessment_sha256": "3761f32df5babc77c22acb765ba0cb97925a7183dfcb81f1afc0c3be1ce577dc",
+    "existing_personal_data_sha256": "98a3e7b4b28ab1b0f83a2b83706cdc9c8f785aba775712fad3746695585368fc",
+    "existing_section_4_2_sha256": "cbc46e9b8d44c8e7c19b887a6a2f59f64d096e6275d2bd45f521132dd133c8a3",
+    "promotion_target_exists": false,
+    "final_promoted": false
+  },
+  "retry_permitted": false,
+  "r2_r3_permitted": false,
+  "next_action": "offline-reference-only-fixture-contract-and-seed-gate"
+}
