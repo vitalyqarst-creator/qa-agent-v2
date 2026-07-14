@@ -3,6 +3,11 @@
   "status": "pass-offline-gap-review-required",
   "live_invocations": 0,
   "production_test_cases_changed": false,
+  "implementation_checkpoint": {
+    "branch": "audit/application-card-personal-data-iteration",
+    "commit": "276d84e4649d80048993f9a796a13c57bbf7ad20",
+    "pushed": true
+  },
   "prepared_package": {
     "path": "work/review-cycles/questionnaire-upload-transfer-v7-20260714/prepared-input/questionnaire-upload-transfer-v7-r1/stage-package.json",
     "package_version": 8,

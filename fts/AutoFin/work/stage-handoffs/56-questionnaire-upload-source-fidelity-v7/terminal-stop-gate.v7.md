@@ -4,6 +4,12 @@
 
 `offline-complete-ready-for-gap-review`
 
+## Implementation Checkpoint
+
+- branch: `audit/application-card-personal-data-iteration`
+- commit: `276d84e4649d80048993f9a796a13c57bbf7ad20`
+- push: `origin/audit/application-card-personal-data-iteration` подтвержден обычным fast-forward push.
+
 ## Разрешено
 
 - независимый `scope_gap_review` по активному prompt;
