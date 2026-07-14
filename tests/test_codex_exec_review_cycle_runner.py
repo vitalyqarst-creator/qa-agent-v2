@@ -3129,6 +3129,80 @@ Draft body.
             projection["dictionary_evidence"],
         )
 
+    def test_package_context_projection_omits_irrelevant_dadata_notes(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("table-parity",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        evidence_path = runner._prepared_artifact("source-evidence")
+        evidence_path.write_text(
+            """# Prepared Source Evidence
+
+## Mandatory package context
+
+# Package Notes: Demo
+
+## Table abbreviations
+
+- O means required.
+
+## External context: DaData in UI
+
+- DaData suggestions are reference-only context.
+
+- OBL-001: property=SRC-1 | required=visible result | planned=TC-DEMO-001 | status=covered
+""",
+            encoding="utf-8",
+        )
+
+        writer_projection = runner._prepared_writer_source_evidence()
+        reviewer_projection = runner._prepared_shared_context_projection()
+
+        self.assertNotIn("suggestions are reference-only", writer_projection)
+        self.assertNotIn("suggestions are reference-only", reviewer_projection)
+        self.assertIn("Table abbreviations", writer_projection)
+        self.assertIn("not applicable to selected scope", reviewer_projection)
+        for role in ("writer", "reviewer"):
+            report = runner._package_context_projection_reports[role]
+            self.assertEqual(1, report["sections_compacted"])
+            self.assertGreater(report["bytes_removed"], 0)
+
+    def test_package_context_projection_retains_dadata_notes_for_dadata_scope(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("integration",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        evidence_path = runner._prepared_artifact("source-evidence")
+        evidence_path.write_text(
+            """# Prepared Source Evidence
+
+## Mandatory package context
+
+# Package Notes: Demo
+
+## External context: DaData in UI
+
+- DaData suggestions are reference-only context.
+
+- OBL-001: property=SRC-1 | required=DaData suggestion is visible | planned=TC-DEMO-001 | status=covered
+""",
+            encoding="utf-8",
+        )
+
+        writer_projection = runner._prepared_writer_source_evidence()
+        reviewer_projection = runner._prepared_shared_context_projection()
+
+        self.assertIn("suggestions are reference-only", writer_projection)
+        self.assertIn("suggestions are reference-only", reviewer_projection)
+        for role in ("writer", "reviewer"):
+            report = runner._package_context_projection_reports[role]
+            self.assertEqual(0, report["sections_compacted"])
+            self.assertEqual("selected-scope-references-dadata", report["reason"])
+
     def test_standard_reviewer_projection_blocks_missing_dictionary_evidence(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",

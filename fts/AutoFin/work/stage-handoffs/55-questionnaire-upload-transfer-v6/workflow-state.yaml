@@ -1,0 +1,58 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: questionnaire-upload-transfer-v6
+current_stage: agent-architecture-auditor
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: agent-architecture-auditor
+required_inputs:
+  - AGENT-NOTES.md
+  - work/stage-handoffs/54-reference-fixture-contract-v5/workflow-state.yaml
+  - work/stage-handoffs/54-reference-fixture-contract-v5/prompt.reference-fixture-v5-to-next.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/source-selection.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/scope-contract.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/source-parity-check.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/source-row-inventory.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/scope-coverage-gaps.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/atomic-requirements-ledger.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/coverage-obligation-table.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/package-test-design-plan.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/test-design-applicability-matrix.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/context-decomposition.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/architecture-decision.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/benchmark-protocol.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/dispatcher-config.v6.json
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-stop-gate.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-test-report.v6.md
+  - work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json
+  - work/review-cycles/questionnaire-upload-transfer-v6-20260714/backend-selection.v6-r1.dry-run.json
+latest_artifacts:
+  source_selection: work/stage-handoffs/55-questionnaire-upload-transfer-v6/source-selection.md
+  scope_contract: work/stage-handoffs/55-questionnaire-upload-transfer-v6/scope-contract.md
+  source_parity_check: work/stage-handoffs/55-questionnaire-upload-transfer-v6/source-parity-check.md
+  source_row_inventory: work/stage-handoffs/55-questionnaire-upload-transfer-v6/source-row-inventory.md
+  scope_coverage_gaps: work/stage-handoffs/55-questionnaire-upload-transfer-v6/scope-coverage-gaps.md
+  coverage_gaps: work/stage-handoffs/55-questionnaire-upload-transfer-v6/scope-coverage-gaps.md
+  atomic_requirements_ledger: work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/atomic-requirements-ledger.md
+  coverage_obligation_table: work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/coverage-obligation-table.md
+  package_test_design_plan: work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/package-test-design-plan.md
+  test_design_applicability_matrix: work/stage-handoffs/55-questionnaire-upload-transfer-v6/compiler-inputs/questionnaire-upload-transfer-v6/test-design-applicability-matrix.md
+  context_decomposition_v6: work/stage-handoffs/55-questionnaire-upload-transfer-v6/context-decomposition.v6.md
+  architecture_decision: work/stage-handoffs/55-questionnaire-upload-transfer-v6/architecture-decision.md
+  benchmark_protocol: work/stage-handoffs/55-questionnaire-upload-transfer-v6/benchmark-protocol.v6.md
+  dispatcher_config: work/stage-handoffs/55-questionnaire-upload-transfer-v6/dispatcher-config.v6.json
+  pre_live_stop_gate: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-stop-gate.md
+  pre_live_test_report: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-test-report.v6.md
+  prepared_package: work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json
+  backend_selection_dry_run: work/review-cycles/questionnaire-upload-transfer-v6-20260714/backend-selection.v6-r1.dry-run.json
+  decision_log: work/stage-handoffs/55-questionnaire-upload-transfer-v6/agent-decision-log.md
+  session_log: work/stage-handoffs/55-questionnaire-upload-transfer-v6/architecture-session-log.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 0
+open_questions: []
+blocking_reasons: []
+accepted_risks:
+  - V6 is an internal transfer package, not full coverage of the document-upload row.
+  - One live canary can verify transfer correctness but not stable latency median.
+  - Generated draft is benchmark evidence and must not be promoted.

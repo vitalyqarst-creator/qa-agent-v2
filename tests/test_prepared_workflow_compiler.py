@@ -1200,6 +1200,52 @@ coverage_gaps:
             ],
         )
 
+    def test_generic_reference_only_requirement_does_not_invent_fixture_values(self) -> None:
+        (self.design / "dictionary-inventory.md").write_text(
+            """| dictionary_id | dictionary_name | active_values |
+| --- | --- | --- |
+| `DICT-001` | `Корневой справочник` | `DICT-101` |
+| `DICT-101` | `Группа один` | `Значение A`; `Значение B` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "package-test-design-plan.md").write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | input_class | test_data | single_expected_behavior | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Открыть список `DICT-001` без выбора конкретного значения. | `none_required` | `DICT-001` | Список доступен для просмотра. | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | `none_required` | `none_required` | none_required:blocked | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+        obligation_table = self.design / "coverage-obligation-table.md"
+        obligation_table.write_text(
+            obligation_table.read_text(encoding="utf-8").replace(
+                "`dictionary-values-shown`",
+                "`selection-cardinality`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+        package = load_prepared_package(result.stage_package, self.root)
+        obligation_path = self.root / next(
+            item.path
+            for item in package.package_artifacts
+            if item.kind == "atomic-obligations"
+        )
+        requirement = (
+            load_obligations(obligation_path)
+            .obligations[0]
+            .dictionary_requirements[0]
+        )
+
+        self.assertEqual("reference-only", requirement.coverage_mode)
+        self.assertEqual((), requirement.required_values)
+        self.assertEqual((), requirement.fixture_values)
+
     def test_rejects_dictionary_group_locator_lost_between_data_and_action(self) -> None:
         (self.design / "dictionary-inventory.md").write_text(
             """| dictionary_id | dictionary_name | active_values |

@@ -1,0 +1,62 @@
+{
+  "created_at": "2026-07-14T03:48:30.880057+00:00",
+  "execution_profile": "standard-required",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/test-cases",
+    "fts/AutoFin/work/review-cycles"
+  ],
+  "ft_slug": "AutoFin",
+  "input_fingerprint": "f60a5bdf97689cfdcd87860c0c7b55f9199663886cf83ee201c5f3f6b2a13b2c",
+  "package_artifacts": [
+    {
+      "bytes": 14916,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/source-evidence.md",
+      "sha256": "f049e2aea244cdd5d77bfc631b29346007b279dc0f452e0f26e2fca91b146531"
+    },
+    {
+      "bytes": 11316,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/atomic-obligations.json",
+      "sha256": "b2e92672e1a528e2bb7597375390dbdf228746540af6dde48b219afd35d4639d"
+    },
+    {
+      "bytes": 1403,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-instructions.md",
+      "sha256": "e582d3b3db9ce5b406c96a671d615117d54b4c32352474cdd233a0262c48dc12"
+    }
+  ],
+  "package_digest": "c0a6cb07676ca3d7ae3617289dcf4712f100c3ca510a0b4732e58a9b961cb32d",
+  "package_id": "questionnaire-upload-transfer-v6-r1",
+  "package_version": 8,
+  "scope_slug": "questionnaire-upload-transfer-v6",
+  "section_id": "16",
+  "source_registry": [
+    {
+      "locator": "pinned by source-selection.md",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "role": "source-of-truth",
+      "sha256": "c6892bfa57599f29fda84035c8ecd19e9ed5257cf88771bd52e910817a5af75b"
+    },
+    {
+      "locator": "pinned by source-selection.md",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.xhtml",
+      "role": "machine-readable",
+      "sha256": "cbf7ce8eca806f9f132c6bec26a8577eb544106a87cb79c46ace24e1b3d00a66"
+    },
+    {
+      "locator": "pinned by source-selection.md",
+      "path": "fts/AutoFin/source/FT4AutoFinFinal.pdf",
+      "role": "structural-cross-check",
+      "sha256": "8caee78cdf87fe27deb2ffa64b57791768c958703f249b8c85518283aeb8da58"
+    }
+  ],
+  "unsupported_dimensions": [
+    "file-upload",
+    "input-boundaries",
+    "negative-oracle",
+    "visibility"
+  ]
+}

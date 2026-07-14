@@ -908,6 +908,9 @@ class CodexExecReviewCycleRunner:
     _writer_dictionary_context_report: dict[str, Any] = field(
         default_factory=dict, init=False
     )
+    _package_context_projection_reports: dict[str, dict[str, Any]] = field(
+        default_factory=dict, init=False
+    )
     _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_oracle_quality_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_state_change_plan: dict[str, Any] = field(default_factory=dict, init=False)
@@ -2349,6 +2352,68 @@ class CodexExecReviewCycleRunner:
             [f"## Context profile: `{profile}`", "", *[f"- {item}" for item in rules[profile]]]
         )
 
+    def _prepared_package_context_projection(self, evidence: str, *, role: str) -> str:
+        """Remove a known package-note section when the selected scope cannot use it.
+
+        Package notes are mandatory context, but their DaData section is explicitly
+        conditional: it applies only when the selected FT evidence already describes
+        a DaData-backed field.  Repeating that whole section in unrelated writer and
+        reviewer sessions adds no review signal.  The projection is conservative: it
+        removes only the DaData H2 block, only when no text outside that block refers
+        to DaData, and records the exact byte delta in the context budget report.
+        """
+
+        heading = re.search(
+            r"(?mi)^##\s+[^\r\n]*dadata[^\r\n]*\r?$",
+            evidence,
+        )
+        original_bytes = len(evidence.encode("utf-8"))
+        report: dict[str, Any] = {
+            "validator": "prepared-package-context-projection-v1",
+            "role": role,
+            "sections_seen": 0,
+            "sections_compacted": 0,
+            "omitted_headings": [],
+            "reason": "no-dadata-package-note-section",
+            "original_bytes": original_bytes,
+            "projected_bytes": original_bytes,
+            "bytes_removed": 0,
+        }
+        if heading is None:
+            self._package_context_projection_reports[role] = report
+            return evidence
+
+        report["sections_seen"] = 1
+        next_boundary = re.search(
+            r"(?m)^(?:##\s+|- OBL-[A-Za-z0-9_.-]+:)",
+            evidence[heading.end() :],
+        )
+        end = (
+            heading.end() + next_boundary.start()
+            if next_boundary is not None
+            else len(evidence)
+        )
+        outside = evidence[: heading.start()] + evidence[end:]
+        if re.search(r"(?i)dadata|дадат", outside):
+            report["reason"] = "selected-scope-references-dadata"
+            self._package_context_projection_reports[role] = report
+            return evidence
+
+        replacement = "<!-- DaData package notes: not applicable to selected scope. -->\n\n"
+        projected = evidence[: heading.start()] + replacement + evidence[end:]
+        projected_bytes = len(projected.encode("utf-8"))
+        report.update(
+            {
+                "sections_compacted": 1,
+                "omitted_headings": [heading.group(0).strip()],
+                "reason": "selected-scope-has-no-dadata-behavior",
+                "projected_bytes": projected_bytes,
+                "bytes_removed": original_bytes - projected_bytes,
+            }
+        )
+        self._package_context_projection_reports[role] = report
+        return projected
+
     def _prepared_standard_writer_payload(self) -> str:
         lines = [
                 "<!-- PREPARED-STANDARD-WRITER-PAYLOAD:BEGIN -->",
@@ -2675,10 +2740,16 @@ class CodexExecReviewCycleRunner:
 
     def _prepared_shared_context_projection(self) -> str:
         evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
+        evidence = self._prepared_package_context_projection(
+            evidence,
+            role="reviewer",
+        )
         first_obligation = re.search(r"(?m)^- OBL-[A-Za-z0-9_.-]+:", evidence)
         if first_obligation is None:
-            return evidence.strip()
-        return evidence[: first_obligation.start()].rstrip()
+            shared = evidence.strip()
+        else:
+            shared = evidence[: first_obligation.start()].rstrip()
+        return shared.strip()
 
     def _prepared_writer_source_evidence(
         self,
@@ -2693,6 +2764,7 @@ class CodexExecReviewCycleRunner:
             source = self._prepared_artifact("source-evidence").read_text(
                 encoding="utf-8"
             )
+        source = self._prepared_package_context_projection(source, role="writer")
         headings = list(
             re.finditer(r"(?m)^##\s+(DICT-[A-Za-z0-9._-]+)\s*$", source)
         )
@@ -2922,6 +2994,9 @@ class CodexExecReviewCycleRunner:
             report["dictionary_context_projection"] = dict(
                 self._writer_dictionary_context_report
             )
+        package_context_projection = self._package_context_projection_reports.get(role)
+        if package_context_projection:
+            report["package_context_projection"] = dict(package_context_projection)
         self._context_budget_reports[stage] = report
         if not report["passed"]:
             raise RunnerError(

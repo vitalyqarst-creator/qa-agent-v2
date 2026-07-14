@@ -1,0 +1,47 @@
+{
+  "schema": "prepared-context-decomposition-v6",
+  "source_cycle": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v5-20260714",
+  "v5_uncached_input_tokens": 53028,
+  "writer": {
+    "prompt_bytes": 43947,
+    "sections": {
+      "outer_contract": 1048,
+      "metadata_profile_rule_card": 6787,
+      "source_evidence": 23533,
+      "obligation_transport": 1532,
+      "draft_seed_and_final_contract": 11047
+    },
+    "irrelevant_dadata_bytes": 5331,
+    "projected_prompt_bytes": 38682
+  },
+  "reviewer": {
+    "prompt_bytes": 55660,
+    "sections": {
+      "outer_contract": 633,
+      "metadata_profile_rule_card": 4419,
+      "shared_source_evidence": 6511,
+      "semantic_obligation_projection": 12457,
+      "gate_and_calibration_summaries": 2355,
+      "immutable_draft": 28560,
+      "final_contract": 725
+    },
+    "irrelevant_dadata_bytes": 5331,
+    "projected_prompt_bytes": 50395
+  },
+  "proven_removal": {
+    "kind": "scope-irrelevant-package-note-section",
+    "section": "DaData",
+    "bytes_removed_before_replacement": 10662,
+    "replacement_bytes_total": 132,
+    "net_prompt_bytes_removed": 10530,
+    "guard": "retain-full-section-when-selected-evidence-outside-note-references-dadata"
+  },
+  "not_reduced": [
+    "source-backed obligation semantics",
+    "observable oracles",
+    "portable fixture contracts",
+    "immutable writer draft supplied to independent reviewer",
+    "role runtime profiles required in separate exec sessions"
+  ],
+  "interpretation_limit": "Prompt bytes are exact; backend bootstrap/system tokens are not section-attributed by the exec event stream, so the full uncached-token delta cannot be assigned to repository artifacts without inference."
+}
