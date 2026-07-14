@@ -1,0 +1,263 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-QUT-001",
+      "handling": "Сохранить `ATOM-008` / `OBL-QUT-008` как отдельный gap; не создавать exact-boundary/just-over byte TC. Writer и reviewer могут обработать остальные 10 testable obligations при явном сохранении этого ограничения.",
+      "problem": "BSR 210; SRC-QUT-002.P06; DOCX table 6 row 82; XHTML row 135; размер файла не более 40 МБ",
+      "source_refs": [
+        "BSR 210",
+        "SRC-QUT-002.P06",
+        "ATOM-008",
+        "OBL-QUT-008"
+      ]
+    }
+  ],
+  "digest": "70e532ec3df5bfca883eb5920d129696ea0a39bada1eb3c7977eb78cb60a61e5",
+  "obligations": [
+    {
+      "atom_id": "ATOM-001",
+      "atomic_statement": "Буквальный текст `Анкета клиента. Распечатайте, подпишите с клиентом и загрузите скан в заявку` отображается всегда.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-001",
+      "observable_oracle": "Буквальный текст `Анкета клиента. Распечатайте, подпишите с клиентом и загрузите скан в заявку` отображается всегда.",
+      "planned_test_case_id": "TC-QUT-001",
+      "source_refs": [
+        "SRC-QUT-001.P01",
+        "BSR 206",
+        "SRC-QUT-001"
+      ],
+      "state_change": null,
+      "test_intent": "Открыть блок `Документы по заявке`."
+    },
+    {
+      "atom_id": "ATOM-002",
+      "atomic_statement": "Информационное поле не допускает ручного редактирования своего текста.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-002",
+      "observable_oracle": "Текст информационного поля нельзя изменить ручным вводом.",
+      "planned_test_case_id": "TC-QUT-002",
+      "source_refs": [
+        "SRC-QUT-001.P02",
+        "BSR 207",
+        "SRC-QUT-001"
+      ],
+      "state_change": null,
+      "test_intent": "Установить фокус на информационном поле и попытаться ввести `Тест`."
+    },
+    {
+      "atom_id": "ATOM-003",
+      "atomic_statement": "Поле добавления файла `Анкета клиента` отображается всегда.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-003",
+      "observable_oracle": "Поле добавления файла `Анкета клиента` отображается всегда.",
+      "planned_test_case_id": "TC-QUT-003",
+      "source_refs": [
+        "SRC-QUT-002.P01",
+        "BSR 208",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "Открыть блок `Документы по заявке`."
+    },
+    {
+      "atom_id": "ATOM-004",
+      "atomic_statement": "Документ можно добавить через открытие проводника по кнопке.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-004",
+      "observable_oracle": "После выбора portable jpg через проводник файл добавлен.",
+      "planned_test_case_id": "TC-QUT-004",
+      "source_refs": [
+        "SRC-QUT-002.P02",
+        "BSR 209",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "По кнопке открыть проводник и выбрать `FIXTURE-QUT-JPG`."
+    },
+    {
+      "atom_id": "ATOM-005",
+      "atomic_statement": "После добавления документа отображается имя прикреплённого файла.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-005",
+      "observable_oracle": "После добавления отображается точное имя выбранного файла.",
+      "planned_test_case_id": "TC-QUT-004",
+      "source_refs": [
+        "SRC-QUT-002.P03",
+        "BSR 211",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "По кнопке открыть проводник и выбрать `FIXTURE-QUT-JPG`."
+    },
+    {
+      "atom_id": "ATOM-006",
+      "atomic_statement": "Документ можно добавить через Drag and Drop.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-006",
+      "observable_oracle": "После Drag and Drop portable pdf файл добавлен и его имя отображается.",
+      "planned_test_case_id": "TC-QUT-005",
+      "source_refs": [
+        "SRC-QUT-002.P04",
+        "BSR 209",
+        "SRC-QUT-002",
+        "BSR 211"
+      ],
+      "state_change": null,
+      "test_intent": "Перетащить `FIXTURE-QUT-PDF` в поле `Анкета клиента`."
+    },
+    {
+      "atom_id": "ATOM-007",
+      "atomic_statement": "Поле принимает файлы форматов jpg, png и pdf.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-007",
+      "observable_oracle": "В отдельных чистых итерациях jpg, png и pdf добавляются успешно.",
+      "planned_test_case_id": "TC-QUT-006",
+      "source_refs": [
+        "SRC-QUT-002.P05",
+        "BSR 210",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "В трёх чистых итерациях добавить `FIXTURE-QUT-JPG`, `FIXTURE-QUT-PNG`, `FIXTURE-QUT-PDF`."
+    },
+    {
+      "atom_id": "ATOM-008",
+      "atomic_statement": "Точное граничное значение для `размер файла не более 40 МБ` нельзя задать без byte convention.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "gap",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "GAP-QUT-001",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-008",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-QUT-002.P06",
+        "BSR 210",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "Точное граничное значение для `размер файла не более 40 МБ` нельзя задать без byte convention."
+    },
+    {
+      "atom_id": "ATOM-009",
+      "atomic_statement": "Ограничение `размер файла не более 40 МБ`: файл размером 50 МБ не загружается и отображается точный текст ошибки.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-009",
+      "observable_oracle": "Ограничение `размер файла не более 40 МБ`: файл размером 50 МБ не добавляется; отображается `Документы не загружены. Проверьте соответствуют ли документы требованиям: формат jpg, png, pdf, размер не более 40 МБ`.",
+      "planned_test_case_id": "TC-QUT-007",
+      "source_refs": [
+        "SRC-QUT-002.P07",
+        "BSR 210",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "Добавить `FIXTURE-QUT-PDF-OVER40`."
+    },
+    {
+      "atom_id": "ATOM-010",
+      "atomic_statement": "Файл недопустимого формата не загружается, отображается точный текст ошибки из ФТ.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-010",
+      "observable_oracle": "Файл txt не добавляется; отображается `Документы не загружены. Проверьте соответствуют ли документы требованиям: формат jpg, png, pdf, размер не более 40 МБ`.",
+      "planned_test_case_id": "TC-QUT-008",
+      "source_refs": [
+        "SRC-QUT-002.P08",
+        "BSR 210",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "Добавить `FIXTURE-QUT-TXT`."
+    },
+    {
+      "atom_id": "ATOM-011",
+      "atomic_statement": "После попытки добавить второй файл в типе документа остаётся не более одного файла.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-QUT-011",
+      "observable_oracle": "После попытки добавить второй файл отображается не более одного имени файла этого типа.",
+      "planned_test_case_id": "TC-QUT-009",
+      "source_refs": [
+        "SRC-QUT-002.P09",
+        "BSR 210",
+        "SRC-QUT-002"
+      ],
+      "state_change": null,
+      "test_intent": "Добавить `FIXTURE-QUT-PDF-A`, затем попытаться добавить `FIXTURE-QUT-PDF-B`."
+    }
+  ],
+  "package_id": "questionnaire-upload-transfer-v8-prod-candidate-r1",
+  "package_version": 8
+}

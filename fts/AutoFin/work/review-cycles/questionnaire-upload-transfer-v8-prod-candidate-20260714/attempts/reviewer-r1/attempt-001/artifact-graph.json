@@ -1,0 +1,281 @@
+{
+  "version": 1,
+  "cycle_id": "questionnaire-upload-transfer-v8-prod-candidate-20260714",
+  "stage_id": "reviewer-r1",
+  "role": "reviewer",
+  "context_profile": "character-restriction-calibration",
+  "input_digest": "3347f993a696ea8abeffad580be20e58823f09818e2d54c1b230c82877945bba",
+  "input_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/prompt.md",
+      "sha256": "ca3ff254ae6dc91f586b694f577c9535b024cc1c25e7a34a3b9d16b1ecfb8c50",
+      "kind": "prompt",
+      "group": "prompt",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "175dceff807f883f73c7b9822a221a9f7bb1e8157ba0036c3d59934a656f4035",
+      "kind": "instruction",
+      "group": "instruction",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/prepared-input/questionnaire-upload-transfer-v8-prod-candidate-r1/source-evidence.md",
+      "sha256": "8ed6684c5cfdbf1a6b249a0b72be49f9bcd60ae102755f0afe2ba482ff9a258d",
+      "kind": "source",
+      "group": "source",
+      "lifecycle": "source",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/prepared-input/questionnaire-upload-transfer-v8-prod-candidate-r1/stage-package.json",
+      "sha256": "f752f0488aa1917ac579ac27fbb3e830e41549d672ab882f08b01790caf49892",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/prepared-input/questionnaire-upload-transfer-v8-prod-candidate-r1/atomic-obligations.json",
+      "sha256": "8ab8b469faf5be8b231200ba66461b9f88ffe77724390775a1e4a9ecf141eaf5",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "4a8d2dc6043939696e2ed8be39d653b2f447f47ad4d0d90fabbea47fe6bc758a",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "5d9a37ecaa8e0d1977434a6fdc5713c4c2edee8d17c5ec0616ea197f080130fb",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "b01688c609ade234db256fe04778053fd627bd804b4e4b1709b2da5ad1a91f96",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "a45e528c2b60a9de73415b3c2daffee3b5c8589904315c598a552e0ab3081475",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "29bb0927b8f662349b07b14496c2f973be30aa88a4b5948a075f039a76b5126a",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/dictionary-projection.json",
+      "sha256": "8a5081ab9e03bbf47c34a406f0dc4bf6e1cb9cfa1e15b38851022a04a4e50498",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "e627a7dffebe418be708baa6bc775d52bf68b1b1e6ebf90fad639d41e3328c5b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "7ebb363cc1d3f9515e68639585877d374aa24e4ba8e46d2f59afe91c920ff316",
+      "kind": "handoff",
+      "group": "handoff",
+      "lifecycle": "prepared",
+      "producer": "upstream",
+      "consumers": [
+        "reviewer",
+        "runner"
+      ]
+    }
+  ],
+  "output_nodes": [
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "kind": "stdout",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "kind": "stderr",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "kind": "events",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "kind": "stage-status",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "kind": "artifact-graph",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "kind": "review-findings",
+      "lifecycle": "reviewed",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "kind": "evidence-access-report",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "kind": "context-budget",
+      "lifecycle": "generated",
+      "producer": "runner",
+      "consumers": [
+        "runner"
+      ],
+      "required": true
+    }
+  ],
+  "access_policy": {
+    "sandbox": "read_only",
+    "allowed_write_roots": [],
+    "forbidden_write_roots": [
+      "fts/AutoFin/test-cases"
+    ],
+    "fallback_policy": "targeted-only"
+  },
+  "graph_digest": "4d6fd8cd5ddcdedbae4908601c393e7bb7e548e99e0aea963219c87baf0f7f79"
+}

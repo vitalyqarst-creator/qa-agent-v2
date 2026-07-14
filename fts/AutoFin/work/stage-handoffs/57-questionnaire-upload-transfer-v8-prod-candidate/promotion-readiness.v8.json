@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "status": "passed",
+  "checker": "CodexExecReviewCycleRunner._promotion_plan",
+  "mode": "post-hoc-read-only",
+  "draft_path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md",
+  "draft_sha256": "30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b",
+  "destination_path": "fts/AutoFin/test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md",
+  "destination_exists": false,
+  "overwrite_allowed": false,
+  "production_changes": [],
+  "write_performed": false,
+  "note": "The canonical runner promotion checker was invoked read-only after the manual quality gate because the live cycle intentionally ran with promotion disabled."
+}

@@ -1,10 +1,10 @@
 ft_slug: AutoFin
 prepared_compiler_contract_version: 2
 scope_slug: questionnaire-upload-transfer-v7
-current_stage: ft-scope-analyzer
-stage_status: ready-for-gap-review
+current_stage: ft-test-case-reviewer
+stage_status: blocked-input
 current_round: 1
-next_skill: ft-test-case-reviewer
+next_skill: ft-scope-analyzer
 canonical_test_cases: test-cases/16-questionnaire-upload-transfer-v7.md
 required_inputs:
   - AGENT-NOTES.md
@@ -21,6 +21,9 @@ required_inputs:
   - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/agent-decision-log.md
   - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-analyzer-session-log.md
   - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/prompt.scope-gaps-to-reviewer.md
+  - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-gap-review.md
+  - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/reviewer-session-log.round-1.md
+  - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/agent-decision-log.scope-gap-review.md
   - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/offline-validation.v7.json
   - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/validation-final.v7.json
   - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/iteration-summary.v7.md
@@ -51,16 +54,21 @@ latest_artifacts:
   validation_final_v7: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/validation-final.v7.json
   iteration_summary_v7: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/iteration-summary.v7.md
   terminal_stop_gate_v7: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/terminal-stop-gate.v7.md
-  active_transition_prompt: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/prompt.scope-gaps-to-reviewer.md
+  failed_transition_prompt: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/prompt.scope-gaps-to-reviewer.md
   alternative_transition_prompt: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/prompt.v7-to-next.md
-  decision_log: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/agent-decision-log.md
+  scope_gap_review: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-gap-review.md
+  reviewer_raw_output: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-gap-review.raw.json
+  session_log: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/reviewer-session-log.round-1.md
+  reviewer_round_1_session_log: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/reviewer-session-log.round-1.md
+  decision_log: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/agent-decision-log.scope-gap-review.md
   scope_analyzer_session_log: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-analyzer-session-log.md
 coverage_gaps:
   blocking: 0
   non_blocking: 1
 open_questions:
   - BSR 210 не определяет decimal или binary byte convention для 40 МБ.
-blocking_reasons: []
+blocking_reasons:
+  - H56 active prompt and terminal gate contradict the canonical passed scope-gap-review route; ft-scope-analyzer must issue a corrected immutable handoff.
 accepted_risks:
   - V7 gate covers named literal and unit risks, not general semantic equivalence.
   - Exact 40 МБ boundary remains uncovered until GAP-QUT-001 is resolved.

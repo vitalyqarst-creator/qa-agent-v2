@@ -1,0 +1,19 @@
+{
+  "attempt_id": "attempt-001",
+  "backend": "codex-exec",
+  "cached_input_tokens": 0,
+  "contract_version": 2,
+  "cycle_id": "questionnaire-upload-transfer-v8-prod-candidate-20260714",
+  "duration_ms": 33250,
+  "input_artifact_bytes": 93691,
+  "input_artifact_count": 15,
+  "input_tokens": 22981,
+  "outcome": "accepted",
+  "output_artifact_bytes": 22441,
+  "output_artifact_count": 8,
+  "output_tokens": 1476,
+  "role": "reviewer",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "stage_id": "reviewer-r1",
+  "total_tokens": 24457
+}

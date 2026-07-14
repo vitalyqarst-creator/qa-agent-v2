@@ -1,0 +1,89 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: questionnaire-upload-transfer-v8-prod-candidate
+current_stage: ft-test-case-iteration
+stage_status: blocked-input
+current_round: 1
+next_skill: none
+canonical_test_cases: test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md
+required_inputs:
+  - AGENT-NOTES.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/source-selection.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-contract.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/source-parity-check.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/source-row-inventory.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-coverage-gaps.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-clarification-requests.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/negative-oracle-inventory.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-execution-options.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/agent-decision-log.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-analyzer-session-log.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/prompt.scope-gaps-to-reviewer.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-gap-review.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/reviewer-session-log.round-1.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/agent-decision-log.scope-gap-review.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/prompt.scope-to-iteration.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/atomic-requirements-ledger.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/coverage-obligation-table.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/package-test-design-plan.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/test-design-applicability-matrix.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/source-to-package-fidelity.json
+  - work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-gap-review.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/iteration-session-log.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/agent-decision-log.iteration.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/dispatcher-config.v8.json
+  - work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/prepared-input/questionnaire-upload-transfer-v8-prod-candidate-r1/stage-package.json
+  - work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/cycle-state.yaml
+  - work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md
+  - work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  - work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/performance.v8.json
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/manual-quality-gate.v8.md
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/promotion-readiness.v8.json
+  - work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/terminal-stop-gate.v8.md
+latest_artifacts:
+  source_selection: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/source-selection.md
+  scope_contract: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-contract.md
+  source_parity_check: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/source-parity-check.md
+  source_row_inventory: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/source-row-inventory.md
+  scope_coverage_gaps: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-coverage-gaps.md
+  coverage_gaps: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-coverage-gaps.md
+  scope_clarification_requests: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-clarification-requests.md
+  negative_oracle_inventory: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/negative-oracle-inventory.md
+  scope_execution_options: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-execution-options.md
+  atomic_requirements_ledger: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/atomic-requirements-ledger.md
+  coverage_obligation_table: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/coverage-obligation-table.md
+  package_test_design_plan: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/package-test-design-plan.md
+  test_design_applicability_matrix: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/test-design-applicability-matrix.md
+  source_to_package_fidelity: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/compiler-inputs/questionnaire-upload-transfer-v8-prod-candidate/source-to-package-fidelity.json
+  previous_gap_review: work/stage-handoffs/56-questionnaire-upload-source-fidelity-v7/scope-gap-review.md
+  scope_gap_review: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-gap-review.md
+  reviewer_raw_output: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-gap-review.raw.json
+  reviewer_round_1_session_log: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/reviewer-session-log.round-1.md
+  reviewer_decision_log: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/agent-decision-log.scope-gap-review.md
+  active_transition_prompt: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/prompt.scope-to-iteration.md
+  prepared_stage_package: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/prepared-input/questionnaire-upload-transfer-v8-prod-candidate-r1/stage-package.json
+  dispatcher_config: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/dispatcher-config.v8.json
+  cycle_state: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/cycle-state.yaml
+  candidate_draft: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md
+  final_findings: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/reviewer-r1/attempt-001/runner-output/findings.md
+  quality_gate_bundle: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json
+  performance_report: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/performance.v8.json
+  manual_quality_gate: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/manual-quality-gate.v8.md
+  promotion_readiness: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/promotion-readiness.v8.json
+  live_result: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/live-result.v8.json
+  terminal_stop_gate: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/terminal-stop-gate.v8.md
+  iteration_summary: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/iteration-summary.v8.md
+  architecture_audit: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/architecture-audit.v8.md
+  session_log: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/iteration-session-log.md
+  scope_analyzer_session_log: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/scope-analyzer-session-log.md
+  decision_log: work/stage-handoffs/57-questionnaire-upload-transfer-v8-prod-candidate/agent-decision-log.iteration.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 1
+open_questions:
+  - BSR 210 не определяет decimal или binary byte convention для 40 МБ.
+blocking_reasons:
+  - Explicit owner approval is required before the first controlled production write.
+accepted_risks:
+  - GAP-QUT-001 remains open-non-blocking; exact-boundary TC is forbidden until source-backed convention is available.
+  - Independent review, live canary and manual quality gate passed; promotion remains off until explicit owner approval.

@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "validator": "semantic-overlap-diagnostic-v1",
+  "status": "clean",
+  "blocking": false,
+  "test_case_count": 9,
+  "findings": [],
+  "checked_paths": [
+    "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\work\\review-cycles\\questionnaire-upload-transfer-v8-prod-candidate-20260714\\attempts\\writer-r1\\attempt-001\\stage-output\\draft.md"
+  ]
+}

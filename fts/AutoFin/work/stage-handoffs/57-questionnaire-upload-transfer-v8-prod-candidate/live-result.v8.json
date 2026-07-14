@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "iteration": "v8-prod-candidate",
+  "terminal_status": "accepted-not-promoted",
+  "dispatcher_exit_code": 1,
+  "exit_code_class": "expected-policy-stop-promotion-disabled",
+  "canary_contract_passed": true,
+  "production_ready": true,
+  "production_promoted": false,
+  "package": {
+    "package_id": "questionnaire-upload-transfer-v8-prod-candidate-r1",
+    "package_version": 8,
+    "stage_package_sha256": "f752f0488aa1917ac579ac27fbb3e830e41549d672ab882f08b01790caf49892",
+    "package_digest": "d84baaba4f46eacfff012d4884fab9c03556dd36b2b8e163c2c102649b9fa731",
+    "input_fingerprint": "935aa313baf111cd2044bf5fe62039fecb2640b3a0c6ea95da991424a0a21007",
+    "execution_profile": "standard-required"
+  },
+  "backend": {
+    "requested": "exec",
+    "selected": "exec",
+    "verified": true,
+    "fallback_used": false,
+    "writer_session_id": "019f5f41-7ff2-75e2-a857-a086fc7f18e0",
+    "reviewer_session_id": "019f5f42-74c3-73f1-a48c-84797b174d7a",
+    "sessions_are_distinct": true
+  },
+  "writer": {
+    "outcome": "draft-ready",
+    "duration_ms": 62141,
+    "total_tokens": 25048,
+    "draft_sha256": "30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b",
+    "test_cases": 9,
+    "commands": 0,
+    "file_changes": 0
+  },
+  "reviewer": {
+    "outcome": "accepted",
+    "duration_ms": 33250,
+    "total_tokens": 24457,
+    "testable_obligations_covered": 10,
+    "gap_obligations_preserved": 1,
+    "blocking_findings": 0,
+    "commands": 0,
+    "file_changes": 0
+  },
+  "performance": {
+    "stage_duration_ms_total": 95391,
+    "dispatcher_wall_ms": 100969,
+    "total_tokens": 49505,
+    "duration_budget_ms": 180000,
+    "token_budget": 75000,
+    "duration_budget_passed": true,
+    "token_budget_passed": true
+  },
+  "quality_gates": {
+    "deterministic_bundle": "passed",
+    "reviewer_verdict": "accepted",
+    "manual_quality_gate": "passed",
+    "gap_qut_001": "preserved",
+    "promotion_readiness": "passed-not-written",
+    "architecture_audit": "61 checks; 0 findings",
+    "targeted_regressions": "631 passed",
+    "full_regressions": "1021 passed; 1 skipped; 1 external deprecation warning"
+  },
+  "production_boundary": {
+    "target": "fts/AutoFin/test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md",
+    "target_exists": false,
+    "overwrite_allowed": false,
+    "write_performed": false,
+    "approval_required": true
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "validator": "runner-owned-dictionary-projection-v1",
+  "materialized_count": 0,
+  "items": [],
+  "writer_ownership": {
+    "passed": true,
+    "validator": "runner-owned-dictionary-writer-boundary-v1",
+    "checked_obligation_count": 0,
+    "finding_count": 0,
+    "findings": []
+  },
+  "reference_fixtures": {
+    "version": 1,
+    "validator": "runner-owned-reference-fixture-projection-v1",
+    "materialized_count": 0,
+    "items": []
+  },
+  "draft_changed": false
+}

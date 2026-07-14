@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-observable-oracle-preflight-v1",
+  "error_code": "",
+  "package_id": "questionnaire-upload-transfer-v8-prod-candidate-r1",
+  "atomic_obligations_sha256": "8ab8b469faf5be8b231200ba66461b9f88ffe77724390775a1e4a9ecf141eaf5",
+  "testable_obligations_checked": 10,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "b064bb8e768b679c2bfd02f3b2d0a6a874fd5111716665a2829651ef0d621eec"
+}

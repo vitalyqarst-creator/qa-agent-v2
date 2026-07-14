@@ -1,0 +1,82 @@
+{
+  "version": 2,
+  "backend": "exec",
+  "run_profile": "production",
+  "benchmark_details_included": false,
+  "cycle_dir": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714",
+  "stage_count": 2,
+  "duration_ms_total": 95391,
+  "total_tokens": 49505,
+  "uncached_input_tokens_total": 44848,
+  "input_artifact_bytes_total": 168053,
+  "output_artifact_bytes_total": 80760,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f5f41-7ff2-75e2-a857-a086fc7f18e0",
+    "019f5f42-74c3-73f1-a48c-84797b174d7a"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "questionnaire-upload-transfer-v8-prod-candidate-20260714",
+      "duration_ms": 62141,
+      "input_artifact_bytes": 74362,
+      "input_artifact_count": 7,
+      "input_tokens": 21867,
+      "outcome": "draft-ready",
+      "output_artifact_bytes": 58319,
+      "output_artifact_count": 16,
+      "output_tokens": 3181,
+      "role": "writer",
+      "scenario": "writer.session_prepared_standard_structured",
+      "stage_id": "writer-r1",
+      "total_tokens": 25048
+    },
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "questionnaire-upload-transfer-v8-prod-candidate-20260714",
+      "duration_ms": 33250,
+      "input_artifact_bytes": 93691,
+      "input_artifact_count": 15,
+      "input_tokens": 22981,
+      "outcome": "accepted",
+      "output_artifact_bytes": 22441,
+      "output_artifact_count": 8,
+      "output_tokens": 1476,
+      "role": "reviewer",
+      "scenario": "reviewer.session_prepared_standard_semantic",
+      "stage_id": "reviewer-r1",
+      "total_tokens": 24457
+    }
+  ],
+  "stage_attribution": [],
+  "context_efficiency": {
+    "primary_context_bytes_total": 0,
+    "prompt_bytes_total": 0,
+    "instruction_bytes_total": 0,
+    "instruction_artifact_count_total": 0,
+    "command_executions_total": 0,
+    "file_changes_total": 0,
+    "test_case_count": 9,
+    "testable_obligations": 10,
+    "uncached_tokens_per_obligation": 4484.8,
+    "commands_per_test_case": 0.0
+  },
+  "timing_breakdown": {
+    "capability_probe_ms": 93,
+    "runner_preflight_ms": 1187,
+    "runner_wall_ms": 99625,
+    "stage_execution_ms": 95391,
+    "runner_orchestration_overhead_ms": 4234,
+    "reporting_ms": 16,
+    "dispatcher_wall_ms": 100969
+  }
+}

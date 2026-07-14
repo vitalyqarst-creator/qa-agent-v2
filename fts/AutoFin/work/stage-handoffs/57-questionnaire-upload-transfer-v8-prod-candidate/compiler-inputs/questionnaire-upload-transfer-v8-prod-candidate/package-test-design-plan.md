@@ -1,0 +1,26 @@
+# Package Test Design Plan — Questionnaire Upload Transfer V8 Prod Candidate
+
+## Portable Fixture Contracts
+
+- `FIXTURE-QUT-JPG`: валидный JPEG `questionnaire-valid.jpg`, 1 КБ.
+- `FIXTURE-QUT-PNG`: валидный PNG `questionnaire-valid.png`, 1 КБ.
+- `FIXTURE-QUT-PDF`: валидный PDF `questionnaire-valid.pdf`, 1 КБ.
+- `FIXTURE-QUT-PDF-OVER40`: валидный PDF `questionnaire-over40mb.pdf`, размер 50 МБ; fixture заведомо больше лимита при decimal и binary interpretation.
+- `FIXTURE-QUT-TXT`: текстовый `questionnaire-invalid.txt`, 1 КБ.
+- `FIXTURE-QUT-PDF-A`: валидный PDF `questionnaire-first.pdf`, 1 КБ.
+- `FIXTURE-QUT-PDF-B`: валидный PDF `questionnaire-second.pdf`, 1 КБ, другое имя и содержимое.
+
+## Plan
+
+| design_item_id | package_id | design_dimension | source_ref | linked_atoms | planned_check | check_type | coverage_class | input_class | test_data | single_expected_behavior | oracle_source | planned_tc_or_gap | status | grouping_justification |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-QUT-001` | `WP-QUT-01` | `visibility` | `SRC-QUT-001; BSR 206` | `ATOM-001` | Открыть блок `Документы по заявке`. | `positive` | `visibility` | `field-state` | `none_required` | Буквальный текст `Анкета клиента. Распечатайте, подпишите с клиентом и загрузите скан в заявку` отображается всегда. | `DOCX/XHTML/PDF exact literal` | `TC-QUT-001` | `covered` | `none_required:single-atom` |
+| `PLAN-QUT-002` | `WP-QUT-01` | `field-property` | `SRC-QUT-001; BSR 207` | `ATOM-002` | Установить фокус на информационном поле и попытаться ввести `Тест`. | `positive` | `read-only` | `text:Тест` | `Тест` | Текст информационного поля не изменяется. | `DOCX/XHTML/PDF; Р=Нет` | `TC-QUT-002` | `covered` | `none_required:single-atom` |
+| `PLAN-QUT-003` | `WP-QUT-01` | `visibility` | `SRC-QUT-002; BSR 208` | `ATOM-003` | Открыть блок `Документы по заявке`. | `positive` | `visibility` | `field-state` | `none_required` | Поле добавления файла `Анкета клиента` отображается. | `DOCX/XHTML/PDF` | `TC-QUT-003` | `covered` | `none_required:single-atom` |
+| `PLAN-QUT-004` | `WP-QUT-01` | `file-upload` | `SRC-QUT-002; BSR 209; BSR 211` | `ATOM-004; ATOM-005` | По кнопке открыть проводник и выбрать `FIXTURE-QUT-JPG`. | `positive` | `picker-upload` | `file:FIXTURE-QUT-JPG` | `FIXTURE-QUT-JPG` | Файл добавлен, отображается имя `questionnaire-valid.jpg`. | `DOCX/XHTML/PDF` | `TC-QUT-004` | `covered` | `grouping-justification:` способ и имя образуют один upload result. |
+| `PLAN-QUT-005` | `WP-QUT-01` | `file-upload` | `SRC-QUT-002; BSR 209; BSR 211` | `ATOM-006` | Перетащить `FIXTURE-QUT-PDF` в поле `Анкета клиента`. | `positive` | `drag-drop-upload` | `file:FIXTURE-QUT-PDF` | `FIXTURE-QUT-PDF` | Файл добавлен, отображается имя `questionnaire-valid.pdf`. | `DOCX/XHTML/PDF` | `TC-QUT-005` | `covered` | `none_required:single-atom` |
+| `PLAN-QUT-006` | `WP-QUT-01` | `equivalence` | `SRC-QUT-002; BSR 210` | `ATOM-007` | В трёх чистых итерациях добавить `FIXTURE-QUT-JPG`, `FIXTURE-QUT-PNG`, `FIXTURE-QUT-PDF`. | `positive` | `allowed-formats` | `files:three-formats` | `FIXTURE-QUT-JPG; FIXTURE-QUT-PNG; FIXTURE-QUT-PDF` | В каждой итерации выбранный файл добавляется. | `DOCX/XHTML/PDF` | `TC-QUT-006` | `covered` | `none_required:one-fixed-value-set` |
+| `PLAN-QUT-007` | `WP-QUT-01` | `boundary` | `SRC-QUT-002; BSR 210; GAP-QUT-001` | `ATOM-008` | Не создавать exact-boundary TC до уточнения byte convention. | `gap` | `max-file-size` | `none_required` | `none_required` | Точное граничное значение для `размер файла не более 40 МБ` нельзя задать без byte convention. | `GAP-QUT-001` | `GAP-QUT-001` | `gap` | `none_required:single-atom-gap` |
+| `PLAN-QUT-008` | `WP-QUT-01` | `negative-oracle` | `SRC-QUT-002; BSR 210` | `ATOM-009` | Добавить `FIXTURE-QUT-PDF-OVER40`. | `negative-boundary` | `oversize-file` | `file:over-max` | `FIXTURE-QUT-PDF-OVER40` | Ограничение `размер файла не более 40 МБ`: файл размером 50 МБ не добавляется; отображается `Документы не загружены. Проверьте соответствуют ли документы требованиям: формат jpg, png, pdf, размер не более 40 МБ`. | `DOCX/XHTML/PDF exact text` | `TC-QUT-007` | `covered` | `none_required:single-atom` |
+| `PLAN-QUT-009` | `WP-QUT-01` | `negative-oracle` | `SRC-QUT-002; BSR 210` | `ATOM-010` | Добавить `FIXTURE-QUT-TXT`. | `negative-equivalence` | `unsupported-format` | `file:txt` | `FIXTURE-QUT-TXT` | Файл не добавляется; отображается `Документы не загружены. Проверьте соответствуют ли документы требованиям: формат jpg, png, pdf, размер не более 40 МБ`. | `DOCX/XHTML/PDF exact text` | `TC-QUT-008` | `covered` | `none_required:single-atom` |
+| `PLAN-QUT-010` | `WP-QUT-01` | `file-cardinality` | `SRC-QUT-002; BSR 210` | `ATOM-011` | Добавить `FIXTURE-QUT-PDF-A`, затем попытаться добавить `FIXTURE-QUT-PDF-B`. | `boundary` | `one-file-per-type` | `files:two-distinct` | `FIXTURE-QUT-PDF-A; FIXTURE-QUT-PDF-B` | После второго действия отображается не более одного имени файла; replace/reject/message не утверждаются. | `DOCX/XHTML/PDF count rule` | `TC-QUT-009` | `covered` | `none_required:single-atom` |

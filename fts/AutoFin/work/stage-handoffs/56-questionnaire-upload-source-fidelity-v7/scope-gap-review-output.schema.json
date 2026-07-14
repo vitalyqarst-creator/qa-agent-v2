@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "verdict",
+    "gap_status",
+    "routing_decision",
+    "findings",
+    "checks",
+    "report_markdown",
+    "session_summary_markdown"
+  ],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["passed", "needs-scope-revision", "blocked-input"]
+    },
+    "gap_status": {
+      "type": "string",
+      "enum": ["open-non-blocking", "closed-source-backed", "invalid"]
+    },
+    "routing_decision": {
+      "type": "string"
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "evidence", "required_change"],
+        "properties": {
+          "severity": {"type": "string", "enum": ["error", "warning", "info"]},
+          "category": {"type": "string"},
+          "evidence": {"type": "string"},
+          "required_change": {"type": "string"}
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["check", "result", "evidence"],
+        "properties": {
+          "check": {"type": "string"},
+          "result": {"type": "string", "enum": ["pass", "fail", "not-applicable"]},
+          "evidence": {"type": "string"}
+        }
+      }
+    },
+    "report_markdown": {"type": "string"},
+    "session_summary_markdown": {"type": "string"}
+  }
+}
