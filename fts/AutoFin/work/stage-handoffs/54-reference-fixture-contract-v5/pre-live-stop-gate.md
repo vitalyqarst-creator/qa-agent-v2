@@ -2,7 +2,7 @@
 
 ## Status
 
-`awaiting-offline-checkpoint`
+`open-for-one-authorized-canary`
 
 ## До live обязательно
 
@@ -17,3 +17,7 @@
 ## Запрещено
 
 Live до выполнения всех условий; повтор после terminal result; SDK fallback; исправление benchmark draft вручную; promotion или изменение FT-first baseline.
+
+## Authorization
+
+Все offline-условия выполнены. Offline checkpoint `25ba4a45cb0edfb7cf6574fbd9bbd182d02b16b1` отправлен; authorization: `pre-live-authorization.v5.md`. Разрешён ровно один invocation после push authorization checkpoint.

@@ -19,3 +19,4 @@
 | `DEC-004` | 4 | `validation` | Writer может обобщить fixture | Runner canonicalizes block и gate проверяет exact projection | Качество не зависит от соблюдения prose instruction | gate/runner regressions | high | applied |
 | `DEC-005` | 5 | `validation` | Actual rejected V4 draft | Использовать его только как immutable negative replay | Ручная правка скрыла бы реальную регрессию | `offline-replay.v5.json` | high | applied |
 | `DEC-006` | 6 | `authorization` | User instruction `Продолжай` | Live разрешать только после pushed offline checkpoint и отдельной hash binding | Сохраняет terminal stop discipline | `pre-live-stop-gate.md` | high | applied |
+| `DEC-007` | 7 | `authorization` | Pushed offline checkpoint `25ba4a4` | Разрешить ровно один V5 dispatcher invocation | Одного canary достаточно для проверки semantic blocker; retry исказил бы результат | `pre-live-authorization.v5.md` | high | applied |

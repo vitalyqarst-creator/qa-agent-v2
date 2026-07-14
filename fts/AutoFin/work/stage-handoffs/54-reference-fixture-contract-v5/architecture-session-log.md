@@ -8,7 +8,7 @@
 | mode | `reference-fixture-contract-v5` |
 | ft_slug | `AutoFin` |
 | scope_slug | `visual-assessment-medium-scope-benchmark-v5` |
-| status_after | `awaiting-offline-checkpoint` |
+| status_after | `authorized-canary-pending` |
 
 ## Inputs Read
 
@@ -77,6 +77,8 @@
 | 6 | Compiled immutable V5 package | 13 obligations; exact OBL-013 fixture values | stage package |
 | 7 | Ran exec capability dry-run and validate-only | verified contract v2; no cycle artifacts | backend selection and runner output |
 | 8 | Ran architecture audit | 61 checks, 0 findings | audit output |
+| 9 | Created and pushed offline checkpoint | local/origin match at `25ba4a4` | Git checkpoint |
+| 10 | Bound one V5 live invocation | retry/fallback/promotion prohibited | `pre-live-authorization.v5.md` |
 
 ## Quality Checkpoints
 
