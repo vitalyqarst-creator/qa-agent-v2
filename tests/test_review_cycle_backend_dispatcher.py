@@ -152,6 +152,16 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
                 + "\n",
                 encoding="utf-8",
             )
+            (cycle / "runner-events.ndjson").write_text(
+                json.dumps(
+                    {
+                        "event": "stage_process_finished",
+                        "backend_session_id": "session-production-1",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
 
             report = module.summarize_exec_cycle(
                 cycle,
@@ -161,6 +171,7 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
         self.assertEqual("production", report["run_profile"])
         self.assertFalse(report["benchmark_details_included"])
         self.assertEqual([], report["stage_attribution"])
+        self.assertEqual(["session-production-1"], report["backend_session_ids"])
         self.assertEqual(12, report["duration_ms_total"])
 
     def test_benchmark_profile_requires_performance_output(self) -> None:

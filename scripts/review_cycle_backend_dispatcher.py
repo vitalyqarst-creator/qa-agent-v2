@@ -228,7 +228,10 @@ def summarize_exec_cycle(
     validator_reports = tuple(cycle_dir.glob("attempts/*/*/runner-output/validator.json"))
     events_path = cycle_dir / "runner-events.ndjson"
     events: list[dict[str, Any]] = []
-    if benchmark_details and events_path.exists():
+    # Session ids are production audit evidence, not benchmark-only telemetry.
+    # Keep expensive per-attempt event/context scans behind benchmark_details,
+    # but always read the small runner lifecycle ledger when it exists.
+    if events_path.exists():
         for raw in events_path.read_text(encoding="utf-8").splitlines():
             if raw.strip():
                 events.append(json.loads(raw))
