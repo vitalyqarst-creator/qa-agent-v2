@@ -1,0 +1,40 @@
+version: 1
+snapshot_id: signed-off
+cycle_id: questionnaire-upload-transfer-v8-prod-candidate-20260714
+stage_status: signed-off
+files:
+  -
+    source: fts\AutoFin\work\review-cycles\questionnaire-upload-transfer-v8-prod-candidate-20260714\cycle-state.yaml
+    snapshot_path: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/cycle-state.yaml
+    bytes: 3565
+    sha256: fe967d8ce608849e2cc8a16683fcacaa88912ea86d465be6b15b87133108df46
+  -
+    source: "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2\\fts\\AutoFin\\test-cases\\16-questionnaire-upload-transfer-v8-prod-candidate.md"
+    snapshot_path: test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md
+    bytes: 9893
+    sha256: 30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b
+  -
+    source: fts\AutoFin\work\review-cycles\questionnaire-upload-transfer-v8-prod-candidate-20260714\runner-events.ndjson
+    snapshot_path: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/runner-events.ndjson
+    bytes: 4864
+    sha256: 04e35111456b89edaf09a4b758da92a4eb5752791b71501768f59a363eb5479b
+  -
+    source: fts\AutoFin\work\review-cycles\questionnaire-upload-transfer-v8-prod-candidate-20260714\outputs\final-findings.md
+    snapshot_path: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/outputs/final-findings.md
+    bytes: 5576
+    sha256: 28c5a2137ee9fb6959d62a44a1bf1b73659b9f7f53ad84373c20704e3de39955
+  -
+    source: fts\AutoFin\work\review-cycles\questionnaire-upload-transfer-v8-prod-candidate-20260714\outputs\final-traceability-matrix.md
+    snapshot_path: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/outputs/final-traceability-matrix.md
+    bytes: 2188
+    sha256: 5a8edc451ea0b46342edaf660556cfa63a7406bcd52ec6465a00e9d464184c73
+  -
+    source: fts\AutoFin\work\review-cycles\questionnaire-upload-transfer-v8-prod-candidate-20260714\outputs\final-traceability-matrix.xlsx
+    snapshot_path: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/outputs/final-traceability-matrix.xlsx
+    bytes: 6379
+    sha256: 662c9c2e510fa803ac45ceb4861228a35b1439f00a4b44d6cd42e68e08d959d4
+  -
+    source: fts\AutoFin\work\review-cycles\questionnaire-upload-transfer-v8-prod-candidate-20260714\outputs\loop-summary.md
+    snapshot_path: work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/outputs/loop-summary.md
+    bytes: 2011
+    sha256: 2f11cbc044c030d1cc5334f0d04e8de46fd03b20396cb4748297f8d5a9718153

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "status": "promoted",
+  "authorization": "explicit-user-approval",
+  "source_candidate": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v8-prod-candidate-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md",
+  "destination": "fts/AutoFin/test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md",
+  "candidate_sha256": "30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b",
+  "destination_sha256": "30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b",
+  "candidate_bytes": 9893,
+  "destination_bytes": 9893,
+  "byte_identical": true,
+  "overwrite_performed": false,
+  "writer_restarted": false,
+  "reviewer_restarted": false,
+  "residual_gap": "GAP-QUT-001",
+  "production_write_scope": [
+    "fts/AutoFin/test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md"
+  ]
+}

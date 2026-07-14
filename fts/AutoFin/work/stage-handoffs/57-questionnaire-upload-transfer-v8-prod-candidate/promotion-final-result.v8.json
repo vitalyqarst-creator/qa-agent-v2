@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "status": "signed-off",
+  "workflow_stage": "ft-test-case-iteration",
+  "next_skill": "ft-ui-automation-prep",
+  "canonical_test_cases": "fts/AutoFin/test-cases/16-questionnaire-upload-transfer-v8-prod-candidate.md",
+  "canonical_sha256": "30737645afe53d3535db78c005968225b495e63a11ec201edeed2db107e2080b",
+  "test_case_count": 9,
+  "covered_testable_obligations": 10,
+  "total_testable_obligations": 10,
+  "blocking_findings": 0,
+  "residual_non_blocking_gaps": [
+    "GAP-QUT-001"
+  ],
+  "writer_restarted": false,
+  "reviewer_restarted": false
+}
