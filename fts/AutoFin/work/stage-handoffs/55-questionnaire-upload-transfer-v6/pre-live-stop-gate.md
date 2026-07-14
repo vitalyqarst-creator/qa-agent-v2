@@ -2,7 +2,7 @@
 
 ## Status
 
-`offline-gates-pass-checkpoint-pending`
+`authorized-one-shot`
 
 ## До Live Обязательно
 
@@ -23,4 +23,4 @@
 
 ## Current Gate
 
-Offline gates подтверждены в `pre-live-test-report.v6.md`. Live всё ещё запрещён: checkpoint ещё не создан и не отправлен, authorization artifact отсутствует.
+Offline gates подтверждены в `pre-live-test-report.v6.md`. Checkpoint `5135c023f51253fb8dce992b0396942e3e7a37d2` отправлен, local/origin SHA совпали, а `pre-live-authorization.v6.md` связал immutable package/config с одним invocation. Live разрешён ровно один раз; любой terminal result обнуляет budget.

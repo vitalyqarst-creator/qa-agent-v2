@@ -24,6 +24,7 @@ required_inputs:
   - work/stage-handoffs/55-questionnaire-upload-transfer-v6/dispatcher-config.v6.json
   - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-stop-gate.md
   - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-test-report.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-authorization.v6.md
   - work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json
   - work/review-cycles/questionnaire-upload-transfer-v6-20260714/backend-selection.v6-r1.dry-run.json
 latest_artifacts:
@@ -43,6 +44,7 @@ latest_artifacts:
   dispatcher_config: work/stage-handoffs/55-questionnaire-upload-transfer-v6/dispatcher-config.v6.json
   pre_live_stop_gate: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-stop-gate.md
   pre_live_test_report: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-test-report.v6.md
+  pre_live_authorization: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-authorization.v6.md
   prepared_package: work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json
   backend_selection_dry_run: work/review-cycles/questionnaire-upload-transfer-v6-20260714/backend-selection.v6-r1.dry-run.json
   decision_log: work/stage-handoffs/55-questionnaire-upload-transfer-v6/agent-decision-log.md

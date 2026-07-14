@@ -62,6 +62,7 @@
 | `TF-009` | Initial source-row inventory was emitted by the general builder. | ad-hoc generated table writer | regenerated the final inventory through canonical `write_artifact_sections.py` manifest | `_artifact_write/source-row-inventory/manifest.json` | yes | no residual fidelity risk | retain manifest for replay |
 | `TF-010` | Canonical atom identifiers changed the prepared input fingerprint after the first local compile. | reuse the uncheckpointed stale package directory | compiled a new immutable `questionnaire-upload-transfer-v6-r1` package and removed only the verified stale local package | `work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/` | yes | no residual fidelity risk | never overwrite a prepared package with a different fingerprint |
 | `TF-011` | Default `python -m unittest` discovery found zero tests. | implicit discovery from repository root | ran explicit `python -m unittest discover -s tests -p 'test_*.py'` | `pre-live-test-report.v6.md` | yes | no residual fidelity risk | keep the explicit discovery command in gates |
+| `TF-012` | Authorization update used a noncanonical workflow stage status. | `ready-for-live-canary` | restored canonical `ready-for-next-stage`; one-shot permission remains in authorization and stop-gate artifacts | `workflow-state.yaml`; `pre-live-authorization.v6.md` | yes | no residual fidelity risk | do not encode authorization as a new process status |
 
 ## Artifact Write Strategy
 
@@ -82,6 +83,7 @@ Generated handoff/compiler inputs are emitted by `scripts/build_autofin_question
 | 4 | Guarded projection and regressions added | irrelevant DaData omitted; relevant branch retained | code/tests |
 | 5 | Transfer package compiled | 11 obligations, 10 TC, 0 gaps | prepared package |
 | 6 | Reviewer projection order hardened | relevance is evaluated from full evidence before reviewer obligation truncation | code/tests |
+| 7 | Offline checkpoint pushed and authorization bound | local/origin `5135c023...`; one invocation budget | pre-live authorization |
 
 ## Quality Checkpoints
 
