@@ -1,0 +1,22 @@
+# Pre-Live Stop Gate V4
+
+## Status
+
+`blocked-until-offline-checkpoint-pushed`
+
+## До первого live обязательно
+
+- Все focused и agent-layer tests проходят.
+- Architecture audit имеет 0 errors/warnings.
+- Три V4 package/config пары скомпилированы и hash-bound.
+- Validate-only и exec dry-run проходят для каждой пары.
+- Protected baseline hashes повторно подтверждены, target отсутствует.
+- Offline checkpoint отправлен в `origin`, local/remote SHA совпадают.
+- Отдельный authorization artifact связывает user instruction, checkpoint SHA и три invocation budgets.
+
+## Запрещено
+
+- live до выполнения всех условий;
+- повтор одного cycle после terminal result;
+- переход к r2/r3 после quality failure canary;
+- SDK fallback, promotion или изменение production baseline.

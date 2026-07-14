@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "cycle_dir": "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714",
+  "exec_runner_args": [
+    "--ft-root", "fts/AutoFin",
+    "--cycle-dir", "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714",
+    "--final-artifact", "fts/AutoFin/test-cases/section-18-visual-assessment-medium-scope-benchmark.md",
+    "--prepared-package", "fts/AutoFin/work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json",
+    "--prepared-standard-writer-mode", "structured",
+    "--sandbox-flag", "--sandbox",
+    "--writer-sandbox", "workspace-write",
+    "--reviewer-sandbox", "read-only",
+    "--working-directory-flag", "--cd",
+    "--json-flag", "--json",
+    "--output-last-message-flag", "--output-last-message",
+    "--output-schema-flag", "--output-schema",
+    "--writer-timeout-seconds", "600",
+    "--reviewer-timeout-seconds", "450",
+    "--writer-command-budget", "1",
+    "--reviewer-command-budget", "1",
+    "--prepared-reviewer-command-budget", "1",
+    "--prepared-standard-writer-context-max-bytes", "131072",
+    "--prepared-standard-reviewer-context-max-bytes", "131072",
+    "--prepared-structured-writer-single-session-tc-limit", "12",
+    "--prepared-structured-writer-shard-size", "12",
+    "--prepared-structured-writer-max-shards", "1",
+    "--prepared-structured-reviewer-obligation-limit", "100"
+  ],
+  "sdk_runner_args": []
+}

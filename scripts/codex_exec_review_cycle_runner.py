@@ -44,6 +44,7 @@ from test_case_agent.review_cycle.prepared_package import (
 from test_case_agent.review_cycle.obligation_gate import (
     materialize_draft_dictionary_projections,
     validate_draft_obligation_coverage,
+    validate_writer_dictionary_ownership,
 )
 from test_case_agent.review_cycle.promotion_readiness import (
     PromotionContract,
@@ -900,6 +901,9 @@ class CodexExecReviewCycleRunner:
         default_factory=dict, init=False
     )
     _context_budget_reports: dict[str, dict[str, Any]] = field(
+        default_factory=dict, init=False
+    )
+    _writer_dictionary_context_report: dict[str, Any] = field(
         default_factory=dict, init=False
     )
     _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
@@ -2417,8 +2421,21 @@ class CodexExecReviewCycleRunner:
         artifact = self._prepared_artifact("atomic-obligations")
         obligations = load_obligations(artifact)
         status_counts: dict[str, int] = {}
+        runner_owned_dictionary_materializations: list[dict[str, Any]] = []
         for item in obligations.obligations:
             status_counts[item.coverage_status] = status_counts.get(item.coverage_status, 0) + 1
+            for requirement in item.dictionary_requirements:
+                if requirement.coverage_mode == "reference-only":
+                    continue
+                runner_owned_dictionary_materializations.append(
+                    {
+                        "obligation_id": item.obligation_id,
+                        "planned_test_case_id": item.planned_test_case_id,
+                        "dictionary_id": requirement.dictionary_id,
+                        "coverage_mode": requirement.coverage_mode,
+                        "required_value_count": len(requirement.required_values),
+                    }
+                )
         return json.dumps(
             {
                 "artifact": relative_path(artifact, self.repo_root),
@@ -2429,6 +2446,9 @@ class CodexExecReviewCycleRunner:
                 "writer_semantics_source": "selected-source-evidence",
                 "test_case_mapping_source": "runner-generated-draft-seed",
                 "full_artifact_consumers": ["runner-gates", "reviewer"],
+                "runner_owned_dictionary_materializations": (
+                    runner_owned_dictionary_materializations
+                ),
             },
             ensure_ascii=False,
             indent=2,
@@ -2644,6 +2664,110 @@ class CodexExecReviewCycleRunner:
             return evidence.strip()
         return evidence[: first_obligation.start()].rstrip()
 
+    def _prepared_writer_source_evidence(
+        self,
+        evidence: str | None = None,
+        *,
+        record_report: bool = False,
+    ) -> str:
+        """Keep dictionary identity in writer context without repeating leaf payloads."""
+
+        source = evidence
+        if source is None:
+            source = self._prepared_artifact("source-evidence").read_text(
+                encoding="utf-8"
+            )
+        headings = list(
+            re.finditer(r"(?m)^##\s+(DICT-[A-Za-z0-9._-]+)\s*$", source)
+        )
+        if not headings:
+            projected = source.strip()
+            report = {
+                "validator": "prepared-writer-dictionary-context-v1",
+                "dictionary_sections_seen": 0,
+                "dictionary_sections_compacted": 0,
+                "original_bytes": len(source.encode("utf-8")),
+                "projected_bytes": len(projected.encode("utf-8")),
+                "bytes_removed": len(source.encode("utf-8"))
+                - len(projected.encode("utf-8")),
+            }
+            if record_report:
+                self._writer_dictionary_context_report = report
+            return projected
+
+        parts: list[str] = []
+        cursor = 0
+        compacted = 0
+        for index, heading in enumerate(headings):
+            end = headings[index + 1].start() if index + 1 < len(headings) else len(source)
+            parts.append(source[cursor : heading.start()])
+            block = source[heading.end() : end]
+            structured_match = re.search(
+                r"```json\s*(\{.*?\})\s*```", block, flags=re.DOTALL
+            )
+            if structured_match is None:
+                parts.append(source[heading.start() : end])
+                cursor = end
+                continue
+            try:
+                structured = json.loads(structured_match.group(1))
+            except json.JSONDecodeError:
+                parts.append(source[heading.start() : end])
+                cursor = end
+                continue
+            dictionary_id = heading.group(1)
+            active_values = structured.get("active_values")
+            if (
+                not isinstance(structured, dict)
+                or structured.get("dictionary_id") != dictionary_id
+                or not isinstance(active_values, list)
+                or not all(isinstance(value, str) for value in active_values)
+            ):
+                parts.append(source[heading.start() : end])
+                cursor = end
+                continue
+            summary = {
+                "dictionary_id": dictionary_id,
+                "dictionary_name": str(structured.get("dictionary_name") or ""),
+                "source_file": str(structured.get("source_file") or ""),
+                "source_location": str(structured.get("source_location") or ""),
+                "extraction_status": str(structured.get("extraction_status") or ""),
+                "active_value_count": len(active_values),
+                "active_dictionary_ids": [
+                    value
+                    for value in active_values
+                    if re.fullmatch(r"DICT-[A-Za-z0-9._-]+", value)
+                ],
+                "exact_value_transport": (
+                    "omitted-from-writer-context; runner-gates-and-reviewer-use-immutable-evidence"
+                ),
+            }
+            parts.extend(
+                [
+                    f"## {dictionary_id}\n\n",
+                    "```json\n",
+                    json.dumps(summary, ensure_ascii=False, separators=(",", ":")),
+                    "\n```\n\n",
+                ]
+            )
+            compacted += 1
+            cursor = end
+        parts.append(source[cursor:])
+        projected = "".join(parts).strip()
+        original_bytes = len(source.encode("utf-8"))
+        projected_bytes = len(projected.encode("utf-8"))
+        report = {
+            "validator": "prepared-writer-dictionary-context-v1",
+            "dictionary_sections_seen": len(headings),
+            "dictionary_sections_compacted": compacted,
+            "original_bytes": original_bytes,
+            "projected_bytes": projected_bytes,
+            "bytes_removed": original_bytes - projected_bytes,
+        }
+        if record_report:
+            self._writer_dictionary_context_report = report
+        return projected
+
     def _prepared_standard_reviewer_calibration_summary(self) -> str:
         artifact = self.calibration_lifecycle_path
         payload = json.loads(artifact.read_text(encoding="utf-8"))
@@ -2778,6 +2902,10 @@ class CodexExecReviewCycleRunner:
             "limit_bytes": limit_bytes,
             "instruction_artifact_count": len(instruction_paths),
         }
+        if role == "writer" and self._writer_dictionary_context_report:
+            report["dictionary_context_projection"] = dict(
+                self._writer_dictionary_context_report
+            )
         self._context_budget_reports[stage] = report
         if not report["passed"]:
             raise RunnerError(
@@ -2817,7 +2945,9 @@ class CodexExecReviewCycleRunner:
             )
         lines.extend(
             [
-                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                self._prepared_writer_source_evidence(
+                    record_report=structured
+                ),
                 "",
             ]
         )
@@ -2932,7 +3062,8 @@ class CodexExecReviewCycleRunner:
                 selectors.add(item.gap_id)
         blocks = re.split(r"\n\s*\n", evidence[first_obligation.start() :].strip())
         selected_blocks = [block for block in blocks if any(value in block for value in selectors)]
-        return "\n\n".join((shared, *selected_blocks)).strip()
+        selected = "\n\n".join((shared, *selected_blocks)).strip()
+        return self._prepared_writer_source_evidence(selected)
 
     def _writer_shard_prompt(self, shard: dict[str, Any]) -> str:
         if self._prepared_package is None:
@@ -4237,12 +4368,41 @@ class CodexExecReviewCycleRunner:
                 self._prepared_artifact("atomic-obligations")
             )
             draft_before_projection = self.draft_path.read_text(encoding="utf-8")
+            writer_ownership = validate_writer_dictionary_ownership(
+                draft_before_projection,
+                obligation_set,
+            )
+            if not writer_ownership["passed"]:
+                write_json(
+                    self.dictionary_projection_path,
+                    {
+                        "version": 1,
+                        "validator": "runner-owned-dictionary-projection-v1",
+                        "materialized_count": 0,
+                        "items": [],
+                        "draft_changed": False,
+                        "writer_ownership": writer_ownership,
+                    },
+                )
+                return self._block_stage(
+                    state,
+                    stage=WRITER_STAGE,
+                    role="writer",
+                    result=writer_result,
+                    artifacts=writer_artifacts,
+                    status="blocked-dictionary-projection-ownership",
+                    reasons=[
+                        "structured writer duplicated runner-owned exhaustive dictionary values",
+                        relative_path(self.dictionary_projection_path, self.repo_root),
+                    ],
+                )
             projected_draft, projection_report = (
                 materialize_draft_dictionary_projections(
                     draft_before_projection,
                     obligation_set,
                 )
             )
+            projection_report["writer_ownership"] = writer_ownership
             projection_report["draft_changed"] = (
                 projected_draft != draft_before_projection
             )
@@ -5016,6 +5176,7 @@ class CodexExecReviewCycleRunner:
                         "reviewer-rebind-test-case-set",
                         "reviewer-rebind-semantic-preservation",
                         "structured-dictionary-projection",
+                        "writer-dictionary-ownership",
                         "context-budget",
                         "output-capacity",
                         "reviewer-output-capacity",

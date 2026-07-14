@@ -1,0 +1,56 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: visual-assessment-medium-scope-benchmark-v4
+current_stage: agent-architecture-auditor
+stage_status: ready-for-next-stage
+current_round: 0
+next_skill: agent-architecture-auditor
+required_inputs:
+  - AGENT-NOTES.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/workflow-state.yaml
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/prompt.iteration-to-performance-stabilization.md
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/live-result.v3.json
+  - work/stage-handoffs/52-visual-assessment-medium-scope-benchmark/performance-analysis.v3.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/performance-baseline.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-decision.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/benchmark-protocol.v4.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-stop-gate.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/agent-decision-log.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-session-log.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.performance-stabilization-to-v4-live.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-test-report.v4.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r1.json
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r2.json
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r3.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r1-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r2-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r1-20260714/backend-selection.dry-run.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r2-20260714/backend-selection.dry-run.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/backend-selection.dry-run.json
+latest_artifacts:
+  performance_baseline: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/performance-baseline.md
+  architecture_decision: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-decision.md
+  benchmark_protocol: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/benchmark-protocol.v4.md
+  pre_live_stop_gate: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-stop-gate.md
+  decision_log: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/agent-decision-log.md
+  session_log: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-session-log.md
+  active_transition_prompt: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.performance-stabilization-to-v4-live.md
+  pre_live_test_report: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-test-report.v4.md
+  dispatcher_config_v4_r1: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r1.json
+  dispatcher_config_v4_r2: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r2.json
+  dispatcher_config_v4_r3: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r3.json
+  prepared_package_v4_r1: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r1-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json
+  prepared_package_v4_r2: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r2-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json
+  prepared_package_v4_r3: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v4/stage-package.json
+  backend_selection_dry_run_v4_r1: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r1-20260714/backend-selection.dry-run.json
+  backend_selection_dry_run_v4_r2: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r2-20260714/backend-selection.dry-run.json
+  backend_selection_dry_run_v4_r3: work/review-cycles/visual-assessment-medium-scope-benchmark-v4-r3-20260714/backend-selection.dry-run.json
+coverage_gaps:
+  blocking: 0
+  non_blocking: 0
+open_questions: []
+blocking_reasons: []
+accepted_risks:
+  - V4 requires up to three live invocations to calculate a comparable median; r2/r3 remain conditional on canary quality.
+  - The accepted V3 draft is immutable benchmark evidence and is not promoted.

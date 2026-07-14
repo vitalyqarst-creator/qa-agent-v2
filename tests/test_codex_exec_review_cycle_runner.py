@@ -2571,12 +2571,68 @@ Draft body.
         )
         self.assertTrue(projection["draft_changed"])
         self.assertEqual(1, projection["materialized_count"])
+        self.assertTrue(projection["writer_ownership"]["passed"])
+        prompt = (self.writer_attempt / "prompt.md").read_text(encoding="utf-8")
+        self.assertIn("runner_owned_dictionary_materializations", prompt)
+        self.assertIn('"coverage_mode": "all-leaf-values"', prompt)
+        context_budget = json.loads(
+            (self.writer_attempt / "runner-output" / "context-budget.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        context_projection = context_budget["dictionary_context_projection"]
+        self.assertGreater(context_projection["dictionary_sections_compacted"], 0)
+        self.assertGreater(context_projection["bytes_removed"], 0)
         obligation_gate = json.loads(
             (self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(
                 encoding="utf-8"
             )
         )
         self.assertTrue(obligation_gate["passed"])
+
+    def test_runner_blocks_writer_owned_exhaustive_dictionary_values(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("table-parity",),
+            dictionary_values=("Первое значение", "Второе значение"),
+            structured_dictionary_evidence=True,
+            dictionary_coverage_mode="all-leaf-values",
+        )
+        draft = """# Test cases
+
+## TC-DEMO-001
+
+**Название:** Полный состав справочника
+**Трассировка:** ATOM-001; SRC-1; DICT-001
+
+### Тестовые данные
+
+- `Первое значение`; `Второе значение`.
+
+### Шаги
+
+1. Открыть список.
+
+### Итоговый ожидаемый результат
+
+Список отображается.
+"""
+        executor = ScriptedExecutor(self.structured_writer_step(draft_text=draft))
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("blocked-dictionary-projection-ownership", result.status)
+        self.assertEqual(1, len(executor.requests))
+        projection = json.loads(
+            (self.writer_attempt / "runner-output" / "dictionary-projection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(projection["writer_ownership"]["passed"])
+        self.assertEqual(
+            "writer-owned-exhaustive-dictionary-values",
+            projection["writer_ownership"]["findings"][0]["id"],
+        )
 
     def test_quality_gate_blocks_lost_calibration_markers(self) -> None:
         package_path = self.build_prepared_package(

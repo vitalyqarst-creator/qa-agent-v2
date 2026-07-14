@@ -7,6 +7,7 @@ from pathlib import Path
 from test_case_agent.review_cycle.obligation_gate import (
     materialize_draft_dictionary_projections,
     validate_draft_obligation_coverage,
+    validate_writer_dictionary_ownership,
 )
 from test_case_agent.review_cycle.prepared_package import (
     PreparedDictionaryRequirement,
@@ -427,6 +428,57 @@ class PreparedObligationGateTests(unittest.TestCase):
         )
 
         self.assertTrue(result.passed)
+
+    def test_writer_dictionary_ownership_rejects_exhaustive_value_enumeration(self) -> None:
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-001",
+            coverage_mode="all-leaf-values",
+            required_values=(
+                PreparedDictionaryValue(("DICT-001",), "leaf", "Первое значение"),
+                PreparedDictionaryValue(("DICT-001",), "leaf", "Второе значение"),
+                PreparedDictionaryValue(("DICT-001",), "leaf", "Третье значение"),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-writer-dictionary-boundary",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001", "DICT-001"),
+                    atomic_statement="Все значения доступны.",
+                    observable_oracle="Отображается полный набор.",
+                    test_intent="Сверить полный набор.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-001",),
+                    notes="",
+                    planned_test_case_id="TC-DICT-001",
+                    dictionary_requirements=(requirement,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        duplicated = (
+            "## TC-DICT-001\n"
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001\n\n"
+            "- Первое значение; Второе значение; Третье значение.\n"
+        )
+        symbolic = duplicated.replace(
+            "Первое значение; Второе значение; Третье значение",
+            "полный набор DICT-001",
+        )
+
+        rejected = validate_writer_dictionary_ownership(duplicated, obligations)
+        accepted = validate_writer_dictionary_ownership(symbolic, obligations)
+
+        self.assertFalse(rejected["passed"])
+        self.assertEqual(1, rejected["finding_count"])
+        self.assertEqual(
+            "writer-owned-exhaustive-dictionary-values",
+            rejected["findings"][0]["id"],
+        )
+        self.assertTrue(accepted["passed"])
 
 
 if __name__ == "__main__":

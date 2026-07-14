@@ -62,6 +62,69 @@ def exhaustive_dictionary_requirements(obligation: Any) -> tuple[Any, ...]:
     )
 
 
+def validate_writer_dictionary_ownership(
+    text: str, obligations: Any
+) -> dict[str, Any]:
+    """Reject model-owned enumeration that the runner will materialize exactly.
+
+    The structured writer may name one concrete dictionary value when it is useful
+    for an action or title, but it must not reproduce an exhaustive value set that
+    is already owned by ``materialize_draft_dictionary_projections``.
+    """
+
+    by_test_case: dict[str, list[Any]] = {}
+    for obligation in obligations.obligations:
+        if not exhaustive_dictionary_requirements(obligation):
+            continue
+        if not obligation.planned_test_case_id:
+            continue
+        by_test_case.setdefault(obligation.planned_test_case_id, []).append(obligation)
+
+    findings: list[dict[str, Any]] = []
+    checked_obligations = 0
+    for tc_id, block in test_case_sections(text):
+        for obligation in by_test_case.get(tc_id, []):
+            checked_obligations += 1
+            for requirement in exhaustive_dictionary_requirements(obligation):
+                values = tuple(
+                    dict.fromkeys(
+                        item.value.strip()
+                        for item in requirement.required_values
+                        if item.value.strip()
+                    )
+                )
+                if len(values) < 2:
+                    continue
+                mentioned = tuple(value for value in values if value in block)
+                if len(mentioned) < 2:
+                    continue
+                findings.append(
+                    {
+                        "id": "writer-owned-exhaustive-dictionary-values",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation.obligation_id,
+                        "atom_id": obligation.traceability_atom_id,
+                        "dictionary_id": requirement.dictionary_id,
+                        "coverage_mode": requirement.coverage_mode,
+                        "mentioned_value_count": len(mentioned),
+                        "required_value_count": len(requirement.required_values),
+                        "mentioned_values_sample": list(mentioned[:5]),
+                        "message": (
+                            "The structured writer must keep an exhaustive dictionary "
+                            "check symbolic; the runner alone materializes the exact values."
+                        ),
+                    }
+                )
+    return {
+        "passed": not findings,
+        "validator": "runner-owned-dictionary-writer-boundary-v1",
+        "checked_obligation_count": checked_obligations,
+        "finding_count": len(findings),
+        "findings": findings,
+    }
+
+
 def dictionary_projection_line(item: Any) -> str:
     label = "Группа" if item.value_kind == "group" else "Значение"
     path = " > ".join(item.hierarchy_path)
