@@ -2,7 +2,7 @@
 
 ## Status
 
-`blocked-until-offline-checkpoint-pushed`
+`authorized-conditional-sequence`
 
 ## До первого live обязательно
 
@@ -13,6 +13,8 @@
 - Protected baseline hashes повторно подтверждены, target отсутствует.
 - Offline checkpoint отправлен в `origin`, local/remote SHA совпадают.
 - Отдельный authorization artifact связывает user instruction, checkpoint SHA и три invocation budgets.
+
+Все условия выполнены. Authorization: `pre-live-authorization.v4.md`; offline checkpoint: `c9dcbebe5ddba6215deb55324dfe9b31201022d5`.
 
 ## Запрещено
 

@@ -61,6 +61,8 @@
 | 8 | Compiled and validated three V4 runs | identical obligations/prompt budget; different attempt-bound package digests | three package/config pairs |
 | 9 | Scoped audit flagged package compiler as non-Markdown writer | clarified runner-owned machine-readable classification | `TF-004` |
 | 10 | Completed offline regression | agent-layer, architecture, budgets and H53 audit pass | `pre-live-test-report.v4.md` |
+| 11 | Created and pushed offline checkpoint | local/origin SHA match at `c9dcbeb` | Git checkpoint |
+| 12 | Bound live authorization | one invocation per run; r2/r3 conditional on prior quality pass | `pre-live-authorization.v4.md` |
 
 ## Quality Checkpoints
 
@@ -92,3 +94,4 @@
 
 - Live is forbidden until checkpoint push and hash-bound authorization.
 - Stop after r1 if any quality or boundary gate fails; duration failure alone is terminal evidence, not retry permission.
+- Authorization conditions are now fulfilled; consume each budget at most once and persist terminal evidence before continuing.

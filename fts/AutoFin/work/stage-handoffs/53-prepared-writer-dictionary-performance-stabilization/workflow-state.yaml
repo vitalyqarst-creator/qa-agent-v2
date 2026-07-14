@@ -19,6 +19,7 @@ required_inputs:
   - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-session-log.md
   - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.performance-stabilization-to-v4-live.md
   - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-test-report.v4.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-authorization.v4.md
   - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r1.json
   - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r2.json
   - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r3.json
@@ -37,6 +38,7 @@ latest_artifacts:
   session_log: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/architecture-session-log.md
   active_transition_prompt: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.performance-stabilization-to-v4-live.md
   pre_live_test_report: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-test-report.v4.md
+  pre_live_authorization: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/pre-live-authorization.v4.md
   dispatcher_config_v4_r1: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r1.json
   dispatcher_config_v4_r2: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r2.json
   dispatcher_config_v4_r3: work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/dispatcher-config.v4-r3.json
