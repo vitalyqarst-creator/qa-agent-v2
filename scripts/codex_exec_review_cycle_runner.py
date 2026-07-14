@@ -43,6 +43,8 @@ from test_case_agent.review_cycle.prepared_package import (
 )
 from test_case_agent.review_cycle.obligation_gate import (
     materialize_draft_dictionary_projections,
+    materialize_draft_reference_fixtures,
+    reference_fixture_block,
     validate_draft_obligation_coverage,
     validate_writer_dictionary_ownership,
 )
@@ -2422,10 +2424,22 @@ class CodexExecReviewCycleRunner:
         obligations = load_obligations(artifact)
         status_counts: dict[str, int] = {}
         runner_owned_dictionary_materializations: list[dict[str, Any]] = []
+        runner_owned_reference_fixtures: list[dict[str, Any]] = []
         for item in obligations.obligations:
             status_counts[item.coverage_status] = status_counts.get(item.coverage_status, 0) + 1
             for requirement in item.dictionary_requirements:
                 if requirement.coverage_mode == "reference-only":
+                    if requirement.fixture_values:
+                        runner_owned_reference_fixtures.append(
+                            {
+                                "obligation_id": item.obligation_id,
+                                "planned_test_case_id": item.planned_test_case_id,
+                                "dictionary_id": requirement.dictionary_id,
+                                "fixture_value_count": len(
+                                    requirement.fixture_values
+                                ),
+                            }
+                        )
                     continue
                 runner_owned_dictionary_materializations.append(
                     {
@@ -2449,6 +2463,7 @@ class CodexExecReviewCycleRunner:
                 "runner_owned_dictionary_materializations": (
                     runner_owned_dictionary_materializations
                 ),
+                "runner_owned_reference_fixtures": runner_owned_reference_fixtures,
             },
             ensure_ascii=False,
             indent=2,
@@ -2475,6 +2490,7 @@ class CodexExecReviewCycleRunner:
                         "dictionary_id": requirement.dictionary_id,
                         "coverage_mode": requirement.coverage_mode,
                         "required_value_count": len(requirement.required_values),
+                        "fixture_value_count": len(requirement.fixture_values),
                     }
                     for requirement in item.dictionary_requirements
                 ]
@@ -3336,6 +3352,11 @@ class CodexExecReviewCycleRunner:
                 self._obligation_requires_ui_calibration(item)
                 for item in obligation_group
             )
+            reference_fixture_projection = "\n\n".join(
+                block
+                for item in obligation_group
+                if (block := reference_fixture_block(item))
+            )
             lines.extend(
                 [
                     f"## {tc_id}",
@@ -3376,6 +3397,11 @@ class CodexExecReviewCycleRunner:
                     "### Тестовые данные",
                     "",
                     "- [SEED:concrete permitted data or parameter]",
+                    *(
+                        ["", reference_fixture_projection]
+                        if reference_fixture_projection
+                        else []
+                    ),
                     "",
                     "### Шаги",
                     "",
@@ -3451,7 +3477,10 @@ class CodexExecReviewCycleRunner:
         ] = {}
         for obligation in obligations.obligations:
             for requirement in obligation.dictionary_requirements:
-                for value in requirement.required_values:
+                for value in (
+                    *requirement.required_values,
+                    *requirement.fixture_values,
+                ):
                     identity = (requirement.dictionary_id, value.hierarchy_path)
                     if value.value_kind == "group":
                         dictionary_groups[identity] = value.value
@@ -4396,13 +4425,20 @@ class CodexExecReviewCycleRunner:
                         relative_path(self.dictionary_projection_path, self.repo_root),
                     ],
                 )
-            projected_draft, projection_report = (
-                materialize_draft_dictionary_projections(
+            reference_projected_draft, reference_fixture_report = (
+                materialize_draft_reference_fixtures(
                     draft_before_projection,
                     obligation_set,
                 )
             )
+            projected_draft, projection_report = (
+                materialize_draft_dictionary_projections(
+                    reference_projected_draft,
+                    obligation_set,
+                )
+            )
             projection_report["writer_ownership"] = writer_ownership
+            projection_report["reference_fixtures"] = reference_fixture_report
             projection_report["draft_changed"] = (
                 projected_draft != draft_before_projection
             )

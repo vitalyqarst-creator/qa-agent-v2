@@ -574,6 +574,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         first_state_change: PreparedStateChange | None = None,
         dictionary_values: tuple[str, ...] = (),
         prepared_dictionary_values: tuple[PreparedDictionaryValue, ...] = (),
+        reference_fixture_values: tuple[PreparedDictionaryValue, ...] = (),
         extra_prepared_obligations: tuple[PreparedObligation, ...] = (),
         structured_dictionary_evidence: bool = False,
         dictionary_coverage_mode: str = "reference-only",
@@ -585,9 +586,15 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             else ""
         )
         dictionary_evidence = ""
-        if dictionary_values or prepared_dictionary_values:
+        if dictionary_values or prepared_dictionary_values or reference_fixture_values:
             evidence_values = dictionary_values or tuple(
-                dict.fromkeys(value.value for value in prepared_dictionary_values)
+                dict.fromkeys(
+                    value.value
+                    for value in (
+                        *prepared_dictionary_values,
+                        *reference_fixture_values,
+                    )
+                )
             )
             rendered_values = "; ".join(f"`{value}`" for value in evidence_values)
             if structured_dictionary_evidence:
@@ -644,7 +651,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 gap_id="",
                 dictionary_refs=(
                     ("DICT-001",)
-                    if dictionary_values or prepared_dictionary_values
+                    if dictionary_values
+                    or prepared_dictionary_values
+                    or reference_fixture_values
                     else ()
                 ),
                 notes="",
@@ -657,9 +666,16 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                             dictionary_id="DICT-001",
                             coverage_mode=dictionary_coverage_mode,
                             required_values=compiled_dictionary_values,
+                            fixture_values=(
+                                reference_fixture_values
+                                if dictionary_coverage_mode == "reference-only"
+                                else ()
+                            ),
                         ),
                     )
-                    if dictionary_values or prepared_dictionary_values
+                    if dictionary_values
+                    or prepared_dictionary_values
+                    or reference_fixture_values
                     else ()
                 ),
                 calibration_status=calibration_status,
@@ -672,6 +688,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     if test_case_count > 1
                     or calibration_status != "none"
                     or dictionary_coverage_mode != "reference-only"
+                    or reference_fixture_values
                     else ""
                 ),
             )
@@ -1068,6 +1085,84 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         seed = runner._draft_seed_text()
 
         self.assertLess(seed.index("## TC-GROUP-001"), seed.index("## TC-GROUP-002"))
+
+    def test_prepared_seed_contains_exact_reference_fixture_projection(self) -> None:
+        fixtures = (
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-101"), "group", "Признаки алкоголика"
+            ),
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-101"), "leaf", "Первое точное значение"
+            ),
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-101"), "leaf", "Второе точное значение"
+            ),
+        )
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+            reference_fixture_values=fixtures,
+            structured_dictionary_evidence=True,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        runner.validate_configuration()
+        seed = runner._draft_seed_text()
+
+        self.assertIn("runner-reference-fixture:start ATOM-001", seed)
+        self.assertIn("Признаки алкоголика", seed)
+        self.assertIn("Первое точное значение", seed)
+        self.assertIn("Второе точное значение", seed)
+
+    def test_runner_materializes_reference_fixture_before_reviewer(self) -> None:
+        fixtures = (
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-101"), "group", "Признаки алкоголика"
+            ),
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-101"), "leaf", "Первое точное значение"
+            ),
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-101"), "leaf", "Второе точное значение"
+            ),
+        )
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+            reference_fixture_values=fixtures,
+            structured_dictionary_evidence=True,
+        )
+        generic_v4_style = self.complete_test_case_section(1).replace(
+            "ATOM-001; ATOM-001; SRC-1",
+            "ATOM-001; SRC-1; DICT-001",
+        ).replace(
+            "- Значение: `value-1`.",
+            "- Два обычных значения из DICT-101.",
+        ).replace(
+            "1. Ввести `value-1` в поле 1.",
+            "1. Последовательно выбрать два обычных значения.",
+        )
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text="# Тест-кейсы\n\n" + generic_v4_style),
+            self.reviewer_step(),
+        )
+
+        result = self.make_prepared_runner(executor, package_path).run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        materialized = self.draft_path.read_text(encoding="utf-8")
+        self.assertIn("runner-reference-fixture:start ATOM-001", materialized)
+        self.assertIn("Первое точное значение", materialized)
+        self.assertIn("Второе точное значение", materialized)
+        projection_report = json.loads(
+            (self.writer_attempt / "runner-output" / "dictionary-projection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            1,
+            projection_report["reference_fixtures"]["materialized_count"],
+        )
 
     def test_prepared_writer_creates_absent_stage_owned_output_from_template(self) -> None:
         package_path = self.build_prepared_package()

@@ -18,6 +18,8 @@ ATOM_REFERENCE = re.compile(r"\bATOM-[A-Za-z0-9._-]+\b")
 OBLIGATION_REFERENCE = re.compile(r"\bOBL-[A-Za-z0-9._-]+\b")
 DICTIONARY_PROJECTION_START = "runner-dictionary-projection:start"
 DICTIONARY_PROJECTION_END = "runner-dictionary-projection:end"
+REFERENCE_FIXTURE_START = "runner-reference-fixture:start"
+REFERENCE_FIXTURE_END = "runner-reference-fixture:end"
 
 
 def traceability_references(text: str) -> set[str]:
@@ -60,6 +62,188 @@ def exhaustive_dictionary_requirements(obligation: Any) -> tuple[Any, ...]:
         for requirement in obligation.dictionary_requirements
         if requirement.coverage_mode != "reference-only"
     )
+
+
+def reference_fixture_requirements(obligation: Any) -> tuple[Any, ...]:
+    return tuple(
+        requirement
+        for requirement in obligation.dictionary_requirements
+        if requirement.coverage_mode == "reference-only"
+        and requirement.fixture_values
+    )
+
+
+def reference_fixture_line(item: Any) -> str:
+    label = "Группа fixture" if item.value_kind == "group" else "Значение fixture"
+    path = " > ".join(item.hierarchy_path)
+    return f"- {label} `{path}`: `{item.value}`"
+
+
+def reference_fixture_block(obligation: Any) -> str:
+    requirements = reference_fixture_requirements(obligation)
+    if not requirements:
+        return ""
+    lines = [
+        f"<!-- {REFERENCE_FIXTURE_START} {obligation.obligation_id} -->",
+        "- Использовать точные reference-only fixture values в указанном порядке:",
+    ]
+    for requirement in requirements:
+        lines.extend(
+            reference_fixture_line(item) for item in requirement.fixture_values
+        )
+    lines.append(f"<!-- {REFERENCE_FIXTURE_END} {obligation.obligation_id} -->")
+    return "\n".join(lines)
+
+
+def reference_fixture_findings(
+    *, tc_id: str, block: str, obligation: Any
+) -> tuple[dict[str, Any], ...]:
+    findings: list[dict[str, Any]] = []
+    requirements = reference_fixture_requirements(obligation)
+    if not requirements:
+        return ()
+    marker = re.compile(
+        rf"(?ms)^<!--\s*{re.escape(REFERENCE_FIXTURE_START)}\s+"
+        rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
+        rf"(.*?)"
+        rf"^<!--\s*{re.escape(REFERENCE_FIXTURE_END)}\s+"
+        rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
+    )
+    match = marker.search(block)
+    expected_lines = {
+        reference_fixture_line(item): (requirement, item)
+        for requirement in requirements
+        for item in requirement.fixture_values
+    }
+    if match is None:
+        return (
+            {
+                "id": "reference-fixture-projection-missing",
+                "severity": "error",
+                "tc_id": tc_id,
+                "obligation_id": obligation.obligation_id,
+                "atom_id": obligation.traceability_atom_id,
+                "missing_values": [
+                    {
+                        "dictionary_id": requirement.dictionary_id,
+                        "hierarchy_path": list(item.hierarchy_path),
+                        "value_kind": item.value_kind,
+                        "value": item.value,
+                    }
+                    for requirement in requirements
+                    for item in requirement.fixture_values
+                ],
+                "message": (
+                    "A reference-only obligation with exact fixture values requires "
+                    "the runner-owned fixture projection inside its linked TC."
+                ),
+            },
+        )
+    actual_lines = {
+        line.strip()
+        for line in match.group(1).splitlines()
+        if line.strip().startswith(("- Группа fixture `", "- Значение fixture `"))
+    }
+    missing_lines = sorted(set(expected_lines) - actual_lines)
+    unexpected_lines = sorted(actual_lines - set(expected_lines))
+    if missing_lines or unexpected_lines:
+        findings.append(
+            {
+                "id": "reference-fixture-projection-incomplete",
+                "severity": "error",
+                "tc_id": tc_id,
+                "obligation_id": obligation.obligation_id,
+                "atom_id": obligation.traceability_atom_id,
+                "missing_values": [
+                    {
+                        "dictionary_id": expected_lines[line][0].dictionary_id,
+                        "hierarchy_path": list(expected_lines[line][1].hierarchy_path),
+                        "value_kind": expected_lines[line][1].value_kind,
+                        "value": expected_lines[line][1].value,
+                    }
+                    for line in missing_lines
+                ],
+                "unexpected_values": unexpected_lines,
+                "message": (
+                    "The reference-only fixture projection must preserve every exact "
+                    "group/value/path from the prepared obligation."
+                ),
+            }
+        )
+    return tuple(findings)
+
+
+def materialize_draft_reference_fixtures(
+    text: str, obligations: Any
+) -> tuple[str, dict[str, Any]]:
+    by_test_case: dict[str, list[Any]] = {}
+    for obligation in obligations.obligations:
+        if not reference_fixture_requirements(obligation):
+            continue
+        if not obligation.planned_test_case_id:
+            continue
+        by_test_case.setdefault(obligation.planned_test_case_id, []).append(obligation)
+
+    result = text
+    materialized: list[dict[str, Any]] = []
+    for tc_id, original_block in test_case_sections(text):
+        linked = by_test_case.get(tc_id, [])
+        if not linked:
+            continue
+        block = original_block
+        for obligation in linked:
+            existing = re.compile(
+                rf"(?ms)^<!--\s*{re.escape(REFERENCE_FIXTURE_START)}\s+"
+                rf"{re.escape(obligation.obligation_id)}\s*-->.*?"
+                rf"^<!--\s*{re.escape(REFERENCE_FIXTURE_END)}\s+"
+                rf"{re.escape(obligation.obligation_id)}\s*-->\s*\n?"
+            )
+            block = existing.sub("", block)
+        projection = "\n\n".join(reference_fixture_block(item) for item in linked)
+        test_data = re.search(r"(?m)^###\s+Тестовые данные\s*$", block)
+        if test_data is None:
+            steps = re.search(r"(?m)^###\s+Шаги\s*$", block)
+            insertion = steps.start() if steps else len(block)
+            prefix = "### Тестовые данные\n\n"
+        else:
+            following = re.search(r"(?m)^###\s+", block[test_data.end() :])
+            insertion = (
+                test_data.end() + following.start()
+                if following is not None
+                else len(block)
+            )
+            prefix = "\n\n"
+        block = (
+            block[:insertion].rstrip()
+            + "\n\n"
+            + prefix
+            + projection
+            + "\n\n"
+            + block[insertion:].lstrip()
+        )
+        result = result.replace(original_block, block, 1)
+        for obligation in linked:
+            materialized.append(
+                {
+                    "obligation_id": obligation.obligation_id,
+                    "atom_id": obligation.traceability_atom_id,
+                    "test_case_id": tc_id,
+                    "requirements": [
+                        {
+                            "dictionary_id": requirement.dictionary_id,
+                            "coverage_mode": requirement.coverage_mode,
+                            "fixture_value_count": len(requirement.fixture_values),
+                        }
+                        for requirement in reference_fixture_requirements(obligation)
+                    ],
+                }
+            )
+    return result, {
+        "version": 1,
+        "validator": "runner-owned-reference-fixture-projection-v1",
+        "materialized_count": len(materialized),
+        "items": materialized,
+    }
 
 
 def validate_writer_dictionary_ownership(
@@ -503,6 +687,13 @@ def validate_draft_obligation_coverage(
                         obligation=obligation,
                     )
                 )
+                findings.extend(
+                    reference_fixture_findings(
+                        tc_id=tc_id,
+                        block=block,
+                        obligation=obligation,
+                    )
+                )
                 covered.add(obligation_id)
 
         for atom_id in sorted(traced_atoms):
@@ -536,6 +727,13 @@ def validate_draft_obligation_coverage(
                             )
                         findings.extend(
                             dictionary_projection_findings(
+                                tc_id=tc_id,
+                                block=block,
+                                obligation=obligation,
+                            )
+                        )
+                        findings.extend(
+                            reference_fixture_findings(
                                 tc_id=tc_id,
                                 block=block,
                                 obligation=obligation,

@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "source_run": "v4-r1",
+  "source_draft_status": "rejected-immutable-evidence",
+  "v5_gate_result": "blocked-before-reviewer",
+  "finding_ids": ["reference-fixture-projection-missing"],
+  "positive_materialization_test": "pass",
+  "exact_value_mutation_test": "reference-fixture-projection-incomplete",
+  "production_baseline_modified": false
+}

@@ -20,8 +20,8 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 7
-SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, 6, PACKAGE_VERSION}
+PACKAGE_VERSION = 8
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, 6, 7, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 STANDARD_EXECUTION_PROFILE = "standard-required"
 FAST_EVIDENCE_MAX_BYTES = 32768
@@ -310,8 +310,9 @@ class PreparedDictionaryRequirement:
     dictionary_id: str
     coverage_mode: str
     required_values: tuple[PreparedDictionaryValue, ...] = ()
+    fixture_values: tuple[PreparedDictionaryValue, ...] = ()
 
-    def validate(self) -> None:
+    def validate(self, *, package_version: int = PACKAGE_VERSION) -> None:
         _identifier(self.dictionary_id, "dictionary requirement dictionary_id", DICT_ID)
         if self.coverage_mode not in DICTIONARY_COVERAGE_MODES:
             raise StageRuntimeError(
@@ -330,6 +331,20 @@ class PreparedDictionaryRequirement:
         ]
         if len(identities) != len(set(identities)):
             raise StageRuntimeError("dictionary requirement values must not contain duplicates")
+        for item in self.fixture_values:
+            item.validate()
+            if item.hierarchy_path[0] != self.dictionary_id:
+                raise StageRuntimeError(
+                    "dictionary fixture hierarchy_path must start with its requirement dictionary_id"
+                )
+        fixture_identities = [
+            (item.hierarchy_path, item.value_kind, item.value)
+            for item in self.fixture_values
+        ]
+        if len(fixture_identities) != len(set(fixture_identities)):
+            raise StageRuntimeError(
+                "dictionary fixture values must not contain duplicates"
+            )
         if self.coverage_mode == "reference-only" and self.required_values:
             raise StageRuntimeError(
                 "reference-only dictionary requirement cannot declare required_values"
@@ -338,23 +353,46 @@ class PreparedDictionaryRequirement:
             raise StageRuntimeError(
                 "exhaustive dictionary requirement must declare required_values"
             )
+        if package_version < 8 and self.fixture_values:
+            raise StageRuntimeError(
+                "dictionary fixture values require package version 8"
+            )
+        if self.coverage_mode != "reference-only" and self.fixture_values:
+            raise StageRuntimeError(
+                "exhaustive dictionary requirement cannot declare fixture_values"
+            )
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
+    def to_dict(self, *, include_fixture_contract: bool = True) -> dict[str, Any]:
+        payload = {
             "dictionary_id": self.dictionary_id,
             "coverage_mode": self.coverage_mode,
             "required_values": [item.to_dict() for item in self.required_values],
         }
+        if include_fixture_contract:
+            payload["fixture_values"] = [
+                item.to_dict() for item in self.fixture_values
+            ]
+        return payload
 
     @classmethod
-    def from_dict(cls, payload: Mapping[str, Any]) -> PreparedDictionaryRequirement:
+    def from_dict(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        package_version: int = PACKAGE_VERSION,
+    ) -> PreparedDictionaryRequirement:
+        expected = {"dictionary_id", "coverage_mode", "required_values"}
+        if package_version >= 8:
+            expected.add("fixture_values")
         _exact_fields(
             payload,
-            {"dictionary_id", "coverage_mode", "required_values"},
+            expected,
             "dictionary requirement",
         )
         if not isinstance(payload["required_values"], list):
             raise StageRuntimeError("dictionary requirement required_values must be a JSON array")
+        if package_version >= 8 and not isinstance(payload["fixture_values"], list):
+            raise StageRuntimeError("dictionary requirement fixture_values must be a JSON array")
         item = cls(
             dictionary_id=payload["dictionary_id"],
             coverage_mode=payload["coverage_mode"],
@@ -362,8 +400,16 @@ class PreparedDictionaryRequirement:
                 PreparedDictionaryValue.from_dict(value)
                 for value in payload["required_values"]
             ),
+            fixture_values=(
+                tuple(
+                    PreparedDictionaryValue.from_dict(value)
+                    for value in payload["fixture_values"]
+                )
+                if package_version >= 8
+                else ()
+            ),
         )
-        item.validate()
+        item.validate(package_version=package_version)
         return item
 
 
@@ -458,7 +504,7 @@ class PreparedObligation:
                 )
         if package_version >= 7:
             for requirement in self.dictionary_requirements:
-                requirement.validate()
+                requirement.validate(package_version=package_version)
             requirement_ids = [
                 requirement.dictionary_id for requirement in self.dictionary_requirements
             ]
@@ -487,6 +533,7 @@ class PreparedObligation:
         include_atom_id: bool = False,
         include_execution_semantics: bool = False,
         include_dictionary_contract: bool = False,
+        include_dictionary_fixture_contract: bool = False,
     ) -> dict[str, Any]:
         payload = {
             "obligation_id": self.obligation_id,
@@ -512,7 +559,10 @@ class PreparedObligation:
             )
         if include_dictionary_contract:
             payload["dictionary_requirements"] = [
-                item.to_dict() for item in self.dictionary_requirements
+                item.to_dict(
+                    include_fixture_contract=include_dictionary_fixture_contract
+                )
+                for item in self.dictionary_requirements
             ]
             payload["calibration_status"] = self.calibration_status
         return payload
@@ -576,7 +626,10 @@ class PreparedObligation:
             ),
             dictionary_requirements=(
                 tuple(
-                    PreparedDictionaryRequirement.from_dict(value)
+                    PreparedDictionaryRequirement.from_dict(
+                        value,
+                        package_version=package_version,
+                    )
                     for value in payload["dictionary_requirements"]
                 )
                 if package_version >= 7
@@ -608,6 +661,7 @@ class PreparedObligationSet:
                     include_atom_id=self.package_version >= 5,
                     include_execution_semantics=self.package_version >= 6,
                     include_dictionary_contract=self.package_version >= 7,
+                    include_dictionary_fixture_contract=self.package_version >= 8,
                 )
                 for item in self.obligations
             ],

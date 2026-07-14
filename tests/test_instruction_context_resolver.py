@@ -227,6 +227,7 @@ class InstructionContextResolverTests(unittest.TestCase):
         profile_text = profile.read_text(encoding="utf-8")
         self.assertIn("input_fingerprint", profile_text)
         self.assertIn("runner_owned_dictionary_materializations", profile_text)
+        self.assertIn("runner_owned_reference_fixtures", profile_text)
         self.assertNotIn("package version `", profile_text)
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 

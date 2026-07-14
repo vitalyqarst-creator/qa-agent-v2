@@ -1143,6 +1143,63 @@ coverage_gaps:
             ],
         )
 
+    def test_compiles_exact_reference_only_fixture_values_with_hierarchy(self) -> None:
+        (self.design / "dictionary-inventory.md").write_text(
+            """| dictionary_id | dictionary_name | active_values |
+| --- | --- | --- |
+| `DICT-001` | `Параметры визуальной оценки` | `DICT-101`; `DICT-102` |
+| `DICT-101` | `Признаки алкоголика` | `Запах алкоголя`; `Отечность лица` |
+| `DICT-102` | `Признаки другого состояния` | `Отечность лица`; `Иное значение` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "package-test-design-plan.md").write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | input_class | test_data | single_expected_behavior | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | В группе `Признаки алкоголика` (`DICT-101`) последовательно выбрать `Запах алкоголя` и `Отечность лица`. | `two-values` | два явно названных значения `DICT-101` | Оба значения остаются выбранными. | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | `none_required` | `none_required` | none_required:blocked | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+        obligation_table = self.design / "coverage-obligation-table.md"
+        obligation_table.write_text(
+            obligation_table.read_text(encoding="utf-8").replace(
+                "`dictionary-values-shown`",
+                "`selection-cardinality`",
+                1,
+            ),
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+        package = load_prepared_package(result.stage_package, self.root)
+        obligation_path = self.root / next(
+            item.path
+            for item in package.package_artifacts
+            if item.kind == "atomic-obligations"
+        )
+        requirement = (
+            load_obligations(obligation_path)
+            .obligations[0]
+            .dictionary_requirements[0]
+        )
+
+        self.assertEqual("reference-only", requirement.coverage_mode)
+        self.assertEqual((), requirement.required_values)
+        self.assertEqual(
+            [
+                ("group", ("DICT-001", "DICT-101"), "Признаки алкоголика"),
+                ("leaf", ("DICT-001", "DICT-101"), "Запах алкоголя"),
+                ("leaf", ("DICT-001", "DICT-101"), "Отечность лица"),
+            ],
+            [
+                (item.value_kind, item.hierarchy_path, item.value)
+                for item in requirement.fixture_values
+            ],
+        )
+
     def test_rejects_dictionary_group_locator_lost_between_data_and_action(self) -> None:
         (self.design / "dictionary-inventory.md").write_text(
             """| dictionary_id | dictionary_name | active_values |

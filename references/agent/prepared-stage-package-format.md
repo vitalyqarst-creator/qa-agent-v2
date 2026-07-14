@@ -13,7 +13,7 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Workflow compilation requires an expected FT slug; state, sources, output and attempt root stay inside that package. Neighboring `fts/*` packages are never substitutes.
 - Registry entries come only from the linked `source-selection.md`. DOCX and XHTML/HTML use the same base name; selected PDF is structural cross-check evidence.
 - The canonical applicability matrix decides routing. Numeric/boundary, dependency/state, integration/persistence, table-parity and unclassified applicable dimensions produce `standard-required` plus explicit `unsupported_dimensions`; flags and prompts cannot force the fast path.
-- Compiler contract v2 preserves explicit `OBL-* -> ATOM-* -> TC/GAP`. Package v7 adds exact dictionary requirements, source-backed calibration status and an input fingerprint; evidence prose cannot replace these fields.
+- Compiler contract v2 preserves explicit `OBL-* -> ATOM-* -> TC/GAP`. Package v8 retains the v7 exhaustive dictionary, calibration and input-fingerprint contracts and adds exact bounded `reference-only` fixture values with hierarchy paths; evidence prose cannot replace these fields.
 - When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
 - Every input-based design-plan row binds a concrete synthetic/source-backed value or stable fixture. Abstract classes such as `valid-text` fail with `input-fixture-required`.
 - Before live, empty or known non-observable prepared oracles block as `blocked-prepared-oracle-quality`.
@@ -37,7 +37,7 @@ The four files are the default writer/reviewer input capsule. Package-local path
 
 Required fields:
 
-- `package_version`: currently `7`; versions `1` through `6` remain readable as legacy evidence but are not eligible for a new prepared writer run;
+- `package_version`: currently `8`; versions `1` through `7` remain readable as legacy evidence but are not eligible for a new prepared writer run;
 - stable `package_id`, `ft_slug`, `scope_slug` and `section_id`;
 - `created_at` with timezone;
 - `input_fingerprint`: SHA-256 over source registry hashes, compiler evidence, obligations, attempt-bound instructions and routing inputs; it intentionally excludes `created_at`;
@@ -51,7 +51,7 @@ Required fields:
 
 The package is rejected when registered full sources changed after preparation. Full source files are not copied into `prepared-input/`.
 
-Version `7` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
+Version `8` fast-path packages must register both the authoritative `.docx` as `source-of-truth` and the mandatory `.xhtml`/`.html` extraction source as `machine-readable`. A package with only one representation is ineligible even when its selected evidence is otherwise well formed.
 
 The runner must route `standard-required` packages with explicit `unsupported_dimensions` through the prepared-standard writer/reviewer path. Legacy/unclassified profiles remain blocked. Fast-path rejection is a quality guard, not a reason to weaken the source package.
 
@@ -62,7 +62,7 @@ Required top-level fields are `package_version`, `package_id`, `obligations`, `c
 Each obligation contains:
 
 - unique `obligation_id` using `OBL-*`; legacy packages may still contain atom ids in this field;
-- unique `atom_id` using `ATOM-*` in package version 7, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
+- unique `atom_id` using `ATOM-*` in current package version 8, preserving the machine-readable obligation-to-atom relation used by writer, gate and reviewer;
 - non-empty `source_refs` using exact requirement codes and/or `SRC-*` anchors;
 - one independently checkable `atomic_statement`;
 - `observable_oracle` or an explicit linked gap;
@@ -70,11 +70,11 @@ Each obligation contains:
 - `coverage_status`: `testable | gap | unclear | not-applicable`;
 - optional `dictionary_refs`, `constraint_gap_ids`, `notes` and `planned_test_case_id`;
 - v7 `execution_semantics` and nullable `state_change`: `direct` requires null; `reset-to-captured-initial` requires captured/changed setup, a pre-action oracle and `different-from-captured-initial`;
-- v7 `dictionary_requirements`: exactly one per `dictionary_ref`, with `coverage_mode = reference-only | all-leaf-values | full-hierarchy`. Exhaustive modes carry exact group/leaf values and hierarchy paths; the runner materializes and obligation gate v4 compares them, so symbolic “all values” text cannot pass;
-- v7 `calibration_status`; `ui-calibration-required` remains active without a `constraint_gap_id`;
+- v8 `dictionary_requirements`: exactly one per `dictionary_ref`, with `coverage_mode = reference-only | all-leaf-values | full-hierarchy`. Exhaustive modes carry `required_values`; bounded reference-only scenarios carry only exact plan-named `fixture_values`. Both preserve group/leaf hierarchy paths and are runner-materialized before obligation gate v4;
+- v8 `calibration_status`; `ui-calibration-required` remains active without a `constraint_gap_id`;
 - `planned_test_case_id` from the Coverage Obligation Table. A shared TC requires one design-plan row that links all grouped atoms to one action, fixture and oracle. Conflicts or unjustified cross-field/package groups fail as `invalid-planned-test-case-group`.
 
-Versions 1–6 remain readable with their original digests. Every gap must be token-exact and linked as executable or non-blocking; fast packages cannot contain blocking gaps.
+Versions 1–7 remain readable with their original digests. Every gap must be token-exact and linked as executable or non-blocking; fast packages cannot contain blocking gaps.
 
 Each gap contains a stable `GAP-*` id, source refs, problem, handling and blocking flag. One source row may map to multiple obligations; the builder must not assume that one row equals one atom.
 
@@ -127,7 +127,7 @@ Targeted repair uses a new cycle and hash-bound inputs. Only per-TC `package_id`
 
 ## Recovery And Replay
 
-- A package is bound to one exact cycle, writer attempt root and output path. It is never replayed against another attempt. `compile_prepared_stage_package.py --reuse-if-current` may return the same immutable package only when its v7 `input_fingerprint` and registered source hashes still match; any input or attempt-binding change requires a new package id/output root.
+- A package is bound to one exact cycle, writer attempt root and output path. It is never replayed against another attempt. `compile_prepared_stage_package.py --reuse-if-current` may return the same immutable package only when its v8 `input_fingerprint` and registered source hashes still match; any input or attempt-binding change requires a new package id/output root.
 - Structured interruption yields no progress because only a complete contract is materialized. Legacy workspace interruption is `completed-with-progress` only after all deterministic gates pass.
 - Invalid/missing draft, drift or gate failure stops the cycle; recovery uses a fresh cycle and target-bound package.
 - Interrupted reviewer output is discarded; recovery uses fresh writer/reviewer sessions.
@@ -155,6 +155,7 @@ Before writer output can reach reviewer:
 - `gap` and `unclear` obligations are not represented as executable coverage;
 - source/package/input hashes remain unchanged;
 - every exhaustive `dictionary_requirement` is materialized by the runner in its linked TC and passes exact group/leaf/path comparison;
+- every non-empty `reference-only.fixture_values` contract is materialized by the runner in its linked TC and passes exact group/value/path comparison;
 - no forbidden evidence root was used;
 - structured fast writer is read-only and performs no workspace reads; explicit legacy workspace mode may read only its exact runner-declared current `stage-output` root for local self-checks;
 - JSONL command evidence contains no broad repository scan or registered full-source access without a prior exact `targeted_source_fallback` authorization;

@@ -6,6 +6,7 @@ from pathlib import Path
 
 from test_case_agent.review_cycle.obligation_gate import (
     materialize_draft_dictionary_projections,
+    materialize_draft_reference_fixtures,
     validate_draft_obligation_coverage,
     validate_writer_dictionary_ownership,
 )
@@ -428,6 +429,87 @@ class PreparedObligationGateTests(unittest.TestCase):
         )
 
         self.assertTrue(result.passed)
+
+    def test_reference_only_exact_fixture_blocks_generic_v4_replay(self) -> None:
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-001",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(
+                    ("DICT-001", "DICT-101"),
+                    "group",
+                    "Признаки алкоголика",
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-001", "DICT-101"),
+                    "leaf",
+                    "Запах алкоголя / перегара / сильный запах духов, перебивающий перегар",
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-001", "DICT-101"),
+                    "leaf",
+                    "Отечность, нездоровый цвет лица, синяки под глазами",
+                ),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-reference-fixture",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-013",
+                    atom_id="ATOM-013",
+                    source_refs=("SRC-003.P08", "DICT-001"),
+                    atomic_statement="Можно одновременно выбрать несколько значений.",
+                    observable_oracle="Оба checkbox остаются выбранными.",
+                    test_intent="Последовательно выбрать два точных значения.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-001",),
+                    notes="",
+                    planned_test_case_id="TC-VAMB-012",
+                    dictionary_requirements=(requirement,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+        generic_v4_replay = (
+            "## TC-VAMB-012\n"
+            "**Трассировка:** OBL-013; ATOM-013; SRC-003.P08; DICT-001\n\n"
+            "### Тестовые данные\n\n- Два обычных значения из DICT-101.\n\n"
+            "### Шаги\n\n1. Последовательно выбрать два обычных значения.\n\n"
+            "### Итоговый ожидаемый результат\n\nОба checkbox остаются выбранными.\n"
+        )
+
+        rejected = self._validate(generic_v4_replay)
+
+        self.assertFalse(rejected.passed)
+        self.assertIn(
+            "reference-fixture-projection-missing",
+            {item["id"] for item in rejected.findings},
+        )
+
+        projected, report = materialize_draft_reference_fixtures(
+            generic_v4_replay,
+            obligations,
+        )
+        accepted = self._validate(projected)
+
+        self.assertTrue(accepted.passed)
+        self.assertEqual(1, report["materialized_count"])
+        self.assertIn("Признаки алкоголика", projected)
+        self.assertIn("Запах алкоголя / перегара", projected)
+
+        incomplete_text = projected.replace(
+            "- Значение fixture `DICT-001 > DICT-101`: "
+            "`Отечность, нездоровый цвет лица, синяки под глазами`\n",
+            "",
+        )
+        incomplete = self._validate(incomplete_text)
+        self.assertIn(
+            "reference-fixture-projection-incomplete",
+            {item["id"] for item in incomplete.findings},
+        )
 
     def test_writer_dictionary_ownership_rejects_exhaustive_value_enumeration(self) -> None:
         requirement = PreparedDictionaryRequirement(

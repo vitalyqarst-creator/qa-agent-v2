@@ -176,10 +176,8 @@ def _compile_dictionary_requirement(
     coverage_mode: str,
     dictionary_rows: Mapping[str, Mapping[str, str]],
     dictionary_active_values: Mapping[str, tuple[str, ...]],
+    reference_fixture_text: str = "",
 ) -> PreparedDictionaryRequirement:
-    if coverage_mode == "reference-only":
-        return PreparedDictionaryRequirement(dictionary_id, coverage_mode)
-
     values: list[PreparedDictionaryValue] = []
 
     def visit(current_id: str, path: tuple[str, ...], visiting: frozenset[str]) -> None:
@@ -197,7 +195,7 @@ def _compile_dictionary_requirement(
                         f"semantic degradation: {current_id} references missing child {raw_value}"
                     )
                 child_path = (*path, raw_value)
-                if coverage_mode == "full-hierarchy":
+                if coverage_mode in {"full-hierarchy", "reference-only"}:
                     child_name = dictionary_rows[raw_value].get(
                         "dictionary_name", ""
                     ).strip()
@@ -213,6 +211,38 @@ def _compile_dictionary_requirement(
             values.append(PreparedDictionaryValue(path, "leaf", raw_value))
 
     visit(dictionary_id, (dictionary_id,), frozenset())
+    if coverage_mode == "reference-only":
+        normalized_fixture = reference_fixture_text.casefold()
+        matched_group_paths = {
+            item.hierarchy_path
+            for item in values
+            if item.value_kind == "group"
+            and (
+                item.hierarchy_path[-1].casefold() in normalized_fixture
+                or item.value.casefold() in normalized_fixture
+            )
+        }
+        fixture_values = tuple(
+            item
+            for item in values
+            if (
+                item.value_kind == "group"
+                and item.hierarchy_path in matched_group_paths
+            )
+            or (
+                item.value_kind == "leaf"
+                and item.value.casefold() in normalized_fixture
+                and (
+                    not matched_group_paths
+                    or item.hierarchy_path in matched_group_paths
+                )
+            )
+        )
+        return PreparedDictionaryRequirement(
+            dictionary_id=dictionary_id,
+            coverage_mode=coverage_mode,
+            fixture_values=fixture_values,
+        )
     if not values:
         raise StageRuntimeError(
             f"semantic degradation: exhaustive {dictionary_id} projection has no values"
@@ -1525,12 +1555,20 @@ def compile_workflow_package(
                 raise StageRuntimeError(f"semantic degradation: {atom_id} references missing {dictionary_id}")
             used_dicts.add(dictionary_id)
         dictionary_coverage = _dictionary_coverage_mode(obligation_row)
+        reference_fixture_text = " ".join(
+            (
+                intent,
+                *(item.get("test_data", "") for item in mapped_viable),
+                *(item.get("input_class", "") for item in mapped_viable),
+            )
+        )
         dictionary_requirements = tuple(
             _compile_dictionary_requirement(
                 dictionary_id=dictionary_id,
                 coverage_mode=dictionary_coverage,
                 dictionary_rows=dictionary_rows,
                 dictionary_active_values=dictionary_active_values,
+                reference_fixture_text=reference_fixture_text,
             )
             for dictionary_id in dict_tokens
         )

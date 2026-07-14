@@ -1,0 +1,39 @@
+ft_slug: AutoFin
+prepared_compiler_contract_version: 2
+scope_slug: visual-assessment-medium-scope-benchmark-v5
+current_stage: agent-architecture-auditor
+stage_status: ready-for-next-stage
+current_round: 1
+next_skill: agent-architecture-auditor
+required_inputs:
+  - AGENT-NOTES.md
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/workflow-state.yaml
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/live-result.v4-r1.json
+  - work/stage-handoffs/53-prepared-writer-dictionary-performance-stabilization/prompt.v4-canary-to-reference-fixture-contract-v5.md
+  - work/stage-handoffs/54-reference-fixture-contract-v5/architecture-decision.md
+  - work/stage-handoffs/54-reference-fixture-contract-v5/benchmark-protocol.v5.md
+  - work/stage-handoffs/54-reference-fixture-contract-v5/offline-replay.v5.json
+  - work/stage-handoffs/54-reference-fixture-contract-v5/pre-live-stop-gate.md
+  - work/stage-handoffs/54-reference-fixture-contract-v5/pre-live-test-report.v5.md
+  - work/stage-handoffs/54-reference-fixture-contract-v5/dispatcher-config.v5.json
+  - work/review-cycles/visual-assessment-medium-scope-benchmark-v5-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v5/stage-package.json
+latest_artifacts:
+  architecture_decision: work/stage-handoffs/54-reference-fixture-contract-v5/architecture-decision.md
+  benchmark_protocol: work/stage-handoffs/54-reference-fixture-contract-v5/benchmark-protocol.v5.md
+  offline_replay: work/stage-handoffs/54-reference-fixture-contract-v5/offline-replay.v5.json
+  pre_live_stop_gate: work/stage-handoffs/54-reference-fixture-contract-v5/pre-live-stop-gate.md
+  pre_live_test_report: work/stage-handoffs/54-reference-fixture-contract-v5/pre-live-test-report.v5.md
+  dispatcher_config: work/stage-handoffs/54-reference-fixture-contract-v5/dispatcher-config.v5.json
+  prepared_package: work/review-cycles/visual-assessment-medium-scope-benchmark-v5-20260714/prepared-input/visual-assessment-medium-scope-benchmark-v5/stage-package.json
+  decision_log: work/stage-handoffs/54-reference-fixture-contract-v5/agent-decision-log.md
+  session_log: work/stage-handoffs/54-reference-fixture-contract-v5/architecture-session-log.md
+  active_transition_prompt: work/stage-handoffs/54-reference-fixture-contract-v5/prompt.reference-fixture-v5-to-next.md
+coverage_gaps:
+  blocking: 0
+  non_blocking: 0
+open_questions: []
+blocking_reasons:
+  - Live remains blocked until offline checkpoint is pushed and separately authorized.
+accepted_risks:
+  - One V5 canary is sufficient for semantic blocker verification but not for a stable performance median.
+  - The rejected V4 draft remains immutable negative evidence and is not promoted.
