@@ -25,6 +25,12 @@ required_inputs:
   - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-stop-gate.md
   - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-test-report.v6.md
   - work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-authorization.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/live-result.v6.json
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/post-canary-source-package-audit.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/performance-analysis.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/terminal-stop-gate.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/iteration-summary.v6.md
+  - work/stage-handoffs/55-questionnaire-upload-transfer-v6/prompt.v6-to-next.md
   - work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json
   - work/review-cycles/questionnaire-upload-transfer-v6-20260714/backend-selection.v6-r1.dry-run.json
 latest_artifacts:
@@ -45,6 +51,12 @@ latest_artifacts:
   pre_live_stop_gate: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-stop-gate.md
   pre_live_test_report: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-test-report.v6.md
   pre_live_authorization: work/stage-handoffs/55-questionnaire-upload-transfer-v6/pre-live-authorization.v6.md
+  live_result_v6: work/stage-handoffs/55-questionnaire-upload-transfer-v6/live-result.v6.json
+  post_canary_source_package_audit_v6: work/stage-handoffs/55-questionnaire-upload-transfer-v6/post-canary-source-package-audit.v6.md
+  performance_analysis_v6: work/stage-handoffs/55-questionnaire-upload-transfer-v6/performance-analysis.v6.md
+  terminal_stop_gate_v6: work/stage-handoffs/55-questionnaire-upload-transfer-v6/terminal-stop-gate.v6.md
+  iteration_summary_v6: work/stage-handoffs/55-questionnaire-upload-transfer-v6/iteration-summary.v6.md
+  active_transition_prompt: work/stage-handoffs/55-questionnaire-upload-transfer-v6/prompt.v6-to-next.md
   prepared_package: work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json
   backend_selection_dry_run: work/review-cycles/questionnaire-upload-transfer-v6-20260714/backend-selection.v6-r1.dry-run.json
   decision_log: work/stage-handoffs/55-questionnaire-upload-transfer-v6/agent-decision-log.md
@@ -52,9 +64,11 @@ latest_artifacts:
 coverage_gaps:
   blocking: 0
   non_blocking: 0
-open_questions: []
+open_questions:
+  - BSR 210 не определяет, считать ли 40 МБ как 40 000 000 или 41 943 040 байт.
 blocking_reasons: []
 accepted_risks:
   - V6 is an internal transfer package, not full coverage of the document-upload row.
   - One live canary can verify transfer correctness but not stable latency median.
   - Generated draft is benchmark evidence and must not be promoted.
+  - V6 downstream acceptance does not resolve the two post-canary source-to-package fidelity observations.

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "validator": "prepared-state-change-preflight-v1",
+  "error_code": "",
+  "package_id": "questionnaire-upload-transfer-v6-r1",
+  "atomic_obligations_sha256": "b2e92672e1a528e2bb7597375390dbdf228746540af6dde48b219afd35d4639d",
+  "reset_obligations_checked": 0,
+  "finding_count": 0,
+  "affected_test_case_ids": [],
+  "findings": [],
+  "preflight_digest": "78c0be0ed5a688bfb0c673207abca81517fe7ef7c3a51b6c758a83295dd54713"
+}

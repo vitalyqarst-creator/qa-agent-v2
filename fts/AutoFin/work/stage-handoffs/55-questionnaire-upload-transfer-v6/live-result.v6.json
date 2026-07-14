@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "iteration": "v6",
+  "terminal_status": "accepted-not-promoted",
+  "dispatcher_exit_code": 1,
+  "exit_code_class": "expected-policy-stop-promotion-disabled",
+  "canary_contract_passed": true,
+  "production_ready": false,
+  "invocation_budget": {
+    "before": 1,
+    "consumed": 1,
+    "remaining": 0,
+    "retry_authorized": false
+  },
+  "binding": {
+    "offline_checkpoint": "5135c023f51253fb8dce992b0396942e3e7a37d2",
+    "authorization_commit": "17e7a1a41b67b6d671fe0e07b5e099085460341d",
+    "package_id": "questionnaire-upload-transfer-v6-r1",
+    "stage_package_sha256": "8d30cc27da9a16d3c162c76d847b4e4c582d54720273bdcdc502f0f3458ff106",
+    "package_digest": "c0a6cb07676ca3d7ae3617289dcf4712f100c3ca510a0b4732e58a9b961cb32d",
+    "input_fingerprint": "f60a5bdf97689cfdcd87860c0c7b55f9199663886cf83ee201c5f3f6b2a13b2c",
+    "dispatcher_config_sha256": "14522560aeead43741aae243870bfbe719c5731903ca7d295e5cf5c8430f09a5"
+  },
+  "backend": {
+    "requested": "exec",
+    "selected": "exec",
+    "verified": true,
+    "fallback_used": false,
+    "sessions": [
+      "019f5ed3-867b-7581-bfd9-12145d283980",
+      "019f5ed4-5d12-70a0-aacb-cb9b6f909f29"
+    ]
+  },
+  "writer": {
+    "status": "completed",
+    "outcome": "draft-ready",
+    "duration_ms": 54469,
+    "input_tokens": 21582,
+    "output_tokens": 2620,
+    "draft_sha256": "ecb656d276b4bc76981990aa1ab9e4b8d45f094977e8d313587666488283a31e",
+    "test_cases": 10,
+    "commands": 0,
+    "file_changes": 0
+  },
+  "reviewer": {
+    "status": "completed",
+    "outcome": "accepted",
+    "duration_ms": 22797,
+    "input_tokens": 22628,
+    "output_tokens": 910,
+    "findings_sha256": "493b32bea32b3cf4e3d5a88fc6f620eebcbab3ec8908bbc94d8aaf17e8c61f67",
+    "covered_obligations": 11,
+    "incorrect_obligations": 0,
+    "blocking_findings": 0,
+    "commands": 0,
+    "file_changes": 0
+  },
+  "quality_gates": {
+    "markdown_structure": "pass",
+    "obligation_coverage": "11/11",
+    "unique_titles": "pass",
+    "exact_negative_message": "pass",
+    "evidence_access": "pass",
+    "context_projection": "pass",
+    "promotion": "disabled"
+  },
+  "performance": {
+    "stage_duration_ms_total": 77266,
+    "dispatcher_wall_ms": 83297,
+    "total_tokens": 47740,
+    "uncached_input_tokens_total": 44210,
+    "uncached_tokens_per_obligation": 4019.09,
+    "prompt_bytes_total": 55077,
+    "primary_context_bytes_total": 63994
+  },
+  "post_canary_source_package_observations": [
+    "BSR 210 says 40 MB but does not define decimal versus binary byte semantics; the prepared package selected 41943040 bytes without a source-backed convention.",
+    "The literal informational text from source row 81 was reduced to generic field visibility, so exact text fidelity is not asserted by the prepared obligation."
+  ],
+  "production_boundary": {
+    "final_promoted": false,
+    "target_exists": false,
+    "protected_baselines_unchanged": true
+  },
+  "recommendation": "retain V6 as transfer evidence; remediate source-to-package fidelity gates before any promotion or further live canary"
+}

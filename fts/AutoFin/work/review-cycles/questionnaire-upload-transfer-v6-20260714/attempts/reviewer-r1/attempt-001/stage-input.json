@@ -1,0 +1,150 @@
+{
+  "allowed_write_roots": [],
+  "attempt_id": "attempt-001",
+  "attempt_root": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001",
+  "canonical_test_cases": "fts/AutoFin/test-cases/16-questionnaire-upload-transfer-v6.md",
+  "contract_version": 2,
+  "cycle_id": "questionnaire-upload-transfer-v6-20260714",
+  "expected_outputs": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/stdout.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/stderr.txt",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/events.ndjson",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/stage-status.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/artifact-graph.json",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "review-findings",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/findings.md",
+      "producer": "runner",
+      "required": true
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "producer": "runner",
+      "required": false
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/runner-output/context-budget.json",
+      "producer": "runner",
+      "required": true
+    }
+  ],
+  "forbidden_write_roots": [
+    "fts/AutoFin/test-cases"
+  ],
+  "handoff_artifacts": [
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/stage-package.json",
+      "sha256": "8d30cc27da9a16d3c162c76d847b4e4c582d54720273bdcdc502f0f3458ff106"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/atomic-obligations.json",
+      "sha256": "b2e92672e1a528e2bb7597375390dbdf228746540af6dde48b219afd35d4639d"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "ecb656d276b4bc76981990aa1ab9e4b8d45f094977e8d313587666488283a31e"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "9f1a2fd87e9984a6da78da1ba4f34c45ab1ef9b553123430fd2f4aacd96f7c32"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "f9ba8bb3a93d3e129186c8276a4b4339fe1d5fcb83fe3bda35152d760fa1ddb8"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "4a7ba9becd7e4b39789cc358fc02744cc0dfbad010a41ceb03cc00d25a5f3ab8"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "24d5b368aa0bfbc8f3f074d2a62521d1bad54f6ae87660e9815d882314f0d372"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "29bb0927b8f662349b07b14496c2f973be30aa88a4b5948a075f039a76b5126a"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/dictionary-projection.json",
+      "sha256": "8a5081ab9e03bbf47c34a406f0dc4bf6e1cb9cfa1e15b38851022a04a4e50498"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "8425ed1e732eaa9eec307cc9312d3f1bfca76f25e36acf1f15320b0dad2f9fd1"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "handoff",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/review-contract.schema.json",
+      "sha256": "7f82d94fbeb478f61f0c2dc89c94d1e1a9f82d9845a5e7726ab97b7204dead41"
+    }
+  ],
+  "input_digest": "56921972d4daa62a2c793a56609f806c5808e9f4cc86f173706b8f0c4e54ea4a",
+  "instruction_artifacts": [
+    {
+      "kind": "instruction",
+      "path": "references/agent/prepared-reviewer-runtime-profile.md",
+      "sha256": "175dceff807f883f73c7b9822a221a9f7bb1e8157ba0036c3d59934a656f4035"
+    }
+  ],
+  "prompt_artifact": {
+    "kind": "prompt",
+    "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/reviewer-r1/attempt-001/prompt.md",
+    "sha256": "b9239f2dbd1c20e51be08aff11129e5f171f0b7502f4ef6876d3b61daed12b4a"
+  },
+  "role": "reviewer",
+  "sandbox_policy": "read_only",
+  "scenario": "reviewer.session_prepared_standard_semantic",
+  "semantic_round": 0,
+  "session_id": "session-reviewer-r1-attempt-001",
+  "source_artifacts": [
+    {
+      "kind": "source",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/source-evidence.md",
+      "sha256": "f049e2aea244cdd5d77bfc631b29346007b279dc0f452e0f26e2fca91b146531"
+    }
+  ],
+  "stage_id": "reviewer-r1",
+  "timeout_seconds": 450
+}

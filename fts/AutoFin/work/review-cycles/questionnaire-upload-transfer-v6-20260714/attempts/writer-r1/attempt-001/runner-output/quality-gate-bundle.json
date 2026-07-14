@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "validator": "prepared-quality-gate-bundle-v1",
+  "context_profile": "character-restriction-calibration",
+  "test_case_count": 10,
+  "checks": [
+    "unique-titles",
+    "constraint-gap-preservation",
+    "ui-calibration-lifecycle-markers",
+    "deterministic-structure",
+    "obligation-traceability",
+    "dictionary-value-completeness",
+    "execution-action-unambiguity",
+    "dictionary-value-path-unambiguity",
+    "semantic-overlap",
+    "evidence-access",
+    "execution-oracle-quality"
+  ],
+  "findings": []
+}

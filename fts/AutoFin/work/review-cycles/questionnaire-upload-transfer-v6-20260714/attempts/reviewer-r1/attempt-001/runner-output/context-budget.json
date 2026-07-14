@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "validator": "prepared-standard-context-budget-v1",
+  "error_code": "",
+  "role": "reviewer",
+  "scenario": "reviewer.semantic_traceability_test_design",
+  "prompt_bytes": 28522,
+  "instruction_bytes": 3246,
+  "primary_context_bytes": 31768,
+  "limit_bytes": 131072,
+  "instruction_artifact_count": 1,
+  "package_context_projection": {
+    "validator": "prepared-package-context-projection-v1",
+    "role": "reviewer",
+    "sections_seen": 1,
+    "sections_compacted": 1,
+    "omitted_headings": [
+      "## Внешний Контекст: DaData На Интерфейсе"
+    ],
+    "reason": "selected-scope-has-no-dadata-behavior",
+    "original_bytes": 14806,
+    "projected_bytes": 9541,
+    "bytes_removed": 5265
+  }
+}

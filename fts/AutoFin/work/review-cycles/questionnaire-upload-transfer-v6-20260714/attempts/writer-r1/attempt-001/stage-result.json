@@ -1,0 +1,101 @@
+{
+  "attempt_id": "attempt-001",
+  "backend_session_id": "019f5ed3-867b-7581-bfd9-12145d283980",
+  "blocking_reasons": [],
+  "contract_version": 2,
+  "cycle_id": "questionnaire-upload-transfer-v6-20260714",
+  "duration_ms": 54469,
+  "exit_code": 0,
+  "finished_at": "2026-07-14T04:13:22.811716+00:00",
+  "input_digest": "52248746424dbe7a91312b33b9b1a5c80711bbf91eb84887bc1ca667aaa7dcb7",
+  "outcome": "draft-ready",
+  "output_artifacts": [
+    {
+      "kind": "stdout",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/stdout.txt",
+      "sha256": "b0c224be36f47664007c46e38079e34c4d9c4ae9f4cfc4b117db5458825a7de6"
+    },
+    {
+      "kind": "stderr",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/stderr.txt",
+      "sha256": "e53d28cf21d88fa3eb8a71169d697bee3a9eae3d40c3cfab5d1ea445fcec86d4"
+    },
+    {
+      "kind": "events",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/events.ndjson",
+      "sha256": "b0c224be36f47664007c46e38079e34c4d9c4ae9f4cfc4b117db5458825a7de6"
+    },
+    {
+      "kind": "stage-status",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/stage-status.json",
+      "sha256": "caad78b082f266a7e7544adcefa194759b1eb44ca4685891664a6578799a2a43"
+    },
+    {
+      "kind": "artifact-graph",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/artifact-graph.json",
+      "sha256": "ec20425cef45563cec4f027c29b86611f5923998a37bd46b4f47660847e92aff"
+    },
+    {
+      "kind": "test-case-draft",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/stage-output/draft.md",
+      "sha256": "ecb656d276b4bc76981990aa1ab9e4b8d45f094977e8d313587666488283a31e"
+    },
+    {
+      "kind": "validator-report",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/validator.json",
+      "sha256": "9f1a2fd87e9984a6da78da1ba4f34c45ab1ef9b553123430fd2f4aacd96f7c32"
+    },
+    {
+      "kind": "obligation-gate",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/obligation-gate.json",
+      "sha256": "f9ba8bb3a93d3e129186c8276a4b4339fe1d5fcb83fe3bda35152d760fa1ddb8"
+    },
+    {
+      "kind": "semantic-overlap-diagnostic",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/semantic-overlap-diagnostic.json",
+      "sha256": "4a7ba9becd7e4b39789cc358fc02744cc0dfbad010a41ceb03cc00d25a5f3ab8"
+    },
+    {
+      "kind": "quality-gate-bundle",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/quality-gate-bundle.json",
+      "sha256": "24d5b368aa0bfbc8f3f074d2a62521d1bad54f6ae87660e9815d882314f0d372"
+    },
+    {
+      "kind": "calibration-lifecycle",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/calibration-lifecycle.json",
+      "sha256": "29bb0927b8f662349b07b14496c2f973be30aa88a4b5948a075f039a76b5126a"
+    },
+    {
+      "kind": "dictionary-projection",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/dictionary-projection.json",
+      "sha256": "8a5081ab9e03bbf47c34a406f0dc4bf6e1cb9cfa1e15b38851022a04a4e50498"
+    },
+    {
+      "kind": "seed-gate",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/seed-gate.json",
+      "sha256": "8425ed1e732eaa9eec307cc9312d3f1bfca76f25e36acf1f15320b0dad2f9fd1"
+    },
+    {
+      "kind": "evidence-access-report",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/evidence-access-report.json",
+      "sha256": "68a367706e2d33984efbb618f87364130b20c127b8a5e9274aef5eb237bc672b"
+    },
+    {
+      "kind": "writer-result",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/writer-result.json",
+      "sha256": "591e54d028616be8d26e13144a45891d6600d1cb5d731ec2e92eb32405086a5a"
+    },
+    {
+      "kind": "context-budget",
+      "path": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/writer-r1/attempt-001/runner-output/context-budget.json",
+      "sha256": "b4f876ab2aef973770bcdca3fc4e706f7d2f014893a0bf45f29839554892645c"
+    }
+  ],
+  "role": "writer",
+  "scenario": "writer.session_prepared_standard_structured",
+  "session_id": "session-writer-r1-attempt-001",
+  "stage_id": "writer-r1",
+  "started_at": "2026-07-14T04:12:28.340128+00:00",
+  "status": "completed",
+  "timed_out": false
+}

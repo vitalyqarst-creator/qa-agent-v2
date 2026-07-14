@@ -1,0 +1,99 @@
+{
+  "version": 2,
+  "backend": "exec",
+  "run_profile": "benchmark",
+  "benchmark_details_included": true,
+  "cycle_dir": "fts/AutoFin/work/review-cycles/questionnaire-upload-transfer-v6-20260714",
+  "stage_count": 2,
+  "duration_ms_total": 77266,
+  "total_tokens": 47740,
+  "uncached_input_tokens_total": 44210,
+  "input_artifact_bytes_total": 160711,
+  "output_artifact_bytes_total": 84681,
+  "validator_invocations": 1,
+  "validator_budget": 5,
+  "validator_budget_passed": true,
+  "backend_session_ids": [
+    "019f5ed3-867b-7581-bfd9-12145d283980",
+    "019f5ed4-5d12-70a0-aacb-cb9b6f909f29"
+  ],
+  "stage_metrics": [
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "questionnaire-upload-transfer-v6-20260714",
+      "duration_ms": 54469,
+      "input_artifact_bytes": 70133,
+      "input_artifact_count": 7,
+      "input_tokens": 21582,
+      "outcome": "draft-ready",
+      "output_artifact_bytes": 62808,
+      "output_artifact_count": 16,
+      "output_tokens": 2620,
+      "role": "writer",
+      "scenario": "writer.session_prepared_standard_structured",
+      "stage_id": "writer-r1",
+      "total_tokens": 24202
+    },
+    {
+      "attempt_id": "attempt-001",
+      "backend": "codex-exec",
+      "cached_input_tokens": 0,
+      "contract_version": 2,
+      "cycle_id": "questionnaire-upload-transfer-v6-20260714",
+      "duration_ms": 22797,
+      "input_artifact_bytes": 90578,
+      "input_artifact_count": 15,
+      "input_tokens": 22628,
+      "outcome": "accepted",
+      "output_artifact_bytes": 21873,
+      "output_artifact_count": 8,
+      "output_tokens": 910,
+      "role": "reviewer",
+      "scenario": "reviewer.session_prepared_standard_semantic",
+      "stage_id": "reviewer-r1",
+      "total_tokens": 23538
+    }
+  ],
+  "stage_attribution": [
+    {
+      "stage_id": "reviewer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    },
+    {
+      "stage_id": "writer-r1",
+      "attempt_id": "attempt-001",
+      "turns_started": 1,
+      "agent_messages": 1,
+      "command_executions": 0,
+      "file_changes": 0
+    }
+  ],
+  "context_efficiency": {
+    "primary_context_bytes_total": 63994,
+    "prompt_bytes_total": 55077,
+    "instruction_bytes_total": 8917,
+    "instruction_artifact_count_total": 2,
+    "command_executions_total": 0,
+    "file_changes_total": 0,
+    "test_case_count": 10,
+    "testable_obligations": 11,
+    "uncached_tokens_per_obligation": 4019.09,
+    "commands_per_test_case": 0.0
+  },
+  "timing_breakdown": {
+    "capability_probe_ms": 109,
+    "runner_preflight_ms": 1438,
+    "runner_wall_ms": 81686,
+    "stage_execution_ms": 77266,
+    "runner_orchestration_overhead_ms": 4420,
+    "reporting_ms": 31,
+    "dispatcher_wall_ms": 83297
+  }
+}

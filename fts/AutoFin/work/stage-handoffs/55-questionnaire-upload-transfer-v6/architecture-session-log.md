@@ -63,6 +63,8 @@
 | `TF-010` | Canonical atom identifiers changed the prepared input fingerprint after the first local compile. | reuse the uncheckpointed stale package directory | compiled a new immutable `questionnaire-upload-transfer-v6-r1` package and removed only the verified stale local package | `work/review-cycles/questionnaire-upload-transfer-v6-20260714/prepared-input/questionnaire-upload-transfer-v6-r1/` | yes | no residual fidelity risk | never overwrite a prepared package with a different fingerprint |
 | `TF-011` | Default `python -m unittest` discovery found zero tests. | implicit discovery from repository root | ran explicit `python -m unittest discover -s tests -p 'test_*.py'` | `pre-live-test-report.v6.md` | yes | no residual fidelity risk | keep the explicit discovery command in gates |
 | `TF-012` | Authorization update used a noncanonical workflow stage status. | `ready-for-live-canary` | restored canonical `ready-for-next-stage`; one-shot permission remains in authorization and stop-gate artifacts | `workflow-state.yaml`; `pre-live-authorization.v6.md` | yes | no residual fidelity risk | do not encode authorization as a new process status |
+| `TF-013` | Repository artifact validator was pointed directly at a review-cycle directory. | strict cycle-only validation | discarded the expected missing-workflow warning; used runner-native cycle gates and canonical H55 workflow validation | `live-result.v6.json`; `workflow-state.yaml` | yes | no residual fidelity risk | validate process metadata from its handoff root |
+| `TF-014` | Exec sessions warned that PowerShell shell snapshots were unsupported; writer additionally received a remote plugin catalog cache 400. | optional shell snapshot/catalog warmup | runner continued with bound prompt/package; neither role executed commands, plugins or file changes | `work/review-cycles/questionnaire-upload-transfer-v6-20260714/attempts/*/attempt-001/runner-output/stderr.txt` | yes | no observed semantic impact | retain stderr and do not retry the terminal canary |
 
 ## Artifact Write Strategy
 
@@ -84,6 +86,8 @@ Generated handoff/compiler inputs are emitted by `scripts/build_autofin_question
 | 5 | Transfer package compiled | 11 obligations, 10 TC, 0 gaps | prepared package |
 | 6 | Reviewer projection order hardened | relevance is evaluated from full evidence before reviewer obligation truncation | code/tests |
 | 7 | Offline checkpoint pushed and authorization bound | local/origin `5135c023...`; one invocation budget | pre-live authorization |
+| 8 | Single live canary executed | writer draft-ready; reviewer accepted 11/11; budget 0 | live result and performance |
+| 9 | Raw-source post-canary audit | two upstream fidelity risks found; no draft edit/promotion | source-package audit |
 
 ## Quality Checkpoints
 
@@ -93,8 +97,11 @@ Generated handoff/compiler inputs are emitted by `scripts/build_autofin_question
 | Generic reference-only no-invention | pass | focused regression | none |
 | Production boundary | pass at initial write | target absent; protected hashes captured | recheck after live |
 | Full offline gate | pass | final code rerun: 1016 tests, 1 skipped; artifact/architecture audits; validate-only | checkpoint and authorization |
+| One-shot live contract | pass | two exec sessions; no fallback, commands or file changes | budget exhausted |
+| Downstream transfer quality | pass | 10 unique TC; 11/11 obligations; 0 findings | preserve evidence |
+| Source-to-package production readiness | not pass | `SPA-V6-001`; `SPA-V6-002` | offline V7 remediation |
 
 ## Handoff Notes For Next Session
 
-- Live разрешён только после full offline gates, pushed checkpoint и separate hash binding.
-- Любой terminal result consumes the single V6 budget; no retry or promotion.
+- V6 budget равен нулю; retry и promotion запрещены.
+- Следующий запуск начинается с `prompt.v6-to-next.md` и offline source-to-package fidelity gates.
