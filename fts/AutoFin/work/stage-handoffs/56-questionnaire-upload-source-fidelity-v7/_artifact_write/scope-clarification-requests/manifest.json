@@ -1,0 +1,11 @@
+{
+  "target_path": "../../scope-clarification-requests.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "CR-QUT-001",
+      "content_file": "section-01.md"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+- total_negative_obligations: `2`
+- executable_tc: `2`
+- candidate_tc_required: `0`
+- gap_required: `0`
+- clarification_required: `0`
+- exact positive boundary: `GAP-QUT-001`, не относится к negative inventory.

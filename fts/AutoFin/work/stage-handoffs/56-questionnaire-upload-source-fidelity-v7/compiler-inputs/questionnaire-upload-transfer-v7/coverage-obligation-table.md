@@ -1,0 +1,17 @@
+# Coverage Obligation Table — Questionnaire Upload Transfer V7
+
+## Obligations
+
+| obligation_id | package_id | source_property_id | linked_atom_id | property_type | obligation_class | required_behavior | source_ref | planned_tc_or_gap | status | review_notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `OBL-QUT-001` | `WP-QUT-01` | `SRC-QUT-001.P01` | `ATOM-001` | `field-property` | `field-visible` | Буквальный текст `Анкета клиента. Распечатайте, подпишите с клиентом и загрузите скан в заявку` отображается всегда. | `SRC-QUT-001; BSR 206` | `TC-QUT-001` | `covered` | Literal обязан дойти до oracle без generic compression. |
+| `OBL-QUT-002` | `WP-QUT-01` | `SRC-QUT-001.P02` | `ATOM-002` | `field-property` | `informational-read-only` | Текст информационного поля нельзя изменить ручным вводом. | `SRC-QUT-001; BSR 207` | `TC-QUT-002` | `covered` | BSR 207 и Р=Нет. |
+| `OBL-QUT-003` | `WP-QUT-01` | `SRC-QUT-002.P01` | `ATOM-003` | `field-property` | `field-visible` | Поле добавления файла `Анкета клиента` отображается всегда. | `SRC-QUT-002; BSR 208` | `TC-QUT-003` | `covered` | Прямая visibility obligation. |
+| `OBL-QUT-004` | `WP-QUT-01` | `SRC-QUT-002.P02` | `ATOM-004` | `file-upload` | `picker-upload` | После выбора portable jpg через проводник файл добавлен. | `SRC-QUT-002; BSR 209` | `TC-QUT-004` | `covered` | Сгруппировано с OBL-QUT-005 одним result. |
+| `OBL-QUT-005` | `WP-QUT-01` | `SRC-QUT-002.P03` | `ATOM-005` | `file-upload` | `filename-visible` | После добавления отображается точное имя выбранного файла. | `SRC-QUT-002; BSR 211` | `TC-QUT-004` | `covered` | Один observable upload result. |
+| `OBL-QUT-006` | `WP-QUT-01` | `SRC-QUT-002.P04` | `ATOM-006` | `file-upload` | `drag-drop-upload` | После Drag and Drop portable pdf файл добавлен и его имя отображается. | `SRC-QUT-002; BSR 209; BSR 211` | `TC-QUT-005` | `covered` | Отдельный способ действия. |
+| `OBL-QUT-007` | `WP-QUT-01` | `SRC-QUT-002.P05` | `ATOM-007` | `equivalence` | `allowed-file-formats` | В отдельных чистых итерациях jpg, png и pdf добавляются успешно. | `SRC-QUT-002; BSR 210` | `TC-QUT-006` | `covered` | Полный фиксированный перечень. |
+| `OBL-QUT-008` | `WP-QUT-01` | `SRC-QUT-002.P06` | `ATOM-008` | `input-boundaries` | `max-file-size` | Точное граничное значение для `размер файла не более 40 МБ` нельзя задать без byte convention. | `SRC-QUT-002; BSR 210; GAP-QUT-001` | `GAP-QUT-001` | `gap` | Обязательство сохранено, exact boundary не выдуман. |
+| `OBL-QUT-009` | `WP-QUT-01` | `SRC-QUT-002.P07` | `ATOM-009` | `negative-oracle` | `oversize-file` | Ограничение `размер файла не более 40 МБ`: файл размером 50 МБ не добавляется; отображается `Документы не загружены. Проверьте соответствуют ли документы требованиям: формат jpg, png, pdf, размер не более 40 МБ`. | `SRC-QUT-002; BSR 210` | `TC-QUT-007` | `covered` | 50 МБ заведомо больше обеих 40 МБ conventions. |
+| `OBL-QUT-010` | `WP-QUT-01` | `SRC-QUT-002.P08` | `ATOM-010` | `negative-oracle` | `unsupported-format` | Файл txt не добавляется; отображается `Документы не загружены. Проверьте соответствуют ли документы требованиям: формат jpg, png, pdf, размер не более 40 МБ`. | `SRC-QUT-002; BSR 210` | `TC-QUT-008` | `covered` | Точный source-backed oracle. |
+| `OBL-QUT-011` | `WP-QUT-01` | `SRC-QUT-002.P09` | `ATOM-011` | `file-upload` | `one-file-per-type` | После попытки добавить второй файл отображается не более одного имени файла этого типа. | `SRC-QUT-002; BSR 210` | `TC-QUT-009` | `covered` | Не утверждается replace/reject/message. |

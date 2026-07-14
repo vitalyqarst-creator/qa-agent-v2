@@ -1,0 +1,4 @@
+- source family: только `FT4AutoFinFinal.*`.
+- rejected: `AutoFinPreFinal.*` и созданные по нему старые BSR mappings.
+- machine-readable status: XHTML подтверждён.
+- production test cases: запрещены как requirement evidence.

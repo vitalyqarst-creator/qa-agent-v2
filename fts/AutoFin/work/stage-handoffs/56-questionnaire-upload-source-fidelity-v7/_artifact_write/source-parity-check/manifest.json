@@ -1,0 +1,31 @@
+{
+  "target_path": "../../source-parity-check.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Контекст",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Identity",
+      "content_file": "section-02.md"
+    },
+    {
+      "level": 2,
+      "heading": "Parity Result",
+      "content_file": "section-03.md"
+    },
+    {
+      "level": 2,
+      "heading": "Code Recovery",
+      "content_file": "section-04.md"
+    },
+    {
+      "level": 2,
+      "heading": "Visual Check",
+      "content_file": "section-05.md"
+    }
+  ]
+}

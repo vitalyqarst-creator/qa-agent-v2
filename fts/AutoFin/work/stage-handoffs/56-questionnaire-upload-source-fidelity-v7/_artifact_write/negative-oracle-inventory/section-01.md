@@ -1,0 +1,3 @@
+- `scope_slug`: `questionnaire-upload-transfer-v7`
+- `scope_contract`: `scope-contract.md`
+- `scope_coverage_gaps`: `scope-coverage-gaps.md`

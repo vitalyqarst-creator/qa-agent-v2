@@ -22,6 +22,7 @@ Missing and unknown versions are blocking. Use `scripts/migrate_prepared_compile
 - `latest_artifacts.package_test_design_plan`;
 - `latest_artifacts.test_design_applicability_matrix`;
 - optional `latest_artifacts.coverage_gaps` and `latest_artifacts.dictionary_inventory` when the scope uses them.
+- optional `latest_artifacts.source_to_package_fidelity`; when declared, the compiler enforces the bindings from `references/agent/source-to-package-fidelity-format.md`.
 
 All paths are FT-package relative. The compiler input, design artifacts, output and attempt root must remain inside the explicitly selected `fts/<ft-slug>` package.
 
@@ -43,6 +44,13 @@ Required invariants:
 6. Every open gap is linked either by a gap/unclear obligation or through `constraint_gap_ids` on a testable atom.
 7. A constraint gap remains visible in the prepared package but does not change the testable obligation into a gap.
 8. Every referenced `DICT-*` resolves to one unique non-empty dictionary inventory row.
+9. Every declared source-fidelity binding preserves its literal in the named projection targets or records an explicit allowed decision; ambiguous source units do not become exact bytes without a source-backed policy.
+
+## Source-To-Package Fidelity Extension
+
+Use `source-to-package-fidelity.json` only for named high-risk literals and unit conversions. It is optional for legacy scopes, but mandatory for the current compile whenever `latest_artifacts.source_to_package_fidelity` is present. The compiler validates it before creating package evidence and embeds the normalized bindings into `source-evidence.md` so binding changes affect the immutable input fingerprint.
+
+The canonical schema, closed handling enums and diagnostics are defined in `references/agent/source-to-package-fidelity-format.md`. Do not replace the artifact with prose in a prompt or decision log.
 
 ## Coverage Obligation Table
 

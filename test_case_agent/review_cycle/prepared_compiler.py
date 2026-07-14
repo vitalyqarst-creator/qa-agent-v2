@@ -27,6 +27,9 @@ TOKEN = re.compile(
 )
 TC_TOKEN = re.compile(r"\bTC-[A-Za-z0-9_.-]+\b")
 FIXTURE_TOKEN = re.compile(r"\bFIX-[A-Za-z0-9_.-]+\b")
+BYTE_VALUE = re.compile(
+    r"\b\d[\d\s.,_]*\s*(?:байт(?:а|ов)?|bytes?)\b", flags=re.IGNORECASE
+)
 COMPILER_CONTRACT_VERSION = 2
 SECTION_PREFIX = re.compile(r"^(?P<section>(?:section-)?\d+(?:[-.]\d+)*)-")
 FAST_PROFILE = "simple-field-property"
@@ -768,6 +771,274 @@ def _artifact(ft_root: Path, state: Mapping[str, Any], key: str, *, required: bo
     return path
 
 
+def _validate_source_to_package_fidelity(
+    *,
+    path: Path,
+    scope_slug: str,
+    ledger_by_atom: Mapping[str, Mapping[str, str]],
+    obligation_rows: Sequence[Mapping[str, str]],
+    plan_by_atom: Mapping[str, Sequence[Mapping[str, str]]],
+    known_gaps: Mapping[str, PreparedGap],
+    repo_root: Path,
+) -> tuple[dict[str, object], ...]:
+    """Validate explicit high-risk source-to-package fidelity bindings.
+
+    This contract is intentionally narrow.  It proves preservation of named
+    literal/unit statements; it is not a general semantic equivalence checker.
+    """
+
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise StageRuntimeError(f"invalid source-to-package fidelity JSON: {path}") from exc
+    if not isinstance(raw, dict) or raw.get("version") != 1:
+        raise StageRuntimeError("source-to-package fidelity version must be 1")
+    if raw.get("scope_slug") != scope_slug:
+        raise StageRuntimeError(
+            "source-to-package fidelity scope_slug must match workflow-state"
+        )
+    bindings = raw.get("bindings")
+    if not isinstance(bindings, list) or not bindings:
+        raise StageRuntimeError("source-to-package fidelity bindings must be non-empty")
+
+    obligations_by_id = {
+        row.get("obligation_id", ""): row for row in obligation_rows
+    }
+    seen_ids: set[str] = set()
+    normalized: list[dict[str, object]] = []
+    allowed_targets = {
+        "atomic_statement",
+        "required_behavior",
+        "single_expected_behavior",
+    }
+    for item in bindings:
+        if not isinstance(item, dict):
+            raise StageRuntimeError("source-to-package fidelity binding must be an object")
+        binding_id = str(item.get("binding_id", "")).strip()
+        kind = str(item.get("binding_kind", "")).strip()
+        source_ref = str(item.get("source_ref", "")).strip()
+        source_text = str(item.get("source_text", "")).strip()
+        atom_id = str(item.get("atom_id", "")).strip()
+        obligation_id = str(item.get("obligation_id", "")).strip()
+        handling = str(item.get("handling", "")).strip()
+        if not re.fullmatch(r"FID-[A-Za-z0-9_.-]+", binding_id):
+            raise StageRuntimeError(f"invalid source fidelity binding id: {binding_id}")
+        if binding_id in seen_ids:
+            raise StageRuntimeError(f"duplicate source fidelity binding id: {binding_id}")
+        seen_ids.add(binding_id)
+        if not source_ref or not source_text:
+            raise StageRuntimeError(f"{binding_id} requires source_ref and source_text")
+        if atom_id not in ledger_by_atom:
+            raise StageRuntimeError(f"{binding_id} references unknown atom {atom_id}")
+        obligation = obligations_by_id.get(obligation_id)
+        if obligation is None:
+            raise StageRuntimeError(
+                f"{binding_id} references unknown obligation {obligation_id}"
+            )
+        linked_atoms = {
+            token
+            for token in TOKEN.findall(obligation.get("linked_atom_id", ""))
+            if token.startswith("ATOM-")
+        }
+        if linked_atoms != {atom_id}:
+            raise StageRuntimeError(
+                f"{binding_id} obligation {obligation_id} does not link {atom_id}"
+            )
+
+        targets_raw = item.get("required_targets", [])
+        if not isinstance(targets_raw, list) or any(
+            not isinstance(target, str) for target in targets_raw
+        ):
+            raise StageRuntimeError(f"{binding_id} required_targets must be a string list")
+        targets = tuple(dict.fromkeys(targets_raw))
+        unknown_targets = sorted(set(targets) - allowed_targets)
+        if unknown_targets:
+            raise StageRuntimeError(
+                f"{binding_id} has unknown required_targets: {', '.join(unknown_targets)}"
+            )
+
+        target_values: dict[str, tuple[str, ...]] = {
+            "atomic_statement": (
+                ledger_by_atom[atom_id].get("atomic_statement", ""),
+            ),
+            "required_behavior": (obligation.get("required_behavior", ""),),
+            "single_expected_behavior": tuple(
+                row.get("single_expected_behavior", "")
+                for row in plan_by_atom.get(atom_id, ())
+            ),
+        }
+        if kind == "literal":
+            if handling not in {"preserve", "locator-only"}:
+                raise StageRuntimeError(
+                    f"{binding_id} literal handling must be preserve or locator-only"
+                )
+            if handling == "locator-only":
+                if targets:
+                    raise StageRuntimeError(
+                        f"{binding_id} locator-only binding cannot require projection targets"
+                    )
+                if not str(item.get("decision_reason", "")).strip():
+                    raise StageRuntimeError(
+                        f"{binding_id} locator-only binding requires decision_reason"
+                    )
+            elif not targets:
+                raise StageRuntimeError(
+                    f"{binding_id} preserve binding requires projection targets"
+                )
+        elif kind == "unit":
+            if handling not in {
+                "coverage-gap",
+                "source-unit-only",
+                "decimal-bytes",
+                "binary-bytes",
+            }:
+                raise StageRuntimeError(f"{binding_id} has invalid unit handling")
+            unit_value = item.get("unit_value")
+            unit_symbol = str(item.get("unit_symbol", "")).strip()
+            if not isinstance(unit_value, int) or unit_value <= 0 or not unit_symbol:
+                raise StageRuntimeError(
+                    f"{binding_id} unit binding requires positive unit_value and unit_symbol"
+                )
+            if not re.search(
+                rf"(?<!\d){unit_value}\s*{re.escape(unit_symbol)}(?!\w)",
+                source_text,
+                flags=re.IGNORECASE,
+            ):
+                raise StageRuntimeError(
+                    f"{binding_id} source_text must contain unit_value and unit_symbol"
+                )
+            if not targets:
+                raise StageRuntimeError(
+                    f"{binding_id} unit binding requires projection targets"
+                )
+            if handling in {"decimal-bytes", "binary-bytes"}:
+                if not str(item.get("policy_source_ref", "")).strip():
+                    raise StageRuntimeError(
+                        f"{binding_id} byte conversion requires policy_source_ref"
+                    )
+                byte_offset = item.get("byte_offset")
+                if not isinstance(byte_offset, int):
+                    raise StageRuntimeError(
+                        f"{binding_id} byte conversion requires integer byte_offset"
+                    )
+                base = 1_000_000 if handling == "decimal-bytes" else 1_048_576
+                expected_bytes = unit_value * base + byte_offset
+                byte_values = [
+                    int(re.sub(r"\D", "", match.group()))
+                    for values in target_values.values()
+                    for value in values
+                    for match in BYTE_VALUE.finditer(value)
+                ]
+                if not byte_values or any(
+                    value != expected_bytes for value in byte_values
+                ):
+                    raise PreparedCompilerDiagnostic(
+                        "source-fidelity-byte-conversion-mismatch",
+                        "semantic degradation: exact byte projection does not match "
+                        "the declared unit policy and offset",
+                        details=(
+                            {
+                                "kind": "source-fidelity-byte-conversion-mismatch",
+                                "binding_id": binding_id,
+                                "atom_id": atom_id,
+                                "obligation_id": obligation_id,
+                                "expected_bytes": expected_bytes,
+                                "actual_byte_values": sorted(set(byte_values)),
+                                **_artifact_anchor(path, binding_id, repo_root),
+                            },
+                        ),
+                    )
+            else:
+                byte_hits = [
+                    value
+                    for values in target_values.values()
+                    for value in values
+                    if BYTE_VALUE.search(value)
+                ]
+                if byte_hits:
+                    raise PreparedCompilerDiagnostic(
+                        "source-fidelity-unit-conversion-without-policy",
+                        "semantic degradation: source unit was converted to exact bytes "
+                        "without a source-backed policy",
+                        details=(
+                            {
+                                "kind": "source-fidelity-unit-conversion-without-policy",
+                                "binding_id": binding_id,
+                                "atom_id": atom_id,
+                                "obligation_id": obligation_id,
+                                **_artifact_anchor(path, binding_id, repo_root),
+                            },
+                        ),
+                    )
+            if handling == "coverage-gap":
+                gap_id = str(item.get("gap_id", "")).strip()
+                ledger_status = ledger_by_atom[atom_id].get("coverage_status", "").lower()
+                obligation_status = obligation.get("status", "").lower()
+                linked_gap_tokens = {
+                    token
+                    for value in (
+                        ledger_by_atom[atom_id].get("covered_by_tc", ""),
+                        obligation.get("planned_tc_or_gap", ""),
+                    )
+                    for token in TOKEN.findall(value)
+                    if token.startswith("GAP-")
+                }
+                if (
+                    gap_id not in known_gaps
+                    or ledger_status not in {"gap", "unclear"}
+                    or obligation_status not in {"gap", "unclear"}
+                    or linked_gap_tokens != {gap_id}
+                ):
+                    raise PreparedCompilerDiagnostic(
+                        "source-fidelity-unit-gap-mismatch",
+                        "semantic degradation: unresolved source unit must remain an "
+                        "explicit linked coverage gap",
+                        details=(
+                            {
+                                "kind": "source-fidelity-unit-gap-mismatch",
+                                "binding_id": binding_id,
+                                "atom_id": atom_id,
+                                "obligation_id": obligation_id,
+                                "gap_id": gap_id,
+                                **_artifact_anchor(path, binding_id, repo_root),
+                            },
+                        ),
+                    )
+        else:
+            raise StageRuntimeError(f"{binding_id} has invalid binding_kind: {kind}")
+
+        if handling != "locator-only":
+            missing_targets = [
+                target
+                for target in targets
+                if not target_values[target]
+                or any(source_text not in value for value in target_values[target])
+            ]
+            if missing_targets:
+                raise PreparedCompilerDiagnostic(
+                    "source-fidelity-literal-missing",
+                    "semantic degradation: source literal is missing from required "
+                    "prepared projection targets",
+                    details=(
+                        {
+                            "kind": "source-fidelity-literal-missing",
+                            "binding_id": binding_id,
+                            "atom_id": atom_id,
+                            "obligation_id": obligation_id,
+                            "missing_targets": missing_targets,
+                            **_artifact_anchor(path, binding_id, repo_root),
+                        },
+                    ),
+                )
+        normalized.append(
+            {
+                key: item[key]
+                for key in sorted(item)
+            }
+        )
+    return tuple(normalized)
+
+
 def _gap_sections(path: Path | None) -> dict[str, PreparedGap]:
     if path is None:
         return {}
@@ -1072,6 +1343,9 @@ def compile_workflow_package(
     )
     gaps_path = _artifact(ft_root, state, "coverage_gaps", required=False)
     dictionary_path = _artifact(ft_root, state, "dictionary_inventory", required=False)
+    source_fidelity_path = _artifact(
+        ft_root, state, "source_to_package_fidelity", required=False
+    )
     assert (
         source_selection_path is not None
         and ledger_path is not None
@@ -1179,6 +1453,17 @@ def compile_workflow_package(
         repo_root=repo_root,
     )
     known_gaps = _gap_sections(gaps_path)
+    source_fidelity_bindings: tuple[dict[str, object], ...] = ()
+    if source_fidelity_path is not None:
+        source_fidelity_bindings = _validate_source_to_package_fidelity(
+            path=source_fidelity_path,
+            scope_slug=scope_slug,
+            ledger_by_atom=ledger_by_atom,
+            obligation_rows=obligation_rows,
+            plan_by_atom=plan_by_atom,
+            known_gaps=known_gaps,
+            repo_root=repo_root,
+        )
     dictionary_rows: dict[str, dict[str, str]] = {}
     dictionary_active_values: dict[str, tuple[str, ...]] = {}
     if dictionary_path is not None:
@@ -1221,6 +1506,21 @@ def compile_workflow_package(
                 "## Portable fixture contracts",
                 "",
                 *dict.fromkeys(text for _, text in fixture_contract_lines),
+                "",
+            ]
+        )
+    if source_fidelity_bindings:
+        evidence_rows.extend(
+            [
+                "## Source-to-package fidelity bindings",
+                "",
+                "```json",
+                json.dumps(
+                    source_fidelity_bindings,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "```",
                 "",
             ]
         )

@@ -1,0 +1,3 @@
+- DOCX extraction сохраняет поведение, но не BSR labels.
+- XHTML и PDF согласованно восстанавливают `BSR 206-212`; эти коды обязательны в `req_id` и traceability.
+- Legacy `AutoFinPreFinal` mapping `BSR 198-203` отклонён: в текущем Final эти коды относятся к другим свойствам.

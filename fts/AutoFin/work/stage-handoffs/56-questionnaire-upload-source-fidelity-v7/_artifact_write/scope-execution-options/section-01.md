@@ -1,0 +1,2 @@
+- Сначала `ft-test-case-reviewer` проверяет `GAP-QUT-001` и fidelity bindings.
+- После ответа по gap новая immutable revision может перейти в `ft-test-case-iteration`.

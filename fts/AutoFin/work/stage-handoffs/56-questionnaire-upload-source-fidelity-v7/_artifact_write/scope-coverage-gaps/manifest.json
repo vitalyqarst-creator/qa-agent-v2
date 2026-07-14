@@ -1,0 +1,31 @@
+{
+  "target_path": "../../scope-coverage-gaps.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Контекст",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Summary",
+      "content_file": "section-02.md"
+    },
+    {
+      "level": 2,
+      "heading": "GAP-QUT-001",
+      "content_file": "section-03.md"
+    },
+    {
+      "level": 2,
+      "heading": "Что Можно Покрывать Несмотря На Gap",
+      "content_file": "section-04.md"
+    },
+    {
+      "level": 2,
+      "heading": "Что Нельзя Домысливать",
+      "content_file": "section-05.md"
+    }
+  ]
+}

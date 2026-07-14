@@ -1,0 +1,7 @@
+- main_ft_xhtml: `source/FT4AutoFinFinal.xhtml`
+- xhtml_available: `yes`
+- xhtml_path: `source/FT4AutoFinFinal.xhtml`
+- xhtml_matches_main_ft: `yes`
+- xhtml_role: `mandatory_machine_readable_extraction_source`
+- xhtml_required_for_downstream: `yes`
+- blocking_reason: `none`

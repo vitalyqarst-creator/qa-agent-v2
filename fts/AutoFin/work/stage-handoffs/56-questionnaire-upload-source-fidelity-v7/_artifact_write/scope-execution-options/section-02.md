@@ -1,0 +1,3 @@
+- deterministic compile/validate-only;
+- architecture and artifact audits;
+- review source/design artifacts без создания draft.

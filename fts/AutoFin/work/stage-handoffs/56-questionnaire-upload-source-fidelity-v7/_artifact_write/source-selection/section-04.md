@@ -1,0 +1,4 @@
+- pdf_available: `yes`
+- pdf_path: `source/FT4AutoFinFinal.pdf`
+- pdf_matches_main_ft: `yes`
+- limitation: PDF используется только для кодов/структуры/визуальной сверки; текстовая истина остаётся в DOCX.

@@ -1,0 +1,26 @@
+{
+  "target_path": "../../negative-oracle-inventory.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Контекст",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Negative Oracle Inventory",
+      "content_file": "section-02.md"
+    },
+    {
+      "level": 2,
+      "heading": "Summary",
+      "content_file": "section-03.md"
+    },
+    {
+      "level": 2,
+      "heading": "Writer Handoff Rules",
+      "content_file": "section-04.md"
+    }
+  ]
+}

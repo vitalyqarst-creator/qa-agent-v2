@@ -1,0 +1,346 @@
+{
+  "summary": {
+    "workflow_states_checked": 1,
+    "source_documents_checked": 1,
+    "artifact_manifests_checked": 0,
+    "traceability_matrices_checked": 0,
+    "review_findings_checked": 0,
+    "writer_responses_checked": 0,
+    "test_case_files_checked": 0,
+    "source_normalization_diagnostics_checked": 0,
+    "source_table_normalizations_checked": 0,
+    "dictionary_inventories_checked": 0,
+    "writer_process_diagnostics_checked": 0,
+    "writer_self_checks_checked": 0,
+    "coverage_gap_artifacts_checked": 1,
+    "session_logs_checked": 1,
+    "decision_logs_checked": 1,
+    "active_text_artifacts_checked": 1,
+    "generated_source_basis_artifacts_checked": 0,
+    "mockup_visual_inventories_checked": 0,
+    "ui_evidence_indexes_checked": 0,
+    "ui_validation_reports_checked": 0,
+    "findings_count": 9,
+    "errors_count": 4,
+    "warnings_count": 5,
+    "info_count": 0,
+    "checks_count": 30
+  },
+  "findings": [
+    {
+      "id": "prompt-format-missing-input-artifact-refs",
+      "severity": "error",
+      "category": "prompt-format",
+      "title": "Active transition prompt has no input artifact references",
+      "details": "The next skill should not have to infer its inputs from chat history.",
+      "path": "prompt.scope-gaps-to-reviewer.md",
+      "evidence": [],
+      "recommended_action": "List concrete input artifact paths in the input section."
+    },
+    {
+      "id": "prompt-format-missing-required-scope-inputs",
+      "severity": "error",
+      "category": "prompt-format",
+      "title": "Scope transition prompt misses required input artifacts",
+      "details": "Scope transition prompts must list the concrete source/scope handoff artifacts that the next skill must read.",
+      "path": "prompt.scope-gaps-to-reviewer.md",
+      "evidence": [
+        "negative-oracle-inventory.md",
+        "scope-clarification-requests.md",
+        "scope-contract.md",
+        "scope-coverage-gaps.md",
+        "source-parity-check.md",
+        "source-row-inventory.md",
+        "source-selection.md",
+        "workflow-state.yaml"
+      ],
+      "recommended_action": "Add resolving references to the missing artifacts in the prompt input section, or keep the workflow blocked instead of routing to writer/iteration."
+    },
+    {
+      "id": "prompt-format-missing-required-sections",
+      "severity": "error",
+      "category": "prompt-format",
+      "title": "Active transition prompt misses required sections",
+      "details": "The active handoff prompt must state the stage goal, resolving inputs, and guardrails.",
+      "path": "prompt.scope-gaps-to-reviewer.md",
+      "evidence": [
+        "goal",
+        "guardrails",
+        "inputs"
+      ],
+      "recommended_action": "Add canonical or accepted alias sections for goal, inputs, and guardrails."
+    },
+    {
+      "id": "workflow-state-scope-analyzer-invalid-negative-oracle-inventory",
+      "severity": "error",
+      "category": "artifact-format",
+      "title": "negative-oracle-inventory.md is incomplete",
+      "details": "Scope-level oracle inventories must use the canonical columns and every `candidate_tc_required` row must use `oracle_status = ui-calibration-required`; `gap_required` / `clarification_required` rows must link a real GAP-*.",
+      "path": "workflow-state.yaml",
+      "evidence": [
+        "negative-oracle-inventory.md:missing columns analyst_question, calibration_notes, decision, field_or_block, handoff_rule, observable_oracle_found, oracle_source, planned_tc_or_gap"
+      ],
+      "recommended_action": "Rewrite `negative-oracle-inventory.md` using the canonical reference format."
+    },
+    {
+      "id": "decision-log-missing-required-section",
+      "severity": "warning",
+      "category": "decision-log",
+      "title": "Decision log misses Decision Log section",
+      "details": "agent-decision-log.md must contain a `## Decision Log` table with observable intermediate decisions, not hidden chain-of-thought.",
+      "path": "agent-decision-log.md",
+      "evidence": [
+        "Decision Log"
+      ],
+      "recommended_action": "Rewrite the artifact using references/agent/agent-decision-log-format.md."
+    },
+    {
+      "id": "session-log-missing-required-sections",
+      "severity": "warning",
+      "category": "session-log",
+      "title": "Session log misses required audit sections",
+      "details": "A stage session log should capture inputs read, inputs intentionally not used, key decisions, risks/fallbacks, validation and contamination check.",
+      "path": "scope-analyzer-session-log.md",
+      "evidence": [
+        "Event Timeline",
+        "Handoff Notes For Next Session",
+        "Inputs Not Used",
+        "Inputs Read",
+        "Key Decisions",
+        "Quality Checkpoints",
+        "Risks And Fallbacks",
+        "Session Metadata",
+        "Validation"
+      ],
+      "recommended_action": "Rewrite the session log using references/agent/session-log-format.md."
+    },
+    {
+      "id": "source-quality-many-untitled-sections",
+      "severity": "warning",
+      "category": "source-quality",
+      "title": "Active source extraction has quality risk",
+      "details": "Most sections were inferred from heading styles without numeric section ids.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "evidence": [
+        "untitled=14",
+        "sections=14"
+      ],
+      "recommended_action": "Inspect source extraction before relying on downstream test cases."
+    },
+    {
+      "id": "source-quality-no-numeric-sections",
+      "severity": "warning",
+      "category": "source-quality",
+      "title": "Active source extraction has quality risk",
+      "details": "No numeric section ids were detected; section filtering may be unreliable.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "evidence": [
+        "section-1",
+        "section-2",
+        "section-3",
+        "section-4",
+        "section-5",
+        "section-7",
+        "section-8",
+        "section-15",
+        "section-16",
+        "section-17"
+      ],
+      "recommended_action": "Inspect source extraction before relying on downstream test cases."
+    },
+    {
+      "id": "source-quality-oversized-blocks",
+      "severity": "warning",
+      "category": "source-quality",
+      "title": "Active source extraction has quality risk",
+      "details": "Some source blocks are larger than max_chars and require defensive splitting.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx",
+      "evidence": [
+        "section-16:67018"
+      ],
+      "recommended_action": "Inspect source extraction before relying on downstream test cases."
+    }
+  ],
+  "checks": [
+    {
+      "name": "workflow-state-required-fields",
+      "status": "pass",
+      "details": "Required fields present.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-required-input-artifacts",
+      "status": "pass",
+      "details": "Required input artifacts resolve.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-latest-artifact-links",
+      "status": "pass",
+      "details": "Latest artifact links resolve.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "source-selection-required-sections",
+      "status": "pass",
+      "details": "Required sections are present.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "source-selection-xhtml-section",
+      "status": "pass",
+      "details": "Mandatory XHTML source section is present.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "source-selection-context-fields",
+      "status": "pass",
+      "details": "Required context fields are present.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "source-selection-status",
+      "status": "pass",
+      "details": "selection_status is canonical.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "source-selection-required-xhtml",
+      "status": "pass",
+      "details": "XHTML availability matches selection status.",
+      "path": "source-selection.md"
+    },
+    {
+      "name": "workflow-state-source-selection-xhtml",
+      "status": "pass",
+      "details": "XHTML routing guard passed.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-source-selection-selected",
+      "status": "pass",
+      "details": "Source selection status does not block routing.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "source-row-inventory",
+      "status": "pass",
+      "details": "Source Row Inventory contract passed.",
+      "path": "source-row-inventory.md"
+    },
+    {
+      "name": "scope-analyzer-invalid-negative-oracle-inventory",
+      "status": "fail",
+      "details": "negative-oracle-inventory.md is invalid.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "scope-analyzer-missing-requiredness-oracle-inventory",
+      "status": "pass",
+      "details": "requiredness-oracle-inventory.md not required by scope signals.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-scope-gap-review-handoff-artifacts",
+      "status": "pass",
+      "details": "Required scope gap review artifacts resolve.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-scope-gap-review-gap-count",
+      "status": "pass",
+      "details": "Concrete GAP-* entries found.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-scope-gap-review-source-row-inventory",
+      "status": "pass",
+      "details": "Row-level source inventory handoff is present or not required.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-signed-off-gate",
+      "status": "pass",
+      "details": "No signed-off blocking-gap conflict.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-session-log",
+      "status": "pass",
+      "details": "Stage session log resolves.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-session-log-kind",
+      "status": "pass",
+      "details": "Workflow state links a same-stage session log.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-decision-log",
+      "status": "pass",
+      "details": "Stage decision log resolves.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "workflow-state-active-transition-prompt",
+      "status": "pass",
+      "details": "Active transition prompt resolves.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "active-transition-prompt-format",
+      "status": "fail",
+      "details": "Active prompt format contract failed.",
+      "path": "prompt.scope-gaps-to-reviewer.md"
+    },
+    {
+      "name": "workflow-state-stage-transition",
+      "status": "pass",
+      "details": "Stage transition contract passed.",
+      "path": "workflow-state.yaml"
+    },
+    {
+      "name": "active-source-quality",
+      "status": "fail",
+      "details": "Active source quality gate failed.",
+      "path": "C:/Users/Пользователь/Documents/Виталя/GitProjects/qa-agent-v2/fts/AutoFin/source/FT4AutoFinFinal.docx"
+    },
+    {
+      "name": "source-support-duplicate-manifest",
+      "status": "pass",
+      "details": "Duplicate source/support files are covered by artifact manifest or absent.",
+      "path": "."
+    },
+    {
+      "name": "oracle-candidate-obligation-coverage",
+      "status": "pass",
+      "details": "Candidate TC coverage is deferred until a test-case output exists; oracle inventory planning is validated separately.",
+      "path": "."
+    },
+    {
+      "name": "coverage-gap-inventory",
+      "status": "pass",
+      "details": "Coverage gap inventory section not present.",
+      "path": "scope-coverage-gaps.md"
+    },
+    {
+      "name": "session-log-format",
+      "status": "warn",
+      "details": "Session log misses required sections.",
+      "path": "scope-analyzer-session-log.md"
+    },
+    {
+      "name": "decision-log-format",
+      "status": "warn",
+      "details": "Decision log misses required section.",
+      "path": "agent-decision-log.md"
+    },
+    {
+      "name": "active-text-encoding-damage",
+      "status": "pass",
+      "details": "Active text artifact has no encoding damage markers.",
+      "path": "scope-analyzer-session-log.md"
+    }
+  ]
+}

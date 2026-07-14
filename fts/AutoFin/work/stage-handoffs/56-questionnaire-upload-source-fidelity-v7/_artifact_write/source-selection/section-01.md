@@ -1,0 +1,5 @@
+- request_summary: V7 source-fidelity package по загрузке анкеты клиента без изменения FT-first baseline.
+- selected_ft_slug: `AutoFin`
+- selection_status: `selected`
+- created_at: `2026-07-14`
+- created_by: `Codex / ft-scope-analyzer`

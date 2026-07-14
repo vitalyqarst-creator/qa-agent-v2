@@ -1,0 +1,31 @@
+{
+  "target_path": "../../scope-contract.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Контекст",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "In Scope",
+      "content_file": "section-02.md"
+    },
+    {
+      "level": 2,
+      "heading": "Out Of Scope",
+      "content_file": "section-03.md"
+    },
+    {
+      "level": 2,
+      "heading": "Внутренние Рабочие Пакеты",
+      "content_file": "section-04.md"
+    },
+    {
+      "level": 2,
+      "heading": "Result Boundary",
+      "content_file": "section-05.md"
+    }
+  ]
+}

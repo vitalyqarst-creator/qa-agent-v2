@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -135,6 +136,30 @@ coverage_gaps:
             expected_ft_slug="demo",
             reuse_if_current=reuse_if_current,
         )
+
+    def enable_source_fidelity(self, bindings: list[dict[str, object]]) -> Path:
+        path = self.design / "source-to-package-fidelity.json"
+        path.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "scope_slug": "demo-scope",
+                    "bindings": bindings,
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        state = self.state.read_text(encoding="utf-8")
+        state = state.replace(
+            "  test_design_applicability_matrix: work/test-design/demo-scope/test-design-applicability-matrix.md\n",
+            "  test_design_applicability_matrix: work/test-design/demo-scope/test-design-applicability-matrix.md\n"
+            "  source_to_package_fidelity: work/test-design/demo-scope/source-to-package-fidelity.json\n",
+        )
+        self.state.write_text(state, encoding="utf-8")
+        return path
 
     def configure_reset_plan(
         self,
@@ -1395,6 +1420,261 @@ coverage_gaps:
 
         self.assertEqual(result.obligation_count, 3)
         self.assertEqual(result.gap_count, 1)
+
+    def test_preserves_literal_in_declared_projection_targets(self) -> None:
+        literal = "Точный текст интерфейса"
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "Поле использует фиксированный список DICT-001.",
+                f"Отображается {literal} и используется DICT-001.",
+            ),
+            encoding="utf-8",
+        )
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
+                "Отображаются все и только значения DICT-001.",
+                f"Отображается {literal} и все значения DICT-001.",
+            ),
+            encoding="utf-8",
+        )
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace(
+                "Отображаются все и только значения DICT-001.",
+                f"Отображается {literal} и все значения DICT-001.",
+            ),
+            encoding="utf-8",
+        )
+        self.enable_source_fidelity(
+            [
+                {
+                    "binding_id": "FID-001",
+                    "binding_kind": "literal",
+                    "source_ref": "GSR 1",
+                    "source_text": literal,
+                    "atom_id": "ATOM-001",
+                    "obligation_id": "OBL-001",
+                    "handling": "preserve",
+                    "required_targets": [
+                        "atomic_statement",
+                        "required_behavior",
+                        "single_expected_behavior",
+                    ],
+                }
+            ]
+        )
+
+        result = self.compile()
+        evidence = (result.stage_package.parent / "source-evidence.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn('"binding_id":"FID-001"', evidence)
+
+    def test_blocks_lost_literal_in_declared_projection_target(self) -> None:
+        self.enable_source_fidelity(
+            [
+                {
+                    "binding_id": "FID-001",
+                    "binding_kind": "literal",
+                    "source_ref": "GSR 1",
+                    "source_text": "Поле использует фиксированный список DICT-001.",
+                    "atom_id": "ATOM-001",
+                    "obligation_id": "OBL-001",
+                    "handling": "preserve",
+                    "required_targets": ["atomic_statement", "required_behavior"],
+                }
+            ]
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as caught:
+            self.compile()
+
+        self.assertEqual("source-fidelity-literal-missing", caught.exception.code)
+        self.assertEqual(
+            ["required_behavior"],
+            caught.exception.details[0]["missing_targets"],
+        )
+
+    def test_accepts_explicit_literal_locator_only_decision(self) -> None:
+        self.enable_source_fidelity(
+            [
+                {
+                    "binding_id": "FID-001",
+                    "binding_kind": "literal",
+                    "source_ref": "GSR 1",
+                    "source_text": "Служебный заголовок источника",
+                    "atom_id": "ATOM-001",
+                    "obligation_id": "OBL-001",
+                    "handling": "locator-only",
+                    "required_targets": [],
+                    "decision_reason": "Текст является locator, а не наблюдаемым oracle.",
+                }
+            ]
+        )
+
+        result = self.compile()
+
+        self.assertEqual(2, result.obligation_count)
+
+    def test_blocks_exact_byte_conversion_without_source_policy(self) -> None:
+        source_text = "не более 40 МБ"
+        for name in (
+            "atomic-requirements-ledger.md",
+            "coverage-obligation-table.md",
+            "package-test-design-plan.md",
+        ):
+            path = self.design / name
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "Неизвестен текст ошибки.",
+                    f"Размер файла {source_text} (41943040 байт).",
+                ),
+                encoding="utf-8",
+            )
+        self.enable_source_fidelity(
+            [
+                {
+                    "binding_id": "FID-002",
+                    "binding_kind": "unit",
+                    "source_ref": "GSR 2",
+                    "source_text": source_text,
+                    "atom_id": "ATOM-002",
+                    "obligation_id": "OBL-002",
+                    "handling": "coverage-gap",
+                    "required_targets": [
+                        "atomic_statement",
+                        "required_behavior",
+                        "single_expected_behavior",
+                    ],
+                    "unit_value": 40,
+                    "unit_symbol": "МБ",
+                    "gap_id": "GAP-001",
+                }
+            ]
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as caught:
+            self.compile()
+
+        self.assertEqual(
+            "source-fidelity-unit-conversion-without-policy",
+            caught.exception.code,
+        )
+
+    def test_accepts_source_backed_decimal_byte_policy(self) -> None:
+        source_text = "не более 40 МБ"
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "Поле использует фиксированный список DICT-001.",
+                f"Размер файла {source_text} (40000000 байт); DICT-001 сохраняется.",
+            ),
+            encoding="utf-8",
+        )
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
+                "Отображаются все и только значения DICT-001.",
+                f"Размер файла {source_text} (40000000 байт); значения DICT-001 отображаются.",
+            ),
+            encoding="utf-8",
+        )
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace(
+                "Отображаются все и только значения DICT-001.",
+                f"Размер файла {source_text} (40000000 байт); значения DICT-001 отображаются.",
+            ),
+            encoding="utf-8",
+        )
+        self.enable_source_fidelity(
+            [
+                {
+                    "binding_id": "FID-003",
+                    "binding_kind": "unit",
+                    "source_ref": "GSR 1",
+                    "source_text": source_text,
+                    "atom_id": "ATOM-001",
+                    "obligation_id": "OBL-001",
+                    "handling": "decimal-bytes",
+                    "required_targets": [
+                        "atomic_statement",
+                        "required_behavior",
+                        "single_expected_behavior",
+                    ],
+                    "unit_value": 40,
+                    "unit_symbol": "МБ",
+                    "policy_source_ref": "GSR 9; source/policy.md: 1 МБ = 1000000 байт",
+                    "byte_offset": 0,
+                }
+            ]
+        )
+
+        result = self.compile()
+
+        self.assertEqual(2, result.obligation_count)
+
+    def test_blocks_byte_value_that_conflicts_with_declared_policy(self) -> None:
+        source_text = "не более 40 МБ"
+        wrong_projection = f"Размер файла {source_text} (41943040 байт)."
+        ledger = self.design / "atomic-requirements-ledger.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8").replace(
+                "Поле использует фиксированный список DICT-001.",
+                wrong_projection + " Используется DICT-001.",
+            ),
+            encoding="utf-8",
+        )
+        obligations = self.design / "coverage-obligation-table.md"
+        obligations.write_text(
+            obligations.read_text(encoding="utf-8").replace(
+                "Отображаются все и только значения DICT-001.",
+                wrong_projection + " Значения DICT-001 отображаются.",
+            ),
+            encoding="utf-8",
+        )
+        plan = self.design / "package-test-design-plan.md"
+        plan.write_text(
+            plan.read_text(encoding="utf-8").replace(
+                "Отображаются все и только значения DICT-001.",
+                wrong_projection + " Значения DICT-001 отображаются.",
+            ),
+            encoding="utf-8",
+        )
+        self.enable_source_fidelity(
+            [
+                {
+                    "binding_id": "FID-004",
+                    "binding_kind": "unit",
+                    "source_ref": "GSR 1",
+                    "source_text": source_text,
+                    "atom_id": "ATOM-001",
+                    "obligation_id": "OBL-001",
+                    "handling": "decimal-bytes",
+                    "required_targets": [
+                        "atomic_statement",
+                        "required_behavior",
+                        "single_expected_behavior",
+                    ],
+                    "unit_value": 40,
+                    "unit_symbol": "МБ",
+                    "policy_source_ref": "GSR 9; source/policy.md: 1 МБ = 1000000 байт",
+                    "byte_offset": 0,
+                }
+            ]
+        )
+
+        with self.assertRaises(PreparedCompilerDiagnostic) as caught:
+            self.compile()
+
+        self.assertEqual(
+            "source-fidelity-byte-conversion-mismatch",
+            caught.exception.code,
+        )
+        self.assertEqual(40_000_000, caught.exception.details[0]["expected_bytes"])
 
 
 if __name__ == "__main__":

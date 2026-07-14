@@ -1,0 +1,46 @@
+{
+  "target_path": "../../source-selection.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Context",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Main FT Documents",
+      "content_file": "section-02.md"
+    },
+    {
+      "level": 2,
+      "heading": "Machine-Readable XHTML Source",
+      "content_file": "section-03.md"
+    },
+    {
+      "level": 2,
+      "heading": "Structural Cross-Check PDF",
+      "content_file": "section-04.md"
+    },
+    {
+      "level": 2,
+      "heading": "Support Files And Mockups",
+      "content_file": "section-05.md"
+    },
+    {
+      "level": 2,
+      "heading": "Source Quality",
+      "content_file": "section-06.md"
+    },
+    {
+      "level": 2,
+      "heading": "Ambiguity And Decision Log",
+      "content_file": "section-07.md"
+    },
+    {
+      "level": 2,
+      "heading": "Handoff",
+      "content_file": "section-08.md"
+    }
+  ]
+}

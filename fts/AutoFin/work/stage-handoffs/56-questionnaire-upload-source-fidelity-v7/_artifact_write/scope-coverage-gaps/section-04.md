@@ -1,0 +1,1 @@
+- 10 остальных obligations, включая заведомо oversized fixture `50 МБ`, остаются testable.

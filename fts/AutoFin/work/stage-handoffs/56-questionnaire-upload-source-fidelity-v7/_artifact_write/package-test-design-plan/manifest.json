@@ -1,0 +1,16 @@
+{
+  "target_path": "../../compiler-inputs/questionnaire-upload-transfer-v7/package-test-design-plan.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Portable Fixture Contracts",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Plan",
+      "content_file": "section-02.md"
+    }
+  ]
+}

@@ -14,6 +14,7 @@ This reference defines the compact, source-backed input used by fresh writer and
 - Registry entries come only from the linked `source-selection.md`. DOCX and XHTML/HTML use the same base name; selected PDF is structural cross-check evidence.
 - The canonical applicability matrix decides routing. Numeric/boundary, dependency/state, integration/persistence, table-parity and unclassified applicable dimensions produce `standard-required` plus explicit `unsupported_dimensions`; flags and prompts cannot force the fast path.
 - Compiler contract v2 preserves explicit `OBL-* -> ATOM-* -> TC/GAP`. Package v8 retains the v7 exhaustive dictionary, calibration and input-fingerprint contracts and adds exact bounded `reference-only` fixture values with hierarchy paths; evidence prose cannot replace these fields.
+- When workflow-state declares `source_to_package_fidelity`, compilation must pass its literal/unit bindings before the package is built; normalized bindings are compiler evidence covered by the package fingerprint.
 - When the FT package contains `AGENT-NOTES.md`, workflow compilation embeds it as mandatory package context in `source-evidence.md`. Package notes remain context/guardrails, not a replacement requirement source.
 - Every input-based design-plan row binds a concrete synthetic/source-backed value or stable fixture. Abstract classes such as `valid-text` fail with `input-fixture-required`.
 - Before live, empty or known non-observable prepared oracles block as `blocked-prepared-oracle-quality`.
@@ -89,6 +90,7 @@ Keep only scope-local evidence needed to understand the obligations:
 - parity decisions and limitations;
 - dictionary/oracle statements;
 - coverage gaps and accepted risks.
+- normalized source-to-package fidelity bindings when the workflow declares them.
 
 Builder inputs use explicit selectors. Each selector must resolve to a Markdown heading block or a narrow line window; missing selectors block the package. Full-file inclusion is explicit and byte-capped. One evidence slice is capped by its declared `max_bytes`. Fast-eligible combined `source-evidence.md` is capped at 32768 bytes. A `standard-required` diagnostic/routing package may use up to 49152 bytes so mandatory package context can be retained, but it remains ineligible for the optimized writer and is rejected by fast-runner preflight.
 

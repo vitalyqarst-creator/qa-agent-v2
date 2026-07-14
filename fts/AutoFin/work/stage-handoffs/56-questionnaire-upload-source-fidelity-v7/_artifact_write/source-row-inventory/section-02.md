@@ -1,0 +1,3 @@
+- Каждый in-scope clause имеет отдельный `SRC-QUT-*.P*` в scope contract.
+- `О` и `Р` интерпретируются только через обязательный `AGENT-NOTES.md`.
+- V6 draft и production test cases не являются source evidence; inventory сохранен по текущему Final DOCX/XHTML/PDF.

@@ -1,0 +1,4 @@
+- все 11 V6 source obligations сохранены: 10 testable и 1 gap obligation;
+- package compile допустим только после deterministic fidelity gate;
+- `test-cases/16-questionnaire-upload-transfer-v7.md` должен оставаться отсутствующим;
+- V6 package/draft остаются immutable evidence и не изменяются.

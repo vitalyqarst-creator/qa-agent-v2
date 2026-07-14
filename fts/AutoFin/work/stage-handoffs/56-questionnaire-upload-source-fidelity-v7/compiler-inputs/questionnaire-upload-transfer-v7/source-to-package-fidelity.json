@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "scope_slug": "questionnaire-upload-transfer-v7",
+  "bindings": [
+    {
+      "binding_id": "FID-QUT-001",
+      "binding_kind": "literal",
+      "source_ref": "BSR 206; DOCX table 6 row 81; XHTML row 134",
+      "source_text": "Анкета клиента. Распечатайте, подпишите с клиентом и загрузите скан в заявку",
+      "atom_id": "ATOM-001",
+      "obligation_id": "OBL-QUT-001",
+      "handling": "preserve",
+      "required_targets": [
+        "atomic_statement",
+        "required_behavior",
+        "single_expected_behavior"
+      ]
+    },
+    {
+      "binding_id": "FID-QUT-002",
+      "binding_kind": "unit",
+      "source_ref": "BSR 210; DOCX table 6 row 82; XHTML row 135",
+      "source_text": "размер файла не более 40 МБ",
+      "atom_id": "ATOM-008",
+      "obligation_id": "OBL-QUT-008",
+      "handling": "coverage-gap",
+      "required_targets": [
+        "atomic_statement",
+        "required_behavior",
+        "single_expected_behavior"
+      ],
+      "unit_value": 40,
+      "unit_symbol": "МБ",
+      "gap_id": "GAP-QUT-001",
+      "decision_reason": "Final FT does not define decimal or binary byte convention."
+    },
+    {
+      "binding_id": "FID-QUT-003",
+      "binding_kind": "unit",
+      "source_ref": "BSR 210; DOCX table 6 row 82; XHTML row 135",
+      "source_text": "размер файла не более 40 МБ",
+      "atom_id": "ATOM-009",
+      "obligation_id": "OBL-QUT-009",
+      "handling": "source-unit-only",
+      "required_targets": [
+        "atomic_statement",
+        "required_behavior",
+        "single_expected_behavior"
+      ],
+      "unit_value": 40,
+      "unit_symbol": "МБ",
+      "decision_reason": "50 МБ fixture is unambiguously over the limit under both conventions."
+    }
+  ]
+}

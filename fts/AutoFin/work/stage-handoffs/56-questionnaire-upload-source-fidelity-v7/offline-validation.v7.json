@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "status": "pass-offline-gap-review-required",
+  "live_invocations": 0,
+  "production_test_cases_changed": false,
+  "prepared_package": {
+    "path": "work/review-cycles/questionnaire-upload-transfer-v7-20260714/prepared-input/questionnaire-upload-transfer-v7-r1/stage-package.json",
+    "package_version": 8,
+    "stage_package_sha256": "f51553797f1472c3c357517f860190cbde1d0670a940d0079841860eecc3ddd7",
+    "package_digest": "7de3a3a818ca6a9b81e8dd9e85cd3c5d0699d1aaea8a9739eb6832247f966bf8",
+    "input_fingerprint": "365d6cf643ad8377629a9388e06b69309eae4339a3b4931b0ca46f7fa32087b5",
+    "atomic_obligations_sha256": "cb6808f680d3f4cbeb10ad771b7930a965247f3c2ca7a55dbd138c681f9aee11",
+    "obligation_count": 11,
+    "testable_obligation_count": 10,
+    "gap_obligation_count": 1,
+    "planned_test_case_count": 9,
+    "execution_profile": "standard-required"
+  },
+  "source_fidelity": {
+    "artifact_sha256": "d7265a6a39935262ba05a8a9e9b66f787cd289f9c47c97e4ee7afc269c89b8f7",
+    "binding_count": 3,
+    "literal_projection": "pass",
+    "unit_gap_projection": "pass",
+    "unsupported_exact_byte_values_found": 0
+  },
+  "implementation": {
+    "prepared_compiler_sha256": "ece727f675e29ca1cc51ebafa22a972d57328f7f0182124dc812918540178f20",
+    "prepared_compiler_tests_sha256": "fe0d1f88707bccf4d31730352d9e4b5eb7f89824885b1812b80b43bb2f3df277"
+  },
+  "checks": {
+    "focused_compiler_tests": "70 passed",
+    "full_unit_discovery": "1022 passed; 1 skipped",
+    "architecture_audit": "61 checks; 0 findings",
+    "scoped_artifact_audit": "0 errors; 3 expected source-quality warnings",
+    "prepared_compile": "built then immutable reuse passed",
+    "runner_validate_only": "validated; no cycle outputs created; final target absent"
+  },
+  "open_gap": "GAP-QUT-001",
+  "next_skill": "ft-test-case-reviewer",
+  "live_authorized": false
+}

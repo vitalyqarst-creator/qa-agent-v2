@@ -1,0 +1,7 @@
+- `FIXTURE-QUT-JPG`: валидный JPEG `questionnaire-valid.jpg`, 1 КБ.
+- `FIXTURE-QUT-PNG`: валидный PNG `questionnaire-valid.png`, 1 КБ.
+- `FIXTURE-QUT-PDF`: валидный PDF `questionnaire-valid.pdf`, 1 КБ.
+- `FIXTURE-QUT-PDF-OVER40`: валидный PDF `questionnaire-over40mb.pdf`, размер 50 МБ; fixture заведомо больше лимита при decimal и binary interpretation.
+- `FIXTURE-QUT-TXT`: текстовый `questionnaire-invalid.txt`, 1 КБ.
+- `FIXTURE-QUT-PDF-A`: валидный PDF `questionnaire-first.pdf`, 1 КБ.
+- `FIXTURE-QUT-PDF-B`: валидный PDF `questionnaire-second.pdf`, 1 КБ, другое имя и содержимое.

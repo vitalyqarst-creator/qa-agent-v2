@@ -1,0 +1,21 @@
+{
+  "target_path": "../../scope-execution-options.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Recommended",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Allowed Offline Now",
+      "content_file": "section-02.md"
+    },
+    {
+      "level": 2,
+      "heading": "Forbidden Now",
+      "content_file": "section-03.md"
+    }
+  ]
+}

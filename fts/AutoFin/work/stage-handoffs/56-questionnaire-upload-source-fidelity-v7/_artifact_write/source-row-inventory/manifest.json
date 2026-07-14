@@ -1,0 +1,16 @@
+{
+  "target_path": "../../source-row-inventory.md",
+  "preamble_file": "preamble.md",
+  "sections": [
+    {
+      "level": 2,
+      "heading": "Source Row Inventory",
+      "content_file": "section-01.md"
+    },
+    {
+      "level": 2,
+      "heading": "Inventory Notes",
+      "content_file": "section-02.md"
+    }
+  ]
+}

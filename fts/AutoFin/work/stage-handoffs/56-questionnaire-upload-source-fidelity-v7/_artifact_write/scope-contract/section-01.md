@@ -1,0 +1,5 @@
+- `ft_slug`: `AutoFin`
+- `scope_slug`: `questionnaire-upload-transfer-v7`
+- внешний scope: текущий Final, `section-16`, блок `Документы по заявке`.
+- внутренний package: информационный literal и desktop-загрузка файла `Анкета клиента`.
+- режим: offline source-to-package fidelity; без writer/reviewer live и без изменения baseline.
