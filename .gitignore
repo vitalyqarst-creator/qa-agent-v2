@@ -29,6 +29,17 @@ evals/runs/
 evals/candidates/*
 !evals/candidates/README.md
 
+# Raw qualification runs stay local. Curated benchmark definitions and schema
+# reservations are committed through their explicit allowlisted directories.
+evals/sdk-turn-diagnostics/
+evals/full-production-benchmark/*
+!evals/full-production-benchmark/configs/
+!evals/full-production-benchmark/configs/**
+evals/lean-production-benchmark/
+evals/schema-canary/*
+!evals/schema-canary/qualification-registry/
+!evals/schema-canary/qualification-registry/*.json
+
 # FT packages and generated/manual test-case artifacts are intentionally out of
 # the agent repository. Keep reusable agent rules in skills/ and references/.
 fts/
@@ -64,6 +75,7 @@ fts/AutoFin/support/**/*.xls
 fts/AutoFin/support/**/*.png
 fts/AutoFin/support/**/*.jpg
 fts/AutoFin/support/**/*.jpeg
+fts/AutoFin/test-cases/*shadow*.md
 fts/AutoFin/work/
 !fts/AutoFin/work/
 fts/AutoFin/work/*

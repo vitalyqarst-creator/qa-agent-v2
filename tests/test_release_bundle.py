@@ -19,6 +19,8 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertIn("fts/AutoFin/mockups/", ignore)
         self.assertIn("fts/AutoFin/support/**/*.docx", ignore)
         self.assertIn("fts/AutoFin/support/**/*.pdf", ignore)
+        self.assertIn("evals/sdk-turn-diagnostics/", ignore)
+        self.assertIn("fts/AutoFin/test-cases/*shadow*.md", ignore)
 
     def test_production_profile_excludes_benchmarks_tests_and_ft_inputs(self) -> None:
         receipt = build_release_bundle(
