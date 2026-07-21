@@ -70,6 +70,123 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("work/review-cycles/<scope-slug>/outputs/", reviewer_output)
         self.assertIn("те же строки, колонки и значения", reviewer_output)
 
+    def test_checked_in_schema_v2_observation_is_executor_owned(self) -> None:
+        iteration = (
+            ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md"
+        ).read_text(encoding="utf-8")
+        observation = (
+            ROOT_DIR
+            / "references"
+            / "agent"
+            / "full-process-timing-observation.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("production.checked_in_observation", iteration)
+        self.assertIn("start_full_process_observation.py --execute", iteration)
+        self.assertIn("schema v1 остаётся", iteration)
+        self.assertIn("не более одного раза, без retry или fallback", iteration)
+        self.assertIn("Config schema v1 остаётся start-only", observation)
+        self.assertIn("точное `task_complete`", observation.lower())
+
+    def test_checked_in_observation_allows_only_bounded_prebootstrap_reads(self) -> None:
+        observation = (
+            ROOT_DIR
+            / "references"
+            / "agent"
+            / "full-process-timing-observation.md"
+        ).read_text(encoding="utf-8")
+        launch = (
+            ROOT_DIR
+            / "evals"
+            / "full-production-benchmark"
+            / "configs"
+            / "postfinal-v2-client-addresses-v15"
+            / "launch-new-session.md"
+        ).read_text(encoding="utf-8")
+
+        for content in (observation, launch):
+            self.assertIn("ограниченный pre-bootstrap preflight", content.lower())
+            self.assertIn("metadata-bootstrap", content)
+            self.assertIn("primary root-agent", content)
+        self.assertNotIn(
+            "Первое инструментальное действие root-agent должно", observation
+        )
+        self.assertNotIn("Первым инструментальным действием", launch)
+        self.assertNotIn("Вторым инструментальным действием", launch)
+
+    def test_controller_created_observation_is_not_claimed_as_user_turn(self) -> None:
+        observation = (
+            ROOT_DIR
+            / "references"
+            / "agent"
+            / "full-process-timing-observation.md"
+        ).read_text(encoding="utf-8")
+        launch = (
+            ROOT_DIR
+            / "evals"
+            / "full-production-benchmark"
+            / "configs"
+            / "postfinal-v2-client-addresses-v15"
+            / "launch-controller-session.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("thread_source = subagent", observation)
+        self.assertIn("--request-start-source controller-job-start", observation)
+        self.assertIn("request-to-final", observation)
+        self.assertIn("ограниченный pre-bootstrap preflight", launch.lower())
+        self.assertIn("`scripts/probe_environment.py` не запускай", launch)
+        self.assertIn("thread_source = subagent", launch)
+        self.assertIn("--request-start-source controller-job-start", launch)
+        self.assertIn("request-to-final reconciliation — `not-applicable`", launch)
+
+    def test_controller_metadata_has_dedicated_fail_closed_helper(self) -> None:
+        observation = (
+            ROOT_DIR
+            / "references"
+            / "agent"
+            / "full-process-timing-observation.md"
+        ).read_text(encoding="utf-8")
+        helper = (
+            ROOT_DIR / "scripts" / "read_codex_controller_turn_metadata.mjs"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("read_codex_controller_turn_metadata.mjs", observation)
+        self.assertIn('metadata.thread_source !== "subagent"', helper)
+        self.assertIn('source: "controller-job-start"', helper)
+        self.assertIn("Number.isSafeInteger(metadata.turn_started_at_unix_ms)", helper)
+
+    def test_observation_requires_cache_mode_disclosure(self) -> None:
+        observation = (
+            ROOT_DIR
+            / "references"
+            / "agent"
+            / "full-process-timing-observation.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("`cold-cache`, `warm-cache`", observation)
+        self.assertIn("не может называться временем первичного извлечения", observation)
+
+    def test_v16_launches_use_one_exact_metadata_call(self) -> None:
+        launch_root = (
+            ROOT_DIR
+            / "evals"
+            / "full-production-benchmark"
+            / "configs"
+            / "postfinal-v2-client-addresses-v16"
+        )
+        controller = (launch_root / "launch-controller-session.md").read_text(
+            encoding="utf-8"
+        )
+        user = (launch_root / "launch-new-session.md").read_text(encoding="utf-8")
+
+        self.assertIn("`mcp__node_repl__js` ровно один раз", controller)
+        self.assertIn("read_codex_controller_turn_metadata.mjs", controller)
+        self.assertIn("--request-start-source controller-job-start", controller)
+        self.assertIn("ожидается `warm-cache`", controller)
+        self.assertIn("`mcp__node_repl__js` ровно один раз", user)
+        self.assertIn("read_codex_turn_metadata.mjs", user)
+        self.assertIn("--request-start-source codex-request-metadata", user)
+
 
 if __name__ == "__main__":
     unittest.main()

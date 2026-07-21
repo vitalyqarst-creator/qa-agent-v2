@@ -12,6 +12,11 @@ from pathlib import Path
 
 from docx import Document
 
+from scripts.validate_agent_artifacts import (
+    expected_transition_prompt,
+    transition_prompt_kind,
+)
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPT_PATH = ROOT_DIR / "scripts" / "validate_agent_artifacts.py"
@@ -3397,6 +3402,143 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("workflow-state-ready-for-gap-review-without-gaps", finding_ids)
+
+    def test_compiler_v3_scope_analyzer_accepts_source_assertion_reviewer_prompt(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            self.write_valid_session_log(
+                fixture_root / "scope-analyzer-session-log.md",
+                skill="ft-scope-analyzer",
+            )
+            self.write_valid_source_selection(fixture_root / "source-selection.md")
+            (fixture_root / "scope-contract.md").write_text(
+                "# Scope Contract\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "scope-coverage-gaps.md").write_text(
+                "# Scope Coverage Gaps\n\n- Gaps: `0`\n- Blocking gaps: `no`\n",
+                encoding="utf-8",
+            )
+            self.write_scope_source_row_inventory(
+                fixture_root / "source-row-inventory.md"
+            )
+            (fixture_root / "source-row-extraction-spec.json").write_text(
+                "{}\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "source-row-baseline.json").write_text(
+                "{}\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "source-assertions.json").write_text(
+                "{}\n",
+                encoding="utf-8",
+            )
+            (fixture_root / "prompt.scope-assertions-to-reviewer.md").write_text(
+                "\n".join(
+                    [
+                        "# Prompt",
+                        "",
+                        "## Goal",
+                        "Run independent source assertion review.",
+                        "",
+                        "## Inputs",
+                        "- `source-selection.md`",
+                        "- `scope-contract.md`",
+                        "- `scope-coverage-gaps.md`",
+                        "- `source-row-inventory.md`",
+                        "- `source-row-extraction-spec.json`",
+                        "- `source-row-baseline.json`",
+                        "- `source-assertions.json`",
+                        "- `workflow-state.yaml`",
+                        "",
+                        "## Guardrails",
+                        "Use reviewer mode `source_assertion_review`; do not review test cases.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (fixture_root / "workflow-state.yaml").write_text(
+                "\n".join(
+                    [
+                        "ft_slug: ft-sample",
+                        "scope_slug: ui-main-info",
+                        "prepared_compiler_contract_version: 3",
+                        "current_stage: ft-scope-analyzer",
+                        "stage_status: ready-for-next-stage",
+                        "current_round: 0",
+                        "next_skill: ft-test-case-reviewer",
+                        "required_inputs:",
+                        "  - source-selection.md",
+                        "  - scope-contract.md",
+                        "  - scope-coverage-gaps.md",
+                        "  - source-row-inventory.md",
+                        "  - source-row-extraction-spec.json",
+                        "  - source-row-baseline.json",
+                        "  - source-assertions.json",
+                        "  - prompt.scope-assertions-to-reviewer.md",
+                        "latest_artifacts:",
+                        "  session_log: scope-analyzer-session-log.md",
+                        "  source_selection: source-selection.md",
+                        "  scope_contract: scope-contract.md",
+                        "  coverage_gaps: scope-coverage-gaps.md",
+                        "  source_row_inventory: source-row-inventory.md",
+                        "  source_row_extraction_spec: source-row-extraction-spec.json",
+                        "  source_row_baseline: source-row-baseline.json",
+                        "  source_assertions: source-assertions.json",
+                        "  active_transition_prompt: prompt.scope-assertions-to-reviewer.md",
+                        "coverage_gaps:",
+                        "  blocking: 0",
+                        "  non_blocking: 0",
+                        "open_questions: []",
+                        "blocking_reasons: []",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(fixture_root),
+                "--json",
+                "--fail-on",
+                "error",
+                "--session-log-policy",
+                "strict",
+            )
+
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn(
+            "workflow-state-active-transition-prompt-kind-mismatch",
+            finding_ids,
+        )
+        self.assertNotIn(
+            "workflow-state-source-assertion-review-missing-handoff-artifacts",
+            finding_ids,
+        )
+
+    def test_compiler_v3_source_assertion_transition_rejects_writer_prompt_kind(self) -> None:
+        state = {
+            "prepared_compiler_contract_version": 3,
+            "current_stage": "ft-scope-analyzer",
+            "stage_status": "ready-for-next-stage",
+            "next_skill": "ft-test-case-reviewer",
+        }
+
+        self.assertEqual(
+            expected_transition_prompt(state),
+            "prompt.scope-assertions-to-reviewer.md",
+        )
+        self.assertEqual(
+            transition_prompt_kind("prompt.scope-assertions-to-reviewer.md"),
+            "scope-assertions-to-reviewer",
+        )
+        self.assertNotEqual(
+            transition_prompt_kind("prompt.writer-to-reviewer.round-1.md"),
+            transition_prompt_kind("prompt.scope-assertions-to-reviewer.md"),
+        )
 
     def test_scope_gap_review_to_writer_prompt_must_reference_review_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

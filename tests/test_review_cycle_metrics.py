@@ -98,7 +98,12 @@ class ReviewCycleMetricsTests(unittest.TestCase):
             finished_at=now,
             duration_ms=12,
             exit_code=0,
-            usage={"input_tokens": 10, "output_tokens": 4, "total_tokens": 14},
+            usage={
+                "input_tokens": 10,
+                "output_tokens": 4,
+                "reasoning_tokens": 2,
+                "total_tokens": 14,
+            },
         )
         return manifest, result, execution
 
@@ -108,6 +113,14 @@ class ReviewCycleMetricsTests(unittest.TestCase):
         self.assertEqual(4, metrics.input_artifact_count)
         self.assertEqual(self.output.stat().st_size, metrics.output_artifact_bytes)
         self.assertEqual(14, metrics.total_tokens)
+        self.assertEqual(2, metrics.reasoning_tokens)
+
+    def test_legacy_metric_without_reasoning_tokens_remains_readable(self) -> None:
+        metrics = build_stage_metrics(*self.evidence(), repo_root=self.root)
+        legacy = metrics.to_dict()
+        legacy.pop("reasoning_tokens")
+        restored = StageMetrics.from_dict(legacy)
+        self.assertIsNone(restored.reasoning_tokens)
 
     def test_recorder_writes_attempt_and_cycle_evidence(self) -> None:
         metrics = build_stage_metrics(*self.evidence(), repo_root=self.root)

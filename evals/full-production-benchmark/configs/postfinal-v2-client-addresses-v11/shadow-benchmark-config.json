@@ -1,0 +1,61 @@
+{
+  "schema_version": 2,
+  "benchmark_id": "postfinal-v2-client-addresses-v11",
+  "ft_root": "fts/AutoFin",
+  "ft_slug": "AutoFin",
+  "scope_slug": "application-card-client-addresses",
+  "source_files": [
+    "source/PostFinal-v2/PostFinal-v2.docx",
+    "source/PostFinal-v2/PostFinal-v2.xhtml",
+    "source/PostFinal-v2/PostFinal-v2.pdf"
+  ],
+  "scope_inputs": [
+    {
+      "path": "support/PostFinal-v2/client-addresses-approved-clarifications-v3.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification"
+    },
+    {
+      "path": "AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    }
+  ],
+  "expected_sha256": {
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+    "fts/AutoFin/AGENT-NOTES.md": "5713d2d8d49d34354ae4308701e0ea2162ce41ac21f555ba098d1152a92087bf",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-docx.json": "44193759d4ba7a72162d3fd647c0a342502286df7614e814ff0b7b73b1762f36",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-pdf.json": "49759c443616c32d0e23182f36c4d1e5bd1a45c6e705f1fc56f4992edaa401f9",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-xhtml-boundary.json": "d2fa04df7e05ac7da9fff46598a1ec33425ccc1975003a3a14e4e9bd1ec53014",
+    "fts/AutoFin/work/vendor-references/dadata-reference.md": "77f9f57f33860ea059a7b828d39436f19c3944b40fc3dbdf8efd5bfb848a27df",
+    "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v3.md": "1b0b93993d4531ff090c9462837cf1ddd04bee5194b4e359be3236e3003a33da",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v11/bounded-context-template.json": "3356428e27d4185913e734163b276bb8f64ee750a6bb2d49a8f7ea116b13adc8",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v11/source-row-extraction-spec.json": "66764abb9470c7c41d0435e7587c51edae8c212caa4a50f906d0b940f93bccde"
+  },
+  "source_preparation": {
+    "context_template": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v11/bounded-context-template.json",
+    "cache_dir": ".codex-temp/source-preparation-cache"
+  },
+  "outputs": {
+    "handoff_dir": "work/stage-handoffs/87-application-card-client-addresses-v11",
+    "cycle_dir": "work/review-cycles/application-card-client-addresses-v11-20260720",
+    "final_artifact": "test-cases/4.3-application-card-client-addresses-shadow-20260720-v11.md"
+  },
+  "observation_root": "work/full-process-observation",
+  "recorder_entrypoint": "scripts/workflow_wall_clock.py",
+  "production_wrapper": "scripts/run_standard_production_iteration.py",
+  "measurement_mode": "observational"
+}

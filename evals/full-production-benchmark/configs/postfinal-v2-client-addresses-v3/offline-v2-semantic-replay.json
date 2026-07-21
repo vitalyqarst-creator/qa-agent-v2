@@ -1,0 +1,778 @@
+{
+  "version": 1,
+  "status": "blocked",
+  "inputs": {
+    "context": "fts/AutoFin/work/full-process-observation/019f78a6-e045-7922-8d8d-1e4505c59257/source-preparation/prepared-bounded-context.json",
+    "scope_boundary_decision": "fts/AutoFin/work/full-process-observation/019f78a6-e045-7922-8d8d-1e4505c59257/runtime/scope-analysis/scope-boundary-decision.json",
+    "semantic_design": "fts/AutoFin/work/full-process-observation/019f78a6-e045-7922-8d8d-1e4505c59257/runtime/semantic-design/semantic-design.model-output.json"
+  },
+  "transport_diagnostics": {
+    "version": 1,
+    "status": "findings",
+    "finding_count": 13,
+    "repairable_count": 12,
+    "blocking_count": 1,
+    "raw_sha256": "fc3bf868afedea088ff6fb986e09a4373f97ffaf951fe802ef05493d45a14912",
+    "findings": [
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[0].requirement_code_evidence",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-115",
+        "requirement_code": "BSR 115",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[1].requirement_code_evidence",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-116",
+        "requirement_code": "BSR 116",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[2].requirement_code_evidence",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-117",
+        "requirement_code": "BSR 117",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "clarification-binding-code-overreach",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[3].clarification_clause_bindings[0].requirement_codes",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-118",
+        "clarification_id": "CLR-ADDR-001",
+        "outside_requirement_codes": [
+          "BSR 119",
+          "BSR 143",
+          "BSR 144"
+        ],
+        "retained_requirement_codes": [
+          "BSR 118"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[3].requirement_code_evidence",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-118",
+        "requirement_code": "BSR 118",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "clarification-binding-code-overreach",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[4].clarification_clause_bindings[0].requirement_codes",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-119",
+        "clarification_id": "CLR-ADDR-001",
+        "outside_requirement_codes": [
+          "BSR 118",
+          "BSR 143",
+          "BSR 144"
+        ],
+        "retained_requirement_codes": [
+          "BSR 119"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[4].requirement_code_evidence",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-119",
+        "requirement_code": "BSR 119",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[18].assertions[5].requirement_code_evidence",
+        "source_row_id": "SRC-019",
+        "assertion_id": "ASSERT-SRC-019-120",
+        "requirement_code": "BSR 120",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[19].assertions[0].requirement_code_evidence",
+        "source_row_id": "SRC-020",
+        "assertion_id": "ASSERT-SRC-020-121",
+        "requirement_code": "BSR 121",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[19].assertions[1].requirement_code_evidence",
+        "source_row_id": "SRC-020",
+        "assertion_id": "ASSERT-SRC-020-122",
+        "requirement_code": "BSR 122",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "clarification-binding-code-overreach",
+        "severity": "repairable",
+        "path": "$.source_designs[31].assertions[0].clarification_clause_bindings[0].requirement_codes",
+        "source_row_id": "SRC-032",
+        "assertion_id": "ASSERT-SRC-032-CODES",
+        "clarification_id": "CLR-ADDR-001",
+        "outside_requirement_codes": [
+          "BSR 118",
+          "BSR 119"
+        ],
+        "retained_requirement_codes": [
+          "BSR 143",
+          "BSR 144"
+        ]
+      },
+      {
+        "code": "duplicate-requirement-code-evidence",
+        "severity": "repairable",
+        "path": "$.source_designs[43].assertions[0].requirement_code_evidence",
+        "source_row_id": "SRC-044",
+        "assertion_id": "ASSERT-SRC-044-324",
+        "requirement_code": "BSR 324",
+        "duplicate_count": 2,
+        "provenance_roles": [
+          "xhtml-row",
+          "pdf-parity"
+        ]
+      },
+      {
+        "code": "obligation-registry-mismatch",
+        "severity": "blocking",
+        "path": "$.obligations",
+        "assertion_obligation_count": 33,
+        "registry_obligation_count": 3,
+        "missing_obligation_ids": [
+          "OBL-SRC-019-115",
+          "OBL-SRC-019-116",
+          "OBL-SRC-019-117",
+          "OBL-SRC-019-119",
+          "OBL-SRC-019-120",
+          "OBL-SRC-020-121",
+          "OBL-SRC-020-122",
+          "OBL-SRC-021-CODES",
+          "OBL-SRC-022-125",
+          "OBL-SRC-023-126",
+          "OBL-SRC-024-127",
+          "OBL-SRC-025-128",
+          "OBL-SRC-026-129",
+          "OBL-SRC-027-130",
+          "OBL-SRC-028-CODES",
+          "OBL-SRC-029-CODES",
+          "OBL-SRC-030-CODES",
+          "OBL-SRC-031-CODES",
+          "OBL-SRC-032-CODES",
+          "OBL-SRC-033-CODES",
+          "OBL-SRC-034-CODES",
+          "OBL-SRC-035-150",
+          "OBL-SRC-036-151",
+          "OBL-SRC-037-152",
+          "OBL-SRC-038-153",
+          "OBL-SRC-039-154",
+          "OBL-SRC-040-155",
+          "OBL-SRC-041-156",
+          "OBL-SRC-042-CODES",
+          "OBL-SRC-043-CODES"
+        ],
+        "extra_obligation_ids": []
+      }
+    ]
+  },
+  "normalization_receipt": {
+    "version": 1,
+    "status": "applied",
+    "repair_count": 108,
+    "repairs": [
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[18].assertions[0].requirement_code_evidence[1]",
+        "previous_value_sha256": "05a067651cb6cc9163edf8ae3f418a187069fac2572258a205a779f5a0b30b67"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "1b4cf649fb31b2fd2911f9becc82a318aa98f92c1a83aee49bf5128aa71767a1"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[18].assertions[1].requirement_code_evidence[1]",
+        "previous_value_sha256": "632639fbe67a37bc677aeb61f86cb205f50bc63459c8a675aa785d9fd58c9ebf"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[1].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[1].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "1b4cf649fb31b2fd2911f9becc82a318aa98f92c1a83aee49bf5128aa71767a1"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[18].assertions[2].requirement_code_evidence[1]",
+        "previous_value_sha256": "253b1487cbe3bed3be3cb675d7ef5f1d6896dcf175fb018183f475c602255f65"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[2].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[2].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "1b4cf649fb31b2fd2911f9becc82a318aa98f92c1a83aee49bf5128aa71767a1"
+      },
+      {
+        "rule": "restrict-clarification-codes-to-owning-assertion",
+        "path": "$.source_designs[18].assertions[3].clarification_clause_bindings[0].requirement_codes",
+        "previous_value_sha256": "327888d0f384e2f14b57f68fed3ec720510c95f95449814926699d79cd7db02f"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[18].assertions[3].requirement_code_evidence[1]",
+        "previous_value_sha256": "787effe790349ce9f92b1308ea5359a53e57c6deffd6229143f742823912fb3a"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[3].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[3].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "1b4cf649fb31b2fd2911f9becc82a318aa98f92c1a83aee49bf5128aa71767a1"
+      },
+      {
+        "rule": "restrict-clarification-codes-to-owning-assertion",
+        "path": "$.source_designs[18].assertions[4].clarification_clause_bindings[0].requirement_codes",
+        "previous_value_sha256": "327888d0f384e2f14b57f68fed3ec720510c95f95449814926699d79cd7db02f"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[18].assertions[4].requirement_code_evidence[1]",
+        "previous_value_sha256": "de3affd72813fdf93e6b7aac44e54021b3e35fd23b44336907646487e3f26e8d"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[4].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[4].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "1b4cf649fb31b2fd2911f9becc82a318aa98f92c1a83aee49bf5128aa71767a1"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[18].assertions[5].requirement_code_evidence[1]",
+        "previous_value_sha256": "08184707a4e725eeeed5dd285e476941223cbb30f827184f75e7ad582c4caa3b"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[5].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[18].assertions[5].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "1b4cf649fb31b2fd2911f9becc82a318aa98f92c1a83aee49bf5128aa71767a1"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[19].assertions[0].requirement_code_evidence[1]",
+        "previous_value_sha256": "522cacbf6a26aaf9ad0278a1de26045401d7f8eb457c6ef955f60de28e46c6f9"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[19].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[19].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "31b4aa0e2616cdbd6e626ab74b14eda4276f546f5bc90cc01113ba543ad52471"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[19].assertions[1].requirement_code_evidence[1]",
+        "previous_value_sha256": "67326c01ac5883359108ef82e375efe141ac1414a384672de3a764b7688563f9"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[19].assertions[1].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[19].assertions[1].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "31b4aa0e2616cdbd6e626ab74b14eda4276f546f5bc90cc01113ba543ad52471"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[20].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[20].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "4bd68d5edda9c4a8832adfcd3154c56297a2b8c6ab5dbe3784245ab07ae2749a"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[20].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[20].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "4bd68d5edda9c4a8832adfcd3154c56297a2b8c6ab5dbe3784245ab07ae2749a"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[21].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[21].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "f0c8b518b29270820d86772c552da731917c202ba790827eae127c1cdcd3f217"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[22].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[22].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "72fff80cd6ea5d158e89e1c755d11c8f33055607d4abff4a67b717824d8ee8f9"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[23].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[23].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "ac03b0d60ba48dc324d4bf55613feaaab5aef5f57a74c9655a052c46a445edcf"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[24].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[24].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "27bd3900d56ea32671f355d2baf4a7bb0b8ef346f7012a57d1d57640a3d7f649"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[25].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[25].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "3d2a49c889951a17ef550c757efc266d0d8244a2ef8eee9b0f7bd8f3986388c3"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[26].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[26].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "0756c2e45ea9f75cf98aa04b6f98f8d2161b757141ae1ff0fc8d113d85790181"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[27].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[27].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "13d43971333ec9329a9eb55b2ce163747a535b7efe958ecddea4c1198340c846"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[27].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[27].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "13d43971333ec9329a9eb55b2ce163747a535b7efe958ecddea4c1198340c846"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[28].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[28].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "04c449a775edd346eb6b386f11e780dd485bafca686ed780b806e68d5245db32"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[28].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[28].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "04c449a775edd346eb6b386f11e780dd485bafca686ed780b806e68d5245db32"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[29].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[29].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "eaef9e30a991575e9b2ffb1cc79d75b3303a3f266f1789b407ba73e80c62079b"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[29].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[29].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "eaef9e30a991575e9b2ffb1cc79d75b3303a3f266f1789b407ba73e80c62079b"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[29].assertions[0].requirement_code_evidence[2].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[29].assertions[0].requirement_code_evidence[2].evidence_locator",
+        "previous_value_sha256": "eaef9e30a991575e9b2ffb1cc79d75b3303a3f266f1789b407ba73e80c62079b"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[30].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[30].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "411fb59138fb724167b91738617740ae508e7e087e462070fd649e38af8f5531"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[30].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[30].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "411fb59138fb724167b91738617740ae508e7e087e462070fd649e38af8f5531"
+      },
+      {
+        "rule": "restrict-clarification-codes-to-owning-assertion",
+        "path": "$.source_designs[31].assertions[0].clarification_clause_bindings[0].requirement_codes",
+        "previous_value_sha256": "327888d0f384e2f14b57f68fed3ec720510c95f95449814926699d79cd7db02f"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "782ed37426ec1d15971887f990e9dc3b635713aa760d243912dba07c6c524abd"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "782ed37426ec1d15971887f990e9dc3b635713aa760d243912dba07c6c524abd"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[2].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[2].evidence_locator",
+        "previous_value_sha256": "782ed37426ec1d15971887f990e9dc3b635713aa760d243912dba07c6c524abd"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[3].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[3].evidence_locator",
+        "previous_value_sha256": "782ed37426ec1d15971887f990e9dc3b635713aa760d243912dba07c6c524abd"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[4].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[4].evidence_locator",
+        "previous_value_sha256": "782ed37426ec1d15971887f990e9dc3b635713aa760d243912dba07c6c524abd"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[5].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[31].assertions[0].requirement_code_evidence[5].evidence_locator",
+        "previous_value_sha256": "782ed37426ec1d15971887f990e9dc3b635713aa760d243912dba07c6c524abd"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[32].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[32].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "9edb0c0f25063a5b0fd601f4ece4b5a8fb811dabac0e4b3648e7bb82b2f5e132"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[32].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[32].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "9edb0c0f25063a5b0fd601f4ece4b5a8fb811dabac0e4b3648e7bb82b2f5e132"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[33].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[33].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "25400f6ffb7fae0bc8ee30d7da5fffcb5e88d0e53c3742d4c0db92b09422c1fc"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[33].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[33].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "25400f6ffb7fae0bc8ee30d7da5fffcb5e88d0e53c3742d4c0db92b09422c1fc"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[34].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[34].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "6a06ff4a0fe7eb58fa19326524a58a09455b2e314cbe1e0e7c8e47794d02f6b4"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[35].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[35].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "39474198fd2bf9ad66f06325f11698ab5398470229e0bdd137467a5ad1e4963d"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[36].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[36].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "b786533d6712a7b54ab883ed2359a3a4c1c0b4443d847e9b7d20c385a4f562a2"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[37].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[37].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "cf360e5e06498df9abeadc533f784b746be1fd5c157744f2ae11380307eb4cc1"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[38].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[38].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "c897e9a992f64f8d889eb3d8c4f8ed3cdea87812bb210d73792c571da7e72e84"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[39].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[39].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "3310e97f428575d5dc033835daf8188989a2d0db66755a5007414f7fa90d4aad"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[40].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[40].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "30ab27c62f2ea90fbee9c132dfd756afd14d8b30b2531a76c248e21fc87f5cfe"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[41].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[41].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "03aab381580e60d70af0268f8e63fd5104976227c72453d05a1cb0f81352223c"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[41].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[41].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "03aab381580e60d70af0268f8e63fd5104976227c72453d05a1cb0f81352223c"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[41].assertions[0].requirement_code_evidence[2].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[41].assertions[0].requirement_code_evidence[2].evidence_locator",
+        "previous_value_sha256": "03aab381580e60d70af0268f8e63fd5104976227c72453d05a1cb0f81352223c"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[42].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[42].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "74a3e688aa0489fd5974af0780d3296695c51608918c0b73299915db7c736973"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[42].assertions[0].requirement_code_evidence[1].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[42].assertions[0].requirement_code_evidence[1].evidence_locator",
+        "previous_value_sha256": "74a3e688aa0489fd5974af0780d3296695c51608918c0b73299915db7c736973"
+      },
+      {
+        "rule": "drop-redundant-pdf-parity-for-xhtml-code",
+        "path": "$.source_designs[43].assertions[0].requirement_code_evidence[1]",
+        "previous_value_sha256": "a2c7aa591b6464bf60bd17dfde91ee04dd91791fdaed2e5bc96d359f3ef6bc69"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[43].assertions[0].requirement_code_evidence[0].evidence_source_path",
+        "previous_value_sha256": "d8568f469aee13afed6885def311d7f141580e495f52c4aaa765b1f25ec7b9b8"
+      },
+      {
+        "rule": "clear-pdf-fields-for-xhtml-provenance",
+        "path": "$.source_designs[43].assertions[0].requirement_code_evidence[0].evidence_locator",
+        "previous_value_sha256": "c5e587bb0ce8e5975cd0055463ef7dd4b5e3c20f67b1cb61cfcdbe7c352f9652"
+      }
+    ],
+    "raw_sha256": "fc3bf868afedea088ff6fb986e09a4373f97ffaf951fe802ef05493d45a14912",
+    "normalized_sha256": "a7d336d208bd0ff0135e4636ed7023e8e93b98a6baaee3541071a6e858af77e3"
+  },
+  "strict_validation": {
+    "status": "blocked",
+    "error_type": "SemanticDesignBridgeError",
+    "error": "semantic design obligations must match assertion obligation bindings"
+  }
+}

@@ -78,6 +78,8 @@ atom_id = ATOM-001, ATOM-002, ...
 coverage_status = covered | gap | unclear
 ```
 
+В source-first final matrix дополнительно допустим `coverage_status = not-applicable`, если строка дословно проецирует hash-bound accepted source assertion с `semantic_disposition = not-applicable`, не ссылается на `TC-*` и сохраняет source-backed rationale по `references/qa/traceability-matrix-format.md`. Этот статус не заменяет `gap` или `unclear` для тестируемого утверждения.
+
 `gap` означает достаточную определенность требования при отсутствии покрытия.  
 `unclear` означает, что требование нельзя однозначно превратить в проверку без домысливания.
 
@@ -182,9 +184,11 @@ Allowed `waiver_class`: `false-positive`, `validator-schema-lag`, `accepted-sour
 
 Если reviewer не может честно заполнить этот self-check, он не должен создавать `prompt.reviewer-to-ui-prep.md`.
 
+Узкое исключение для source-first controlled promotion: terminal producer принятого review contract v4 может заранее материализовать hash-bound prompt со статусом `pending-controlled-promotion`, если одновременно созданы и self-validated final Markdown/XLSX matrix, финальный reviewer output содержит этот self-check, а warnings и `coverage_status = gap` отсутствуют. Такой prompt не является lifecycle sign-off и прямо запрещает UI-запуск до атомарного перевода обоих state artifacts в `signed-off` controlled promotion transaction. Prompt остаётся generic и cycle-independent: scope-specific проверки берутся из canonical TC/traceability, а cycle state, findings, matrices и snapshot — из signed-off `workflow-state.yaml.latest_artifacts`, без прошитых путей конкретного cycle.
+
 ## Handoff To UI Prep
 
-Reviewer может создать:
+Reviewer может создать (либо активировать заранее материализованный `pending-controlled-promotion` prompt):
 
 ```text
 prompt.reviewer-to-ui-prep.md

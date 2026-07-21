@@ -37,6 +37,7 @@ description: Аудировать структуру AGENTS, skills, references 
 1. После baseline audit вручную разберись только с теми зонами, где скрипт не может уверенно доказать проблему.
 2. Уточняй severity и `recommended_move`, если вывод требует архитектурного суждения.
 3. Не создавай новые доменные правила; ссылайся на канонические references и предлагай перенос в правильное место.
+4. Если agent instructions изменены, определи затронутые instruction-loading scenarios и проверь материал с позиции целевого агента, которому доступен только фактически загружаемый контекст.
 
 ## Формат результата
 
@@ -52,6 +53,7 @@ description: Аудировать структуру AGENTS, skills, references 
 - Размещение знаний: [../../references/agent/content-placement.md](../../references/agent/content-placement.md)
 - Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
 - Политика против дублирования: [../../references/agent/duplication-policy.md](../../references/agent/duplication-policy.md)
+- Правила написания инструкций: [../../references/agent/instruction-authoring-policy.md](../../references/agent/instruction-authoring-policy.md)
 - Чек-лист аудита: [../../references/agent/maintenance-checklist.md](../../references/agent/maintenance-checklist.md)
 - Формат audit findings: [../../references/agent/audit-output-format.md](../../references/agent/audit-output-format.md)
 

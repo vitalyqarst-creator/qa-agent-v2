@@ -21,6 +21,7 @@
 ## Что хранить в `references/`
 
 - стабильные, переиспользуемые документы;
+- канонические правила написания и проверки agent instructions;
 - шаблоны и форматы;
 - правила трассировки;
 - границы ответственности;
@@ -50,6 +51,12 @@
 - данные, на которые reviewer/validator должны ссылаться как на источник истины перед чтением `TC-*`.
 
 Canonical test-case file в `test-cases/` хранит ссылки, краткое summary и сами `TC-*`, но не полные копии этих таблиц.
+
+## Что хранить в source-first handoff
+
+- `source-assertions.json` рядом с подтвержденными scope/source-row artifacts;
+- отдельный `source-assertion-review.json`, созданный независимым reviewer-ом и связанный с точным digest manifest-а;
+- только source-model semantics до writer-а; draft TC, promotion receipt и runtime diagnostics остаются в review-cycle outputs.
 
 ## Что хранить в коде
 

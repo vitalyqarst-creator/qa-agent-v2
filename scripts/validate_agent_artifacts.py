@@ -3047,6 +3047,7 @@ def validate_active_transition_prompt(
         "prompt.scope-to-writer.md",
         "prompt.scope-to-iteration.md",
         "prompt.scope-gaps-to-reviewer.md",
+        "prompt.scope-assertions-to-reviewer.md",
     }:
         state = parse_workflow_state(workflow_path)
         workflow_artifact_values = [
@@ -3060,6 +3061,16 @@ def validate_active_transition_prompt(
         }
         if prompt_path.name == "prompt.scope-gaps-to-reviewer.md":
             required_scope_input_names.add("workflow-state.yaml")
+        if prompt_path.name == "prompt.scope-assertions-to-reviewer.md":
+            required_scope_input_names.update(
+                {
+                    "workflow-state.yaml",
+                    "source-row-inventory.md",
+                    "source-row-extraction-spec.json",
+                    "source-row-baseline.json",
+                    "source-assertions.json",
+                }
+            )
         for conditional_name in (
             "source-parity-check.md",
             "mockup-visual-inventory.md",
@@ -17487,6 +17498,8 @@ def expected_transition_prompt(state: dict[str, Any]) -> str | None:
 
     if next_skill == "ft-ui-automation-prep":
         return "prompt.reviewer-to-ui-prep.md"
+    if is_source_assertion_review_transition(state):
+        return "prompt.scope-assertions-to-reviewer.md"
     if (
         current_stage == "ft-test-case-reviewer"
         and stage_status == "ready-for-next-stage"
@@ -17523,6 +17536,8 @@ def transition_prompt_kind(prompt_name: str | None) -> str | None:
         return "reviewer-to-ui-prep"
     if name == "prompt.scope-gaps-to-reviewer.md":
         return "scope-gaps-to-reviewer"
+    if name == "prompt.scope-assertions-to-reviewer.md":
+        return "scope-assertions-to-reviewer"
     if name == "prompt.scope-to-writer.md":
         return "scope-to-writer"
     if name == "prompt.scope-to-iteration.md":
@@ -17565,10 +17580,27 @@ def is_signed_off_state(state: dict[str, Any]) -> bool:
 def is_ready_for_review_state(state: dict[str, Any]) -> bool:
     return state.get("stage_status") == "ready-for-review" or (
         state.get("next_skill") == "ft-test-case-reviewer"
+        and not is_source_assertion_review_transition(state)
         and not (
             state.get("current_stage") == "ft-scope-analyzer"
             and state.get("stage_status") == "ready-for-gap-review"
         )
+    )
+
+
+def is_source_assertion_review_transition(state: dict[str, Any]) -> bool:
+    """Return whether this is the compiler-v3 pre-writer source review handoff.
+
+    This transition is distinct from both the legacy scope-gap reviewer route and
+    a writer-to-reviewer TC handoff.  Keeping the predicate exact prevents the
+    dedicated prompt from weakening either of those transition contracts.
+    """
+
+    return (
+        state.get("prepared_compiler_contract_version") == 3
+        and state.get("current_stage") == "ft-scope-analyzer"
+        and state.get("stage_status") == "ready-for-next-stage"
+        and state.get("next_skill") == "ft-test-case-reviewer"
     )
 
 
@@ -18293,6 +18325,70 @@ def validate_workflow_state(
             checks.append(Check("workflow-state-scope-gap-review-source-row-inventory", "fail", "Row-level source inventory handoff is missing.", display_path))
         else:
             checks.append(Check("workflow-state-scope-gap-review-source-row-inventory", "pass", "Row-level source inventory handoff is present or not required.", display_path))
+
+    if is_source_assertion_review_transition(state):
+        source_assertion_handoff_values = [
+            *required_input_values,
+            *latest_artifact_values,
+        ]
+        required_source_assertion_review_names = {
+            "source-selection.md",
+            "scope-contract.md",
+            "scope-coverage-gaps.md",
+            "source-row-inventory.md",
+            "source-row-extraction-spec.json",
+            "source-row-baseline.json",
+            "source-assertions.json",
+            "prompt.scope-assertions-to-reviewer.md",
+        }
+        missing_source_assertion_review_names = [
+            name
+            for name in sorted(required_source_assertion_review_names)
+            if resolving_artifact_by_name(
+                name,
+                source_assertion_handoff_values,
+                path,
+                root,
+                ft_root,
+            )
+            is None
+        ]
+        if missing_source_assertion_review_names:
+            findings.append(
+                Finding(
+                    id="workflow-state-source-assertion-review-missing-handoff-artifacts",
+                    severity="error",
+                    category="artifact-links",
+                    title="Source assertion review handoff misses required artifacts",
+                    details=(
+                        "Compiler-contract-v3 pre-writer review requires the exact source-row "
+                        "registry/baseline, source assertion manifest and dedicated reviewer prompt."
+                    ),
+                    path=display_path,
+                    evidence=missing_source_assertion_review_names,
+                    recommended_action=(
+                        "Create and link the missing source-first artifacts or keep the scope "
+                        "workflow blocked before independent review."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "workflow-state-source-assertion-review-handoff-artifacts",
+                    "fail",
+                    "Required source assertion review artifacts are missing.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "workflow-state-source-assertion-review-handoff-artifacts",
+                    "pass",
+                    "Required source assertion review artifacts resolve.",
+                    display_path,
+                )
+            )
 
     if (
         current_stage == "ft-scope-analyzer"

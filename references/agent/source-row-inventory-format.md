@@ -32,6 +32,21 @@ Writer не должен сам становиться единственным 
 | `SRC-001` | `WP-01` | `Сумма на руки` | `PDF p.46, row ...` | `GSR 1` | `yes` | `ATOM-001` |
 | `SRC-002` | `WP-01` | `Скрытый internal attribute kladr` | `PDF p.52, row ...` | `GSR 115` | `yes` | `GAP-002` |
 
+Для `prepared_compiler_contract_version: 3` эта же таблица обязана дополнительно
+содержать typed registry columns:
+
+| source_path | source_locator | bounded_source_text | source_context_class | candidate_id |
+| --- | --- | --- | --- | --- |
+| `fts/pkg/source/main.xhtml` | `/*/*[2]/*[68]` | `BSR 3. <полный ограниченный текст строки>` | `document-global-constraints` | `SRC-CAND-<24 hex>` |
+
+`source_path`, `source_locator`, `bounded_source_text`, `source_context_class`,
+nullable `candidate_id`, `requirement_codes` и нормализованный
+`in_scope = yes | unclear | no` входят в hash-bound
+`source-assertions.json/source_rows`. Compiler v3 требует точное совпадение
+registry с inventory, а не только совпадение множества `SRC-*` ids. Правила
+детерминированного candidate registry и bijection определены в
+`references/agent/source-row-baseline-format.md`.
+
 ## Правила
 
 - Одна строка inventory = одна строка или явный фрагмент source внутри подтвержденного scope.
@@ -44,6 +59,16 @@ Writer не должен сам становиться единственным 
 - `in_scope = yes` требует `mapped_atom_or_gap` с существующим `ATOM-*` или `GAP-*`.
 - `in_scope = unclear` требует `GAP-*` или clarification question.
 - `in_scope = no | out-of-scope` требует понятного решения scope, но не требует `ATOM-*`.
+- В source-first v3 строки `in_scope = no` не удаляются из expected registry:
+  они сохраняются как `scope_disposition = no`, имеют только
+  `semantic_disposition = not-applicable` assertions и не создают executable
+  obligations. Testable/ambiguous assertion на такой row блокируется.
+- `bounded_source_text` — полный ограниченный текст именно этой source row из
+  зарегистрированного UTF-8 extraction source. Нельзя подставлять фрагмент
+  другой строки, даже если он встречается в том же файле.
+- `requirement_codes` перечисляет точные коды этой row через `;`, включая
+  PDF-only codes из parity evidence; при отсутствии кода используется
+  `none_required`.
 - Requirement codes должны сохраняться в том же смысле, что в source/parity artifact. Нельзя просто перенести `GSR N` рядом с другим полем или другим expected behavior.
 
 ## Blocking Defects

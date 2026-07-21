@@ -22,6 +22,7 @@ REQUIRED_AGENT_REFS = {
     "content-placement.md",
     "skill-boundaries.md",
     "duplication-policy.md",
+    "instruction-authoring-policy.md",
     "maintenance-checklist.md",
     "audit-output-format.md",
     "quality-feedback-loop.md",
@@ -39,6 +40,8 @@ REQUIRED_AGENT_REFS = {
     "session-based-review-cycle-format.md",
     "review-cycle-stage-contract-v2.md",
     "prepared-stage-package-format.md",
+    "source-assertions-format.md",
+    "source-assertion-semantic-rule-card.md",
     "codex-sdk-orchestration-format.md",
 }
 
@@ -159,6 +162,7 @@ class AgentArchitectureTests(unittest.TestCase):
         iteration = (SKILLS_DIR / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("`review_mode = full | traceability | structure | test-design`", reviewer)
         self.assertIn("`scope_gap_review`", reviewer)
+        self.assertIn("`source_assertion_review`", reviewer)
         self.assertIn("`structure_preflight`", reviewer)
         self.assertIn("`semantic_traceability_test_design`", reviewer)
         self.assertIn("`structure_format_final`", reviewer)
@@ -201,8 +205,113 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("writer.session_initial_draft", manifest)
         self.assertIn("reviewer.scope_gap_review", manifest)
         self.assertIn("reviewer.scope_gap_review", routing)
+        self.assertIn("reviewer.session_prepared_source_assertion", manifest)
+        self.assertIn("reviewer.session_prepared_source_assertion", routing)
         self.assertIn("reviewer.semantic_traceability_test_design", manifest)
         self.assertIn("sdk_orchestration.review_cycle", manifest)
+
+    def test_source_first_contract_is_wired_for_production_promotion(self) -> None:
+        index = (REFERENCES_DIR / "agent" / "instruction-contract-index.md").read_text(
+            encoding="utf-8"
+        )
+        prepared = (REFERENCES_DIR / "agent" / "prepared-stage-package-format.md").read_text(
+            encoding="utf-8"
+        )
+        scope = (SKILLS_DIR / "ft-scope-analyzer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reviewer = (SKILLS_DIR / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        source_contract = (
+            REFERENCES_DIR / "agent" / "source-assertions-format.md"
+        ).read_text(encoding="utf-8")
+        semantic_rule_card = (
+            REFERENCES_DIR / "agent" / "source-assertion-semantic-rule-card.md"
+        ).read_text(encoding="utf-8")
+        controlled_promotion = (
+            REFERENCES_DIR / "agent" / "controlled-promotion-format.md"
+        ).read_text(encoding="utf-8")
+        iteration = (SKILLS_DIR / "ft-test-case-iteration" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("Source-first assertion model and independent receipt", index)
+        self.assertIn("High-confidence production TC runtime gate", index)
+        self.assertIn("marker-only packages", index)
+        self.assertIn("prompt.scope-assertions-to-reviewer.md", scope)
+        self.assertIn("document-global constraints", scope)
+        self.assertIn("`scope_boundary_review`", reviewer)
+        self.assertIn("`dimension_verdicts`", reviewer)
+        self.assertIn("`primary_gap_id`", scope)
+        self.assertIn("`version: 6`", source_contract)
+        self.assertIn("`primary_gap_id`", source_contract)
+        self.assertIn("`dimension_verdicts`", source_contract)
+        self.assertIn("`required_change`", source_contract)
+        self.assertIn("reviewed_manifest_contexts", source_contract)
+        self.assertIn("`source_inventory_review`", source_contract)
+        self.assertIn("source-row-baseline-format.md", source_contract)
+        self.assertIn("`source_rows`", source_contract)
+        self.assertIn("`bounded_source_text`", source_contract)
+        self.assertIn("`supporting_source_bindings`", source_contract)
+        self.assertIn("`execution_readiness`", source_contract)
+        self.assertIn("source-row-registry-mismatch", source_contract)
+        self.assertIn("legacy-manifest-requires-rematerialization", source_contract)
+        self.assertIn("legacy-review-receipt-requires-rereview", source_contract)
+        self.assertIn("compiler contract v3", iteration)
+        self.assertIn("A marker without a parseable manifest/receipt", prepared)
+        self.assertIn("`bounded-source-first-assertions-v4`", source_contract)
+        self.assertIn("`SOURCE-ASSERTIONS-V4`", source_contract)
+        self.assertIn("всех тринадцати", source_contract)
+        self.assertIn("source-assertion-semantic-rule-card.md", source_contract)
+        self.assertIn("`binding_scope = source-context`", source_contract)
+        self.assertIn("`source_row_ids`", source_contract)
+        self.assertIn("scope_disposition = yes", source_contract)
+        self.assertIn("Backward-compatible decoder", source_contract)
+        self.assertIn(
+            "Pure declared metadata type without authorized manual interface",
+            semantic_rule_card,
+        )
+        self.assertIn("`not-applicable`", semantic_rule_card)
+        self.assertIn("Visible mapping / rendered type / format", semantic_rule_card)
+        self.assertIn("`dependency-blocked` + GAP", semantic_rule_card)
+        self.assertIn("Search/filter relational behavior", semantic_rule_card)
+        self.assertIn("same-table pre-search capture", semantic_rule_card)
+        self.assertIn(
+            "доказывает только реляционное filter behavior (`retained`/`excluded`)",
+            semantic_rule_card,
+        )
+        self.assertIn("mapping gate применяется отдельно", semantic_rule_card)
+        self.assertIn(
+            "Capture ожидаемого mapping/type из того же наблюдаемого result state",
+            semantic_rule_card,
+        )
+        self.assertIn("`package_version`: currently `9`", prepared)
+        self.assertIn("`release_status`", prepared)
+        self.assertIn("blocked-execution-dependencies", prepared)
+        self.assertIn("ready subset", iteration)
+        self.assertIn("write-ahead recovery journal", controlled_promotion)
+        self.assertIn("PROMO-RECOVERY-AMBIGUOUS", controlled_promotion)
+        self.assertIn("atomic directory renames", controlled_promotion)
+        self.assertIn("complete OOXML workbook", controlled_promotion)
+        self.assertIn("normalized header, rows, order and values", controlled_promotion)
+        self.assertIn("exact `source_property_id` lineage", source_contract)
+        self.assertIn("free-text polarity guessing is not used", source_contract)
+        for stale_claim in (
+            "всех одиннадцати",
+            "останавливает оба output mode",
+            "пока не реализована",
+            "перематериализовать как v2",
+            "нужен новый независимый review v4",
+            "нужен новый независимый review v5",
+            "`package_version`: currently `8`",
+            "not implemented yet",
+            "does not yet implement a ready-subset",
+        ):
+            self.assertNotIn(stale_claim, source_contract + prepared + iteration)
+        self.assertTrue(
+            (ROOT_DIR / "test_case_agent" / "review_cycle" / "production_tc_gate.py").is_file()
+        )
 
     def test_auditor_skill_uses_script_first_workflow(self) -> None:
         content = (SKILLS_DIR / "agent-architecture-auditor" / "SKILL.md").read_text(encoding="utf-8")
@@ -210,6 +319,37 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("Baseline audit", content)
         self.assertIn("Manual follow-up", content)
         self.assertIn("../../references/agent/audit-output-format.md", content)
+
+    def test_instruction_authoring_policy_is_wired(self) -> None:
+        policy = (REFERENCES_DIR / "agent" / "instruction-authoring-policy.md").read_text(
+            encoding="utf-8"
+        )
+        auditor = (SKILLS_DIR / "agent-architecture-auditor" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        manifest = (REFERENCES_DIR / "agent" / "instruction-loading-manifest.md").read_text(
+            encoding="utf-8"
+        )
+        index = (REFERENCES_DIR / "agent" / "instruction-contract-index.md").read_text(
+            encoding="utf-8"
+        )
+        maintenance = (REFERENCES_DIR / "agent" / "maintenance-checklist.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("## Обобщение и размещение", policy)
+        self.assertIn("## Контракты других компонентов", policy)
+        self.assertIn("`governed-by`", policy)
+        self.assertIn("`validated-against`", policy)
+        self.assertIn("`derived-from`", policy)
+        self.assertIn("## Ревью в контексте целевого агента", policy)
+        self.assertIn("замечание существенным", policy)
+        self.assertIn("повторявшимся runtime-дефектом", policy)
+        self.assertIn("instruction-authoring-policy.md", auditor)
+        self.assertIn("instruction-authoring-policy.md", manifest)
+        self.assertIn("Instruction authoring:", index)
+        self.assertIn("dependency relation semantics", index)
+        self.assertIn("instruction-authoring-policy.md", maintenance)
 
     def test_quality_feedback_loop_is_wired(self) -> None:
         index = (REFERENCES_DIR / "agent" / "instruction-contract-index.md").read_text(encoding="utf-8")
@@ -245,6 +385,7 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("tests.test_session_based_review_cycle_contracts", content)
         self.assertIn("tests.test_task_start_skill_routing", content)
         self.assertIn("audit_agent_architecture.py", content)
+        self.assertIn('env["PYTHONDONTWRITEBYTECODE"] = "1"', content)
         self.assertIn('"--fail-on"', content)
         self.assertIn('"warning"', content)
 

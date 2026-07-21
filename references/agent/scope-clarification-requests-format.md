@@ -12,7 +12,16 @@
 
 ## Расположение
 
-- `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/scope-clarification-requests.md` для новых handoff-папок
+- `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/scope-clarification-requests.md`
+  — рабочий companion к gaps текущего handoff;
+- `fts/<ft-slug>/support/<source-version>/<scope-slug>-approved-clarifications.md`
+  — переиспользуемый package/source input для новых clean runs, если в
+  файле остались только строки `answered` с production-ready
+  authority/type и стабильными `CLR-*`.
+
+Package-level файл не является workflow state и не заменяет gaps текущего
+run. В source registry его всегда регистрируют с `role = approved-clarification`
+и `manifest_binding = approved-clarification`, а не как обычный support.
 
 ## Когда создавать
 
@@ -31,12 +40,16 @@
 
 ## Обязательные колонки
 
+- `clarification_id`
 - `gap_id`
+- `scope_slug`
+- `requirement_codes`
 - `related_ft_reference`
 - `question`
 - `needed_for`
 - `blocking`
 - `requested_from`
+- `authority`
 - `user_response`
 - `response_status`
 - `response_type`
@@ -44,16 +57,29 @@
 
 ## Правила колонок
 
+- `clarification_id` — стабильный уникальный `CLR-*`; одна точная версия ответа
+  имеет один id.
 - `gap_id` — идентификатор из `scope-coverage-gaps.md`, например `GAP-001`.
+- `scope_slug` — точный scope, для которого получен ответ.
+- `requirement_codes` — один или несколько точных кодов требований через `;`.
 - `related_ft_reference` — краткая ссылка на утверждение ФТ: раздел, `GSR`, таблица/строка, поле/условие, `ATOM-*` или страница PDF.
 - `question` — конкретный вопрос, на который можно ответить без чтения всей истории чата.
 - `needed_for` — что станет возможным после ответа: полное покрытие требования, снятие ambiguity, уточнение тестовых данных.
 - `blocking` = `yes | no`; должно соответствовать impact gap-а.
 - `requested_from` = `user | analyst | product-owner | developer | unknown`.
+- `authority` = `user | analyst | product-owner`; это фактический источник
+  полученного ответа. Нельзя записывать пользователя как analyst/product-owner.
 - `user_response` — место для ответа. До заполнения оставляй пустым или ставь `-`.
 - `response_status` = `unanswered | answered | superseded | rejected`.
-- `response_type` = `not-provided | working-assumption | analyst-confirmed | product-confirmed | rejected`.
+- `response_type` = `not-provided | working-assumption | user-confirmed |
+  analyst-confirmed | product-confirmed | rejected`.
 - `updated_at` — дата обновления в формате `YYYY-MM-DD` или `-`.
+
+Production-ready semantics разрешено строить только из строки со
+`response_status = answered` и согласованной парой authority/type:
+`user/user-confirmed`, `analyst/analyst-confirmed` или
+`product-owner/product-confirmed`. `working-assumption`, `rejected`,
+`superseded`, `unanswered` и `not-provided` не являются утверждённым evidence.
 
 ## Рекомендуемый шаблон
 
@@ -71,9 +97,9 @@
 
 ## Clarification Requests
 
-| gap_id | related_ft_reference | question | needed_for | blocking | requested_from | user_response | response_status | response_type | updated_at |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| GAP-001 | `GSR 1`, поле `...`, `ATOM-001` | Какое точное значение получает поле после сохранения? | Полное покрытие `GSR 1` | no | analyst | - | unanswered | not-provided | - |
+| clarification_id | gap_id | scope_slug | requirement_codes | related_ft_reference | question | needed_for | blocking | requested_from | authority | user_response | response_status | response_type | updated_at |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| CLR-001 | GAP-001 | application-search | GSR 1 | `GSR 1`, поле `...`, `ATOM-001` | Какое точное значение получает поле после сохранения? | Полное покрытие `GSR 1` | no | user | user | - | unanswered | not-provided | - |
 
 ## Gaps Without Requests
 
@@ -84,7 +110,21 @@
 ## Правила Использования Ответов
 
 - Ответы в этом файле не заменяют основной ФТ.
-- Writer может использовать `analyst-confirmed` или `product-confirmed` ответы как уточняющий вход, явно указав это в трассировке.
+- В source-first production workflow ответ сначала регистрируется в manifest v4
+  как typed `clarifications[]`, hash-связывается через dedicated evidence role
+  `approved-clarification` и привязывается к точным assertion clauses. Writer и
+  reviewer получают его только из digest-bound compact projection, а не из
+  свободного prose.
+- Для использованного ответа соответствующий GAP остаётся в coverage-gaps
+  artifact со `status = resolved` и точным
+  `resolution = approved-clarification:<CLR-ID>`. В нём не остаётся активной
+  ASSERT/ATOM/OBL execution chain.
+- Один ответ, одновременно относящийся к нескольким кодам, остаётся одним
+  `CLR-*`. Каждый assertion binding перечисляет только собственные локальные
+  `requirement_codes`, а объединение всех bindings обязано в точности покрыть
+  code set clarification.
+- Изменение exact answer, authority, type, date, scope, gap, requirement codes
+  или bytes файла делает manifest и независимый receipt stale.
 - `working-assumption` можно использовать только как ограниченную рабочую гипотезу и обязательно отмечать в assumptions / coverage gaps.
 - Если ответ противоречит основному ФТ, приоритет остается у основного ФТ; противоречие фиксируется как gap.
 ```

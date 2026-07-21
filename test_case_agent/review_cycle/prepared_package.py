@@ -20,12 +20,12 @@ from test_case_agent.review_cycle.runtime import (
 )
 
 
-PACKAGE_VERSION = 8
-SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, 6, 7, PACKAGE_VERSION}
+PACKAGE_VERSION = 9
+SUPPORTED_PACKAGE_VERSIONS = {1, 2, 3, 4, 5, 6, 7, 8, PACKAGE_VERSION}
 FAST_EXECUTION_PROFILE = "simple-field-property"
 STANDARD_EXECUTION_PROFILE = "standard-required"
 FAST_EVIDENCE_MAX_BYTES = 32768
-STANDARD_ROUTING_EVIDENCE_MAX_BYTES = 49152
+STANDARD_ROUTING_EVIDENCE_MAX_BYTES = 131072
 PACKAGE_KINDS = {"source-evidence", "atomic-obligations", "stage-instructions"}
 COVERAGE_STATUSES = {"testable", "gap", "unclear", "not-applicable"}
 EXECUTION_SEMANTICS = {"direct", "reset-to-captured-initial"}
@@ -41,13 +41,20 @@ IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
 OBLIGATION_ID = re.compile(r"(?:ATOM|OBL)-[A-Za-z0-9._-]+")
 ATOM_ID = re.compile(r"ATOM-[A-Za-z0-9._-]+")
+ASSERTION_ID = re.compile(r"ASSERT-[A-Za-z0-9._-]+")
+SOURCE_ROW_ID = re.compile(r"SRC-[A-Za-z0-9._-]+")
 GAP_ID = re.compile(r"GAP-[A-Za-z0-9._-]+")
 DICT_ID = re.compile(r"DICT-[A-Za-z0-9._-]+")
+DEPENDENCY_ID = re.compile(r"DEP-[A-Za-z0-9._-]+")
 REFERENCE_SELECTOR = re.compile(
     r"(?i)(?:(?:SRC|GAP|RISK|DICT|ATOM)-[A-Za-z0-9._-]+|(?:GSR|BSR|DIT)\s+\d+(?:\.\d+)*)"
 )
 DICTIONARY_CLAIM = re.compile(
     r"(?i)\b(?:справочник\w*|dictionary|reference\s+list|fixed\s+list|closed\s+list)\b"
+)
+EXTERNAL_DYNAMIC_DICTIONARY_CONTRACT = re.compile(
+    r"(?i)\bexternal-dynamic\s+dictionary\s+dependency:\s*"
+    r"(?P<dependency_id>DEP-[A-Za-z0-9._-]+)\b"
 )
 REFERENCE_BOUNDARY_CHARS = "A-Za-z0-9._-"
 
@@ -67,6 +74,19 @@ def _identifier(value: Any, field_name: str, pattern: re.Pattern[str] = IDENTIFI
     if not isinstance(value, str) or not pattern.fullmatch(value):
         raise StageRuntimeError(f"{field_name} must be a stable identifier")
     return value
+
+
+def _has_external_dynamic_dictionary_contract(item: "PreparedObligation") -> bool:
+    """Return true only for a compiler-bound external dynamic dictionary dependency."""
+
+    dependency_refs = {
+        value for value in item.source_refs if DEPENDENCY_ID.fullmatch(value)
+    }
+    declared_dependencies = {
+        match.group("dependency_id")
+        for match in EXTERNAL_DYNAMIC_DICTIONARY_CONTRACT.finditer(item.notes)
+    }
+    return bool(dependency_refs and dependency_refs == declared_dependencies)
 
 
 def _text(value: Any, field_name: str) -> str:
@@ -174,6 +194,355 @@ class PackageArtifact:
     def from_dict(cls, payload: Mapping[str, Any]) -> PackageArtifact:
         _exact_fields(payload, {"path", "sha256", "kind", "bytes"}, "package artifact")
         item = cls(**payload)
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PreparedExecutionDependency:
+    assertion_id: str
+    source_row_id: str
+    atom_id: str
+    obligation_ids: tuple[str, ...]
+    gap_ids: tuple[str, ...]
+    risk: str
+    rationale: str
+    route: str = "excluded-from-ready-subset"
+
+    def validate(self) -> None:
+        _identifier(self.assertion_id, "execution_dependency.assertion_id", ASSERTION_ID)
+        _identifier(
+            self.source_row_id,
+            "execution_dependency.source_row_id",
+            SOURCE_ROW_ID,
+        )
+        _identifier(self.atom_id, "execution_dependency.atom_id", ATOM_ID)
+        for field_name, values, pattern in (
+            ("obligation_ids", self.obligation_ids, OBLIGATION_ID),
+            ("gap_ids", self.gap_ids, GAP_ID),
+        ):
+            if not values:
+                raise StageRuntimeError(
+                    f"execution_dependency.{field_name} must not be empty"
+                )
+            if len(values) != len(set(values)):
+                raise StageRuntimeError(
+                    f"execution_dependency.{field_name} must not contain duplicates"
+                )
+            for value in values:
+                _identifier(value, f"execution_dependency.{field_name}[]", pattern)
+        if any(not value.startswith("OBL-") for value in self.obligation_ids):
+            raise StageRuntimeError(
+                "execution_dependency.obligation_ids must contain only OBL-* IDs"
+            )
+        if self.risk not in {"low", "medium", "high", "critical"}:
+            raise StageRuntimeError(
+                "execution_dependency.risk must be low, medium, high or critical"
+            )
+        _text(self.rationale, "execution_dependency.rationale")
+        if self.route != "excluded-from-ready-subset":
+            raise StageRuntimeError(
+                "execution_dependency.route must be excluded-from-ready-subset"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "assertion_id": self.assertion_id,
+            "source_row_id": self.source_row_id,
+            "atom_id": self.atom_id,
+            "obligation_ids": list(self.obligation_ids),
+            "gap_ids": list(self.gap_ids),
+            "risk": self.risk,
+            "rationale": self.rationale,
+            "route": self.route,
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "PreparedExecutionDependency":
+        _exact_fields(
+            payload,
+            {
+                "assertion_id",
+                "source_row_id",
+                "atom_id",
+                "obligation_ids",
+                "gap_ids",
+                "risk",
+                "rationale",
+                "route",
+            },
+            "execution dependency",
+        )
+        item = cls(
+            assertion_id=payload["assertion_id"],
+            source_row_id=payload["source_row_id"],
+            atom_id=payload["atom_id"],
+            obligation_ids=_string_list(
+                payload["obligation_ids"],
+                "execution_dependency.obligation_ids",
+            ),
+            gap_ids=_string_list(
+                payload["gap_ids"],
+                "execution_dependency.gap_ids",
+            ),
+            risk=payload["risk"],
+            rationale=payload["rationale"],
+            route=payload["route"],
+        )
+        item.validate()
+        return item
+
+
+@dataclass(frozen=True)
+class PreparedReleaseStatus:
+    contract: str
+    output_mode: str
+    release_eligible: bool
+    blocking_gap_ids: tuple[str, ...]
+    execution_dependency_registry: tuple[PreparedExecutionDependency, ...]
+    excluded_execution_obligation_ids: tuple[str, ...]
+    unsigned_status: str
+    release_blocking_finding_codes: tuple[str, ...]
+
+    @classmethod
+    def release_default(cls) -> "PreparedReleaseStatus":
+        return cls(
+            contract="prepared-package-release-status-v1",
+            output_mode="release",
+            release_eligible=True,
+            blocking_gap_ids=(),
+            execution_dependency_registry=(),
+            excluded_execution_obligation_ids=(),
+            unsigned_status="none",
+            release_blocking_finding_codes=(),
+        )
+
+    def validate(self) -> None:
+        if self.contract != "prepared-package-release-status-v1":
+            raise StageRuntimeError(
+                "release_status.contract must be prepared-package-release-status-v1"
+            )
+        if self.output_mode not in {"release", "draft-with-blocking-gaps"}:
+            raise StageRuntimeError(
+                "release_status.output_mode must be release or draft-with-blocking-gaps"
+            )
+        if not isinstance(self.release_eligible, bool):
+            raise StageRuntimeError("release_status.release_eligible must be boolean")
+        for field_name, values, pattern in (
+            ("blocking_gap_ids", self.blocking_gap_ids, GAP_ID),
+            (
+                "excluded_execution_obligation_ids",
+                self.excluded_execution_obligation_ids,
+                OBLIGATION_ID,
+            ),
+        ):
+            if len(values) != len(set(values)):
+                raise StageRuntimeError(
+                    f"release_status.{field_name} must not contain duplicates"
+                )
+            for value in values:
+                _identifier(value, f"release_status.{field_name}[]", pattern)
+        if any(
+            not value.startswith("OBL-")
+            for value in self.excluded_execution_obligation_ids
+        ):
+            raise StageRuntimeError(
+                "release_status.excluded_execution_obligation_ids must contain only OBL-* IDs"
+            )
+        assertion_ids: list[str] = []
+        atom_ids: list[str] = []
+        obligation_ids: list[str] = []
+        dependency_obligation_ids: set[str] = set()
+        dependency_gap_ids: set[str] = set()
+        for item in self.execution_dependency_registry:
+            if not isinstance(item, PreparedExecutionDependency):
+                raise StageRuntimeError(
+                    "release_status.execution_dependency_registry contains an invalid item"
+                )
+            item.validate()
+            assertion_ids.append(item.assertion_id)
+            atom_ids.append(item.atom_id)
+            obligation_ids.extend(item.obligation_ids)
+            dependency_obligation_ids.update(item.obligation_ids)
+            dependency_gap_ids.update(item.gap_ids)
+        if len(assertion_ids) != len(set(assertion_ids)):
+            raise StageRuntimeError(
+                "release_status.execution_dependency_registry must contain unique assertion_ids"
+            )
+        if len(atom_ids) != len(set(atom_ids)):
+            raise StageRuntimeError(
+                "release_status.execution_dependency_registry must contain unique atom_ids"
+            )
+        if len(obligation_ids) != len(set(obligation_ids)):
+            raise StageRuntimeError(
+                "release_status execution dependency obligation_ids must not overlap"
+            )
+        if dependency_obligation_ids != set(
+            self.excluded_execution_obligation_ids
+        ):
+            raise StageRuntimeError(
+                "release_status excluded execution obligations must exactly equal the registry"
+            )
+        if not dependency_gap_ids.issubset(set(self.blocking_gap_ids)):
+            raise StageRuntimeError(
+                "release_status dependency gap IDs must be included in blocking_gap_ids"
+            )
+        allowed_unsigned = {
+            "none",
+            "blocked-source-gaps",
+            "blocked-execution-dependencies",
+            "blocked-source-contract",
+        }
+        if self.unsigned_status not in allowed_unsigned:
+            raise StageRuntimeError(
+                "release_status.unsigned_status has an unsupported value"
+            )
+        if len(self.release_blocking_finding_codes) != len(
+            set(self.release_blocking_finding_codes)
+        ):
+            raise StageRuntimeError(
+                "release_status.release_blocking_finding_codes must not contain duplicates"
+            )
+        for code in self.release_blocking_finding_codes:
+            _identifier(code, "release_status.release_blocking_finding_codes[]")
+        if self.execution_dependency_registry:
+            if self.output_mode != "draft-with-blocking-gaps":
+                raise StageRuntimeError(
+                    "execution dependencies are allowed only in draft-with-blocking-gaps"
+                )
+            if self.release_eligible:
+                raise StageRuntimeError(
+                    "execution dependency draft cannot be release eligible"
+                )
+            if self.unsigned_status != "blocked-execution-dependencies":
+                raise StageRuntimeError(
+                    "execution dependency draft must be unsigned blocked-execution-dependencies"
+                )
+            if "source-execution-dependency-blocked" not in set(
+                self.release_blocking_finding_codes
+            ):
+                raise StageRuntimeError(
+                    "execution dependency draft must carry source-execution-dependency-blocked"
+                )
+            if "blocking-source-first-gap" not in set(
+                self.release_blocking_finding_codes
+            ):
+                raise StageRuntimeError(
+                    "execution dependency draft must carry blocking-source-first-gap"
+                )
+        elif self.excluded_execution_obligation_ids:
+            raise StageRuntimeError(
+                "excluded execution obligations require an execution dependency registry"
+            )
+        if self.output_mode == "release" and self.release_eligible:
+            if self.blocking_gap_ids:
+                raise StageRuntimeError(
+                    "release-eligible output must have no blocking gaps"
+                )
+            if self.unsigned_status != "none":
+                raise StageRuntimeError(
+                    "release-eligible output must have unsigned_status=none"
+                )
+            if self.release_blocking_finding_codes:
+                raise StageRuntimeError(
+                    "release-eligible output cannot carry blocking finding codes"
+                )
+        elif self.output_mode == "release":
+            if self.blocking_gap_ids:
+                raise StageRuntimeError(
+                    "non-eligible release output cannot carry blocking gaps"
+                )
+            if self.unsigned_status != "blocked-source-contract" or set(
+                self.release_blocking_finding_codes
+            ) != {"legacy-source-contract"}:
+                raise StageRuntimeError(
+                    "non-eligible release output must be the exact legacy-source-contract route"
+                )
+        elif self.release_eligible:
+            raise StageRuntimeError("draft output cannot be release eligible")
+        elif not self.blocking_gap_ids:
+            raise StageRuntimeError(
+                "draft-with-blocking-gaps requires at least one blocking gap"
+            )
+        elif self.execution_dependency_registry:
+            if self.unsigned_status != "blocked-execution-dependencies":
+                raise StageRuntimeError(
+                    "execution dependency draft must be blocked-execution-dependencies"
+                )
+        elif self.unsigned_status != "blocked-source-gaps":
+            raise StageRuntimeError(
+                "source-gap draft must be unsigned blocked-source-gaps"
+            )
+        elif "blocking-source-first-gap" not in set(
+            self.release_blocking_finding_codes
+        ):
+            raise StageRuntimeError(
+                "source-gap draft must carry blocking-source-first-gap"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "contract": self.contract,
+            "output_mode": self.output_mode,
+            "release_eligible": self.release_eligible,
+            "blocking_gap_ids": list(self.blocking_gap_ids),
+            "execution_dependency_registry": [
+                item.to_dict() for item in self.execution_dependency_registry
+            ],
+            "excluded_execution_obligation_ids": list(
+                self.excluded_execution_obligation_ids
+            ),
+            "unsigned_status": self.unsigned_status,
+            "release_blocking_finding_codes": list(
+                self.release_blocking_finding_codes
+            ),
+        }
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "PreparedReleaseStatus":
+        _exact_fields(
+            payload,
+            {
+                "contract",
+                "output_mode",
+                "release_eligible",
+                "blocking_gap_ids",
+                "execution_dependency_registry",
+                "excluded_execution_obligation_ids",
+                "unsigned_status",
+                "release_blocking_finding_codes",
+            },
+            "release status",
+        )
+        if not isinstance(payload["execution_dependency_registry"], list):
+            raise StageRuntimeError(
+                "release_status.execution_dependency_registry must be a JSON array"
+            )
+        item = cls(
+            contract=payload["contract"],
+            output_mode=payload["output_mode"],
+            release_eligible=payload["release_eligible"],
+            blocking_gap_ids=_string_list(
+                payload["blocking_gap_ids"],
+                "release_status.blocking_gap_ids",
+                allow_empty=True,
+            ),
+            execution_dependency_registry=tuple(
+                PreparedExecutionDependency.from_dict(value)
+                for value in payload["execution_dependency_registry"]
+            ),
+            excluded_execution_obligation_ids=_string_list(
+                payload["excluded_execution_obligation_ids"],
+                "release_status.excluded_execution_obligation_ids",
+                allow_empty=True,
+            ),
+            unsigned_status=payload["unsigned_status"],
+            release_blocking_finding_codes=_string_list(
+                payload["release_blocking_finding_codes"],
+                "release_status.release_blocking_finding_codes",
+                allow_empty=True,
+            ),
+        )
         item.validate()
         return item
 
@@ -714,6 +1083,7 @@ class PreparedObligationSet:
                     item.coverage_status == "testable"
                     and DICTIONARY_CLAIM.search(claim_text)
                     and not item.dictionary_refs
+                    and not _has_external_dynamic_dictionary_contract(item)
                 ):
                     raise StageRuntimeError(
                         f"{item.obligation_id} dictionary-backed testable obligation must link "
@@ -803,6 +1173,44 @@ class PreparedObligationSet:
         return value
 
 
+def _validate_release_status_against_obligations(
+    release_status: PreparedReleaseStatus,
+    obligations: PreparedObligationSet,
+) -> None:
+    blocking_gap_ids = {
+        item.gap_id for item in obligations.coverage_gaps if item.blocking
+    }
+    registry_gap_ids = {
+        gap_id
+        for item in release_status.execution_dependency_registry
+        for gap_id in item.gap_ids
+    }
+    if set(release_status.blocking_gap_ids) != blocking_gap_ids | registry_gap_ids:
+        raise StageRuntimeError(
+            "release_status.blocking_gap_ids must exactly equal blocking prepared "
+            "gaps plus execution-dependency gaps"
+        )
+    compiled_obligation_ids = {
+        item.obligation_id for item in obligations.obligations
+    }
+    if compiled_obligation_ids & set(
+        release_status.excluded_execution_obligation_ids
+    ):
+        raise StageRuntimeError(
+            "excluded execution obligations must be absent from atomic-obligations.json"
+        )
+    compiled_atom_ids = {
+        item.traceability_atom_id for item in obligations.obligations
+    }
+    blocked_atom_ids = {
+        item.atom_id for item in release_status.execution_dependency_registry
+    }
+    if compiled_atom_ids & blocked_atom_ids:
+        raise StageRuntimeError(
+            "execution-blocked ATOMs must be absent from atomic-obligations.json"
+        )
+
+
 @dataclass(frozen=True)
 class PreparedStagePackage:
     package_version: int
@@ -816,6 +1224,7 @@ class PreparedStagePackage:
     package_artifacts: tuple[PackageArtifact, ...]
     execution_profile: str
     unsupported_dimensions: tuple[str, ...]
+    release_status: PreparedReleaseStatus | None
     forbidden_evidence_roots: tuple[str, ...]
     fallback_policy: str
     package_digest: str
@@ -836,6 +1245,12 @@ class PreparedStagePackage:
             payload["unsupported_dimensions"] = list(self.unsupported_dimensions)
         if self.package_version >= 7:
             payload["input_fingerprint"] = self.input_fingerprint
+        if self.package_version >= 9:
+            if self.release_status is None:
+                raise StageRuntimeError(
+                    "package version 9 requires structured release_status"
+                )
+            payload["release_status"] = self.release_status.to_dict()
         payload["forbidden_evidence_roots"] = list(self.forbidden_evidence_roots)
         payload["fallback_policy"] = self.fallback_policy
         return payload
@@ -856,6 +1271,12 @@ class PreparedStagePackage:
             raise StageRuntimeError("created_at must include timezone")
         if self.package_version >= 7:
             _sha(self.input_fingerprint, "input_fingerprint")
+        if self.package_version >= 9:
+            if not isinstance(self.release_status, PreparedReleaseStatus):
+                raise StageRuntimeError(
+                    "package version 9 requires structured release_status"
+                )
+            self.release_status.validate()
         if not self.source_registry:
             raise StageRuntimeError("source_registry must not be empty")
         source_paths = [item.path for item in self.source_registry]
@@ -930,6 +1351,8 @@ class PreparedStagePackage:
             expected.update({"execution_profile", "unsupported_dimensions"})
         if isinstance(package_version, int) and package_version >= 7:
             expected.add("input_fingerprint")
+        if isinstance(package_version, int) and package_version >= 9:
+            expected.add("release_status")
         _exact_fields(payload, expected, "prepared stage package")
         if not isinstance(payload["source_registry"], list) or not isinstance(payload["package_artifacts"], list):
             raise StageRuntimeError("source_registry and package_artifacts must be JSON arrays")
@@ -958,6 +1381,11 @@ class PreparedStagePackage:
                 )
                 if isinstance(package_version, int) and package_version >= 2
                 else ("legacy-unclassified",)
+            ),
+            release_status=(
+                PreparedReleaseStatus.from_dict(payload["release_status"])
+                if isinstance(package_version, int) and package_version >= 9
+                else None
             ),
             forbidden_evidence_roots=_string_list(
                 payload["forbidden_evidence_roots"], "forbidden_evidence_roots"
@@ -1043,13 +1471,31 @@ class PreparedPackageBuilder:
         execution_profile: str,
         unsupported_dimensions: Sequence[str],
         forbidden_evidence_roots: Sequence[str],
+        release_status: PreparedReleaseStatus,
+        immutable_evidence_max_bytes: int | None = None,
         reuse_if_current: bool = False,
+        allow_blocking_primary_gaps: bool = False,
     ) -> PreparedStagePackage:
         _identifier(package_id, "package_id")
         _identifier(ft_slug, "ft_slug")
         _identifier(scope_slug, "scope_slug")
         _text(section_id, "section_id")
         instructions.validate()
+        if not isinstance(allow_blocking_primary_gaps, bool):
+            raise StageRuntimeError("allow_blocking_primary_gaps must be boolean")
+        if not isinstance(release_status, PreparedReleaseStatus):
+            raise StageRuntimeError(
+                "package version 9 requires explicit structured release_status"
+            )
+        release_status.validate()
+        if immutable_evidence_max_bytes is not None and (
+            not isinstance(immutable_evidence_max_bytes, int)
+            or isinstance(immutable_evidence_max_bytes, bool)
+            or immutable_evidence_max_bytes < 1
+        ):
+            raise StageRuntimeError(
+                "immutable_evidence_max_bytes must be a positive integer when set"
+            )
         _identifier(execution_profile, "execution_profile")
         normalized_unsupported = tuple(unsupported_dimensions)
         for dimension in normalized_unsupported:
@@ -1058,18 +1504,61 @@ class PreparedPackageBuilder:
             raise StageRuntimeError(
                 "simple-field-property package cannot declare unsupported dimensions"
             )
+        blocking_gap_ids = {
+            item.gap_id for item in obligations.coverage_gaps if item.blocking
+        }
+        blocking_constraint_gap_ids = sorted(
+            blocking_gap_ids
+            & {
+                gap_id
+                for obligation in obligations.obligations
+                for gap_id in obligation.constraint_gap_ids
+            }
+        )
+        if blocking_constraint_gap_ids:
+            raise StageRuntimeError(
+                "prepared package cannot contain blocking constraint gaps: "
+                + ", ".join(blocking_constraint_gap_ids)
+            )
+        blocking_primary_gap_ids = sorted(
+            blocking_gap_ids
+            & {
+                obligation.gap_id
+                for obligation in obligations.obligations
+                if obligation.gap_id
+            }
+        )
+        if blocking_primary_gap_ids and not allow_blocking_primary_gaps:
+            raise StageRuntimeError(
+                "prepared package cannot contain blocking coverage gaps unless the "
+                "internal draft escape hatch is enabled: "
+                + ", ".join(blocking_primary_gap_ids)
+            )
+        if (
+            allow_blocking_primary_gaps
+            and blocking_primary_gap_ids
+            and not any(
+                item.coverage_status == "testable"
+                for item in obligations.obligations
+            )
+        ):
+            raise StageRuntimeError(
+                "blocking-gap draft package requires at least one testable obligation"
+            )
+        _validate_release_status_against_obligations(release_status, obligations)
+        if release_status.output_mode == "draft-with-blocking-gaps":
+            if not allow_blocking_primary_gaps:
+                raise StageRuntimeError(
+                    "draft release_status requires the internal draft escape hatch"
+                )
+        elif allow_blocking_primary_gaps:
+            raise StageRuntimeError(
+                "internal draft escape hatch requires draft release_status"
+            )
         if execution_profile == FAST_EXECUTION_PROFILE:
             if obligations.package_version != PACKAGE_VERSION:
                 raise StageRuntimeError(
                     f"simple-field-property fast path requires package version {PACKAGE_VERSION}"
-                )
-            blocking_gaps = sorted(
-                item.gap_id for item in obligations.coverage_gaps if item.blocking
-            )
-            if blocking_gaps:
-                raise StageRuntimeError(
-                    "simple-field-property fast path cannot contain blocking coverage gaps: "
-                    + ", ".join(blocking_gaps)
                 )
         if obligations.package_id != package_id:
             raise StageRuntimeError("obligations package_id does not match package_id")
@@ -1126,6 +1615,9 @@ class PreparedPackageBuilder:
                 "execution_profile": execution_profile,
                 "unsupported_dimensions": list(normalized_unsupported),
                 "forbidden_evidence_roots": list(forbidden_evidence_roots),
+                "allow_blocking_primary_gaps": allow_blocking_primary_gaps,
+                "release_status": release_status.to_dict(),
+                "immutable_evidence_max_bytes": immutable_evidence_max_bytes,
             }
         )
         if resolved_output.exists():
@@ -1152,7 +1644,7 @@ class PreparedPackageBuilder:
         try:
             temporary.mkdir(parents=True)
             evidence_text = self._render_evidence(package_id, evidence_inputs)
-            evidence_max_bytes = (
+            evidence_max_bytes = immutable_evidence_max_bytes or (
                 FAST_EVIDENCE_MAX_BYTES
                 if execution_profile == FAST_EXECUTION_PROFILE
                 else STANDARD_ROUTING_EVIDENCE_MAX_BYTES
@@ -1198,6 +1690,7 @@ class PreparedPackageBuilder:
                 package_artifacts=artifacts,
                 execution_profile=execution_profile,
                 unsupported_dimensions=normalized_unsupported,
+                release_status=release_status,
                 forbidden_evidence_roots=tuple(forbidden_evidence_roots),
                 fallback_policy="targeted-only",
                 package_digest="",
@@ -1430,3 +1923,13 @@ def verify_prepared_package(
     )
     if obligations.package_id != package.package_id:
         raise StageRuntimeError("prepared obligations package_id does not match stage package")
+    if obligations.package_version != package.package_version:
+        raise StageRuntimeError(
+            "prepared obligations package_version does not match stage package"
+        )
+    if package.package_version >= 9:
+        assert package.release_status is not None
+        _validate_release_status_against_obligations(
+            package.release_status,
+            obligations,
+        )

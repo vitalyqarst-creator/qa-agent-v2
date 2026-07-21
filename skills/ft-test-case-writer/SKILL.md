@@ -31,6 +31,8 @@ description: Пишет новые ручные тест-кейсы по уже 
 
 Если передан проверенный `stage-package.json`, используй prepared fast path: читай только четыре package-файла, не повторяй source discovery/extraction и обращайся к полному источнику только адресно по fallback-контракту из [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
 
+For source-first packages, follow the accepted exact-digest contract; conflicts return `blocked-input`.
+
 ## Выходы
 
 - canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
@@ -122,6 +124,7 @@ Minimum runtime rules:
 - Writer handoff format: [../../references/agent/writer-handoff-format.md](../../references/agent/writer-handoff-format.md)
 - Writer revision output format: [../../references/agent/writer-revision-output-format.md](../../references/agent/writer-revision-output-format.md)
 - Source parity check format: [../../references/agent/source-parity-check-format.md](../../references/agent/source-parity-check-format.md)
+- Source-first assertion contract: [../../references/agent/source-assertions-format.md](../../references/agent/source-assertions-format.md)
 - Mockup visual inventory format: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
 - Test case runtime format: [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md)
 - Test case format: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)

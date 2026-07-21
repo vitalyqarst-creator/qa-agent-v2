@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "status": "ready-with-known-baseline-debt",
+  "benchmark_id": "postfinal-v2-client-addresses-v5",
+  "config_sha256": "a658f9dc8737af352afad6aa1051bab4a31380295281fb06b334cd577ab51410",
+  "git_head": "28536d563424561cd6b0625df8d7a1502def0d28",
+  "worktree_clean": false,
+  "code_snapshot_binding": {
+    "test_case_agent/semantic_design_bridge.py": "412446bf4aaed5bcbbedd0ee1923122e4cb083db873dd023cfa0652c2eee637d",
+    "test_case_agent/semantic_design_sharding.py": "f4a74881a95efe691eaec2998a230cc196a8f0adc0cfec6762f15b21a28c4604",
+    "scripts/run_standard_scope_bridge.py": "f782f41ac8b1a74614e109eaf795674655dc7b3e7a3f1190d0728331ae7a1dbe",
+    "scripts/start_full_process_observation.py": "f566dec062065a7c070fb9e3efba541c67ce4b7a8bf73a0e50eb570b446b44a9",
+    "skills/ft-test-case-iteration/SKILL.md": "253ac02deed56b90bf06051bbe956eb1bbfefce6ddb26a8e49ec9f693d7af87d",
+    "references/agent/full-process-timing-observation.md": "60a95f49d8c90ed025ca89c2b4ac08f6f066e2bac9ccd208c7d9ef1189130901"
+  },
+  "verification": {
+    "target_and_contract_tests": {
+      "status": "passed",
+      "test_count": 220,
+      "duration_seconds": 57.885
+    },
+    "full_suite": {
+      "status": "baseline-debt-only",
+      "test_count": 1431,
+      "error_count": 4,
+      "skipped_count": 1,
+      "duration_seconds": 357.357,
+      "new_regression_count": 0,
+      "baseline_error": "stale-evidence-source-sha256 for historical H64/H65 manifests bound to an older fts/AutoFin/AGENT-NOTES.md hash"
+    },
+    "architecture_audit": {
+      "status": "passed",
+      "finding_count": 0,
+      "check_count": 63,
+      "fail_on": "warning"
+    },
+    "git_diff_check": {
+      "status": "passed"
+    },
+    "offline_replay": {
+      "status": "passed",
+      "source_row_count": 44,
+      "included_source_row_count": 27,
+      "shard_shape": [
+        [16, 0],
+        [11, 10],
+        [10, 10],
+        [7, 7]
+      ],
+      "deterministic_shard_count": 1,
+      "model_shard_count": 3
+    }
+  },
+  "protected_outputs": {
+    "canonical_test_cases": "fts/AutoFin/test-cases/14-application-card-client-addresses.md",
+    "canonical_sha256": "3631d9e0a1abbb1773344bd70dadfbce67a5018bc3414fd7b138bbaed0674a28",
+    "shadow_test_cases": "fts/AutoFin/test-cases/4.3-application-card-client-addresses-shadow-20260719-v5.md"
+  },
+  "launch_policy": {
+    "live_run_performed_during_development": false,
+    "fresh_session_required": true,
+    "fresh_handoff_required": true,
+    "fresh_cycle_required": true,
+    "previous_test_cases_available_to_writer_reviewer": false,
+    "canonical_overwrite_allowed": false
+  }
+}

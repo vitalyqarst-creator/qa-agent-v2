@@ -86,6 +86,14 @@ Dispatcher принимает JSON-конфигурацию v1 с `exec_runner_a
 
 Для `standard-required` действует тот же безопасный default через `--prepared-standard-writer-mode structured`: writer и reviewer получают bounded prepared context, writer имеет нулевой command budget, а runner создаёт draft, artifact graph, calibration lifecycle и deterministic gate bundle. `--prepared-standard-writer-mode assisted` разрешён только как явный новый immutable cycle для точечного source fallback.
 
+## Release profiles
+
+Стабильный qualification baseline содержит тесты и curated benchmark configs, но
+не содержит сырые прогоны, diagnostics или оригинальные AutoFin sources/mockups.
+Production bundle собирается из того же commit по отдельному allowlist и не
+содержит `evals/`, `tests/`, `fts/` и work/history. Команды и точный contract:
+[release/README.md](release/README.md).
+
 ## Как запускать тесты
 
 Канонический способ запуска тестов в репозитории:

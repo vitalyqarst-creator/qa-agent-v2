@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import re
+import unicodedata
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -8,11 +10,14 @@ from typing import Any
 from test_case_agent.review_cycle.prepared_package import load_obligations
 
 
-HEADING_LINE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t]*#*[ \t]*$")
+HEADING_LINE = re.compile(
+    r"^(#{1,6})[^\S\r\n]+(.+?)[^\S\r\n]*#*[^\S\r\n]*$"
+)
 TC_TITLE = re.compile(r"^(TC-[A-Za-z0-9._-]+)\b")
 FENCE_LINE = re.compile(r"^[ \t]*(`{3,}|~{3,})")
 TRACEABILITY_FIELD = re.compile(
-    r"(?im)^[ \t]*(?:[-+*][ \t]+)?\*\*(?:Трассировка|Traceability):\*\*[ \t]*(.+)$"
+    r"(?im)^[^\S\r\n]*(?:[-+*][^\S\r\n]+)?"
+    r"\*\*(?:Трассировка|Traceability):\*\*[^\S\r\n]*(.+)$"
 )
 ATOM_REFERENCE = re.compile(r"\bATOM-[A-Za-z0-9._-]+\b")
 OBLIGATION_REFERENCE = re.compile(r"\bOBL-[A-Za-z0-9._-]+\b")
@@ -20,6 +25,122 @@ DICTIONARY_PROJECTION_START = "runner-dictionary-projection:start"
 DICTIONARY_PROJECTION_END = "runner-dictionary-projection:end"
 REFERENCE_FIXTURE_START = "runner-reference-fixture:start"
 REFERENCE_FIXTURE_END = "runner-reference-fixture:end"
+
+RUNTIME_SECTION_TITLES = {
+    "предусловия": "preconditions",
+    "тестовые данные": "test_data",
+    "шаги": "steps",
+    "итоговый ожидаемый результат": "expected_result",
+}
+RUNTIME_SECTION_NAMES = {
+    "preconditions": "Предусловия",
+    "test_data": "Тестовые данные",
+    "steps": "Шаги",
+    "expected_result": "Итоговый ожидаемый результат",
+}
+NUMBERED_STEP = re.compile(r"(?m)^[^\S\r\n]*\d+[.)][^\S\r\n]+\S")
+HTML_COMMENT = re.compile(r"(?s)<!--.*?-->")
+RUNTIME_PLACEHOLDER = re.compile(
+    r"^(?:не\s+требуется|не\s+применимо)[\s.!;:,\-]*$",
+    re.IGNORECASE,
+)
+LEXICAL_TOKEN = re.compile(r"[^\W_]+", re.UNICODE)
+NEGATION_TOKENS = {"не", "нет", "без", "not", "no", "without", "never"}
+NEGATION_ROOTS = ("отсутств", "исключен", "absent", "missing")
+QUOTED_BOOLEAN_LITERAL = re.compile(
+    r"(?:«\s*(?:да|нет|yes|no)\s*»|[\"'“]\s*(?:да|нет|yes|no)\s*[\"'”])",
+    re.IGNORECASE,
+)
+NON_POLARITY_RETENTION_NEGATION = re.compile(
+    r"\b(?:без\s+изменени\w*|without\s+change\w*)\b",
+    re.IGNORECASE,
+)
+LEXICAL_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "as",
+    "at",
+    "be",
+    "by",
+    "for",
+    "from",
+    "in",
+    "is",
+    "of",
+    "on",
+    "or",
+    "the",
+    "then",
+    "to",
+    "when",
+    "with",
+    "а",
+    "бы",
+    "в",
+    "во",
+    "для",
+    "до",
+    "и",
+    "из",
+    "или",
+    "к",
+    "как",
+    "на",
+    "над",
+    "о",
+    "об",
+    "от",
+    "по",
+    "под",
+    "после",
+    "при",
+    "с",
+    "со",
+    "то",
+    "что",
+    "чтобы",
+}
+SEMANTIC_FAMILY_ROOTS = {
+    "input": ("ввест", "ввод", "заполн", "указ", "enter", "fill", "type"),
+    "search": ("поиск", "найт", "ищ", "search", "find"),
+    "select": ("выбр", "отмет", "select", "choos", "check"),
+    "click": ("нажат", "клик", "click", "tap"),
+    "open": ("откр", "open"),
+    "clear": ("очист", "сброс", "clear", "reset"),
+    "change": ("измен", "change", "edit"),
+    "verify": ("провер", "свер", "убед", "просмотр", "verify", "check", "view"),
+    "display": ("отображ", "показ", "видим", "появ", "display", "show", "visible", "appear"),
+    "accept": ("принима", "принят", "допуст", "accept", "allow"),
+    "hide": ("скры", "исчез", "hide", "disappear"),
+    "error": ("ошиб", "валидац", "error", "invalid"),
+    "success": ("успеш", "success", "valid"),
+    "remain": ("сохран", "оста", "remain", "keep"),
+}
+REQUIRED_ORACLE_FAMILIES = {"accept"}
+CONTRADICTORY_FAMILIES = {
+    frozenset(("input", "clear")),
+    frozenset(("display", "hide")),
+    frozenset(("error", "success")),
+    frozenset(("clear", "remain")),
+}
+ACTION_CHANGE_ROOTS = ("установ", "переключ", "активир", "примен")
+ACTION_INPUT_ROOTS = ("примен",)
+ACTION_CONTRACT = re.compile(
+    r"(?is)(?:^|;\s*)Action\s+contract:\s*(?P<value>.*?)"
+    r"(?=;\s*(?:Design\s+fixture|Check\s+type|Test\s+data|Field/block|"
+    r"Condition\s+contract):|$)"
+)
+FIELD_SELECTION_RETENTION_CONTRACT = re.compile(
+    r"(?is)\bсохран\w*\b.{0,80}\bв\s+поле\b"
+)
+FIELD_SELECTION_VISIBLE_AFTER_CHOICE = re.compile(
+    r"(?is)\bпосле\s+выбор\w*\b.{0,120}\b(?:отображ\w*|оста\w*|сохран\w*)\b"
+)
+PERSISTENCE_LIFECYCLE = re.compile(
+    r"(?is)\b(?:повторн\w*\s+откр\w*|переоткр\w*|перезагруз\w*|"
+    r"после\s+сохранени\w*|нов\w*\s+сесси\w*)\b"
+)
 
 
 def traceability_references(text: str) -> set[str]:
@@ -177,7 +298,12 @@ def materialize_draft_reference_fixtures(
     text: str, obligations: Any
 ) -> tuple[str, dict[str, Any]]:
     by_test_case: dict[str, list[Any]] = {}
+    all_by_test_case: dict[str, list[Any]] = {}
     for obligation in obligations.obligations:
+        if obligation.planned_test_case_id:
+            all_by_test_case.setdefault(
+                obligation.planned_test_case_id, []
+            ).append(obligation)
         if not reference_fixture_requirements(obligation):
             continue
         if not obligation.planned_test_case_id:
@@ -188,10 +314,11 @@ def materialize_draft_reference_fixtures(
     materialized: list[dict[str, Any]] = []
     for tc_id, original_block in test_case_sections(text):
         linked = by_test_case.get(tc_id, [])
-        if not linked:
+        cleanup_linked = all_by_test_case.get(tc_id, [])
+        if not linked and not cleanup_linked:
             continue
         block = original_block
-        for obligation in linked:
+        for obligation in cleanup_linked:
             existing = re.compile(
                 rf"(?ms)^<!--\s*{re.escape(REFERENCE_FIXTURE_START)}\s+"
                 rf"{re.escape(obligation.obligation_id)}\s*-->.*?"
@@ -199,6 +326,9 @@ def materialize_draft_reference_fixtures(
                 rf"{re.escape(obligation.obligation_id)}\s*-->\s*\n?"
             )
             block = existing.sub("", block)
+        if not linked:
+            result = result.replace(original_block, block, 1)
+            continue
         projection = "\n\n".join(reference_fixture_block(item) for item in linked)
         test_data = re.search(r"(?m)^###\s+Тестовые данные\s*$", block)
         if test_data is None:
@@ -247,7 +377,10 @@ def materialize_draft_reference_fixtures(
 
 
 def validate_writer_dictionary_ownership(
-    text: str, obligations: Any
+    text: str,
+    obligations: Any,
+    *,
+    trusted_runner_projected_test_case_ids: Collection[str] = (),
 ) -> dict[str, Any]:
     """Reject model-owned enumeration that the runner will materialize exactly.
 
@@ -256,6 +389,7 @@ def validate_writer_dictionary_ownership(
     is already owned by ``materialize_draft_dictionary_projections``.
     """
 
+    trusted_projection_ids = set(trusted_runner_projected_test_case_ids)
     by_test_case: dict[str, list[Any]] = {}
     for obligation in obligations.obligations:
         if not exhaustive_dictionary_requirements(obligation):
@@ -269,6 +403,16 @@ def validate_writer_dictionary_ownership(
     for tc_id, block in test_case_sections(text):
         for obligation in by_test_case.get(tc_id, []):
             checked_obligations += 1
+            writer_owned_block = block
+            if tc_id in trusted_projection_ids:
+                writer_owned_block = re.sub(
+                    rf"(?ms)^<!--\s*{re.escape(DICTIONARY_PROJECTION_START)}\s+"
+                    rf"{re.escape(obligation.obligation_id)}\s*-->.*?"
+                    rf"^<!--\s*{re.escape(DICTIONARY_PROJECTION_END)}\s+"
+                    rf"{re.escape(obligation.obligation_id)}\s*-->\s*$",
+                    "",
+                    block,
+                )
             for requirement in exhaustive_dictionary_requirements(obligation):
                 values = tuple(
                     dict.fromkeys(
@@ -279,7 +423,9 @@ def validate_writer_dictionary_ownership(
                 )
                 if len(values) < 2:
                     continue
-                mentioned = tuple(value for value in values if value in block)
+                mentioned = tuple(
+                    value for value in values if value in writer_owned_block
+                )
                 if len(mentioned) < 2:
                     continue
                 findings.append(
@@ -340,15 +486,15 @@ def dictionary_projection_findings(
     *, tc_id: str, block: str, obligation: Any
 ) -> tuple[dict[str, Any], ...]:
     findings: list[dict[str, Any]] = []
+    marker = re.compile(
+        rf"(?ms)^<!--\s*{re.escape(DICTIONARY_PROJECTION_START)}\s+"
+        rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
+        rf"(.*?)"
+        rf"^<!--\s*{re.escape(DICTIONARY_PROJECTION_END)}\s+"
+        rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
+    )
+    match = marker.search(block)
     for requirement in exhaustive_dictionary_requirements(obligation):
-        marker = re.compile(
-            rf"(?ms)^<!--\s*{re.escape(DICTIONARY_PROJECTION_START)}\s+"
-            rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
-            rf"(.*?)"
-            rf"^<!--\s*{re.escape(DICTIONARY_PROJECTION_END)}\s+"
-            rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
-        )
-        match = marker.search(block)
         expected_lines = {
             dictionary_projection_line(item): item
             for item in requirement.required_values
@@ -379,9 +525,20 @@ def dictionary_projection_findings(
                 }
             )
             continue
+        requirement_marker = re.compile(
+            rf"(?ms)^- Полный набор `{re.escape(requirement.dictionary_id)}` "
+            rf"\(`{re.escape(requirement.coverage_mode)}`\):\s*$"
+            rf"(.*?)"
+            rf"(?=^- Полный набор `|\Z)"
+        )
+        requirement_match = requirement_marker.search(match.group(1))
         actual_lines = {
             line.strip()
-            for line in match.group(1).splitlines()
+            for line in (
+                requirement_match.group(1).splitlines()
+                if requirement_match is not None
+                else ()
+            )
             if line.strip().startswith(("- Группа `", "- Значение `"))
         }
         missing_lines = sorted(set(expected_lines) - actual_lines)
@@ -419,7 +576,12 @@ def materialize_draft_dictionary_projections(
     text: str, obligations: Any
 ) -> tuple[str, dict[str, Any]]:
     by_test_case: dict[str, list[Any]] = {}
+    all_by_test_case: dict[str, list[Any]] = {}
     for obligation in obligations.obligations:
+        if obligation.planned_test_case_id:
+            all_by_test_case.setdefault(
+                obligation.planned_test_case_id, []
+            ).append(obligation)
         if not exhaustive_dictionary_requirements(obligation):
             continue
         if not obligation.planned_test_case_id:
@@ -430,10 +592,11 @@ def materialize_draft_dictionary_projections(
     materialized: list[dict[str, Any]] = []
     for tc_id, original_block in test_case_sections(text):
         linked = by_test_case.get(tc_id, [])
-        if not linked:
+        cleanup_linked = all_by_test_case.get(tc_id, [])
+        if not linked and not cleanup_linked:
             continue
         block = original_block
-        for obligation in linked:
+        for obligation in cleanup_linked:
             existing = re.compile(
                 rf"(?ms)^<!--\s*{re.escape(DICTIONARY_PROJECTION_START)}\s+"
                 rf"{re.escape(obligation.obligation_id)}\s*-->.*?"
@@ -441,6 +604,9 @@ def materialize_draft_dictionary_projections(
                 rf"{re.escape(obligation.obligation_id)}\s*-->\s*\n?"
             )
             block = existing.sub("", block)
+        if not linked:
+            result = result.replace(original_block, block, 1)
+            continue
         projection = "\n\n".join(
             dictionary_projection_block(obligation) for obligation in linked
         )
@@ -569,6 +735,462 @@ def without_fenced_blocks(text: str) -> str:
     return "".join(lines)
 
 
+def _normalized_text(text: str) -> str:
+    return " ".join(
+        unicodedata.normalize("NFKC", text).casefold().replace("ё", "е").split()
+    )
+
+
+def _runtime_section_content(block: str) -> dict[str, tuple[str, ...]]:
+    safe_block = without_fenced_blocks(block)
+    heading_matches = list(
+        re.finditer(
+            r"(?m)^#{1,6}[^\S\r\n]+(.+?)[^\S\r\n]*#*"
+            r"[^\S\r\n]*(?:\r?\n|$)",
+            safe_block,
+        )
+    )
+    content: dict[str, list[str]] = {}
+    for index, match in enumerate(heading_matches):
+        title = _normalized_text(match.group(1).strip())
+        section_id = RUNTIME_SECTION_TITLES.get(title)
+        if section_id is None:
+            continue
+        end = (
+            heading_matches[index + 1].start()
+            if index + 1 < len(heading_matches)
+            else len(safe_block)
+        )
+        content.setdefault(section_id, []).append(safe_block[match.end() : end])
+    return {key: tuple(value) for key, value in content.items()}
+
+
+def _visible_section_text(text: str) -> str:
+    value = HTML_COMMENT.sub("", text)
+    value = TRACEABILITY_FIELD.sub("", value)
+    value = re.sub(r"[`*_>#]", "", value)
+    return value.strip()
+
+
+def _placeholder_text(text: str) -> str:
+    value = _normalized_text(_visible_section_text(text))
+    return re.sub(r"^(?:[-+*]|\d+[.)])\s*", "", value).strip()
+
+
+def _lexical_tokens(text: str) -> set[str]:
+    normalized = unicodedata.normalize("NFKC", text).casefold().replace("ё", "е")
+    return {
+        token
+        for token in LEXICAL_TOKEN.findall(normalized)
+        if token not in LEXICAL_STOPWORDS
+        and token not in NEGATION_TOKENS
+        and not token.isdigit()
+    }
+
+
+def _tokens_overlap(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    common_prefix = 0
+    for left_char, right_char in zip(left, right):
+        if left_char != right_char:
+            break
+        common_prefix += 1
+    return common_prefix >= 5
+
+
+def _shared_token_count(left: set[str], right: set[str]) -> int:
+    return sum(
+        1
+        for left_token in left
+        if any(_tokens_overlap(left_token, right_token) for right_token in right)
+    )
+
+
+def _semantic_families(tokens: set[str]) -> set[str]:
+    return {
+        family
+        for family, roots in SEMANTIC_FAMILY_ROOTS.items()
+        if any(token.startswith(root) for token in tokens for root in roots)
+    }
+
+
+def _action_semantic_families(tokens: set[str]) -> set[str]:
+    families = _semantic_families(tokens)
+    if any(token.startswith(root) for token in tokens for root in ACTION_CHANGE_ROOTS):
+        families.add("change")
+    if any(token.startswith(root) for token in tokens for root in ACTION_INPUT_ROOTS):
+        families.add("input")
+    return families
+
+
+def _has_contradictory_families(left: set[str], right: set[str]) -> bool:
+    return any(
+        len(pair & left) == 1
+        and len(pair & right) == 1
+        and (pair & left) != (pair & right)
+        for pair in CONTRADICTORY_FAMILIES
+    )
+
+
+def _semantic_contract_matches(
+    contract: str, actual: str, *, action_contract: bool = False
+) -> bool:
+    contract_tokens = _lexical_tokens(contract)
+    actual_tokens = _lexical_tokens(actual)
+    if not contract_tokens or not actual_tokens:
+        return False
+    shared_count = _shared_token_count(contract_tokens, actual_tokens)
+    family_projection = (
+        _action_semantic_families if action_contract else _semantic_families
+    )
+    contract_families = family_projection(contract_tokens)
+    actual_families = family_projection(actual_tokens)
+    if _has_contradictory_families(contract_families, actual_families):
+        return False
+    if (
+        not action_contract
+        and not PERSISTENCE_LIFECYCLE.search(contract)
+        and FIELD_SELECTION_RETENTION_CONTRACT.search(contract)
+        and FIELD_SELECTION_VISIBLE_AFTER_CHOICE.search(actual)
+        and shared_count >= 2
+    ):
+        return True
+    if (
+        not action_contract
+        and contract_families.intersection(REQUIRED_ORACLE_FAMILIES)
+        - actual_families
+    ):
+        return False
+    if contract_families and not contract_families.intersection(actual_families):
+        return False
+    if shared_count >= 2:
+        return True
+    return bool(shared_count and contract_families.intersection(actual_families))
+
+
+def _prepared_action_contract(test_intent: str) -> str:
+    """Use the executable clause, not conditions and fixtures, for step matching."""
+
+    match = ACTION_CONTRACT.search(test_intent)
+    if match is None:
+        return test_intent
+    value = match.group("value").strip()
+    return value or test_intent
+
+
+def _has_explicit_negation(text: str) -> bool:
+    normalized = unicodedata.normalize("NFKC", text).casefold().replace("ё", "е")
+    # Quoted boolean values describe control state, not sentence polarity.  For
+    # example, `переключатель = «Нет»` must not invert an otherwise positive
+    # oracle such as `поле отображается`.
+    normalized = QUOTED_BOOLEAN_LITERAL.sub(" ", normalized)
+    # `без изменения` describes value retention and does not negate a positive
+    # acceptance/display oracle.
+    normalized = NON_POLARITY_RETENTION_NEGATION.sub(" ", normalized)
+    tokens = LEXICAL_TOKEN.findall(normalized)
+    return bool(
+        NEGATION_TOKENS.intersection(tokens)
+        or any(token.startswith(root) for token in tokens for root in NEGATION_ROOTS)
+    )
+
+
+def _oracle_polarity_conflicts(contract: str, actual: str) -> bool:
+    contract_tokens = _lexical_tokens(contract)
+    actual_tokens = _lexical_tokens(actual)
+    shared_families = _semantic_families(contract_tokens).intersection(
+        _semantic_families(actual_tokens)
+    )
+    if not shared_families or not _shared_token_count(contract_tokens, actual_tokens):
+        return False
+    relevant_clauses = []
+    for clause in re.split(r"[.;!?]+|\r?\n+", actual):
+        clause_tokens = _lexical_tokens(clause)
+        if not clause_tokens:
+            continue
+        if not _semantic_families(contract_tokens).intersection(
+            _semantic_families(clause_tokens)
+        ):
+            continue
+        if not _shared_token_count(contract_tokens, clause_tokens):
+            continue
+        relevant_clauses.append(clause)
+    if not relevant_clauses:
+        relevant_clauses = [actual]
+    contract_negated = _has_explicit_negation(contract)
+    return all(
+        _has_explicit_negation(clause) != contract_negated
+        for clause in relevant_clauses
+    )
+
+
+def _strict_runtime_contract_findings(
+    *,
+    sections: tuple[tuple[str, str], ...],
+    obligations_by_id: dict[str, Any],
+) -> tuple[list[dict[str, Any]], dict[str, list[str]]]:
+    findings: list[dict[str, Any]] = []
+    occurrences: dict[str, list[str]] = {}
+    testable_obligations = {
+        obligation_id: obligation
+        for obligation_id, obligation in obligations_by_id.items()
+        if obligation.coverage_status == "testable"
+    }
+    planned_by_tc: dict[str, list[Any]] = {}
+    for obligation in testable_obligations.values():
+        if obligation.planned_test_case_id:
+            planned_by_tc.setdefault(obligation.planned_test_case_id, []).append(
+                obligation
+            )
+
+    for tc_id, block in sections:
+        runtime_sections = _runtime_section_content(block)
+        for section_id, section_name in RUNTIME_SECTION_NAMES.items():
+            values = runtime_sections.get(section_id, ())
+            if not values:
+                findings.append(
+                    {
+                        "id": "missing-runtime-section",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "section": section_name,
+                        "message": (
+                            "Strict runtime TCs must contain every required "
+                            "execution section."
+                        ),
+                    }
+                )
+                continue
+            if len(values) > 1:
+                findings.append(
+                    {
+                        "id": "duplicate-runtime-section",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "section": section_name,
+                        "message": "A required runtime section must occur exactly once per TC.",
+                    }
+                )
+            visible = _visible_section_text(values[0])
+            if not visible:
+                findings.append(
+                    {
+                        "id": "empty-runtime-section",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "section": section_name,
+                        "message": "A required runtime section must not be empty.",
+                    }
+                )
+                continue
+            if RUNTIME_PLACEHOLDER.fullmatch(
+                _placeholder_text(values[0])
+            ) and section_id not in {"preconditions", "test_data"}:
+                findings.append(
+                    {
+                        "id": "forbidden-runtime-placeholder",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "section": section_name,
+                        "message": (
+                            "Only Preconditions and Test data may use an explicit "
+                            "not-applicable placeholder."
+                        ),
+                    }
+                )
+
+        step_values = runtime_sections.get("steps", ())
+        if step_values and not NUMBERED_STEP.search(step_values[0]):
+            findings.append(
+                {
+                    "id": "runtime-step-missing-numbered-action",
+                    "severity": "error",
+                    "tc_id": tc_id,
+                    "message": "Strict runtime TCs require at least one numbered executable step.",
+                }
+            )
+
+        safe_block = without_fenced_blocks(block)
+        trace_values = TRACEABILITY_FIELD.findall(safe_block)
+        trace_text = "; ".join(trace_values)
+        traced_references = traceability_references(trace_text)
+        traced_atoms = set(ATOM_REFERENCE.findall(trace_text))
+        traced_obligations = set(OBLIGATION_REFERENCE.findall(trace_text))
+        traced_items: list[Any] = []
+        for obligation in testable_obligations.values():
+            is_traced = obligation.obligation_id in traced_obligations
+            if obligation.obligation_id == obligation.traceability_atom_id:
+                is_traced = is_traced or obligation.traceability_atom_id in traced_atoms
+            if not is_traced:
+                continue
+            traced_items.append(obligation)
+            occurrences.setdefault(obligation.obligation_id, []).append(tc_id)
+            if (
+                obligation.planned_test_case_id
+                and obligation.planned_test_case_id != tc_id
+            ):
+                findings.append(
+                    {
+                        "id": "planned-test-case-mismatch",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation.obligation_id,
+                        "planned_test_case_id": obligation.planned_test_case_id,
+                        "message": "A planned obligation may be covered only by its planned TC id.",
+                    }
+                )
+
+        mapped_items = list(planned_by_tc.get(tc_id, ()))
+        mapped_ids = {item.obligation_id for item in mapped_items}
+        mapped_items.extend(
+            item
+            for item in traced_items
+            if not item.planned_test_case_id and item.obligation_id not in mapped_ids
+        )
+        if not mapped_items:
+            findings.append(
+                {
+                    "id": "unmapped-runtime-test-case",
+                    "severity": "error",
+                    "tc_id": tc_id,
+                        "message": (
+                            "Every strict runtime TC must map to at least one "
+                            "testable prepared obligation."
+                        ),
+                }
+            )
+        expected_references: set[str] = set()
+        for obligation in mapped_items:
+            expected_references.add(obligation.obligation_id)
+            if obligation.traceability_atom_id:
+                expected_references.add(obligation.traceability_atom_id)
+            expected_references.update(obligation.source_refs)
+            expected_references.update(obligation.dictionary_refs)
+        missing_references = sorted(expected_references - traced_references)
+        unexpected_references = sorted(traced_references - expected_references)
+        if missing_references or unexpected_references:
+            findings.append(
+                {
+                    "id": "strict-traceability-contract-mismatch",
+                    "severity": "error",
+                    "tc_id": tc_id,
+                    "missing_references": missing_references,
+                    "unexpected_references": unexpected_references,
+                    "message": (
+                        "TC traceability must equal the exact obligation, atom, "
+                        "source and dictionary contract for this TC."
+                    ),
+                }
+            )
+
+        steps = step_values[0] if step_values else ""
+        precondition_values = runtime_sections.get("preconditions", ())
+        execution_contract_text = "\n".join(
+            value
+            for value in (
+                precondition_values[0] if precondition_values else "",
+                steps,
+            )
+            if value
+        )
+        expected_values = runtime_sections.get("expected_result", ())
+        expected_result = expected_values[0] if expected_values else ""
+        for obligation in mapped_items:
+            if not _semantic_contract_matches(
+                _prepared_action_contract(obligation.test_intent),
+                execution_contract_text,
+                action_contract=True,
+            ):
+                findings.append(
+                    {
+                        "id": "action-contract-mismatch",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation.obligation_id,
+                        "message": (
+                            "Numbered preconditions and steps must have meaningful "
+                            "lexical and action overlap with the prepared test_intent."
+                        ),
+                    }
+                )
+            if _oracle_polarity_conflicts(
+                obligation.observable_oracle, expected_result
+            ):
+                findings.append(
+                    {
+                        "id": "oracle-polarity-mismatch",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation.obligation_id,
+                        "message": (
+                            "The final expected result has opposite polarity to the "
+                            "prepared observable oracle."
+                        ),
+                    }
+                )
+            elif not _semantic_contract_matches(
+                obligation.observable_oracle, expected_result
+            ):
+                findings.append(
+                    {
+                        "id": "observable-oracle-contract-mismatch",
+                        "severity": "error",
+                        "tc_id": tc_id,
+                        "obligation_id": obligation.obligation_id,
+                        "message": (
+                            "The final expected result must preserve the prepared "
+                            "observable oracle semantics."
+                        ),
+                    }
+                )
+
+    for obligation_id, tc_ids in occurrences.items():
+        distinct_tc_ids = tuple(dict.fromkeys(tc_ids))
+        if len(distinct_tc_ids) <= 1:
+            continue
+        for tc_id in distinct_tc_ids:
+            findings.append(
+                {
+                    "id": "duplicate-obligation-coverage",
+                    "severity": "error",
+                    "tc_id": tc_id,
+                    "obligation_id": obligation_id,
+                    "test_case_ids": list(distinct_tc_ids),
+                    "message": "A prepared obligation must not be claimed by more than one TC.",
+                }
+            )
+    return findings, occurrences
+
+
+def _strict_valid_coverage(
+    *,
+    occurrences: dict[str, list[str]],
+    obligations_by_id: dict[str, Any],
+    findings: list[dict[str, Any]],
+) -> set[str]:
+    covered: set[str] = set()
+    for obligation_id, tc_ids in occurrences.items():
+        obligation = obligations_by_id[obligation_id]
+        for tc_id in dict.fromkeys(tc_ids):
+            if (
+                obligation.planned_test_case_id
+                and obligation.planned_test_case_id != tc_id
+            ):
+                continue
+            has_local_finding = any(
+                finding.get("tc_id") == tc_id
+                and (
+                    "obligation_id" not in finding
+                    or finding.get("obligation_id") == obligation_id
+                )
+                for finding in findings
+            )
+            if not has_local_finding:
+                covered.add(obligation_id)
+                break
+    return covered
+
+
 @dataclass(frozen=True)
 class ObligationGateResult:
     passed: bool
@@ -596,6 +1218,7 @@ def validate_draft_obligation_coverage(
     *,
     draft_path: Path,
     obligations_path: Path,
+    strict_runtime_contract: bool = False,
 ) -> ObligationGateResult:
     text = draft_path.read_text(encoding="utf-8")
     obligations = load_obligations(obligations_path)
@@ -615,7 +1238,9 @@ def validate_draft_obligation_coverage(
     sections = test_case_sections(text)
 
     for tc_id, block in sections:
-        trace_values = TRACEABILITY_FIELD.findall(without_fenced_blocks(block))
+        safe_block = without_fenced_blocks(block)
+        trace_values = TRACEABILITY_FIELD.findall(safe_block)
+        projection_block = safe_block if strict_runtime_contract else block
         trace_text = " ".join(trace_values)
         traced_references = traceability_references(trace_text)
         traced_atoms = set(ATOM_REFERENCE.findall(trace_text))
@@ -683,14 +1308,14 @@ def validate_draft_obligation_coverage(
                 findings.extend(
                     dictionary_projection_findings(
                         tc_id=tc_id,
-                        block=block,
+                        block=projection_block,
                         obligation=obligation,
                     )
                 )
                 findings.extend(
                     reference_fixture_findings(
                         tc_id=tc_id,
-                        block=block,
+                        block=projection_block,
                         obligation=obligation,
                     )
                 )
@@ -728,14 +1353,14 @@ def validate_draft_obligation_coverage(
                         findings.extend(
                             dictionary_projection_findings(
                                 tc_id=tc_id,
-                                block=block,
+                                block=projection_block,
                                 obligation=obligation,
                             )
                         )
                         findings.extend(
                             reference_fixture_findings(
                                 tc_id=tc_id,
-                                block=block,
+                                block=projection_block,
                                 obligation=obligation,
                             )
                         )
@@ -752,6 +1377,18 @@ def validate_draft_obligation_coverage(
                         "message": "Current prepared-package TC traceability must name the linked OBL as well as the ATOM.",
                     }
                 )
+
+    if strict_runtime_contract:
+        strict_findings, occurrences = _strict_runtime_contract_findings(
+            sections=sections,
+            obligations_by_id=obligations_by_id,
+        )
+        findings.extend(strict_findings)
+        covered = _strict_valid_coverage(
+            occurrences=occurrences,
+            obligations_by_id=obligations_by_id,
+            findings=findings,
+        )
 
     for obligation_id in sorted(testable - covered):
         obligation = obligations_by_id[obligation_id]

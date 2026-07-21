@@ -148,8 +148,18 @@ def _usage(turn: Any) -> dict[str, int] | None:
     if usage is None:
         return None
     result: dict[str, int] = {}
-    for key in ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens"):
-        value = getattr(usage, key, None)
+    aliases = {
+        "input_tokens": ("input_tokens",),
+        "cached_input_tokens": ("cached_input_tokens",),
+        "output_tokens": ("output_tokens",),
+        "total_tokens": ("total_tokens",),
+        "reasoning_tokens": ("reasoning_tokens", "reasoning_output_tokens"),
+    }
+    for key, candidates in aliases.items():
+        value = next(
+            (getattr(usage, candidate, None) for candidate in candidates if getattr(usage, candidate, None) is not None),
+            None,
+        )
         if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
             result[key] = value
     return result or None

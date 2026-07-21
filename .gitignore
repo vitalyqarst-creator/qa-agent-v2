@@ -53,5 +53,29 @@ fts/
 fts/*
 !fts/AutoFin/
 !fts/AutoFin/**
+# AutoFin source documents and UI mockups are local qualification inputs.
+# Benchmarks bind them by hashes; never publish the original files.
+fts/AutoFin/source/
+fts/AutoFin/mockups/
+fts/AutoFin/support/**/*.docx
+fts/AutoFin/support/**/*.pdf
+fts/AutoFin/support/**/*.xlsx
+fts/AutoFin/support/**/*.xls
+fts/AutoFin/support/**/*.png
+fts/AutoFin/support/**/*.jpg
+fts/AutoFin/support/**/*.jpeg
 fts/AutoFin/work/
+!fts/AutoFin/work/
+fts/AutoFin/work/*
+!fts/AutoFin/work/vendor-references/
+fts/AutoFin/work/vendor-references/*
+!fts/AutoFin/work/vendor-references/dadata-reference.md
+!fts/AutoFin/work/vendor-references/dadata-fixture-catalog.md
+!fts/AutoFin/work/vendor-references/dadata-fixtures/
+fts/AutoFin/work/vendor-references/dadata-fixtures/*
+!fts/AutoFin/work/vendor-references/dadata-fixtures/*.json
+!fts/AutoFin/work/vendor-references/dadata-fixtures/*.md
+!fts/AutoFin/work/ui-automation-prep/
+fts/AutoFin/work/ui-automation-prep/*
+!fts/AutoFin/work/ui-automation-prep/UI-AGENT-NOTES.md
 fts/AutoFin/**/~$*

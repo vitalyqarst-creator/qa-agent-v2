@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "benchmark_id": "postfinal-v2-client-addresses-v15",
+  "event_status": "blocked-before-benchmark",
+  "event_phase": "request-metadata",
+  "error_type": "fail-closed metadata validation",
+  "error": "root user turn metadata required; received thread_source=subagent",
+  "evidence_source": "user-reported terminal message",
+  "wrapper_invoked": false,
+  "benchmark_attempt_created": false,
+  "outputs_created": false,
+  "reserved_paths_remain_fresh": true,
+  "canonical_unchanged": true,
+  "source_files_unchanged": true,
+  "disposition": "Fix root-only launch routing and reuse the same unconsumed v15 config and reserved outputs."
+}

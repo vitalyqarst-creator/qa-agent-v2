@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-07-20T12:13:37Z",
+  "probe_entrypoint": "scripts/probe_environment.py",
+  "platform_system": "Windows",
+  "platform_release": "10",
+  "platform_version": "10.0.22000",
+  "os_name": "nt",
+  "shell": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+  "detected_shell_hint": "powershell-likely",
+  "python_version": "3.11.9",
+  "python_executable": "C:\\Program Files\\Python311\\python.exe",
+  "python_on_path": "C:\\Program Files\\Python311\\python.EXE",
+  "stdout_encoding": "cp1251",
+  "stderr_encoding": "cp1251",
+  "preferred_locale_encoding": "cp1251",
+  "filesystem_encoding": "utf-8",
+  "cyrillic_probe_status": "printed",
+  "reuse_scope": "same-workstation-next-session",
+  "note": "Use explicit UTF-8 file decoding for Russian artifacts; do not use mojibake console output as evidence."
+}

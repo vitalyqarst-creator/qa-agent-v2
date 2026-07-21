@@ -1,0 +1,67 @@
+{
+  "schema_version": 2,
+  "benchmark_id": "postfinal-v2-employment-main-work",
+  "ft_root": "fts/AutoFin",
+  "ft_slug": "AutoFin",
+  "scope_slug": "employment-main-work",
+  "source_files": [
+    "source/PostFinal-v2/PostFinal-v2.docx",
+    "source/PostFinal-v2/PostFinal-v2.xhtml",
+    "source/PostFinal-v2/PostFinal-v2.pdf"
+  ],
+  "scope_inputs": [
+    {
+      "path": "support/PostFinal-v2/АФБ справочники 26.06.26.md",
+      "role": "support",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification"
+    },
+    {
+      "path": "AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    }
+  ],
+  "expected_sha256": {
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+    "fts/AutoFin/support/PostFinal-v2/АФБ справочники 26.06.26.md": "a498cbd00237ff0ed9b48b5ffeade89a6914cff2f20f4fa231c566f7dbfc7e38",
+    "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md": "4324e54ab0c311ae913211dc9b869c70fe3552698bf914a14b7bef280c1b10a2",
+    "fts/AutoFin/AGENT-NOTES.md": "5713d2d8d49d34354ae4308701e0ea2162ce41ac21f555ba098d1152a92087bf",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg": "0529de9c3d0d20e672453d894a517a79a8e1bd7c29ffa06c703463d2d8d774d5",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-context-template.json": "e7df1da61a98ec7286458cba83a286f0ac0e000035058b5f564a588b08b2a0cf",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json": "41ac781951d7b95ea95d4e9e584850caa7adc63bdf7785496b350c4c9f1ed792",
+    "evals/lean-production-benchmark/h70/bounded-evidence-docx.json": "fbbffd2d4f52f86cd4953d1b98354d4d1651dd77bf7af482aa6b52808b6e3980",
+    "evals/lean-production-benchmark/h70/bounded-evidence-pdf.json": "eb4998f6d675ecb160e086cd69b763698615cf59683991cac9bd2b09cca252d6",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/source-row-extraction-spec.json": "8491b8ef22bc9b87404e64df937a3db1cdd1c107c519478cafe36f8d5ccced77"
+  },
+  "source_preparation": {
+    "context_template": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-context-template.json",
+    "cache_dir": ".codex-temp/source-preparation-cache"
+  },
+  "outputs": {
+    "handoff_dir": "work/stage-handoffs/73-employment-main-work-one-command",
+    "cycle_dir": "work/review-cycles/employment-main-work-one-command-20260718",
+    "final_artifact": "test-cases/4.3-employment-main-work.md"
+  },
+  "observation_root": "work/full-process-observation",
+  "recorder_entrypoint": "scripts/workflow_wall_clock.py",
+  "production_wrapper": "scripts/run_standard_production_iteration.py",
+  "measurement_mode": "observational"
+}

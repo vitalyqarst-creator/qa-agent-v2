@@ -91,6 +91,17 @@ GAP-001 preserved.
         with self.assertRaisesRegex(Exception, "SHA-256 mismatch"):
             PromotionContract.load(self.contract_path, self.root)
 
+    def test_accepts_scope_without_coverage_gaps(self) -> None:
+        payload = json.loads(self.contract_path.read_text(encoding="utf-8"))
+        payload["required_gap_ids"] = []
+        self.contract_path.write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+
+        contract = PromotionContract.load(self.contract_path, self.root)
+
+        self.assertEqual((), contract.required_gap_ids)
+
 
 if __name__ == "__main__":
     unittest.main()

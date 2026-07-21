@@ -12,6 +12,8 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from test_case_agent.review_cycle.prepared_compiler import (  # noqa: E402
+    DRAFT_WITH_BLOCKING_GAPS_OUTPUT_MODE,
+    RELEASE_OUTPUT_MODE,
     PreparedCompilerDiagnostic,
     compile_workflow_package,
 )
@@ -30,6 +32,11 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--section-id")
     result.add_argument("--repo-root", default=".")
     result.add_argument("--reuse-if-current", action="store_true")
+    result.add_argument(
+        "--output-mode",
+        choices=(RELEASE_OUTPUT_MODE, DRAFT_WITH_BLOCKING_GAPS_OUTPUT_MODE),
+        default=RELEASE_OUTPUT_MODE,
+    )
     return result
 
 
@@ -46,9 +53,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             expected_ft_slug=args.expected_ft_slug,
             section_id=args.section_id,
             reuse_if_current=args.reuse_if_current,
+            output_mode=args.output_mode,
         )
     except (OSError, StageRuntimeError, ValueError) as exc:
-        payload: dict[str, object] = {"status": "blocked", "reason": str(exc)}
+        payload: dict[str, object] = {
+            "status": "blocked",
+            "reason": str(exc),
+            "output_mode": args.output_mode,
+        }
         if isinstance(exc, PreparedCompilerDiagnostic):
             payload["error_code"] = exc.code
             payload["details"] = list(exc.details)
@@ -66,6 +78,16 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "execution_profile": compiled.execution_profile,
                 "unsupported_dimensions": list(compiled.unsupported_dimensions),
                 "fast_path_eligible": not compiled.unsupported_dimensions,
+                "output_mode": compiled.output_mode,
+                "release_eligible": compiled.release_eligible,
+                "blocking_gap_ids": list(compiled.blocking_gap_ids),
+                "release_blocking_finding_codes": list(
+                    compiled.release_blocking_finding_codes
+                ),
+                "execution_dependency_count": compiled.execution_dependency_count,
+                "excluded_execution_obligation_ids": list(
+                    compiled.excluded_execution_obligation_ids
+                ),
                 "cache_reused": compiled.cache_reused,
             },
             ensure_ascii=False,

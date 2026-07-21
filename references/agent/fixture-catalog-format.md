@@ -10,6 +10,35 @@ Artifact обязателен, если writer использует именов
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `FX-EMP-BASE-001` | Валидный baseline раздела занятости для негативных проверок одного поля | `section 2.1.1.1.1.2` | `Открыта карточка УЗ, пользователь может редактировать раздел` | `Тип занятости = Работа по найму; ...` | `TC-EMP-...` | `-` | `F-DADATA-ORG-001` | `Откатить изменения заявки` | `TC-EMP-006; TC-EMP-013` |
 
+## External-dynamic fixture
+
+Для внешнего динамического справочника, например DaData, строка каталога должна
+иметь связанный блок со следующими обязательными полями:
+
+```yaml
+fixture_id: FX-DADATA-ADDR-001
+provider: DaData
+request:
+  method: POST
+  endpoint: <официальный endpoint>
+  parameters: <точные параметры>
+  query: <точная строка запроса>
+expected_response:
+  outcome: suggestions-found | suggestions-empty
+  exact_suggestion: <точный value либо not_applicable>
+  exact_components: <проверяемые компоненты либо not_applicable>
+verification:
+  source: <официальная документация или сохранённый live response>
+  checked_at: YYYY-MM-DDThh:mm:ssZ
+  response_snapshot: <repo-relative path>
+  response_sha256: <64 hex>
+  status: verified | stale | blocked-verification
+freshness:
+  recheck_before_release: true
+  stale_after_days: <целое число>
+  invalidation_trigger: <изменение ответа/контракта/источника>
+```
+
 ## Rules
 
 - `concrete_data` должен содержать literals, параметры с source (`min`, `N`, `DICT-*`) или ссылки на другие fixtures; фразы `валидные данные`, `минимальный валидный набор`, `корректная заявка` без раскрытия недопустимы.
@@ -17,4 +46,15 @@ Artifact обязателен, если writer использует именов
 - Если fixture зависит от внешнего справочника, mock/stub или системного состояния, укажи это в `dependencies`; если зависимость недоступна, используй `GAP-*`, а не generic fixture.
 - Если fixture используется только в одном TC и полностью раскрыта в `Тестовые данные` / `Предусловия`, отдельная строка catalog не обязательна.
 - Fixture catalog не является источником новых требований. Если baseline требует поведения, которого нет в source, добавь `coverage gap` / `unclear`.
+- External-dynamic fixture создаётся и проверяется до writer; writer и runtime TC
+  не обращаются к внешнему API для поиска тестового значения.
+- Позитивный external-dynamic fixture хранит точный запрос, предложение и нужные
+  компоненты. Негативный считается воспроизводимым только при сохранённом ответе
+  `suggestions=[]` и совпадающем SHA-256; вымышленная «несуществующая» строка не
+  доказывает отсутствие подсказок.
+- TC содержит `FX-DADATA-*`, точный запрос и ожидаемые литералы, поэтому остаётся
+  исполнимым без чтения каталога во время выполнения.
+- Перед release fixture перепроверяется. Изменение vendor-ответа сначала требует
+  reconciliation fixture; дефект продукта создаётся только после подтверждения
+  расхождения с ФТ на новом валидном fixture.
 

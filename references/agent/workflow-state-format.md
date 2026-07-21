@@ -54,9 +54,11 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 - Если для подтвержденного scope доступны DOCX и PDF основного ФТ, `latest_artifacts.source_parity_check` должен указывать на `source-parity-check.md`, а writer/reviewer/iteration должны видеть этот artifact в `required_inputs`.
 - Если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий, `latest_artifacts.source_row_inventory` должен указывать на `source-row-inventory.md`, а writer/reviewer/iteration должны видеть этот artifact в `required_inputs`.
 - Если для подтвержденного UI scope доступен mockup, `latest_artifacts.mockup_visual_inventory` должен указывать на `mockup-visual-inventory.md`, а writer/reviewer/iteration должны видеть этот artifact в `required_inputs`.
+- V3 workflow связывает `latest_artifacts.source_assertions` и accepted exact-digest `source_assertion_review`; оба входят в compiler `required_inputs`.
 - Для writer outputs `latest_artifacts.test_design_dir` должен указывать на `work/test-design/<section-id>-<scope-slug>/`, а `latest_artifacts.canonical_test_cases` - на slim canonical file в `test-cases/`.
 - Для `current_stage: ft-scope-analyzer`, `stage_status: ready-for-gap-review` и `next_skill: ft-test-case-reviewer` handoff обязан ссылаться на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`. Этот переход используется только до writer и только для review найденных scope gaps.
 - Для `current_stage: ft-scope-analyzer`, `stage_status: ready-for-next-stage` и `next_skill: ft-test-case-writer | ft-test-case-iteration` handoff обязан ссылаться на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md` и соответствующий prompt (`prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`).
+- V3 pre-writer review: `ready-for-next-stage` → reviewer с `prompt.scope-assertions-to-reviewer.md`; accepted идёт к writer/iteration, иначе обратно к scope analyzer.
 - Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, handoff обязан ссылаться на `scope-clarification-requests.md`. Даже non-blocking gap должен быть передан downstream явно, а не только упомянут в summary.
 - Для session-based review-cycle итогов `latest_artifacts` должен содержать canonical aliases: `cycle_state`, `final_findings`, `final_traceability_matrix`, `final_traceability_matrix_xlsx`, `final_writer_response` если была revision, and `signed_off_snapshot` или `round_cap_snapshot`.
 - `open_questions` — список еще не снятых неоднозначностей по scope или coverage.
@@ -265,8 +267,10 @@ accepted_risks: []
 - `ft-ui-automation-prep` может стартовать только от signed-off baseline: `cycle-state.yaml` или совместимый `workflow-state.yaml` должны фиксировать `signed-off`.
 - Если следующий этап writer revision, активный handoff prompt должен быть `prompt.reviewer-to-writer.round-N.md`.
 - Если `scope_gap_review` завершился с verdict `passed` и следующий этап writer, активный handoff prompt должен быть `prompt.scope-to-writer.md` и должен ссылаться на `scope-gap-review.md`.
+- Accepted `source_assertion_review` связывает receipt с тем же manifest digest и заменяет gap review.
 - Если следующий этап reviewer, активный handoff prompt должен быть `prompt.writer-to-reviewer.round-N.md`.
 - Если следующий этап reviewer для pre-writer gap review после scope analysis, активный handoff prompt должен быть `prompt.scope-gaps-to-reviewer.md`.
+- V3 source-model reviewer использует `prompt.scope-assertions-to-reviewer.md`.
 - Если `latest_artifacts.active_transition_prompt` задан, именно он считается активным handoff prompt и имеет приоритет над выводом имени по `current_round`.
-- `active_transition_prompt` обязан существовать и соответствовать направлению перехода: `writer-to-reviewer`, `reviewer-to-writer`, `reviewer-to-ui-prep`, `scope-gaps-to-reviewer`, `scope-to-writer` или `scope-to-iteration`.
+- `active_transition_prompt` обязан существовать и соответствовать направлению перехода: `writer-to-reviewer`, `reviewer-to-writer`, `reviewer-to-ui-prep`, `scope-gaps-to-reviewer`, `scope-assertions-to-reviewer`, `scope-to-writer` или `scope-to-iteration`.
 - Не оставляй рядом stale prompt того же направления, например старый `prompt.writer-to-reviewer.round-N.md`, если активный переход уже указывает на специальный prompt. Такой alias может увести следующую сессию в устаревший handoff.

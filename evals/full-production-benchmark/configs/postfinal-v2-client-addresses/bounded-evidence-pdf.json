@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "source_sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+  "extraction_method": "pdf-page-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "page:20",
+      "exact_source_text": "BSR 115. Видимость-всегда.",
+      "exact_source_text_sha256": "be9228646d1a682e11e286567285de6bf009517622ab1edbb07c0022c4b6f810"
+    },
+    {
+      "source_locator": "page:34",
+      "exact_source_text": "BSR 324. Если адрес клиента (регистрации / места жительства) заполнен посредством запроса DaData",
+      "exact_source_text_sha256": "8cbd9e693989eb81ad39b19ffbac56ae1ebb476a3313b88ed38b71881c59e336"
+    }
+  ]
+}

@@ -2,23 +2,53 @@ from __future__ import annotations
 
 import importlib.util
 import hashlib
+import io
 import json
 import sys
 import tempfile
+import threading
 import time
 import unittest
+import zipfile
+from dataclasses import replace
 from pathlib import Path
+from unittest import mock
 
 from test_case_agent.review_cycle.prepared_package import (
     EvidenceInput,
     PreparedDictionaryRequirement,
     PreparedDictionaryValue,
+    PreparedExecutionDependency,
     PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
     PreparedPackageBuilder,
+    PreparedReleaseStatus,
     PreparedStateChange,
     StageInstructionConfig,
+    load_obligations,
+)
+from test_case_agent.review_cycle.source_assertions import (
+    NO_REQUIRED_CHANGE,
+    REVIEW_RECEIPT_VERSION,
+    SOURCE_ASSERTIONS_MARKER,
+    SOURCE_REVIEW_DIMENSIONS,
+    ClauseEvidenceBinding,
+    RequirementCodeBinding,
+    ScopeBoundaryManifestContext,
+    ScopeBoundaryExclusion,
+    ScopeBoundaryReview,
+    SourceAssertion,
+    SourceAssertionReview,
+    SourceAssertionReviewReceipt,
+    SourceInventoryReview,
+    build_source_assertion_manifest,
+    render_embedded_source_assertion_contract,
+    scope_boundary_source_locator,
+)
+from test_case_agent.review_cycle.dimension_bindings import (
+    ReviewerDimensionSourceBindings,
+    render_reviewer_dimension_source_bindings,
 )
 
 
@@ -51,18 +81,60 @@ class ScriptedExecutor:
         return self.steps.pop(0)(request)
 
 
+class ConcurrentStageExecutor:
+    supports_concurrent_execution = True
+
+    def __init__(self, handler):
+        self.handler = handler
+        self.requests = []
+        self.completion_order = []
+        self.max_active = 0
+        self._active = 0
+        self._lock = threading.Lock()
+
+    def execute(self, request):
+        with self._lock:
+            self.requests.append(request)
+            self._active += 1
+            self.max_active = max(self.max_active, self._active)
+        try:
+            return self.handler(request)
+        finally:
+            with self._lock:
+                self._active -= 1
+                self.completion_order.append(request.stage)
+
+
 class StreamingSubprocessExecutorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
 
+    def test_targeted_repair_accepts_primary_and_derived_obligation_findings(self) -> None:
+        expected = {
+            "oracle-polarity-mismatch",
+            "missing-testable-obligation-coverage",
+            "production-forbidden-process-wording",
+            "production-missing-numbered-action-step",
+            "production-non-reproducible-precondition",
+        }
+        self.assertTrue(
+            expected.issubset(runner_module.REPAIRABLE_QUALITY_FINDING_IDS)
+        )
+        self.assertEqual(
+            14,
+            runner_module.DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES,
+        )
+
     def request(
         self,
         code: str,
         *,
-        timeout_seconds: int = 5,
-        idle_timeout_seconds: int | None = 2,
+        # These positive-path defaults include Windows process scheduling and
+        # interpreter startup; timeout-contract tests pass explicit 1s values.
+        timeout_seconds: int | None = 15,
+        idle_timeout_seconds: int | None = 10,
         command_budget: int = 5,
         progress_path: Path | None = None,
         first_artifact_deadline_seconds: int | None = None,
@@ -91,7 +163,7 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         )
         result = runner_module.SubprocessExecutor().execute(self.request(code))
 
-        self.assertEqual(0, result.exit_code)
+        self.assertEqual(0, result.exit_code, result)
         self.assertEqual(1, result.command_count)
         self.assertEqual("completed", result.termination_reason)
         self.assertIsNotNone(result.first_output_seconds)
@@ -138,6 +210,20 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         self.assertEqual("hard-timeout", result.termination_reason)
         self.assertLess(time.monotonic() - started, 4)
 
+    def test_disabled_hard_and_idle_timeouts_allows_normal_completion(self) -> None:
+        result = runner_module.SubprocessExecutor().execute(
+            self.request(
+                "print('completed', flush=True)",
+                timeout_seconds=None,
+                idle_timeout_seconds=None,
+            )
+        )
+
+        self.assertEqual(0, result.exit_code, result)
+        self.assertFalse(result.timed_out)
+        self.assertFalse(result.idle_timed_out)
+        self.assertEqual("completed", result.termination_reason)
+
     def test_stops_when_first_meaningful_artifact_deadline_is_missed(self) -> None:
         code = "import time; print('started',flush=True); time.sleep(5)"
         result = runner_module.SubprocessExecutor().execute(
@@ -164,13 +250,41 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
             self.request(
                 code,
                 progress_path=self.root / "draft.md",
-                first_artifact_deadline_seconds=2,
+                first_artifact_deadline_seconds=5,
             )
         )
 
-        self.assertEqual(0, result.exit_code)
+        self.assertEqual(0, result.exit_code, result)
+        self.assertEqual("completed", result.termination_reason)
         self.assertIsNotNone(result.first_artifact_seconds)
-        self.assertLess(result.first_artifact_seconds, 2)
+        self.assertLess(result.first_artifact_seconds, 5)
+
+
+class ImmutableTerminalArtifactTests(unittest.TestCase):
+    def test_matching_bytes_are_recovery_safe_but_conflicting_bytes_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "terminal.md"
+            runner_module._write_immutable_atomic(path, b"accepted\n")
+            runner_module._write_immutable_atomic(path, b"accepted\n")
+
+            with self.assertRaises(runner_module.RunnerError):
+                runner_module._write_immutable_atomic(path, b"conflict\n")
+
+            self.assertEqual(b"accepted\n", path.read_bytes())
+
+    def test_concurrent_destination_is_never_clobbered(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "terminal.md"
+
+            def competing_publish(_source, destination) -> None:
+                Path(destination).write_bytes(b"competitor\n")
+                raise FileExistsError(destination)
+
+            with mock.patch.object(runner_module.os, "link", side_effect=competing_publish):
+                with self.assertRaises(runner_module.RunnerError):
+                    runner_module._write_immutable_atomic(path, b"candidate\n")
+
+            self.assertEqual(b"competitor\n", path.read_bytes())
 
 
 class FakeValidator:
@@ -202,6 +316,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.source_path = self.ft_root / "source" / "main.xhtml"
         self.docx_path = self.ft_root / "source" / "main.docx"
         self.handoff_path = self.ft_root / "work" / "stage-handoffs" / "01-demo" / "scope-contract.md"
+        self.coverage_gaps_path = (
+            self.handoff_path.parent / "scope-coverage-gaps.md"
+        )
+        self.workflow_state_path = self.handoff_path.parent / "workflow-state.yaml"
         self.instruction_path = self.repo_root / "AGENTS.md"
         self.writer_runtime_instruction = self.repo_root / "writer-runtime.md"
         self.reviewer_runtime_instruction = self.repo_root / "reviewer-runtime.md"
@@ -213,10 +331,30 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         self.source_path.parent.mkdir(parents=True)
         self.handoff_path.parent.mkdir(parents=True)
+        self.coverage_gaps_path.parent.mkdir(parents=True, exist_ok=True)
         self.final_path.parent.mkdir(parents=True)
-        self.source_path.write_text("<html><body>Source</body></html>\n", encoding="utf-8")
+        self.source_path.write_text(
+            '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+            "<p>BSR 1. Source</p>"
+            "<p>External ancestor context.</p>"
+            "<p>External cross-reference context.</p>"
+            "</body></html>\n",
+            encoding="utf-8",
+        )
         self.docx_path.write_bytes(b"docx-source")
         self.handoff_path.write_text("# Scope contract\n", encoding="utf-8")
+        self.coverage_gaps_path.write_text(
+            "# Coverage Gaps\n\nNo gaps.\n", encoding="utf-8"
+        )
+        self.workflow_state_path.write_text(
+            "ft_slug: demo-ft\n"
+            "scope_slug: demo-scope\n"
+            "current_stage: ft-test-case-iteration\n"
+            "stage_status: ready-for-review\n"
+            "next_skill: ft-test-case-reviewer\n"
+            "blocking_reasons: []\n",
+            encoding="utf-8",
+        )
         self.instruction_path.write_text("# Test instructions\n", encoding="utf-8")
         self.writer_runtime_instruction.write_text(
             "# Writer runtime\n\nUse canonical `## TC-*` headings.\n",
@@ -230,6 +368,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.prepared_profile_path.write_text(
             "# Prepared Writer Runtime Profile\n\n"
             "Require runner-validated current metadata with `package_digest`.\n"
+            "Production preconditions use inline numbered setup actions.\n"
             "Write the embedded seed immediately.\n",
             encoding="utf-8",
         )
@@ -358,6 +497,19 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 "prepared reviewer fast path" in _request.prompt
                 or "prepared-standard reviewer" in _request.prompt
             ):
+                schema = {}
+                if "--output-schema-contract" in _request.command:
+                    schema_path = Path(
+                        _request.command[
+                            _request.command.index("--output-schema-contract") + 1
+                        ]
+                    )
+                    schema = json.loads(schema_path.read_text(encoding="utf-8"))
+                contract_version = (
+                    schema.get("properties", {})
+                    .get("contract_version", {})
+                    .get("const", 2)
+                )
                 prepared_findings = []
                 verdict = "covered"
                 if decision == "changes-required":
@@ -373,28 +525,116 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                             "required_change": "Correct the affected test case.",
                         }
                     ]
-                payload = {
-                    "contract_version": 2,
-                    "decision": decision,
-                    "reviewed_draft_sha256": hashlib.sha256(
-                        self.draft_path.read_bytes()
-                    ).hexdigest(),
-                    "obligation_reviews": [
-                        {
-                            "obligation_id": "ATOM-001",
-                            "atom_id": "ATOM-001",
-                            "verdict": verdict,
-                            "test_case_ids": ["TC-DEMO-001"],
-                            "note": (
-                                "The supplied draft was reviewed against the atom; GAP-001 preserved."
-                                if '"constraint_gap_ids"' in _request.prompt and "GAP-001" in _request.prompt
-                                else "The supplied draft was reviewed against the atom."
-                            ),
-                        }
-                    ],
-                    "findings": prepared_findings,
-                    "summary": findings,
-                }
+                if contract_version == 4:
+                    properties = schema["properties"]
+                    dimension_receipts = []
+                    for variant in (
+                        properties["dimension_reviews"]
+                        .get("items", {})
+                        .get("anyOf", [])
+                    ):
+                        variant_properties = variant.get("properties", {})
+                        dimension = variant_properties.get("dimension", {}).get(
+                            "const", ""
+                        )
+                        allowed_refs = (
+                            variant_properties.get("source_refs", {})
+                            .get("items", {})
+                            .get("enum", [])
+                        )
+                        if dimension and allowed_refs:
+                            dimension_receipts.append((dimension, allowed_refs))
+                    obligation_reviews = []
+                    failure_assigned = False
+                    for variant in (
+                        properties["obligation_reviews"]
+                        .get("items", {})
+                        .get("anyOf", [])
+                    ):
+                        variant_properties = variant.get("properties", {})
+                        obligation_ids = (
+                            variant_properties.get("obligation_id", {}).get("enum", [])
+                        )
+                        allowed_verdicts = (
+                            variant_properties.get("verdict", {}).get("enum", [])
+                        )
+                        success_verdict = (
+                            "covered"
+                            if "covered" in allowed_verdicts
+                            else "gap-preserved"
+                        )
+                        failure_verdict = (
+                            "incorrect"
+                            if "incorrect" in allowed_verdicts
+                            else "invented-coverage"
+                        )
+                        for obligation_id in obligation_ids:
+                            use_failure = (
+                                decision != "accepted" and not failure_assigned
+                            )
+                            obligation_reviews.append(
+                                {
+                                    "obligation_id": obligation_id,
+                                    "verdict": (
+                                        failure_verdict
+                                        if use_failure
+                                        else success_verdict
+                                    ),
+                                }
+                            )
+                            failure_assigned = failure_assigned or use_failure
+                    payload = {
+                        "contract_version": 4,
+                        "decision": decision,
+                        "reviewed_draft_sha256": hashlib.sha256(
+                            self.draft_path.read_bytes()
+                        ).hexdigest(),
+                        "reviewed_source_basis_sha256": properties[
+                            "reviewed_source_basis_sha256"
+                        ]["const"],
+                        "reviewed_obligation_set_sha256": properties[
+                            "reviewed_obligation_set_sha256"
+                        ]["const"],
+                        "obligation_reviews": obligation_reviews,
+                        "dimension_reviews": [
+                            {
+                                "dimension": dimension,
+                                "verdict": (
+                                    "verified"
+                                    if decision == "accepted"
+                                    else "unsupported"
+                                ),
+                                "source_refs": source_refs,
+                                "note": "The routed dimension was reviewed source-first.",
+                            }
+                            for dimension, source_refs in dimension_receipts
+                        ],
+                        "findings": prepared_findings,
+                        "summary": findings,
+                    }
+                else:
+                    payload = {
+                        "contract_version": 2,
+                        "decision": decision,
+                        "reviewed_draft_sha256": hashlib.sha256(
+                            self.draft_path.read_bytes()
+                        ).hexdigest(),
+                        "obligation_reviews": [
+                            {
+                                "obligation_id": "ATOM-001",
+                                "atom_id": "ATOM-001",
+                                "verdict": verdict,
+                                "test_case_ids": ["TC-DEMO-001"],
+                                "note": (
+                                    "The supplied draft was reviewed against the atom; GAP-001 preserved."
+                                    if '"constraint_gap_ids"' in _request.prompt and "GAP-001" in _request.prompt
+                                    else "The supplied draft was reviewed against the atom."
+                                ),
+                            }
+                        ],
+                        "findings": prepared_findings,
+                        "summary": findings,
+                    }
             else:
                 payload = {"decision": decision, "findings_markdown": findings}
             contract = json.dumps(payload, ensure_ascii=False)
@@ -469,7 +709,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
 ### Предусловия
 
-1. Открыта тестовая форма {index}.
+1. Авторизоваться в системе.
+2. Открыть форму с полем {index}.
 
 ### Тестовые данные
 
@@ -487,6 +728,32 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
 - Дополнительная очистка не требуется.
 """
+
+    def structured_shard_result(
+        self,
+        test_case_ids,
+        *,
+        session_id: str,
+        exit_code: int | None = 0,
+    ):
+        payload = {
+            "contract_version": 1,
+            "status": "draft-ready",
+            "draft_markdown": "\n\n".join(
+                self.complete_test_case_section(
+                    int(test_case_id.rsplit("-", 1)[1])
+                )
+                for test_case_id in test_case_ids
+            ),
+            "blocking_reasons": [],
+        }
+        return self.process_result(
+            exit_code=exit_code,
+            stdout=self.json_event(
+                json.dumps(payload, ensure_ascii=False),
+                session_id=session_id,
+            ),
+        )
 
     def prepared_reviewer_step_for_count(self, count: int):
         def step(_request):
@@ -565,6 +832,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         forbidden_evidence_roots=("fts/demo-ft/test-cases",),
         instruction_attempt_root: Path | None = None,
         include_gap: bool = False,
+        blocking_gap: bool = False,
         constraint_gap: bool = False,
         grouped_obligations: bool = False,
         out_of_order_planned_ids: bool = False,
@@ -576,13 +844,18 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         prepared_dictionary_values: tuple[PreparedDictionaryValue, ...] = (),
         reference_fixture_values: tuple[PreparedDictionaryValue, ...] = (),
         extra_prepared_obligations: tuple[PreparedObligation, ...] = (),
+        extra_prepared_gaps: tuple[PreparedGap, ...] = (),
         structured_dictionary_evidence: bool = False,
         dictionary_coverage_mode: str = "reference-only",
         calibration_status: str = "none",
+        source_first_contract: bool | str = False,
+        source_first_risk: str = "high",
+        source_first_polarity: str = "positive",
+        execution_dependency: bool = False,
     ) -> Path:
         gap_evidence = (
             "\nGAP-001: exact mapping is unresolved.\n"
-            if include_gap or constraint_gap
+            if include_gap or blocking_gap or constraint_gap
             else ""
         )
         dictionary_evidence = ""
@@ -625,10 +898,329 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     f"extracted | {rendered_values} | none_required | SRC-1 | "
                     "none_required | Test dictionary.\n"
                 )
+        source_first_requested = bool(source_first_contract)
+        source_first_evidence = ""
+        if source_first_requested:
+            if execution_dependency:
+                self.source_path.write_text(
+                    '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                    "<p>BSR 1. Source</p>"
+                    "<p>BSR 2. Dependency-bound source</p>"
+                    "<p>External ancestor context.</p>"
+                    "<p>External cross-reference context.</p>"
+                    "</body></html>\n",
+                    encoding="utf-8",
+                )
+            self.coverage_gaps_path.write_text(
+                (
+                    "# Coverage Gaps\n\n## GAP-001\n\n"
+                    + (
+                        "**Impact:** `blocking`\n"
+                        if blocking_gap
+                        else "**Impact:** `non-blocking`\n"
+                    )
+                    + "| field | value |\n"
+                    + "| --- | --- |\n"
+                    + "| gap_id | GAP-001 |\n"
+                    + "| affected_assertion_id | ASSERT-001 |\n"
+                    + "| affected_atom_id | ATOM-001 |\n"
+                    + "| status | open |\n"
+                )
+                if include_gap or blocking_gap or constraint_gap
+                else (
+                    "# Coverage Gaps\n\n## GAP-EXECUTION-001\n\n"
+                    "**Impact:** `blocking`\n\n"
+                    "| field | value |\n"
+                    "| --- | --- |\n"
+                    "| gap_id | GAP-EXECUTION-001 |\n"
+                    "| affected_assertion_id | ASSERT-BLOCKED-001 |\n"
+                    "| affected_atom_id | ATOM-BLOCKED-001 |\n"
+                    "| execution_assertion_ids | ASSERT-BLOCKED-001 |\n"
+                    "| execution_atom_ids | ATOM-BLOCKED-001 |\n"
+                    "| execution_obligation_ids | OBL-BLOCKED-001 |\n"
+                    "| blocks_ready_for_review | yes |\n"
+                    "| status | open |\n"
+                    if execution_dependency
+                    else "# Coverage Gaps\n\nNo gaps.\n"
+                )
+                ,
+                encoding="utf-8",
+            )
+            assertion_specs = [
+                (
+                    "OBL-001",
+                    "ATOM-001",
+                    "The requirement is observable.",
+                    "Verify the visible result.",
+                    first_observable_oracle,
+                )
+            ]
+            assertion_specs.extend(
+                (
+                    item.obligation_id,
+                    item.traceability_atom_id,
+                    item.atomic_statement,
+                    item.test_intent,
+                    item.observable_oracle,
+                )
+                for item in extra_prepared_obligations
+                if item.coverage_status == "testable"
+            )
+            assertion_specs.extend(
+                (
+                    f"OBL-{index:03d}",
+                    f"ATOM-{index:03d}",
+                    f"Observable property {index} is required.",
+                    f"Verify visible result {index}.",
+                    f"Visible result {index} is present.",
+                )
+                for index in range(2, test_case_count + 1)
+            )
+            if grouped_obligations or out_of_order_planned_ids:
+                assertion_specs.append(
+                    (
+                        "OBL-002",
+                        "ATOM-002",
+                        "The same observable action proves a second property.",
+                        "Verify both properties with one observable action.",
+                        "The visible result matches the second property.",
+                    )
+                )
+            unique_assertion_specs = tuple(
+                {
+                    obligation_id: (
+                        obligation_id,
+                        atom_id,
+                        statement,
+                        action,
+                        oracle,
+                    )
+                    for obligation_id, atom_id, statement, action, oracle in assertion_specs
+                }.values()
+            )
+            assertions = tuple(
+                SourceAssertion(
+                    assertion_id=f"ASSERT-{index:03d}",
+                    source_path=self.source_path.relative_to(self.repo_root).as_posix(),
+                    source_context_class="document-global-constraints",
+                    locator="/*/*[1]/*[1]",
+                    exact_source_text="BSR 1. Source",
+                    canonical_statement=statement,
+                    polarity=source_first_polarity,
+                    semantic_disposition="testable",
+                    execution_readiness="ready",
+                    execution_readiness_rationale=NO_REQUIRED_CHANGE,
+                    risk=source_first_risk,
+                    condition_clauses=("The demo form is open.",),
+                    action_clauses=(action,),
+                    oracle_clauses=(oracle,),
+                    requirement_codes=("BSR 1",),
+                    requirement_code_bindings=(
+                        RequirementCodeBinding(
+                            "BSR 1", "SRC-1", "xhtml-row", "BSR 1"
+                        ),
+                    ),
+                    clause_evidence_bindings=tuple(
+                        ClauseEvidenceBinding(
+                            clause_kind=kind,
+                            clause_index=0,
+                            source_row_id="SRC-1",
+                            evidence_role=kind,
+                            exact_source_fragment="BSR 1. Source",
+                        )
+                        for kind in ("condition", "action", "oracle")
+                    ),
+                    source_row_id="SRC-1",
+                    atom_id=atom_id,
+                    obligation_ids=(obligation_id,),
+                    execution_dependency_gap_ids=(),
+                    primary_gap_id=None,
+                )
+                for index, (
+                    obligation_id,
+                    atom_id,
+                    statement,
+                    action,
+                    oracle,
+                ) in enumerate(unique_assertion_specs, start=1)
+            )
+            if execution_dependency:
+                assertions += (
+                    SourceAssertion(
+                        assertion_id="ASSERT-BLOCKED-001",
+                        source_path=self.source_path.relative_to(
+                            self.repo_root
+                        ).as_posix(),
+                        source_context_class="scope-local",
+                        locator="/*/*[1]/*[2]",
+                        exact_source_text="BSR 2. Dependency-bound source",
+                        canonical_statement=(
+                            "A second observable property requires a missing fixture."
+                        ),
+                        polarity="positive",
+                        semantic_disposition="testable",
+                        execution_readiness="dependency-blocked",
+                        execution_readiness_rationale=(
+                            "A reproducible fixture is not registered for execution."
+                        ),
+                        risk="high",
+                        condition_clauses=("The demo form is open.",),
+                        action_clauses=("Execute the second observable action.",),
+                        oracle_clauses=("The second visible result is present.",),
+                        requirement_codes=("BSR 2",),
+                        requirement_code_bindings=(
+                            RequirementCodeBinding(
+                                "BSR 2", "SRC-2", "xhtml-row", "BSR 2"
+                            ),
+                        ),
+                        clause_evidence_bindings=tuple(
+                            ClauseEvidenceBinding(
+                                clause_kind=kind,
+                                clause_index=0,
+                                source_row_id="SRC-2",
+                                evidence_role=kind,
+                                exact_source_fragment=(
+                                    "BSR 2. Dependency-bound source"
+                                ),
+                            )
+                            for kind in ("condition", "action", "oracle")
+                        ),
+                        source_row_id="SRC-2",
+                        atom_id="ATOM-BLOCKED-001",
+                        obligation_ids=("OBL-BLOCKED-001",),
+                        execution_dependency_gap_ids=(
+                            "GAP-EXECUTION-001",
+                        ),
+                        primary_gap_id=None,
+                    ),
+                )
+            manifest = build_source_assertion_manifest(
+                self.repo_root,
+                scope_slug="demo-scope",
+                coverage_gaps_path=self.coverage_gaps_path.relative_to(
+                    self.repo_root
+                ).as_posix(),
+                source_paths=(self.source_path.relative_to(self.repo_root).as_posix(),),
+                assertions=assertions,
+                source_row_extraction_spec_digest="1" * 64,
+                source_row_baseline_digest="2" * 64,
+                source_row_candidate_count=(2 if execution_dependency else 1),
+                source_row_candidate_ids={
+                    "SRC-1": "SRC-CAND-" + "1" * 24,
+                    **(
+                        {"SRC-2": "SRC-CAND-" + "2" * 24}
+                        if execution_dependency
+                        else {}
+                    ),
+                },
+                expected_source_row_ids=(
+                    ("SRC-1", "SRC-2")
+                    if execution_dependency
+                    else ("SRC-1",)
+                ),
+            )
+            receipt = SourceAssertionReviewReceipt(
+                version=REVIEW_RECEIPT_VERSION,
+                manifest_digest=manifest.digest,
+                decision="accepted",
+                source_inventory_review=SourceInventoryReview(
+                    extraction_spec_digest=manifest.source_row_extraction_spec_digest,
+                    baseline_digest=manifest.source_row_baseline_digest,
+                    candidate_count=manifest.source_row_candidate_count,
+                    mapped_source_row_count=manifest.source_row_candidate_count,
+                    verdict="verified",
+                    required_change=NO_REQUIRED_CHANGE,
+                    note="Candidate baseline and source-row mapping were reviewed.",
+                ),
+                assertion_reviews=tuple(
+                    SourceAssertionReview(
+                        assertion_id=assertion.assertion_id,
+                        approved_polarity=assertion.polarity,
+                        approved_semantic_disposition="testable",
+                        approved_execution_readiness=assertion.execution_readiness,
+                        approved_risk=assertion.risk,
+                        dimension_verdicts={
+                            dimension: "verified"
+                            for dimension in SOURCE_REVIEW_DIMENSIONS
+                        },
+                        verdict="verified",
+                        required_change=NO_REQUIRED_CHANGE,
+                        note="Checked against the exact XHTML source text.",
+                    )
+                    for assertion in assertions
+                ),
+                scope_boundary_review=ScopeBoundaryReview(
+                    verdict="verified",
+                    checked_context_classes=(
+                        "document-global-constraints",
+                        "ancestor-and-section-preamble",
+                        "cross-referenced-constraints",
+                    ),
+                    reviewed_manifest_contexts=(
+                        ScopeBoundaryManifestContext(
+                            context_class="document-global-constraints",
+                            source_row_id="SRC-1",
+                        ),
+                    ),
+                    excluded_contexts=tuple(
+                        ScopeBoundaryExclusion(
+                            context_class=context_class,
+                            source_path=manifest.sources[0].path,
+                            source_sha256=manifest.sources[0].sha256,
+                            source_locator=scope_boundary_source_locator(
+                                manifest.sources[0].path,
+                                exact_text,
+                            ),
+                            exact_source_text=exact_text,
+                            reason=(
+                                "Verified context is outside the manifest row registry."
+                            ),
+                        )
+                        for context_class, exact_text in (
+                            (
+                                "ancestor-and-section-preamble",
+                                "External ancestor context.",
+                            ),
+                            (
+                                "cross-referenced-constraints",
+                                "External cross-reference context.",
+                            ),
+                        )
+                    ),
+                    required_change=NO_REQUIRED_CHANGE,
+                    note="Scope boundaries were checked against the full document.",
+                ),
+            )
+            if source_first_contract == "empty":
+                source_first_evidence = "\n<!-- SOURCE-ASSERTIONS-V3 -->\n"
+            elif source_first_contract == "empty-current":
+                source_first_evidence = f"\n{SOURCE_ASSERTIONS_MARKER}\n"
+            else:
+                source_first_evidence = (
+                    "\n"
+                    + render_embedded_source_assertion_contract(manifest, receipt)
+                )
+                if source_first_contract == "forged":
+                    source_first_evidence = source_first_evidence.replace(
+                        manifest.digest, "0" * 64, 1
+                    )
+            source_first_evidence += (
+                "\n## Reviewer dimension source bindings\n\n"
+                + render_reviewer_dimension_source_bindings(
+                    ReviewerDimensionSourceBindings.create(
+                        {
+                            dimension: ("SRC-1",)
+                            for dimension in unsupported_dimensions
+                        }
+                    )
+                )
+                + "\n"
+            )
         self.handoff_path.write_text(
             "# Scope contract\n\nSRC-1: observable requirement.\n"
             + gap_evidence
-            + dictionary_evidence,
+            + dictionary_evidence
+            + source_first_evidence,
             encoding="utf-8",
         )
         compiled_dictionary_values = (
@@ -642,7 +1234,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         prepared_obligations = [
             PreparedObligation(
-                obligation_id="ATOM-001",
+                obligation_id=(
+                    "OBL-001" if source_first_requested else "ATOM-001"
+                ),
+                atom_id="ATOM-001" if source_first_requested else "",
                 source_refs=("SRC-1",),
                 atomic_statement="The requirement is observable.",
                 observable_oracle=first_observable_oracle,
@@ -686,6 +1281,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     if grouped_obligations
                     else "TC-DEMO-001"
                     if test_case_count > 1
+                    or source_first_requested
                     or calibration_status != "none"
                     or dictionary_coverage_mode != "reference-only"
                     or reference_fixture_values
@@ -737,7 +1333,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     blocking=False,
                 )
             )
-        if include_gap:
+        if include_gap or blocking_gap:
             prepared_obligations.append(
                 PreparedObligation(
                     obligation_id="OBL-002",
@@ -758,9 +1354,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     source_refs=("SRC-1",),
                     problem="Exact mapping is unresolved.",
                     handling="Do not invent executable coverage.",
-                    blocking=False,
+                    blocking=blocking_gap,
                 )
             )
+        prepared_gaps.extend(extra_prepared_gaps)
         obligations = PreparedObligationSet.create(
             package_id="pkg-exec-001",
             obligations=tuple(prepared_obligations),
@@ -786,6 +1383,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     selectors=("SRC-1", "DICT-001")
                     if dictionary_values
                     else ("SRC-1",),
+                    include_full=source_first_requested,
+                    max_bytes=(128 * 1024 if source_first_requested else 8192),
                 ),
             ),
             obligations=obligations,
@@ -808,6 +1407,64 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             execution_profile=execution_profile,
             unsupported_dimensions=unsupported_dimensions,
             forbidden_evidence_roots=forbidden_evidence_roots,
+            release_status=(
+                PreparedReleaseStatus(
+                    contract="prepared-package-release-status-v1",
+                    output_mode="draft-with-blocking-gaps",
+                    release_eligible=False,
+                    blocking_gap_ids=("GAP-EXECUTION-001",),
+                    execution_dependency_registry=(
+                        PreparedExecutionDependency(
+                            assertion_id="ASSERT-BLOCKED-001",
+                            source_row_id="SRC-2",
+                            atom_id="ATOM-BLOCKED-001",
+                            obligation_ids=("OBL-BLOCKED-001",),
+                            gap_ids=("GAP-EXECUTION-001",),
+                            risk="high",
+                            rationale=(
+                                "A reproducible fixture is not registered for execution."
+                            ),
+                        ),
+                    ),
+                    excluded_execution_obligation_ids=("OBL-BLOCKED-001",),
+                    unsigned_status="blocked-execution-dependencies",
+                    release_blocking_finding_codes=(
+                        "blocking-source-first-gap",
+                        "source-execution-dependency-blocked",
+                    ),
+                )
+                if execution_dependency
+                else PreparedReleaseStatus(
+                    contract="prepared-package-release-status-v1",
+                    output_mode="draft-with-blocking-gaps",
+                    release_eligible=False,
+                    blocking_gap_ids=("GAP-001",),
+                    execution_dependency_registry=(),
+                    excluded_execution_obligation_ids=(),
+                    unsigned_status="blocked-source-gaps",
+                    release_blocking_finding_codes=(
+                        "blocking-source-first-gap",
+                    ),
+                )
+                if blocking_gap
+                else (
+                    PreparedReleaseStatus.release_default()
+                    if source_first_requested
+                    else PreparedReleaseStatus(
+                        contract="prepared-package-release-status-v1",
+                        output_mode="release",
+                        release_eligible=False,
+                        blocking_gap_ids=(),
+                        execution_dependency_registry=(),
+                        excluded_execution_obligation_ids=(),
+                        unsigned_status="blocked-source-contract",
+                        release_blocking_finding_codes=(
+                            "legacy-source-contract",
+                        ),
+                    )
+                )
+            ),
+            allow_blocking_primary_gaps=(blocking_gap or execution_dependency),
         )
         return package_root / "stage-package.json"
 
@@ -822,6 +1479,8 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         repair_draft_path: Path | None = None,
         repair_findings_path: Path | None = None,
         reviewer_rebind_draft_path: Path | None = None,
+        source_first_terminal_handoff_dir: Path | None = None,
+        promote_final: bool = False,
     ):
         return runner_module.CodexExecReviewCycleRunner(
             repo_root=self.repo_root,
@@ -834,7 +1493,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             prepared_repair_draft_path=repair_draft_path,
             prepared_repair_findings_path=repair_findings_path,
             prepared_reviewer_rebind_draft_path=reviewer_rebind_draft_path,
+            source_first_terminal_handoff_dir=source_first_terminal_handoff_dir,
             promotion_contract_path=promotion_contract_path,
+            promote_final=promote_final,
             prepared_fast_writer_mode=writer_mode,
             prepared_standard_writer_mode=standard_writer_mode,
             command_config=runner_module.ExecCommandConfig(
@@ -854,7 +1515,12 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             instruction_context_resolver=self.resolve_instruction_context,
         )
 
-    def build_promotion_contract(self) -> Path:
+    def build_promotion_contract(
+        self,
+        *,
+        required_requirement_ids=("BSR 1",),
+        required_gap_ids=("GAP-001",),
+    ) -> Path:
         accepted = self.ft_root / "work" / "accepted-candidate.md"
         accepted.parent.mkdir(parents=True, exist_ok=True)
         accepted.write_text("accepted semantic candidate\n", encoding="utf-8")
@@ -872,11 +1538,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     "test_design_dir": "fts/demo-ft/work/test-design/1-demo-scope",
                     "test_case_ids": ["TC-DEMO-001"],
                     "expected_priorities": {"TC-DEMO-001": "High"},
-                    "required_requirement_ids": ["BSR 1"],
+                    "required_requirement_ids": list(required_requirement_ids),
                     "required_sections": [
                         "Metadata", "Scope Boundaries", "Coverage Summary", "Coverage Gaps", "Test Cases"
                     ],
-                    "required_gap_ids": ["GAP-001"],
+                    "required_gap_ids": list(required_gap_ids),
                     "accepted_candidate": accepted.relative_to(self.repo_root).as_posix(),
                     "accepted_candidate_sha256": hashlib.sha256(accepted.read_bytes()).hexdigest(),
                 },
@@ -908,6 +1574,16 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(
             "structured",
             parser.get_default("prepared_standard_writer_mode"),
+        )
+        self.assertEqual(
+            3,
+            parser.get_default("prepared_structured_writer_max_concurrency"),
+        )
+        self.assertEqual(
+            3,
+            runner_module.CodexExecReviewCycleRunner.__dataclass_fields__[
+                "prepared_structured_writer_max_concurrency"
+            ].default,
         )
 
     def test_prepared_writer_uses_embedded_runtime_limits_not_standard_defaults(self) -> None:
@@ -970,6 +1646,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("prepared writer fast path", writer_prompt)
         self.assertIn("PREPARED-STAGE-PAYLOAD:BEGIN", writer_prompt)
         self.assertIn("Prepared Writer Runtime Profile", writer_prompt)
+        self.assertIn("inline numbered setup actions", writer_prompt)
         self.assertIn("ATOM-001", writer_prompt)
         self.assertIn("observable requirement", writer_prompt)
         self.assertIn("do not load the full ft-test-case-writer skill", writer_prompt)
@@ -1085,6 +1762,46 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         seed = runner._draft_seed_text()
 
         self.assertLess(seed.index("## TC-GROUP-001"), seed.index("## TC-GROUP-002"))
+
+    def test_source_first_seed_projects_negative_type_and_high_risk_priority(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            source_first_contract=True,
+            source_first_polarity="negative",
+            source_first_risk="high",
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        runner.validate_configuration()
+        seed = runner._draft_seed_text()
+
+        self.assertIn("**Тип:** негативный", seed)
+        self.assertIn("**Приоритет:** высокий", seed)
+
+    def test_source_first_seed_prefers_obligation_check_type_over_broad_assertion_polarity(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            source_first_contract=True,
+            source_first_polarity="negative",
+            source_first_risk="medium",
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        runner.validate_configuration()
+        obligation = runner_module.load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        ).obligations[0]
+        projected = replace(
+            obligation,
+            test_intent=obligation.test_intent + "; Check type: positive",
+        )
+
+        self.assertEqual(
+            ("позитивный", "средний"),
+            runner._source_first_seed_properties((projected,)),
+        )
 
     def test_prepared_seed_contains_exact_reference_fixture_projection(self) -> None:
         fixtures = (
@@ -1270,6 +1987,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertIn("runtime-selected integration response", writer_prompt)
         self.assertIn("Do not require a stand record ID", writer_prompt)
         self.assertIn("observable oracle without invention", writer_prompt)
+        reviewer_prompt = executor.requests[1].prompt
+        self.assertIn("runtime-selected integration response", reviewer_prompt)
+        self.assertIn("stand-specific organization", reviewer_prompt)
+        self.assertIn("does not by itself assert a blocked transition", reviewer_prompt)
 
     def test_prepared_structured_writer_rejects_invalid_contract(self) -> None:
         package_path = self.build_prepared_package()
@@ -1783,6 +2504,86 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertFalse((self.cycle_dir / "writer-output-capacity-preflight.json").exists())
         self.assertFalse(self.writer_attempt.exists())
 
+    def test_output_capacity_at_exact_limit_runs_one_writer_without_shards(self) -> None:
+        test_case_count = 14
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=test_case_count,
+        )
+        draft = "# Тест-кейсы\n\n" + "\n\n".join(
+            self.complete_test_case_section(index).strip()
+            for index in range(1, test_case_count + 1)
+        ) + "\n"
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.prepared_reviewer_step_for_count(test_case_count),
+        )
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = test_case_count
+        runner.prepared_structured_writer_shard_size = test_case_count
+        runner.prepared_structured_writer_max_shards = 1
+        runner.prepared_structured_writer_max_concurrency = 1
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(
+            [("writer-r1", "writer"), ("reviewer-r1", "reviewer")],
+            [(request.stage, request.role) for request in executor.requests],
+        )
+        capacity = json.loads(
+            (self.cycle_dir / "writer-output-capacity-preflight.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(capacity["passed"])
+        self.assertEqual("single-session", capacity["mode"])
+        self.assertEqual(test_case_count, capacity["test_case_count"])
+        self.assertEqual(
+            test_case_count, capacity["single_session_test_case_limit"]
+        )
+        self.assertEqual(test_case_count, capacity["configured_shard_size"])
+        self.assertEqual(1, capacity["max_shards"])
+        self.assertEqual(1, capacity["configured_max_concurrency"])
+        self.assertEqual(0, capacity["shard_count"])
+        self.assertEqual(0, capacity["wave_count"])
+        self.assertEqual([], capacity["shards"])
+        self.assertFalse((self.cycle_dir / "writer-shard-plan.json").exists())
+        self.assertFalse(
+            (self.cycle_dir / "attempts" / "writer-r1-shard-002").exists()
+        )
+
+    def test_output_capacity_above_limit_with_one_max_shard_fails_closed(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=15,
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 14
+        runner.prepared_structured_writer_shard_size = 14
+        runner.prepared_structured_writer_max_shards = 1
+        runner.prepared_structured_writer_max_concurrency = 1
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            (
+                "blocked-prepared-writer-output-capacity: "
+                "test_case_count=15, single_session_limit=14, "
+                "shard_size=14, max_shards=1"
+            ),
+        ):
+            runner.validate_configuration()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(
+            (self.cycle_dir / "writer-output-capacity-preflight.json").exists()
+        )
+        self.assertFalse((self.cycle_dir / "writer-shard-plan.json").exists())
+        self.assertFalse(self.writer_attempt.exists())
+
     def test_output_capacity_preflight_builds_disjoint_complete_shards(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -1958,10 +2759,31 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                     "passed": False,
                     "findings": [
                         {
+                            "id": "observable-oracle-contract-mismatch",
+                            "severity": "error",
+                            "tc_id": "TC-DEMO-001",
+                        },
+                        {
                             "id": "non-observable-expected-result",
                             "severity": "error",
+                            "test_case_ids": ["TC-DEMO-003"],
+                        },
+                        {
+                            "id": "duplicate-title",
+                            "severity": "error",
                             "test_case_ids": ["TC-DEMO-001", "TC-DEMO-003"],
-                        }
+                        },
+                        {
+                            "id": "production-unobservable-address-decomposition",
+                            "severity": "error",
+                            "tc_id": "TC-DEMO-001",
+                            "obligation_id": "OBL-001",
+                            "atom_id": "ATOM-001",
+                            "message": (
+                                "Capture the selected DaData components, reveal the "
+                                "manual fields, and compare their visible values."
+                            ),
+                        },
                     ],
                 },
                 ensure_ascii=False,
@@ -1995,6 +2817,22 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("reviewer-r1", executor.requests[1].stage)
         self.assertIn("unsigned repair input only", executor.requests[0].prompt)
         self.assertIn("selected source-backed evidence", executor.requests[0].prompt)
+        self.assertIn(
+            "Mandatory repair acceptance contracts",
+            executor.requests[0].prompt,
+        )
+        self.assertIn(
+            '"finding_id":"production-unobservable-address-decomposition"',
+            executor.requests[0].prompt,
+        )
+        self.assertIn(
+            "Use one explicit address branch",
+            executor.requests[0].prompt,
+        )
+        self.assertIn(
+            "Capture the selected DaData components",
+            executor.requests[0].prompt,
+        )
         self.assertNotEqual(
             executor.requests[0].prompt,
             executor.requests[1].prompt,
@@ -2009,6 +2847,20 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             ["TC-DEMO-001", "TC-DEMO-003"],
             capacity["target_test_case_ids"],
         )
+        repair_plan = json.loads(
+            (self.cycle_dir / "writer-targeted-repair-plan.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        address_contract = next(
+            item
+            for item in repair_plan["repair_contracts"]
+            if item["finding_id"]
+            == "production-unobservable-address-decomposition"
+        )
+        self.assertEqual(["TC-DEMO-001"], address_contract["test_case_ids"])
+        self.assertEqual("OBL-001", address_contract["obligation_id"])
+        self.assertEqual("ATOM-001", address_contract["atom_id"])
         splice = json.loads(
             (self.writer_attempt / "runner-output" / "repair-splice.json").read_text(
                 encoding="utf-8"
@@ -2296,6 +3148,66 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         state = (self.cycle_dir / "cycle-state.yaml").read_text(encoding="utf-8")
         self.assertIn("writer_stage_status: skipped-reviewer-rebind", state)
 
+    def test_reviewer_rebind_accepts_prior_runner_dictionary_projection(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            dictionary_values=("Первое значение", "Второе значение"),
+            structured_dictionary_evidence=True,
+            dictionary_coverage_mode="all-leaf-values",
+        )
+        source_text = (
+            "# Тест-кейсы\n\n"
+            + self.complete_test_case_section(1)
+            .replace("SRC-1", "SRC-1; DICT-001")
+            .replace("- Значение: `value-1`.", "- Полный набор DICT-001.")
+        )
+        projected, initial_report = (
+            runner_module.materialize_draft_dictionary_projections(
+                source_text,
+                runner_module.load_obligations(
+                    package_path.parent / "atomic-obligations.json"
+                ),
+            )
+        )
+        self.assertEqual(1, initial_report["materialized_count"])
+        prior_draft = (
+            self.ft_root
+            / "work"
+            / "review-cycles"
+            / "prior-runner-projected"
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+            / "stage-output"
+            / "draft.md"
+        )
+        prior_draft.parent.mkdir(parents=True)
+        prior_draft.write_text(projected, encoding="utf-8")
+        executor = ScriptedExecutor(self.prepared_reviewer_step_for_count(1))
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            reviewer_rebind_draft_path=prior_draft,
+        )
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(1, len(executor.requests))
+        self.assertEqual("reviewer", executor.requests[0].role)
+        projection = json.loads(
+            (self.writer_attempt / "runner-output" / "dictionary-projection.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(projection["writer_ownership"]["passed"])
+        self.assertFalse(projection["draft_changed"])
+        rebind = json.loads(
+            (self.cycle_dir / "reviewer-rebind.json").read_text(encoding="utf-8")
+        )
+        self.assertFalse(rebind["writer_llm_started"])
+
     def test_reviewer_rebind_rejects_input_hash_drift(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -2508,6 +3420,22 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual("writer-r1", executor.requests[0].stage)
         self.assertEqual("writer-r1-shard-002", executor.requests[1].stage)
         self.assertEqual("reviewer-r1", executor.requests[2].stage)
+        package_metadata = json.loads(package_path.read_text(encoding="utf-8"))
+        for request in executor.requests[:2]:
+            self.assertIn(
+                f'"package_digest":"{package_metadata["package_digest"]}"',
+                request.prompt,
+            )
+            self.assertIn(
+                f'"input_fingerprint":"{package_metadata["input_fingerprint"]}"',
+                request.prompt,
+            )
+            self.assertIn(
+                f'"execution_profile":"{package_metadata["execution_profile"]}"',
+                request.prompt,
+            )
+            self.assertIn('"context_profile":"character-restriction-calibration"', request.prompt)
+            self.assertIn('"unsupported_dimensions":["negative-oracle"]', request.prompt)
         self.assertIn("TC-DEMO-003", executor.requests[2].prompt)
         self.assertIn(
             "writer-shard-1",
@@ -2542,6 +3470,196 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(3, merge["test_case_count"])
         self.assertFalse(self.final_path.exists())
 
+    def test_structured_writer_shards_overlap_with_configured_cap(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=5,
+        )
+        stage_ids = {
+            "writer-r1": ["TC-DEMO-001"],
+            "writer-r1-shard-002": ["TC-DEMO-002"],
+            "writer-r1-shard-003": ["TC-DEMO-003"],
+            "writer-r1-shard-004": ["TC-DEMO-004"],
+            "writer-r1-shard-005": ["TC-DEMO-005"],
+        }
+        barriers = {
+            "writer-r1": threading.Barrier(2),
+            "writer-r1-shard-002": None,
+            "writer-r1-shard-003": threading.Barrier(2),
+            "writer-r1-shard-004": None,
+        }
+        barriers["writer-r1-shard-002"] = barriers["writer-r1"]
+        barriers["writer-r1-shard-004"] = barriers["writer-r1-shard-003"]
+        reviewer_step = self.prepared_reviewer_step_for_count(5)
+
+        def handler(request):
+            if request.role == "reviewer":
+                return reviewer_step(request)
+            barrier = barriers.get(request.stage)
+            if barrier is not None:
+                barrier.wait(timeout=3)
+            return self.structured_shard_result(
+                stage_ids[request.stage],
+                session_id=f"session-{request.stage}",
+            )
+
+        executor = ConcurrentStageExecutor(handler)
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 1
+        runner.prepared_structured_writer_shard_size = 1
+        runner.prepared_structured_writer_max_concurrency = 2
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(2, executor.max_active)
+        plan = json.loads(
+            (self.cycle_dir / "writer-shard-plan.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, plan["effective_max_concurrency"])
+        self.assertEqual(3, plan["wave_count"])
+
+    def test_out_of_order_shard_finish_keeps_plan_order_merge(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        stage_ids = {
+            "writer-r1": ["TC-DEMO-001"],
+            "writer-r1-shard-002": ["TC-DEMO-002"],
+            "writer-r1-shard-003": ["TC-DEMO-003"],
+        }
+        second_finished = threading.Event()
+        reviewer_step = self.prepared_reviewer_step_for_count(3)
+
+        def handler(request):
+            if request.role == "reviewer":
+                return reviewer_step(request)
+            if request.stage == "writer-r1":
+                if not second_finished.wait(timeout=3):
+                    raise AssertionError("second shard did not overlap primary shard")
+                time.sleep(0.03)
+            elif request.stage == "writer-r1-shard-002":
+                second_finished.set()
+            return self.structured_shard_result(
+                stage_ids[request.stage],
+                session_id=f"session-{request.stage}",
+            )
+
+        executor = ConcurrentStageExecutor(handler)
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 1
+        runner.prepared_structured_writer_shard_size = 1
+        runner.prepared_structured_writer_max_concurrency = 3
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertLess(
+            executor.completion_order.index("writer-r1-shard-002"),
+            executor.completion_order.index("writer-r1"),
+        )
+        expected = "# Тест-кейсы\n\n" + "\n\n".join(
+            self.complete_test_case_section(index).strip()
+            for index in range(1, 4)
+        ) + "\n"
+        self.assertEqual(expected, self.draft_path.read_text(encoding="utf-8"))
+        merge = json.loads(
+            (self.writer_attempt / "runner-output" / "shard-merge.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            [
+                "writer-r1",
+                "writer-r1-shard-002",
+                "writer-r1-shard-003",
+            ],
+            [item["stage"] for item in merge["shards"]],
+        )
+
+    def test_wave_one_failure_prevents_later_writer_shards(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=4,
+        )
+        first_wave_barrier = threading.Barrier(2)
+        first_wave_ids = {
+            "writer-r1": ["TC-DEMO-001"],
+            "writer-r1-shard-002": ["TC-DEMO-002"],
+        }
+
+        def handler(request):
+            if request.stage not in first_wave_ids:
+                raise AssertionError(f"later wave was launched: {request.stage}")
+            first_wave_barrier.wait(timeout=3)
+            return self.structured_shard_result(
+                first_wave_ids[request.stage],
+                session_id=f"session-{request.stage}",
+                exit_code=(7 if request.stage == "writer-r1-shard-002" else 0),
+            )
+
+        executor = ConcurrentStageExecutor(handler)
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 1
+        runner.prepared_structured_writer_shard_size = 1
+        runner.prepared_structured_writer_max_concurrency = 2
+
+        result = runner.run()
+
+        self.assertEqual("blocked-process-exit", result.status)
+        self.assertEqual(
+            {"writer-r1", "writer-r1-shard-002"},
+            {request.stage for request in executor.requests},
+        )
+        self.assertFalse(
+            runner.attempt_root("writer-r1-shard-003").exists()
+        )
+
+    def test_unknown_custom_executor_keeps_shards_serial(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            test_case_count=3,
+        )
+        executor = ScriptedExecutor(
+            lambda _request: self.structured_shard_result(
+                ["TC-DEMO-001"], session_id="serial-writer-1"
+            ),
+            lambda _request: self.structured_shard_result(
+                ["TC-DEMO-002"], session_id="serial-writer-2"
+            ),
+            lambda _request: self.structured_shard_result(
+                ["TC-DEMO-003"], session_id="serial-writer-3"
+            ),
+            self.prepared_reviewer_step_for_count(3),
+        )
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 1
+        runner.prepared_structured_writer_shard_size = 1
+        runner.prepared_structured_writer_max_concurrency = 3
+
+        result = runner.run()
+
+        self.assertEqual("accepted-not-promoted", result.status)
+        self.assertEqual(
+            [
+                "writer-r1",
+                "writer-r1-shard-002",
+                "writer-r1-shard-003",
+                "reviewer-r1",
+            ],
+            [request.stage for request in executor.requests],
+        )
+        plan = json.loads(
+            (self.cycle_dir / "writer-shard-plan.json").read_text(encoding="utf-8")
+        )
+        self.assertFalse(plan["executor_supports_concurrent_execution"])
+        self.assertEqual(1, plan["effective_max_concurrency"])
+
     def test_character_restriction_seed_and_lifecycle_preserve_constraint_gap(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -2550,6 +3668,7 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
                 "evidence-qualified-ui-calibration",
             ),
             constraint_gap=True,
+            calibration_status="ui-calibration-required",
         )
         draft = """# Test cases
 
@@ -2574,6 +3693,7 @@ Draft body.
             encoding="utf-8"
         )
         self.assertIn("candidate-ui-calibration", seed)
+        self.assertIn("**Требуется подтверждение:** [SEED:", seed)
         lifecycle = json.loads(
             (self.writer_attempt / "runner-output" / "calibration-lifecycle.json").read_text(
                 encoding="utf-8"
@@ -2581,6 +3701,83 @@ Draft body.
         )
         self.assertEqual("awaiting-ui-calibration", lifecycle["items"][0]["status"])
         self.assertFalse(lifecycle["items"][0]["regression_ready"])
+
+    def test_mixed_atom_explicit_calibration_is_authoritative_per_obligation(self) -> None:
+        executable = PreparedObligation(
+            obligation_id="OBL-EXEC-001",
+            atom_id="ATOM-001",
+            source_refs=("SRC-1",),
+            atomic_statement="The executable behavior remains source-backed.",
+            observable_oracle="The executable visible result is present.",
+            test_intent="Verify the executable visible result.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+            constraint_gap_ids=("GAP-001",),
+            calibration_status="none",
+            planned_test_case_id="TC-DEMO-002",
+        )
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=(
+                "negative-oracle",
+                "evidence-qualified-ui-calibration",
+            ),
+            constraint_gap=True,
+            calibration_status="ui-calibration-required",
+            extra_prepared_obligations=(executable,),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        seed = runner._draft_seed_text()
+        lifecycle = runner._build_calibration_lifecycle()
+
+        candidate_section, executable_section = seed.split(
+            "## TC-DEMO-002", 1
+        )
+        self.assertIn("## TC-DEMO-001", candidate_section)
+        self.assertIn("candidate-ui-calibration", candidate_section)
+        self.assertIn("**Coverage gap:** GAP-001", candidate_section)
+        self.assertNotIn("candidate-ui-calibration", executable_section)
+        self.assertNotIn("ui-calibration-required", executable_section)
+        self.assertIn("**Coverage gap:** GAP-001", executable_section)
+        self.assertEqual(1, lifecycle["open_count"])
+        self.assertEqual("ATOM-001", lifecycle["items"][0]["obligation_id"])
+        self.assertNotIn(
+            "OBL-EXEC-001",
+            {item["obligation_id"] for item in lifecycle["items"]},
+        )
+
+    def test_constraint_gap_calibration_fallback_is_legacy_only(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("negative-oracle",),
+            constraint_gap=True,
+            calibration_status="none",
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        obligations = load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        )
+        obligation = obligations.obligations[0]
+
+        self.assertFalse(
+            runner._obligation_requires_ui_calibration(
+                obligation,
+                package_version=runner_module.EXPLICIT_OBLIGATION_CALIBRATION_PACKAGE_VERSION,
+            )
+        )
+        self.assertTrue(
+            runner._obligation_requires_ui_calibration(
+                obligation,
+                package_version=(
+                    runner_module.EXPLICIT_OBLIGATION_CALIBRATION_PACKAGE_VERSION - 1
+                ),
+            )
+        )
 
     def test_source_backed_calibration_without_gap_is_registered(self) -> None:
         package_path = self.build_prepared_package(
@@ -2737,6 +3934,7 @@ Draft body.
                 "evidence-qualified-ui-calibration",
             ),
             constraint_gap=True,
+            calibration_status="ui-calibration-required",
         )
         executor = ScriptedExecutor(
             self.structured_writer_step(
@@ -3026,9 +4224,29 @@ Draft body.
         )
         self.assertEqual("runner-PACKAGE_VERSION", report["runtime_identity"]["version_source"])
         self.assertTrue(report["writer_context_budget"]["passed"])
+        self.assertTrue(report["reviewer_schema_preflight"]["passed"])
+        self.assertIn(
+            "reviewer-output-schema",
+            report["preflight_checks"],
+        )
         self.assertFalse(report["cycle_artifacts_created"])
         self.assertFalse(self.cycle_dir.joinpath("cycle-state.yaml").exists())
         self.assertFalse(self.writer_attempt.exists())
+
+    def test_source_first_constraint_gap_validate_only_uses_prepared_classification(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("evidence-qualified-ui-calibration",),
+            constraint_gap=True,
+            source_first_contract=True,
+            source_first_risk="medium",
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+
+        report = runner.validate_only_report()
+
+        self.assertEqual("validated", report["status"])
+        self.assertEqual("prepared-standard", report["route"])
 
     def test_prepared_review_schema_binds_verdict_enums_to_obligation_status(self) -> None:
         package_path = self.build_prepared_package(include_gap=True)
@@ -3127,6 +4345,327 @@ Draft body.
                 }
             ],
             projection["dictionary_evidence"],
+        )
+
+    def test_source_first_runtime_projection_is_digest_bound_and_semantically_exact(
+        self,
+    ) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        writer_text = runner._prepared_writer_source_evidence()
+        writer_projection = json.loads(writer_text)
+        reviewer_projection = json.loads(
+            runner._prepared_shared_context_projection()
+        )
+        semantic_projection = json.loads(
+            runner._prepared_standard_reviewer_semantic_projection()
+        )
+        writer_transport = json.loads(
+            runner._prepared_structured_obligation_transport()
+        )
+        writer_metadata = runner._prepared_standard_metadata()
+
+        self.assertEqual(writer_text, runner._prepared_writer_source_evidence())
+        self.assertEqual(
+            "prepared-digest-bound-source-evidence-projection-v1",
+            writer_projection["contract"],
+        )
+        self.assertEqual("accepted", writer_projection["accepted_source_contract"]["review_decision"])
+        self.assertEqual(
+            runner._source_first_contract.manifest.digest,
+            writer_projection["accepted_source_contract"]["manifest_digest"],
+        )
+        self.assertRegex(
+            writer_projection["accepted_source_contract"]["review_receipt_sha256"],
+            r"^[0-9a-f]{64}$",
+        )
+        self.assertEqual(["ASSERT-001"], writer_projection["selection"]["assertion_ids"])
+        self.assertEqual(["OBL-001"], writer_projection["selection"]["obligation_ids"])
+        assertion = writer_projection["assertions"][0]
+        self.assertEqual("SRC-1", assertion["source_row_id"])
+        self.assertEqual(
+            "The requirement is observable.", assertion["canonical_statement"]
+        )
+        self.assertEqual(["The demo form is open."], assertion["condition_clauses"])
+        self.assertEqual(["Verify the visible result."], assertion["action_clauses"])
+        self.assertEqual(
+            ["The visible result matches the requirement."],
+            assertion["oracle_clauses"],
+        )
+        self.assertEqual(["BSR 1"], assertion["requirement_codes"])
+        self.assertEqual("ready", assertion["execution_readiness"])
+        self.assertEqual("OBL-001", assertion["obligation_bindings"][0]["obligation_id"])
+        self.assertEqual("release", writer_metadata["output_mode"])
+        self.assertTrue(writer_metadata["release_status"]["release_eligible"])
+        transported = writer_transport["testable_obligations"][0]
+        immutable = runner_module.load_obligations(
+            runner._prepared_artifact("atomic-obligations")
+        ).obligations[0]
+        self.assertEqual(immutable.atomic_statement, transported["atomic_statement"])
+        self.assertEqual(immutable.test_intent, transported["test_intent"])
+        self.assertEqual(immutable.observable_oracle, transported["observable_oracle"])
+        self.assertEqual(list(immutable.source_refs), transported["source_refs"])
+        self.assertNotIn("Checked against the exact XHTML", writer_text)
+        self.assertNotIn("Scope boundaries were checked", writer_text)
+        self.assertNotIn("BSR 1. Source", writer_text)
+        self.assertEqual(
+            "reviewer-dimension-source-bindings-v1",
+            reviewer_projection["reviewer_dimension_source_bindings"]["contract"],
+        )
+        self.assertEqual(
+            {"state-transition": ["SRC-1"]},
+            reviewer_projection["reviewer_dimension_source_bindings"]["bindings"],
+        )
+        compiled = semantic_projection["obligations"][0]
+        self.assertEqual(immutable.atomic_statement, compiled["atomic_statement"])
+        self.assertEqual(immutable.observable_oracle, compiled["observable_oracle"])
+        self.assertEqual(immutable.test_intent, compiled["test_intent"])
+        self.assertEqual(list(immutable.source_refs), compiled["source_refs"])
+        self.assertEqual(
+            writer_projection["accepted_source_contract"]["manifest_digest"],
+            semantic_projection["source_contract_digest_summary"]["manifest_digest"],
+        )
+
+    def test_writer_transport_preserves_non_testable_context_gap_without_fake_tc(
+        self,
+    ) -> None:
+        context_obligation = PreparedObligation(
+            obligation_id="OBL-CONTEXT-001",
+            atom_id="ATOM-CONTEXT-001",
+            source_refs=("SRC-1",),
+            atomic_statement="Context evidence is retained without executable behavior.",
+            observable_oracle="",
+            test_intent="Preserve the context evidence without creating a test case.",
+            coverage_status="not-applicable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="Context-only authoritative boundary gap.",
+            constraint_gap_ids=("GAP-CONTEXT-001",),
+        )
+        context_gap = PreparedGap(
+            gap_id="GAP-CONTEXT-001",
+            source_refs=("SRC-1",),
+            problem="The contextual interpretation remains unresolved.",
+            handling="Preserve the evidence and do not invent a test case.",
+            blocking=False,
+        )
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            extra_prepared_obligations=(context_obligation,),
+            extra_prepared_gaps=(context_gap,),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        transport = json.loads(runner._prepared_structured_obligation_transport())
+        self.assertEqual(1, len(transport["testable_obligations"]))
+        self.assertEqual(
+            ["GAP-CONTEXT-001"],
+            [item["gap_id"] for item in transport["coverage_gaps"]],
+        )
+        self.assertEqual(
+            [
+                {
+                    "obligation_id": "OBL-CONTEXT-001",
+                    "atom_id": "ATOM-CONTEXT-001",
+                    "coverage_status": "not-applicable",
+                    "gap_id": "",
+                    "constraint_gap_ids": ["GAP-CONTEXT-001"],
+                }
+            ],
+            transport["coverage_gap_bindings"],
+        )
+        writer_payload = runner._prepared_writer_payload(structured=True)
+        self.assertIn("GAP-CONTEXT-001", writer_payload)
+        self.assertIn("OBL-CONTEXT-001", writer_payload)
+        seed = runner._draft_seed_text()
+        self.assertEqual(1, seed.count("\n## TC-"))
+        self.assertNotIn("GAP-CONTEXT-001", seed)
+
+    def test_source_first_external_artifact_freshness_is_rechecked_before_stage(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+        runner.validate_configuration()
+        self.coverage_gaps_path.write_text(
+            self.coverage_gaps_path.read_text(encoding="utf-8")
+            + "\n<!-- changed after preflight -->\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "stale-coverage-gaps-artifact-sha256",
+        ):
+            runner.run()
+
+        self.assertEqual([], executor.requests)
+
+    def test_source_first_writer_shard_projects_only_referenced_assertion(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            test_case_count=2,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        projection = json.loads(
+            runner._prepared_writer_shard_evidence(
+                {"obligation_ids": ["OBL-002"]}
+            )
+        )
+
+        self.assertEqual(["OBL-002"], projection["selection"]["obligation_ids"])
+        self.assertEqual(["ASSERT-002"], projection["selection"]["assertion_ids"])
+        self.assertEqual(1, len(projection["assertions"]))
+        self.assertEqual(
+            "Observable property 2 is required.",
+            projection["assertions"][0]["canonical_statement"],
+        )
+        self.assertNotIn("The requirement is observable.", json.dumps(projection))
+
+    def test_source_first_reviewer_projection_uses_actual_draft_trace_ids(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            test_case_count=2,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        runner.draft_path.parent.mkdir(parents=True, exist_ok=True)
+        runner.draft_path.write_text(
+            "## TC-DEMO-002\n"
+            "**Трассировка:** OBL-002; ATOM-002; SRC-1\n",
+            encoding="utf-8",
+        )
+
+        projection = json.loads(runner._prepared_shared_context_projection())
+
+        self.assertEqual(["OBL-002"], projection["selection"]["obligation_ids"])
+        self.assertEqual(["ASSERT-002"], projection["selection"]["assertion_ids"])
+
+    def test_source_first_reviewer_projection_rejects_unknown_draft_trace_id(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        runner.draft_path.parent.mkdir(parents=True, exist_ok=True)
+        runner.draft_path.write_text(
+            "## TC-DEMO-001\n"
+            "**Трассировка:** OBL-001; ATOM-999; SRC-1\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "unknown draft trace IDs: ATOM-999",
+        ):
+            runner._prepared_shared_context_projection()
+
+    def test_source_first_projection_fails_closed_on_artifact_digest_drift(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        runner._prepared_writer_source_evidence()
+        evidence_path = runner._prepared_artifact("source-evidence")
+        evidence_path.write_text(
+            evidence_path.read_text(encoding="utf-8") + "\npost-validation drift\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "runtime projection artifact digest mismatch",
+        ):
+            runner._prepared_writer_source_evidence()
+
+    def test_source_first_projection_fails_closed_on_missing_assertion_binding(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            test_case_count=2,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        original = runner._source_first_contract
+        incomplete_manifest = replace(
+            original.manifest,
+            assertions=original.manifest.assertions[:1],
+        )
+        rebound_receipt = replace(
+            original.review_receipt,
+            manifest_digest=incomplete_manifest.digest,
+        )
+        runner._source_first_contract = runner_module.EmbeddedSourceAssertionContract(
+            incomplete_manifest,
+            rebound_receipt,
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "missing accepted source assertions for: OBL-002",
+        ):
+            runner._prepared_writer_source_evidence(
+                obligation_ids=("OBL-002",)
+            )
+
+    def test_source_first_projection_byte_report_stays_under_explicit_budget(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            test_case_count=24,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+
+        first = runner._prepared_writer_source_evidence()
+        second = runner._prepared_writer_source_evidence()
+        report = runner._source_evidence_projection_reports["writer"]
+        reviewer_capacity = runner._build_reviewer_context_capacity_plan()
+
+        self.assertEqual(first, second)
+        self.assertTrue(report["passed"], report)
+        self.assertEqual(24, report["selected_assertion_count"])
+        self.assertEqual(
+            runner_module.DEFAULT_PREPARED_WRITER_SOURCE_PROJECTION_MAX_BYTES,
+            report["limit_bytes"],
+        )
+        self.assertLess(report["projected_bytes"], 48 * 1024)
+        self.assertLess(
+            report["projected_bytes"], report["original_source_evidence_bytes"]
+        )
+        self.assertRegex(report["projection_sha256"], r"^[0-9a-f]{64}$")
+        self.assertEqual(
+            reviewer_capacity["shared_context_bytes"]
+            + reviewer_capacity["semantic_projection_bytes"],
+            reviewer_capacity["source_and_semantic_projection_bytes"],
+        )
+        self.assertGreaterEqual(
+            reviewer_capacity["estimated_primary_context_bytes"],
+            reviewer_capacity["source_and_semantic_projection_bytes"],
         )
 
     def test_package_context_projection_omits_irrelevant_dadata_notes(self) -> None:
@@ -3287,7 +4826,7 @@ Draft body.
         ):
             runner._prepared_dictionary_evidence_projection(obligations)
 
-    def test_prepared_promotion_contract_produces_promotion_ready_terminal_state(self) -> None:
+    def test_legacy_prepared_promotion_is_rejected_before_writer(self) -> None:
         package_path = self.build_prepared_package(execution_profile="standard-required", unsupported_dimensions=("state-transition",))
         contract_path = self.build_promotion_contract()
         draft = """# Тест-кейсы: demo
@@ -3325,15 +4864,65 @@ GAP-001 remains open.
             executor, package_path, promotion_contract_path=contract_path
         )
 
-        result = runner.run()
+        with self.assertRaisesRegex(
+            runner_module.RunnerError, "bounded source-first assertion"
+        ):
+            runner.run()
 
-        self.assertEqual("accepted-promotion-ready-not-promoted", result.status)
-        self.assertTrue(runner.promotion_readiness_path.is_file())
-        writer_prompt = executor.requests[0].prompt
-        self.assertIn("Promotion canonicalization contract", writer_prompt)
-        self.assertIn("TC-DEMO-001", writer_prompt)
+        self.assertEqual([], executor.requests)
 
-    def test_prepared_promotion_contract_blocks_diagnostic_shape_before_reviewer(self) -> None:
+    def test_empty_source_first_marker_is_rejected_before_writer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract="empty",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "legacy-embedded-source-contract-requires-rematerialization",
+        ):
+            runner.run()
+
+        self.assertEqual([], executor.requests)
+
+    def test_empty_current_source_first_marker_is_rejected_as_incomplete_before_writer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract="empty-current",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "incomplete-embedded-source-contract",
+        ):
+            runner.run()
+
+        self.assertEqual([], executor.requests)
+
+    def test_forged_source_first_digest_is_rejected_before_writer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract="forged",
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(executor, package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "embedded-manifest-digest-mismatch",
+        ):
+            runner.run()
+
+        self.assertEqual([], executor.requests)
+
+    def test_legacy_prepared_promotion_cannot_bypass_source_model_with_diagnostic_shape(self) -> None:
         package_path = self.build_prepared_package(execution_profile="standard-required", unsupported_dimensions=("state-transition",))
         contract_path = self.build_promotion_contract()
         executor = ScriptedExecutor(self.writer_step())
@@ -3341,10 +4930,692 @@ GAP-001 remains open.
             executor, package_path, promotion_contract_path=contract_path
         )
 
-        result = runner.run()
+        with self.assertRaisesRegex(
+            runner_module.RunnerError, "legacy packages are review evidence only"
+        ):
+            runner.run()
 
-        self.assertEqual("blocked-promotion-readiness", result.status)
+        self.assertEqual([], executor.requests)
+
+    def test_source_first_prepared_direct_promotion_is_rejected_before_writer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        contract_path = self.build_promotion_contract(
+            required_requirement_ids=("SRC-1",),
+            required_gap_ids=(),
+        )
+        executor = ScriptedExecutor()
+        runner = self.make_prepared_runner(
+            executor,
+            package_path,
+            promotion_contract_path=contract_path,
+            promote_final=True,
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "Prepared/source-first direct promotion is disabled",
+        ):
+            runner.run()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.final_path.exists())
+
+    def test_prepared_private_promote_method_cannot_bypass_posthoc_transaction(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.validate_configuration()
+        runner.draft_path.parent.mkdir(parents=True, exist_ok=True)
+        runner.draft_path.write_bytes(b"accepted candidate\n")
+        draft_sha = hashlib.sha256(runner.draft_path.read_bytes()).hexdigest()
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "Prepared/source-first direct promotion is disabled",
+        ):
+            runner._promote({}, expected_draft_sha256=draft_sha)
+
+        self.assertFalse(self.final_path.exists())
+
+    def test_source_first_promotion_reaches_ready_state_with_compact_obligation_review(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        contract_path = self.build_promotion_contract(
+            required_requirement_ids=("SRC-1",),
+            required_gap_ids=(),
+        )
+        draft = """# Тест-кейсы: demo
+
+## Metadata
+| field | value |
+| --- | --- |
+| ft_slug | `demo-ft` |
+| scope_slug | `demo-scope` |
+| section_id | `1` |
+| package_id | `WP-01` |
+| test_design_dir | `fts/demo-ft/work/test-design/1-demo-scope` |
+
+## Scope Boundaries
+Bounded scope.
+
+## Coverage Summary
+OBL-001, ATOM-001 and SRC-1 are covered.
+
+## Coverage Gaps
+No gaps.
+
+## Test Cases
+
+## TC-DEMO-001
+**Название:** Проверка видимого результата
+**Тип:** позитивный
+**package_id:** WP-01
+**Приоритет:** High
+**Трассировка:** OBL-001; ATOM-001; SRC-1
+
+### Предусловия
+
+Не требуются.
+
+### Тестовые данные
+
+Не требуется.
+
+### Шаги
+
+1. Verify the visible result.
+
+### Итоговый ожидаемый результат
+
+The page displays the exact value `DEMO-RESULT-001`.
+
+### Постусловия
+
+- Не применимо.
+"""
+        executor = ScriptedExecutor(
+            self.writer_step(draft_text=draft),
+            self.reviewer_step(decision="accepted"),
+        )
+        cycle = self.make_prepared_runner(
+            executor,
+            package_path,
+            promotion_contract_path=contract_path,
+        )
+
+        result = cycle.run()
+
+        self.assertEqual(
+            "accepted-promotion-ready-not-promoted",
+            result.status,
+            result.blocking_reasons,
+        )
+        self.assertEqual(2, len(executor.requests))
+        self.assertIn("contract_version 4", executor.requests[1].prompt)
+        self.assertIn(
+            "Do not mark it incorrect solely because the source does not define "
+            "a confirmation, continuation or validation trigger",
+            executor.requests[1].prompt,
+        )
+        self.assertIn(
+            "reviewer-dimension-source-bindings-v1", executor.requests[1].prompt
+        )
+        schema = json.loads(cycle.reviewer_schema_path.read_text(encoding="utf-8"))
+        dimension_variants = schema["properties"]["dimension_reviews"]["items"][
+            "anyOf"
+        ]
+        self.assertEqual(
+            ["state-transition"],
+            [item["properties"]["dimension"]["const"] for item in dimension_variants],
+        )
+        self.assertEqual(
+            ["SRC-1"],
+            dimension_variants[0]["properties"]["source_refs"]["items"]["enum"],
+        )
+        findings = cycle.reviewer_findings_path.read_text(encoding="utf-8")
+        self.assertIn("SHA-256 source basis", findings)
+        self.assertIn("state-transition", findings)
+        self.assertIn("## Reviewer Sign-off Self-check", findings)
+        self.assertIn("**traceability_gaps_absent:** yes", findings)
+        self.assertIn("**source_parity_checked:** not-applicable", findings)
+        self.assertTrue(cycle.final_traceability_matrix_path.is_file())
+        self.assertTrue(cycle.final_traceability_matrix_xlsx_path.is_file())
+        runner_module.validate_traceability_matrix_pair(
+            cycle.final_traceability_matrix_path,
+            cycle.final_traceability_matrix_xlsx_path,
+        )
+        matrix_markdown = cycle.final_traceability_matrix_path.read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("| atom_id | req_id | source_path |", matrix_markdown)
+        self.assertIn(
+            "| ATOM-001 | BSR 1 |", matrix_markdown
+        )
+        self.assertIn("| TC-DEMO-001 | covered | not_applicable:covered |", matrix_markdown)
+        prompt_path = self.handoff_path.parent / "prompt.reviewer-to-ui-prep.md"
+        prompt = prompt_path.read_text(encoding="utf-8")
+        for heading in (
+            "## Цель этапа",
+            "## Входные артефакты",
+            "## Обязательные действия",
+            "## Не делать",
+            "## Ожидаемые выходы",
+            "## Gate завершения",
+        ):
+            self.assertIn(heading, prompt)
+        self.assertIn("pending-controlled-promotion", prompt)
+        self.assertIn("через `latest_artifacts` этого workflow-state", prompt)
+        self.assertNotIn("work/review-cycles/", prompt)
+        self.assertIn(
+            "Выполнить каждый уникальный `TC-*` из canonical test cases",
+            prompt,
+        )
+        self.assertIn("`unclear`/`not-applicable` не исполнять", prompt)
+        self.assertNotIn("удаления заполненного блока", prompt)
+        normalized_review = json.loads(
+            cycle.normalized_review_result_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, normalized_review["schema_version"])
+        self.assertEqual(4, normalized_review["contract_version"])
+        self.assertEqual("accepted", normalized_review["decision"])
+        self.assertEqual(
+            hashlib.sha256(cycle.draft_path.read_bytes()).hexdigest(),
+            normalized_review["reviewed_draft_sha256"],
+        )
+        self.assertEqual(
+            ["state-transition"],
+            [item["dimension"] for item in normalized_review["dimension_reviews"]],
+        )
+        self.assertEqual(
+            [{"obligation_id": "OBL-001", "verdict": "covered"}],
+            normalized_review["obligation_reviews"],
+        )
+
+        promotion_seed = json.loads(
+            cycle.promotion_basis_seed_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, promotion_seed["schema_version"])
+        self.assertEqual("promotion-basis-seed", promotion_seed["artifact_kind"])
+        self.assertEqual("builder-input-required", promotion_seed["status"])
+        self.assertEqual("demo-scope", promotion_seed["scope_slug"])
+        self.assertEqual(
+            normalized_review["reviewed_draft_sha256"],
+            promotion_seed["candidate"]["sha256"],
+        )
+        self.assertEqual(
+            hashlib.sha256(cycle.normalized_review_result_path.read_bytes()).hexdigest(),
+            promotion_seed["reviewer"]["sha256"],
+        )
+        self.assertEqual(
+            normalized_review["reviewed_source_basis_sha256"],
+            promotion_seed["source_basis"]["sha256"],
+        )
+        self.assertEqual(
+            normalized_review["reviewed_obligation_set_sha256"],
+            promotion_seed["obligation_set"]["sha256"],
+        )
+        self.assertEqual(
+            "prepared-quality-gate-bundle-v1",
+            promotion_seed["gate_reports"][0]["validator"],
+        )
+        self.assertEqual(
+            self.final_path.relative_to(self.repo_root).as_posix(),
+            promotion_seed["production_baseline"]["canonical_path"],
+        )
+        self.assertIsNone(
+            promotion_seed["production_baseline"]["canonical_prior_sha256"]
+        )
+        self.assertIn(
+            "workflow-state-signed-off-replacement",
+            promotion_seed["missing_builder_inputs"],
+        )
+        for name, path in (
+            ("final_traceability_matrix", cycle.final_traceability_matrix_path),
+            (
+                "final_traceability_matrix_xlsx",
+                cycle.final_traceability_matrix_xlsx_path,
+            ),
+            ("handoff_prompt", prompt_path),
+        ):
+            binding = promotion_seed["available_builder_inputs"][name]
+            self.assertEqual(
+                hashlib.sha256(path.read_bytes()).hexdigest(), binding["sha256"]
+            )
+        self.assertNotIn(
+            "final-traceability-matrix", promotion_seed["missing_builder_inputs"]
+        )
+        self.assertNotIn(
+            "final-traceability-matrix-xlsx",
+            promotion_seed["missing_builder_inputs"],
+        )
+        self.assertNotIn(
+            "reviewer-to-ui-prep-handoff-prompt",
+            promotion_seed["missing_builder_inputs"],
+        )
+        state = cycle.state_path.read_text(encoding="utf-8")
+        self.assertIn("normalized_review_result: work/review-cycles/", state)
+        self.assertIn("promotion_basis_seed_status: builder-input-required", state)
+
+    def test_source_first_traceability_preserves_not_applicable_manifest_atom(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        cycle = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        cycle.validate_configuration()
+        self.assertIsNotNone(cycle._source_first_contract)
+        source_contract = cycle._source_first_contract
+        assert source_contract is not None
+        base = source_contract.manifest.assertions[0]
+        not_applicable = replace(
+            base,
+            assertion_id="ASSERT-NA-001",
+            canonical_statement="Служебная строка не задает исполнимое поведение.",
+            semantic_disposition="not-applicable",
+            execution_readiness="not-applicable",
+            condition_clauses=(),
+            action_clauses=(),
+            oracle_clauses=(),
+            requirement_codes=(),
+            requirement_code_bindings=(),
+            clause_evidence_bindings=(),
+            atom_id="ATOM-NA-001",
+            obligation_ids=(),
+            disposition_rationale=(
+                "Строка является контекстным заголовком и не содержит проверяемого правила."
+            ),
+        )
+        source_contract = runner_module.EmbeddedSourceAssertionContract(
+            manifest=replace(
+                source_contract.manifest,
+                assertions=(*source_contract.manifest.assertions, not_applicable),
+            ),
+            review_receipt=source_contract.review_receipt,
+        )
+        review = runner_module.ReviewContract(
+            decision="accepted",
+            contract_version=4,
+            obligation_reviews=(
+                runner_module.ObligationReview(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    verdict="covered",
+                    test_case_ids=("TC-DEMO-001",),
+                    note="accepted",
+                ),
+            ),
+        )
+
+        rows = runner_module.build_source_first_traceability_rows(
+            source_contract,
+            review,
+        )
+
+        self.assertEqual("ATOM-NA-001", rows[-1][0])
+        self.assertEqual("SRC-1", rows[-1][1])
+        self.assertEqual(
+            "source-entity:document-global-constraints:SRC-1", rows[-1][4]
+        )
+        self.assertEqual(
+            "not_covered:source-disposition-not-applicable", rows[-1][7]
+        )
+        self.assertEqual("not-applicable", rows[-1][8])
+        self.assertIn("source_disposition:not-applicable", rows[-1][9])
+        first = runner_module.render_source_first_traceability_xlsx(rows)
+        second = runner_module.render_source_first_traceability_xlsx(rows)
+        self.assertEqual(first, second)
+        with zipfile.ZipFile(io.BytesIO(first), "r") as workbook:
+            core_properties = workbook.read("docProps/core.xml")
+        self.assertIn(
+            b">2000-01-01T00:00:00Z</dcterms:modified>",
+            core_properties,
+        )
+
+    def test_source_first_terminal_handoff_can_be_separate_from_source_handoff(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        terminal_handoff = (
+            self.ft_root / "work" / "stage-handoffs" / "02-demo-terminal"
+        )
+        terminal_handoff.mkdir(parents=True)
+        (terminal_handoff / "workflow-state.yaml").write_text(
+            "ft_slug: demo-ft\n"
+            "scope_slug: demo-scope\n"
+            "section_id: '1'\n"
+            "current_stage: ft-test-case-iteration\n"
+            "stage_status: ready-for-review\n"
+            "next_skill: ft-test-case-reviewer\n"
+            "blocking_reasons: []\n"
+            "latest_artifacts:\n"
+            "  coverage_gaps: work/stage-handoffs/01-demo/scope-coverage-gaps.md\n",
+            encoding="utf-8",
+        )
+        cycle = self.make_prepared_runner(
+            ScriptedExecutor(),
+            package_path,
+            source_first_terminal_handoff_dir=terminal_handoff,
+        )
+
+        cycle.validate_configuration()
+
+        handoff_dir, workflow_path = cycle._source_first_active_handoff()
+        self.assertEqual(terminal_handoff.resolve(), handoff_dir)
+        self.assertEqual(
+            (terminal_handoff / "workflow-state.yaml").resolve(),
+            workflow_path,
+        )
+
+    def test_blocking_source_gap_produces_reviewed_unsigned_draft_only(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            blocking_gap=True,
+        )
+        draft = """# Тест-кейсы: demo
+
+## Metadata
+| field | value |
+| --- | --- |
+| ft_slug | `demo-ft` |
+| scope_slug | `demo-scope` |
+| section_id | `1` |
+| package_id | `WP-01` |
+| test_design_dir | `fts/demo-ft/work/test-design/1-demo-scope` |
+
+## Scope Boundaries
+Bounded scope.
+
+## Coverage Summary
+OBL-001, ATOM-001 and SRC-1 are covered. OBL-002 is preserved as GAP-001.
+
+## Coverage Gaps
+GAP-001 remains blocking because the exact mapping is unresolved.
+
+## Test Cases
+
+## TC-DEMO-001
+**Название:** Проверка видимого результата
+**Тип:** позитивный
+**package_id:** WP-01
+**Приоритет:** High
+**Трассировка:** OBL-001; ATOM-001; SRC-1
+
+### Предусловия
+
+Не требуются.
+
+### Тестовые данные
+
+Не требуется.
+
+### Шаги
+
+1. Verify the visible result.
+
+### Итоговый ожидаемый результат
+
+The page displays the exact value `DEMO-RESULT-001`.
+
+### Постусловия
+
+- Не применимо.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(decision="accepted"),
+        )
+        cycle = self.make_prepared_runner(executor, package_path)
+
+        result = cycle.run()
+
+        self.assertEqual("blocked-source-gaps", result.status)
+        self.assertEqual(2, len(executor.requests))
+        state = cycle.state_path.read_text(encoding="utf-8")
+        self.assertIn("stage_status: blocked-input", state)
+        self.assertIn("reviewer_stage_status: accepted", state)
+        self.assertIn("accepted_terminal_state: false", state)
+        self.assertIn("draft_or_unsigned: true", state)
+        self.assertIn("promotion_status: blocked-source-gaps", state)
+        self.assertIn("GAP-001", state)
+        self.assertTrue(cycle.draft_path.is_file())
+        self.assertTrue(cycle.normalized_review_result_path.is_file())
+        self.assertFalse(cycle.promotion_basis_seed_path.exists())
+        self.assertFalse(cycle.final_traceability_matrix_path.exists())
+        self.assertFalse(cycle.final_traceability_matrix_xlsx_path.exists())
+        self.assertFalse(
+            (self.handoff_path.parent / "prompt.reviewer-to-ui-prep.md").exists()
+        )
+        self.assertFalse(self.final_path.exists())
+        self.assertFalse((self.cycle_dir / "versions" / "signed-off").exists())
+
+    def test_blocking_source_gap_rejects_promotion_before_model_calls(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            blocking_gap=True,
+        )
+        contract_path = self.build_promotion_contract(
+            required_requirement_ids=("SRC-1",),
+            required_gap_ids=("GAP-001",),
+        )
+        executor = ScriptedExecutor()
+        cycle = self.make_prepared_runner(
+            executor,
+            package_path,
+            promotion_contract_path=contract_path,
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError, "PROMO-BLOCKING-SOURCE-GAPS"
+        ):
+            cycle.run()
+
+        self.assertEqual([], executor.requests)
+        self.assertFalse(self.final_path.exists())
+
+    def test_execution_dependency_ready_subset_is_reviewed_but_remains_unsigned(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            execution_dependency=True,
+        )
+        draft = """# Тест-кейсы: demo
+
+## Metadata
+| field | value |
+| --- | --- |
+| ft_slug | `demo-ft` |
+| scope_slug | `demo-scope` |
+| section_id | `1` |
+| package_id | `WP-01` |
+| test_design_dir | `fts/demo-ft/work/test-design/1-demo-scope` |
+
+## Scope Boundaries
+Bounded ready subset.
+
+## Coverage Summary
+OBL-001, ATOM-001 and SRC-1 are covered. OBL-BLOCKED-001 is excluded by GAP-EXECUTION-001.
+
+## Coverage Gaps
+GAP-EXECUTION-001 remains blocking until its reproducible fixture is registered.
+
+## Test Cases
+
+## TC-DEMO-001
+**Название:** Проверка видимого результата
+**Тип:** позитивный
+**package_id:** WP-01
+**Приоритет:** High
+**Трассировка:** OBL-001; ATOM-001; SRC-1
+
+### Предусловия
+
+Не требуются.
+
+### Тестовые данные
+
+Не требуется.
+
+### Шаги
+
+1. Verify the visible result.
+
+### Итоговый ожидаемый результат
+
+The page displays the exact value `DEMO-RESULT-001`.
+
+### Постусловия
+
+- Не применимо.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(decision="accepted"),
+        )
+        cycle = self.make_prepared_runner(executor, package_path)
+
+        result = cycle.run()
+
+        self.assertEqual("blocked-execution-dependencies", result.status)
+        self.assertEqual(2, len(executor.requests))
+        state = cycle.state_path.read_text(encoding="utf-8")
+        self.assertIn("stage_status: blocked-input", state)
+        self.assertIn("reviewer_stage_status: accepted", state)
+        self.assertIn("accepted_terminal_state: false", state)
+        self.assertIn("draft_or_unsigned: true", state)
+        self.assertIn("promotion_status: blocked-execution-dependencies", state)
+        self.assertIn("GAP-EXECUTION-001", state)
+        self.assertTrue(cycle.normalized_review_result_path.is_file())
+        self.assertFalse(cycle.promotion_basis_seed_path.exists())
+
+    def test_execution_dependency_rejects_promotion_before_model_calls(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            execution_dependency=True,
+        )
+        contract_path = self.build_promotion_contract(
+            required_requirement_ids=("SRC-1",),
+            required_gap_ids=("GAP-EXECUTION-001",),
+        )
+        executor = ScriptedExecutor()
+        cycle = self.make_prepared_runner(
+            executor,
+            package_path,
+            promotion_contract_path=contract_path,
+        )
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "PROMO-BLOCKED-EXECUTION-DEPENDENCIES",
+        ):
+            cycle.run()
+
+        self.assertEqual([], executor.requests)
+
+    def test_recomputed_package_cannot_omit_reviewed_execution_dependency(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+            execution_dependency=True,
+        )
+        payload = json.loads(package_path.read_text(encoding="utf-8"))
+        payload["release_status"] = PreparedReleaseStatus.release_default().to_dict()
+        without_digest = {
+            key: value for key, value in payload.items() if key != "package_digest"
+        }
+        payload["package_digest"] = hashlib.sha256(
+            json.dumps(
+                without_digest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        package_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        executor = ScriptedExecutor()
+        cycle = self.make_prepared_runner(executor, package_path)
+
+        with self.assertRaisesRegex(
+            runner_module.RunnerError,
+            "execution registry does not exactly match",
+        ):
+            cycle.run()
+
+        self.assertEqual([], executor.requests)
+
+    def test_source_first_runtime_smell_blocks_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        draft = """# Тест-кейсы: demo
+
+## Test Cases
+
+## TC-DEMO-001
+**Название:** Проверка видимого результата
+**Тип:** позитивный
+**Приоритет:** High
+**package_id:** WP-01
+**Трассировка:** OBL-001; ATOM-001; SRC-1
+
+### Предусловия
+
+1. Log in with runtime credentials.
+
+### Тестовые данные
+
+Не требуется.
+
+### Шаги
+
+1. Verify the visible result.
+
+### Итоговый ожидаемый результат
+
+The visible result matches the requirement.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(decision="accepted"),
+        )
+        cycle = self.make_prepared_runner(executor, package_path)
+
+        result = cycle.run()
+
+        self.assertEqual("blocked-quality-gate", result.status)
         self.assertEqual(1, len(executor.requests))
+        bundle = json.loads(cycle.quality_gate_bundle_path.read_text(encoding="utf-8"))
+        finding_ids = {item["id"] for item in bundle["findings"]}
+        self.assertIn("production-magic-credential-setup", finding_ids)
+        self.assertEqual(
+            hashlib.sha256(cycle.draft_path.read_bytes()).hexdigest(),
+            bundle["draft_sha256"],
+        )
 
     def test_standard_path_blocks_before_writer_when_reviewer_command_budget_cannot_read_inputs(self) -> None:
         executor = ScriptedExecutor()
@@ -3395,6 +5666,13 @@ GAP-001 remains open.
         self.assertEqual("changes-required", result.status)
         self.assertTrue((outputs / "stdout.txt").read_text(encoding="utf-8").strip())
         self.assertEqual(findings + "\n", (outputs / "findings.md").read_text(encoding="utf-8"))
+        contract = json.loads((outputs / "review-contract.json").read_text(encoding="utf-8"))
+        self.assertEqual("changes-required", contract["decision"])
+        self.assertEqual(1, contract["contract_version"])
+        self.assertEqual(
+            hashlib.sha256((findings + "\n").encode("utf-8")).hexdigest(),
+            contract["findings_markdown_sha256"],
+        )
 
     def test_writer_draft_stays_in_work_outputs_when_review_requires_changes(self) -> None:
         executor = ScriptedExecutor(self.writer_step(), self.reviewer_step(decision="changes-required"))
@@ -3486,6 +5764,29 @@ GAP-001 remains open.
         )
         self.assertEqual("completed-with-progress", writer_status["status"])
         self.assertTrue(writer_status["validator_passed"])
+
+    def test_source_first_timeout_with_valid_draft_fails_closed_before_reviewer(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition",),
+            source_first_contract=True,
+        )
+        executor = ScriptedExecutor(
+            self.writer_step(exit_code=None, timed_out=True),
+        )
+        cycle = self.make_prepared_runner(executor, package_path)
+
+        result = cycle.run()
+
+        self.assertEqual("blocked-timeout", result.status)
+        self.assertEqual(1, len(executor.requests))
+        writer_status = json.loads(
+            (self.writer_attempt / "runner-output" / "stage-status.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(writer_status["timed_out"])
+        self.assertIn("did not return a complete contract", writer_status["reason"])
 
     def test_missing_writer_output_blocks_with_actionable_reason(self) -> None:
         executor = ScriptedExecutor(self.writer_step(create_draft=False))

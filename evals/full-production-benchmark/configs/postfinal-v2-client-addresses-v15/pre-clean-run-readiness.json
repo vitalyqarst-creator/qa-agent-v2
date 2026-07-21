@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "status": "ready-for-clean-run",
+  "checked_at_utc": "2026-07-20T12:13:37Z",
+  "last_updated_at_utc": "2026-07-20T12:52:13Z",
+  "benchmark_id": "postfinal-v2-client-addresses-v15",
+  "route": "production.checked_in_observation",
+  "config": {
+    "path": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/shadow-benchmark-config.json",
+    "schema_version": 2,
+    "sha256": "dfb7b760919a34ff399c53b5ed571ee172b2c8aed8c081d402137eab989ef0f3",
+    "validation_status": "validated",
+    "model_invoked_during_validation": false
+  },
+  "prepared_inputs": {
+    "bounded_context_template": {
+      "path": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/bounded-context-template.json",
+      "sha256": "b9602f8d40e070e7967496c2e39bad0bfb31a2471259b29b485fff17aac730f8"
+    },
+    "source_row_extraction_spec": {
+      "path": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/source-row-extraction-spec.json",
+      "sha256": "66764abb9470c7c41d0435e7587c51edae8c212caa4a50f906d0b940f93bccde"
+    },
+    "launch_prompt": {
+      "path": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/launch-new-session.md",
+      "sha256": "9afe6290e26ed2c24fba559070186da9a10fe480adf0e755b862da1386ec69a3"
+    },
+    "environment_probe": {
+      "path": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/environment-probe.json",
+      "sha256": "84f6c7cc5d64a035b9ab534d76c9d95bffc4aaa68c3ed63211387c4aa2058f72",
+      "reuse_scope": "same-workstation-next-session"
+    }
+  },
+  "source_hashes": {
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218"
+  },
+  "support_hashes": {
+    "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v3.md": "1b0b93993d4531ff090c9462837cf1ddd04bee5194b4e359be3236e3003a33da",
+    "fts/AutoFin/AGENT-NOTES.md": "5713d2d8d49d34354ae4308701e0ea2162ce41ac21f555ba098d1152a92087bf",
+    "fts/AutoFin/work/vendor-references/dadata-reference.md": "77f9f57f33860ea059a7b828d39436f19c3944b40fc3dbdf8efd5bfb848a27df",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622"
+  },
+  "reserved_outputs": [
+    {
+      "path": "fts/AutoFin/work/stage-handoffs/96-application-card-client-addresses-v15",
+      "exists_before_run": false
+    },
+    {
+      "path": "fts/AutoFin/work/review-cycles/application-card-client-addresses-v15-20260720",
+      "exists_before_run": false
+    },
+    {
+      "path": "fts/AutoFin/test-cases/4.3-application-card-client-addresses-shadow-20260720-v15.md",
+      "exists_before_run": false
+    }
+  ],
+  "protected_canonical": {
+    "path": "fts/AutoFin/test-cases/14-application-card-client-addresses.md",
+    "sha256": "dc51b317ab4547576f1d72674a50445dbe9e81d03c26b2ede317f924c98020af",
+    "test_case_count": 109,
+    "writer_reviewer_access": "forbidden",
+    "overwrite": "forbidden"
+  },
+  "offline_verification": {
+    "schema_v2_validate_only": "passed",
+    "codex_turn_metadata_helper": "passed",
+    "targeted_test_count": 477,
+    "targeted_test_duration_seconds": 141.505,
+    "targeted_test_result": "passed",
+    "post_repair_protocol_tests": {
+      "test_count": 41,
+      "result": "passed"
+    },
+    "post_repair_adjacent_tests": {
+      "test_count": 108,
+      "result": "passed"
+    },
+    "instruction_context": {
+      "scenario": "iteration.checked_in_observation",
+      "size_kib": 57.4,
+      "budget_kib": 75.0,
+      "headroom_kib": 17.6,
+      "result": "passed"
+    },
+    "architecture_audit": {
+      "check_count": 63,
+      "finding_count": 0,
+      "result": "passed"
+    },
+    "tested_layers": [
+      "observation-bootstrap",
+      "observation-execute-contract",
+      "source-preparation",
+      "semantic-design-author",
+      "semantic-design-sharding",
+      "semantic-design-bridge",
+      "semantic-design-qualification",
+      "semantic-design-materializer",
+      "source-assertions",
+      "source-assertion-reviewer",
+      "standard-production-wrapper",
+      "lean-production-downstream",
+      "promotion-readiness",
+      "posthoc-promotion"
+    ]
+  },
+  "preflight_history": [
+    {
+      "phase": "request-metadata",
+      "status": "blocked-before-benchmark",
+      "reason": "thread_source=subagent",
+      "wrapper_invoked": false,
+      "outputs_created": false,
+      "artifact": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/metadata-preflight-blocker-20260720.json"
+    },
+    {
+      "phase": "request-metadata",
+      "status": "blocked-before-benchmark",
+      "reason": "contradictory-prebootstrap-order-contract",
+      "wrapper_invoked": false,
+      "outputs_created": false,
+      "artifact": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/protocol-order-blocker-20260720.json"
+    }
+  ],
+  "execution_constraints": {
+    "primary_root_agent_only": true,
+    "agent_delegation": "forbidden",
+    "one_executor_call": true,
+    "retry": "forbidden",
+    "fallback": "forbidden",
+    "resume_prior_cycle": "forbidden",
+    "manual_test_case_writing": "forbidden",
+    "semantic_and_source_review_shards": "sequential",
+    "ui_calibration": "deferred-user-confirmed",
+    "canonical_comparison": "separate-post-run-evaluator-only"
+  },
+  "remaining_external_risks": [
+    "Codex backend availability and model capacity cannot be proven offline.",
+    "The clean run can still terminate on a genuinely new model-output or source-semantic defect; it must not be repaired inside the benchmark session."
+  ]
+}

@@ -37,11 +37,12 @@
 - `source_path` — краткая иерархия источника: раздел, блок, поле или иной точный фрагмент ФТ.
 - `atomic_statement` — одно неделимое утверждение из ФТ без перефразирования, меняющего смысл.
 - `field_or_block` — поле, блок или сущность, к которой относится утверждение.
+- Если source-first manifest не содержит отдельного structured field/block, final matrix использует явный source-backed entity fallback `source-entity:<source_context_class>:<SRC-ID>`. Это идентификатор контекстной сущности источника, а не вывод о существовании UI-поля; свободное угадывание названия поля по prose запрещено.
 - `condition` — условие применимости правила. Если условия нет, укажи `always`.
 - `expected_behavior` — какое поведение должно быть покрыто тестом.
-- `covered_by_tc` — список `test_case_id`, покрывающих утверждение. Если покрытия нет, укажи `not_covered:<GAP-ID>` для `gap` или `unclear:<GAP-ID>` / `not_covered:unclear` для `unclear`; не используй placeholder `-` или `N/A`.
-- `coverage_status` = `covered | gap | unclear`
-- `gap_note` — краткое пояснение, почему строка имеет статус `gap` или `unclear`. Для `covered` используй `not_applicable:covered` или краткое подтверждение покрытия; не используй placeholder `-` или `N/A`.
+- `covered_by_tc` — список `test_case_id`, покрывающих утверждение. Если покрытия нет, укажи `not_covered:<GAP-ID>` для `gap` или `unclear:<GAP-ID>` / `not_covered:unclear` для `unclear`; для source-first строки с принятой source disposition `not-applicable` используй `not_covered:source-disposition-not-applicable`; не используй placeholder `-` или `N/A`.
+- `coverage_status` = `covered | gap | unclear`; source-first final matrix дополнительно допускает `not-applicable`, только когда hash-bound accepted source assertion имеет `semantic_disposition = not-applicable` и source-backed rationale.
+- `gap_note` — краткое пояснение, почему строка имеет статус `gap` или `unclear`. Для `covered` используй `not_applicable:covered` или краткое подтверждение покрытия. Для `not-applicable` используй `source_disposition:not-applicable; <source-backed rationale>`; не используй placeholder `-` или `N/A`.
 
 ## XLSX-дубль
 
@@ -75,6 +76,7 @@
 - Если строка матрицы переносится в следующий round без смыслового изменения, сохраняй тот же `atom_id`; если атомарное утверждение разделено на несколько независимых строк, старый `atom_id` не переиспользуй для новых смыслов и явно отметь split в human summary.
 - `gap` означает отсутствие покрытия при достаточной определенности требования.
 - `unclear` означает, что требование нельзя однозначно превратить в проверку без домысливания.
+- `not-applicable` не означает непокрытый тестируемый ATOM и не является waiver: это честная проекция принятого source-first решения о неприменимости утверждения к исполнимому набору. Такой ATOM остается в matrix и не получает фиктивный `TC-*`.
 
 ## Legacy Матрицы
 

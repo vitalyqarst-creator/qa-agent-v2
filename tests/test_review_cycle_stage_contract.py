@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from test_case_agent.review_cycle import (
@@ -337,6 +338,15 @@ class ReviewCycleStageContractTests(unittest.TestCase):
         payload["input_digest"] = "0" * 64
         with self.assertRaisesRegex(ContractValidationError, "positive integer"):
             StageInputManifest.from_dict(payload)
+
+    def test_null_timeout_is_valid_for_observational_stage(self) -> None:
+        unbound = replace(
+            self.writer_manifest(), timeout_seconds=None, input_digest=""
+        )
+        manifest = replace(unbound, input_digest=unbound.compute_digest())
+        manifest.validate()
+        restored = StageInputManifest.from_dict(manifest.to_dict())
+        self.assertIsNone(restored.timeout_seconds)
 
     def test_malformed_scalar_types_raise_contract_errors(self) -> None:
         manifest_payload = self.writer_manifest().to_dict()

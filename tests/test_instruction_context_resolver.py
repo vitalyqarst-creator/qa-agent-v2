@@ -30,13 +30,17 @@ REQUIRED_SCENARIOS = {
     "writer.session_format_revision",
     "reviewer.full_existing_cases",
     "reviewer.session_prepared_semantic",
+    "reviewer.session_prepared_source_assertion",
     "reviewer.scope_gap_review",
     "reviewer.structure_preflight",
     "reviewer.semantic_traceability_test_design",
     "reviewer.structure_format_final",
     "reviewer.semantic_regression",
+    "scope.bounded_production",
     "scope.manual",
     "scope.agent_proposed",
+    "iteration.checked_in_observation",
+    "iteration.incremental_update",
     "iteration.full_loop",
     "ui_automation_prep.signed_off",
     "architecture.audit",
@@ -217,6 +221,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertNotIn("skills/README.md", paths)
         self.assertNotIn("skills/ft-test-case-writer/SKILL.md", paths)
         self.assertIn("references/agent/prepared-stage-package-format.md", paths)
+        self.assertNotIn("references/agent/session-based-review-cycle-format.md", paths)
+        self.assertNotIn("references/agent/codex-sdk-orchestration-format.md", paths)
         self.assertNotIn("references/agent/writer-runtime-workflow.md", paths)
         self.assertNotIn("references/agent/source-row-inventory-format.md", paths)
         self.assertNotIn("references/agent/writer-process-workflow.md", paths)
@@ -228,6 +234,10 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("input_fingerprint", profile_text)
         self.assertIn("runner_owned_dictionary_materializations", profile_text)
         self.assertIn("runner_owned_reference_fixtures", profile_text)
+        self.assertIn("inline numbered setup actions", profile_text)
+        self.assertIn("setup IDs are provenance only", profile_text)
+        self.assertIn("preceding state-producing action", profile_text)
+        self.assertIn("cannot define the required executable setup", profile_text)
         self.assertNotIn("package version `", profile_text)
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
 
@@ -301,6 +311,8 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertIn("references/agent/prepared-reviewer-runtime-profile.md", paths)
         self.assertNotIn("skills/README.md", paths)
         self.assertIn("references/agent/prepared-stage-package-format.md", paths)
+        self.assertNotIn("references/agent/session-based-review-cycle-format.md", paths)
+        self.assertNotIn("references/agent/codex-sdk-orchestration-format.md", paths)
         self.assertNotIn("skills/ft-test-case-reviewer/SKILL.md", paths)
         self.assertNotIn("references/qa/test-design-review-rubric.md", paths)
         self.assertNotIn("references/qa/test-case-runtime-format.md", paths)
@@ -345,6 +357,33 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertNotIn("references/qa/test-case-format.md", paths)
         self.assertNotIn("references/qa/test-case-style-examples.md", paths)
 
+    def test_prepared_source_assertion_reviewer_is_compact_and_tool_free(self) -> None:
+        payload = self.resolve_json(
+            "--scenario", "reviewer.session_prepared_source_assertion"
+        )
+        paths = {item["path"] for item in payload["files"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("AGENTS.md", paths)
+        self.assertIn(
+            "references/agent/source-assertion-reviewer-runtime-profile.md", paths
+        )
+        self.assertIn(
+            "references/agent/source-assertion-semantic-rule-card.md", paths
+        )
+        self.assertNotIn("skills/ft-test-case-reviewer/SKILL.md", paths)
+        self.assertNotIn("references/agent/workflow-state-format.md", paths)
+        self.assertLess(payload["budget"]["total_kib"], 72)
+
+    def test_manual_scope_loads_candidate_baseline_contract(self) -> None:
+        payload = self.resolve_json("--scenario", "scope.manual")
+        paths = {item["path"] for item in payload["files"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertIn("skills/ft-scope-analyzer/SKILL.md", paths)
+        self.assertIn("references/agent/source-assertions-format.md", paths)
+        self.assertIn("references/agent/source-row-baseline-format.md", paths)
+
     def test_sdk_orchestration_context_loads_runner_contracts_only(self) -> None:
         payload = self.resolve_json("--scenario", "sdk_orchestration.review_cycle")
         paths = {item["path"] for item in payload["files"]}
@@ -374,6 +413,7 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertIn("skills/agent-architecture-auditor/SKILL.md", paths)
         self.assertIn("references/agent/task-start-skill-routing-format.md", paths)
+        self.assertIn("references/agent/instruction-authoring-policy.md", paths)
         self.assertIn("references/agent/audit-output-format.md", paths)
 
     def test_all_manifest_budgets_pass(self) -> None:
@@ -404,7 +444,7 @@ class InstructionContextResolverTests(unittest.TestCase):
 
         self.assertEqual("pass", payload["budget"]["status"])
         self.assertGreaterEqual(payload["budget"]["headroom_kib"], 30.0)
-        self.assertLessEqual(payload["budget"]["total_kib"], 150.0)
+        self.assertLessEqual(payload["budget"]["total_kib"], 175.0)
         self.assertIn("iteration_stage_summaries", groups)
         self.assertIn("references/agent/runtime-quality-rule-cards.md", paths)
         self.assertIn("references/agent/stage-routing-summary.md", paths)
@@ -422,6 +462,34 @@ class InstructionContextResolverTests(unittest.TestCase):
         self.assertNotIn("skills/ft-test-case-reviewer/SKILL.md", paths)
         self.assertNotIn("skills/ft-source-locator/SKILL.md", paths)
         self.assertNotIn("skills/ft-scope-analyzer/SKILL.md", paths)
+
+    def test_checked_in_observation_loads_only_executor_root_context(self) -> None:
+        payload = self.resolve_json(
+            "--scenario", "iteration.checked_in_observation"
+        )
+        paths = {item["path"] for item in payload["files"]}
+        groups = {item["group"] for item in payload["groups"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertLessEqual(payload["budget"]["total_kib"], 60.0)
+        self.assertGreaterEqual(payload["budget"]["headroom_kib"], 15.0)
+        self.assertEqual(
+            {"prepared_global_core", "checked_in_observation_executor_core"},
+            groups,
+        )
+        self.assertIn("AGENTS.md", paths)
+        self.assertIn("skills/ft-test-case-iteration/SKILL.md", paths)
+        self.assertIn(
+            "references/agent/full-process-timing-observation.md", paths
+        )
+        forbidden = {
+            "skills/ft-source-locator/SKILL.md",
+            "skills/ft-scope-analyzer/SKILL.md",
+            "skills/ft-test-case-writer/SKILL.md",
+            "skills/ft-test-case-reviewer/SKILL.md",
+            "references/agent/session-based-review-cycle-format.md",
+        }
+        self.assertTrue(forbidden.isdisjoint(paths))
 
     def test_default_runtime_scenarios_do_not_load_deep_examples(self) -> None:
         default_scenarios = [

@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "status": "offline-preview",
+  "source_observation": "019f78a6-e045-7922-8d8d-1e4505c59257",
+  "limits": {
+    "max_included_rows": 10,
+    "max_source_rows": 16,
+    "max_shards": 8
+  },
+  "shards": [
+    {
+      "shard_id": "semantic-shard-001",
+      "owned_source_rows": "SRC-001..SRC-016",
+      "owned_source_row_count": 16,
+      "owned_included_row_count": 0
+    },
+    {
+      "shard_id": "semantic-shard-002",
+      "owned_source_row_ids": [
+        "SRC-017", "SRC-018", "SRC-019", "SRC-020", "SRC-021", "SRC-022",
+        "SRC-023", "SRC-024", "SRC-025", "SRC-026", "SRC-030"
+      ],
+      "owned_source_row_count": 11,
+      "owned_included_row_count": 10
+    },
+    {
+      "shard_id": "semantic-shard-003",
+      "owned_source_row_ids": [
+        "SRC-027", "SRC-028", "SRC-029", "SRC-031", "SRC-032", "SRC-033",
+        "SRC-034", "SRC-035", "SRC-036", "SRC-037"
+      ],
+      "owned_source_row_count": 10,
+      "owned_included_row_count": 10
+    },
+    {
+      "shard_id": "semantic-shard-004",
+      "owned_source_rows": "SRC-038..SRC-044",
+      "owned_source_row_count": 7,
+      "owned_included_row_count": 7
+    }
+  ],
+  "notes": [
+    "DEP-003 approved alias keeps SRC-019 and SRC-030 in one atomic component.",
+    "Typed column header SRC-017 is supplied read-only to shards that need it.",
+    "Broad DaData/dictionary dependencies are projected with literal evidence and restored during merge.",
+    "The live run must regenerate and hash-bind its own authoritative plan."
+  ]
+}

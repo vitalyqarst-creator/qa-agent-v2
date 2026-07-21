@@ -18,6 +18,10 @@ from test_case_agent.review_cycle.prepared_compiler import (  # noqa: E402
     markdown_tables,
 )
 from test_case_agent.review_cycle.runtime import StageRuntimeError  # noqa: E402
+from test_case_agent.review_cycle.source_assertions import (  # noqa: E402
+    MANIFEST_VERSION,
+    REVIEW_RECEIPT_VERSION,
+)
 
 
 CANONICAL_COLUMNS = (
@@ -29,6 +33,8 @@ CANONICAL_COLUMNS = (
     "obligation_class",
     "required_behavior",
     "source_ref",
+    "source_row_id",
+    "requirement_codes",
     "planned_tc_or_gap",
     "status",
     "review_notes",
@@ -75,13 +81,25 @@ def _state_with_contract(
     text: str, *, obligation_relative: str
 ) -> str:
     lines = text.splitlines()
-    if not any(line.startswith("prepared_compiler_contract_version:") for line in lines):
+    contract_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if line.startswith("prepared_compiler_contract_version:")
+        ),
+        None,
+    )
+    if contract_index is None:
         ft_index = next(
             (index for index, line in enumerate(lines) if line.startswith("ft_slug:")), None
         )
         if ft_index is None:
             raise StageRuntimeError("compiler input has no ft_slug")
         lines.insert(ft_index + 1, f"prepared_compiler_contract_version: {COMPILER_CONTRACT_VERSION}")
+    else:
+        lines[contract_index] = (
+            f"prepared_compiler_contract_version: {COMPILER_CONTRACT_VERSION}"
+        )
     if not any(line.strip().startswith("coverage_obligation_table:") for line in lines):
         ledger_index = next(
             (
@@ -119,6 +137,57 @@ def migrate(
     latest = state.get("latest_artifacts")
     if not isinstance(latest, dict):
         raise StageRuntimeError("compiler input latest_artifacts map is required")
+    missing_source_first = [
+        key
+        for key in (
+            "source_row_inventory",
+            "source_row_extraction_spec",
+            "source_row_baseline",
+            "source_assertions",
+            "source_assertion_review",
+            "coverage_gaps",
+        )
+        if not isinstance(latest.get(key), str)
+        or not _within(
+            ft_root / str(latest.get(key) or "missing"),
+            ft_root,
+            f"latest_artifacts.{key}",
+        ).is_file()
+    ]
+    if missing_source_first:
+        raise StageRuntimeError(
+            "semantic migration required: compiler contract v3 needs independently "
+            "reviewed source-first artifacts; the migrator will not invent them: "
+            + ", ".join(missing_source_first)
+        )
+    source_assertions_path = _within(
+        ft_root / str(latest["source_assertions"]),
+        ft_root,
+        "latest_artifacts.source_assertions",
+    )
+    source_review_path = _within(
+        ft_root / str(latest["source_assertion_review"]),
+        ft_root,
+        "latest_artifacts.source_assertion_review",
+    )
+    try:
+        manifest_payload = json.loads(source_assertions_path.read_text(encoding="utf-8"))
+        receipt_payload = json.loads(source_review_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise StageRuntimeError(
+            "semantic migration required: source assertion manifest/receipt must be "
+            f"valid JSON: {exc}"
+        ) from exc
+    if not isinstance(manifest_payload, dict) or manifest_payload.get("version") != MANIFEST_VERSION:
+        raise StageRuntimeError(
+            f"semantic migration required: source assertion manifest must be "
+            f"rematerialized as v{MANIFEST_VERSION}"
+        )
+    if not isinstance(receipt_payload, dict) or receipt_payload.get("version") != REVIEW_RECEIPT_VERSION:
+        raise StageRuntimeError(
+            f"semantic migration required: independent source review must be rerun "
+            f"and issued as receipt v{REVIEW_RECEIPT_VERSION}"
+        )
     ledger_value = latest.get("atomic_requirements_ledger")
     if not isinstance(ledger_value, str):
         raise StageRuntimeError("latest_artifacts.atomic_requirements_ledger is required")
@@ -147,12 +216,22 @@ def migrate(
             (
                 item
                 for item in markdown_tables(ledger_path)
-                if item and {"atom_id", "atomic_statement"} <= set(item[0])
+                if item
+                and {
+                    "atom_id",
+                    "atomic_statement",
+                    "source_row_id",
+                    "requirement_codes",
+                }
+                <= set(item[0])
             ),
             None,
         )
         if ledger is None:
-            raise StageRuntimeError("atomic ledger is missing canonical atom columns")
+            raise StageRuntimeError(
+                "atomic ledger is missing v3 canonical columns: atom_id, "
+                "atomic_statement, source_row_id, requirement_codes"
+            )
         atoms = {row["atom_id"]: row for row in ledger}
         migrated_rows = []
         for position, row in enumerate(table, 1):
@@ -174,6 +253,8 @@ def migrate(
                     "obligation_class": row["dimension"],
                     "required_behavior": atoms[linked_atom]["atomic_statement"],
                     "source_ref": row["source_ref"],
+                    "source_row_id": atoms[linked_atom]["source_row_id"],
+                    "requirement_codes": atoms[linked_atom]["requirement_codes"],
                     "planned_tc_or_gap": row["linked_tc_or_gap"],
                     "status": row["coverage_status"],
                     "review_notes": row["rationale"],
@@ -208,7 +289,7 @@ def migrate(
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
-        description="Migrate a prepared compiler input to contract version 2"
+        description="Migrate a prepared compiler input to source-first contract version 3"
     )
     result.add_argument("--workflow-state", required=True)
     result.add_argument("--expected-ft-slug", required=True)

@@ -17,7 +17,7 @@ REQ_SKILLS={
     "ft-ui-automation-prep",
     "agent-architecture-auditor",
 }
-REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","session-based-review-cycle-format.md","codex-sdk-orchestration-format.md"}
+REQ_AGENT={"content-placement.md","skill-boundaries.md","duplication-policy.md","instruction-authoring-policy.md","maintenance-checklist.md","audit-output-format.md","task-start-skill-routing-format.md","session-based-review-cycle-format.md","codex-sdk-orchestration-format.md"}
 REQ_QA={
     "test-case-format.md",
     "coverage-checklist.md",
@@ -47,8 +47,10 @@ INSTRUCTION_CONTEXT_SCENARIOS=(
     "reviewer.semantic_traceability_test_design",
     "reviewer.structure_format_final",
     "reviewer.semantic_regression",
+    "scope.bounded_production",
     "scope.manual",
     "scope.agent_proposed",
+    "iteration.checked_in_observation",
     "iteration.full_loop",
     "ui_automation_prep.signed_off",
     "architecture.audit",

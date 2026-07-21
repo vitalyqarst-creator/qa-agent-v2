@@ -55,3 +55,10 @@ Do not assert exact message, color, disabled state, filtering, clearing, blocked
 Record trigger, observed reaction, message if present, transition/save effect, evidence, and expected-result / `oracle_status` update.
 
 After evidence: use one observed oracle, set `oracle_status = observed-ui-backed | analyst-confirmed`, remove candidate marker, do not rewrite FT-first baseline without evidence.
+
+## Canonical Suite Status
+
+Кандидаты остаются в общем canonical и сохраняют `TC-ID`. При их наличии metadata
+содержит `execution_ready_count`, `calibration_candidate_count` и
+`suite_readiness: ft-first-reviewed-with-calibration-pending`; набор нельзя называть
+полностью исполнимым. Evidence обновляет тот же `TC-ID`.

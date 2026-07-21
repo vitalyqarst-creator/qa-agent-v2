@@ -55,6 +55,9 @@ For any gap that limits test-design decisions, record these canonical fields in 
 - `missing_observable_oracle`
 - `why_not_executable`
 - `downstream_do_not_test`
+- `execution_assertion_ids`
+- `execution_atom_ids`
+- `execution_obligation_ids`
 
 Rules:
 
@@ -63,6 +66,13 @@ Rules:
 - `temporary_handling` must not invent expected behavior. It may say only what can still be covered safely, what is excluded, or which case is marked `unclear`.
 - For validation/requiredness gaps, `scope_obligation_ids` comes from oracle inventory; `blocked_negative_classes`, `missing_observable_oracle`, `why_not_executable`, and `downstream_do_not_test` must make the blocked executable checks explicit. Use `not_applicable` only for non-validation gaps. Do not mark `downstream_do_not_test` for obligations that have `decision = candidate_tc_required`; route them as UI calibration candidates instead.
 - Explicit deferral requires `accepted_risks` in `workflow-state.yaml` with the same `GAP-*`, owner/role, rationale and revisit condition. Do not treat an open blocking gap as accepted risk just because it is listed in `open_questions`.
+- Если `testable` source assertion семантически ясен, но исполнение
+  заблокировано внешней dependency, GAP обязан иметь
+  `Impact: blocking`, `Blocks Ready For Review: yes`, `Status: open` и
+  duplicate-free dedicated sets `execution_assertion_ids`,
+  `execution_atom_ids`, `execution_obligation_ids`. Эти sets указывают
+  только execution-blocked testable chains и не заменяют более широкие
+  `affected_*` / semantic-gap fields.
 
 ## Минимальный шаблон
 

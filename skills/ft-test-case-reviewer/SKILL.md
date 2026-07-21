@@ -37,6 +37,7 @@ description: Делает review существующих тест-кейсов 
 Для нового Codex SDK process split reviewer запускается отдельными сессиями, но физически остается этим umbrella-skill:
 
 - `scope_gap_review` - pre-writer review of `scope-coverage-gaps.md`, `scope-clarification-requests.md`, source anchors and handoff routing. This mode does not review or edit test cases because the canonical TC file may not exist yet.
+- `source_assertion_review` - обязательный независимый pre-writer review для compiler contract v3. Сверяет каждое assertion непосредственно с XHTML/DOCX-parity evidence и mockup inventory, проверяет polarity/disposition/risk/condition/action/oracle и выпускает hash-bound `source-assertion-review.json`. Не доверяет производному ledger и не проверяет TC.
 - `structure_preflight` — только parseability, handoff completeness, обязательные секции и blockers, которые мешают semantic review; не выполняет polishing.
 - `semantic_traceability_test_design` — объединяет traceability и test-design review, строит или обновляет reviewer traceability matrix и возвращает semantic findings.
 - `structure_format_final` — финальная проверка оформления после semantic closure: шаблон, группировка, сквозная нумерация, wording, format smells и обязательный validator gate по текущему scope.
@@ -46,41 +47,60 @@ description: Делает review существующих тест-кейсов 
 
 Semantic review is mandatory for sign-off. Do not remove semantic checks to satisfy instruction budget; move detailed rules to references and load them selectively. Reviewer must block sign-off for process markers in `Название`, candidate title leaks, generic test data placeholders, missing positive allowed-class TC, numbered passive preconditions, overmerged TC, candidate TC without concrete invalid value, candidate TC with invented rejection mechanism, and source-backed positive checks replaced by candidate negatives.
 
+### `source_assertion_review` contract
+
+Apply `source-assertions-format.md` directly: challenge the manifest against
+XHTML/DOCX-parity and mockup evidence, then emit one exact-digest receipt. This pass
+subsumes gap review for compiler contract v3 and never edits assertions, obligations or test cases.
+Start the boundary check outside the selected section: inspect document-global
+constraints, ancestor/section preambles and cross-referenced constraints. Receipt
+v6 must explicitly record polarity, semantic disposition, execution readiness
+and risk for every assertion and include the typed `scope_boundary_review` required by the canonical
+contract; omitting either per-assertion evidence or boundary attestation is not an
+accepted review.
+Before classifying assertions, compare the complete hash-bound `source_rows`
+registry with `source-row-inventory.md`, including `in_scope = no`, exact
+path/locator/bounded text/context, candidate ids and row requirement codes.
+Independently verify the extraction regions and complete candidate mapping, then
+emit the required digest-bound `source_inventory_review`. Reject primary fragments
+found only elsewhere in the same file; accept cross-row condition/action/oracle
+or requirement-code provenance only through the corresponding typed binding.
+Use `supporting_source_bindings` only for its closed non-clause semantic roles.
+Apply `source-assertion-semantic-rule-card.md` to every statement/action/oracle
+chain. For every assertion fill the exact thirteen-key `dimension_verdicts` map from the
+canonical contract. The assertion `verdict` must equal its aggregate; verified
+rows use `required_change = none_required`, while incorrect rows require a
+substantive correction. When polarity, semantic disposition or risk is marked
+incorrect, record a different valid proposed value instead of echoing the
+manifest. Verify that every ambiguous assertion has one valid `primary_gap_id`
+and a source-backed disposition rationale; testable and not-applicable assertions
+must not claim a primary gap.
+Independently verify the hash-bound coverage-gaps artifact and the exact dedicated
+ASSERT/ATOM/OBL chain, blocking classification and open status of every
+`execution_dependency_gap_ids` binding; record this under
+`execution-dependencies`.
+Before accepting, verify every declared `evidence_sources` hash and role and reject
+an XHTML-based FT manifest that omits the DOCX source of truth, available PDF parity
+source or any support material used to approve a dictionary/oracle. The receipt
+digest must therefore become stale when any reviewed binary or support source
+changes, even if XHTML text did not change.
+Verify `clarification-provenance` independently: only canonical answered records
+with truthful authority/type, exact hashes, resolved GAP binding and local
+clause/code bindings may influence ready semantics. Working, rejected,
+superseded or omitted answers require rejection; any answer change requires a
+fresh manifest digest and receipt.
+For each PDF-only requirement-code binding, verify the canonical `page:<n>`
+locator and that the literal code is extractable from that exact registered PDF
+page; a free-form page note is not provenance.
+
 ### `scope_gap_review` contract
 
-Use `scope_gap_review` only after `ft-scope-analyzer` has produced a confirmed scope and at least one `GAP-*` in `scope-coverage-gaps.md`. The active prompt is `prompt.scope-gaps-to-reviewer.md`.
-
-Required inputs:
-
-- `source-selection.md`
-- `scope-contract.md`
-- `scope-coverage-gaps.md`
-- `scope-clarification-requests.md`
-- `source-parity-check.md`, when DOCX+PDF are available
-- `source-row-inventory.md`, when row-level/table parity is required
-- `mockup-visual-inventory.md`, when the scope uses mockups
-- package `AGENT-NOTES.md`, when present
-- `workflow-state.yaml`
-
-Review only gap quality and routing readiness:
-
-- every `GAP-*` has a concrete FT/source anchor: section, requirement code, table/row, field/condition, quote or atomic statement;
-- each gap has a clear impact, blocking classification and downstream handling rule;
-- each gap with an unresolved decision has a matching analyst-facing item in `scope-clarification-requests.md`;
-- no source-backed requirement was converted into a gap just because writing it is inconvenient;
-- unknown negative/requiredness UI mechanisms are listed as child inventory obligations, not hidden only in parent `GAP-*`;
-- source extraction relied on XHTML when `source-selection.md` requires it;
-- table/list rows present in XHTML were not lost before ledger/TC coverage;
-- no mockup-only detail, internal effect or unsupported expected result is promoted to covered behavior;
-- source parity, row inventory and mockup inventory limitations are carried into gaps or blocking reasons;
-- routing after review is either writer-ready or back to `ft-scope-analyzer`; do not route to UI prep or sign-off from this mode.
-
-Expected outputs:
-
-- `scope-gap-review.md` with verdict `passed | needs-scope-revision | blocked-input`;
-- reviewer session log and decision log in the current stage-handoff folder;
-- if passed: `workflow-state.yaml` routes to writer with `stage_status: ready-for-next-stage`, `next_skill: ft-test-case-writer`, and active prompt `prompt.scope-to-writer.md`;
-- if not passed: `workflow-state.yaml` routes back to `ft-scope-analyzer` or `blocked-input` with explicit findings and blocking reasons.
+This is a legacy pre-writer mode for a confirmed scope with `GAP-*`. Using the
+active scope-gap prompt, verify complete XHTML/source-row anchors, narrow gap and
+blocking classification, clarification routing, parity/mockup limitations and the
+absence of invented coverage. Emit `scope-gap-review.md` and route only to writer,
+scope revision or `blocked-input`; never review TCs or sign off. Do not run it in
+addition to compiler-contract-v3 `source_assertion_review`.
 
 ## Входы
 
@@ -95,6 +115,7 @@ Expected outputs:
 - `dictionary-inventory.md`, если source/support или split artifacts содержат `dictionary-source` / reference-list rows;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope содержит mockup / screen image / `mockups/`;
 - `review_mode = full | traceability | structure | test-design`;
+- для pre-writer source-first: `review_mode = source_assertion_review`, manifest v4 `source-assertions.json`, полный `source-row-inventory.md`, source parity/gaps и mockup inventory;
 - при необходимости связанные материалы FT-пакета для уточнения трассировки;
 - при second review:
   - structured findings artifact предыдущего раунда;
@@ -114,6 +135,7 @@ Expected outputs:
   - список неоднозначностей и противоречий по ФТ;
   - `prompt.reviewer-to-writer.round-N.md`, если findings требуют writer revision;
   - `prompt.reviewer-to-ui-prep.md`, если reviewer подписал набор и следующий этап `ft-ui-automation-prep`.
+- для `source_assertion_review`: hash-bound `source-assertion-review.json` и route к writer либо обратно к scope analyzer;
 - расположение и обязательные поля reviewer outputs определяются `reviewer-output-format.md`.
 
 ## Workflow
@@ -124,7 +146,7 @@ Expected outputs:
 
 1. Найди файл тест-кейсов и соответствующий FT-пакет с нужным scope.
 2. Подтверди, что review выполняется только в пределах уже выбранного scope.
-3. Определи `review_mode`. Если режим не указан явно, используй `full`.
+3. Определи `review_mode`. Если режим не указан явно, используй `full`. Для source-first pre-writer handoff используй только `source_assertion_review` и заверши его до любого TC review.
 4. Перед review проверь `source-selection.md`: если для нового workflow `xhtml_available != yes`, зафиксируй blocking finding и не подписывай набор.
 5. Проверь, что writer использовал XHTML для таблиц, строк, списков, вложенных списков, перечней значений, source rows и dictionary-source rows. Потеря строк/списков, которые присутствуют в XHTML, является traceability/test-design finding.
 6. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ scope до начала review.
@@ -195,6 +217,9 @@ Rules:
 - Формат Package Test Design Plan: [../../references/agent/package-test-design-plan-format.md](../../references/agent/package-test-design-plan-format.md)
 - Формат Source Table Normalization: [../../references/agent/source-table-normalization-format.md](../../references/agent/source-table-normalization-format.md)
 - Формат Source Row Inventory: [../../references/agent/source-row-inventory-format.md](../../references/agent/source-row-inventory-format.md)
+- Source-first assertion contract: [../../references/agent/source-assertions-format.md](../../references/agent/source-assertions-format.md)
+- Source assertion semantic rule card: [../../references/agent/source-assertion-semantic-rule-card.md](../../references/agent/source-assertion-semantic-rule-card.md)
+- Deterministic Source Row Baseline: [../../references/agent/source-row-baseline-format.md](../../references/agent/source-row-baseline-format.md)
 - Формат Dictionary Inventory: [../../references/agent/dictionary-inventory-format.md](../../references/agent/dictionary-inventory-format.md)
 - Формат тест-кейса: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
 - Test-design review rubric: [../../references/qa/test-design-review-rubric.md](../../references/qa/test-design-review-rubric.md)

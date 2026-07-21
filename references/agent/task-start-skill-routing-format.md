@@ -19,6 +19,12 @@ Before substantive work, state:
 
 Keep the disclosure brief. It is not a consent step unless the task itself is ambiguous or unsafe.
 
+When the user supplies an explicit checked-in full-process config with
+`schema_version = 2`, prefer `production.checked_in_observation`. Do not select
+that route from generic wording such as "full run" alone. Without an explicit
+schema-v2 config, keep the generic `production.bounded_full_loop` route and its
+source-locator/scope-analyzer chain.
+
 ## Routing Map
 
 The JSON block is canonical. Tests and architecture audit parse it directly.
@@ -64,6 +70,26 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
         {"skill": "ft-scope-analyzer", "scenario": "scope.manual"}
       ],
       "verification_gates": ["scope-contract.md exists", "coverage gaps are linked to source evidence"]
+    },
+    {
+      "id": "production.bounded_full_loop",
+      "task_type": "Run one eligible bounded scope through source review, writer, reviewer and promotion with user wall-clock limits.",
+      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
+      "instruction_scenarios": [
+        {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
+        {"skill": "ft-scope-analyzer", "scenario": "scope.bounded_production"},
+        {"skill": "ft-test-case-iteration", "scenario": "iteration.full_loop"}
+      ],
+      "verification_gates": ["source assertion receipt is accepted", "writer and reviewer use separate sessions", "promotion gates pass", "full_user_wall_ms is reported"]
+    },
+    {
+      "id": "production.checked_in_observation",
+      "task_type": "Execute one supplied checked-in schema-v2 full-process observation config.",
+      "skill_chain": ["ft-test-case-iteration"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-iteration", "scenario": "iteration.checked_in_observation"}
+      ],
+      "verification_gates": ["schema-v2 config and exact registered inputs validate before timer or model", "executor-owned source preparation and dependency gates pass", "canonical production wrapper is invoked at most once", "timer reaches a terminal state and full_user_wall remains pending until exact post-turn reconciliation"]
     },
     {
       "id": "writer.initial_simple",
@@ -201,6 +227,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["scope-gap-review.md exists", "gap review verdict routes to writer or back to scope analyzer"]
     },
     {
+      "id": "scope.review_source_assertions",
+      "task_type": "Independently review a v4 source assertion model before writer or production promotion.",
+      "skill_chain": ["ft-test-case-reviewer"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.session_prepared_source_assertion"}
+      ],
+      "verification_gates": ["official gate exact", "evidence registry exact", "no tool events", "receipt v6 relational validation"]
+    },
+    {
       "id": "review_cycle.session_based",
       "task_type": "Run a session-based writer/reviewer cycle with separate Codex sessions, max two semantic review rounds, versioned snapshots and final format review.",
       "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
@@ -218,6 +253,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
         {"skill": "codex-sdk-runner", "scenario": "sdk_orchestration.review_cycle"}
       ],
       "verification_gates": ["cycle-state.yaml exists", "codex-session-map.yaml records each stage thread", "semantic review does not exceed two rounds", "version snapshots have snapshot-manifest.yaml", "signed-off requires semantic pass, format pass and semantic regression when format changed"]
+    },
+    {
+      "id": "iteration.incremental_update",
+      "task_type": "Update a signed-off canonical suite from an old FT version to a new FT version without rewriting unchanged cases.",
+      "skill_chain": ["ft-test-case-iteration"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-iteration", "scenario": "iteration.incremental_update"}
+      ],
+      "verification_gates": ["old and new DOCX/XHTML/PDF inputs validate", "unchanged case hashes remain byte-identical", "update review and full-suite gates pass before publication"]
     },
     {
       "id": "iteration.full_loop",
@@ -263,40 +307,22 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "expected_instruction_scenarios": ["source_locator.discovery", "scope.agent_proposed"]
     },
     {
-      "prompt": "Напиши тест-кейсы по подтвержденному простому scope.",
-      "expected_route_id": "writer.initial_simple",
-      "expected_skill_chain": ["ft-test-case-writer"],
-      "expected_instruction_scenarios": ["writer.initial_draft.simple"]
+      "prompt": "Пройди весь процесс по одному небольшому scope и измерь полное время пользователя.",
+      "expected_route_id": "production.bounded_full_loop",
+      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
+      "expected_instruction_scenarios": ["source_locator.discovery", "scope.bounded_production", "iteration.full_loop"]
     },
     {
-      "prompt": "Создай draft в новой сессии из проверенного prepared stage-package.",
-      "expected_route_id": "writer.prepared_session_initial",
-      "expected_skill_chain": ["ft-test-case-writer"],
-      "expected_instruction_scenarios": ["writer.session_prepared_initial_draft"]
+      "prompt": "Выполни полный наблюдательный прогон по checked-in schema-v2 config evals/full-production-benchmark/configs/example.json.",
+      "expected_route_id": "production.checked_in_observation",
+      "expected_skill_chain": ["ft-test-case-iteration"],
+      "expected_instruction_scenarios": ["iteration.checked_in_observation"]
     },
     {
-      "prompt": "Напиши тест-кейсы по таблице с построчной трассировкой.",
-      "expected_route_id": "writer.initial_table",
-      "expected_skill_chain": ["ft-test-case-writer"],
-      "expected_instruction_scenarios": ["writer.initial_draft.table"]
-    },
-    {
-      "prompt": "Проверь существующие тест-кейсы по ФТ.",
-      "expected_route_id": "reviewer.full_existing_cases",
-      "expected_skill_chain": ["ft-test-case-reviewer"],
-      "expected_instruction_scenarios": ["reviewer.full_existing_cases"]
-    },
-    {
-      "prompt": "Проверь prepared draft в новой read-only сессии и верни JSON verdict.",
-      "expected_route_id": "reviewer.prepared_session_semantic",
-      "expected_skill_chain": ["ft-test-case-reviewer"],
-      "expected_instruction_scenarios": ["reviewer.session_prepared_semantic"]
-    },
-    {
-      "prompt": "Run writer and reviewer in separate Codex sessions with two semantic review rounds and snapshots.",
-      "expected_route_id": "review_cycle.session_based",
-      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
-      "expected_instruction_scenarios": ["source_locator.discovery", "scope.manual", "reviewer.scope_gap_review", "writer.session_initial_draft", "reviewer.structure_preflight", "reviewer.semantic_traceability_test_design", "writer.session_semantic_revision", "reviewer.structure_format_final", "writer.session_format_revision", "reviewer.semantic_regression", "sdk_orchestration.review_cycle"]
+      "prompt": "Актуализируй signed-off кейсы для новой версии ФТ, сохранив неизменённые кейсы byte-identical.",
+      "expected_route_id": "iteration.incremental_update",
+      "expected_skill_chain": ["ft-test-case-iteration"],
+      "expected_instruction_scenarios": ["iteration.incremental_update"]
     },
     {
       "prompt": "Проведи writer-reviewer iteration до sign-off.",

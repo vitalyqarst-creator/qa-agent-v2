@@ -66,6 +66,74 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
         self.assertIn("--cli-contract-verified", command)
         self.assertIn("--codex-command", command)
 
+    def test_exec_runner_command_forwards_direct_plugin_isolation_flags(self) -> None:
+        module = load_module()
+        command = module.runner_command(
+            "exec",
+            {"exec_runner_args": ["--ft-root", "fts/demo"]},
+            repo_root=ROOT,
+            exec_command="C:/codex.exe",
+            exec_extra_args=(
+                "--disable", "remote_plugin",
+                "--disable", "plugins",
+                "--disable", "apps",
+            ),
+        )
+
+        self.assertEqual(3, command.count("--extra-arg=--disable"))
+        self.assertIn("remote_plugin", command)
+        self.assertIn("plugins", command)
+        self.assertIn("apps", command)
+
+    def test_exec_runner_command_rejects_different_configured_executable(self) -> None:
+        module = load_module()
+
+        with self.assertRaisesRegex(module.DispatcherError, "differs from the verified"):
+            module.runner_command(
+                "exec",
+                {
+                    "exec_runner_args": [
+                        "--ft-root", "fts/demo",
+                        "--codex-command", "C:/unverified.exe",
+                    ]
+                },
+                repo_root=ROOT,
+                exec_command="C:/verified.exe",
+            )
+
+    def test_exec_runner_command_rejects_unprobed_configurable_flag(self) -> None:
+        module = load_module()
+
+        with self.assertRaisesRegex(module.DispatcherError, "must be bound to --sandbox"):
+            module.runner_command(
+                "exec",
+                {
+                    "exec_runner_args": [
+                        "--ft-root", "fts/demo",
+                        "--sandbox-flag", "--bogus-sandbox",
+                    ]
+                },
+                repo_root=ROOT,
+                exec_command="C:/verified.exe",
+            )
+
+    def test_capability_probe_can_require_direct_image_flag(self) -> None:
+        module = load_module()
+        help_without_image = " ".join(module.REQUIRED_EXEC_HELP_FLAGS)
+        completed = module.subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout=help_without_image,
+            stderr="",
+        )
+        with patch.object(module.subprocess, "run", return_value=completed):
+            capability = module.probe_exec_capability(
+                "codex",
+                additional_required_flags=("--image",),
+            )
+        self.assertFalse(capability.verified)
+        self.assertEqual(("--image",), capability.missing_flags)
+
     def test_exec_runner_command_binds_option_looking_flag_values(self) -> None:
         module = load_module()
         command = module.runner_command(
@@ -173,6 +241,25 @@ class ReviewCycleBackendDispatcherTests(unittest.TestCase):
         self.assertEqual([], report["stage_attribution"])
         self.assertEqual(["session-production-1"], report["backend_session_ids"])
         self.assertEqual(12, report["duration_ms_total"])
+
+    def test_explicit_sdk_dry_run_skips_exec_capability_probe(self) -> None:
+        module = load_module()
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            output = Path(tmp_dir) / "selection.json"
+            with patch.object(
+                module,
+                "resolve_verified_exec_capability",
+            ) as resolver:
+                code = module.main(
+                    [
+                        "--backend", "sdk",
+                        "--selection-output", str(output),
+                        "--dry-run",
+                    ]
+                )
+
+        self.assertEqual(0, code)
+        resolver.assert_not_called()
 
     def test_benchmark_profile_requires_performance_output(self) -> None:
         module = load_module()

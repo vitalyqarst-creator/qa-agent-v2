@@ -5,7 +5,7 @@ import re
 import unittest
 from pathlib import Path
 
-from scripts.resolve_instruction_context import load_manifest
+from scripts.resolve_instruction_context import load_manifest, resolve_instruction_context
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -140,6 +140,53 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
         self.assertIn(
             "direct full review does not create lifecycle sign-off without session-based gates",
             self.route_by_id["reviewer.full_existing_cases"]["verification_gates"],
+        )
+
+    def test_checked_in_observation_is_narrow_and_generic_route_is_unchanged(self) -> None:
+        fast = self.route_by_id["production.checked_in_observation"]
+        generic = self.route_by_id["production.bounded_full_loop"]
+
+        self.assertEqual(["ft-test-case-iteration"], fast["skill_chain"])
+        self.assertEqual(
+            ["iteration.checked_in_observation"],
+            [item["scenario"] for item in fast["instruction_scenarios"]],
+        )
+        self.assertNotIn("ft-source-locator", fast["skill_chain"])
+        self.assertNotIn("ft-scope-analyzer", fast["skill_chain"])
+        self.assertEqual(
+            ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
+            generic["skill_chain"],
+        )
+        self.assertEqual(
+            [
+                "source_locator.discovery",
+                "scope.bounded_production",
+                "iteration.full_loop",
+            ],
+            [item["scenario"] for item in generic["instruction_scenarios"]],
+        )
+
+    def test_incremental_update_is_conditional_and_does_not_expand_full_loop(self) -> None:
+        update = self.route_by_id["iteration.incremental_update"]
+        full = self.route_by_id["iteration.full_loop"]
+
+        self.assertEqual(["ft-test-case-iteration"], update["skill_chain"])
+        self.assertEqual(
+            ["iteration.incremental_update"],
+            [item["scenario"] for item in update["instruction_scenarios"]],
+        )
+        resolved = {
+            item["path"]
+            for item in resolve_instruction_context(
+                root=ROOT_DIR,
+                manifest=self.manifest,
+                scenario_id="iteration.incremental_update",
+            )["files"]
+        }
+        self.assertIn("references/agent/incremental-update-iteration.md", resolved)
+        self.assertNotIn(
+            "iteration.incremental_update",
+            [item["scenario"] for item in full["instruction_scenarios"]],
         )
 
 

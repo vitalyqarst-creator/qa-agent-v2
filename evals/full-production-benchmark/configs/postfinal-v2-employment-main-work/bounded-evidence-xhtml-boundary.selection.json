@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+  "extraction_method": "utf8-literal-fragments-v1",
+  "selections": [
+    {
+      "source_locator": "line:2082; BSR 285 boundary",
+      "exact_source_text": "Добавить источник дохода"
+    }
+  ]
+}

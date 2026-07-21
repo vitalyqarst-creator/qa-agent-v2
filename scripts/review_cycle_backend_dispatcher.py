@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import time
@@ -11,14 +10,22 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
-REQUIRED_EXEC_HELP_FLAGS = (
-    "--sandbox",
-    "--cd",
-    "--json",
-    "--output-schema",
-    "--output-last-message",
+from test_case_agent.review_cycle.exec_backend import (
+    ExecCapability,
+    ExecCapabilityResolution,
+    PLUGIN_ISOLATION_DISABLE_FEATURES,
+    REQUIRED_EXEC_HELP_FLAGS,
+    default_exec_candidates,
+    probe_exec_capability,
+    resolve_exec_command,
+    resolve_verified_exec_capability,
 )
+
+
 RUN_PROFILES = ("production", "benchmark")
 
 RUNNER_OPTION_VALUE_FLAGS = frozenset(
@@ -32,20 +39,17 @@ RUNNER_OPTION_VALUE_FLAGS = frozenset(
     }
 )
 
+CANONICAL_RUNNER_FLAG_BINDINGS = {
+    "--sandbox-flag": "--sandbox",
+    "--working-directory-flag": "--cd",
+    "--json-flag": "--json",
+    "--output-last-message-flag": "--output-last-message",
+    "--output-schema-flag": "--output-schema",
+}
+
 
 class DispatcherError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class ExecCapability:
-    command: str
-    available: bool
-    verified: bool
-    returncode: int | None
-    duration_ms: int
-    missing_flags: tuple[str, ...]
-    error: str = ""
 
 
 @dataclass(frozen=True)
@@ -56,66 +60,6 @@ class BackendSelection:
     fallback_used: bool
     fallback_reason: str
     capability: ExecCapability
-
-
-def default_exec_candidates() -> tuple[str, ...]:
-    candidates: list[str] = []
-    configured = os.environ.get("CODEX_EXEC_COMMAND", "").strip()
-    if configured:
-        candidates.append(configured)
-    home = Path.home()
-    candidates.append(str(home / ".codex" / "plugins" / ".plugin-appserver" / "codex.exe"))
-    discovered = shutil.which("codex")
-    if discovered:
-        candidates.append(discovered)
-    return tuple(dict.fromkeys(candidates))
-
-
-def resolve_exec_command(explicit: str | None = None) -> str:
-    candidates = (explicit,) if explicit else default_exec_candidates()
-    for candidate in candidates:
-        if not candidate:
-            continue
-        path = Path(candidate)
-        if path.is_file() or shutil.which(candidate):
-            return str(path if path.is_file() else candidate)
-    return str(candidates[0]) if candidates else "codex"
-
-
-def probe_exec_capability(command: str, *, timeout_seconds: int = 15) -> ExecCapability:
-    started = time.monotonic()
-    try:
-        completed = subprocess.run(
-            [command, "exec", "--help"],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_seconds,
-            check=False,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        return ExecCapability(
-            command=command,
-            available=False,
-            verified=False,
-            returncode=None,
-            duration_ms=int((time.monotonic() - started) * 1000),
-            missing_flags=REQUIRED_EXEC_HELP_FLAGS,
-            error=str(exc),
-        )
-    help_text = f"{completed.stdout}\n{completed.stderr}"
-    missing = tuple(flag for flag in REQUIRED_EXEC_HELP_FLAGS if flag not in help_text)
-    return ExecCapability(
-        command=command,
-        available=completed.returncode == 0,
-        verified=completed.returncode == 0 and not missing,
-        returncode=completed.returncode,
-        duration_ms=int((time.monotonic() - started) * 1000),
-        missing_flags=missing,
-        error="" if completed.returncode == 0 else help_text[-1000:].strip(),
-    )
-
 
 def select_backend(
     requested_backend: str,
@@ -384,22 +328,103 @@ def normalize_runner_args(args: Sequence[str]) -> list[str]:
     return normalized
 
 
+def _option_values(args: Sequence[str], option: str) -> list[str]:
+    values: list[str] = []
+    index = 0
+    prefix = option + "="
+    while index < len(args):
+        item = args[index]
+        if item.startswith(prefix):
+            values.append(item[len(prefix):])
+            index += 1
+            continue
+        if item == option:
+            if index + 1 >= len(args):
+                raise DispatcherError(f"{option} requires a value")
+            values.append(args[index + 1])
+            index += 2
+            continue
+        index += 1
+    return values
+
+
+def _without_option(args: Sequence[str], option: str) -> list[str]:
+    result: list[str] = []
+    index = 0
+    prefix = option + "="
+    while index < len(args):
+        item = args[index]
+        if item.startswith(prefix):
+            index += 1
+            continue
+        if item == option:
+            if index + 1 >= len(args):
+                raise DispatcherError(f"{option} requires a value")
+            index += 2
+            continue
+        result.append(item)
+        index += 1
+    return result
+
+
+def _path_identity(value: str, *, repo_root: Path) -> str:
+    path = Path(value)
+    resolved = path.resolve() if path.is_absolute() else (repo_root / path).resolve()
+    return os.path.normcase(str(resolved))
+
+
+def validate_exec_runner_contract_args(
+    args: Sequence[str],
+    *,
+    selected_executable: str,
+    repo_root: Path,
+) -> None:
+    configured_commands = _option_values(args, "--codex-command")
+    if any(
+        _path_identity(value, repo_root=repo_root)
+        != _path_identity(selected_executable, repo_root=repo_root)
+        for value in configured_commands
+    ):
+        raise DispatcherError(
+            "exec_runner_args --codex-command differs from the verified executable"
+        )
+    for option, expected in CANONICAL_RUNNER_FLAG_BINDINGS.items():
+        values = _option_values(args, option)
+        if any(value != expected for value in values):
+            raise DispatcherError(
+                f"exec_runner_args {option} must be bound to {expected}"
+            )
+    if _option_values(args, "--extra-arg"):
+        raise DispatcherError(
+            "config-owned --extra-arg is not capability-bound; dispatcher owns exec extras"
+        )
+
+
 def runner_command(
     selected_backend: str,
     config: dict[str, Any],
     *,
     repo_root: Path,
     exec_command: str,
+    exec_extra_args: Sequence[str] = (),
 ) -> list[str]:
     python = repo_root / ".venv" / "Scripts" / "python.exe"
     if not python.exists():
         python = Path(sys.executable)
     if selected_backend == "exec":
-        args = normalize_runner_args(config.get("exec_runner_args") or [])
+        args = list(config.get("exec_runner_args") or [])
         if not args:
             raise DispatcherError("exec_runner_args are required for exec execution")
-        if "--codex-command" not in args:
-            args.extend(("--codex-command", exec_command))
+        validate_exec_runner_contract_args(
+            args,
+            selected_executable=exec_command,
+            repo_root=repo_root,
+        )
+        args = _without_option(args, "--codex-command")
+        for value in exec_extra_args:
+            args.extend(("--extra-arg", value))
+        args.extend(("--codex-command", exec_command))
+        args = normalize_runner_args(args)
         if "--cli-contract-verified" not in args:
             args.append("--cli-contract-verified")
         return [str(python), str(repo_root / "scripts" / "codex_exec_review_cycle_runner.py"), *args]
@@ -435,8 +460,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise DispatcherError(
                 "--performance-output is required for run-profile benchmark"
             )
-    command = resolve_exec_command(args.codex_command)
-    capability = probe_exec_capability(command)
+    if args.backend == "sdk":
+        resolution = ExecCapabilityResolution(
+            requested_command=args.codex_command or "",
+            probes=(),
+            selected=None,
+        )
+        capability = ExecCapability(
+            command=args.codex_command or "",
+            available=False,
+            verified=False,
+            returncode=None,
+            duration_ms=0,
+            missing_flags=(),
+            error="exec capability probe skipped for explicit sdk backend",
+        )
+    else:
+        resolution = resolve_verified_exec_capability(
+            args.codex_command,
+            required_disable_features=PLUGIN_ISOLATION_DISABLE_FEATURES,
+            probe=probe_exec_capability,
+        )
+        capability = resolution.selection_capability()
     try:
         selection = select_backend(
             args.backend,
@@ -453,6 +498,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "requested_backend": args.backend,
                 "selected_backend": "",
                 "capability": asdict(capability),
+                "capability_probes": [asdict(item) for item in resolution.probes],
+                "capability_probe_total_ms": resolution.total_duration_ms,
                 "blocking_reason": str(exc),
             },
         )
@@ -463,6 +510,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "version": 1,
             "status": "selected",
             "run_profile": args.run_profile,
+            "capability_probes": [asdict(item) for item in resolution.probes],
+            "capability_probe_total_ms": resolution.total_duration_ms,
             **asdict(selection),
         }
         write_json(args.selection_output, payload)
@@ -473,7 +522,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         selection.selected_backend,
         config,
         repo_root=repo_root,
-        exec_command=capability.command,
+        exec_command=(
+            resolution.selected_executable
+            or capability.resolved_command
+            or capability.command
+        ),
+        exec_extra_args=resolution.disable_args,
     )
     preflight_ms = 0
     if selection.selected_backend == "exec":
@@ -482,6 +536,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "version": 1,
         "status": "selected",
         "run_profile": args.run_profile,
+        "capability_probes": [asdict(item) for item in resolution.probes],
+        "capability_probe_total_ms": resolution.total_duration_ms,
         **asdict(selection),
     }
     write_json(args.selection_output, payload)
@@ -503,7 +559,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         performance["cycle_dir"] = Path(cycle_dir_value).as_posix()
         stage_execution_ms = int(performance["duration_ms_total"])
         performance["timing_breakdown"] = build_timing_breakdown(
-            capability_probe_ms=capability.duration_ms,
+            capability_probe_ms=resolution.total_duration_ms,
             runner_preflight_ms=preflight_ms,
             runner_wall_ms=runner_wall_ms,
             stage_execution_ms=stage_execution_ms,

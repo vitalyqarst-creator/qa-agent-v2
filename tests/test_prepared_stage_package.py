@@ -4,6 +4,7 @@ import tempfile
 import hashlib
 import json
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from test_case_agent.review_cycle.prepared_package import (
@@ -12,8 +13,11 @@ from test_case_agent.review_cycle.prepared_package import (
     PreparedObligation,
     PreparedObligationSet,
     PreparedPackageBuilder,
+    PreparedReleaseStatus,
+    PreparedStagePackage,
     PreparedStateChange,
     StageInstructionConfig,
+    load_obligations,
     load_prepared_package,
 )
 from test_case_agent.review_cycle.runtime import StageRuntimeError
@@ -74,6 +78,19 @@ class PreparedStagePackageTests(unittest.TestCase):
             ),
         )
 
+    @staticmethod
+    def _draft_status(*gap_ids: str) -> PreparedReleaseStatus:
+        return PreparedReleaseStatus(
+            contract="prepared-package-release-status-v1",
+            output_mode="draft-with-blocking-gaps",
+            release_eligible=False,
+            blocking_gap_ids=tuple(gap_ids),
+            execution_dependency_registry=(),
+            excluded_execution_obligation_ids=(),
+            unsigned_status="blocked-source-gaps",
+            release_blocking_finding_codes=("blocking-source-first-gap",),
+        )
+
     def _build(
         self,
         *,
@@ -110,6 +127,7 @@ class PreparedStagePackageTests(unittest.TestCase):
             execution_profile="simple-field-property",
             unsupported_dimensions=(),
             forbidden_evidence_roots=("fts/demo-ft/test-cases", "work/previous-cycle"),
+            release_status=PreparedReleaseStatus.release_default(),
             reuse_if_current=reuse_if_current,
         )
 
@@ -141,6 +159,62 @@ class PreparedStagePackageTests(unittest.TestCase):
         self.assertIn("targeted_source_fallback", instructions)
         with self.assertRaisesRegex(StageRuntimeError, "immutable"):
             self._build()
+
+    def test_large_immutable_source_basis_uses_separate_storage_budget(self) -> None:
+        self.evidence.write_text(
+            "# Evidence\n\nSRC-1: required evidence.\n\n"
+            + ("X" * (1200 * 1024))
+            + "\nSRC-2: second evidence.\n",
+            encoding="utf-8",
+        )
+        package = PreparedPackageBuilder(
+            self.root,
+            max_package_bytes=3 * 1024 * 1024,
+        ).build(
+            output_root=self.root / "work" / "large-immutable-basis",
+            package_id="pkg-001",
+            ft_slug="demo-ft",
+            scope_slug="field-selection",
+            section_id="4.3",
+            source_registry=(
+                (self.docx, "source-of-truth", "section 4.3"),
+                (self.xhtml, "machine-readable", "SRC-1..SRC-2"),
+            ),
+            evidence_inputs=(
+                EvidenceInput(
+                    self.evidence,
+                    "Full authenticated source contract",
+                    include_full=True,
+                    max_bytes=2 * 1024 * 1024,
+                ),
+            ),
+            obligations=self._obligations(),
+            instructions=StageInstructionConfig(
+                role="writer",
+                scenario="writer.session_prepared_initial_draft",
+                output_path="work/output.md",
+                attempt_root="work/attempt-001",
+                sandbox_policy="workspace_write",
+                timeout_seconds=180,
+                idle_timeout_seconds=60,
+                command_budget=12,
+            ),
+            execution_profile="simple-field-property",
+            unsupported_dimensions=(),
+            forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            release_status=PreparedReleaseStatus.release_default(),
+            immutable_evidence_max_bytes=2 * 1024 * 1024,
+        )
+
+        evidence_artifact = next(
+            item for item in package.package_artifacts if item.kind == "source-evidence"
+        )
+        self.assertGreater(evidence_artifact.bytes, 1024 * 1024)
+        loaded = load_prepared_package(
+            self.root / "work" / "large-immutable-basis" / "stage-package.json",
+            self.root,
+        )
+        self.assertEqual(package.package_digest, loaded.package_digest)
 
     def test_reuses_only_identical_current_package_input(self) -> None:
         original = self._build()
@@ -334,6 +408,47 @@ class PreparedStagePackageTests(unittest.TestCase):
                 package_id="pkg-001", obligations=(invalid,), coverage_gaps=()
             )
 
+    def test_accepts_external_dynamic_dictionary_with_bound_dependency(self) -> None:
+        obligation = PreparedObligation(
+            obligation_id="ATOM-003",
+            source_refs=("SRC-1", "DEP-005"),
+            atomic_statement=(
+                "Значение предлагается из динамического справочника регионов."
+            ),
+            observable_oracle="Выбранное значение отображается в поле продукта.",
+            test_intent="Проверить выбор актуального значения через UI.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="External-dynamic dictionary dependency: DEP-005.",
+        )
+
+        value = PreparedObligationSet.create(
+            package_id="pkg-001", obligations=(obligation,), coverage_gaps=()
+        )
+
+        self.assertEqual(("SRC-1", "DEP-005"), value.obligations[0].source_refs)
+
+    def test_rejects_external_dynamic_marker_without_matching_dependency_ref(self) -> None:
+        invalid = PreparedObligation(
+            obligation_id="ATOM-003",
+            source_refs=("SRC-1",),
+            atomic_statement=(
+                "Значение предлагается из динамического справочника регионов."
+            ),
+            observable_oracle="Выбранное значение отображается в поле продукта.",
+            test_intent="Проверить выбор актуального значения через UI.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="External-dynamic dictionary dependency: DEP-005.",
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "dictionary-backed.*dictionary_refs"):
+            PreparedObligationSet.create(
+                package_id="pkg-001", obligations=(invalid,), coverage_gaps=()
+            )
+
     def test_dictionary_word_in_limiting_test_intent_does_not_change_claim_class(self) -> None:
         obligation = PreparedObligation(
             obligation_id="ATOM-003",
@@ -423,6 +538,104 @@ class PreparedStagePackageTests(unittest.TestCase):
                 execution_profile="simple-field-property",
                 unsupported_dimensions=(),
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+                release_status=self._draft_status("GAP-001"),
+            )
+
+        package = PreparedPackageBuilder(self.root).build(
+            output_root=self.root / "work" / "blocking-gap-draft",
+            package_id="pkg-001",
+            ft_slug="demo-ft",
+            scope_slug="field-selection",
+            section_id="4.3",
+            source_registry=(
+                (self.docx, "source-of-truth", "section 4.3"),
+                (self.xhtml, "machine-readable", "SRC-1..SRC-2"),
+            ),
+            evidence_inputs=(
+                EvidenceInput(
+                    self.evidence,
+                    "Confirmed scope",
+                    selectors=("SRC-1", "SRC-2"),
+                ),
+            ),
+            obligations=obligations,
+            instructions=StageInstructionConfig(
+                role="writer",
+                scenario="writer.session_prepared_initial_draft",
+                output_path="work/output.md",
+                attempt_root="work/attempt-001",
+                sandbox_policy="workspace_write",
+                timeout_seconds=180,
+                idle_timeout_seconds=60,
+                command_budget=12,
+            ),
+            execution_profile="simple-field-property",
+            unsupported_dimensions=(),
+            forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            release_status=self._draft_status("GAP-001"),
+            allow_blocking_primary_gaps=True,
+        )
+        loaded_obligations = load_obligations(
+            next(
+                self.root / item.path
+                for item in package.package_artifacts
+                if item.kind == "atomic-obligations"
+            )
+        )
+        self.assertTrue(loaded_obligations.coverage_gaps[0].blocking)
+
+    def test_internal_blocking_gap_escape_hatch_never_allows_constraint_gap(self) -> None:
+        blocking = PreparedGap(
+            gap_id="GAP-CONSTRAINT",
+            source_refs=("SRC-1",),
+            problem="Ограничение не определено.",
+            handling="Сохранить как блокирующее ограничение.",
+            blocking=True,
+        )
+        obligation = replace(
+            self._obligations().obligations[0],
+            constraint_gap_ids=("GAP-CONSTRAINT",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-001",
+            obligations=(obligation,),
+            coverage_gaps=(blocking,),
+        )
+
+        with self.assertRaisesRegex(StageRuntimeError, "blocking constraint gaps"):
+            PreparedPackageBuilder(self.root).build(
+                output_root=self.root / "work" / "blocking-constraint-draft",
+                package_id="pkg-001",
+                ft_slug="demo-ft",
+                scope_slug="field-selection",
+                section_id="4.3",
+                source_registry=(
+                    (self.docx, "source-of-truth", "section 4.3"),
+                    (self.xhtml, "machine-readable", "SRC-1"),
+                ),
+                evidence_inputs=(
+                    EvidenceInput(
+                        self.evidence,
+                        "Confirmed scope",
+                        selectors=("SRC-1",),
+                    ),
+                ),
+                obligations=obligations,
+                instructions=StageInstructionConfig(
+                    role="writer",
+                    scenario="writer.session_prepared_initial_draft",
+                    output_path="work/output.md",
+                    attempt_root="work/attempt-001",
+                    sandbox_policy="workspace_write",
+                    timeout_seconds=180,
+                    idle_timeout_seconds=60,
+                    command_budget=12,
+                ),
+                execution_profile="simple-field-property",
+                unsupported_dimensions=(),
+                forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+                release_status=self._draft_status("GAP-CONSTRAINT"),
+                allow_blocking_primary_gaps=True,
             )
 
     def test_reference_selector_does_not_match_longer_anchor(self) -> None:
@@ -478,6 +691,7 @@ class PreparedStagePackageTests(unittest.TestCase):
                 execution_profile="simple-field-property",
                 unsupported_dimensions=("integration-persistence",),
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+                release_status=PreparedReleaseStatus.release_default(),
             )
 
     def test_fast_profile_requires_docx_and_xhtml_source_roles(self) -> None:
@@ -503,6 +717,7 @@ class PreparedStagePackageTests(unittest.TestCase):
             "execution_profile": "simple-field-property",
             "unsupported_dimensions": (),
             "forbidden_evidence_roots": ("fts/demo-ft/test-cases",),
+            "release_status": PreparedReleaseStatus.release_default(),
         }
 
         with self.assertRaisesRegex(StageRuntimeError, "DOCX.*XHTML"):
@@ -526,6 +741,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         payload.pop("execution_profile")
         payload.pop("unsupported_dimensions")
         payload.pop("input_fingerprint")
+        payload.pop("release_status")
         without_digest = {key: value for key, value in payload.items() if key != "package_digest"}
         payload["package_digest"] = hashlib.sha256(
             json.dumps(
@@ -537,9 +753,63 @@ class PreparedStagePackageTests(unittest.TestCase):
         ).hexdigest()
         manifest.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-        loaded = load_prepared_package(manifest, self.root)
+        loaded = PreparedStagePackage.from_dict(payload)
         self.assertEqual("legacy-unclassified", loaded.execution_profile)
         self.assertEqual(("legacy-unclassified",), loaded.unsupported_dimensions)
+
+    def test_version_eight_package_remains_diagnostic_readable(self) -> None:
+        self._build()
+        manifest = self.root / "work" / "prepared" / "stage-package.json"
+        payload = json.loads(manifest.read_text(encoding="utf-8"))
+        obligation_artifact = next(
+            item
+            for item in payload["package_artifacts"]
+            if item["kind"] == "atomic-obligations"
+        )
+        obligation_path = self.root / obligation_artifact["path"]
+        obligations = json.loads(obligation_path.read_text(encoding="utf-8"))
+        obligations["package_version"] = 8
+        obligations_without_digest = {
+            key: value for key, value in obligations.items() if key != "digest"
+        }
+        obligations["digest"] = hashlib.sha256(
+            json.dumps(
+                obligations_without_digest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        obligation_path.write_text(
+            json.dumps(obligations, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        obligation_artifact["sha256"] = hashlib.sha256(
+            obligation_path.read_bytes()
+        ).hexdigest()
+        obligation_artifact["bytes"] = obligation_path.stat().st_size
+        payload["package_version"] = 8
+        payload.pop("release_status")
+        without_digest = {
+            key: value for key, value in payload.items() if key != "package_digest"
+        }
+        payload["package_digest"] = hashlib.sha256(
+            json.dumps(
+                without_digest,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
+        manifest.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
+        loaded = load_prepared_package(manifest, self.root)
+
+        self.assertEqual(8, loaded.package_version)
+        self.assertIsNone(loaded.release_status)
 
     def test_version_two_obligations_remain_readable_but_cannot_build_fast_path(self) -> None:
         dictionary_claim = PreparedObligation(
@@ -570,7 +840,7 @@ class PreparedStagePackageTests(unittest.TestCase):
         legacy = PreparedObligationSet.from_dict(payload)
 
         self.assertEqual(2, legacy.package_version)
-        with self.assertRaisesRegex(StageRuntimeError, "requires package version 8"):
+        with self.assertRaisesRegex(StageRuntimeError, "requires package version 9"):
             PreparedPackageBuilder(self.root).build(
                 output_root=self.root / "work" / "legacy-fast",
                 package_id="pkg-001",
@@ -595,6 +865,7 @@ class PreparedStagePackageTests(unittest.TestCase):
                 execution_profile="simple-field-property",
                 unsupported_dimensions=(),
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+                release_status=PreparedReleaseStatus.release_default(),
             )
 
     def test_version_five_obligations_remain_readable_without_state_change_fields(self) -> None:
@@ -685,6 +956,7 @@ class PreparedStagePackageTests(unittest.TestCase):
             execution_profile="simple-field-property",
             unsupported_dimensions=(),
             forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+            release_status=PreparedReleaseStatus.release_default(),
         )
         evidence_path = next(
             item.path for item in package.package_artifacts if item.kind == "source-evidence"
@@ -719,6 +991,7 @@ class PreparedStagePackageTests(unittest.TestCase):
                 execution_profile="simple-field-property",
                 unsupported_dimensions=(),
                 forbidden_evidence_roots=("fts/demo-ft/test-cases",),
+                release_status=PreparedReleaseStatus.release_default(),
             )
 
 

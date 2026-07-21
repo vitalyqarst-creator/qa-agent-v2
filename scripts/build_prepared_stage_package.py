@@ -15,6 +15,7 @@ from test_case_agent.review_cycle.prepared_package import (  # noqa: E402
     EvidenceInput,
     PreparedObligationSet,
     PreparedPackageBuilder,
+    PreparedReleaseStatus,
     StageInstructionConfig,
 )
 from test_case_agent.review_cycle.runtime import StageRuntimeError  # noqa: E402
@@ -46,6 +47,7 @@ def build_from_spec(spec_path: Path, repo_root: Path) -> Path:
         "execution_profile",
         "unsupported_dimensions",
         "forbidden_evidence_roots",
+        "release_status",
     }
     if set(spec) != required:
         raise StageRuntimeError(
@@ -56,6 +58,10 @@ def build_from_spec(spec_path: Path, repo_root: Path) -> Path:
     if not isinstance(obligations_payload, dict):
         raise StageRuntimeError("spec obligations must be a JSON object")
     obligations = PreparedObligationSet.from_dict(obligations_payload)
+    release_status_payload = spec["release_status"]
+    if not isinstance(release_status_payload, dict):
+        raise StageRuntimeError("spec release_status must be a JSON object")
+    release_status = PreparedReleaseStatus.from_dict(release_status_payload)
     instruction_payload = spec["instructions"]
     if not isinstance(instruction_payload, dict):
         raise StageRuntimeError("spec instructions must be a JSON object")
@@ -91,6 +97,7 @@ def build_from_spec(spec_path: Path, repo_root: Path) -> Path:
         execution_profile=spec["execution_profile"],
         unsupported_dimensions=spec["unsupported_dimensions"],
         forbidden_evidence_roots=spec["forbidden_evidence_roots"],
+        release_status=release_status,
     )
     return repo_root / spec["output_root"] / "stage-package.json"
 

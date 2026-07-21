@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+  "source_sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+  "extraction_method": "utf8-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "/*/*[2]/*[116]/*[59]; first excluded sibling after address scope",
+      "exact_source_text": "Блок «Контакты клиента»",
+      "exact_source_text_sha256": "d2d4389fb6ac383970b31e37fb774c422091c907e6e50237e1f859f1fc85b0e2"
+    }
+  ]
+}

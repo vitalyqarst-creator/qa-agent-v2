@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import queue
@@ -11,10 +12,12 @@ import subprocess
 import sys
 import threading
 import time
+import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Protocol, Sequence
+from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
@@ -32,6 +35,7 @@ from test_case_agent.review_cycle.runtime import (
     StageRuntimeError,
     artifact_ref,
     resolve_repository_path,
+    write_json_atomic,
 )
 from test_case_agent.review_cycle.prepared_package import (
     FAST_EXECUTION_PROFILE,
@@ -52,8 +56,36 @@ from test_case_agent.review_cycle.promotion_readiness import (
     PromotionContract,
     validate_promotion_readiness,
 )
+from test_case_agent.review_cycle.production_tc_gate import (
+    validate_production_tc_content,
+)
+from test_case_agent.review_cycle.promotion import (
+    build_normalized_review_result,
+    build_promotion_basis_seed,
+    validate_traceability_matrix_pair,
+)
 from test_case_agent.review_cycle.evidence_access import validate_evidence_access
 from test_case_agent.review_cycle.attempts import format_attempt_id
+from test_case_agent.review_cycle.coverage_accounting import (
+    evaluate_coverage_accounting,
+)
+from test_case_agent.review_cycle.dimension_bindings import (
+    parse_reviewer_dimension_source_bindings,
+)
+from test_case_agent.review_cycle.source_assertions import (
+    EmbeddedSourceAssertionContract,
+    SourceAssertionContractError,
+    parse_embedded_source_assertion_contract,
+)
+from test_case_agent.review_cycle.source_projection import (
+    REVIEWER_SOURCE_PROJECTION_MAX_BYTES,
+    WRITER_SOURCE_PROJECTION_MAX_BYTES,
+    SourceProjectionError,
+    build_compact_source_projection,
+    render_reviewer_obligation_semantic_projection,
+    select_draft_testable_obligation_ids,
+    source_contract_digest_summary,
+)
 from test_case_agent.review_cycle.orchestration import StageCompletionCoordinator
 from scripts.resolve_instruction_context import resolve_instruction_context
 
@@ -70,16 +102,32 @@ PREPARED_REVIEW_VERDICTS = {
     "invented-coverage",
 }
 REVIEW_FINDING_SEVERITIES = {"error", "warning", "info"}
+SOURCE_FIRST_DIMENSION_VERDICTS = {"verified", "unsupported", "not-applicable"}
 REVIEW_FINDING_CATEGORIES = {
+    "source-model",
     "test-design",
     "expected-result",
     "coverage",
     "atomarity",
     "duplication",
     "scope",
+    "dimension",
+    "runtime-binding",
 }
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
+TRACEABILITY_COLUMNS = (
+    "atom_id",
+    "req_id",
+    "source_path",
+    "atomic_statement",
+    "field_or_block",
+    "condition",
+    "expected_behavior",
+    "covered_by_tc",
+    "coverage_status",
+    "gap_note",
+)
 PREPARED_FAST_WRITER_MODES = {"structured", "workspace"}
 DEFAULT_PREPARED_FAST_WRITER_MODE = "structured"
 PREPARED_STANDARD_WRITER_MODES = {"structured", "assisted"}
@@ -88,11 +136,19 @@ MAX_STRUCTURED_WRITER_DRAFT_BYTES = 128 * 1024
 DEFAULT_PREPARED_REVIEWER_PROMPT_MAX_BYTES = 64 * 1024
 DEFAULT_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES = 512 * 1024
 DEFAULT_PREPARED_STANDARD_REVIEWER_CONTEXT_MAX_BYTES = 768 * 1024
+DEFAULT_PREPARED_WRITER_SOURCE_PROJECTION_MAX_BYTES = (
+    WRITER_SOURCE_PROJECTION_MAX_BYTES
+)
+DEFAULT_PREPARED_REVIEWER_SOURCE_PROJECTION_MAX_BYTES = (
+    REVIEWER_SOURCE_PROJECTION_MAX_BYTES
+)
 DEFAULT_PREPARED_STRUCTURED_WRITER_SINGLE_SESSION_TC_LIMIT = 12
 DEFAULT_PREPARED_STRUCTURED_WRITER_SHARD_SIZE = 12
 DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS = 8
-DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES = 12
+DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_CONCURRENCY = 3
+DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES = 14
 DEFAULT_PREPARED_STRUCTURED_REVIEWER_OBLIGATION_LIMIT = 100
+EXPLICIT_OBLIGATION_CALIBRATION_PACKAGE_VERSION = 7
 MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES = 64 * 1024
 DEFAULT_STANDARD_WRITER_COMMAND_BUDGET = 80
 DEFAULT_STANDARD_REVIEWER_COMMAND_BUDGET = 48
@@ -157,12 +213,43 @@ CAPTURED_INITIAL_STATE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 REPAIRABLE_QUALITY_FINDING_IDS = {
+    "action-contract-mismatch",
     "ambiguous-dictionary-value-path",
     "ambiguous-execution-action",
+    "production-calibration-transition-overclaim",
+    "production-forbidden-process-wording",
+    "production-missing-numbered-action-step",
+    "production-non-reproducible-precondition",
+    "production-unobservable-address-decomposition",
+    "dictionary-projection-incomplete",
+    "duplicate-title",
     "generic-execution-fixture",
     "missing-branch-precondition",
+    "missing-testable-obligation-coverage",
     "undefined-execution-action",
     "non-observable-expected-result",
+    "observable-oracle-contract-mismatch",
+    "oracle-polarity-mismatch",
+}
+TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
+    "production-forbidden-process-wording": (
+        "Remove workflow, evidence-recording, calibration, runner, writer and reviewer wording from runtime sections.",
+        "Keep calibration status and the exact open question only in the dedicated metadata fields.",
+    ),
+    "production-missing-numbered-action-step": (
+        "Add a numbered executable action or explicit observation step without inventing an unsupported submit control.",
+    ),
+    "production-non-reproducible-precondition": (
+        "Replace passive state assumptions with numbered actions that produce the required visible state.",
+        "Move an observation out of preconditions when it is the behavior under test.",
+    ),
+    "production-unobservable-address-decomposition": (
+        "Use one explicit address branch; do not leave a registration-or-residence alternative in the executable path.",
+        "After selecting the DaData suggestion, capture the returned address components before inspecting the decomposed fields.",
+        "After the selection, use the source-supported manual-entry control to reveal the manual component fields.",
+        "Compare every visible manual component field with the component captured from the selected suggestion.",
+        "Keep internal kladr population outside the test case.",
+    ),
 }
 PACKAGE_ID_LINE_RE = re.compile(
     r"(?m)^\*\*package_id:\*\*\s*([A-Za-z0-9][A-Za-z0-9._-]*)\s*$"
@@ -286,7 +373,7 @@ class ProcessRequest:
     command: tuple[str, ...]
     cwd: Path
     prompt: str
-    timeout_seconds: int
+    timeout_seconds: int | None
     idle_timeout_seconds: int | None
     command_budget: int
     stdout_path: Path | None = None
@@ -313,12 +400,33 @@ class ProcessResult:
     termination_reason: str = "completed"
 
 
+@dataclass(frozen=True)
+class StageProcessLaunch:
+    stage: str
+    role: str
+    request: ProcessRequest
+    command: tuple[str, ...]
+    stdout_path: Path
+    stderr_path: Path
+    events_path: Path
+    last_message_path: Path | None
+
+
+@dataclass(frozen=True)
+class StageProcessExecution:
+    result: ProcessResult
+    started_at: str
+    finished_at: str
+
+
 class ProcessExecutor(Protocol):
     def execute(self, request: ProcessRequest) -> ProcessResult:
         ...
 
 
 class SubprocessExecutor:
+    supports_concurrent_execution = True
+
     def execute(self, request: ProcessRequest) -> ProcessResult:
         started = time.monotonic()
         stdout_lines: list[str] = []
@@ -389,7 +497,10 @@ class SubprocessExecutor:
                             ):
                                 first_artifact_seconds = now - started
                     if process.poll() is None:
-                        if now - started >= request.timeout_seconds:
+                        if (
+                            request.timeout_seconds is not None
+                            and now - started >= request.timeout_seconds
+                        ):
                             termination_reason = "hard-timeout"
                             break
                         if (
@@ -578,6 +689,46 @@ class ValidationResult:
             "checked_paths": list(self.checked_paths),
             "findings": list(self.findings),
         }
+
+
+def _accept_package_declared_semantic_test_case_ids(
+    validation: ValidationResult,
+    *,
+    draft_text: str,
+    planned_test_case_ids: Sequence[str],
+) -> ValidationResult:
+    """Let the prepared contract own IDs while retaining all structural gates."""
+
+    actual_ids = tuple(
+        test_case_id
+        for test_case_id, _start, _end, _section in test_case_section_spans(
+            draft_text
+        )
+    )
+    planned_ids = tuple(planned_test_case_ids)
+    if (
+        set(actual_ids) != set(planned_ids)
+        or len(actual_ids) != len(set(actual_ids))
+        or len(planned_ids) != len(set(planned_ids))
+    ):
+        return validation
+    package_owned_style_findings = {
+        "structure-preflight-test-case-id-not-numeric",
+        "structure-preflight-test-case-id-sequence-not-contiguous",
+    }
+    remaining = tuple(
+        finding
+        for finding in validation.findings
+        if finding.get("id") not in package_owned_style_findings
+    )
+    if remaining == validation.findings:
+        return validation
+    return ValidationResult(
+        passed=not remaining,
+        findings=remaining,
+        checked_paths=validation.checked_paths,
+        validator=validation.validator + "+prepared-package-id-contract",
+    )
 
 
 def _normalized_case_body(value: str) -> str:
@@ -804,6 +955,14 @@ class ReviewFinding:
 
 
 @dataclass(frozen=True)
+class DimensionReview:
+    dimension: str
+    verdict: str
+    source_refs: tuple[str, ...]
+    note: str
+
+
+@dataclass(frozen=True)
 class ReviewContract:
     decision: str
     findings_markdown: str = ""
@@ -812,6 +971,233 @@ class ReviewContract:
     obligation_reviews: tuple[ObligationReview, ...] = ()
     findings: tuple[ReviewFinding, ...] = ()
     summary: str = ""
+    reviewed_source_basis_sha256: str = ""
+    reviewed_obligation_set_sha256: str = ""
+    dimension_reviews: tuple[DimensionReview, ...] = ()
+
+
+def _normalize_traceability_value(value: Any) -> str:
+    normalized = re.sub(r"\s+", " ", str(value).replace("\u00a0", " ")).strip()
+    if not normalized:
+        raise RunnerError("source-first traceability cells must not be empty")
+    return normalized
+
+
+def build_source_first_traceability_rows(
+    source_contract: EmbeddedSourceAssertionContract,
+    review: ReviewContract,
+) -> tuple[tuple[str, ...], ...]:
+    """Project the accepted source manifest into one deterministic row per ATOM."""
+
+    if review.contract_version != 4 or review.decision != "accepted":
+        raise RunnerError("final traceability requires an accepted source-first review")
+    review_by_obligation = {
+        item.obligation_id: item for item in review.obligation_reviews
+    }
+    rows: list[tuple[str, ...]] = []
+    seen_atoms: set[str] = set()
+    for assertion in source_contract.manifest.assertions:
+        if assertion.atom_id in seen_atoms:
+            raise RunnerError(
+                f"source-first traceability contains duplicate atom_id {assertion.atom_id}"
+            )
+        seen_atoms.add(assertion.atom_id)
+        req_id = "; ".join(assertion.requirement_codes) or assertion.source_row_id
+        source_path = " :: ".join(
+            (assertion.source_path, assertion.locator, assertion.source_row_id)
+        )
+        condition = "; ".join(assertion.condition_clauses) or "always"
+        if assertion.semantic_disposition == "testable":
+            obligation_reviews = []
+            for obligation_id in assertion.obligation_ids:
+                obligation_review = review_by_obligation.get(obligation_id)
+                if obligation_review is None:
+                    raise RunnerError(
+                        "source-first traceability cannot find accepted review for "
+                        f"{obligation_id}"
+                    )
+                if (
+                    obligation_review.atom_id != assertion.atom_id
+                    or obligation_review.verdict != "covered"
+                ):
+                    raise RunnerError(
+                        "source-first traceability requires covered obligation reviews "
+                        f"bound to {assertion.atom_id}"
+                    )
+                obligation_reviews.append(obligation_review)
+            test_case_ids = tuple(
+                dict.fromkeys(
+                    test_case_id
+                    for obligation_review in obligation_reviews
+                    for test_case_id in obligation_review.test_case_ids
+                )
+            )
+            if not test_case_ids:
+                raise RunnerError(
+                    f"covered source assertion {assertion.assertion_id} has no test cases"
+                )
+            expected_behavior = "; ".join(assertion.oracle_clauses)
+            covered_by_tc = "; ".join(test_case_ids)
+            coverage_status = "covered"
+            gap_note = "not_applicable:covered"
+        elif assertion.semantic_disposition == "ambiguous":
+            if assertion.primary_gap_id is None:
+                raise RunnerError(
+                    f"ambiguous source assertion {assertion.assertion_id} has no GAP id"
+                )
+            expected_behavior = assertion.disposition_rationale
+            covered_by_tc = f"unclear:{assertion.primary_gap_id}"
+            coverage_status = "unclear"
+            gap_note = (
+                f"{assertion.primary_gap_id}: {assertion.disposition_rationale}"
+            )
+        elif assertion.semantic_disposition == "not-applicable":
+            expected_behavior = assertion.disposition_rationale
+            covered_by_tc = "not_covered:source-disposition-not-applicable"
+            coverage_status = "not-applicable"
+            gap_note = (
+                "source_disposition:not-applicable; "
+                + assertion.disposition_rationale
+            )
+        else:
+            raise RunnerError(
+                "unsupported source assertion disposition for traceability: "
+                f"{assertion.semantic_disposition}"
+            )
+        rows.append(
+            tuple(
+                _normalize_traceability_value(value)
+                for value in (
+                    assertion.atom_id,
+                    req_id,
+                    source_path,
+                    assertion.canonical_statement,
+                    (
+                        "source-entity:"
+                        f"{assertion.source_context_class}:{assertion.source_row_id}"
+                    ),
+                    condition,
+                    expected_behavior,
+                    covered_by_tc,
+                    coverage_status,
+                    gap_note,
+                )
+            )
+        )
+    if not rows:
+        raise RunnerError("source-first traceability matrix must contain at least one ATOM")
+    return tuple(rows)
+
+
+def render_source_first_traceability_markdown(
+    rows: Sequence[Sequence[str]],
+) -> bytes:
+    def escape(value: str) -> str:
+        return value.replace("\\", "\\\\").replace("|", "\\|")
+
+    lines = [
+        "# Финальная матрица трассировки",
+        "",
+        "## Traceability Matrix",
+        "",
+        "| " + " | ".join(TRACEABILITY_COLUMNS) + " |",
+        "| " + " | ".join("---" for _ in TRACEABILITY_COLUMNS) + " |",
+    ]
+    lines.extend(
+        "| " + " | ".join(escape(value) for value in row) + " |"
+        for row in rows
+    )
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def render_source_first_traceability_xlsx(
+    rows: Sequence[Sequence[str]],
+) -> bytes:
+    """Render deterministic OOXML bytes with the same values as Markdown."""
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "traceability"
+    sheet.append(TRACEABILITY_COLUMNS)
+    for row in rows:
+        sheet.append(tuple(row))
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    for cell in sheet[1]:
+        cell.font = Font(bold=True)
+    for workbook_row in sheet.iter_rows():
+        for cell in workbook_row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    for index, column in enumerate(TRACEABILITY_COLUMNS, start=1):
+        values = [
+            len(str(sheet.cell(row=row, column=index).value or ""))
+            for row in range(2, sheet.max_row + 1)
+        ]
+        sheet.column_dimensions[chr(64 + index)].width = min(
+            60,
+            max(len(column) + 2, max(values, default=0) + 2),
+        )
+    fixed_time = datetime(2000, 1, 1)
+    workbook.properties.created = fixed_time
+    workbook.properties.modified = fixed_time
+    raw = io.BytesIO()
+    workbook.save(raw)
+    workbook.close()
+
+    deterministic = io.BytesIO()
+    with zipfile.ZipFile(raw, "r") as source, zipfile.ZipFile(
+        deterministic, "w", compression=zipfile.ZIP_DEFLATED
+    ) as target:
+        for name in sorted(source.namelist()):
+            info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 0
+            info.external_attr = 0
+            payload = source.read(name)
+            if name == "docProps/core.xml":
+                payload, replacements = re.subn(
+                    rb"(<dcterms:modified\b[^>]*>).*?(</dcterms:modified>)",
+                    rb"\g<1>2000-01-01T00:00:00Z\g<2>",
+                    payload,
+                    count=1,
+                )
+                if replacements != 1:
+                    raise RunnerError(
+                        "cannot normalize XLSX modified timestamp in docProps/core.xml"
+                    )
+            target.writestr(info, payload)
+    return deterministic.getvalue()
+
+
+def _write_immutable_atomic(path: Path, content: bytes) -> None:
+    if path.is_file():
+        if path.read_bytes() != content:
+            raise RunnerError(f"immutable terminal artifact conflicts with existing file: {path}")
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.tmp"
+    )
+    try:
+        with temporary.open("xb") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            # Hard-link publication is an atomic create-if-absent operation on the
+            # same filesystem. Unlike os.replace(), it cannot clobber a terminal
+            # artifact created by a concurrent cycle after the first existence check.
+            os.link(temporary, path)
+        except FileExistsError:
+            if not path.is_file() or path.read_bytes() != content:
+                raise RunnerError(
+                    f"immutable terminal artifact appeared with different bytes: {path}"
+                )
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 @dataclass(frozen=True)
@@ -845,6 +1231,7 @@ class CodexExecReviewCycleRunner:
     prepared_repair_draft_path: Path | None = None
     prepared_repair_findings_path: Path | None = None
     prepared_reviewer_rebind_draft_path: Path | None = None
+    source_first_terminal_handoff_dir: Path | None = None
     promotion_contract_path: Path | None = None
     instruction_files: Sequence[Path] = ()
     writer_instruction_files: Sequence[Path] = ()
@@ -854,7 +1241,7 @@ class CodexExecReviewCycleRunner:
     timeout_seconds: int = 1800
     writer_timeout_seconds: int | None = None
     reviewer_timeout_seconds: int | None = None
-    prepared_reviewer_timeout_seconds: int = 90
+    prepared_reviewer_timeout_seconds: int | None = 90
     writer_idle_timeout_seconds: int = DEFAULT_STANDARD_WRITER_IDLE_TIMEOUT_SECONDS
     reviewer_idle_timeout_seconds: int = DEFAULT_STANDARD_REVIEWER_IDLE_TIMEOUT_SECONDS
     prepared_standard_reviewer_idle_timeout_seconds: int = (
@@ -884,6 +1271,9 @@ class CodexExecReviewCycleRunner:
     prepared_structured_writer_max_shards: int = (
         DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS
     )
+    prepared_structured_writer_max_concurrency: int = (
+        DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_CONCURRENCY
+    )
     prepared_targeted_repair_max_test_cases: int = (
         DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES
     )
@@ -898,6 +1288,10 @@ class CodexExecReviewCycleRunner:
     _backend_session_ids: list[str] = field(default_factory=list, init=False)
     _prepared_package: PreparedStagePackage | None = field(default=None, init=False)
     _promotion_contract: PromotionContract | None = field(default=None, init=False)
+    _source_first_contract_checked: bool = field(default=False, init=False)
+    _source_first_contract: EmbeddedSourceAssertionContract | None = field(
+        default=None, init=False
+    )
     _draft_seed_sha256: str = field(default="", init=False)
     _standard_instruction_contexts: dict[str, tuple[Path, ...]] = field(
         default_factory=dict, init=False
@@ -911,6 +1305,12 @@ class CodexExecReviewCycleRunner:
     _package_context_projection_reports: dict[str, dict[str, Any]] = field(
         default_factory=dict, init=False
     )
+    _source_evidence_projection_reports: dict[str, dict[str, Any]] = field(
+        default_factory=dict, init=False
+    )
+    _source_evidence_projection_cache: dict[
+        tuple[str, tuple[str, ...], bool, str, str], tuple[str, dict[str, Any]]
+    ] = field(default_factory=dict, init=False)
     _writer_output_capacity_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_oracle_quality_plan: dict[str, Any] = field(default_factory=dict, init=False)
     _prepared_state_change_plan: dict[str, Any] = field(default_factory=dict, init=False)
@@ -944,6 +1344,10 @@ class CodexExecReviewCycleRunner:
         if self.prepared_reviewer_rebind_draft_path is not None:
             self.prepared_reviewer_rebind_draft_path = (
                 self.prepared_reviewer_rebind_draft_path.resolve()
+            )
+        if self.source_first_terminal_handoff_dir is not None:
+            self.source_first_terminal_handoff_dir = (
+                self.source_first_terminal_handoff_dir.resolve()
             )
         if self.promotion_contract_path is not None:
             self.promotion_contract_path = self.promotion_contract_path.resolve()
@@ -1030,12 +1434,32 @@ class CodexExecReviewCycleRunner:
         return self.cycle_dir / "promotion-dry-run.json"
 
     @property
+    def normalized_review_result_path(self) -> Path:
+        return self.cycle_dir / "review-result.json"
+
+    @property
+    def promotion_basis_seed_path(self) -> Path:
+        return self.cycle_dir / "promotion-basis.seed.json"
+
+    @property
+    def final_traceability_matrix_path(self) -> Path:
+        return self.cycle_dir / "outputs" / "final-traceability-matrix.md"
+
+    @property
+    def final_traceability_matrix_xlsx_path(self) -> Path:
+        return self.final_traceability_matrix_path.with_suffix(".xlsx")
+
+    @property
     def draft_seed_path(self) -> Path:
         return self.attempt_root(WRITER_STAGE) / "runner-input" / "draft-seed.md"
 
     @property
     def reviewer_findings_path(self) -> Path:
         return self.runner_output_dir(REVIEWER_STAGE) / "findings.md"
+
+    @property
+    def reviewer_contract_result_path(self) -> Path:
+        return self.runner_output_dir(REVIEWER_STAGE) / "review-contract.json"
 
     @property
     def reviewer_schema_path(self) -> Path:
@@ -1115,6 +1539,8 @@ class CodexExecReviewCycleRunner:
             self.prepared_state_change_path,
             self.prepared_repair_plan_path,
             self.reviewer_rebind_path,
+            self.normalized_review_result_path,
+            self.promotion_basis_seed_path,
         ]
         return tuple(paths)
 
@@ -1175,6 +1601,120 @@ class CodexExecReviewCycleRunner:
             or len(self._prepared_writer_groups())
             > self.prepared_structured_writer_single_session_tc_limit
         )
+
+    def _blocking_prepared_gap_ids(self) -> tuple[str, ...]:
+        """Return content-derived release blockers from the bound package.
+
+        A prepared package with a primary blocking source gap may be used to
+        produce an unsigned, independently reviewed draft for the testable
+        obligations.  The package content, rather than a mutable runner flag,
+        remains the authority for whether promotion is forbidden.
+        """
+
+        if self._prepared_package is None:
+            return ()
+        if self._prepared_package.package_version >= 9:
+            status = self._prepared_package.release_status
+            if status is None:
+                raise RunnerError(
+                    "Current prepared package is missing structured release_status"
+                )
+            return status.blocking_gap_ids
+        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+        return tuple(
+            sorted(gap.gap_id for gap in obligations.coverage_gaps if gap.blocking)
+        )
+
+    def _validate_structured_release_status(self, *, source_first: bool) -> None:
+        if self._prepared_package is None:
+            return
+        status = self._prepared_package.release_status
+        if self._prepared_package.package_version < 9 or status is None:
+            raise RunnerError(
+                "Prepared execution requires current package v9 structured release_status"
+            )
+        if not source_first:
+            if status.release_eligible:
+                raise RunnerError(
+                    "release-eligible package is missing the bounded source-first contract"
+                )
+            if (
+                status.output_mode != "release"
+                or status.unsigned_status != "blocked-source-contract"
+            ):
+                raise RunnerError(
+                    "legacy prepared package must use the exact blocked-source-contract route"
+                )
+            return
+        if self._source_first_contract is None:
+            raise RunnerError("Source-first release validation has no parsed contract")
+        manifest = self._source_first_contract.manifest
+        blocked = tuple(
+            item
+            for item in manifest.assertions
+            if item.semantic_disposition == "testable"
+            and item.execution_readiness == "dependency-blocked"
+        )
+        expected_registry = tuple(
+            {
+                "assertion_id": item.assertion_id,
+                "source_row_id": item.source_row_id,
+                "atom_id": item.atom_id,
+                "obligation_ids": list(item.obligation_ids),
+                "gap_ids": list(item.execution_dependency_gap_ids),
+                "risk": item.risk,
+                "rationale": item.execution_readiness_rationale,
+                "route": "excluded-from-ready-subset",
+            }
+            for item in blocked
+        )
+        actual_registry = tuple(
+            item.to_dict() for item in status.execution_dependency_registry
+        )
+        if actual_registry != expected_registry:
+            raise RunnerError(
+                "stage-package release_status execution registry does not exactly match "
+                "the independently reviewed source assertion manifest"
+            )
+        expected_excluded = tuple(
+            sorted(
+                obligation_id
+                for item in blocked
+                for obligation_id in item.obligation_ids
+            )
+        )
+        if status.excluded_execution_obligation_ids != expected_excluded:
+            raise RunnerError(
+                "stage-package excluded execution obligations do not match the source manifest"
+            )
+        obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
+        ready_manifest_obligations = {
+            obligation_id
+            for item in manifest.assertions
+            if item.semantic_disposition == "testable"
+            and item.execution_readiness == "ready"
+            for obligation_id in item.obligation_ids
+        }
+        compiled_testable_obligations = {
+            item.obligation_id
+            for item in obligations.obligations
+            if item.coverage_status == "testable"
+        }
+        if compiled_testable_obligations != ready_manifest_obligations:
+            raise RunnerError(
+                "atomic obligations do not exactly equal the ready source assertion subset"
+            )
+        if blocked:
+            if (
+                status.output_mode != "draft-with-blocking-gaps"
+                or status.release_eligible
+                or status.unsigned_status != "blocked-execution-dependencies"
+            ):
+                raise RunnerError(
+                    "execution-blocked source assertions require the unsigned draft route"
+                )
+        elif status.release_eligible and status.output_mode != "release":
+            raise RunnerError("release-eligible source-first package must use release mode")
 
     def _prepared_writer_groups(self) -> list[tuple[str, list[Any]]]:
         obligations = load_obligations(self._prepared_artifact("atomic-obligations"))
@@ -1366,13 +1906,46 @@ class CodexExecReviewCycleRunner:
                 "Prepared targeted repair does not support finding ids: "
                 + ", ".join(unsupported)
             )
-        finding_tc_ids = {
-            str(test_case_id)
-            for item in raw_findings
-            if item.get("severity") == "error"
-            and item.get("id") in REPAIRABLE_QUALITY_FINDING_IDS
-            for test_case_id in (item.get("test_case_ids") or [])
-        }
+        finding_tc_ids: set[str] = set()
+        repair_contracts: list[dict[str, Any]] = []
+        for item in raw_findings:
+            if (
+                item.get("severity") != "error"
+                or item.get("id") not in REPAIRABLE_QUALITY_FINDING_IDS
+            ):
+                continue
+            raw_test_case_ids = item.get("test_case_ids")
+            if isinstance(raw_test_case_ids, list):
+                contract_test_case_ids = list(
+                    dict.fromkeys(
+                        str(test_case_id)
+                        for test_case_id in raw_test_case_ids
+                        if test_case_id
+                    )
+                )
+                finding_tc_ids.update(
+                    str(test_case_id)
+                    for test_case_id in raw_test_case_ids
+                    if test_case_id
+                )
+            elif item.get("tc_id"):
+                contract_test_case_ids = [str(item["tc_id"])]
+                finding_tc_ids.update(contract_test_case_ids)
+            else:
+                contract_test_case_ids = []
+            finding_id = str(item["id"])
+            contract: dict[str, Any] = {
+                "finding_id": finding_id,
+                "test_case_ids": contract_test_case_ids,
+                "message": " ".join(str(item.get("message", "")).split())[:2000],
+                "acceptance_rules": list(
+                    TARGETED_REPAIR_ACCEPTANCE_RULES.get(finding_id, ())
+                ),
+            }
+            for key in ("obligation_id", "atom_id"):
+                if item.get(key):
+                    contract[key] = str(item[key])
+            repair_contracts.append(contract)
         groups = self._prepared_writer_groups()
         planned_ids = [test_case_id for test_case_id, _ in groups]
         target_ids = [test_case_id for test_case_id in planned_ids if test_case_id in finding_tc_ids]
@@ -1384,6 +1957,12 @@ class CodexExecReviewCycleRunner:
             )
         if not target_ids:
             raise RunnerError("Prepared targeted repair has no repairable test-case ids")
+        for contract in repair_contracts:
+            contract["test_case_ids"] = [
+                test_case_id
+                for test_case_id in target_ids
+                if test_case_id in contract["test_case_ids"]
+            ]
         if len(target_ids) > self.prepared_targeted_repair_max_test_cases:
             raise RunnerError(
                 "blocked-prepared-targeted-repair-capacity: "
@@ -1433,6 +2012,7 @@ class CodexExecReviewCycleRunner:
             "target_atom_ids": list(
                 dict.fromkeys(item.traceability_atom_id for item in target_obligations)
             ),
+            "repair_contracts": repair_contracts,
             "allowed_finding_ids": sorted(REPAIRABLE_QUALITY_FINDING_IDS),
             "sections": sections,
         }
@@ -1549,6 +2129,15 @@ class CodexExecReviewCycleRunner:
                 "Prepared reviewer rebind source draft changed after preflight"
             )
 
+    def _structured_writer_effective_concurrency(self, shard_count: int) -> int:
+        if shard_count <= 0:
+            return 1
+        if not bool(
+            getattr(self.executor, "supports_concurrent_execution", False)
+        ):
+            return 1
+        return min(self.prepared_structured_writer_max_concurrency, shard_count)
+
     def _build_writer_output_capacity_plan(self) -> dict[str, Any]:
         groups = self._prepared_writer_groups()
         if self._prepared_repair_plan.get("passed"):
@@ -1574,6 +2163,14 @@ class CodexExecReviewCycleRunner:
                 "single_session_test_case_limit": self.prepared_structured_writer_single_session_tc_limit,
                 "configured_shard_size": self.prepared_structured_writer_shard_size,
                 "max_shards": self.prepared_structured_writer_max_shards,
+                "configured_max_concurrency": (
+                    self.prepared_structured_writer_max_concurrency
+                ),
+                "executor_supports_concurrent_execution": bool(
+                    getattr(self.executor, "supports_concurrent_execution", False)
+                ),
+                "effective_max_concurrency": 1,
+                "wave_count": 0,
                 "shard_count": 0,
                 "union_complete": True,
                 "disjoint": True,
@@ -1649,6 +2246,9 @@ class CodexExecReviewCycleRunner:
                 and disjoint
             )
         )
+        effective_max_concurrency = self._structured_writer_effective_concurrency(
+            shard_count
+        )
         report: dict[str, Any] = {
             "passed": passed,
             "validator": "prepared-structured-writer-output-capacity-v1",
@@ -1663,6 +2263,19 @@ class CodexExecReviewCycleRunner:
             "single_session_test_case_limit": limit,
             "configured_shard_size": shard_size,
             "max_shards": self.prepared_structured_writer_max_shards,
+            "configured_max_concurrency": (
+                self.prepared_structured_writer_max_concurrency
+            ),
+            "executor_supports_concurrent_execution": bool(
+                getattr(self.executor, "supports_concurrent_execution", False)
+            ),
+            "effective_max_concurrency": effective_max_concurrency,
+            "wave_count": (
+                (shard_count + effective_max_concurrency - 1)
+                // effective_max_concurrency
+                if shard_count
+                else 0
+            ),
             "shard_count": shard_count,
             "union_complete": union_complete,
             "disjoint": disjoint,
@@ -1693,7 +2306,25 @@ class CodexExecReviewCycleRunner:
                 self._prepared_artifact("atomic-obligations")
             ).obligations
         )
-        estimated_output_bytes = 2048 + obligation_count * 256
+        source_first_receipt_contract = self._uses_source_first_contract()
+        dimension_source_refs = (
+            self._source_first_dimension_source_refs()
+            if source_first_receipt_contract
+            else {}
+        )
+        dimension_receipt_estimated_bytes = sum(
+            192
+            + len(dimension.encode("utf-8"))
+            + sum(len(source_ref.encode("utf-8")) + 4 for source_ref in source_refs)
+            for dimension, source_refs in dimension_source_refs.items()
+        )
+        estimated_output_bytes = (
+            4096
+            + dimension_receipt_estimated_bytes
+            + obligation_count * 72
+            if source_first_receipt_contract
+            else 2048 + obligation_count * 256
+        )
         schema_bytes = len(
             json.dumps(
                 self._review_contract_schema(),
@@ -1702,8 +2333,13 @@ class CodexExecReviewCycleRunner:
             ).encode("utf-8")
         )
         passed = (
-            obligation_count <= self.prepared_structured_reviewer_obligation_limit
-            and estimated_output_bytes <= MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES
+            (
+                source_first_receipt_contract
+                or obligation_count
+                <= self.prepared_structured_reviewer_obligation_limit
+            )
+            and estimated_output_bytes
+            <= MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES
         )
         return {
             "passed": passed,
@@ -1711,12 +2347,23 @@ class CodexExecReviewCycleRunner:
             "error_code": "" if passed else "prepared-structured-reviewer-output-capacity-exceeded",
             "obligation_count": obligation_count,
             "obligation_limit": self.prepared_structured_reviewer_obligation_limit,
+            "dimension_count": len(dimension_source_refs),
+            "dimension_source_ref_count": sum(
+                len(source_refs) for source_refs in dimension_source_refs.values()
+            ),
+            "dimension_receipt_estimated_bytes": dimension_receipt_estimated_bytes,
             "estimated_output_bytes": estimated_output_bytes,
             "estimated_output_limit_bytes": MAX_ESTIMATED_STRUCTURED_REVIEWER_OUTPUT_BYTES,
             "output_schema_bytes": schema_bytes,
-            "schema_mode": "generic-bounded-parser-verified"
-            if self._uses_generic_bounded_reviewer_schema()
-            else "exact-obligation-variants",
+            "schema_mode": (
+                "source-first-compact-obligation-receipt-v4"
+                if source_first_receipt_contract
+                else (
+                    "generic-bounded-parser-verified"
+                    if self._uses_generic_bounded_reviewer_schema()
+                    else "exact-obligation-variants"
+                )
+            ),
         }
 
     def _build_reviewer_context_capacity_plan(self) -> dict[str, Any]:
@@ -1725,6 +2372,9 @@ class CodexExecReviewCycleRunner:
         )
         semantic_projection_bytes = len(
             self._prepared_standard_reviewer_semantic_projection().encode("utf-8")
+        )
+        source_and_semantic_projection_bytes = (
+            shared_context_bytes + semantic_projection_bytes
         )
         seed_bytes = len(self._draft_seed_text().encode("utf-8"))
         runtime_profile_bytes = self.prepared_reviewer_profile_path.stat().st_size
@@ -1750,6 +2400,9 @@ class CodexExecReviewCycleRunner:
             "estimate_basis": "full-seed-plus-semantic-projection-and-deterministic-reserve",
             "shared_context_bytes": shared_context_bytes,
             "semantic_projection_bytes": semantic_projection_bytes,
+            "source_and_semantic_projection_bytes": (
+                source_and_semantic_projection_bytes
+            ),
             "full_seed_bytes": seed_bytes,
             "runtime_profile_bytes_counted_twice": runtime_profile_bytes * 2,
             "rule_card_bytes": rule_card_bytes,
@@ -1902,6 +2555,7 @@ class CodexExecReviewCycleRunner:
             "prepared_standard_reviewer_context_max_bytes",
             "prepared_structured_writer_single_session_tc_limit",
             "prepared_structured_writer_max_shards",
+            "prepared_structured_writer_max_concurrency",
             "prepared_targeted_repair_max_test_cases",
             "prepared_structured_reviewer_obligation_limit",
         ):
@@ -1915,8 +2569,8 @@ class CodexExecReviewCycleRunner:
             "prepared_reviewer_timeout_seconds",
         ):
             value = getattr(self, name)
-            if value is not None and value < 1:
-                raise RunnerError(f"{name} must be >= 1 when set")
+            if value is not None and value < 0:
+                raise RunnerError(f"{name} must be >= 0 when set")
         if not self.ft_root.is_dir():
             raise RunnerError(f"FT root does not exist: {self.ft_root}")
         expected_work_root = self.ft_root / "work"
@@ -1948,6 +2602,13 @@ class CodexExecReviewCycleRunner:
                 "reviewer rebind and targeted repair are mutually exclusive"
             )
         if self.prepared_package_path is not None:
+            if self.promote_final:
+                raise RunnerError(
+                    "Prepared/source-first direct promotion is disabled. Run the "
+                    "accepted cycle through scripts/promote_review_cycle.py so the "
+                    "posthoc hash chain, state transaction, receipt, snapshot and "
+                    "rollback contract are enforced."
+                )
             if not self.command_config.output_schema_flag:
                 raise RunnerError(
                     "Prepared reviewer requires a verified output-schema flag"
@@ -2015,6 +2676,44 @@ class CodexExecReviewCycleRunner:
                     f"unsupported_dimensions={dimensions}"
                 )
             self._validate_prepared_attempt_binding()
+            source_first_contract = self._uses_source_first_contract()
+            self._validate_structured_release_status(
+                source_first=source_first_contract
+            )
+            if source_first_contract:
+                # Terminal handoff routing is part of preflight. Discovering an
+                # invalid destination only after an accepted reviewer call wastes
+                # the model result and leaves an unpromotable cycle.
+                self._source_first_active_handoff()
+                blocking_source_gap_ids = self._blocking_prepared_gap_ids()
+                prepared_obligation_set = load_obligations(
+                    self._prepared_artifact("atomic-obligations")
+                )
+                constraint_gap_ids = {
+                    gap_id
+                    for obligation in prepared_obligation_set.obligations
+                    for gap_id in obligation.constraint_gap_ids
+                }
+                source_first_accounting = evaluate_coverage_accounting(
+                    prepared_obligation_set.obligations,
+                    constraint_gap_blocking={
+                        gap.gap_id: gap.blocking
+                        for gap in prepared_obligation_set.coverage_gaps
+                        if gap.gap_id in constraint_gap_ids
+                    },
+                )
+                if (
+                    not source_first_accounting.passed
+                    and not blocking_source_gap_ids
+                ):
+                    raise RunnerError(
+                        "blocked-source-first-coverage-accounting: "
+                        f"ratio={source_first_accounting.ratio:.6f}, "
+                        "findings="
+                        + ",".join(
+                            source_first_accounting.blocking_finding_codes
+                        )
+                    )
             self._prepared_oracle_quality_plan = (
                 self._build_prepared_oracle_quality_plan()
             )
@@ -2065,6 +2764,27 @@ class CodexExecReviewCycleRunner:
             self._standard_instruction_paths("writer")
             self._standard_instruction_paths("reviewer")
             self._validate_standard_command_budgets()
+        blocking_source_gap_ids = self._blocking_prepared_gap_ids()
+        if blocking_source_gap_ids and (
+            self.promotion_contract_path is not None
+            or self.promote_final
+            or self.promotion_dry_run
+        ):
+            execution_dependencies = bool(
+                self._prepared_package is not None
+                and self._prepared_package.release_status is not None
+                and self._prepared_package.release_status.execution_dependency_registry
+            )
+            raise RunnerError(
+                (
+                    "PROMO-BLOCKED-EXECUTION-DEPENDENCIES"
+                    if execution_dependencies
+                    else "PROMO-BLOCKING-SOURCE-GAPS"
+                )
+                + ": prepared draft contains blocking source inputs and cannot "
+                "enter promotion: "
+                + ", ".join(blocking_source_gap_ids)
+            )
         if self.promotion_contract_path is not None:
             if self.prepared_repair_draft_path is not None:
                 raise RunnerError("targeted repair cannot be combined with promotion")
@@ -2072,6 +2792,12 @@ class CodexExecReviewCycleRunner:
                 raise RunnerError("reviewer rebind cannot be combined with promotion")
             if self._prepared_package is None:
                 raise RunnerError("Promotion contract is supported only for prepared routes")
+            if not self._uses_source_first_contract():
+                raise RunnerError(
+                    "Prepared promotion requires the bounded source-first assertion "
+                    "contract and its independent review receipt; legacy packages are "
+                    "review evidence only."
+                )
             if not is_relative_to(self.promotion_contract_path, self.ft_root):
                 raise RunnerError("Promotion contract must be under the FT package")
             try:
@@ -2193,6 +2919,38 @@ class CodexExecReviewCycleRunner:
             raise RunnerError(f"Prepared package does not contain {kind}")
         return resolve_repository_path(reference.path, self.repo_root)
 
+    def _uses_source_first_contract(self) -> bool:
+        if self._prepared_package is None:
+            return False
+        if self._source_first_contract_checked:
+            return self._source_first_contract is not None
+        evidence_text = self._prepared_artifact("source-evidence").read_text(
+            encoding="utf-8"
+        )
+        obligation_set = load_obligations(
+            self._prepared_artifact("atomic-obligations")
+        )
+        expected_obligation_ids = tuple(
+            item.obligation_id
+            for item in obligation_set.obligations
+            if item.coverage_status == "testable"
+        )
+        try:
+            contract = parse_embedded_source_assertion_contract(
+                evidence_text,
+                self.repo_root,
+                expected_scope_slug=self._prepared_package.scope_slug,
+                expected_obligation_ids=expected_obligation_ids,
+            )
+        except (SourceAssertionContractError, OSError, UnicodeError) as exc:
+            raise RunnerError(
+                "Prepared bounded source-first assertion contract is invalid: "
+                f"{exc}"
+            ) from exc
+        self._source_first_contract = contract
+        self._source_first_contract_checked = True
+        return contract is not None
+
     def _prepared_instruction_field(self, field_name: str) -> str:
         instructions_path = self._prepared_artifact("stage-instructions")
         text = instructions_path.read_text(encoding="utf-8")
@@ -2266,6 +3024,26 @@ class CodexExecReviewCycleRunner:
                 f"Prepared {role} runtime profile must require runner-validated `package_digest`"
             )
 
+    def _source_first_dimension_source_refs(self) -> dict[str, tuple[str, ...]]:
+        if self._prepared_package is None or not self._uses_source_first_contract():
+            return {}
+        try:
+            bindings = parse_reviewer_dimension_source_bindings(
+                self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
+            ).as_mapping()
+        except (OSError, StageRuntimeError) as exc:
+            raise RunnerError(
+                f"source-first reviewer dimension bindings are invalid: {exc}"
+            ) from exc
+        expected = set(self._prepared_package.unsupported_dimensions)
+        if set(bindings) != expected:
+            raise RunnerError(
+                "source-first reviewer dimension binding set mismatch: "
+                f"missing={sorted(expected - set(bindings))}, "
+                f"unknown={sorted(set(bindings) - expected)}"
+            )
+        return bindings
+
     def _prepared_package_metadata(self) -> dict[str, Any]:
         if self._prepared_package is None:
             raise RunnerError("Prepared package is not loaded")
@@ -2280,7 +3058,7 @@ class CodexExecReviewCycleRunner:
             raise RunnerError("Prepared package metadata requires a valid package_digest")
         if not SHA256_HEX_RE.fullmatch(package.input_fingerprint):
             raise RunnerError("Prepared package metadata requires a valid input_fingerprint")
-        return {
+        metadata = {
             "package_version": package.package_version,
             "package_id": package.package_id,
             "package_digest": package.package_digest,
@@ -2292,6 +3070,10 @@ class CodexExecReviewCycleRunner:
             "context_profile": self._prepared_context_profile(),
             "unsupported_dimensions": list(package.unsupported_dimensions),
         }
+        if package.release_status is not None:
+            metadata["output_mode"] = package.release_status.output_mode
+            metadata["release_status"] = package.release_status.to_dict()
+        return metadata
 
     def _prepared_standard_metadata(self, *, draft_sha256: str = "") -> dict[str, Any]:
         if self._prepared_package is None:
@@ -2415,6 +3197,13 @@ class CodexExecReviewCycleRunner:
         return projected
 
     def _prepared_standard_writer_payload(self) -> str:
+        source_evidence = (
+            self._prepared_writer_source_evidence(record_report=True)
+            if self._uses_source_first_contract()
+            else self._prepared_artifact("source-evidence")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
         lines = [
                 "<!-- PREPARED-STANDARD-WRITER-PAYLOAD:BEGIN -->",
                 "## Verified prepared-standard metadata",
@@ -2425,7 +3214,7 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Selected source evidence",
                 "",
-                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                source_evidence,
                 "",
                 "## Atomic obligations",
                 "",
@@ -2490,8 +3279,40 @@ class CodexExecReviewCycleRunner:
         status_counts: dict[str, int] = {}
         runner_owned_dictionary_materializations: list[dict[str, Any]] = []
         runner_owned_reference_fixtures: list[dict[str, Any]] = []
+        testable_obligations: list[dict[str, Any]] = []
+        coverage_gap_bindings: list[dict[str, Any]] = []
         for item in obligations.obligations:
             status_counts[item.coverage_status] = status_counts.get(item.coverage_status, 0) + 1
+            if item.coverage_status == "testable":
+                testable_obligations.append(
+                    {
+                        "obligation_id": item.obligation_id,
+                        "atom_id": item.traceability_atom_id,
+                        "planned_test_case_id": item.planned_test_case_id,
+                        "source_refs": list(item.source_refs),
+                        "atomic_statement": item.atomic_statement,
+                        "test_intent": item.test_intent,
+                        "observable_oracle": item.observable_oracle,
+                        "constraint_gap_ids": list(item.constraint_gap_ids),
+                        "calibration_status": item.calibration_status,
+                        "execution_semantics": item.execution_semantics,
+                        "state_change": (
+                            item.state_change.to_dict()
+                            if item.state_change is not None
+                            else None
+                        ),
+                    }
+                )
+            if item.gap_id or item.constraint_gap_ids:
+                coverage_gap_bindings.append(
+                    {
+                        "obligation_id": item.obligation_id,
+                        "atom_id": item.traceability_atom_id,
+                        "coverage_status": item.coverage_status,
+                        "gap_id": item.gap_id,
+                        "constraint_gap_ids": list(item.constraint_gap_ids),
+                    }
+                )
             for requirement in item.dictionary_requirements:
                 if requirement.coverage_mode == "reference-only":
                     if requirement.fixture_values:
@@ -2522,9 +3343,16 @@ class CodexExecReviewCycleRunner:
                 "obligation_count": len(obligations.obligations),
                 "coverage_status_counts": status_counts,
                 "coverage_gap_count": len(obligations.coverage_gaps),
-                "writer_semantics_source": "selected-source-evidence",
+                "writer_semantics_source": (
+                    "selected-source-evidence-and-immutable-obligation-projection"
+                ),
                 "test_case_mapping_source": "runner-generated-draft-seed",
                 "full_artifact_consumers": ["runner-gates", "reviewer"],
+                "testable_obligations": testable_obligations,
+                "coverage_gaps": [
+                    gap.to_dict() for gap in obligations.coverage_gaps
+                ],
+                "coverage_gap_bindings": coverage_gap_bindings,
                 "runner_owned_dictionary_materializations": (
                     runner_owned_dictionary_materializations
                 ),
@@ -2582,43 +3410,30 @@ class CodexExecReviewCycleRunner:
         )
 
     def _prepared_standard_reviewer_semantic_projection(self) -> str:
-        artifact = self._prepared_artifact("atomic-obligations")
+        artifact, artifact_sha256 = self._verified_prepared_artifact(
+            "atomic-obligations"
+        )
         obligations = load_obligations(artifact)
-        return json.dumps(
-            {
-                "artifact": relative_path(artifact, self.repo_root),
-                "artifact_sha256": sha256_file(artifact),
-                "obligation_count": len(obligations.obligations),
-                "semantic_evidence_source": "selected-source-evidence",
-                "coverage_gaps": [item.to_dict() for item in obligations.coverage_gaps],
-                "dictionary_evidence": self._prepared_dictionary_evidence_projection(
-                    obligations.obligations
-                ),
-                "obligations": [
-                    {
-                        "obligation_id": item.obligation_id,
-                        "atom_id": item.traceability_atom_id,
-                        "coverage_status": item.coverage_status,
-                        "planned_test_case_id": item.planned_test_case_id,
-                        "source_refs": list(item.source_refs),
-                        "atomic_statement": item.atomic_statement,
-                        "observable_oracle": item.observable_oracle,
-                        "test_intent": item.test_intent,
-                        "execution_semantics": item.execution_semantics,
-                        "state_change": (
-                            item.state_change.to_dict()
-                            if item.state_change is not None
-                            else None
-                        ),
-                        "dictionary_refs": list(item.dictionary_refs),
-                        "gap_id": item.gap_id,
-                        "constraint_gap_ids": list(item.constraint_gap_ids),
-                    }
-                    for item in obligations.obligations
-                ],
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
+        contract_summary: dict[str, str] | None = None
+        draft_referenced_testable_obligation_ids: tuple[str, ...] = ()
+        if self._uses_source_first_contract() and self._source_first_contract is not None:
+            draft_referenced_testable_obligation_ids = (
+                self._prepared_reviewer_draft_obligation_ids()
+            )
+            contract_summary = source_contract_digest_summary(
+                self._source_first_contract
+            )
+        return render_reviewer_obligation_semantic_projection(
+            obligations=obligations,
+            artifact_path=relative_path(artifact, self.repo_root),
+            artifact_sha256=artifact_sha256,
+            source_contract_summary=contract_summary,
+            draft_referenced_testable_obligation_ids=(
+                draft_referenced_testable_obligation_ids
+            ),
+            dictionary_evidence=self._prepared_dictionary_evidence_projection(
+                obligations.obligations
+            ),
         )
 
     def _prepared_dictionary_evidence_projection(
@@ -2738,7 +3553,144 @@ class CodexExecReviewCycleRunner:
             )
         return projection
 
+    def _verified_prepared_artifact(self, kind: str) -> tuple[Path, str]:
+        """Return one immutable package artifact only while its declared digest holds."""
+
+        if self._prepared_package is None:
+            raise RunnerError("Prepared package is not loaded")
+        reference = next(
+            (item for item in self._prepared_package.package_artifacts if item.kind == kind),
+            None,
+        )
+        if reference is None:
+            raise RunnerError(f"Prepared package does not contain {kind}")
+        artifact = resolve_repository_path(reference.path, self.repo_root)
+        if not artifact.is_file():
+            raise RunnerError(f"Prepared {kind} artifact is missing")
+        actual_bytes = artifact.stat().st_size
+        actual_sha256 = sha256_file(artifact)
+        if actual_bytes != reference.bytes or actual_sha256 != reference.sha256:
+            raise RunnerError(
+                "Prepared runtime projection artifact digest mismatch: "
+                f"kind={kind}, expected_sha256={reference.sha256}, "
+                f"actual_sha256={actual_sha256}, expected_bytes={reference.bytes}, "
+                f"actual_bytes={actual_bytes}"
+            )
+        return artifact, actual_sha256
+
+    def _prepared_compact_source_evidence_projection(
+        self,
+        *,
+        role: str,
+        obligation_ids: Sequence[str] | None = None,
+        include_source_row_siblings: bool = False,
+    ) -> str:
+        """Load immutable artifacts and delegate deterministic projection logic."""
+
+        if role not in {"writer", "reviewer"}:
+            raise RunnerError(f"Unsupported compact source projection role: {role}")
+        evidence_path, evidence_sha256 = self._verified_prepared_artifact(
+            "source-evidence"
+        )
+        obligation_path, obligation_sha256 = self._verified_prepared_artifact(
+            "atomic-obligations"
+        )
+        if not self._uses_source_first_contract() or self._source_first_contract is None:
+            raise RunnerError(
+                "Compact digest-bound source projection requires a current accepted "
+                "source-first contract"
+            )
+        obligations = load_obligations(obligation_path)
+        selected_obligation_ids = (
+            tuple(obligation_ids)
+            if obligation_ids is not None
+            else tuple(
+                item.obligation_id
+                for item in obligations.obligations
+                if item.coverage_status == "testable"
+            )
+        )
+        cache_key = (
+            role,
+            selected_obligation_ids,
+            include_source_row_siblings,
+            evidence_sha256,
+            obligation_sha256,
+        )
+        cached = self._source_evidence_projection_cache.get(cache_key)
+        if cached is not None:
+            rendered, cached_report = cached
+            self._source_evidence_projection_reports[role] = dict(cached_report)
+            return rendered
+        reviewer_bindings = (
+            self._source_first_dimension_source_refs()
+            if role == "reviewer"
+            else {}
+        )
+        try:
+            projection = build_compact_source_projection(
+                role=role,
+                contract=self._source_first_contract,
+                obligations=obligations,
+                selected_obligation_ids=selected_obligation_ids,
+                source_evidence_path=relative_path(evidence_path, self.repo_root),
+                source_evidence_sha256=evidence_sha256,
+                source_evidence_bytes=evidence_path.stat().st_size,
+                atomic_obligations_path=relative_path(
+                    obligation_path, self.repo_root
+                ),
+                atomic_obligations_sha256=obligation_sha256,
+                reviewer_dimension_source_refs=reviewer_bindings,
+                include_source_row_siblings=include_source_row_siblings,
+            )
+        except SourceProjectionError as exc:
+            raise RunnerError(str(exc)) from exc
+        report = dict(projection.report)
+        self._source_evidence_projection_reports[role] = report
+        if not report["passed"]:
+            raise RunnerError(
+                "blocked-prepared-source-evidence-projection-budget: "
+                f"role={role}, projected_bytes={report['projected_bytes']}, "
+                f"limit_bytes={report['limit_bytes']}"
+            )
+        self._source_evidence_projection_cache[cache_key] = (
+            projection.rendered,
+            dict(report),
+        )
+        return projection.rendered
+
+    def _prepared_reviewer_draft_obligation_ids(self) -> tuple[str, ...]:
+        """Load reviewer inputs and delegate exact draft trace selection."""
+
+        obligation_path, _ = self._verified_prepared_artifact(
+            "atomic-obligations"
+        )
+        obligations = load_obligations(obligation_path)
+        if not self.draft_path.is_file():
+            return tuple(
+                item.obligation_id
+                for item in obligations.obligations
+                if item.coverage_status == "testable"
+            )
+        if self._source_first_contract is None:
+            raise RunnerError(
+                "Reviewer draft trace validation requires the accepted source contract"
+            )
+        try:
+            return select_draft_testable_obligation_ids(
+                draft_text=self.draft_path.read_text(encoding="utf-8"),
+                obligations=obligations,
+                manifest=self._source_first_contract.manifest,
+            )
+        except SourceProjectionError as exc:
+            raise RunnerError(str(exc)) from exc
+
     def _prepared_shared_context_projection(self) -> str:
+        if self._uses_source_first_contract():
+            return self._prepared_compact_source_evidence_projection(
+                role="reviewer",
+                obligation_ids=self._prepared_reviewer_draft_obligation_ids(),
+            )
         evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
         evidence = self._prepared_package_context_projection(
             evidence,
@@ -2756,8 +3708,26 @@ class CodexExecReviewCycleRunner:
         evidence: str | None = None,
         *,
         record_report: bool = False,
+        obligation_ids: Sequence[str] | None = None,
+        include_source_row_siblings: bool = False,
     ) -> str:
         """Keep dictionary identity in writer context without repeating leaf payloads."""
+
+        if self._uses_source_first_contract():
+            if evidence is not None:
+                immutable_evidence = self._prepared_artifact(
+                    "source-evidence"
+                ).read_text(encoding="utf-8")
+                if evidence != immutable_evidence:
+                    raise RunnerError(
+                        "Source-first writer projection cannot be built from a partial "
+                        "or modified source-evidence payload"
+                    )
+            return self._prepared_compact_source_evidence_projection(
+                role="writer",
+                obligation_ids=obligation_ids,
+                include_source_row_siblings=include_source_row_siblings,
+            )
 
         source = evidence
         if source is None:
@@ -2887,6 +3857,21 @@ class CodexExecReviewCycleRunner:
 
     def _prepared_standard_reviewer_payload(self) -> str:
         draft_sha256 = sha256_file(self.draft_path)
+        source_first = self._uses_source_first_contract()
+        source_evidence = (
+            self._prepared_shared_context_projection()
+            if source_first
+            else self._prepared_artifact("source-evidence")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
+        obligation_payload = (
+            self._prepared_standard_reviewer_semantic_projection()
+            if source_first
+            else self._prepared_artifact("atomic-obligations")
+            .read_text(encoding="utf-8")
+            .strip()
+        )
         gates = [
             self._prepared_gate_summary("structure", self.validator_path),
             self._prepared_gate_summary("seed", self.seed_gate_path),
@@ -2905,6 +3890,20 @@ class CodexExecReviewCycleRunner:
             gates.append(
                 self._prepared_gate_summary("promotion-readiness", self.promotion_readiness_path)
             )
+        final_contract_instruction = (
+            "Return contract_version 4 with exact draft, source-basis and obligation-set "
+            "SHA-256 values, one compact obligation_reviews verdict for every supplied "
+            "obligation, one review for every routed dimension, and only source refs from "
+            "that dimension's immutable binding; include exception-only findings and a "
+            "non-empty summary."
+            if source_first
+            else (
+                "Return contract_version 2, the exact reviewed_draft_sha256, one "
+                "obligation_reviews item for every supplied obligation, structured "
+                "findings and a non-empty summary. Do not emit commentary outside the "
+                "final JSON object."
+            )
+        )
         return "\n".join(
             [
                 "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:BEGIN -->",
@@ -2920,12 +3919,12 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Selected source evidence",
                 "",
-                self._prepared_artifact("source-evidence").read_text(encoding="utf-8").strip(),
+                source_evidence,
                 "",
                 "## Atomic obligations",
                 "",
                 "```json",
-                self._prepared_artifact("atomic-obligations").read_text(encoding="utf-8").strip(),
+                obligation_payload,
                 "```",
                 "",
                 "## Deterministic gate summaries",
@@ -2954,9 +3953,27 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Required final contract",
                 "",
-                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation, structured findings and a non-empty summary. Do not emit commentary outside the final JSON object.",
-                "Verdict compatibility is strict: testable obligations use covered, missing or incorrect; gap/unclear obligations use gap-preserved or invented-coverage. Preserve non-blocking constraint gaps in the note without changing a testable obligation to gap-preserved.",
-                "For every gap/unclear obligation, test_case_ids must be an empty array. Put its GAP-* identifier in note; GAP-* is not a test-case id.",
+                final_contract_instruction,
+                (
+                    "Every applicable routed dimension must be verified for accepted. "
+                    "Unsupported or not-applicable dimension verdicts require changes-required."
+                    if source_first
+                    else (
+                        "Verdict compatibility is strict: testable obligations use covered, "
+                        "missing or incorrect; gap/unclear obligations use gap-preserved or "
+                        "invented-coverage. Preserve non-blocking constraint gaps in the note "
+                        "without changing a testable obligation to gap-preserved."
+                    )
+                ),
+                (
+                    "Return compact successful obligation verdicts plus only "
+                    "source-model/test-design exceptions as findings."
+                    if source_first
+                    else (
+                        "For every gap/unclear obligation, test_case_ids must be an empty array. "
+                        "Put its GAP-* identifier in note; GAP-* is not a test-case id."
+                    )
+                ),
                 "<!-- PREPARED-STANDARD-REVIEW-PAYLOAD:END -->",
             ]
         )
@@ -2997,6 +4014,15 @@ class CodexExecReviewCycleRunner:
         package_context_projection = self._package_context_projection_reports.get(role)
         if package_context_projection:
             report["package_context_projection"] = dict(package_context_projection)
+        source_evidence_projection = self._source_evidence_projection_reports.get(role)
+        if source_evidence_projection:
+            report["source_evidence_projection"] = dict(
+                source_evidence_projection
+            )
+        if role == "reviewer" and self._reviewer_context_capacity_plan:
+            report["reviewer_context_capacity"] = dict(
+                self._reviewer_context_capacity_plan
+            )
         self._context_budget_reports[stage] = report
         if not report["passed"]:
             raise RunnerError(
@@ -3120,9 +4146,14 @@ class CodexExecReviewCycleRunner:
             for item in obligation_set.coverage_gaps
             if item.gap_id in relevant_gap_ids
         ]
+        package_metadata = self._prepared_package_metadata()
+        if (
+            package_metadata["package_version"] != obligation_set.package_version
+            or package_metadata["package_id"] != obligation_set.package_id
+        ):
+            raise RunnerError("writer shard projection package metadata mismatch")
         payload = {
-            "package_version": obligation_set.package_version,
-            "package_id": obligation_set.package_id,
+            **package_metadata,
             "source_artifact_sha256": sha256_file(
                 self._prepared_artifact("atomic-obligations")
             ),
@@ -3137,6 +4168,52 @@ class CodexExecReviewCycleRunner:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
     def _prepared_writer_shard_evidence(self, shard: dict[str, Any]) -> str:
+        if self._uses_source_first_contract():
+            source_projection = self._prepared_writer_source_evidence(
+                obligation_ids=tuple(shard["obligation_ids"]),
+                include_source_row_siblings=self._uses_targeted_prepared_repair(),
+            )
+            if not self._uses_targeted_prepared_repair():
+                return source_projection
+            obligation_set = load_obligations(
+                self._prepared_artifact("atomic-obligations")
+            )
+            selected_ids = set(shard["obligation_ids"])
+            selected_obligations = tuple(
+                item
+                for item in obligation_set.obligations
+                if item.obligation_id in selected_ids
+            )
+            selected_source_rows = {
+                reference
+                for item in selected_obligations
+                for reference in item.source_refs
+                if reference.startswith("SRC-")
+            }
+            dictionary_context_obligations = tuple(
+                item
+                for item in obligation_set.obligations
+                if item in selected_obligations
+                or selected_source_rows.intersection(item.source_refs)
+            )
+            dictionary_evidence = self._prepared_dictionary_evidence_projection(
+                dictionary_context_obligations
+            )
+            if not dictionary_evidence:
+                return source_projection
+            return "\n\n".join(
+                (
+                    source_projection,
+                    "## Targeted-repair dictionary evidence",
+                    "```json",
+                    json.dumps(
+                        {"dictionary_evidence": dictionary_evidence},
+                        ensure_ascii=False,
+                        separators=(",", ":"),
+                    ),
+                    "```",
+                )
+            )
         evidence = self._prepared_artifact("source-evidence").read_text(encoding="utf-8")
         first_obligation = re.search(r"(?m)^- OBL-[A-Za-z0-9_.-]+:", evidence)
         if first_obligation is None:
@@ -3172,6 +4249,9 @@ class CodexExecReviewCycleRunner:
                 "Do not read previous cycles, generated drafts, production test cases or full sources.",
                 "FT-first fixtures may be portable synthetic values, relative dates or runtime-selected integration responses with source-defined observable properties.",
                 "Return blocked-input only when this shard's embedded evidence cannot define the test intent or observable oracle without invention.",
+                "A calibration_status=ui-calibration-required obligation is not blocked merely because the exact UI trigger or reaction is intentionally unknown. Emit its candidate-ui-calibration TC with the neutral source-backed expected-result class and a specific confirmation question; do not choose one exact message, highlight, filtering, clearing, transition or save behavior.",
+                "For requiredness candidates, state that an empty required field must not be accepted as valid for continuation and that the observed mechanism must be recorded during UI calibration. For invalid-value candidates, state that the invalid value must not be accepted as valid and that the observed mechanism must be recorded during UI calibration.",
+                "Use `Field/block` from the obligation projection and `exact_source_text` from selected evidence to name the actual field. SRC-* is traceability only and must not appear as the user-facing field name.",
                 "",
                 self.prepared_writer_profile_path.read_text(encoding="utf-8").strip(),
                 "",
@@ -3182,7 +4262,7 @@ class CodexExecReviewCycleRunner:
                 "```json",
                 json.dumps(
                     {
-                        "package_id": self._prepared_package.package_id,
+                        **self._prepared_package_metadata(),
                         "stage": stage,
                         "shard_index": shard["index"],
                         "shard_count": self._writer_output_capacity_plan["shard_count"],
@@ -3258,6 +4338,7 @@ class CodexExecReviewCycleRunner:
                 "Return exactly the assigned `## TC-*` replacement sections in the declared order. Do not add an H1 or any unassigned test case.",
                 "Preserve exact assigned OBL/ATOM traceability and coverage-gap lifecycle markers.",
                 "Every final expected result must be observable. For a calibration candidate, define the evidence record produced by the exact action, input value, visible state and outcome without inventing a message, highlight, filtering mechanism, blocked save or transition.",
+                "For an invalid-value or requiredness calibration candidate, also preserve the source-backed abstract invariant that the exact invalid/empty value is not accepted as valid for continuation. This invariant is not a concrete blocked-transition mechanism. For an optional-value candidate, preserve that the value is allowed without asserting a specific allowed transition.",
                 "For a positive permitted-value check, state the exact visible field value; do not append that the UI reaction is undefined or deferred.",
                 "Return blocked-input only when the selected evidence still cannot define an executable ordinary oracle or calibration evidence record without invention.",
                 "",
@@ -3285,6 +4366,20 @@ class CodexExecReviewCycleRunner:
                             "preserved_test_case_count"
                         ],
                     },
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "```",
+                "",
+                "## Mandatory repair acceptance contracts",
+                "",
+                "These contracts describe defects in the prior unsigned sections; they are mandatory acceptance checks, not new requirement evidence.",
+                "Resolve every contract assigned to each replacement section. A title or oracle rewording alone is not a repair when the contract requires executable actions, ordering, capture, branch selection or comparison.",
+                "If the selected source-backed evidence cannot support every required action without invention, return blocked-input instead of repeating the defective section.",
+                "",
+                "```json",
+                json.dumps(
+                    self._prepared_repair_plan["repair_contracts"],
                     ensure_ascii=False,
                     separators=(",", ":"),
                 ),
@@ -3427,6 +4522,22 @@ class CodexExecReviewCycleRunner:
                 self._obligation_requires_ui_calibration(item)
                 for item in obligation_group
             )
+            source_first_seed_properties = self._source_first_seed_properties(
+                obligation_group
+            )
+            if source_first_seed_properties is None:
+                seed_type = (
+                    "негативный" if ui_calibration else "позитивный"
+                )
+            else:
+                seed_type = source_first_seed_properties[0]
+            seed_priority = (
+                contract.expected_priorities[tc_id]
+                if contract is not None
+                else source_first_seed_properties[1]
+                if source_first_seed_properties is not None
+                else "средний"
+            )
             reference_fixture_projection = "\n\n".join(
                 block
                 for item in obligation_group
@@ -3437,12 +4548,8 @@ class CodexExecReviewCycleRunner:
                     f"## {tc_id}",
                     "",
                     f"**Название:** [SEED:title:{atom_label}]",
-                    "**Тип:** " + ("негативный" if ui_calibration else "позитивный"),
-                    (
-                        f"**Приоритет:** {contract.expected_priorities[tc_id]}"
-                        if contract is not None
-                        else "**Приоритет:** средний"
-                    ),
+                    f"**Тип:** {seed_type}",
+                    f"**Приоритет:** {seed_priority}",
                     (
                         f"**package_id:** {contract.domain_package_id}"
                         if contract is not None
@@ -3450,16 +4557,15 @@ class CodexExecReviewCycleRunner:
                     ),
                     f"**Трассировка:** {traceability}",
                     *(
+                        [f"**Coverage gap:** {'; '.join(constraint_gap_ids)}"]
+                        if constraint_gap_ids
+                        else []
+                    ),
+                    *(
                         [
-                            *(
-                                [
-                                    f"**Coverage gap:** {'; '.join(constraint_gap_ids)}"
-                                ]
-                                if constraint_gap_ids
-                                else []
-                            ),
                             "**Статус oracle:** ui-calibration-required",
                             "**Статус тест-кейса:** candidate-ui-calibration",
+                            "**Требуется подтверждение:** [SEED:specific missing observable UI reaction]",
                         ]
                         if ui_calibration
                         else []
@@ -3493,6 +4599,64 @@ class CodexExecReviewCycleRunner:
                 ]
             )
         return "\n".join(lines).rstrip() + "\n"
+
+    def _source_first_seed_properties(
+        self,
+        obligation_group: Sequence[Any],
+    ) -> tuple[str, str] | None:
+        if not self._uses_source_first_contract():
+            return None
+        if self._source_first_contract is None:
+            raise RunnerError("Source-first seed projection has no parsed contract")
+        obligation_ids = {item.obligation_id for item in obligation_group}
+        assertions = tuple(
+            assertion
+            for assertion in self._source_first_contract.manifest.assertions
+            if obligation_ids.intersection(assertion.obligation_ids)
+        )
+        mapped_obligation_ids = {
+            obligation_id
+            for assertion in assertions
+            for obligation_id in assertion.obligation_ids
+            if obligation_id in obligation_ids
+        }
+        if mapped_obligation_ids != obligation_ids:
+            raise RunnerError(
+                "Source-first seed projection is missing assertions for obligations: "
+                + ", ".join(sorted(obligation_ids - mapped_obligation_ids))
+            )
+        projected_check_types = tuple(
+            match.group(1).casefold()
+            for obligation in obligation_group
+            for match in re.finditer(
+                r"(?i)(?<!\w)Check type:\s*(positive|negative)(?!\w)",
+                obligation.test_intent,
+            )
+        )
+        if projected_check_types:
+            seed_type = (
+                "негативный"
+                if "negative" in projected_check_types
+                else "позитивный"
+            )
+        else:
+            seed_type = (
+                "негативный"
+                if any(assertion.polarity == "negative" for assertion in assertions)
+                else "позитивный"
+            )
+        risk_rank = {"low": 0, "medium": 1, "high": 2, "critical": 3}
+        priority_by_risk = {
+            "low": "низкий",
+            "medium": "средний",
+            "high": "высокий",
+            "critical": "высокий",
+        }
+        highest_risk = max(
+            (assertion.risk for assertion in assertions),
+            key=risk_rank.__getitem__,
+        )
+        return seed_type, priority_by_risk[highest_risk]
 
     @staticmethod
     def _test_case_id_sort_key(test_case_id: str) -> tuple[str, int, str]:
@@ -3528,7 +4692,20 @@ class CodexExecReviewCycleRunner:
             "resolved_count": 0,
         }
 
-    def _obligation_requires_ui_calibration(self, item: Any) -> bool:
+    def _obligation_requires_ui_calibration(
+        self,
+        item: Any,
+        *,
+        package_version: int | None = None,
+    ) -> bool:
+        if package_version is None:
+            if self._prepared_package is None:
+                raise RunnerError(
+                    "UI calibration routing requires prepared package metadata"
+                )
+            package_version = self._prepared_package.package_version
+        if package_version >= EXPLICIT_OBLIGATION_CALIBRATION_PACKAGE_VERSION:
+            return item.calibration_status == "ui-calibration-required"
         return item.calibration_status == "ui-calibration-required" or (
             bool(item.constraint_gap_ids)
             and self._prepared_context_profile()
@@ -3695,11 +4872,34 @@ class CodexExecReviewCycleRunner:
                             "candidate_paths": [list(path) for path, _ in paths],
                         }
                     )
+        production_gate = None
+        if self._uses_source_first_contract():
+            production_gate = validate_production_tc_content(
+                draft,
+                checked_path=relative_path(self.draft_path, self.repo_root),
+            )
+            findings.extend(production_gate.findings)
         return {
             "passed": not findings,
             "validator": "prepared-quality-gate-bundle-v1",
+            "draft_sha256": sha256_file(self.draft_path),
             "context_profile": self._prepared_context_profile(),
             "test_case_count": len(sections),
+            "execution_ready_count": (
+                production_gate.execution_ready_count
+                if production_gate is not None
+                else len(sections)
+            ),
+            "calibration_candidate_count": (
+                production_gate.calibration_candidate_count
+                if production_gate is not None
+                else 0
+            ),
+            "suite_readiness": (
+                production_gate.as_dict()["suite_readiness"]
+                if production_gate is not None
+                else "not-applicable-legacy-source-contract"
+            ),
             "checks": [
                 "unique-titles",
                 "constraint-gap-preservation",
@@ -3712,7 +4912,13 @@ class CodexExecReviewCycleRunner:
                 "semantic-overlap",
                 "evidence-access",
                 "execution-oracle-quality",
+                "production-runtime-high-confidence",
             ],
+            "production_runtime_gate": (
+                production_gate.as_dict()
+                if production_gate is not None
+                else {"status": "not-applicable-legacy-source-contract"}
+            ),
             "findings": findings,
         }
 
@@ -3731,6 +4937,9 @@ class CodexExecReviewCycleRunner:
         }
         for key in (
             "test_case_count",
+            "execution_ready_count",
+            "calibration_candidate_count",
+            "suite_readiness",
             "testable_obligations",
             "covered_obligations",
             "commands_checked",
@@ -3789,6 +4998,30 @@ class CodexExecReviewCycleRunner:
             calibration_payload = self.calibration_lifecycle_path.read_text(
                 encoding="utf-8"
             ).strip()
+        final_contract_instruction = (
+            (
+                "Return contract_version 4 with the exact draft, source-basis and "
+                "obligation-set SHA-256 values, exactly one compact obligation_reviews "
+                "item for every supplied obligation, exactly one dimension_reviews item "
+                "for every declared routed dimension, using only source_refs bound to that "
+                "same dimension in the immutable source basis, exception-only structured "
+                "findings and a non-empty summary. accepted requires every obligation verdict to "
+                "be terminal-pass, every dimension verdict to be verified and no error "
+                "finding. Use only schema enum values. Do not emit commentary outside "
+                "the final JSON object."
+            )
+            if self._uses_source_first_contract()
+            else (
+                "Return contract_version 2, the exact reviewed_draft_sha256, one "
+                "obligation_reviews item for every supplied obligation with its exact "
+                "obligation_id and atom_id, structured findings and a non-empty "
+                "summary. Classify every semantic-overlap group: accept only when the "
+                "shared body is justified as one observable multi-obligation check; "
+                "otherwise require consolidation with a duplication finding. Use only "
+                "schema enum values. Do not emit commentary outside the final JSON "
+                "object."
+            )
+        )
         return "\n".join(
             [
                 "<!-- PREPARED-REVIEW-PAYLOAD:BEGIN -->",
@@ -3840,7 +5073,7 @@ class CodexExecReviewCycleRunner:
                 "",
                 "## Required final contract",
                 "",
-                "Return contract_version 2, the exact reviewed_draft_sha256, one obligation_reviews item for every supplied obligation with its exact obligation_id and atom_id, structured findings and a non-empty summary. Classify every semantic-overlap group: accept only when the shared body is justified as one observable multi-obligation check; otherwise require consolidation with a duplication finding. Use only schema enum values. Do not emit commentary outside the final JSON object.",
+                final_contract_instruction,
                 "Dictionary evidence in the verified obligation projection is authoritative. Before claiming that a DICT-* value is absent, compare it with the exact active_values array supplied there.",
                 "<!-- PREPARED-REVIEW-PAYLOAD:END -->",
             ]
@@ -3931,16 +5164,28 @@ class CodexExecReviewCycleRunner:
             self._prepared_package = load_prepared_package(
                 self.prepared_package_path, self.repo_root
             )
+            self._source_first_contract_checked = False
+            self._source_first_contract = None
+            source_first = self._uses_source_first_contract()
+            self._validate_structured_release_status(source_first=source_first)
         except StageRuntimeError as exc:
             raise RunnerError(f"Prepared stage package changed or became invalid: {exc}") from exc
 
-    def _stage_limits(self, role: str) -> tuple[int, int | None, int]:
+    @staticmethod
+    def _optional_timeout(value: int | None, fallback: int) -> int | None:
+        if value is None:
+            return fallback
+        return value or None
+
+    def _stage_limits(self, role: str) -> tuple[int | None, int | None, int]:
         if role == "writer":
             if self._uses_structured_prepared_writer():
                 timeout = (
                     self._prepared_instruction_int("hard_timeout_seconds")
                     if self._is_prepared_fast()
-                    else self.writer_timeout_seconds or self.timeout_seconds
+                    else self._optional_timeout(
+                        self.writer_timeout_seconds, self.timeout_seconds
+                    )
                 )
                 idle_timeout = None
                 command_budget = 0
@@ -3950,7 +5195,9 @@ class CodexExecReviewCycleRunner:
                     idle_timeout = self._prepared_instruction_int("idle_timeout_seconds")
                     command_budget = self._prepared_instruction_int("command_budget")
             else:
-                timeout = self.writer_timeout_seconds or self.timeout_seconds
+                timeout = self._optional_timeout(
+                    self.writer_timeout_seconds, self.timeout_seconds
+                )
                 idle_timeout = self.writer_idle_timeout_seconds
                 command_budget = self.writer_command_budget
         else:
@@ -3958,12 +5205,16 @@ class CodexExecReviewCycleRunner:
                 timeout = (
                     self.prepared_reviewer_timeout_seconds
                     if self._is_prepared_fast()
-                    else self.reviewer_timeout_seconds or self.timeout_seconds
+                    else self._optional_timeout(
+                        self.reviewer_timeout_seconds, self.timeout_seconds
+                    )
                 )
                 idle_timeout = None
                 command_budget = self.prepared_reviewer_command_budget
             else:
-                timeout = self.reviewer_timeout_seconds or self.timeout_seconds
+                timeout = self._optional_timeout(
+                    self.reviewer_timeout_seconds, self.timeout_seconds
+                )
                 idle_timeout = (
                     self.prepared_standard_reviewer_idle_timeout_seconds
                     if self._is_prepared_standard()
@@ -3972,9 +5223,63 @@ class CodexExecReviewCycleRunner:
                 command_budget = self.reviewer_command_budget
         return (
             timeout,
-            min(idle_timeout, timeout) if idle_timeout is not None else None,
+            (
+                min(idle_timeout, timeout)
+                if idle_timeout is not None and timeout is not None
+                else idle_timeout
+            ),
             command_budget,
         )
+
+    def _structured_writer_shard_waves(
+        self,
+        shards: Sequence[dict[str, Any]],
+    ) -> Iterator[tuple[dict[str, Any], ProcessResult, dict[str, Any]]]:
+        prompts = {
+            str(shard["stage"]): self._writer_shard_prompt(shard)
+            for shard in shards
+        }
+        effective_concurrency = int(
+            self._writer_output_capacity_plan.get("effective_max_concurrency")
+            or self._structured_writer_effective_concurrency(len(shards))
+        )
+        effective_concurrency = max(1, min(effective_concurrency, len(shards)))
+        for offset in range(0, len(shards), effective_concurrency):
+            wave = list(shards[offset : offset + effective_concurrency])
+            launches = [
+                self._prepare_stage_process(
+                    stage=str(shard["stage"]),
+                    role="writer",
+                    prompt=prompts[str(shard["stage"])],
+                    last_message_path=self.writer_result_path_for(
+                        str(shard["stage"])
+                    ),
+                )
+                for shard in wave
+            ]
+            if len(launches) == 1:
+                executions = [self._execute_stage_process(launches[0])]
+            else:
+                with ThreadPoolExecutor(
+                    max_workers=len(launches),
+                    thread_name_prefix="prepared-writer-shard",
+                ) as pool:
+                    futures = [
+                        pool.submit(self._execute_stage_process, launch)
+                        for launch in launches
+                    ]
+                    executions = [future.result() for future in futures]
+            finalized = [
+                self._finalize_stage_process(launch, execution)
+                for launch, execution in zip(launches, executions, strict=True)
+            ]
+            self._verify_prepared_package()
+            for shard, (result, artifacts) in zip(
+                wave,
+                finalized,
+                strict=True,
+            ):
+                yield shard, result, artifacts
 
     def _run_structured_writer_shards(
         self,
@@ -3987,14 +5292,8 @@ class CodexExecReviewCycleRunner:
         first_artifacts: dict[str, Any] | None = None
         seen_backend_ids: set[str] = set()
         evidence_reports: list[dict[str, Any]] = []
-        for shard in shards:
+        for shard, result, artifacts in self._structured_writer_shard_waves(shards):
             stage = str(shard["stage"])
-            result, artifacts = self._run_stage(
-                stage=stage,
-                role="writer",
-                prompt=self._writer_shard_prompt(shard),
-                last_message_path=self.writer_result_path_for(stage),
-            )
             evidence_access = validate_evidence_access(
                 events_text=result.stdout,
                 forbidden_roots=self._prepared_package.forbidden_evidence_roots,
@@ -4472,9 +5771,21 @@ class CodexExecReviewCycleRunner:
                 self._prepared_artifact("atomic-obligations")
             )
             draft_before_projection = self.draft_path.read_text(encoding="utf-8")
+            trusted_runner_projected_test_case_ids: Sequence[str] = ()
+            if reviewer_rebind:
+                trusted_runner_projected_test_case_ids = (
+                    self._prepared_reviewer_rebind_plan["test_case_ids"]
+                )
+            elif repair_writer:
+                trusted_runner_projected_test_case_ids = (
+                    self._prepared_repair_plan["preserved_test_case_ids"]
+                )
             writer_ownership = validate_writer_dictionary_ownership(
                 draft_before_projection,
                 obligation_set,
+                trusted_runner_projected_test_case_ids=(
+                    trusted_runner_projected_test_case_ids
+                ),
             )
             if not writer_ownership["passed"]:
                 write_json(
@@ -4562,6 +5873,19 @@ class CodexExecReviewCycleRunner:
             ft_root=self.ft_root,
             state_path=self.state_path,
         )
+        if self._prepared_package is not None:
+            prepared_obligations = load_obligations(
+                self._prepared_artifact("atomic-obligations")
+            )
+            validation = _accept_package_declared_semantic_test_case_ids(
+                validation,
+                draft_text=self.draft_path.read_text(encoding="utf-8"),
+                planned_test_case_ids=tuple(
+                    item.planned_test_case_id
+                    for item in prepared_obligations.obligations
+                    if item.coverage_status == "testable"
+                ),
+            )
         write_json(self.validator_path, validation.as_dict())
         if not validation.passed:
             return self._block_stage(
@@ -4579,6 +5903,7 @@ class CodexExecReviewCycleRunner:
             obligation_gate = validate_draft_obligation_coverage(
                 draft_path=self.draft_path,
                 obligations_path=self._prepared_artifact("atomic-obligations"),
+                strict_runtime_contract=self._uses_source_first_contract(),
             )
             write_json(self.obligation_gate_path, obligation_gate.as_dict())
             if not obligation_gate.passed:
@@ -4677,6 +6002,33 @@ class CodexExecReviewCycleRunner:
             or writer_result.command_budget_exceeded
             or writer_result.first_artifact_deadline_exceeded
         )
+        if writer_interrupted and self._uses_source_first_contract():
+            interruption_reasons = [
+                label
+                for label, active in (
+                    ("hard-timeout", writer_result.timed_out),
+                    ("idle-timeout", writer_result.idle_timed_out),
+                    ("command-budget-exceeded", writer_result.command_budget_exceeded),
+                    (
+                        "first-artifact-deadline-exceeded",
+                        writer_result.first_artifact_deadline_exceeded,
+                    ),
+                )
+                if active
+            ]
+            return self._block_stage(
+                state,
+                stage=WRITER_STAGE,
+                role="writer",
+                result=writer_result,
+                artifacts=writer_artifacts,
+                status="blocked-writer-runtime-budget",
+                reasons=[
+                    "source-first writer was interrupted and cannot advance to reviewer: "
+                    + ", ".join(interruption_reasons)
+                ],
+                validation=validation,
+            )
         writer_status = (
             "skipped-reviewer-rebind"
             if reviewer_rebind
@@ -4990,6 +6342,26 @@ class CodexExecReviewCycleRunner:
                     ).obligations,
                     expected_draft_sha256=draft_sha256,
                     draft_text=self.draft_path.read_text(encoding="utf-8"),
+                    expected_source_basis_sha256=(
+                        sha256_file(self._prepared_artifact("source-evidence"))
+                        if self._uses_source_first_contract()
+                        else ""
+                    ),
+                    expected_obligation_set_sha256=(
+                        sha256_file(self._prepared_artifact("atomic-obligations"))
+                        if self._uses_source_first_contract()
+                        else ""
+                    ),
+                    expected_dimensions=(
+                        self._prepared_package.unsupported_dimensions
+                        if self._uses_source_first_contract()
+                        else ()
+                    ),
+                    expected_dimension_source_refs=(
+                        self._source_first_dimension_source_refs()
+                        if self._uses_source_first_contract()
+                        else {}
+                    ),
                 )
             else:
                 review = parse_review_contract(reviewer_message)
@@ -5016,12 +6388,27 @@ class CodexExecReviewCycleRunner:
                 reasons=[reviewer_session_issue],
             )
 
+        sign_off_self_check: Mapping[str, str] | None = None
+        if (
+            review.contract_version == 4
+            and review.decision == "accepted"
+            and not self._blocking_prepared_gap_ids()
+            and not any(item.severity in {"error", "warning"} for item in review.findings)
+        ):
+            sign_off_self_check = self._source_first_sign_off_self_check()
         findings_markdown = (
-            render_prepared_review_findings(review)
-            if review.contract_version == 2
+            render_prepared_review_findings(
+                review,
+                sign_off_self_check=sign_off_self_check,
+            )
+            if review.contract_version in {2, 4}
             else review.findings_markdown
         )
         self.reviewer_findings_path.write_text(findings_markdown.rstrip() + "\n", encoding="utf-8")
+        reviewer_contract_result = self._write_reviewer_contract_result(
+            review=review,
+            findings_markdown=findings_markdown,
+        )
         if review.decision == "changes-required":
             self._write_stage_status(
                 stage=REVIEWER_STAGE,
@@ -5045,6 +6432,7 @@ class CodexExecReviewCycleRunner:
                     "current_stage": REVIEWER_STAGE,
                     "reviewer_stage_status": "changes-required",
                     "reviewer_findings": relative_path(self.reviewer_findings_path, self.ft_root),
+                    "reviewer_contract_result": reviewer_contract_result,
                     "blocking_reasons": ["reviewer returned changes-required"],
                 }
             )
@@ -5067,6 +6455,84 @@ class CodexExecReviewCycleRunner:
             result=reviewer_result,
             artifacts=reviewer_artifacts,
         )
+        blocking_source_gap_ids = self._blocking_prepared_gap_ids()
+        if blocking_source_gap_ids:
+            execution_dependencies = bool(
+                self._prepared_package is not None
+                and self._prepared_package.release_status is not None
+                and self._prepared_package.release_status.execution_dependency_registry
+            )
+            blocked_workflow_status = (
+                "blocked-execution-dependencies"
+                if execution_dependencies
+                else "blocked-source-gaps"
+            )
+            try:
+                normalized_review_result = (
+                    self._write_normalized_source_first_review_result(
+                        review=review,
+                        draft_sha256=draft_sha256,
+                    )
+                )
+            except (OSError, json.JSONDecodeError, RunnerError) as exc:
+                reason = (
+                    "accepted draft review evidence could not be normalized: "
+                    f"{exc}"
+                )
+                state.update(
+                    {
+                        "workflow_status": "blocked-review-evidence",
+                        "stage_status": "blocked-input",
+                        "current_stage": REVIEWER_STAGE,
+                        "reviewer_stage_status": "accepted",
+                        "accepted_terminal_state": False,
+                        "draft_or_unsigned": True,
+                        "promotion_status": "blocked-source-gaps",
+                        "blocking_reasons": [reason],
+                    }
+                )
+                self._write_state(state)
+                append_event(
+                    self.cycle_dir,
+                    "accepted_draft_review_evidence_blocked",
+                    reason=reason,
+                )
+                return self._result(state)
+            reason = (
+                (
+                    "execution dependencies remain after ready-subset review: "
+                    if execution_dependencies
+                    else "blocking source gaps remain after review: "
+                )
+                + ", ".join(blocking_source_gap_ids)
+            )
+            state.update(
+                {
+                    "workflow_status": blocked_workflow_status,
+                    "stage_status": "blocked-input",
+                    "current_stage": REVIEWER_STAGE,
+                    "reviewer_stage_status": "accepted",
+                    "reviewer_findings": relative_path(
+                        self.reviewer_findings_path, self.ft_root
+                    ),
+                    "normalized_review_result": normalized_review_result,
+                    "accepted_terminal_state": False,
+                    "draft_or_unsigned": True,
+                    "promotion_status": blocked_workflow_status,
+                    "blocking_reasons": [reason],
+                }
+            )
+            self._write_state(state)
+            append_event(
+                self.cycle_dir,
+                (
+                    "reviewer_ready_subset_accepted_with_execution_dependencies"
+                    if execution_dependencies
+                    else "reviewer_draft_accepted_with_blocking_source_gaps"
+                ),
+                gap_ids=list(blocking_source_gap_ids),
+            )
+            return self._result(state)
         state.update(
             {
                 "workflow_status": "accepted-awaiting-promotion",
@@ -5074,10 +6540,37 @@ class CodexExecReviewCycleRunner:
                 "current_stage": REVIEWER_STAGE,
                 "reviewer_stage_status": "accepted",
                 "reviewer_findings": relative_path(self.reviewer_findings_path, self.ft_root),
+                "reviewer_contract_result": reviewer_contract_result,
                 "accepted_terminal_state": True,
                 "blocking_reasons": [],
             }
         )
+        if self._uses_source_first_contract():
+            try:
+                state.update(
+                    self._write_source_first_promotion_evidence(
+                        review=review,
+                        draft_sha256=draft_sha256,
+                        production_before=production_before,
+                    )
+                )
+            except (OSError, json.JSONDecodeError, RunnerError) as exc:
+                reason = f"source-first promotion evidence could not be normalized: {exc}"
+                state.update(
+                    {
+                        "workflow_status": "accepted-promotion-evidence-blocked",
+                        "stage_status": "blocked-input",
+                        "promotion_basis_seed_status": "blocked-input",
+                        "blocking_reasons": [reason],
+                    }
+                )
+                self._write_state(state)
+                append_event(
+                    self.cycle_dir,
+                    "source_first_promotion_evidence_blocked",
+                    reason=reason,
+                )
+                return self._result(state)
         self._write_state(state)
         append_event(self.cycle_dir, "reviewer_terminal_state_accepted")
 
@@ -5171,6 +6664,7 @@ class CodexExecReviewCycleRunner:
                 self._writer_shard_prompt(shard)
         else:
             self._writer_prompt()
+        reviewer_schema_preflight = self._reviewer_output_schema_preflight()
         route = (
             "prepared-fast"
             if self._is_prepared_fast()
@@ -5210,6 +6704,7 @@ class CodexExecReviewCycleRunner:
             "final_artifact": relative_path(self.final_path, self.repo_root),
             "final_exists": self.final_path.exists(),
             "cycle_artifacts_created": False,
+            "reviewer_schema_preflight": reviewer_schema_preflight,
         }
         if self._prepared_package is not None:
             report.update(
@@ -5291,6 +6786,7 @@ class CodexExecReviewCycleRunner:
                         "context-budget",
                         "output-capacity",
                         "reviewer-output-capacity",
+                        "reviewer-output-schema",
                         "shard-union-disjointness",
                         "command-budget",
                         "sandbox-policy",
@@ -5299,6 +6795,426 @@ class CodexExecReviewCycleRunner:
                 }
             )
         return report
+
+    def _promotion_artifact_binding(self, path: Path) -> dict[str, str]:
+        if not path.is_file():
+            raise RunnerError(f"promotion evidence artifact is missing: {path}")
+        return {
+            "path": relative_path(path, self.repo_root),
+            "sha256": sha256_file(path),
+        }
+
+    def _write_normalized_source_first_review_result(
+        self,
+        *,
+        review: ReviewContract,
+        draft_sha256: str,
+    ) -> str:
+        """Persist accepted reviewer evidence without implying release eligibility."""
+
+        if (
+            not self._uses_source_first_contract()
+            or review.contract_version != 4
+            or review.decision != "accepted"
+        ):
+            raise RunnerError(
+                "normalized review evidence requires an accepted source-first "
+                "review contract v4"
+            )
+        quality_payload = json.loads(
+            self.quality_gate_bundle_path.read_text(encoding="utf-8")
+        )
+        if (
+            quality_payload.get("passed") is not True
+            or quality_payload.get("validator")
+            != "prepared-quality-gate-bundle-v1"
+            or quality_payload.get("draft_sha256") != draft_sha256
+        ):
+            raise RunnerError(
+                "normalized source-first review requires a passed "
+                "draft-hash-bound quality gate"
+            )
+
+        normalized_review = build_normalized_review_result(
+            reviewed_draft_path=relative_path(self.draft_path, self.repo_root),
+            reviewed_draft_sha256=draft_sha256,
+            reviewed_source_basis_sha256=review.reviewed_source_basis_sha256,
+            reviewed_obligation_set_sha256=review.reviewed_obligation_set_sha256,
+            obligation_reviews=(
+                {
+                    "obligation_id": item.obligation_id,
+                    "verdict": item.verdict,
+                }
+                for item in review.obligation_reviews
+            ),
+            dimension_reviews=(
+                {
+                    "dimension": item.dimension,
+                    "verdict": item.verdict,
+                    "source_refs": list(item.source_refs),
+                    "note": item.note,
+                }
+                for item in review.dimension_reviews
+            ),
+            findings=(
+                {
+                    "id": item.finding_id,
+                    "severity": item.severity,
+                    "category": item.category,
+                    "atom_ids": list(item.atom_ids),
+                    "test_case_ids": list(item.test_case_ids),
+                    "problem": item.problem,
+                    "required_change": item.required_change,
+                }
+                for item in review.findings
+            ),
+            summary=review.summary,
+        )
+        write_json_atomic(self.normalized_review_result_path, normalized_review)
+        return relative_path(self.normalized_review_result_path, self.ft_root)
+
+    def _write_reviewer_contract_result(
+        self,
+        *,
+        review: ReviewContract,
+        findings_markdown: str,
+    ) -> str:
+        """Persist every parsed reviewer decision, including changes-required."""
+
+        payload = {
+            "version": 1,
+            "contract_version": review.contract_version,
+            "decision": review.decision,
+            "reviewed_draft_sha256": review.reviewed_draft_sha256,
+            "reviewed_source_basis_sha256": review.reviewed_source_basis_sha256,
+            "reviewed_obligation_set_sha256": (
+                review.reviewed_obligation_set_sha256
+            ),
+            "obligation_reviews": [
+                {
+                    "obligation_id": item.obligation_id,
+                    "atom_id": item.atom_id,
+                    "verdict": item.verdict,
+                    "test_case_ids": list(item.test_case_ids),
+                    "note": item.note,
+                }
+                for item in review.obligation_reviews
+            ],
+            "dimension_reviews": [
+                {
+                    "dimension": item.dimension,
+                    "verdict": item.verdict,
+                    "source_refs": list(item.source_refs),
+                    "note": item.note,
+                }
+                for item in review.dimension_reviews
+            ],
+            "findings": [
+                {
+                    "id": item.finding_id,
+                    "severity": item.severity,
+                    "category": item.category,
+                    "atom_ids": list(item.atom_ids),
+                    "test_case_ids": list(item.test_case_ids),
+                    "problem": item.problem,
+                    "required_change": item.required_change,
+                }
+                for item in review.findings
+            ],
+            "summary": review.summary,
+            "findings_markdown_sha256": hashlib.sha256(
+                (findings_markdown.rstrip() + "\n").encode("utf-8")
+            ).hexdigest(),
+        }
+        write_json_atomic(self.reviewer_contract_result_path, payload)
+        return relative_path(self.reviewer_contract_result_path, self.ft_root)
+
+    def _source_first_active_handoff(self) -> tuple[Path, Path]:
+        if self._source_first_contract is None or self._prepared_package is None:
+            raise RunnerError("source-first terminal artifacts require a parsed contract")
+        registered = self._source_first_contract.manifest.coverage_gaps_artifact
+        coverage_gaps_path = resolve_repository_path(registered.path, self.repo_root)
+        if sha256_file(coverage_gaps_path) != registered.sha256:
+            raise RunnerError(
+                "stale-coverage-gaps-artifact-sha256: "
+                "source-first coverage-gaps handoff binding is stale"
+            )
+        handoff_root = (self.ft_root / "work" / "stage-handoffs").resolve()
+        handoff_dir = (
+            self.source_first_terminal_handoff_dir
+            if self.source_first_terminal_handoff_dir is not None
+            else coverage_gaps_path.parent.resolve()
+        )
+        try:
+            relative_handoff = handoff_dir.relative_to(handoff_root)
+        except ValueError as exc:
+            raise RunnerError(
+                "source-first coverage-gaps artifact must be in the active numbered "
+                "stage-handoff directory"
+            ) from exc
+        if len(relative_handoff.parts) != 1 or re.fullmatch(
+            r"[0-9]+-[A-Za-z0-9_.-]+", relative_handoff.name
+        ) is None:
+            raise RunnerError(
+                "source-first coverage-gaps artifact must directly identify one "
+                "numbered stage-handoff directory"
+            )
+        workflow_path = handoff_dir / "workflow-state.yaml"
+        if not workflow_path.is_file():
+            raise RunnerError(
+                "active source-first stage handoff is missing workflow-state.yaml"
+            )
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        scope_values = [
+            line.split(":", 1)[1].strip().strip("'\"")
+            for line in workflow_text.splitlines()
+            if line.startswith("scope_slug:")
+        ]
+        if scope_values != [self._prepared_package.scope_slug]:
+            raise RunnerError(
+                "active source-first workflow-state scope_slug does not match the package"
+            )
+        return handoff_dir, workflow_path
+
+    def _source_first_source_parity_status(self) -> str:
+        if self._source_first_contract is None:
+            raise RunnerError("source parity status requires a parsed source-first contract")
+        manifest = self._source_first_contract.manifest
+        source_paths = [item.path for item in manifest.sources]
+        source_paths.extend(item.path for item in manifest.evidence_sources)
+        suffixes = {Path(path).suffix.casefold() for path in source_paths}
+        return "yes" if {".docx", ".pdf"} <= suffixes else "not-applicable"
+
+    def _source_first_sign_off_self_check(self) -> dict[str, str]:
+        if self._source_first_contract is None:
+            raise RunnerError("source-first self-check requires a parsed contract")
+        unclear = tuple(
+            assertion.atom_id
+            for assertion in self._source_first_contract.manifest.assertions
+            if assertion.semantic_disposition == "ambiguous"
+        )
+        return {
+            "traceability_checked": "yes",
+            "source_parity_checked": self._source_first_source_parity_status(),
+            "structure_checked": "yes",
+            "test_case_grouping_checked": "yes",
+            "test_case_numbering_checked": "yes",
+            "test_design_checked": "yes",
+            "applicability_dimensions_checked": "yes",
+            "validator_checked": "yes",
+            "blocking_findings_absent": "yes",
+            "traceability_gaps_absent": "yes",
+            "known_unclear_items": "; ".join(unclear) if unclear else "none",
+            "sign_off_rationale": (
+                "Контракт reviewer v4 принят, routed dimensions проверены, а draft "
+                "связан по SHA-256 с пройденными quality gates; lifecycle sign-off "
+                "активируется только controlled promotion."
+            ),
+        }
+
+    def _render_pending_ui_prep_prompt(
+        self,
+        *,
+        workflow_path: Path,
+    ) -> bytes:
+        if self._prepared_package is None:
+            raise RunnerError("UI-prep handoff requires a loaded prepared package")
+        scope_slug = self._prepared_package.scope_slug
+        automation_root = self.ft_root / "work" / "ui-automation-prep" / scope_slug
+        automation_ready = (
+            self.ft_root / "test-cases" / "automation-ready" / self.final_path.name
+        )
+        rel = lambda path: relative_path(path, self.ft_root)
+        lines = [
+            "# Handoff: reviewer -> UI automation prep",
+            "",
+            "> Статус: `pending-controlled-promotion`. Не выполнять этот prompt, "
+            "пока `cycle-state.yaml` и `workflow-state.yaml` не переведены в "
+            "`signed-off` controlled promotion transaction.",
+            "",
+            "## Цель этапа",
+            "",
+            f"Проверить в реальном UI automation-ready применимость signed-off baseline для scope `{scope_slug}`.",
+            "",
+            "## Входные артефакты",
+            "",
+            f"- Canonical test cases после promotion: `{rel(self.final_path)}`",
+            f"- Workflow state: `{rel(workflow_path)}`",
+            "- После promotion разрешать cycle state, final findings, обе traceability-матрицы и signed-off snapshot только через `latest_artifacts` этого workflow-state.",
+            "",
+            "## Обязательные действия",
+            "",
+            "- До UI-прогона подтвердить оба lifecycle status `signed-off` и наличие snapshot.",
+            "- Выполнить кейсы в реальном UI и сохранить Playwright evidence с трассировкой к `TC-*`.",
+            "- Выполнить каждый уникальный `TC-*` из canonical test cases и `covered_by_tc` строк с `coverage_status = covered`; `unclear`/`not-applicable` не исполнять и не превращать в новые требования, а Markdown/XLSX только сверить на parity.",
+            "- Зафиксировать найденные runtime-калибровки только в automation-ready версии и UI evidence.",
+            "",
+            "## Не делать",
+            "",
+            "- Не использовать UI как источник бизнес-правил вместо DOCX/XHTML и accepted source contract.",
+            "- Не перезаписывать FT-first canonical baseline результатами UI-калибровки.",
+            "- Не запускать UI-прогон в статусе `pending-controlled-promotion`.",
+            "",
+            "## Ожидаемые выходы",
+            "",
+            f"- `{rel(automation_root / 'ui-validation-report.md')}`",
+            f"- `{rel(automation_root / 'evidence-index.md')}`",
+            f"- `{rel(automation_ready)}`",
+            "",
+            "## Gate завершения",
+            "",
+            "Lifecycle signed-off подтвержден; все готовые кейсы пройдены либо имеют явный UI gap; evidence индексирован; canonical baseline не изменен.",
+        ]
+        return ("\n".join(lines) + "\n").encode("utf-8")
+
+    def _materialize_source_first_terminal_artifacts(
+        self,
+        *,
+        review: ReviewContract,
+    ) -> tuple[Path, Path, Path]:
+        if self._source_first_contract is None:
+            raise RunnerError("terminal artifacts require a parsed source-first contract")
+        warnings = [
+            finding.finding_id
+            for finding in review.findings
+            if finding.severity == "warning"
+        ]
+        if warnings:
+            raise RunnerError(
+                "accepted source-first review cannot create a UI handoff while warning "
+                "findings remain: " + ", ".join(warnings)
+            )
+        rows = build_source_first_traceability_rows(
+            self._source_first_contract,
+            review,
+        )
+        gap_atoms = [row[0] for row in rows if row[8] == "gap"]
+        if gap_atoms:
+            raise RunnerError(
+                "accepted source-first review cannot create a UI handoff while "
+                "traceability gaps remain: " + ", ".join(gap_atoms)
+            )
+        handoff_dir, workflow_path = self._source_first_active_handoff()
+        prompt_path = handoff_dir / "prompt.reviewer-to-ui-prep.md"
+        desired = (
+            (
+                self.final_traceability_matrix_path,
+                render_source_first_traceability_markdown(rows),
+            ),
+            (
+                self.final_traceability_matrix_xlsx_path,
+                render_source_first_traceability_xlsx(rows),
+            ),
+            (
+                prompt_path,
+                self._render_pending_ui_prep_prompt(workflow_path=workflow_path),
+            ),
+        )
+        for path, content in desired:
+            if path.is_file() and path.read_bytes() != content:
+                raise RunnerError(
+                    f"immutable terminal artifact conflicts with existing file: {path}"
+                )
+        for path, content in desired:
+            _write_immutable_atomic(path, content)
+        validate_traceability_matrix_pair(
+            self.final_traceability_matrix_path,
+            self.final_traceability_matrix_xlsx_path,
+        )
+        return (
+            self.final_traceability_matrix_path,
+            self.final_traceability_matrix_xlsx_path,
+            prompt_path,
+        )
+
+    def _write_source_first_promotion_evidence(
+        self,
+        *,
+        review: ReviewContract,
+        draft_sha256: str,
+        production_before: dict[str, str],
+    ) -> dict[str, str]:
+        if (
+            not self._uses_source_first_contract()
+            or review.contract_version != 4
+            or review.decision != "accepted"
+        ):
+            raise RunnerError(
+                "normalized promotion evidence requires an accepted source-first review contract v4"
+            )
+        if self.prepared_package_path is None:
+            raise RunnerError("source-first promotion evidence requires a prepared package")
+        if self._prepared_package is None:
+            raise RunnerError("source-first promotion evidence requires a loaded prepared package")
+
+        source_path = self._prepared_artifact("source-evidence")
+        obligation_path = self._prepared_artifact("atomic-obligations")
+        matrix_path, matrix_xlsx_path, prompt_path = (
+            self._materialize_source_first_terminal_artifacts(review=review)
+        )
+        normalized_review_result = self._write_normalized_source_first_review_result(
+            review=review,
+            draft_sha256=draft_sha256,
+        )
+
+        optional_inputs: dict[str, dict[str, str] | None] = {
+            "final_findings": self._promotion_artifact_binding(
+                self.reviewer_findings_path
+            ),
+            "final_traceability_matrix": self._promotion_artifact_binding(
+                matrix_path
+            ),
+            "final_traceability_matrix_xlsx": self._promotion_artifact_binding(
+                matrix_xlsx_path
+            ),
+            "handoff_prompt": self._promotion_artifact_binding(prompt_path),
+            "promotion_contract": (
+                self._promotion_artifact_binding(self.promotion_contract_path)
+                if self.promotion_contract_path is not None
+                else None
+            ),
+            "promotion_readiness": (
+                self._promotion_artifact_binding(self.promotion_readiness_path)
+                if self.promotion_readiness_path.is_file()
+                else None
+            ),
+        }
+        canonical_relative = relative_path(self.final_path, self.ft_root)
+        seed = build_promotion_basis_seed(
+            ft_root=relative_path(self.ft_root, self.repo_root),
+            cycle_dir=relative_path(self.cycle_dir, self.repo_root),
+            scope_slug=self._prepared_package.scope_slug,
+            candidate=self._promotion_artifact_binding(self.draft_path),
+            writer=self._promotion_artifact_binding(self.draft_path),
+            source_basis=self._promotion_artifact_binding(source_path),
+            obligation_set=self._promotion_artifact_binding(obligation_path),
+            reviewer=self._promotion_artifact_binding(
+                self.normalized_review_result_path
+            ),
+            prepared_package=self._promotion_artifact_binding(
+                self.prepared_package_path
+            ),
+            gate_reports=(
+                {
+                    **self._promotion_artifact_binding(
+                        self.quality_gate_bundle_path
+                    ),
+                    "validator": "prepared-quality-gate-bundle-v1",
+                },
+            ),
+            canonical_path=relative_path(self.final_path, self.repo_root),
+            canonical_prior_sha256=production_before.get(canonical_relative),
+            production_test_case_hashes=production_before,
+            available_builder_inputs=optional_inputs,
+        )
+        write_json_atomic(self.promotion_basis_seed_path, seed)
+        return {
+            "normalized_review_result": normalized_review_result,
+            "promotion_basis_seed": relative_path(
+                self.promotion_basis_seed_path, self.ft_root
+            ),
+            "promotion_basis_seed_status": "builder-input-required",
+        }
 
     def _initial_state(self) -> dict[str, Any]:
         reviewer_rebind = self._uses_prepared_reviewer_rebind()
@@ -5910,6 +7826,26 @@ class CodexExecReviewCycleRunner:
 
     def _reviewer_prompt(self) -> str:
         if self._uses_compact_prepared_reviewer() and self.prepared_package_path is not None:
+            source_first = self._uses_source_first_contract()
+            evidence_boundary = (
+                (
+                    "The accepted independent source-assertion receipt authenticates the "
+                    "source model. Independently review the draft against the exact "
+                    "digest-bound assertion and compiled-obligation semantics; do not "
+                    "repeat the source-row audit in this stage.",
+                    "Treat a missing digest, selected assertion, OBL binding or exact "
+                    "compiled semantic field as a blocking source-model transport finding.",
+                )
+                if source_first
+                else (
+                    "The runner proved package integrity and deterministic gates only; "
+                    "it did not prove that the upstream FT interpretation, polarity or "
+                    "gap classification is correct.",
+                    "Independently verify the supplied bounded source basis against the "
+                    "obligation hypotheses before reviewing TC wording. Treat a missing, "
+                    "stale or derived-only source basis as a blocking source-model finding.",
+                )
+            )
             prompt = "\n".join(
                 [
                     (
@@ -5918,10 +7854,13 @@ class CodexExecReviewCycleRunner:
                         else "# Codex exec prepared-standard reviewer compact path"
                     ),
                     "",
-                    "The upstream package and runner already applied the full source, scope, reviewer-routing and deterministic validation contracts.",
-                    "Use only the embedded Prepared Reviewer Runtime Profile and verified payload below. Do not load the full ft-test-case-reviewer skill, instruction manifest, package files, project references, prior cycles, production test cases or full sources.",
+                    *evidence_boundary,
+                    "Use only the embedded Prepared Reviewer Runtime Profile and verified payload below. Do not load the full ft-test-case-reviewer skill, instruction manifest, package files, project references, prior cycles or production test cases.",
                     "This stage is read-only. Do not modify or create any workspace file.",
                     "No shell command is needed. If the runtime environment is not already confirmed, only `python scripts/probe_environment.py` is allowed.",
+                    "FT-first fixture boundary: a runtime-selected integration response with source-defined observable properties is reproducible at this stage. Do not require a stand-specific organization, record ID, locator, token, session or prerecorded provider response; those bindings belong to UI-prep. Report a fixture finding only when the selection properties, executable action or observable oracle are themselves absent.",
+                    "For ui-calibration-required candidates, the abstract invariant `invalid/empty value is not accepted as valid for continuation` is source-backed and required; it does not by itself assert a blocked transition mechanism. Require the evidence record, but report invention only when the draft preselects a concrete message, filtering, clearing, highlight, disabled state, blocked/allowed transition, save/no-save effect or other exact UI mechanism.",
+                    "A ui-calibration-required candidate remains valid at the FT-first stage when its source-backed action is only to enter or leave the exact value and record the visible state/outcome. Do not mark it incorrect solely because the source does not define a confirmation, continuation or validation trigger; selecting that runtime trigger belongs to UI-prep and must not be invented by the FT-first draft.",
                     "",
                     self._prepared_reviewer_payload(),
                     "",
@@ -6004,6 +7943,23 @@ class CodexExecReviewCycleRunner:
         prompt: str,
         last_message_path: Path | None,
     ) -> tuple[ProcessResult, dict[str, Any]]:
+        launch = self._prepare_stage_process(
+            stage=stage,
+            role=role,
+            prompt=prompt,
+            last_message_path=last_message_path,
+        )
+        execution = self._execute_stage_process(launch)
+        return self._finalize_stage_process(launch, execution)
+
+    def _prepare_stage_process(
+        self,
+        *,
+        stage: str,
+        role: str,
+        prompt: str,
+        last_message_path: Path | None,
+    ) -> StageProcessLaunch:
         self._verify_prepared_package()
         attempt_root = self.attempt_root(stage)
         if attempt_root.exists():
@@ -6106,18 +8062,50 @@ class CodexExecReviewCycleRunner:
                 else None
             ),
         )
+        return StageProcessLaunch(
+            stage=stage,
+            role=role,
+            request=request,
+            command=command,
+            stdout_path=stdout_path,
+            stderr_path=stderr_path,
+            events_path=events_path,
+            last_message_path=last_message_path,
+        )
+
+    def _execute_stage_process(
+        self,
+        launch: StageProcessLaunch,
+    ) -> StageProcessExecution:
         started_at = utc_now()
-        result = self.executor.execute(request)
+        result = self.executor.execute(launch.request)
         finished_at = utc_now()
-        stdout_path.write_text(result.stdout, encoding="utf-8")
-        stderr_path.write_text(result.stderr, encoding="utf-8")
-        events_path.write_text(result.stdout if self.command_config.json_flag else "", encoding="utf-8")
+        return StageProcessExecution(
+            result=result,
+            started_at=started_at,
+            finished_at=finished_at,
+        )
+
+    def _finalize_stage_process(
+        self,
+        launch: StageProcessLaunch,
+        process_execution: StageProcessExecution,
+    ) -> tuple[ProcessResult, dict[str, Any]]:
+        stage = launch.stage
+        role = launch.role
+        result = process_execution.result
+        launch.stdout_path.write_text(result.stdout, encoding="utf-8")
+        launch.stderr_path.write_text(result.stderr, encoding="utf-8")
+        launch.events_path.write_text(
+            result.stdout if self.command_config.json_flag else "",
+            encoding="utf-8",
+        )
         backend_session_id = backend_session_id_from_events(result.stdout)
         execution = BackendStageExecution(
             backend="codex-exec",
             backend_session_id=backend_session_id,
-            started_at=started_at,
-            finished_at=finished_at,
+            started_at=process_execution.started_at,
+            finished_at=process_execution.finished_at,
             duration_ms=max(0, round(result.duration_seconds * 1000)),
             exit_code=result.exit_code,
             stdout=result.stdout,
@@ -6133,12 +8121,18 @@ class CodexExecReviewCycleRunner:
         )
         execution.validate()
         artifacts = {
-            "command": list(command),
-            "stdout": relative_path(stdout_path, self.repo_root),
-            "stderr": relative_path(stderr_path, self.repo_root),
-            "events": relative_path(events_path, self.repo_root) if self.command_config.json_flag else "",
+            "command": list(launch.command),
+            "stdout": relative_path(launch.stdout_path, self.repo_root),
+            "stderr": relative_path(launch.stderr_path, self.repo_root),
+            "events": (
+                relative_path(launch.events_path, self.repo_root)
+                if self.command_config.json_flag
+                else ""
+            ),
             "last_message": (
-                relative_path(last_message_path, self.repo_root) if last_message_path is not None else ""
+                relative_path(launch.last_message_path, self.repo_root)
+                if launch.last_message_path is not None
+                else ""
             ),
             "_execution": execution,
         }
@@ -6437,6 +8431,15 @@ class CodexExecReviewCycleRunner:
                     producer="runner",
                 )
             )
+            expected_outputs.append(
+                ExpectedOutput(
+                    path=relative_path(
+                        self.reviewer_contract_result_path, self.repo_root
+                    ),
+                    kind="review-contract-result",
+                    producer="runner",
+                )
+            )
             if self._prepared_package is not None:
                 expected_outputs.append(
                     ExpectedOutput(
@@ -6540,6 +8543,46 @@ class CodexExecReviewCycleRunner:
             },
         }
 
+    def _reviewer_output_schema_preflight(self) -> dict[str, Any]:
+        """Reject response-schema constructs known to fail Codex before writer live."""
+
+        schema = self._review_contract_schema()
+        forbidden_paths: list[str] = []
+
+        def visit(value: Any, path: str) -> None:
+            if isinstance(value, dict):
+                for key, nested in value.items():
+                    child_path = f"{path}.{key}"
+                    if key == "oneOf":
+                        forbidden_paths.append(f"{child_path}:oneOf")
+                    if key == "const" and isinstance(nested, (dict, list)):
+                        forbidden_paths.append(f"{child_path}:non-scalar-const")
+                    visit(nested, child_path)
+            elif isinstance(value, list):
+                for index, nested in enumerate(value):
+                    visit(nested, f"{path}[{index}]")
+
+        visit(schema, "$")
+        if forbidden_paths:
+            raise RunnerError(
+                "reviewer output schema is incompatible with Codex strict output: "
+                "unsupported construct(s) at " + ", ".join(forbidden_paths)
+            )
+        return {
+            "passed": True,
+            "validator": "codex-reviewer-output-schema-preflight-v1",
+            "schema_sha256": sha256_text(
+                json.dumps(
+                    schema,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            ),
+            "forbidden_constructs": ["oneOf", "non-scalar-const"],
+            "violations": [],
+        }
+
     def _review_contract_schema(
         self,
         *,
@@ -6553,6 +8596,184 @@ class CodexExecReviewCycleRunner:
                     self._prepared_artifact("atomic-obligations")
                 ).obligations
             )
+            uses_source_first_contract = getattr(
+                self, "_uses_source_first_contract", lambda: False
+            )()
+            if uses_source_first_contract:
+                dimension_source_refs = self._source_first_dimension_source_refs()
+                dimensions = list(dimension_source_refs)
+                dimension_variants = [
+                    {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "required": [
+                            "dimension",
+                            "verdict",
+                            "source_refs",
+                            "note",
+                        ],
+                        "properties": {
+                            "dimension": {
+                                "type": "string",
+                                "const": dimension,
+                            },
+                            "verdict": {
+                                "type": "string",
+                                "enum": sorted(SOURCE_FIRST_DIMENSION_VERDICTS),
+                            },
+                            "source_refs": {
+                                "type": "array",
+                                "minItems": len(dimension_source_refs[dimension]),
+                                "maxItems": len(dimension_source_refs[dimension]),
+                                "items": {
+                                    "type": "string",
+                                    "enum": list(dimension_source_refs[dimension]),
+                                },
+                            },
+                            "note": {"type": "string", "minLength": 1},
+                        },
+                    }
+                    for dimension in dimensions
+                ]
+                compact_obligation_variants: list[dict[str, Any]] = []
+                for is_testable in (True, False):
+                    selected_ids = [
+                        obligation.obligation_id
+                        for obligation in obligations
+                        if (obligation.coverage_status == "testable") is is_testable
+                    ]
+                    if not selected_ids:
+                        continue
+                    compact_obligation_variants.append(
+                        {
+                            "type": "object",
+                            "additionalProperties": False,
+                            "required": ["obligation_id", "verdict"],
+                            "properties": {
+                                "obligation_id": {
+                                    "type": "string",
+                                    "enum": selected_ids,
+                                },
+                                "verdict": {
+                                    "type": "string",
+                                    "enum": (
+                                        ["covered", "incorrect", "missing"]
+                                        if is_testable
+                                        else ["gap-preserved", "invented-coverage"]
+                                    ),
+                                },
+                            },
+                        }
+                    )
+                return {
+                    "$schema": "https://json-schema.org/draft/2020-12/schema",
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "contract_version",
+                        "decision",
+                        "reviewed_draft_sha256",
+                        "reviewed_source_basis_sha256",
+                        "reviewed_obligation_set_sha256",
+                        "obligation_reviews",
+                        "dimension_reviews",
+                        "findings",
+                        "summary",
+                    ],
+                    "properties": {
+                        "contract_version": {"type": "integer", "const": 4},
+                        "decision": {
+                            "type": "string",
+                            "enum": sorted(REVIEW_DECISIONS),
+                        },
+                        "reviewed_draft_sha256": {
+                            "type": "string",
+                            "pattern": "^[0-9a-f]{64}$",
+                        },
+                        "reviewed_source_basis_sha256": {
+                            "type": "string",
+                            "const": sha256_file(
+                                self._prepared_artifact("source-evidence")
+                            ),
+                        },
+                        "reviewed_obligation_set_sha256": {
+                            "type": "string",
+                            "const": sha256_file(
+                                self._prepared_artifact("atomic-obligations")
+                            ),
+                        },
+                        "obligation_reviews": {
+                            "type": "array",
+                            "minItems": len(obligations),
+                            "maxItems": len(obligations),
+                            "items": {"anyOf": compact_obligation_variants},
+                        },
+                        "dimension_reviews": {
+                            "type": "array",
+                            "minItems": len(dimensions),
+                            "maxItems": len(dimensions),
+                            "items": (
+                                {"anyOf": dimension_variants}
+                                if dimension_variants
+                                else {"type": "object"}
+                            ),
+                        },
+                        "findings": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "additionalProperties": False,
+                                "required": [
+                                    "id",
+                                    "severity",
+                                    "category",
+                                    "atom_ids",
+                                    "test_case_ids",
+                                    "problem",
+                                    "required_change",
+                                ],
+                                "properties": {
+                                    "id": {"type": "string", "minLength": 1},
+                                    "severity": {
+                                        "type": "string",
+                                        "enum": sorted(
+                                            REVIEW_FINDING_SEVERITIES
+                                        ),
+                                    },
+                                    "category": {
+                                        "type": "string",
+                                        "enum": sorted(
+                                            REVIEW_FINDING_CATEGORIES
+                                        ),
+                                    },
+                                    "atom_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                        },
+                                    },
+                                    "test_case_ids": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                        },
+                                    },
+                                    "problem": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                    },
+                                    "required_change": {
+                                        "type": "string",
+                                        "minLength": 1,
+                                    },
+                                },
+                            },
+                        },
+                        "summary": {"type": "string", "minLength": 1},
+                    },
+                }
             uses_generic_schema = getattr(
                 self, "_uses_generic_bounded_reviewer_schema", lambda: False
             )()
@@ -6919,6 +9140,11 @@ class CodexExecReviewCycleRunner:
         )
 
     def _promote(self, production_before: dict[str, str], *, expected_draft_sha256: str) -> None:
+        if self.prepared_package_path is not None:
+            raise RunnerError(
+                "Prepared/source-first direct promotion is disabled; use "
+                "scripts/promote_review_cycle.py"
+            )
         self._promotion_plan(production_before, expected_draft_sha256=expected_draft_sha256)
         self.final_path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path = self.final_path.with_suffix(self.final_path.suffix + ".promotion-tmp")
@@ -6933,6 +9159,13 @@ class CodexExecReviewCycleRunner:
     def _promotion_plan(
         self, production_before: dict[str, str], *, expected_draft_sha256: str
     ) -> dict[str, Any]:
+        blocking_source_gap_ids = self._blocking_prepared_gap_ids()
+        if blocking_source_gap_ids:
+            raise RunnerError(
+                "PROMO-BLOCKING-SOURCE-GAPS: prepared draft contains blocking "
+                "source gaps and cannot be promoted: "
+                + ", ".join(blocking_source_gap_ids)
+            )
         changes = self._production_changes(production_before)
         if changes:
             raise RunnerError(
@@ -7027,6 +9260,7 @@ def usage_from_events(text: str) -> dict[str, int] | None:
         "cached_input_tokens": ("cached_input_tokens", "cached_prompt_tokens"),
         "output_tokens": ("output_tokens", "completion_tokens"),
         "total_tokens": ("total_tokens",),
+        "reasoning_tokens": ("reasoning_tokens", "reasoning_output_tokens"),
     }
     collected: dict[str, int] = {}
     for raw_line in text.splitlines():
@@ -7196,14 +9430,320 @@ def _string_list(payload: dict[str, Any], key: str, context: str) -> tuple[str, 
     return normalized
 
 
+def _parse_source_first_review_contract(
+    payload: dict[str, Any],
+    *,
+    expected_obligations: Sequence[Any],
+    expected_draft_sha256: str,
+    expected_source_basis_sha256: str,
+    expected_obligation_set_sha256: str,
+    expected_dimensions: Sequence[str],
+    expected_dimension_source_refs: Mapping[str, Sequence[str]],
+    draft_text: str,
+) -> ReviewContract:
+    expected_fields = {
+        "contract_version",
+        "decision",
+        "reviewed_draft_sha256",
+        "reviewed_source_basis_sha256",
+        "reviewed_obligation_set_sha256",
+        "obligation_reviews",
+        "dimension_reviews",
+        "findings",
+        "summary",
+    }
+    if set(payload) != expected_fields:
+        raise RunnerError(
+            "source-first reviewer output must contain exactly the contract v4 fields"
+        )
+    if payload.get("contract_version") != 4:
+        raise RunnerError("source-first reviewer contract_version must equal 4")
+    decision = _required_text(payload, "decision", "review")
+    if decision not in REVIEW_DECISIONS:
+        raise RunnerError(
+            f"reviewer decision must be one of {sorted(REVIEW_DECISIONS)}"
+        )
+    reviewed_draft = _required_text(payload, "reviewed_draft_sha256", "review")
+    reviewed_source = _required_text(
+        payload, "reviewed_source_basis_sha256", "review"
+    )
+    reviewed_obligations = _required_text(
+        payload, "reviewed_obligation_set_sha256", "review"
+    )
+    for label, actual, expected in (
+        ("draft", reviewed_draft, expected_draft_sha256),
+        ("source basis", reviewed_source, expected_source_basis_sha256),
+        ("obligation set", reviewed_obligations, expected_obligation_set_sha256),
+    ):
+        if actual != expected:
+            raise RunnerError(
+                f"source-first reviewer {label} hash mismatch: "
+                f"expected {expected}, got {actual}"
+            )
+
+    normalized_dimension_source_refs: dict[str, tuple[str, ...]] = {}
+    for dimension, raw_refs in expected_dimension_source_refs.items():
+        if (
+            not isinstance(dimension, str)
+            or not dimension.strip()
+            or isinstance(raw_refs, (str, bytes))
+            or not isinstance(raw_refs, Sequence)
+        ):
+            raise RunnerError(
+                "source-first reviewer expected dimension source bindings are invalid"
+            )
+        refs = tuple(raw_refs)
+        if (
+            not refs
+            or any(not isinstance(value, str) or not value.strip() for value in refs)
+            or len(refs) != len(set(refs))
+            or refs != tuple(sorted(refs))
+        ):
+            raise RunnerError(
+                f"source-first reviewer dimension {dimension} has invalid source bindings"
+            )
+        normalized_dimension_source_refs[dimension] = refs
+    if set(normalized_dimension_source_refs) != set(expected_dimensions):
+        raise RunnerError(
+            "source-first reviewer expected dimension binding set mismatch: "
+            f"missing={sorted(set(expected_dimensions) - set(normalized_dimension_source_refs))}, "
+            f"unknown={sorted(set(normalized_dimension_source_refs) - set(expected_dimensions))}"
+        )
+
+    known_tc_ids = set(
+        re.findall(
+            r"^##\s+(TC-[A-Za-z0-9][A-Za-z0-9_.-]*)\b",
+            draft_text,
+            flags=re.MULTILINE,
+        )
+    )
+
+    expected_by_id = {item.obligation_id: item for item in expected_obligations}
+    raw_obligation_reviews = payload.get("obligation_reviews")
+    if not isinstance(raw_obligation_reviews, list) or not raw_obligation_reviews:
+        raise RunnerError(
+            "source-first reviewer obligation_reviews must be a non-empty array"
+        )
+    compact_verdicts: dict[str, str] = {}
+    for index, item in enumerate(raw_obligation_reviews):
+        context = f"obligation_reviews[{index}]"
+        if not isinstance(item, dict) or set(item) != {"obligation_id", "verdict"}:
+            raise RunnerError(f"{context} has invalid fields")
+        obligation_id = _required_text(item, "obligation_id", context)
+        if obligation_id in compact_verdicts:
+            raise RunnerError(
+                "source-first reviewer obligation_reviews contain duplicate obligation ids"
+            )
+        if obligation_id not in expected_by_id:
+            raise RunnerError(
+                f"{context} references unknown obligation id {obligation_id}"
+            )
+        compact_verdicts[obligation_id] = _required_text(item, "verdict", context)
+    if set(compact_verdicts) != set(expected_by_id):
+        raise RunnerError(
+            "source-first reviewer obligation set mismatch: "
+            f"missing={sorted(set(expected_by_id) - set(compact_verdicts))}, "
+            f"unknown={sorted(set(compact_verdicts) - set(expected_by_id))}"
+        )
+    reviews: list[ObligationReview] = []
+    for obligation_id, obligation in expected_by_id.items():
+        verdict = compact_verdicts[obligation_id]
+        if obligation.coverage_status == "testable":
+            allowed_verdicts = {"covered", "missing", "incorrect"}
+        else:
+            allowed_verdicts = {"gap-preserved", "invented-coverage"}
+        if verdict not in allowed_verdicts:
+            raise RunnerError(
+                f"source-first obligation {obligation_id} has incompatible verdict {verdict}"
+            )
+        planned_tc = getattr(obligation, "planned_test_case_id", "")
+        if verdict == "covered" and (
+            not planned_tc or planned_tc not in known_tc_ids
+        ):
+            raise RunnerError(
+                f"source-first covered obligation {obligation_id} planned test case "
+                f"{planned_tc or '<missing>'} is absent from the reviewed draft"
+            )
+        reviews.append(
+            ObligationReview(
+                obligation_id=obligation_id,
+                atom_id=obligation.traceability_atom_id,
+                verdict=verdict,
+                test_case_ids=(planned_tc,) if verdict == "covered" and planned_tc else (),
+                note="compact source-first obligation verdict",
+            )
+        )
+
+    raw_dimensions = payload.get("dimension_reviews")
+    if not isinstance(raw_dimensions, list):
+        raise RunnerError("source-first reviewer dimension_reviews must be an array")
+    dimension_reviews: list[DimensionReview] = []
+    for index, item in enumerate(raw_dimensions):
+        context = f"dimension_reviews[{index}]"
+        if not isinstance(item, dict) or set(item) != {
+            "dimension",
+            "verdict",
+            "source_refs",
+            "note",
+        }:
+            raise RunnerError(f"{context} has invalid fields")
+        verdict = _required_text(item, "verdict", context)
+        if verdict not in SOURCE_FIRST_DIMENSION_VERDICTS:
+            raise RunnerError(f"{context}.verdict is not allowed: {verdict}")
+        source_refs = _string_list(item, "source_refs", context)
+        if not source_refs:
+            raise RunnerError(f"{context}.source_refs must not be empty")
+        dimension_reviews.append(
+            DimensionReview(
+                dimension=_required_text(item, "dimension", context),
+                verdict=verdict,
+                source_refs=source_refs,
+                note=_required_text(item, "note", context),
+            )
+        )
+    actual_dimensions = [item.dimension for item in dimension_reviews]
+    if len(actual_dimensions) != len(set(actual_dimensions)):
+        raise RunnerError("source-first reviewer dimension_reviews contain duplicates")
+    if set(actual_dimensions) != set(expected_dimensions):
+        raise RunnerError(
+            "source-first reviewer dimension set mismatch: "
+            f"missing={sorted(set(expected_dimensions) - set(actual_dimensions))}, "
+            f"unknown={sorted(set(actual_dimensions) - set(expected_dimensions))}"
+        )
+    for item in dimension_reviews:
+        expected_refs = normalized_dimension_source_refs[item.dimension]
+        if item.source_refs != expected_refs:
+            raise RunnerError(
+                f"source-first dimension {item.dimension} must cite the exact canonical "
+                f"bound source refs: expected={list(expected_refs)}, "
+                f"actual={list(item.source_refs)}"
+            )
+
+    known_atom_ids = {
+        item.traceability_atom_id for item in expected_obligations
+    }
+    findings_payload = payload.get("findings")
+    if not isinstance(findings_payload, list):
+        raise RunnerError("source-first reviewer findings must be an array")
+    findings: list[ReviewFinding] = []
+    finding_ids: set[str] = set()
+    for index, item in enumerate(findings_payload):
+        context = f"findings[{index}]"
+        required = {
+            "id",
+            "severity",
+            "category",
+            "atom_ids",
+            "test_case_ids",
+            "problem",
+            "required_change",
+        }
+        if not isinstance(item, dict) or set(item) != required:
+            raise RunnerError(f"{context} has invalid fields")
+        finding_id = _required_text(item, "id", context)
+        if finding_id in finding_ids:
+            raise RunnerError("source-first reviewer findings contain duplicate ids")
+        finding_ids.add(finding_id)
+        severity = _required_text(item, "severity", context)
+        category = _required_text(item, "category", context)
+        if severity not in REVIEW_FINDING_SEVERITIES:
+            raise RunnerError(f"{context}.severity is not allowed: {severity}")
+        if category not in REVIEW_FINDING_CATEGORIES:
+            raise RunnerError(f"{context}.category is not allowed: {category}")
+        atom_ids = _string_list(item, "atom_ids", context)
+        test_case_ids = _string_list(item, "test_case_ids", context)
+        if set(atom_ids) - known_atom_ids:
+            raise RunnerError(f"{context} references unknown atom ids")
+        if set(test_case_ids) - known_tc_ids:
+            raise RunnerError(f"{context} references unknown test-case ids")
+        findings.append(
+            ReviewFinding(
+                finding_id=finding_id,
+                severity=severity,
+                category=category,
+                atom_ids=atom_ids,
+                test_case_ids=test_case_ids,
+                problem=_required_text(item, "problem", context),
+                required_change=_required_text(item, "required_change", context),
+            )
+        )
+
+    has_error = any(item.severity == "error" for item in findings)
+    blocking_atoms = {
+        atom_id
+        for finding in findings
+        if finding.severity == "error"
+        for atom_id in finding.atom_ids
+    }
+    for review in reviews:
+        if review.verdict in {"missing", "incorrect", "invented-coverage"} and (
+            review.atom_id not in blocking_atoms
+        ):
+            raise RunnerError(
+                f"blocking verdict for {review.atom_id} requires an error finding linked to the atom"
+            )
+    all_terminal_pass = all(
+        item.verdict in {"covered", "gap-preserved"} for item in reviews
+    )
+    all_dimensions_verified = all(
+        item.verdict == "verified" for item in dimension_reviews
+    )
+    if decision == "accepted" and (
+        has_error or not all_terminal_pass or not all_dimensions_verified
+    ):
+        raise RunnerError(
+            "accepted source-first review requires every obligation to pass, "
+            "every dimension verified and no error finding"
+        )
+    if decision == "changes-required" and not findings:
+        raise RunnerError(
+            "changes-required source-first review requires at least one finding"
+        )
+    return ReviewContract(
+        decision=decision,
+        contract_version=4,
+        reviewed_draft_sha256=reviewed_draft,
+        obligation_reviews=tuple(reviews),
+        reviewed_source_basis_sha256=reviewed_source,
+        reviewed_obligation_set_sha256=reviewed_obligations,
+        dimension_reviews=tuple(dimension_reviews),
+        findings=tuple(findings),
+        summary=_required_text(payload, "summary", "review"),
+    )
+
+
 def parse_prepared_review_contract(
     text: str,
     *,
     expected_obligations: Sequence[Any],
     expected_draft_sha256: str,
     draft_text: str,
+    expected_source_basis_sha256: str = "",
+    expected_obligation_set_sha256: str = "",
+    expected_dimensions: Sequence[str] = (),
+    expected_dimension_source_refs: Mapping[str, Sequence[str]] | None = None,
 ) -> ReviewContract:
     payload = _review_contract_payload(text)
+    if payload.get("contract_version") == 3:
+        raise RunnerError(
+            "source-first reviewer contract version 3 is obsolete because it lacks "
+            "a per-obligation review receipt; rebuild the reviewer output with contract v4"
+        )
+    if payload.get("contract_version") == 4:
+        if not expected_source_basis_sha256 or not expected_obligation_set_sha256:
+            raise RunnerError(
+                "source-first reviewer contract requires expected source/obligation hashes"
+            )
+        return _parse_source_first_review_contract(
+            payload,
+            expected_obligations=expected_obligations,
+            expected_draft_sha256=expected_draft_sha256,
+            expected_source_basis_sha256=expected_source_basis_sha256,
+            expected_obligation_set_sha256=expected_obligation_set_sha256,
+            expected_dimensions=expected_dimensions,
+            expected_dimension_source_refs=expected_dimension_source_refs or {},
+            draft_text=draft_text,
+        )
     expected_fields = {
         "contract_version",
         "decision",
@@ -7386,22 +9926,51 @@ def parse_prepared_review_contract(
     )
 
 
-def render_prepared_review_findings(review: ReviewContract) -> str:
+def render_prepared_review_findings(
+    review: ReviewContract,
+    *,
+    sign_off_self_check: Mapping[str, str] | None = None,
+) -> str:
     lines = [
         "# Результат prepared reviewer",
         "",
         f"- Решение: `{review.decision}`",
         f"- SHA-256 проверенного draft: `{review.reviewed_draft_sha256}`",
-        "",
-        "## Проверка обязательств",
-        "",
     ]
-    for item in review.obligation_reviews:
-        tc_ids = ", ".join(f"`{value}`" for value in item.test_case_ids) or "нет"
-        lines.append(
-            f"- `{item.obligation_id}` -> `{item.atom_id}` — `{item.verdict}`; "
-            f"test cases: {tc_ids}; {item.note}"
+    if review.contract_version == 4:
+        lines.extend(
+            [
+                f"- SHA-256 source basis: `{review.reviewed_source_basis_sha256}`",
+                f"- SHA-256 obligation set: `{review.reviewed_obligation_set_sha256}`",
+                "",
+                "## Проверка routed dimensions",
+                "",
+            ]
         )
+        if review.dimension_reviews:
+            for item in review.dimension_reviews:
+                refs = ", ".join(f"`{value}`" for value in item.source_refs)
+                lines.append(
+                    f"- `{item.dimension}` — `{item.verdict}`; "
+                    f"source refs: {refs}; {item.note}"
+                )
+        else:
+            lines.append("Routed dimensions отсутствуют.")
+        lines.extend(["", "## Проверка обязательств", ""])
+        for item in review.obligation_reviews:
+            tc_ids = ", ".join(f"`{value}`" for value in item.test_case_ids) or "нет"
+            lines.append(
+                f"- `{item.obligation_id}` -> `{item.atom_id}` — `{item.verdict}`; "
+                f"test cases: {tc_ids}."
+            )
+    else:
+        lines.extend(["", "## Проверка обязательств", ""])
+        for item in review.obligation_reviews:
+            tc_ids = ", ".join(f"`{value}`" for value in item.test_case_ids) or "нет"
+            lines.append(
+                f"- `{item.obligation_id}` -> `{item.atom_id}` — `{item.verdict}`; "
+                f"test cases: {tc_ids}; {item.note}"
+            )
     lines.extend(["", "## Findings", ""])
     if review.findings:
         for finding in review.findings:
@@ -7422,6 +9991,28 @@ def render_prepared_review_findings(review: ReviewContract) -> str:
             )
     else:
         lines.extend(["Blocking findings отсутствуют.", ""])
+    if sign_off_self_check is not None:
+        expected_keys = (
+            "traceability_checked",
+            "source_parity_checked",
+            "structure_checked",
+            "test_case_grouping_checked",
+            "test_case_numbering_checked",
+            "test_design_checked",
+            "applicability_dimensions_checked",
+            "validator_checked",
+            "blocking_findings_absent",
+            "traceability_gaps_absent",
+            "known_unclear_items",
+            "sign_off_rationale",
+        )
+        if set(sign_off_self_check) != set(expected_keys):
+            raise RunnerError("source-first sign-off self-check fields are incomplete")
+        lines.extend(["## Reviewer Sign-off Self-check", ""])
+        lines.extend(
+            f"**{key}:** {sign_off_self_check[key]}" for key in expected_keys
+        )
+        lines.append("")
     lines.extend(["## Резюме", "", review.summary])
     return "\n".join(lines)
 
@@ -7445,6 +10036,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--prepared-repair-draft")
     parser.add_argument("--prepared-repair-findings")
     parser.add_argument("--prepared-reviewer-rebind-draft")
+    parser.add_argument("--source-first-terminal-handoff-dir")
     parser.add_argument("--codex-command", default="codex")
     parser.add_argument("--sandbox-flag", required=True)
     parser.add_argument("--writer-sandbox", required=True)
@@ -7539,6 +10131,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_SHARDS,
     )
     parser.add_argument(
+        "--prepared-structured-writer-max-concurrency",
+        type=int,
+        default=DEFAULT_PREPARED_STRUCTURED_WRITER_MAX_CONCURRENCY,
+    )
+    parser.add_argument(
         "--prepared-targeted-repair-max-test-cases",
         type=int,
         default=DEFAULT_PREPARED_TARGETED_REPAIR_MAX_TEST_CASES,
@@ -7580,6 +10177,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         prepared_reviewer_rebind_draft_path=(
             repo_root / args.prepared_reviewer_rebind_draft
             if args.prepared_reviewer_rebind_draft
+            else None
+        ),
+        source_first_terminal_handoff_dir=(
+            repo_root / args.source_first_terminal_handoff_dir
+            if args.source_first_terminal_handoff_dir
             else None
         ),
         promotion_contract_path=(
@@ -7634,6 +10236,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
         prepared_structured_writer_max_shards=(
             args.prepared_structured_writer_max_shards
+        ),
+        prepared_structured_writer_max_concurrency=(
+            args.prepared_structured_writer_max_concurrency
         ),
         prepared_targeted_repair_max_test_cases=(
             args.prepared_targeted_repair_max_test_cases

@@ -1,0 +1,366 @@
+{
+  "version": 1,
+  "ft_slug": "AutoFin",
+  "scope_slug": "application-card-client-addresses",
+  "section_id": "4.3",
+  "package_id": "WP-01",
+  "request_summary": "Новый immutable full-production benchmark блока «Адреса клиента» после подтверждённого исключения общеплатформенного раздела 5 из тестирования AutoFin.",
+  "canonical_test_cases": "test-cases/4.3-application-card-client-addresses-shadow-20260719-v4.md",
+  "main_ft_docx": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "main_ft_xhtml": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+  "main_ft_pdf": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "package_notes": "fts/AutoFin/AGENT-NOTES.md",
+  "source_row_extraction_spec": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v4/source-row-extraction-spec.json",
+  "bounded_evidence": {
+    "docx": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-docx.json",
+    "pdf": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-pdf.json",
+    "xhtml_boundary": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-xhtml-boundary.json"
+  },
+  "sources": [
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+      "role": "main-ft-docx",
+      "manifest_binding": "semantic-source-of-truth",
+      "selection_reason": "Authoritative FT meaning for the selected PostFinal-v2 scope.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "DOCX is authoritative when another representation differs."
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+      "role": "main-ft-xhtml",
+      "manifest_binding": "assertion-source",
+      "selection_reason": "Mandatory exact table, row and cross-reference extraction source.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Hash-bound by the extraction spec and deterministic baseline."
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+      "role": "main-ft-pdf",
+      "manifest_binding": "structural-visual-parity",
+      "selection_reason": "Visual and structural parity for Table 4 and BSR 115-161/324.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Pages 20-22 and 34 visually checked; PDF does not replace DOCX/XHTML."
+    },
+    {
+      "path": "fts/AutoFin/AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Defines table columns О and Р and package-specific DaData guardrails.",
+      "version_or_date": "current",
+      "notes": "О means mandatory; Р means editable; vendor behavior does not create AutoFin requirements."
+    },
+    {
+      "path": "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v2.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification",
+      "selection_reason": "Binds DaData/address-field clarifications and the user-confirmed out-of-project disposition of the global data-type section.",
+      "version_or_date": "2026-07-19",
+      "notes": "Only answered canonical rows for this exact scope are eligible."
+    }
+  ],
+  "approved_clarifications": [
+    {
+      "clarification_id": "CLR-ADDR-001",
+      "gap_id": "GAP-ADDR-001",
+      "scope_slug": "application-card-client-addresses",
+      "requirement_codes": ["BSR 118", "BSR 119", "BSR 143", "BSR 144"],
+      "authority": "analyst",
+      "response_status": "answered",
+      "response_type": "analyst-confirmed",
+      "answered_at": "2026-06-26",
+      "exact_answer": "«Нет, у нас или найден адрес в DaData, или не найден целиком».",
+      "exact_answer_sha256": "3e8fd538a5085798d257df76e5842ffe9007ccbf3274dbcaa9ea24058a7486f9",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v2.md",
+      "evidence_source_sha256": "8a65dbe6672042c731f11b8527fab85f499e3446ef29082f3ca70af9db3c96e7"
+    },
+    {
+      "clarification_id": "CLR-ADDR-002",
+      "gap_id": "GAP-ADDR-002",
+      "scope_slug": "application-card-client-addresses",
+      "requirement_codes": ["BSR 135"],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-19",
+      "exact_answer": "«Адрес постоянной регистрации» и «Адрес регистрации» — одно и то же поле.",
+      "exact_answer_sha256": "5b2f7e17ce3c31bfadd4fc27a47ee93dca965692b42e6425488b22220c4b8c84",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v2.md",
+      "evidence_source_sha256": "8a65dbe6672042c731f11b8527fab85f499e3446ef29082f3ca70af9db3c96e7"
+    },
+    {
+      "clarification_id": "CLR-ADDR-003",
+      "gap_id": "GAP-ADDR-003",
+      "scope_slug": "application-card-client-addresses",
+      "requirement_codes": [],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-19",
+      "exact_answer": "«Вообще всё, что касается этого раздела, тестировать не нужно: это проверяется отдельно, не в рамках текущего проекта».",
+      "exact_answer_sha256": "44af53414eda74acfac028ff3e852acc1389217e18a16ba85cc12eb882ccd8c3",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v2.md",
+      "evidence_source_sha256": "8a65dbe6672042c731f11b8527fab85f499e3446ef29082f3ca70af9db3c96e7",
+      "binding_scope": "source-context",
+      "source_row_ids": [
+        "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008", "SRC-009",
+        "SRC-010", "SRC-011", "SRC-012", "SRC-013", "SRC-014", "SRC-015"
+      ]
+    }
+  ],
+  "source_table_column_semantics": [
+    {
+      "table_id": "POSTFINAL-V2-TABLE-4-CLIENT-ADDRESSES",
+      "header_source_row_id": "SRC-017",
+      "target_source_row_ids": [
+        "SRC-019", "SRC-020", "SRC-021", "SRC-022", "SRC-023",
+        "SRC-024", "SRC-025", "SRC-026", "SRC-027", "SRC-028",
+        "SRC-029", "SRC-030", "SRC-031", "SRC-032", "SRC-033",
+        "SRC-034", "SRC-035", "SRC-036", "SRC-037", "SRC-038",
+        "SRC-039", "SRC-040", "SRC-041", "SRC-042", "SRC-043"
+      ],
+      "columns": [
+        {
+          "property": "requiredness",
+          "physical_column_index": 2,
+          "expected_header": "О",
+          "value_mapping": {
+            "Да": "required",
+            "Нет": "optional",
+            "Да, если признак «Ввести вручную»= «Нет»": "required",
+            "Да, если не заполнен о поле «Город»": "required",
+            "Да, если не заполнено поле «Населенный пункт»": "required",
+            "Да; если признак «Клиент зарегистрирован в частном доме» = «Нет»": "required",
+            "BSR 157. Да, если признак «Клиент проживает в частном доме» = «Нет»": "required"
+          },
+          "interpretation_source": "fts/AutoFin/AGENT-NOTES.md",
+          "interpretation_source_fragment": "В таблицах описания свойств полей формы столбец `О` означает `Обязательность`, а столбец `Р` означает `Редактируемость`."
+        },
+        {
+          "property": "editability",
+          "physical_column_index": 3,
+          "expected_header": "Р",
+          "value_mapping": {
+            "Да": "editable",
+            "Нет": "read-only",
+            "Да, если признак «Ввести вручную»= «Нет»": "editable"
+          },
+          "interpretation_source": "fts/AutoFin/AGENT-NOTES.md",
+          "interpretation_source_fragment": "В таблицах описания свойств полей формы столбец `О` означает `Обязательность`, а столбец `Р` означает `Редактируемость`."
+        }
+      ]
+    }
+  ],
+  "mockups": [
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup",
+      "screen_name": "Анкета клиента, максимальное состояние",
+      "selection_reason": "Shows the client-address block, registration-address manual controls and the same-address state.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Visually opened; the actual-address fields are hidden in this state and the mockup is not a business-rule source."
+    }
+  ],
+  "mockup_locators": [
+    "Рисунок 5: заголовок «Адреса клиента» и строка «Адрес регистрации»",
+    "Рисунок 5: переключатель «Ввести вручную», ручные адресные поля и отметка частного дома",
+    "Рисунок 5: признак совпадения фактического адреса с адресом регистрации; отдельные поля фактического адреса на этом макете не показаны"
+  ],
+  "scope_boundary": {
+    "target": "Таблица 4, блок «Адреса клиента», строки 32-57, BSR 115-161; связанное cross-reference BSR 324.",
+    "include": [
+      "Заголовок блока, адрес регистрации, адрес фактического места жительства и все локальные строки ручного ввода.",
+      "Видимость, обязательность, редактируемость, типы, форматы, значения по умолчанию, признаки частного дома и совпадения адресов из BSR 115-161.",
+      "Интеграция DaData ровно в объёме ФТ, подтверждённая бинарная трактовка найден/не найден и раскладывание адреса по ручным полям.",
+      "Связанное BSR 324 о заполнении kladr.",
+      "Макет только для визуальных UI hints; текст ФТ имеет приоритет."
+    ],
+    "exclude": [
+      "Предыдущие паспортные строки до блока адресов и блок «Контакты клиента» начиная с BSR 162.",
+      "Печатные формы, адрес работодателя, адреса созаёмщика/залогодателя и другие блоки карточки заявки.",
+      "Весь раздел 5 «Ограничения по типам данных» и следующий общий default NULL: они проверяются отдельно вне проекта AutoFin по CLR-ADDR-003.",
+      "DaData trigger length, debounce, сортировка, число подсказок, fallback/retry и тексты ошибок, которых нет в ФТ.",
+      "Подмена BSR 324 UI-проверкой без наблюдаемого API/модельного/интеграционного артефакта.",
+      "Старые test-cases, handoff, review-cycle, findings и любые прежние model outputs до post-sign-off evaluation."
+    ]
+  },
+  "dependency_gap_gate": true,
+  "dependency_aliases": {
+    "Адрес постоянной регистрации": "Адрес регистрации"
+  },
+  "dependency_alias_provenance": {
+    "Адрес постоянной регистрации": "CLR-ADDR-002"
+  },
+  "expected_dependencies": [
+    {
+      "kind": "field",
+      "name": "Город",
+      "source_row_ids": ["SRC-024"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-025"],
+      "exact_source_fragments": ["поле «Город»"]
+    },
+    {
+      "kind": "field",
+      "name": "Населенный пункт",
+      "source_row_ids": ["SRC-025"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-024"],
+      "exact_source_fragments": ["поле «Населенный пункт»"]
+    },
+    {
+      "kind": "field",
+      "name": "Адрес постоянной регистрации",
+      "source_row_ids": ["SRC-030"],
+      "resolution": "approved-alias",
+      "target_source_row_ids": ["SRC-019"],
+      "exact_source_fragments": [
+        "поле \"Адрес постоянной регистрации\"",
+        "поля \"Адрес постоянной регистрации\""
+      ]
+    },
+    {
+      "kind": "field",
+      "name": "Адрес фактического места жительства",
+      "source_row_ids": ["SRC-033"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-032"],
+      "exact_source_fragments": ["поле «Адрес фактического места жительства»"]
+    },
+    {
+      "kind": "dictionary",
+      "name": "регионы",
+      "source_row_ids": ["SRC-022", "SRC-035"],
+      "resolution": "source-provided",
+      "target_source_row_ids": ["SRC-022", "SRC-035"],
+      "exact_source_fragments": ["По справочнику регионов"]
+    },
+    {
+      "kind": "integration",
+      "name": "DaData address suggestions",
+      "source_row_ids": ["SRC-019", "SRC-032", "SRC-044"],
+      "resolution": "source-provided",
+      "target_source_row_ids": ["SRC-019", "SRC-032", "SRC-044"],
+      "exact_source_fragments": ["DaData"]
+    },
+    {
+      "kind": "other",
+      "name": "kladr",
+      "source_row_ids": ["SRC-044"],
+      "resolution": "source-provided",
+      "target_source_row_ids": ["SRC-044"],
+      "exact_source_fragments": ["поле kladr (код КЛАДР)"]
+    }
+  ],
+  "scope_execution_facts": {
+    "version": 1,
+    "bounded_scope_kind": "contiguous-bounded-fragment-with-cross-referenced-constraint",
+    "expected_testable_assertion_count": null,
+    "expected_tc_count": null,
+    "internal_package_count": 1,
+    "has_heterogeneous_integrations": false,
+    "has_large_dictionary": true,
+    "mockups_ready": true,
+    "standard_profile_reasons": [
+      "The deterministic source profile contains 44 bounded source rows and exceeds the lean source-row limit.",
+      "The scope contains two conditional address flows, DaData behavior and an internal kladr obligation.",
+      "The referenced region dictionary is potentially large and its full values are not declared in the selected support registry."
+    ]
+  },
+  "source_rows": [
+    {"source_row_id": "SRC-001", "field_or_action": "Примерные значения макета", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[1]", "source_locator": "/*/*[2]/*[54]/*[1]", "in_scope_hint": "no; document-global context"},
+    {"source_row_id": "SRC-002", "field_or_action": "Приоритет текстового описания", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[2]", "source_locator": "/*/*[2]/*[54]/*[2]", "in_scope_hint": "no; document-global context"},
+    {"source_row_id": "SRC-003", "field_or_action": "Расположение полей на макете", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[3]", "source_locator": "/*/*[2]/*[54]/*[3]", "in_scope_hint": "no; document-global context"},
+    {"source_row_id": "SRC-004", "field_or_action": "Заголовок ограничений типов данных", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[2]", "source_locator": "/*/*[2]/*[55]/*[2]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-005", "field_or_action": "Ограничение типа Текст", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[3]", "source_locator": "/*/*[2]/*[55]/*[3]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-006", "field_or_action": "Ограничение типа Длинный текст", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[4]", "source_locator": "/*/*[2]/*[55]/*[4]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-007", "field_or_action": "Ограничение типа Целое число", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[5]", "source_locator": "/*/*[2]/*[55]/*[5]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-008", "field_or_action": "Ограничение типа Дробное число", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[6]", "source_locator": "/*/*[2]/*[55]/*[6]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-009", "field_or_action": "Ограничение типа Дата", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[7]", "source_locator": "/*/*[2]/*[55]/*[7]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-010", "field_or_action": "Ограничение типа Дата и время", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[8]", "source_locator": "/*/*[2]/*[55]/*[8]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-011", "field_or_action": "Ограничение типа Двоичные данные", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[9]", "source_locator": "/*/*[2]/*[55]/*[9]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-012", "field_or_action": "Ограничение типа Список", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[10]", "source_locator": "/*/*[2]/*[55]/*[10]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-013", "field_or_action": "Ограничение типа Список с множественным выбором", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[11]", "source_locator": "/*/*[2]/*[55]/*[11]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-014", "field_or_action": "Ограничение логического типа", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[12]", "source_locator": "/*/*[2]/*[55]/*[12]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-015", "field_or_action": "Значения по умолчанию NULL", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[56]", "source_locator": "/*/*[2]/*[56]", "in_scope_hint": "no; user-confirmed out-of-project section CLR-ADDR-003"},
+    {"source_row_id": "SRC-016", "field_or_action": "Таблица 4", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[115]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]", "source_locator": "/*/*[2]/*[115]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]", "in_scope_hint": "no; ancestor and section preamble"},
+    {"source_row_id": "SRC-017", "field_or_action": "Заголовок колонок Таблицы 4", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[2]", "source_locator": "/*/*[2]/*[116]/*[2]", "in_scope_hint": "no; ancestor and section preamble"},
+    {"source_row_id": "SRC-018", "field_or_action": "Блок Адреса клиента", "source_ref": "PostFinal-v2.xhtml Table 4 row 33 /*/*[2]/*[116]/*[33]", "source_locator": "/*/*[2]/*[116]/*[33]", "in_scope_hint": "yes; selected block header"},
+    {"source_row_id": "SRC-019", "field_or_action": "Адрес регистрации", "source_ref": "PostFinal-v2.xhtml Table 4 row 34 /*/*[2]/*[116]/*[34]; BSR 115-120", "source_locator": "/*/*[2]/*[116]/*[34]", "in_scope_hint": "yes; BSR 115-120"},
+    {"source_row_id": "SRC-020", "field_or_action": "Ввести вручную", "source_ref": "PostFinal-v2.xhtml Table 4 row 35 /*/*[2]/*[116]/*[35]; BSR 121-122", "source_locator": "/*/*[2]/*[116]/*[35]", "in_scope_hint": "yes; registration address; BSR 121-122"},
+    {"source_row_id": "SRC-021", "field_or_action": "Почтовый индекс", "source_ref": "PostFinal-v2.xhtml Table 4 row 36 /*/*[2]/*[116]/*[36]; BSR 123-124", "source_locator": "/*/*[2]/*[116]/*[36]", "in_scope_hint": "yes; registration address; BSR 123-124"},
+    {"source_row_id": "SRC-022", "field_or_action": "Регион", "source_ref": "PostFinal-v2.xhtml Table 4 row 37 /*/*[2]/*[116]/*[37]; BSR 125", "source_locator": "/*/*[2]/*[116]/*[37]", "in_scope_hint": "yes; registration address; BSR 125"},
+    {"source_row_id": "SRC-023", "field_or_action": "Район", "source_ref": "PostFinal-v2.xhtml Table 4 row 38 /*/*[2]/*[116]/*[38]; BSR 126", "source_locator": "/*/*[2]/*[116]/*[38]", "in_scope_hint": "yes; registration address; BSR 126"},
+    {"source_row_id": "SRC-024", "field_or_action": "Населенный пункт", "source_ref": "PostFinal-v2.xhtml Table 4 row 39 /*/*[2]/*[116]/*[39]; BSR 127", "source_locator": "/*/*[2]/*[116]/*[39]", "in_scope_hint": "yes; registration address; BSR 127"},
+    {"source_row_id": "SRC-025", "field_or_action": "Город", "source_ref": "PostFinal-v2.xhtml Table 4 row 40 /*/*[2]/*[116]/*[40]; BSR 128", "source_locator": "/*/*[2]/*[116]/*[40]", "in_scope_hint": "yes; registration address; BSR 128"},
+    {"source_row_id": "SRC-026", "field_or_action": "Улица", "source_ref": "PostFinal-v2.xhtml Table 4 row 41 /*/*[2]/*[116]/*[41]; BSR 129", "source_locator": "/*/*[2]/*[116]/*[41]", "in_scope_hint": "yes; registration address; BSR 129"},
+    {"source_row_id": "SRC-027", "field_or_action": "Дом", "source_ref": "PostFinal-v2.xhtml Table 4 row 42 /*/*[2]/*[116]/*[42]; BSR 130", "source_locator": "/*/*[2]/*[116]/*[42]", "in_scope_hint": "yes; registration address; BSR 130"},
+    {"source_row_id": "SRC-028", "field_or_action": "Корпус", "source_ref": "PostFinal-v2.xhtml Table 4 row 43 /*/*[2]/*[116]/*[43]; BSR 131-132", "source_locator": "/*/*[2]/*[116]/*[43]", "in_scope_hint": "yes; registration address; BSR 131-132"},
+    {"source_row_id": "SRC-029", "field_or_action": "Квартира", "source_ref": "PostFinal-v2.xhtml Table 4 row 44 /*/*[2]/*[116]/*[44]; BSR 133-134", "source_locator": "/*/*[2]/*[116]/*[44]", "in_scope_hint": "yes; registration address; BSR 133-134"},
+    {"source_row_id": "SRC-030", "field_or_action": "Клиент зарегистрирован в частном доме", "source_ref": "PostFinal-v2.xhtml Table 4 row 45 /*/*[2]/*[116]/*[45]; BSR 135-137", "source_locator": "/*/*[2]/*[116]/*[45]", "in_scope_hint": "yes; registration address; BSR 135-137"},
+    {"source_row_id": "SRC-031", "field_or_action": "Адрес фактического места жительства совпадает с адресом регистрации", "source_ref": "PostFinal-v2.xhtml Table 4 row 46 /*/*[2]/*[116]/*[46]; BSR 138-139", "source_locator": "/*/*[2]/*[116]/*[46]", "in_scope_hint": "yes; BSR 138-139"},
+    {"source_row_id": "SRC-032", "field_or_action": "Адрес фактического места жительства", "source_ref": "PostFinal-v2.xhtml Table 4 row 47 /*/*[2]/*[116]/*[47]; BSR 140-145", "source_locator": "/*/*[2]/*[116]/*[47]", "in_scope_hint": "yes; BSR 140-145"},
+    {"source_row_id": "SRC-033", "field_or_action": "Клиент проживает в частном доме", "source_ref": "PostFinal-v2.xhtml Table 4 row 48 /*/*[2]/*[116]/*[48]; BSR 146-147", "source_locator": "/*/*[2]/*[116]/*[48]", "in_scope_hint": "yes; actual address; BSR 146-147"},
+    {"source_row_id": "SRC-034", "field_or_action": "Ввести вручную", "source_ref": "PostFinal-v2.xhtml Table 4 row 49 /*/*[2]/*[116]/*[49]; BSR 148-149", "source_locator": "/*/*[2]/*[116]/*[49]", "in_scope_hint": "yes; actual address; BSR 148-149"},
+    {"source_row_id": "SRC-035", "field_or_action": "Регион", "source_ref": "PostFinal-v2.xhtml Table 4 row 50 /*/*[2]/*[116]/*[50]; BSR 150", "source_locator": "/*/*[2]/*[116]/*[50]", "in_scope_hint": "yes; actual address; BSR 150"},
+    {"source_row_id": "SRC-036", "field_or_action": "Район", "source_ref": "PostFinal-v2.xhtml Table 4 row 51 /*/*[2]/*[116]/*[51]; BSR 151", "source_locator": "/*/*[2]/*[116]/*[51]", "in_scope_hint": "yes; actual address; BSR 151"},
+    {"source_row_id": "SRC-037", "field_or_action": "Населенный пункт", "source_ref": "PostFinal-v2.xhtml Table 4 row 52 /*/*[2]/*[116]/*[52]; BSR 152", "source_locator": "/*/*[2]/*[116]/*[52]", "in_scope_hint": "yes; actual address; BSR 152"},
+    {"source_row_id": "SRC-038", "field_or_action": "Город", "source_ref": "PostFinal-v2.xhtml Table 4 row 53 /*/*[2]/*[116]/*[53]; BSR 153", "source_locator": "/*/*[2]/*[116]/*[53]", "in_scope_hint": "yes; actual address; BSR 153"},
+    {"source_row_id": "SRC-039", "field_or_action": "Улица", "source_ref": "PostFinal-v2.xhtml Table 4 row 54 /*/*[2]/*[116]/*[54]; BSR 154", "source_locator": "/*/*[2]/*[116]/*[54]", "in_scope_hint": "yes; actual address; BSR 154"},
+    {"source_row_id": "SRC-040", "field_or_action": "Дом", "source_ref": "PostFinal-v2.xhtml Table 4 row 55 /*/*[2]/*[116]/*[55]; BSR 155", "source_locator": "/*/*[2]/*[116]/*[55]", "in_scope_hint": "yes; actual address; BSR 155"},
+    {"source_row_id": "SRC-041", "field_or_action": "Корпус", "source_ref": "PostFinal-v2.xhtml Table 4 row 56 /*/*[2]/*[116]/*[56]; BSR 156", "source_locator": "/*/*[2]/*[116]/*[56]", "in_scope_hint": "yes; actual address; BSR 156"},
+    {"source_row_id": "SRC-042", "field_or_action": "Квартира", "source_ref": "PostFinal-v2.xhtml Table 4 row 57 /*/*[2]/*[116]/*[57]; BSR 157-159", "source_locator": "/*/*[2]/*[116]/*[57]", "in_scope_hint": "yes; actual address; BSR 157-159"},
+    {"source_row_id": "SRC-043", "field_or_action": "Почтовый индекс", "source_ref": "PostFinal-v2.xhtml Table 4 row 58 /*/*[2]/*[116]/*[58]; BSR 160-161", "source_locator": "/*/*[2]/*[116]/*[58]", "in_scope_hint": "yes; actual address; BSR 160-161"},
+    {"source_row_id": "SRC-044", "field_or_action": "DaData раскладывает адрес и заполняет kladr", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[119]/*[1]; BSR 324", "source_locator": "/*/*[2]/*[119]/*[1]", "in_scope_hint": "yes; cross-referenced constraint; BSR 324"}
+  ],
+  "parity": [
+    {"requirement_code": "BSR 115", "docx_locator": "Table 7 row 33", "xhtml_locator": "/*/*[2]/*[116]/*[34]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 116", "docx_locator": "Table 7 row 33", "xhtml_locator": "/*/*[2]/*[116]/*[34]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 117", "docx_locator": "Table 7 row 33", "xhtml_locator": "/*/*[2]/*[116]/*[34]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 118", "docx_locator": "Table 7 row 33", "xhtml_locator": "/*/*[2]/*[116]/*[34]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 119", "docx_locator": "Table 7 row 33", "xhtml_locator": "/*/*[2]/*[116]/*[34]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 120", "docx_locator": "Table 7 row 33", "xhtml_locator": "/*/*[2]/*[116]/*[34]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 121", "docx_locator": "Table 7 row 34", "xhtml_locator": "/*/*[2]/*[116]/*[35]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 122", "docx_locator": "Table 7 row 34", "xhtml_locator": "/*/*[2]/*[116]/*[35]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 123", "docx_locator": "Table 7 row 35", "xhtml_locator": "/*/*[2]/*[116]/*[36]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 124", "docx_locator": "Table 7 row 35", "xhtml_locator": "/*/*[2]/*[116]/*[36]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 125", "docx_locator": "Table 7 row 36", "xhtml_locator": "/*/*[2]/*[116]/*[37]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 126", "docx_locator": "Table 7 row 37", "xhtml_locator": "/*/*[2]/*[116]/*[38]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 127", "docx_locator": "Table 7 row 38", "xhtml_locator": "/*/*[2]/*[116]/*[39]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 128", "docx_locator": "Table 7 row 39", "xhtml_locator": "/*/*[2]/*[116]/*[40]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 129", "docx_locator": "Table 7 row 40", "xhtml_locator": "/*/*[2]/*[116]/*[41]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 130", "docx_locator": "Table 7 row 41", "xhtml_locator": "/*/*[2]/*[116]/*[42]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 131", "docx_locator": "Table 7 row 42", "xhtml_locator": "/*/*[2]/*[116]/*[43]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 132", "docx_locator": "Table 7 row 42", "xhtml_locator": "/*/*[2]/*[116]/*[43]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 133", "docx_locator": "Table 7 row 43", "xhtml_locator": "/*/*[2]/*[116]/*[44]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 134", "docx_locator": "Table 7 row 43", "xhtml_locator": "/*/*[2]/*[116]/*[44]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 135", "docx_locator": "Table 7 row 44", "xhtml_locator": "/*/*[2]/*[116]/*[45]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 136", "docx_locator": "Table 7 row 44", "xhtml_locator": "/*/*[2]/*[116]/*[45]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 137", "docx_locator": "Table 7 row 44", "xhtml_locator": "/*/*[2]/*[116]/*[45]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 138", "docx_locator": "Table 7 row 45", "xhtml_locator": "/*/*[2]/*[116]/*[46]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 139", "docx_locator": "Table 7 row 45", "xhtml_locator": "/*/*[2]/*[116]/*[46]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 140", "docx_locator": "Table 7 row 46", "xhtml_locator": "/*/*[2]/*[116]/*[47]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 141", "docx_locator": "Table 7 row 46", "xhtml_locator": "/*/*[2]/*[116]/*[47]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 142", "docx_locator": "Table 7 row 46", "xhtml_locator": "/*/*[2]/*[116]/*[47]", "pdf_locator": "page:21", "status": "matched"},
+    {"requirement_code": "BSR 143", "docx_locator": "Table 7 row 46", "xhtml_locator": "/*/*[2]/*[116]/*[47]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 144", "docx_locator": "Table 7 row 46", "xhtml_locator": "/*/*[2]/*[116]/*[47]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 145", "docx_locator": "Table 7 row 46", "xhtml_locator": "/*/*[2]/*[116]/*[47]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 146", "docx_locator": "Table 7 row 47", "xhtml_locator": "/*/*[2]/*[116]/*[48]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 147", "docx_locator": "Table 7 row 47", "xhtml_locator": "/*/*[2]/*[116]/*[48]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 148", "docx_locator": "Table 7 row 48", "xhtml_locator": "/*/*[2]/*[116]/*[49]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 149", "docx_locator": "Table 7 row 48", "xhtml_locator": "/*/*[2]/*[116]/*[49]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 150", "docx_locator": "Table 7 row 49", "xhtml_locator": "/*/*[2]/*[116]/*[50]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 151", "docx_locator": "Table 7 row 50", "xhtml_locator": "/*/*[2]/*[116]/*[51]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 152", "docx_locator": "Table 7 row 51", "xhtml_locator": "/*/*[2]/*[116]/*[52]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 153", "docx_locator": "Table 7 row 52", "xhtml_locator": "/*/*[2]/*[116]/*[53]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 154", "docx_locator": "Table 7 row 53", "xhtml_locator": "/*/*[2]/*[116]/*[54]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 155", "docx_locator": "Table 7 row 54", "xhtml_locator": "/*/*[2]/*[116]/*[55]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 156", "docx_locator": "Table 7 row 55", "xhtml_locator": "/*/*[2]/*[116]/*[56]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 157", "docx_locator": "Table 7 row 56", "xhtml_locator": "/*/*[2]/*[116]/*[57]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 158", "docx_locator": "Table 7 row 56", "xhtml_locator": "/*/*[2]/*[116]/*[57]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 159", "docx_locator": "Table 7 row 56", "xhtml_locator": "/*/*[2]/*[116]/*[57]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 160", "docx_locator": "Table 7 row 57", "xhtml_locator": "/*/*[2]/*[116]/*[58]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 161", "docx_locator": "Table 7 row 57", "xhtml_locator": "/*/*[2]/*[116]/*[58]", "pdf_locator": "page:22", "status": "matched"},
+    {"requirement_code": "BSR 324", "docx_locator": "paragraph 120; list label BSR 324", "xhtml_locator": "/*/*[2]/*[119]/*[1]", "pdf_locator": "page:34", "status": "matched"}
+  ]
+}

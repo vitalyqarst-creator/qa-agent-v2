@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "profile": "qualification",
+  "description": "Reproducible engineering baseline with curated benchmark definitions but without raw runs or proprietary AutoFin inputs.",
+  "include": [
+    ".gitignore",
+    "AGENTS.md",
+    "CONTRIBUTING.md",
+    "README.md",
+    "pyproject.toml",
+    "uv.lock",
+    "package.json",
+    "package-lock.json",
+    "playwright-cli.json",
+    "release/*.json",
+    "release/*.md",
+    "test_case_agent/**/*.py",
+    "scripts/**/*.py",
+    "scripts/**/*.mjs",
+    "scripts/**/*.ps1",
+    "skills/**/*.md",
+    "skills/**/*.py",
+    "references/**/*.md",
+    "tests/**/*.py",
+    "evals/full-production-benchmark/configs/**/*.json",
+    "evals/full-production-benchmark/configs/**/*.md",
+    "evals/schema-canary/qualification-registry/*.json",
+    "fts/AutoFin/AGENT-NOTES.md",
+    "fts/AutoFin/support/**/*.md",
+    "fts/AutoFin/test-cases/*.md",
+    "fts/AutoFin/work/vendor-references/dadata-reference.md",
+    "fts/AutoFin/work/vendor-references/dadata-fixture-catalog.md",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/*.json",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/*.md",
+    "fts/AutoFin/work/ui-automation-prep/UI-AGENT-NOTES.md"
+  ],
+  "exclude": [
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "evals/**/diagnostics/**",
+    "evals/sdk-turn-diagnostics/**",
+    "evals/**/runs/**",
+    "evals/**/candidates/**",
+    "fts/AutoFin/source/**",
+    "fts/AutoFin/mockups/**",
+    "fts/AutoFin/work/review-cycles/**",
+    "fts/AutoFin/work/stage-handoffs/**",
+    "fts/AutoFin/test-cases/*shadow*.md",
+    "fts/AutoFin/support/**/*.docx",
+    "fts/AutoFin/support/**/*.pdf",
+    "fts/AutoFin/support/**/*.xlsx",
+    "fts/AutoFin/support/**/*.xls",
+    "fts/AutoFin/support/**/*.png",
+    "fts/AutoFin/support/**/*.jpg",
+    "fts/AutoFin/support/**/*.jpeg"
+  ],
+  "required_paths": [
+    "test_case_agent/review_cycle/production_tc_gate.py",
+    "scripts/review_cycle_backend_dispatcher.py",
+    "scripts/build_release_bundle.py",
+    "references/agent/instruction-loading-manifest.md",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v16/shadow-benchmark-config.json",
+    "evals/schema-canary/qualification-registry/h65-source-review-schema-v6-20260716.reserved.json"
+  ],
+  "forbidden_prefixes": [
+    "evals/sdk-turn-diagnostics/",
+    "fts/AutoFin/source/",
+    "fts/AutoFin/mockups/",
+    "fts/AutoFin/work/review-cycles/",
+    "fts/AutoFin/work/stage-handoffs/"
+  ],
+  "forbidden_suffixes": [
+    ".docx",
+    ".pdf",
+    ".xlsx",
+    ".xls",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".pyc"
+  ],
+  "local_inputs": [
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+      "sha256": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689"
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+      "sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93"
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+      "sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218"
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 1 Макет раздела меню Заявки в системе.jpg",
+      "sha256": "5e2199d319339f0d633251ca6d50405fdebaeccb498b340129c029a92073b0cd"
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg",
+      "sha256": "0529de9c3d0d20e672453d894a517a79a8e1bd7c29ffa06c703463d2d8d774d5"
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 4 Макет всплывающего окна Распознание документов.jpg",
+      "sha256": "3639e3b55143d835a64858469e1bbf219e9df0629f3e083f04286b361814f3e7"
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "sha256": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622"
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 6  Анкета Залогодателя. Минимальное состояние.jpg",
+      "sha256": "45ed199793422586586ff98974fb87ba7d26526422c21a59e9cdb73ca81e829c"
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 7  Анкета Созаемщика. Максимальное состояние.jpg",
+      "sha256": "36118a497e833be3d0f926a81f4e3d66899f4fc80613049a2202068c9f7cc396"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 1 Макет раздела меню Заявки в системе.jpg",
+      "sha256": "82029a5f393a7ffb8f92d60083ce3e9bfef045dd73963443a01adff66de48f60"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 2  Анкета Клиента. Минимальное состояние.jpg",
+      "sha256": "61d8bfb844c0162866adfbdb14d779ffa51cd9329f77efde816f613bc5204d7d"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg",
+      "sha256": "0529de9c3d0d20e672453d894a517a79a8e1bd7c29ffa06c703463d2d8d774d5"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 4 Макет всплывающего окна Распознание документов.jpg",
+      "sha256": "3639e3b55143d835a64858469e1bbf219e9df0629f3e083f04286b361814f3e7"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "sha256": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 6  Анкета Залогодателя. Минимальное состояние.jpg",
+      "sha256": "45ed199793422586586ff98974fb87ba7d26526422c21a59e9cdb73ca81e829c"
+    },
+    {
+      "path": "fts/AutoFin/mockups/Рисунок 7  Анкета Созаемщика. Максимальное состояние.jpg",
+      "sha256": "36118a497e833be3d0f926a81f4e3d66899f4fc80613049a2202068c9f7cc396"
+    }
+  ]
+}

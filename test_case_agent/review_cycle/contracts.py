@@ -170,7 +170,7 @@ class StageInputManifest:
     scenario: str
     semantic_round: int
     sandbox_policy: str
-    timeout_seconds: int
+    timeout_seconds: int | None
     attempt_root: str
     canonical_test_cases: str
     prompt_artifact: ArtifactRef
@@ -194,7 +194,7 @@ class StageInputManifest:
         scenario: str,
         semantic_round: int,
         sandbox_policy: str,
-        timeout_seconds: int,
+        timeout_seconds: int | None,
         attempt_root: str,
         canonical_test_cases: str,
         prompt_artifact: ArtifactRef,
@@ -299,12 +299,14 @@ class StageInputManifest:
             or not 0 <= self.semantic_round <= 2
         ):
             raise ContractValidationError("semantic_round must be an integer from 0 to 2")
-        if (
+        if self.timeout_seconds is not None and (
             isinstance(self.timeout_seconds, bool)
             or not isinstance(self.timeout_seconds, int)
             or self.timeout_seconds < 1
         ):
-            raise ContractValidationError("timeout_seconds must be a positive integer")
+            raise ContractValidationError(
+                "timeout_seconds must be a positive integer or null"
+            )
         _require_relative_path(self.attempt_root, "attempt_root")
         _require_relative_path(self.canonical_test_cases, "canonical_test_cases")
         self.prompt_artifact.validate("prompt_artifact")

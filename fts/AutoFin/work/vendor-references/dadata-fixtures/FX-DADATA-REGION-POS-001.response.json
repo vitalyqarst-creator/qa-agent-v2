@@ -1,0 +1,25 @@
+{
+  "fixture_id": "FX-DADATA-REGION-POS-001",
+  "provider": "DaData",
+  "evidence_kind": "official-vendor-support-example",
+  "checked_at": "2026-07-21",
+  "source": "https://support.dadata.ru/communities/1/topics/2187-granulyarnyie-podskazki-po-api",
+  "request": {
+    "method": "POST",
+    "endpoint": "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/address",
+    "query": "Саратов",
+    "from_bound": {
+      "value": "region"
+    },
+    "to_bound": {
+      "value": "region"
+    }
+  },
+  "documented_result": {
+    "value": "Саратовская обл",
+    "components": {
+      "region_with_type": "Саратовская обл"
+    }
+  },
+  "limitations": "Документационный пример подтверждает representative region fixture, но не текущую конфигурацию AutoFin UI."
+}

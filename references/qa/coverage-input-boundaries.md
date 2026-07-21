@@ -13,11 +13,11 @@ Deep coverage reference for numeric, date/time, length, mask and allowed-symbol 
 
 ## Length And Mask
 
-- For exact length, test exact length acceptance and shorter/longer behavior only when source defines expected response.
+- For exact length, create separate `N`, `N-1` and `N+1` coverage classes. When the source defines only the allowed length but not the exact UI response for `N-1`/`N+1`, keep those two classes as neutral `candidate-ui-calibration` obligations or as two narrow class-specific `GAP-*`; do not invent filtering, a message, clearing, persistence or transition behavior.
 - For max length, test max acceptance and max+1 behavior.
 - For mask, test visible field state, not navigation, unless source defines validation on action.
 - If trim, multi-byte characters, newline handling or counting rule is missing, create `GAP-*`.
-- Exact length requires separate `N`, `N-1` and `N+1` obligations or narrow `GAP-*`; do not merge shorter and longer values into one generic invalid-length TC.
+- Exact length requires separate `N`, `N-1` and `N+1` obligations or narrow class-specific `GAP-*`; one generic invalid-length assertion or gap cannot stand for both shorter and longer values.
 
 ## Date And Time
 

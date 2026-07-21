@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "source_sha256": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+  "extraction_method": "docx-xml-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "word/document.xml#table-index:7/row-index:32",
+      "exact_source_text": "Блок «Адреса клиента»",
+      "exact_source_text_sha256": "5fa7d93ef38882c93c7d0348a4bdeca82438b082a624f99f5aec331faeec33b0"
+    },
+    {
+      "source_locator": "word/document.xml#paragraph-index:120; list-label:BSR 324",
+      "exact_source_text": "Если адрес клиента (регистрации / места жительства) заполнен посредством запроса DaData, то он раскладывается по полям в блоке для ручного ввода, в модели данных должно заполняться поле kladr (код КЛАДР).",
+      "exact_source_text_sha256": "2d9c6386a8c01535f1f4edc585657def2d8d59aecf8d6af5a1c5a63c78119b09"
+    }
+  ]
+}

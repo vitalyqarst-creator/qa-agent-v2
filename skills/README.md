@@ -16,6 +16,12 @@
 - Если FT-пакет уже выбран, но еще не определен точный фрагмент требований или нужно разбить большое ФТ на scope-ы: `ft-scope-analyzer`.
 - Если scope уже зафиксирован и нужно написать новые кейсы одним writer-pass без review-cycle: `ft-test-case-writer`.
 - Если scope уже зафиксирован и нужно пройти writer-reviewer iteration: `ft-test-case-iteration`.
+- Если новая версия ФТ должна актуализировать signed-off набор: условный режим
+  `ft-test-case-iteration` `incremental-update` через
+  `scripts/run_incremental_update_iteration.py`; обычный full-loop его инструкции не загружает.
+- Если явно передан checked-in full-process config с `schema_version = 2`:
+  напрямую `ft-test-case-iteration` через `scripts/start_full_process_observation.py --execute`;
+  generic цепочки discovery/scope остаются для запусков без такого config.
 - Если нужен новый session-based writer/reviewer cycle в отдельных Codex sessions: `ft-test-case-iteration` через `scripts/review_cycle_backend_dispatcher.py --backend auto`; SDK используется только как явно выбранный fallback.
 - Если кейсы уже существуют и нужен review: `ft-test-case-reviewer`.
   По умолчанию он работает в режиме `full` и последовательно выполняет `traceability` -> `structure` -> `test-design`.
@@ -27,6 +33,8 @@
 - Новый набор тест-кейсов: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer`
 - Новый набор тест-кейсов с session-based review-cycle: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration`
 - Новый session-based review cycle: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` через `scripts/review_cycle_backend_dispatcher.py --backend auto`
+- Актуализация новой версии ФТ: `ft-test-case-iteration` в режиме
+  `incremental-update` после явного выбора обеих версий и target scope.
 - Подготовка automation-ready версии после sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` -> `ft-ui-automation-prep`
 - Review существующих кейсов: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
 - Аудит agent-layer: `agent-architecture-auditor` со script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
@@ -48,6 +56,7 @@ python scripts/resolve_instruction_context.py --phase writer --mode initial_draf
 - Instruction contracts: [../references/agent/instruction-contract-index.md](../references/agent/instruction-contract-index.md)
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
+- Full-process timing observation: [../references/agent/full-process-timing-observation.md](../references/agent/full-process-timing-observation.md)
 - Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
 - Codex SDK orchestration: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)
 - Writer runtime contract: [../references/agent/writer-runtime-contract.md](../references/agent/writer-runtime-contract.md)

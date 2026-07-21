@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "benchmark_id": "postfinal-v2-client-addresses-v4",
+  "ft_root": "fts/AutoFin",
+  "ft_slug": "AutoFin",
+  "scope_slug": "application-card-client-addresses",
+  "source_files": [
+    "source/PostFinal-v2/PostFinal-v2.docx",
+    "source/PostFinal-v2/PostFinal-v2.xhtml",
+    "source/PostFinal-v2/PostFinal-v2.pdf"
+  ],
+  "scope_inputs": [
+    {
+      "path": "support/PostFinal-v2/client-addresses-approved-clarifications-v2.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification"
+    },
+    {
+      "path": "AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    }
+  ],
+  "expected_sha256": {
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+    "fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v2.md": "8a65dbe6672042c731f11b8527fab85f499e3446ef29082f3ca70af9db3c96e7",
+    "fts/AutoFin/AGENT-NOTES.md": "db9a95ed8d1f660742f67b6e4bffc71e94bfbb08b839990c08d43428cd246cde",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v4/bounded-context-template.json": "5ecda6bece1b3f26c9b22799e85f1e2623b88d244e6c11eaa41e29ece67ca1e0",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v4/source-row-extraction-spec.json": "6da23f6577e4c7afe7cb0ddbf3d9bdc89897663bd935ffa68e202f8fd5456699",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-docx.json": "44193759d4ba7a72162d3fd647c0a342502286df7614e814ff0b7b73b1762f36",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-pdf.json": "49759c443616c32d0e23182f36c4d1e5bd1a45c6e705f1fc56f4992edaa401f9",
+    "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v3/bounded-evidence-xhtml-boundary.json": "d2fa04df7e05ac7da9fff46598a1ec33425ccc1975003a3a14e4e9bd1ec53014"
+  },
+  "source_preparation": {
+    "context_template": "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v4/bounded-context-template.json",
+    "cache_dir": ".codex-temp/source-preparation-cache"
+  },
+  "outputs": {
+    "handoff_dir": "work/stage-handoffs/80-application-card-client-addresses-semantic-shards-v4",
+    "cycle_dir": "work/review-cycles/application-card-client-addresses-semantic-shards-v4-20260719",
+    "final_artifact": "test-cases/4.3-application-card-client-addresses-shadow-20260719-v4.md"
+  },
+  "observation_root": "work/full-process-observation",
+  "recorder_entrypoint": "scripts/workflow_wall_clock.py",
+  "production_wrapper": "scripts/run_standard_production_iteration.py",
+  "measurement_mode": "observational"
+}

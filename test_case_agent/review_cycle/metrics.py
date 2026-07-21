@@ -17,6 +17,7 @@ from test_case_agent.review_cycle.runtime import (
 
 
 TOKEN_FIELDS = ("input_tokens", "cached_input_tokens", "output_tokens", "total_tokens")
+OPTIONAL_TOKEN_FIELDS = ("reasoning_tokens",)
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,7 @@ class StageMetrics:
     cached_input_tokens: int | None = None
     output_tokens: int | None = None
     total_tokens: int | None = None
+    reasoning_tokens: int | None = None
 
     def validate(self) -> None:
         if self.contract_version != 2:
@@ -58,7 +60,7 @@ class StageMetrics:
             value = getattr(self, name)
             if not isinstance(value, int) or isinstance(value, bool) or value < 0:
                 raise StageRuntimeError(f"metrics {name} must be a non-negative integer")
-        for name in TOKEN_FIELDS:
+        for name in (*TOKEN_FIELDS, *OPTIONAL_TOKEN_FIELDS):
             value = getattr(self, name)
             if value is not None and (
                 not isinstance(value, int) or isinstance(value, bool) or value < 0
@@ -80,7 +82,7 @@ class StageMetrics:
             "input_artifact_bytes": self.input_artifact_bytes,
             "output_artifact_count": self.output_artifact_count,
             "output_artifact_bytes": self.output_artifact_bytes,
-            **{name: getattr(self, name) for name in TOKEN_FIELDS},
+            **{name: getattr(self, name) for name in (*TOKEN_FIELDS, *OPTIONAL_TOKEN_FIELDS)},
         }
 
     @classmethod
@@ -101,9 +103,13 @@ class StageMetrics:
             "output_artifact_bytes",
             *TOKEN_FIELDS,
         }
-        if set(payload) != expected:
+        allowed = expected | set(OPTIONAL_TOKEN_FIELDS)
+        if frozenset(payload) not in {frozenset(expected), frozenset(allowed)}:
             raise StageRuntimeError("metrics payload has missing or unknown fields")
-        metrics = cls(**{name: payload[name] for name in expected})
+        values = {name: payload[name] for name in expected}
+        for name in OPTIONAL_TOKEN_FIELDS:
+            values[name] = payload.get(name)
+        metrics = cls(**values)
         metrics.validate()
         return metrics
 
@@ -146,7 +152,7 @@ def build_stage_metrics(
         input_artifact_bytes=input_bytes,
         output_artifact_count=len(result.output_artifacts),
         output_artifact_bytes=output_bytes,
-        **{name: usage.get(name) for name in TOKEN_FIELDS},
+        **{name: usage.get(name) for name in (*TOKEN_FIELDS, *OPTIONAL_TOKEN_FIELDS)},
     )
     metrics.validate()
     return metrics

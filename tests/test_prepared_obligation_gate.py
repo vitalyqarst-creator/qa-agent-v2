@@ -430,6 +430,117 @@ class PreparedObligationGateTests(unittest.TestCase):
 
         self.assertTrue(result.passed)
 
+    def test_multiple_exhaustive_dictionaries_are_validated_independently(self) -> None:
+        requirements = (
+            PreparedDictionaryRequirement(
+                dictionary_id="DICT-001",
+                coverage_mode="all-leaf-values",
+                required_values=(
+                    PreparedDictionaryValue(("DICT-001",), "leaf", "Значение один"),
+                ),
+            ),
+            PreparedDictionaryRequirement(
+                dictionary_id="DICT-002",
+                coverage_mode="all-leaf-values",
+                required_values=(
+                    PreparedDictionaryValue(("DICT-002",), "leaf", "Значение два"),
+                ),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-two-dictionaries",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001",),
+                    atomic_statement="Оба справочника отображаются полностью.",
+                    observable_oracle="Доступны все значения обоих справочников.",
+                    test_intent="Просмотреть оба поля.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-001", "DICT-002"),
+                    notes="",
+                    planned_test_case_id="TC-DICT-001",
+                    dictionary_requirements=requirements,
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+        symbolic = (
+            "## TC-DICT-001\n"
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001; DICT-002\n\n"
+            "### Тестовые данные\n\n- Оба справочника.\n\n"
+            "### Шаги\n\n1. Просмотреть оба поля.\n"
+        )
+
+        projected, _ = materialize_draft_dictionary_projections(symbolic, obligations)
+        result = self._validate(projected)
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_stale_exhaustive_projection_is_removed_after_reference_only_recompile(self) -> None:
+        exhaustive = PreparedDictionaryRequirement(
+            dictionary_id="DICT-001",
+            coverage_mode="all-leaf-values",
+            required_values=(
+                PreparedDictionaryValue(("DICT-001",), "leaf", "Первое"),
+            ),
+        )
+        base = dict(
+            obligation_id="OBL-001",
+            atom_id="ATOM-001",
+            source_refs=("SRC-001", "DICT-001"),
+            atomic_statement="Поле отображается.",
+            observable_oracle="Поле видно.",
+            test_intent="Просмотреть поле.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=("DICT-001",),
+            notes="",
+            planned_test_case_id="TC-DICT-001",
+        )
+        old = PreparedObligationSet.create(
+            package_id="pkg-old",
+            obligations=(
+                PreparedObligation(
+                    **base,
+                    dictionary_requirements=(exhaustive,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        symbolic = (
+            "## TC-DICT-001\n"
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001\n\n"
+            "### Тестовые данные\n\n- DICT-001.\n\n"
+            "### Шаги\n\n1. Просмотреть поле.\n"
+        )
+        projected, _ = materialize_draft_dictionary_projections(symbolic, old)
+        current = PreparedObligationSet.create(
+            package_id="pkg-current",
+            obligations=(
+                PreparedObligation(
+                    **base,
+                    dictionary_requirements=(
+                        PreparedDictionaryRequirement(
+                            dictionary_id="DICT-001",
+                            coverage_mode="reference-only",
+                        ),
+                    ),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        cleaned, report = materialize_draft_dictionary_projections(
+            projected, current
+        )
+
+        self.assertNotIn("runner-dictionary-projection:start", cleaned)
+        self.assertEqual(0, report["materialized_count"])
+
     def test_reference_only_exact_fixture_blocks_generic_v4_replay(self) -> None:
         requirement = PreparedDictionaryRequirement(
             dictionary_id="DICT-001",
@@ -561,6 +672,717 @@ class PreparedObligationGateTests(unittest.TestCase):
             rejected["findings"][0]["id"],
         )
         self.assertTrue(accepted["passed"])
+
+        projected, _ = materialize_draft_dictionary_projections(symbolic, obligations)
+        untrusted_marker = validate_writer_dictionary_ownership(projected, obligations)
+        runner_owned = validate_writer_dictionary_ownership(
+            projected,
+            obligations,
+            trusted_runner_projected_test_case_ids=("TC-DICT-001",),
+        )
+        self.assertFalse(untrusted_marker["passed"])
+        self.assertTrue(runner_owned["passed"])
+
+        projected_with_writer_duplication = projected.replace(
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001\n",
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001; DICT-001\n"
+            "- Первое значение; Второе значение.\n",
+        )
+        writer_owned = validate_writer_dictionary_ownership(
+            projected_with_writer_duplication,
+            obligations,
+            trusted_runner_projected_test_case_ids=("TC-DICT-001",),
+        )
+        self.assertFalse(writer_owned["passed"])
+
+
+class StrictPreparedObligationGateTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.draft = self.root / "draft.md"
+        self.obligations_path = self.root / "atomic-obligations.json"
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-runtime",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01", "BSR 16"),
+                    atomic_statement=(
+                        "При вводе некорректного VIN и выполнении поиска "
+                        "система показывает ошибку."
+                    ),
+                    observable_oracle="Сообщение об ошибке VIN отображается.",
+                    test_intent="Ввести некорректный VIN и выполнить поиск.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+    def _case(
+        self,
+        *,
+        tc_id: str = "TC-AMS-001",
+        traceability: str = "OBL-001; ATOM-001; SRC-001.P01; BSR 16",
+        preconditions: str = "- Открыта основная форма.",
+        steps: str = (
+            "1. Ввести некорректный VIN `123`.\n"
+            "2. Нажать «Найти» и выполнить поиск."
+        ),
+        expected_result: str = (
+            "После поиска система показывает "
+            "сообщение об ошибке для VIN."
+        ),
+    ) -> str:
+        return (
+            f"## {tc_id}\n\n"
+            f"**Трассировка:** {traceability}\n\n"
+            "### Предусловия\n\n"
+            f"{preconditions}\n\n"
+            "### Тестовые данные\n\n"
+            "- Некорректный VIN: `123`.\n\n"
+            f"### Шаги\n\n{steps}\n\n"
+            "### Итоговый ожидаемый результат\n\n"
+            f"{expected_result}\n"
+        )
+
+    def _validate(self, text: str):
+        self.draft.write_text(text, encoding="utf-8")
+        return validate_draft_obligation_coverage(
+            draft_path=self.draft,
+            obligations_path=self.obligations_path,
+            strict_runtime_contract=True,
+        )
+
+    def test_traceability_only_fails_even_if_fenced_code_has_valid_sections(self) -> None:
+        result = self._validate(
+            "## TC-AMS-001\n"
+            "**Трассировка:** OBL-001; ATOM-001; SRC-001.P01; BSR 16\n\n"
+            "```markdown\n"
+            "### Предусловия\nНе требуется.\n"
+            "### Тестовые данные\nНе требуется.\n"
+            "### Шаги\n1. Ввести VIN.\n"
+            "### Итоговый ожидаемый результат\n"
+            "Ошибка отображается.\n```\n"
+        )
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "missing-runtime-section",
+            {finding["id"] for finding in result.findings},
+        )
+        self.assertNotIn("OBL-001", result.covered_obligations)
+
+    def test_obligation_in_wrong_planned_tc_fails(self) -> None:
+        result = self._validate(self._case(tc_id="TC-AMS-999"))
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "planned-test-case-mismatch",
+            {finding["id"] for finding in result.findings},
+        )
+
+    def test_wrong_executable_action_fails(self) -> None:
+        result = self._validate(
+            self._case(steps="1. Очистить поле VIN.")
+        )
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "action-contract-mismatch",
+            {finding["id"] for finding in result.findings},
+        )
+
+    def test_view_action_matches_view_intent(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-view",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Поле отображается.",
+                    observable_oracle="Поле доступно для просмотра.",
+                    test_intent="Просмотреть поле «Тип должности».",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Просмотреть поле «Тип должности».",
+                expected_result="Поле доступно для просмотра.",
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_source_first_action_contract_isolated_from_conditions_and_fixture(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-action",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="В анкете отображается блок адресов.",
+                    observable_oracle="На странице виден заголовок адресов.",
+                    test_intent=(
+                        "Field/block: Блок адресов; "
+                        "Condition contract: Открыта анкета клиента.; "
+                        "Action contract: Перейти к адресной части анкеты клиента.; "
+                        "Design fixture: Открыть адресную часть и проверить заголовок.; "
+                        "Check type: positive; Test data: Анкета клиента"
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Перейти к адресной части анкеты клиента.",
+                expected_result="На странице виден заголовок адресов.",
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_action_contract_can_be_split_between_preconditions_and_steps(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-split-action",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Пустой обязательный регион не принимается.",
+                    observable_oracle="Пустой регион не подтверждается как валидный.",
+                    test_intent=(
+                        "Field/block: Регион; "
+                        "Action contract: Оставить регион пустым и попытаться "
+                        "подтвердить адрес.; Check type: negative"
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                preconditions="1. Оставить поле «Регион» пустым.",
+                steps="1. Попытаться подтвердить адрес.",
+                expected_result="Пустой регион не подтверждается как валидный.",
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_switch_action_matches_set_values_in_two_modes(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-switch",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Поле видно в автоматическом и ручном режимах.",
+                    observable_oracle="Поле видно при значениях «Нет» и «Да».",
+                    test_intent=(
+                        "Field/block: Адрес регистрации; "
+                        "Condition contract: Переключатель доступен.; "
+                        "Action contract: Открыть блок в автоматическом режиме.; "
+                        "Переключить адрес регистрации в ручной режим.; "
+                        "Design fixture: Проверить оба режима."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps=(
+                    "1. Установить переключатель в значение «Нет».\n"
+                    "2. Установить переключатель в значение «Да»."
+                ),
+                expected_result="Поле видно при значениях «Нет» и «Да».",
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_quoted_no_control_value_does_not_invert_positive_oracle(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-quoted-no",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement=(
+                        "Поле видно как при автоматическом, так и при ручном вводе."
+                    ),
+                    observable_oracle=(
+                        "Поле отображается при автоматическом вводе; то же поле "
+                        "отображается при ручном вводе."
+                    ),
+                    test_intent=(
+                        "Field/block: Адрес регистрации; "
+                        "Condition contract: Переключатель доступен.; "
+                        "Action contract: Проверить поле при автоматическом вводе.; "
+                        "Переключить адрес регистрации в ручной режим."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps=(
+                    "1. Проверить поле при значении переключателя «Нет».\n"
+                    "2. Переключить адрес регистрации в ручной режим."
+                ),
+                expected_result=(
+                    "Поле отображается при автоматическом вводе со значением "
+                    "«Нет» и продолжает отображаться при ручном вводе со "
+                    "значением «Да»."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_without_change_retention_phrase_does_not_invert_positive_oracle(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-retention-polarity",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Поле сохраняет выбранный регион.",
+                    observable_oracle=(
+                        "Значение региона предложено и сохранено в поле после выбора."
+                    ),
+                    test_intent="Найти и выбрать регион.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Найти и выбрать регион.",
+                expected_result=(
+                    "Значение региона предложено интерфейсом и сохранено в поле "
+                    "после выбора без изменения."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_acceptance_oracle_cannot_be_reduced_to_display_only(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-acceptance",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Поле принимает шестизначный индекс.",
+                    observable_oracle=(
+                        "Поле принимает и отображает значение «660017»."
+                    ),
+                    test_intent="Ввести индекс «660017».",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        reduced = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Ввести индекс «660017».",
+                expected_result="Поле отображает значение «660017».",
+            )
+        )
+        preserved = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Ввести индекс «660017».",
+                expected_result=(
+                    "Поле принимает и отображает значение «660017»."
+                ),
+            )
+        )
+
+        self.assertFalse(reduced.passed)
+        self.assertIn(
+            "observable-oracle-contract-mismatch",
+            {finding["id"] for finding in reduced.findings},
+        )
+        self.assertTrue(preserved.passed, preserved.findings)
+
+    def test_apply_address_action_matches_entering_that_address(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-source-first-apply",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Признак не появляется для адреса с квартирой.",
+                    observable_oracle="Флажок частного дома не отображается.",
+                    test_intent=(
+                        "Field/block: Частный дом; "
+                        "Condition contract: Адрес не совпадает.; "
+                        "Action contract: Применить несовпадающий фактический адрес с квартирой «2».; "
+                        "Design fixture: Квартира указана."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Ввести несовпадающий фактический адрес с квартирой «2».",
+                expected_result="Флажок частного дома не отображается.",
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_opposite_and_wrong_oracles_fail(self) -> None:
+        examples = (
+            (
+                "Сообщение об ошибке VIN не отображается.",
+                "oracle-polarity-mismatch",
+            ),
+            (
+                "Поле VIN очищается.",
+                "observable-oracle-contract-mismatch",
+            ),
+        )
+        for expected_result, finding_id in examples:
+            with self.subTest(expected_result=expected_result):
+                result = self._validate(
+                    self._case(expected_result=expected_result)
+                )
+                self.assertFalse(result.passed)
+                self.assertIn(
+                    finding_id,
+                    {finding["id"] for finding in result.findings},
+                )
+
+    def test_selected_value_display_matches_field_retention_oracle(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-selection-retention",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Поле предлагает и сохраняет выбранное значение.",
+                    observable_oracle=(
+                        "То же значение предложено продуктом и сохранено в поле «Регион»."
+                    ),
+                    test_intent="Найти и выбрать значение в поле «Регион».",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Найти и выбрать значение в поле «Регион».",
+                expected_result=(
+                    "Значение предложено продуктом и после выбора отображается "
+                    "в поле «Регион» с тем же текстом."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_selected_value_display_does_not_prove_reopen_persistence(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-selection-persistence",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Значение сохраняется после повторного открытия.",
+                    observable_oracle=(
+                        "После повторного открытия то же значение сохранено в поле «Регион»."
+                    ),
+                    test_intent="Выбрать значение, сохранить и повторно открыть карточку.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps="1. Выбрать значение в поле «Регион».",
+                expected_result=(
+                    "После выбора значение отображается в поле «Регион» с тем же текстом."
+                ),
+            )
+        )
+
+        self.assertIn(
+            "observable-oracle-contract-mismatch",
+            {finding["id"] for finding in result.findings},
+        )
+
+    def test_lifecycle_intent_can_explicitly_combine_fill_and_reset(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-runtime",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01", "BSR 16"),
+                    atomic_statement="После удаления заполненного блока новый блок пуст.",
+                    observable_oracle="Поля нового блока пусты.",
+                    test_intent=(
+                        "Заполнить поля, удалить блок кнопкой «Корзина», затем "
+                        "повторно добавить блок и проверить пустое состояние."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                steps=(
+                    "1. Заполнить поля блока.\n"
+                    "2. Нажать «Корзина» и удалить блок.\n"
+                    "3. Повторно добавить блок и проверить его поля."
+                ),
+                expected_result="Поля нового блока пусты.",
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_matching_positive_oracle_allows_supplementary_negative_clause(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-runtime",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01", "BSR 16"),
+                    atomic_statement="Выбранный блок удаляется кнопкой «Корзина».",
+                    observable_oracle="Выбранный блок-повторитель удалён.",
+                    test_intent="Нажать кнопку-пиктограмму «Корзина» выбранного блока.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                steps="1. Нажать кнопку-пиктограмму «Корзина» выбранного блока.",
+                expected_result=(
+                    "Выбранный блок-повторитель удалён; соответствующий доход "
+                    "больше не отображается."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_oracle_in_steps_does_not_compensate_empty_final_expected(self) -> None:
+        result = self._validate(
+            self._case(
+                steps=(
+                    "1. Ввести некорректный VIN и выполнить поиск.\n"
+                    "2. Убедиться, что сообщение об ошибке VIN отображается."
+                ),
+                expected_result="",
+            )
+        )
+
+        finding_ids = {finding["id"] for finding in result.findings}
+        self.assertFalse(result.passed)
+        self.assertIn("empty-runtime-section", finding_ids)
+        self.assertIn("observable-oracle-contract-mismatch", finding_ids)
+
+    def test_only_preconditions_and_test_data_allow_not_applicable_placeholders(self) -> None:
+        allowed = self._case().replace(
+            "- Открыта основная форма.",
+            "Не требуется.",
+        ).replace(
+            "- Некорректный VIN: `123`.",
+            "Не применимо.",
+        )
+        allowed_result = self._validate(allowed)
+        forbidden_result = self._validate(
+            self._case(expected_result="Не применимо.")
+        )
+
+        self.assertTrue(allowed_result.passed, allowed_result.findings)
+        self.assertIn(
+            "forbidden-runtime-placeholder",
+            {finding["id"] for finding in forbidden_result.findings},
+        )
+
+    def test_steps_require_a_numbered_executable_action(self) -> None:
+        result = self._validate(
+            self._case(
+                steps="Ввести некорректный VIN и выполнить поиск."
+            )
+        )
+
+        self.assertIn(
+            "runtime-step-missing-numbered-action",
+            {finding["id"] for finding in result.findings},
+        )
+
+    def test_extra_source_reference_fails_exact_traceability(self) -> None:
+        result = self._validate(
+            self._case(
+                traceability=(
+                    "OBL-001; ATOM-001; SRC-001.P01; BSR 16; SRC-UNRELATED"
+                )
+            )
+        )
+
+        finding = next(
+            finding
+            for finding in result.findings
+            if finding["id"] == "strict-traceability-contract-mismatch"
+        )
+        self.assertEqual(["SRC-UNRELATED"], finding["unexpected_references"])
+
+    def test_duplicate_obligation_across_test_cases_fails(self) -> None:
+        duplicate = self._case(tc_id="TC-AMS-002")
+        result = self._validate(self._case() + "\n" + duplicate)
+
+        duplicate_findings = [
+            finding
+            for finding in result.findings
+            if finding["id"] == "duplicate-obligation-coverage"
+        ]
+        self.assertFalse(result.passed)
+        self.assertEqual(2, len(duplicate_findings))
+        self.assertNotIn("OBL-001", result.covered_obligations)
+
+    def test_full_runtime_contract_passes_without_verbatim_oracle(self) -> None:
+        result = self._validate(self._case())
+
+        self.assertTrue(result.passed, result.findings)
+        self.assertEqual(("OBL-001",), result.covered_obligations)
+
+    def test_crlf_and_unicode_whitespace_are_tolerated(self) -> None:
+        text = self._case()
+        text = text.replace("## TC-AMS-001", "##\u00a0TC-AMS-001")
+        text = text.replace("### Тестовые данные", "###\u202fТестовые\u00a0данные")
+        text = text.replace("**Трассировка:** ", "**Трассировка:**\u00a0")
+        text = text.replace("1. Ввести", "1.\u202fВвести")
+        text = text.replace("\n", "\r\n")
+
+        result = self._validate(text)
+
+        self.assertTrue(result.passed, result.findings)
 
 
 if __name__ == "__main__":

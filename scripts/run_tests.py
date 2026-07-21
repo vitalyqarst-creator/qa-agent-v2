@@ -17,11 +17,16 @@ AGENT_LAYER_MODULES = [
     "tests.test_agent_architecture",
     "tests.test_agent_audit_script",
     "tests.test_agent_artifact_validator",
+    "tests.test_autofin_dadata_reference",
+    "tests.test_bounded_scope_analyzer_v2",
     "tests.test_codex_exec_review_cycle_runner",
     "tests.test_codex_output_schema_probe",
     "tests.test_codex_review_cycle_runner",
     "tests.test_instruction_context_resolver",
     "tests.test_iteration_contracts",
+    "tests.test_lean_production",
+    "tests.test_overnight_controller",
+    "tests.test_incremental_update",
     "tests.test_probe_environment",
     "tests.test_prepared_stage_package",
     "tests.test_prepared_obligation_gate",
@@ -35,8 +40,15 @@ AGENT_LAYER_MODULES = [
     "tests.test_review_cycle_metrics",
     "tests.test_review_cycle_backend_matrix",
     "tests.test_reviewer_contracts",
+    "tests.test_release_bundle",
+    "tests.test_semantic_design_author",
+    "tests.test_semantic_design_bridge",
+    "tests.test_semantic_design_materializer",
     "tests.test_session_based_review_cycle_contracts",
     "tests.test_source_parsing_quality",
+    "tests.test_source_preparation",
+    "tests.test_standard_production_iteration",
+    "tests.test_standard_scope_bridge",
     "tests.test_task_start_skill_routing",
     "tests.test_update_markdown_section",
 ]
@@ -67,6 +79,9 @@ def utf8_subprocess_env() -> dict[str, str]:
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
+    # Canonical test runs must be read-only with respect to repository sources.
+    # Child interpreters do not inherit the parent's ``-B`` flag automatically.
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
     return env
 
 

@@ -34,12 +34,13 @@ class ReviewerContractTests(unittest.TestCase):
 
         for token in (
             "`scope_gap_review`",
+            "`source_assertion_review`",
             "`structure_preflight`",
             "`semantic_traceability_test_design`",
             "`structure_format_final`",
             "`semantic_regression`",
-            "prompt.scope-gaps-to-reviewer.md",
             "scope-gap-review.md",
+            "source-assertion-review.json",
             "structure_preflight -> semantic_traceability_test_design",
             "round-cap-reached",
         ):

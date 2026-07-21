@@ -128,6 +128,11 @@ The session-based cycle uses reviewer modes as separate sessions:
 - `structure_format_final`: final template, numbering, grouping and wording review after semantic closure.
 - `semantic_regression`: final check that formatting changes did not alter coverage or meaning.
 
+Pre-cycle compiler-contract-v3 `source_assertion_review` supplies the exact-digest
+source-assertion receipt, replaces gap review for that manifest and is not a TC
+review round. This v3 label belongs to the compiler/source-assertion basis; the
+subsequent source-first prepared TC reviewer returns contract v4.
+
 `structure_preflight` must not spend work polishing the set. It only blocks cases that cannot be reviewed reliably.
 
 When `structure_preflight` blocks the cycle and creates an active writer prompt, `structure-preflight-blocked` is recoverable by `writer-structure-r1`. This writer stage must perform structure-only remediation and route back to `writer-draft-ready` / `reviewer.structure_preflight`; it must not perform semantic redesign.

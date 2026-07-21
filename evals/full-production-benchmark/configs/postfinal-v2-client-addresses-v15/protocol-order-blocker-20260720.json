@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-07-20T12:52:13Z",
+  "benchmark_id": "postfinal-v2-client-addresses-v15",
+  "codex_task_id": "019f7f8a-3a13-7732-b7d2-2558a52c8132",
+  "status": "blocked-before-benchmark",
+  "phase": "request-metadata",
+  "error_type": "contradictory-prebootstrap-order-contract",
+  "error": "Mandatory project and skill instruction loading preceded a contract that incorrectly required request metadata to be the first instrumental action.",
+  "root_agent_execution": true,
+  "delegation_used": false,
+  "wrapper_invoked": false,
+  "outputs_created": false,
+  "task_duration_ms": 61491,
+  "disposition": {
+    "benchmark_attempt_consumed": false,
+    "reuse_same_v15_config": true,
+    "contract_repaired": true,
+    "repair_summary": "Allow a bounded instruction/environment preflight, then require an uninterrupted root-only metadata-bootstrap pair. Backdate the timer to the original request timestamp."
+  }
+}

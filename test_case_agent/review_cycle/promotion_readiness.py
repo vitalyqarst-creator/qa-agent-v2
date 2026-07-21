@@ -28,9 +28,12 @@ def _path(value: Any, name: str) -> str:
     return text
 
 
-def _strings(value: Any, name: str) -> tuple[str, ...]:
-    if not isinstance(value, list) or not value:
-        raise StageRuntimeError(f"promotion contract {name} must be a non-empty array")
+def _strings(
+    value: Any, name: str, *, allow_empty: bool = False
+) -> tuple[str, ...]:
+    if not isinstance(value, list) or (not value and not allow_empty):
+        qualifier = "an array" if allow_empty else "a non-empty array"
+        raise StageRuntimeError(f"promotion contract {name} must be {qualifier}")
     result = tuple(_text(item, f"{name}[]") for item in value)
     if len(result) != len(set(result)):
         raise StageRuntimeError(f"promotion contract {name} must not contain duplicates")
@@ -85,7 +88,9 @@ class PromotionContract:
                 payload["required_requirement_ids"], "required_requirement_ids"
             ),
             required_sections=_strings(payload["required_sections"], "required_sections"),
-            required_gap_ids=_strings(payload["required_gap_ids"], "required_gap_ids"),
+            required_gap_ids=_strings(
+                payload["required_gap_ids"], "required_gap_ids", allow_empty=True
+            ),
             accepted_candidate=_path(payload["accepted_candidate"], "accepted_candidate"),
             accepted_candidate_sha256=_text(
                 payload["accepted_candidate_sha256"], "accepted_candidate_sha256"

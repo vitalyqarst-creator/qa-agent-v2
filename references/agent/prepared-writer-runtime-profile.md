@@ -7,6 +7,9 @@ This is the technical execution projection inside `ft-test-case-writer`. It intr
 Continue only when the embedded payload confirms:
 
 - runner-validated current package metadata, including non-empty SHA-256 `package_digest` and `input_fingerprint`;
+- compiler `output_mode` and release status; `draft-with-blocking-gaps` is
+  eligible only with source-first accepted receipt, primary blocking gaps and
+  at least one testable obligation after every other compiler guard passed;
 - `execution_profile = simple-field-property` or `standard-required`;
 - an explicit context profile and unsupported dimensions;
 - scope-local source evidence and atomic obligations;
@@ -31,6 +34,18 @@ Return `blocked-input` when these conditions do not hold. Do not open project in
 10. Keep one primary check and one main observable result per TC. Use unique titles that name the field/action and exact positive, boundary or invalid class.
 11. A concrete FT-first fixture may be a synthetic value, relative date or runtime-selected integration response with source-defined observable properties. A stand record ID, locator, token, session or prerecorded provider response is not required until UI-prep.
 12. Return `blocked-input` with empty `draft_markdown` and precise reasons only when inline evidence cannot define the test intent or observable oracle without invention.
+
+### Executable setup projection
+
+- In production test cases, write preconditions as inline numbered setup actions that create, reveal, select or input the required state, using concrete source-backed controls and values.
+- `FX-*`, `FIX-*` and other setup IDs are provenance only; they never substitute for executable setup actions in the test case.
+- A passive state statement may appear only after the preceding state-producing action that makes the state true.
+- When the embedded source-backed evidence cannot define the required executable setup without invention, return `blocked-input`; do not emit a passive or identifier-only precondition.
+
+The presence of an already classified primary blocking gap is not by itself a
+writer failure in `draft-with-blocking-gaps`: write only the testable obligations
+and preserve the gap as non-executable. The resulting Markdown remains unsigned
+and cannot be published or promoted from this stage.
 
 ## Targeted Repair Projection
 
