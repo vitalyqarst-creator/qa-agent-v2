@@ -622,6 +622,60 @@ class PreparedObligationGateTests(unittest.TestCase):
             {item["id"] for item in incomplete.findings},
         )
 
+    def test_dadata_reference_fixture_projection_uses_runtime_roles(self) -> None:
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-DADATA-ADDR-POS",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "FX-DADATA-ADDR-001"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "самара авроры 7 12"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "г Самара, ул Авроры, д 7, кв 12"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "443017"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "Самарская обл"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "Самара"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "Авроры"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "7"),
+                PreparedDictionaryValue(("DICT-DADATA-ADDR-POS",), "leaf", "12"),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-dadata-reference-fixture",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-003",
+                    atom_id="ATOM-003",
+                    source_refs=("SRC-003", "DICT-DADATA-ADDR-POS"),
+                    atomic_statement="DaData возвращает точное предложение адреса.",
+                    observable_oracle="Выбрано точное предложение адреса.",
+                    test_intent="Выбрать точное предложение адреса.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-DADATA-ADDR-POS",),
+                    notes="",
+                    planned_test_case_id="TC-003",
+                    dictionary_requirements=(requirement,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        draft = (
+            "## TC-003\n"
+            "**Трассировка:** OBL-003; ATOM-003; SRC-003; DICT-DADATA-ADDR-POS\n\n"
+            "### Тестовые данные\n\n- Адрес DaData.\n\n"
+            "### Шаги\n\n1. Выбрать предложение DaData.\n"
+        )
+
+        projected, _ = materialize_draft_reference_fixtures(draft, obligations)
+
+        self.assertIn("- Fixture DaData: `FX-DADATA-ADDR-001`.", projected)
+        self.assertIn("- Запрос: `самара авроры 7 12`.", projected)
+        self.assertIn(
+            "- Точное предложение: `г Самара, ул Авроры, д 7, кв 12`.",
+            projected,
+        )
+        self.assertIn("- Регион: `Самарская обл`.", projected)
+        self.assertNotIn("Значение fixture", projected)
+
     def test_writer_dictionary_ownership_rejects_exhaustive_value_enumeration(self) -> None:
         requirement = PreparedDictionaryRequirement(
             dictionary_id="DICT-001",
@@ -800,6 +854,160 @@ class StrictPreparedObligationGateTests(unittest.TestCase):
             "action-contract-mismatch",
             {finding["id"] for finding in result.findings},
         )
+
+    def test_negated_rejection_is_valid_acceptance_oracle(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-acceptance",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-041",
+                    atom_id="ATOM-041",
+                    source_refs=("SRC-041",),
+                    atomic_statement="Поле принимает допустимое значение.",
+                    observable_oracle="Значение принимается системой как допустимое.",
+                    test_intent="Ввести допустимое значение в поле.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-041",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                tc_id="TC-041",
+                traceability="OBL-041; ATOM-041; SRC-041",
+                steps="1. Ввести допустимое значение в поле.",
+                expected_result=(
+                    "Введённое значение не отклонено системой как недопустимое."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_clear_or_do_not_fill_satisfies_leave_field_empty_action(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-empty-field",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-081",
+                    atom_id="ATOM-081",
+                    source_refs=("SRC-081",),
+                    atomic_statement="Поле Регион может быть пустым.",
+                    observable_oracle="Поле Регион остаётся пустым.",
+                    test_intent="Оставить поле «Регион» пустым.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-081",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        for steps in (
+            "1. Очистить поле «Регион».",
+            "1. Продолжить, не заполняя поле «Регион».",
+        ):
+            with self.subTest(steps=steps):
+                result = self._validate(
+                    self._case(
+                        tc_id="TC-081",
+                        traceability="OBL-081; ATOM-081; SRC-081",
+                        steps=steps,
+                        expected_result="Поле «Регион» остаётся пустым.",
+                    )
+                )
+                self.assertTrue(result.passed, result.findings)
+
+    def test_disappears_and_is_absent_are_equivalent_oracles(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-disappearance",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-053",
+                    atom_id="ATOM-070",
+                    source_refs=("SRC-030", "BSR 137"),
+                    atomic_statement="Подсказка исчезает после активации флажка.",
+                    observable_oracle=(
+                        "Подсказка «Укажите номер квартиры» исчезает с поля "
+                        "«Адрес регистрации»."
+                    ),
+                    test_intent="Активировать флажок частного дома.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-053",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                tc_id="TC-053",
+                traceability="OBL-053; ATOM-070; SRC-030; BSR 137",
+                steps="1. Активировать флажок частного дома.",
+                expected_result=(
+                    "Подсказка «Укажите номер квартиры» отсутствует на поле "
+                    "«Адрес регистрации»."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
+    def test_not_activated_preserves_default_control_state(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-strict-default-control",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-054",
+                    atom_id="ATOM-071",
+                    source_refs=("SRC-030",),
+                    atomic_statement="Необязательный флажок можно не активировать.",
+                    observable_oracle=(
+                        "Необязательный логический элемент остаётся в заданном "
+                        "значении по умолчанию «Нет» без обязательной активации."
+                    ),
+                    test_intent=(
+                        "Field/block: Флажок частного дома; "
+                        "Action contract: Не изменять значение по умолчанию «Нет» "
+                        "флажка частного дома."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-054",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                tc_id="TC-054",
+                traceability="OBL-054; ATOM-071; SRC-030",
+                steps="1. Не активируя флажок, выполнить действие продолжения.",
+                expected_result=(
+                    "Значение «Нет» допускается без обязательной активации "
+                    "флажка; зафиксировано отсутствие его активации."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
 
     def test_view_action_matches_view_intent(self) -> None:
         obligations = PreparedObligationSet.create(

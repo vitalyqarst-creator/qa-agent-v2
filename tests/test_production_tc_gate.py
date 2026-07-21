@@ -760,6 +760,121 @@ class ProductionTcGateTests(unittest.TestCase):
             finding_ids,
         )
 
+    def test_dadata_component_list_still_requires_revealing_manual_fields(self) -> None:
+        finding_ids = self._finding_ids(
+            self._case(
+                test_data=(
+                    "- Fixture DaData: `FX-DADATA-ADDR-001`.\n"
+                    "- Запрос: `самара авроры 7 12`.\n"
+                    "- Точное предложение: `г Самара, ул Авроры, д 7, кв 12`.\n"
+                    "- Почтовый индекс: `443017`.\n"
+                    "- Регион: `Самарская обл`.\n"
+                    "- Город: `г Самара`."
+                ),
+                steps=(
+                    "1. Ввести запрос в поле фактического адреса.\n"
+                    "2. Выбрать предложение `г Самара, ул Авроры, д 7, кв 12`."
+                ),
+                expected_result=(
+                    "В блоке ручного ввода отображаются компоненты выбранного "
+                    "адреса: «Почтовый индекс» — `443017`, «Регион» — "
+                    "`Самарская обл`, «Город» — `г Самара`."
+                ),
+            )
+        )
+
+        self.assertIn(
+            "production-unobservable-address-decomposition",
+            finding_ids,
+        )
+
+    def test_duplicate_dadata_path_requires_an_exact_address_branch(self) -> None:
+        common = {
+            "test_data": (
+                "- Fixture DaData: `FX-DADATA-REGION-001`.\n"
+                "- Запрос: `Саратов`.\n"
+                "- Точное предложение: `Саратовская обл`."
+            ),
+            "steps": (
+                "1. Ввести в поле «Регион» запрос `Саратов`.\n"
+                "2. Выбрать предложение `Саратовская обл`."
+            ),
+            "expected_result": (
+                "Интерфейс предлагает значение `Саратовская обл`, а после "
+                "выбора поле «Регион» отображает значение `Саратовская обл`."
+            ),
+        }
+        content = "\n".join(
+            (
+                self._case(
+                    tc_id="TC-AMS-001",
+                    preconditions=(
+                        "1. Открыть блок адреса регистрации.\n"
+                        "2. Установить переключатель «Ввести вручную» в значение «Да»."
+                    ),
+                    **common,
+                ),
+                self._case(
+                    tc_id="TC-AMS-002",
+                    preconditions=(
+                        "1. Открыть адресный блок с переключателем «Ввести вручную».\n"
+                        "2. Установить переключатель «Ввести вручную» в значение «Да»."
+                    ),
+                    **common,
+                ),
+            )
+        )
+
+        result = validate_production_tc_content(content)
+
+        ambiguous = [
+            finding
+            for finding in result.findings
+            if finding["id"] == "production-ambiguous-duplicate-execution-path"
+        ]
+        self.assertEqual(["TC-AMS-002"], [item["tc_id"] for item in ambiguous])
+
+    def test_duplicate_dadata_path_with_two_explicit_branches_passes(self) -> None:
+        common = {
+            "test_data": (
+                "- Fixture DaData: `FX-DADATA-REGION-001`.\n"
+                "- Запрос: `Саратов`.\n"
+                "- Точное предложение: `Саратовская обл`."
+            ),
+            "steps": (
+                "1. Ввести в поле «Регион» запрос `Саратов`.\n"
+                "2. Выбрать предложение `Саратовская обл`."
+            ),
+            "expected_result": (
+                "Интерфейс предлагает значение `Саратовская обл`, а после "
+                "выбора поле «Регион» отображает значение `Саратовская обл`."
+            ),
+        }
+        content = "\n".join(
+            (
+                self._case(
+                    tc_id="TC-AMS-001",
+                    preconditions=(
+                        "1. Открыть блок адреса регистрации.\n"
+                        "2. Установить переключатель «Ввести вручную» в значение «Да»."
+                    ),
+                    **common,
+                ),
+                self._case(
+                    tc_id="TC-AMS-002",
+                    preconditions=(
+                        "1. Открыть блок фактического адреса.\n"
+                        "2. Установить переключатель «Ввести вручную» в значение «Да»."
+                    ),
+                    **common,
+                ),
+            )
+        )
+
+        result = validate_production_tc_content(content)
+
+        self.assertTrue(result.passed, result.findings)
+
     def test_dadata_address_decomposition_with_component_comparison_passes(self) -> None:
         result = validate_production_tc_content(
             self._case(
@@ -812,6 +927,36 @@ class ProductionTcGateTests(unittest.TestCase):
 
         self.assertTrue(result.passed, result.findings)
 
+    def test_dadata_decomposition_accepts_exact_proposal_without_repeated_vendor_name(self) -> None:
+        result = validate_production_tc_content(
+            self._case(
+                test_data=(
+                    "- Fixture DaData: `FX-DADATA-ADDR-001`.\n"
+                    "- Запрос: `самара авроры 7 12`.\n"
+                    "- Точное предложение: `г Самара, ул Авроры, д 7, кв 12`.\n"
+                    "- Регион: `Самарская обл`.\n"
+                    "- Город: `Самара`.\n"
+                    "- Улица: `Авроры`.\n"
+                    "- Дом: `7`.\n"
+                    "- Квартира: `12`."
+                ),
+                steps=(
+                    "1. Ввести запрос в поле «Адрес регистрации».\n"
+                    "2. Выбрать предложение `г Самара, ул Авроры, д 7, кв 12`.\n"
+                    "3. Зафиксировать возвращённые компоненты адреса.\n"
+                    "4. Установить переключатель «Ввести вручную» в значение «Да», "
+                    "чтобы открыть поля ручного ввода.\n"
+                    "5. Сравнить видимые поля с зафиксированными компонентами."
+                ),
+                expected_result=(
+                    "Компоненты выбранного адреса отображены в соответствующих "
+                    "полях ручного ввода адреса регистрации."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
+
     def test_dadata_positive_fixture_requires_id_query_and_exact_suggestion(self) -> None:
         base = self._case(
             test_data="- DaData используется для поиска адреса.",
@@ -825,12 +970,12 @@ class ProductionTcGateTests(unittest.TestCase):
         self.assertIn("production-dadata-query-literal-missing", finding_ids)
         self.assertIn("production-dadata-suggestion-literal-missing", finding_ids)
 
-    def test_dadata_negative_fixture_requires_empty_response_hash(self) -> None:
+    def test_dadata_negative_fixture_requires_verified_empty_response(self) -> None:
         content = self._case(
             test_data=(
                 "- Fixture DaData: `FX-DADATA-ADDR-NEG-001`.\n"
                 "- Запрос: `проверенный отрицательный адрес`.\n"
-                "- Результат DaData: `suggestions=[]`."
+                "- Результат DaData отсутствует."
             ),
             steps="1. Ввести `проверенный отрицательный адрес` в поле адреса.",
             expected_result="Отображается сообщение «Некорректно указан адрес».",
@@ -846,10 +991,7 @@ class ProductionTcGateTests(unittest.TestCase):
             test_data=(
                 "- Fixture DaData: `FX-DADATA-ADDR-NEG-001`.\n"
                 "- Запрос: `проверенный отрицательный адрес`.\n"
-                "- Результат DaData: `suggestions=[]`.\n"
-                "- response_sha256: `"
-                + "a" * 64
-                + "`."
+                "- Результат DaData: `suggestions=[]`."
             ),
             steps="1. Ввести `проверенный отрицательный адрес` в поле адреса.",
             expected_result="Отображается сообщение «Некорректно указан адрес».",
@@ -858,6 +1000,110 @@ class ProductionTcGateTests(unittest.TestCase):
         result = validate_production_tc_content(content)
 
         self.assertTrue(result.passed, result.findings)
+
+    def test_dadata_runtime_get_fixture_wording_is_blocked(self) -> None:
+        content = self._case(
+            preconditions=(
+                "1. Получить fixture `FX-DADATA-ADDR-001` через HTTPS DaData.\n"
+                "2. Открыть блок адресов."
+            ),
+            test_data=(
+                "- Fixture DaData: `FX-DADATA-ADDR-001`.\n"
+                "- Запрос: `самара авроры 7 12`.\n"
+                "- Точное предложение: `г Самара, ул Авроры, д 7, кв 12`."
+            ),
+            steps="1. Ввести запрос и выбрать предложение DaData.",
+            expected_result="Выбранное предложение отображается в поле адреса.",
+        )
+
+        self.assertIn(
+            "production-dadata-dynamic-fixture",
+            self._finding_ids(content),
+        )
+
+    def test_dadata_semantic_suggestion_labels_are_accepted(self) -> None:
+        for label in ("Выбираемое предложение", "Ожидаемое точное предложение"):
+            with self.subTest(label=label):
+                content = self._case(
+                    test_data=(
+                        "- Fixture DaData: `FX-DADATA-ADDR-001`.\n"
+                        "- Запрос: `самара авроры 7 12`.\n"
+                        f"- {label}: `г Самара, ул Авроры, д 7, кв 12`."
+                    ),
+                    steps="1. Ввести запрос и выбрать предложение DaData.",
+                    expected_result="Выбранное предложение отображается в поле адреса.",
+                )
+                self.assertNotIn(
+                    "production-dadata-suggestion-literal-missing",
+                    self._finding_ids(content),
+                )
+
+    def test_nonconcrete_current_dictionary_value_is_blocked(self) -> None:
+        content = self._case(
+            test_data="- Любое значение из актуального списка регионов.",
+            steps="1. Выбрать указанное значение в поле «Регион».",
+            expected_result="Выбранное значение отображается в поле «Регион».",
+        )
+
+        self.assertIn(
+            "production-nonconcrete-runtime-value",
+            self._finding_ids(content),
+        )
+
+    def test_internal_fixture_paths_and_snapshots_are_blocked(self) -> None:
+        content = self._case(
+            test_data=(
+                "- Fixture DaData: `FX-DADATA-ADDR-001`.\n"
+                "- Запрос: `самара авроры 7 12`.\n"
+                "- Точное предложение: `г Самара, ул Авроры, д 7, кв 12`.\n"
+                "- Значение взять из `fts/AutoFin/work/vendor-references/"
+                "dadata-fixture-catalog.md` и response snapshot."
+            ),
+            steps="1. Ввести запрос и выбрать предложение DaData.",
+            expected_result="Выбранное предложение отображается в поле адреса.",
+        )
+
+        self.assertIn(
+            "production-internal-fixture-artifact-leak",
+            self._finding_ids(content),
+        )
+
+    def test_out_of_scope_kladr_diagnostic_is_blocked(self) -> None:
+        content = self._case(
+            postconditions=(
+                "- Проверка внутреннего заполнения KLADR в рамках этого кейса "
+                "не выполняется."
+            )
+        )
+
+        self.assertIn(
+            "production-out-of-scope-diagnostic-leak",
+            self._finding_ids(content),
+        )
+
+    def test_approved_alias_is_rejected_in_runtime_sections(self) -> None:
+        content = self._case(
+            steps=(
+                "1. Ввести `самара авроры 7 12` в поле "
+                "«Адрес постоянной регистрации»."
+            ),
+            expected_result=(
+                "В поле «Адрес постоянной регистрации» отображается введённое "
+                "значение."
+            ),
+        )
+
+        result = validate_production_tc_content(
+            content,
+            approved_runtime_aliases={
+                "Адрес постоянной регистрации": "Адрес регистрации",
+            },
+        )
+
+        self.assertIn(
+            "production-noncanonical-approved-alias",
+            {finding["id"] for finding in result.findings},
+        )
 
     def test_single_address_field_visibility_is_not_decomposition(self) -> None:
         result = validate_production_tc_content(

@@ -12,9 +12,13 @@ from test_case_agent.review_cycle.prepared_compiler import (
     compile_workflow_package,
 )
 from test_case_agent.review_cycle.obligation_gate import (
+    materialize_draft_dictionary_projections,
+    materialize_draft_reference_fixtures,
     validate_draft_obligation_coverage,
 )
+from test_case_agent.review_cycle.prepared_package import load_obligations
 from test_case_agent.review_cycle.production_tc_gate import (
+    validate_production_tc_content,
     validate_production_tc_draft,
 )
 from test_case_agent.review_cycle.source_model_adequacy import (
@@ -82,6 +86,24 @@ ADDRESS_V18_CYCLE = (
     / "work"
     / "review-cycles"
     / "application-card-client-addresses-v18-live-qualification-20260721"
+)
+ADDRESS_V22_CYCLE = (
+    FT_ROOT
+    / "work"
+    / "review-cycles"
+    / "application-card-client-addresses-v22-clean-20260721-turn-019f83f4"
+)
+ADDRESS_V23_CYCLE = (
+    FT_ROOT
+    / "work"
+    / "review-cycles"
+    / "application-card-client-addresses-v23-targeted-repair-20260721"
+)
+ADDRESS_V24_CYCLE = (
+    FT_ROOT
+    / "work"
+    / "review-cycles"
+    / "application-card-client-addresses-v24-two-case-repair-20260721"
 )
 
 
@@ -490,6 +512,143 @@ class AutoFinDaDataReferenceTests(unittest.TestCase):
         self.assertEqual(
             "observable-oracle-contract-mismatch",
             primary_findings[0]["id"],
+        )
+
+    def test_v22_saved_draft_offline_qualification_is_bounded_to_real_repairs(self) -> None:
+        draft_path = (
+            ADDRESS_V22_CYCLE
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+            / "stage-output"
+            / "draft.md"
+        )
+        obligations_path = (
+            ADDRESS_V22_CYCLE
+            / "prepared-input"
+            / "WP-01"
+            / "atomic-obligations.json"
+        )
+        obligations = load_obligations(obligations_path)
+        projected, _ = materialize_draft_reference_fixtures(
+            draft_path.read_text(encoding="utf-8"), obligations
+        )
+        projected, _ = materialize_draft_dictionary_projections(
+            projected, obligations
+        )
+        with tempfile.TemporaryDirectory(prefix="autofin-v22-offline-") as raw:
+            projected_path = Path(raw) / "projected-v22.md"
+            projected_path.write_text(projected, encoding="utf-8")
+            obligation_result = validate_draft_obligation_coverage(
+                draft_path=projected_path,
+                obligations_path=obligations_path,
+                strict_runtime_contract=True,
+            )
+        self.assertTrue(obligation_result.passed, obligation_result.findings)
+
+        production_result = validate_production_tc_content(
+            projected,
+            checked_path="saved-v22-offline-projection",
+            approved_runtime_aliases={
+                "Адрес постоянной регистрации": "Адрес регистрации",
+            },
+        )
+        actual_findings = sorted(
+            (item["tc_id"], item["id"])
+            for item in production_result.findings
+        )
+        self.assertEqual(
+            [
+                ("TC-010", "production-unobservable-address-decomposition"),
+                ("TC-023", "production-nonconcrete-runtime-value"),
+                ("TC-024", "production-internal-fixture-artifact-leak"),
+                ("TC-048", "production-noncanonical-approved-alias"),
+                ("TC-050", "production-noncanonical-approved-alias"),
+                ("TC-051", "production-noncanonical-approved-alias"),
+                ("TC-052", "production-noncanonical-approved-alias"),
+                ("TC-053", "production-noncanonical-approved-alias"),
+                ("TC-054", "production-noncanonical-approved-alias"),
+                ("TC-055", "production-noncanonical-approved-alias"),
+                ("TC-066", "production-unobservable-address-decomposition"),
+                ("TC-080", "production-dadata-dynamic-fixture"),
+                ("TC-080", "production-internal-fixture-artifact-leak"),
+                ("TC-111", "production-internal-fixture-artifact-leak"),
+                ("TC-111", "production-out-of-scope-diagnostic-leak"),
+            ],
+            actual_findings,
+        )
+
+    def test_v23_saved_draft_offline_qualification_includes_later_reviewer_findings(self) -> None:
+        draft_path = (
+            ADDRESS_V23_CYCLE
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+            / "stage-output"
+            / "draft.md"
+        )
+        obligations_path = (
+            ADDRESS_V23_CYCLE
+            / "prepared-input"
+            / "WP-01"
+            / "atomic-obligations.json"
+        )
+        obligation_result = validate_draft_obligation_coverage(
+            draft_path=draft_path,
+            obligations_path=obligations_path,
+            strict_runtime_contract=True,
+        )
+        self.assertTrue(obligation_result.passed, obligation_result.findings)
+
+        production_result = validate_production_tc_draft(draft_path=draft_path)
+        self.assertEqual(
+            [
+                ("TC-048", "production-calibration-question-missing"),
+                ("TC-048", "production-process-marker-in-title"),
+                ("TC-054", "production-calibration-question-missing"),
+                ("TC-054", "production-non-reproducible-precondition"),
+                ("TC-054", "production-process-marker-in-title"),
+                ("TC-066", "production-unobservable-address-decomposition"),
+                ("TC-080", "production-ambiguous-duplicate-execution-path"),
+            ],
+            sorted(
+                (item["tc_id"], item["id"])
+                for item in production_result.findings
+            ),
+        )
+
+    def test_v24_saved_draft_offline_qualification_matches_reviewer_findings(self) -> None:
+        draft_path = (
+            ADDRESS_V24_CYCLE
+            / "attempts"
+            / "writer-r1"
+            / "attempt-001"
+            / "stage-output"
+            / "draft.md"
+        )
+        obligations_path = (
+            ADDRESS_V24_CYCLE
+            / "prepared-input"
+            / "WP-01"
+            / "atomic-obligations.json"
+        )
+        obligation_result = validate_draft_obligation_coverage(
+            draft_path=draft_path,
+            obligations_path=obligations_path,
+            strict_runtime_contract=True,
+        )
+        self.assertTrue(obligation_result.passed, obligation_result.findings)
+
+        production_result = validate_production_tc_draft(draft_path=draft_path)
+        self.assertEqual(
+            [
+                ("TC-066", "production-unobservable-address-decomposition"),
+                ("TC-080", "production-ambiguous-duplicate-execution-path"),
+            ],
+            sorted(
+                (item["tc_id"], item["id"])
+                for item in production_result.findings
+            ),
         )
 
     def test_v17_repair_binds_factual_address_branches_before_writer(self) -> None:

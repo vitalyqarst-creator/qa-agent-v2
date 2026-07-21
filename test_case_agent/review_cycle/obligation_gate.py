@@ -112,7 +112,7 @@ SEMANTIC_FAMILY_ROOTS = {
     "verify": ("провер", "свер", "убед", "просмотр", "verify", "check", "view"),
     "display": ("отображ", "показ", "видим", "появ", "display", "show", "visible", "appear"),
     "accept": ("принима", "принят", "допуст", "accept", "allow"),
-    "hide": ("скры", "исчез", "hide", "disappear"),
+    "hide": ("скры", "исчез", "отсутств", "hide", "disappear", "absent"),
     "error": ("ошиб", "валидац", "error", "invalid"),
     "success": ("успеш", "success", "valid"),
     "remain": ("сохран", "оста", "remain", "keep"),
@@ -131,6 +131,11 @@ ACTION_CONTRACT = re.compile(
     r"(?=;\s*(?:Design\s+fixture|Check\s+type|Test\s+data|Field/block|"
     r"Condition\s+contract):|$)"
 )
+FIELD_BLOCK_CONTRACT = re.compile(
+    r"(?is)(?:^|;\s*)Field/block:\s*(?P<value>.*?)"
+    r"(?=;\s*(?:Condition\s+contract|Action\s+contract|Design\s+fixture|"
+    r"Check\s+type|Test\s+data):|$)"
+)
 FIELD_SELECTION_RETENTION_CONTRACT = re.compile(
     r"(?is)\bсохран\w*\b.{0,80}\bв\s+поле\b"
 )
@@ -140,6 +145,24 @@ FIELD_SELECTION_VISIBLE_AFTER_CHOICE = re.compile(
 PERSISTENCE_LIFECYCLE = re.compile(
     r"(?is)\b(?:повторн\w*\s+откр\w*|переоткр\w*|перезагруз\w*|"
     r"после\s+сохранени\w*|нов\w*\s+сесси\w*)\b"
+)
+NEGATED_REJECTION_ACCEPTANCE = re.compile(
+    r"(?is)\bне\s+отклон\w*\b.{0,120}\b(?:недопуст\w*|невалид\w*|invalid)\b"
+)
+EMPTY_FIELD_CONTRACT = re.compile(
+    r"(?is)(?:\bостав\w*\b.{0,100}\bпуст\w*\b|"
+    r"\bне\s+заполн\w*\b.{0,100}\bпол\w*\b)"
+)
+EMPTY_FIELD_ACTION = re.compile(
+    r"(?is)(?:\bочист\w*\b.{0,100}\bпол\w*\b|"
+    r"\bне\s+заполн\w*\b.{0,100}\bпол\w*\b|"
+    r"\bне\s+заполня\w*\b.{0,100}\bпол\w*\b|"
+    r"\bостав\w*\b.{0,100}\bпуст\w*\b)"
+)
+UNCHANGED_CONTROL_STATE = re.compile(
+    r"(?is)(?:\bне\s+измен\w*\b|\bне\s+активир\w*\b|"
+    r"\bотсутств\w*\b.{0,80}\bактивац\w*\b|"
+    r"\bбез\s+(?:обязательн\w*\s+)?активац\w*\b)"
 )
 
 
@@ -200,18 +223,63 @@ def reference_fixture_line(item: Any) -> str:
     return f"- {label} `{path}`: `{item.value}`"
 
 
+def _dadata_reference_fixture_lines(requirement: Any) -> tuple[str, ...]:
+    values = tuple(item.value for item in requirement.fixture_values)
+    if not values or not values[0].startswith("FX-DADATA-"):
+        return ()
+    fixture_id = values[0]
+    if "-ADDR-NEG-" in fixture_id and len(values) >= 3:
+        return (
+            f"- Fixture DaData: `{fixture_id}`.",
+            f"- Запрос: `{values[1]}`.",
+            f"- Ожидаемый ответ fixture: `{values[2]}`.",
+        )
+    if "-REGION-" in fixture_id and len(values) >= 5:
+        return (
+            f"- Fixture DaData: `{fixture_id}`.",
+            f"- Запрос: `{values[1]}`.",
+            f"- Параметр `from_bound`: `{values[2]}`.",
+            f"- Параметр `to_bound`: `{values[3]}`.",
+            f"- Точное предложение: `{values[4]}`.",
+        )
+    if "-ADDR-" in fixture_id and len(values) >= 9:
+        labels = (
+            "Fixture DaData",
+            "Запрос",
+            "Точное предложение",
+            "Почтовый индекс",
+            "Регион",
+            "Город",
+            "Улица",
+            "Дом",
+            "Квартира",
+        )
+        return tuple(
+            f"- {label}: `{value}`." for label, value in zip(labels, values)
+        )
+    return ()
+
+
+def reference_fixture_lines(requirement: Any) -> tuple[str, ...]:
+    dadata_lines = _dadata_reference_fixture_lines(requirement)
+    if dadata_lines:
+        return dadata_lines
+    return tuple(reference_fixture_line(item) for item in requirement.fixture_values)
+
+
 def reference_fixture_block(obligation: Any) -> str:
     requirements = reference_fixture_requirements(obligation)
     if not requirements:
         return ""
     lines = [
         f"<!-- {REFERENCE_FIXTURE_START} {obligation.obligation_id} -->",
-        "- Использовать точные reference-only fixture values в указанном порядке:",
     ]
     for requirement in requirements:
-        lines.extend(
-            reference_fixture_line(item) for item in requirement.fixture_values
-        )
+        if not _dadata_reference_fixture_lines(requirement):
+            lines.append(
+                "- Использовать точные reference-only fixture values в указанном порядке:"
+            )
+        lines.extend(reference_fixture_lines(requirement))
     lines.append(f"<!-- {REFERENCE_FIXTURE_END} {obligation.obligation_id} -->")
     return "\n".join(lines)
 
@@ -232,9 +300,11 @@ def reference_fixture_findings(
     )
     match = marker.search(block)
     expected_lines = {
-        reference_fixture_line(item): (requirement, item)
+        line: (requirement, item)
         for requirement in requirements
-        for item in requirement.fixture_values
+        for line, item in zip(
+            reference_fixture_lines(requirement), requirement.fixture_values
+        )
     }
     if match is None:
         return (
@@ -260,10 +330,26 @@ def reference_fixture_findings(
                 ),
             },
         )
+    recognized_prefixes = (
+        "- Группа fixture `",
+        "- Значение fixture `",
+        "- Fixture DaData:",
+        "- Запрос:",
+        "- Точное предложение:",
+        "- Почтовый индекс:",
+        "- Регион:",
+        "- Город:",
+        "- Улица:",
+        "- Дом:",
+        "- Квартира:",
+        "- Параметр `from_bound`:",
+        "- Параметр `to_bound`:",
+        "- Ожидаемый ответ fixture:",
+    )
     actual_lines = {
         line.strip()
         for line in match.group(1).splitlines()
-        if line.strip().startswith(("- Группа fixture `", "- Значение fixture `"))
+        if line.strip().startswith(recognized_prefixes)
     }
     missing_lines = sorted(set(expected_lines) - actual_lines)
     unexpected_lines = sorted(actual_lines - set(expected_lines))
@@ -846,6 +932,28 @@ def _semantic_contract_matches(
     )
     contract_families = family_projection(contract_tokens)
     actual_families = family_projection(actual_tokens)
+    if (
+        action_contract
+        and EMPTY_FIELD_CONTRACT.search(contract)
+        and EMPTY_FIELD_ACTION.search(actual)
+        and shared_count >= 2
+    ):
+        return True
+    if (
+        not action_contract
+        and "accept" in contract_families
+        and NEGATED_REJECTION_ACCEPTANCE.search(actual)
+    ):
+        actual_families.add("accept")
+    if not action_contract and UNCHANGED_CONTROL_STATE.search(actual):
+        actual_families.add("remain")
+    if (
+        action_contract
+        and UNCHANGED_CONTROL_STATE.search(contract)
+        and UNCHANGED_CONTROL_STATE.search(actual)
+        and shared_count >= 1
+    ):
+        return True
     if _has_contradictory_families(contract_families, actual_families):
         return False
     if (
@@ -876,7 +984,11 @@ def _prepared_action_contract(test_intent: str) -> str:
     if match is None:
         return test_intent
     value = match.group("value").strip()
-    return value or test_intent
+    if not value:
+        return test_intent
+    field_match = FIELD_BLOCK_CONTRACT.search(test_intent)
+    field_name = field_match.group("value").strip() if field_match else ""
+    return f"{value} {field_name}".strip()
 
 
 def _has_explicit_negation(text: str) -> bool:
@@ -898,6 +1010,16 @@ def _has_explicit_negation(text: str) -> bool:
 def _oracle_polarity_conflicts(contract: str, actual: str) -> bool:
     contract_tokens = _lexical_tokens(contract)
     actual_tokens = _lexical_tokens(actual)
+    if (
+        "accept" in _semantic_families(contract_tokens)
+        and NEGATED_REJECTION_ACCEPTANCE.search(actual)
+    ):
+        return False
+    if (
+        "hide" in _semantic_families(contract_tokens)
+        and any(token.startswith(("отсутств", "absent")) for token in actual_tokens)
+    ):
+        return False
     shared_families = _semantic_families(contract_tokens).intersection(
         _semantic_families(actual_tokens)
     )

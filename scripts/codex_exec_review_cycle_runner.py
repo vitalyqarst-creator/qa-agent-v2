@@ -116,6 +116,10 @@ REVIEW_FINDING_CATEGORIES = {
 }
 ATTEMPT_ID = format_attempt_id(1)
 SEED_MARKER = "PREPARED-DRAFT-SEED"
+APPROVED_RUNTIME_ALIAS_RE = re.compile(
+    r"approved\s+alias\s+`([^`\r\n]+?)\s*->\s*([^`\r\n]+?)`",
+    re.IGNORECASE,
+)
 TRACEABILITY_COLUMNS = (
     "atom_id",
     "req_id",
@@ -217,9 +221,17 @@ REPAIRABLE_QUALITY_FINDING_IDS = {
     "ambiguous-dictionary-value-path",
     "ambiguous-execution-action",
     "production-calibration-transition-overclaim",
+    "production-calibration-question-missing",
+    "production-ambiguous-duplicate-execution-path",
+    "production-dadata-dynamic-fixture",
     "production-forbidden-process-wording",
+    "production-internal-fixture-artifact-leak",
     "production-missing-numbered-action-step",
+    "production-noncanonical-approved-alias",
+    "production-nonconcrete-runtime-value",
     "production-non-reproducible-precondition",
+    "production-out-of-scope-diagnostic-leak",
+    "production-process-marker-in-title",
     "production-unobservable-address-decomposition",
     "dictionary-projection-incomplete",
     "duplicate-title",
@@ -232,12 +244,34 @@ REPAIRABLE_QUALITY_FINDING_IDS = {
     "oracle-polarity-mismatch",
 }
 TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
+    "production-ambiguous-duplicate-execution-path": (
+        "Keep the separate test case, but make its preconditions select the exact source-backed address branch.",
+        "Do not use a generic address block when the same steps and oracle exist for another branch.",
+    ),
+    "production-calibration-question-missing": (
+        "Keep the dedicated calibration confirmation as one concrete question ending with a question mark.",
+        "Name the exact missing visible UI reaction without inventing the reaction.",
+    ),
+    "production-dadata-dynamic-fixture": (
+        "Remove every runtime instruction to call DaData, obtain or capture a fixture, or discover a current value.",
+        "Use only the exact runner-projected FX-DADATA fixture query, suggestion and components.",
+    ),
     "production-forbidden-process-wording": (
         "Remove workflow, evidence-recording, calibration, runner, writer and reviewer wording from runtime sections.",
         "Keep calibration status and the exact open question only in the dedicated metadata fields.",
     ),
     "production-missing-numbered-action-step": (
         "Add a numbered executable action or explicit observation step without inventing an unsupported submit control.",
+    ),
+    "production-internal-fixture-artifact-leak": (
+        "Remove repository paths, response snapshots, verification files and hashes from all runtime sections.",
+        "Keep the concrete runner-projected fixture values required by the tester.",
+    ),
+    "production-noncanonical-approved-alias": (
+        "Replace the approved alias with the canonical field name named by the finding and keep the same product intent.",
+    ),
+    "production-nonconcrete-runtime-value": (
+        "Replace a changing-list or runtime-selected placeholder with one exact source-backed or runner-projected literal.",
     ),
     "production-non-reproducible-precondition": (
         "Replace passive state assumptions with numbered actions that produce the required visible state.",
@@ -249,6 +283,13 @@ TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
         "After the selection, use the source-supported manual-entry control to reveal the manual component fields.",
         "Compare every visible manual component field with the component captured from the selected suggestion.",
         "Keep internal kladr population outside the test case.",
+    ),
+    "production-out-of-scope-diagnostic-leak": (
+        "Remove the excluded KLADR or other out-of-project diagnostic from runtime sections without adding a replacement assertion.",
+    ),
+    "production-process-marker-in-title": (
+        "Make the title describe the product behavior under test and remove calibration, writer, reviewer, runner and fixture-process wording.",
+        "Keep calibration lifecycle markers only in their dedicated metadata fields.",
     ),
 }
 PACKAGE_ID_LINE_RE = re.compile(
@@ -2543,9 +2584,6 @@ class CodexExecReviewCycleRunner:
         if self.timeout_seconds < 1:
             raise RunnerError("timeout_seconds must be >= 1")
         for name in (
-            "writer_idle_timeout_seconds",
-            "reviewer_idle_timeout_seconds",
-            "prepared_standard_reviewer_idle_timeout_seconds",
             "writer_command_budget",
             "reviewer_command_budget",
             "prepared_reviewer_command_budget",
@@ -2561,6 +2599,13 @@ class CodexExecReviewCycleRunner:
         ):
             if getattr(self, name) < 1:
                 raise RunnerError(f"{name} must be >= 1")
+        for name in (
+            "writer_idle_timeout_seconds",
+            "reviewer_idle_timeout_seconds",
+            "prepared_standard_reviewer_idle_timeout_seconds",
+        ):
+            if getattr(self, name) < 0:
+                raise RunnerError(f"{name} must be >= 0")
         if self.prepared_structured_writer_shard_size < 0:
             raise RunnerError("prepared_structured_writer_shard_size must be >= 0")
         for name in (
@@ -4877,6 +4922,7 @@ class CodexExecReviewCycleRunner:
             production_gate = validate_production_tc_content(
                 draft,
                 checked_path=relative_path(self.draft_path, self.repo_root),
+                approved_runtime_aliases=self._approved_runtime_aliases(),
             )
             findings.extend(production_gate.findings)
         return {
@@ -4921,6 +4967,21 @@ class CodexExecReviewCycleRunner:
             ),
             "findings": findings,
         }
+
+    def _approved_runtime_aliases(self) -> dict[str, str]:
+        if self._source_first_contract is None:
+            return {}
+        aliases: dict[str, str] = {}
+        evidence_paths = {
+            item.evidence_source_path
+            for item in self._source_first_contract.manifest.clarifications
+        }
+        for relative in sorted(evidence_paths):
+            path = resolve_repository_path(relative, self.repo_root)
+            text = path.read_text(encoding="utf-8")
+            for alias, canonical_name in APPROVED_RUNTIME_ALIAS_RE.findall(text):
+                aliases[alias.strip()] = canonical_name.strip()
+        return aliases
 
     def _prepared_gate_summary(self, label: str, path: Path) -> dict[str, Any]:
         try:
@@ -5198,7 +5259,7 @@ class CodexExecReviewCycleRunner:
                 timeout = self._optional_timeout(
                     self.writer_timeout_seconds, self.timeout_seconds
                 )
-                idle_timeout = self.writer_idle_timeout_seconds
+                idle_timeout = self.writer_idle_timeout_seconds or None
                 command_budget = self.writer_command_budget
         else:
             if self._uses_compact_prepared_reviewer():
@@ -5219,7 +5280,7 @@ class CodexExecReviewCycleRunner:
                     self.prepared_standard_reviewer_idle_timeout_seconds
                     if self._is_prepared_standard()
                     else self.reviewer_idle_timeout_seconds
-                )
+                ) or None
                 command_budget = self.reviewer_command_budget
         return (
             timeout,
@@ -5828,9 +5889,16 @@ class CodexExecReviewCycleRunner:
             projection_report["draft_changed"] = (
                 projected_draft != draft_before_projection
             )
+            projection_report["draft_before_projection_sha256"] = hashlib.sha256(
+                draft_before_projection.encode("utf-8")
+            ).hexdigest()
             if projection_report["draft_changed"]:
                 self.draft_path.write_text(projected_draft, encoding="utf-8")
+            projection_report["final_draft_sha256"] = sha256_file(self.draft_path)
             write_json(self.dictionary_projection_path, projection_report)
+            self._finalize_shard_merge_hash(
+                projection_changed=projection_report["draft_changed"]
+            )
             if repair_writer or reviewer_rebind:
                 package_metadata_validation = self._validate_draft_package_metadata()
                 write_json(
@@ -5887,6 +5955,60 @@ class CodexExecReviewCycleRunner:
                 ),
             )
         write_json(self.validator_path, validation.as_dict())
+        obligation_gate = None
+        quality_bundle = None
+        if self._prepared_package is not None:
+            obligation_gate = validate_draft_obligation_coverage(
+                draft_path=self.draft_path,
+                obligations_path=self._prepared_artifact("atomic-obligations"),
+                strict_runtime_contract=self._uses_source_first_contract(),
+            )
+            write_json(self.obligation_gate_path, obligation_gate.as_dict())
+            semantic_overlap = build_semantic_overlap_diagnostic(self.draft_path)
+            write_json(self.semantic_overlap_path, semantic_overlap)
+
+            write_json(
+                self.calibration_lifecycle_path,
+                self._build_calibration_lifecycle(),
+            )
+            quality_bundle = self._build_quality_gate_bundle()
+            write_json(self.quality_gate_bundle_path, quality_bundle)
+
+            gate_aggregate = {
+                "passed": (
+                    validation.passed
+                    and obligation_gate.passed
+                    and quality_bundle["passed"]
+                ),
+                "validator": "prepared-writer-gate-aggregate-v1",
+                "draft_sha256": sha256_file(self.draft_path),
+                "gates": {
+                    "validator": {
+                        "passed": validation.passed,
+                        "finding_count": len(validation.findings),
+                        "artifact": relative_path(self.validator_path, self.repo_root),
+                    },
+                    "obligation_gate": {
+                        "passed": obligation_gate.passed,
+                        "finding_count": len(obligation_gate.findings),
+                        "artifact": relative_path(
+                            self.obligation_gate_path, self.repo_root
+                        ),
+                    },
+                    "quality_gate": {
+                        "passed": quality_bundle["passed"],
+                        "finding_count": len(quality_bundle["findings"]),
+                        "artifact": relative_path(
+                            self.quality_gate_bundle_path, self.repo_root
+                        ),
+                    },
+                },
+            }
+            write_json(
+                self.runner_output_dir(WRITER_STAGE) / "writer-gate-aggregate.json",
+                gate_aggregate,
+            )
+
         if not validation.passed:
             return self._block_stage(
                 state,
@@ -5899,13 +6021,7 @@ class CodexExecReviewCycleRunner:
                 validation=validation,
             )
 
-        if self._prepared_package is not None:
-            obligation_gate = validate_draft_obligation_coverage(
-                draft_path=self.draft_path,
-                obligations_path=self._prepared_artifact("atomic-obligations"),
-                strict_runtime_contract=self._uses_source_first_contract(),
-            )
-            write_json(self.obligation_gate_path, obligation_gate.as_dict())
+        if obligation_gate is not None:
             if not obligation_gate.passed:
                 return self._block_stage(
                     state,
@@ -5917,19 +6033,15 @@ class CodexExecReviewCycleRunner:
                     reasons=[
                         "prepared atomic obligation gate reported findings",
                         relative_path(self.obligation_gate_path, self.repo_root),
+                        relative_path(
+                            self.runner_output_dir(WRITER_STAGE)
+                            / "writer-gate-aggregate.json",
+                            self.repo_root,
+                        ),
                     ],
                     validation=validation,
                 )
-
-            semantic_overlap = build_semantic_overlap_diagnostic(self.draft_path)
-            write_json(self.semantic_overlap_path, semantic_overlap)
-
-            write_json(
-                self.calibration_lifecycle_path,
-                self._build_calibration_lifecycle(),
-            )
-            quality_bundle = self._build_quality_gate_bundle()
-            write_json(self.quality_gate_bundle_path, quality_bundle)
+            assert quality_bundle is not None
             if not quality_bundle["passed"]:
                 return self._block_stage(
                     state,
@@ -7645,6 +7757,18 @@ class CodexExecReviewCycleRunner:
             ],
         }
         write_json(self.runner_output_dir(WRITER_STAGE) / "shard-merge.json", merge)
+
+    def _finalize_shard_merge_hash(self, *, projection_changed: bool) -> None:
+        path = self.runner_output_dir(WRITER_STAGE) / "shard-merge.json"
+        if not path.is_file():
+            return
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise RunnerError("writer shard merge report must be a JSON object")
+        payload["finalized_after_projection"] = True
+        payload["projection_changed"] = projection_changed
+        payload["final_draft_sha256"] = sha256_file(self.draft_path)
+        write_json(path, payload)
 
     def _write_artifact_graph(self, manifest: StageInputManifest) -> None:
         def lifecycle(path: str, kind: str) -> str:

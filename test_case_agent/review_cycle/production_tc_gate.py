@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Mapping
 from dataclasses import dataclass
 from html import unescape
 from pathlib import Path
@@ -130,6 +131,7 @@ DADATA_FIXTURE_ID_RE = re.compile(r"\bFX-DADATA-[A-Z0-9_-]+\b")
 DADATA_DYNAMIC_FIXTURE_RE = re.compile(
     r"(?:получ\w*\s+(?:тестов\w*\s+)?значени\w*\s+[^.\n]{0,100}"
     r"(?:контракт\w*|ответ\w*)\s+DaData|"
+    r"получ\w*\s+fixture\b[^.\n]{0,160}\bDaData\b|"
     r"значени\w*\s*,?\s*полученн\w*\s+(?:во\s+время|при)\s+выполнени\w*|"
     r"адрес\w*\s*,?\s*для\s+котор\w*\s+DaData\s+[^.\n]{0,100}"
     r"(?:возвращ\w*|наход\w*)|"
@@ -142,7 +144,8 @@ DADATA_QUERY_LITERAL_RE = re.compile(
     r"(?im)(?:^|[-*]\s*)(?:Запрос|query)\s*(?:DaData)?\s*:\s*`[^`\r\n]+`"
 )
 DADATA_SUGGESTION_LITERAL_RE = re.compile(
-    r"(?im)(?:^|[-*]\s*)(?:Точн\w*\s+)?(?:предложени\w*|suggestion)"
+    r"(?im)(?:^|[-*]\s*)(?:(?:Выбираем\w*|Ожидаем\w*)\s+)?"
+    r"(?:Точн\w*\s+)?(?:предложени\w*|suggestion)"
     r"\s*(?:DaData)?\s*:\s*`[^`\r\n]+`"
 )
 DADATA_EMPTY_SUGGESTIONS_RE = re.compile(
@@ -224,14 +227,24 @@ ADDRESS_DECOMPOSITION_ORACLE_RE = re.compile(
     r"[^.\n]{0,240}\bручн\w*\s+ввод\w*\b",
     re.IGNORECASE,
 )
+ADDRESS_COMPONENT_FIELD_RE = re.compile(
+    r"\b(?:Почтовый\s+индекс|Регион|Район|Насел[её]нный\s+пункт|"
+    r"Город|Улица|Дом|Корпус|Квартира)\b",
+    re.IGNORECASE,
+)
+MANUAL_INPUT_BLOCK_RE = re.compile(
+    r"\b(?:блок\w*\s+)?ручн\w*\s+ввод\w*\b",
+    re.IGNORECASE,
+)
 DADATA_SELECTION_THEN_MANUAL_REVEAL_RE = re.compile(
-    r"(?:выбрать\w*[^.\n]{0,120}(?:DaData|подсказк\w*)|"
+    r"(?:выбрать\w*[^.\n]{0,120}(?:DaData|подсказк\w*|предложени\w*)|"
     r"(?:DaData|подсказк\w*)[^.\n]{0,120}выбрать\w*)"
     r"[\s\S]{0,600}(?:"
     r"(?:установить|изменить|переключить)\w*[^.\n]{0,120}"
     r"(?:Ввести\s+вручную|ручн\w*\s+ввод\w*)[^.\n]{0,80}(?:Да|включ)|"
     r"(?:открыть|раскрыть|просмотреть)\w*[^.\n]{0,120}(?:"
-    r"ручн\w*\s+пол\w*|блок\w*\s+ручн\w*\s+ввод\w*))",
+    r"ручн\w*\s+пол\w*|пол\w*\s+ручн\w*\s+ввод\w*|"
+    r"блок\w*\s+ручн\w*\s+ввод\w*))",
     re.IGNORECASE,
 )
 ADDRESS_COMPONENT_CAPTURE_RE = re.compile(
@@ -240,9 +253,22 @@ ADDRESS_COMPONENT_CAPTURE_RE = re.compile(
     r"компонент\w*[^.\n]{0,100}зафиксир\w*)",
     re.IGNORECASE,
 )
+DADATA_COMPONENT_LABEL_RE = re.compile(
+    r"(?im)^\s*[-*]\s*(Почтовый\s+индекс|Регион|Город|Улица|Дом|Квартира)\s*:"
+)
 AMBIGUOUS_ADDRESS_BRANCH_RE = re.compile(
     r"(?:регистрац\w*[^.\n]{0,100}\bили\b[^.\n]{0,100}жительств\w*|"
     r"жительств\w*[^.\n]{0,100}\bили\b[^.\n]{0,100}регистрац\w*)",
+    re.IGNORECASE,
+)
+GENERIC_ADDRESS_BLOCK_SETUP_RE = re.compile(
+    r"\b(?:адресн\w*\s+блок\w*|блок\w*\s+адрес\w*)\b",
+    re.IGNORECASE,
+)
+SPECIFIC_ADDRESS_BRANCH_RE = re.compile(
+    r"\b(?:адрес\w*\s+(?:постоянн\w*\s+)?регистрац\w*|"
+    r"(?:фактическ\w*\s+адрес\w*|адрес\w*\s+фактическ\w*)|"
+    r"адрес\w*\s+фактическ\w*\s+мест\w*\s+жительств\w*)\b",
     re.IGNORECASE,
 )
 FORBIDDEN_PROCESS_RE = re.compile(
@@ -254,6 +280,24 @@ FORBIDDEN_PROCESS_RE = re.compile(
     r"\bmanifest[-_ ]*digest\b|\bhash[-_ ]*bound\b|"
     r"\bfixture[-_ ]*blocked\b|\bsource[-_ ]*backed\b|"
     r"\b(?:writer|reviewer|runner)\b)",
+    re.IGNORECASE,
+)
+NONCONCRETE_RUNTIME_VALUE_RE = re.compile(
+    r"(?:\bлюб\w*\s+значени\w*\b[^.\n]{0,120}\bактуальн\w*\s+списк\w*\b|"
+    r"\bзначени\w*\b[^.\n]{0,120}\bво\s+время\s+выполнени\w*\b)",
+    re.IGNORECASE,
+)
+INTERNAL_FIXTURE_ARTIFACT_RE = re.compile(
+    r"(?:\bwork[\\/]vendor-references[\\/]|"
+    r"\bdadata-fixtures[\\/][^\s`]+|"
+    r"\bresponse\s+snapshot\b|\bsnapshot\s+ответ\w*\b|"
+    r"\bverification(?:\.json)?\b)",
+    re.IGNORECASE,
+)
+OUT_OF_SCOPE_KLADR_DIAGNOSTIC_RE = re.compile(
+    r"(?:проверк\w*[^.\n]{0,120}\bkladr\b[^.\n]{0,120}"
+    r"не\s+выполн\w*|\bkladr\b[^.\n]{0,120}"
+    r"(?:вне\s+рамок|не\s+провер\w*|не\s+выполн\w*))",
     re.IGNORECASE,
 )
 OPTIONALITY_ABSENCE_RE = re.compile(
@@ -724,9 +768,12 @@ def validate_production_tc_content(
     content: str,
     *,
     checked_path: str = "<memory>",
+    approved_runtime_aliases: Mapping[str, str] | None = None,
 ) -> ProductionTcGateResult:
     blocks = test_case_sections(content)
     findings: list[dict[str, Any]] = []
+    execution_paths: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
+    runtime_aliases = tuple((approved_runtime_aliases or {}).items())
     if not blocks:
         findings.append(
             _finding(
@@ -760,11 +807,46 @@ def validate_production_tc_content(
         steps = _visible_text(raw_steps)
         expected_result = _visible_text(raw_expected_result)
         postconditions = _visible_text(raw_postconditions)
+        execution_path_key = (
+            " ".join(steps.casefold().split()),
+            " ".join(expected_result.casefold().split()),
+        )
+        execution_paths.setdefault(execution_path_key, []).append(
+            (tc_id, preconditions, "\n".join((test_data, steps, expected_result)))
+        )
         candidate_oracle = CANDIDATE_ORACLE_STATUS_RE.search(clean_block) is not None
         candidate_status = CANDIDATE_TEST_CASE_STATUS_RE.search(clean_block) is not None
         is_calibration_candidate = candidate_oracle and candidate_status
         if is_calibration_candidate:
             calibration_candidate_count += 1
+
+        runtime_sections = (
+            ("preconditions", preconditions),
+            ("test_data", test_data),
+            ("steps", steps),
+            ("expected_result", expected_result),
+            ("postconditions", postconditions),
+        )
+        for alias, canonical_name in runtime_aliases:
+            if not alias or alias.casefold() == canonical_name.casefold():
+                continue
+            for section, inspected_text in runtime_sections:
+                match = re.search(re.escape(alias), inspected_text, re.IGNORECASE)
+                if match is None:
+                    continue
+                findings.append(
+                    _finding(
+                        finding_id="production-noncanonical-approved-alias",
+                        tc_id=tc_id,
+                        section=section,
+                        evidence=match.group(0),
+                        message=(
+                            f"Use the approved canonical field name `{canonical_name}` "
+                            f"instead of alias `{alias}` in production runtime text."
+                        ),
+                    )
+                )
+                break
 
         title_match = TITLE_METADATA_RE.search(clean_block)
         title = title_match.group(1).strip() if title_match else ""
@@ -975,6 +1057,42 @@ def validate_production_tc_content(
                 )
             )
 
+        for finding_id, section, inspected_text, pattern, message in (
+            (
+                "production-nonconcrete-runtime-value",
+                "test_data",
+                "\n".join((test_data, steps)),
+                NONCONCRETE_RUNTIME_VALUE_RE,
+                "Production test data must contain a concrete value, not a value selected from a changing list at runtime.",
+            ),
+            (
+                "production-internal-fixture-artifact-leak",
+                "test_data",
+                "\n".join((preconditions, test_data, steps, postconditions)),
+                INTERNAL_FIXTURE_ARTIFACT_RE,
+                "Production runtime text must use projected fixture values and must not direct a tester to runner-owned paths, snapshots or verification artifacts.",
+            ),
+            (
+                "production-out-of-scope-diagnostic-leak",
+                "postconditions",
+                postconditions,
+                OUT_OF_SCOPE_KLADR_DIAGNOSTIC_RE,
+                "A production TC must not contain diagnostics for behavior explicitly excluded from this project scope.",
+            ),
+        ):
+            match = pattern.search(inspected_text)
+            if match is None:
+                continue
+            findings.append(
+                _finding(
+                    finding_id=finding_id,
+                    tc_id=tc_id,
+                    section=section,
+                    evidence=match.group(0),
+                    message=message,
+                )
+            )
+
         dadata_runtime = "\n".join(
             (preconditions, test_data, steps, expected_result, postconditions)
         )
@@ -1020,10 +1138,7 @@ def validate_production_tc_content(
                 "\n".join((test_data, expected_result))
             ) is not None
             if is_negative_dadata:
-                if (
-                    DADATA_EMPTY_SUGGESTIONS_RE.search(raw_test_data) is None
-                    or DADATA_RESPONSE_HASH_RE.search(raw_test_data) is None
-                ):
+                if DADATA_EMPTY_SUGGESTIONS_RE.search(raw_test_data) is None:
                     findings.append(
                         _finding(
                             finding_id="production-dadata-negative-verification-missing",
@@ -1031,8 +1146,9 @@ def validate_production_tc_content(
                             section="test_data",
                             evidence=test_data,
                             message=(
-                                "A negative DaData fixture requires a verified "
-                                "`suggestions=[]` response and its response SHA-256."
+                                "A negative DaData fixture requires an exact "
+                                "preverified `suggestions=[]` result. The catalog, "
+                                "not the runtime TC, owns response hashes."
                             ),
                         )
                     )
@@ -1108,15 +1224,32 @@ def validate_production_tc_content(
                 )
             )
 
-        if ADDRESS_DECOMPOSITION_ORACLE_RE.search(expected_result) is not None:
+        address_component_fields = {
+            match.group(0).casefold()
+            for match in ADDRESS_COMPONENT_FIELD_RE.finditer(expected_result)
+        }
+        address_decomposition_oracle = (
+            ADDRESS_DECOMPOSITION_ORACLE_RE.search(expected_result) is not None
+            or (
+                MANUAL_INPUT_BLOCK_RE.search(expected_result) is not None
+                and len(address_component_fields) >= 2
+            )
+        )
+        if address_decomposition_oracle:
             decomposition_findings: list[str] = []
             if DADATA_SELECTION_THEN_MANUAL_REVEAL_RE.search(steps) is None:
                 decomposition_findings.append(
                     "manual fields are not revealed after selecting the DaData suggestion"
                 )
-            if ADDRESS_COMPONENT_CAPTURE_RE.search(
-                "\n".join((test_data, steps))
-            ) is None:
+            component_text = "\n".join((test_data, steps))
+            structured_component_labels = {
+                match.casefold()
+                for match in DADATA_COMPONENT_LABEL_RE.findall(raw_test_data)
+            }
+            if (
+                ADDRESS_COMPONENT_CAPTURE_RE.search(component_text) is None
+                and len(structured_component_labels) < 2
+            ):
                 decomposition_findings.append(
                     "selected DaData components are not captured for field comparison"
                 )
@@ -1175,6 +1308,32 @@ def validate_production_tc_content(
                     message=(
                         "Production TCs require at least one numbered, executable "
                         "action or observation step."
+                    ),
+                )
+            )
+
+    for duplicate_group in execution_paths.values():
+        if len(duplicate_group) < 2:
+            continue
+        related_ids = ", ".join(item[0] for item in duplicate_group)
+        for tc_id, preconditions, execution_text in duplicate_group:
+            if DADATA_REFERENCE_RE.search(execution_text) is None:
+                continue
+            if GENERIC_ADDRESS_BLOCK_SETUP_RE.search(preconditions) is None:
+                continue
+            if SPECIFIC_ADDRESS_BRANCH_RE.search(preconditions) is not None:
+                continue
+            findings.append(
+                _finding(
+                    finding_id="production-ambiguous-duplicate-execution-path",
+                    tc_id=tc_id,
+                    section="preconditions",
+                    evidence=f"same steps/oracle as {related_ids}: {preconditions}",
+                    message=(
+                        "Duplicate DaData execution paths must identify the exact "
+                        "address branch in their setup. A generic address block can "
+                        "nominally trace a second obligation while exercising the "
+                        "first branch again."
                     ),
                 )
             )

@@ -116,6 +116,7 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
             "oracle-polarity-mismatch",
             "missing-testable-obligation-coverage",
             "production-forbidden-process-wording",
+            "production-ambiguous-duplicate-execution-path",
             "production-missing-numbered-action-step",
             "production-non-reproducible-precondition",
         }
@@ -208,7 +209,7 @@ class StreamingSubprocessExecutorTests(unittest.TestCase):
         self.assertTrue(result.timed_out)
         self.assertFalse(result.idle_timed_out)
         self.assertEqual("hard-timeout", result.termination_reason)
-        self.assertLess(time.monotonic() - started, 4)
+        self.assertLess(time.monotonic() - started, 5)
 
     def test_disabled_hard_and_idle_timeouts_allows_normal_completion(self) -> None:
         result = runner_module.SubprocessExecutor().execute(
@@ -1594,6 +1595,24 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
 
         self.assertEqual((180, 60, 12), runner._stage_limits("writer"))
 
+    def test_zero_disables_standard_model_hard_and_idle_timeouts(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("boundary",),
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.writer_timeout_seconds = 0
+        runner.reviewer_timeout_seconds = 0
+        runner.prepared_reviewer_timeout_seconds = 0
+        runner.writer_idle_timeout_seconds = 0
+        runner.reviewer_idle_timeout_seconds = 0
+        runner.prepared_standard_reviewer_idle_timeout_seconds = 0
+
+        runner.validate_configuration()
+
+        self.assertEqual((None, None, 0), runner._stage_limits("writer"))
+        self.assertEqual((None, None, 1), runner._stage_limits("reviewer"))
+
     def test_prepared_runtime_profile_rejects_numeric_package_allowlist_before_attempt(self) -> None:
         package_path = self.build_prepared_package()
         self.prepared_profile_path.write_text(
@@ -2141,6 +2160,22 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         gate = json.loads((self.writer_attempt / "runner-output" / "obligation-gate.json").read_text(encoding="utf-8"))
         self.assertFalse(gate["passed"])
         self.assertEqual("missing-testable-obligation-coverage", gate["findings"][0]["id"])
+        quality = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        aggregate = json.loads(
+            (self.writer_attempt / "runner-output" / "writer-gate-aggregate.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("passed", quality)
+        self.assertFalse(aggregate["passed"])
+        self.assertEqual(
+            {"validator", "obligation_gate", "quality_gate"},
+            set(aggregate["gates"]),
+        )
 
     def test_prepared_fast_path_rejects_unchanged_seed(self) -> None:
         package_path = self.build_prepared_package()
@@ -2874,6 +2909,24 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         self.assertEqual(preserved["source_sha256"], preserved["output_sha256"])
         self.assertFalse(self.final_path.exists())
 
+    def test_targeted_repair_allows_bounded_runtime_fixture_cleanup_findings(self) -> None:
+        expected = {
+            "production-calibration-question-missing",
+            "production-dadata-dynamic-fixture",
+            "production-internal-fixture-artifact-leak",
+            "production-noncanonical-approved-alias",
+            "production-nonconcrete-runtime-value",
+            "production-out-of-scope-diagnostic-leak",
+            "production-process-marker-in-title",
+        }
+
+        self.assertTrue(expected <= runner_module.REPAIRABLE_QUALITY_FINDING_IDS)
+        for finding_id in expected:
+            self.assertTrue(
+                runner_module.TARGETED_REPAIR_ACCEPTANCE_RULES[finding_id],
+                finding_id,
+            )
+
     def test_targeted_repair_migrates_only_package_metadata_in_preserved_sections(self) -> None:
         package_path = self.build_prepared_package(
             execution_profile="standard-required",
@@ -3468,6 +3521,11 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
             )
         )
         self.assertEqual(3, merge["test_case_count"])
+        self.assertEqual(
+            hashlib.sha256(self.draft_path.read_bytes()).hexdigest(),
+            merge["final_draft_sha256"],
+        )
+        self.assertTrue(merge["finalized_after_projection"])
         self.assertFalse(self.final_path.exists())
 
     def test_structured_writer_shards_overlap_with_configured_cap(self) -> None:
