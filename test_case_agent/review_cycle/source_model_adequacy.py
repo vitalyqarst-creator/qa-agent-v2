@@ -5,6 +5,8 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from .prepared_compiler import evaluate_reference_fixture_action_adequacy
+
 
 VALIDATOR_NAME = "exact-length-source-model-adequacy-v1"
 EXACT_LENGTH_RE = re.compile(
@@ -160,4 +162,30 @@ def evaluate_exact_length_adequacy(
         "rule_count": len(rules),
         "failed_rule_count": missing_rule_count,
         "rules": rules,
+    }
+
+
+def evaluate_pre_review_source_model_adequacy(
+    manifest_value: Path | Mapping[str, Any],
+    *,
+    coverage_obligation_table: Path,
+    package_test_design_plan: Path,
+    dictionary_inventory: Path | None,
+) -> dict[str, Any]:
+    """Run every deterministic source-model check before model review."""
+
+    exact_length = evaluate_exact_length_adequacy(manifest_value)
+    reference_fixture_actions = evaluate_reference_fixture_action_adequacy(
+        manifest_value,
+        coverage_obligation_table=coverage_obligation_table,
+        package_test_design_plan=package_test_design_plan,
+        dictionary_inventory=dictionary_inventory,
+    )
+    return {
+        "version": 2,
+        "validator": "pre-review-source-model-adequacy-v2",
+        "passed": bool(exact_length["passed"])
+        and bool(reference_fixture_actions["passed"]),
+        "exact_length": exact_length,
+        "reference_fixture_actions": reference_fixture_actions,
     }

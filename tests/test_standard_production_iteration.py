@@ -440,6 +440,10 @@ class StandardProductionIterationTests(unittest.TestCase):
             self.assertEqual("verified-codex", _value(downstream_args, "--codex-command"))
             measurement_index = downstream_args.index("--measurement-mode")
             self.assertEqual("observational", downstream_args[measurement_index + 1])
+            self.assertEqual(
+                "standard-production",
+                _value(downstream_args, "--workflow-profile"),
+            )
             self.assertNotIn("--image", downstream_args)
 
             summary = json.loads(

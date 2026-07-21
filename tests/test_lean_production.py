@@ -1875,6 +1875,51 @@ class LeanProductionTests(unittest.TestCase):
             self.assertEqual("fail", result["status"])
             self.assertIn("scope-analyzer-session-log.md", result["forbidden_success_artifacts"])
 
+    def test_standard_source_review_audit_artifacts_are_linked_atomically(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            ft_root = Path(raw) / "fts" / "Demo"
+            handoff = ft_root / "work" / "stage-handoffs" / "01-small"
+            handoff.mkdir(parents=True)
+            workflow = handoff / "workflow-state.yaml"
+            workflow.write_text(
+                "ft_slug: Demo\n"
+                "latest_artifacts:\n"
+                "  source_assertions: work/stage-handoffs/01-small/source-assertions.json\n"
+                "blocking_reasons: []\n",
+                encoding="utf-8",
+            )
+            session_log = handoff / "reviewer-session-log.source-assertion.md"
+            decision_log = handoff / "agent-decision-log.source-assertion-review.md"
+            session_log.write_text("# session\n", encoding="utf-8")
+            decision_log.write_text("# decision\n", encoding="utf-8")
+
+            run_lean_production_iteration._register_source_review_audit_artifacts(
+                workflow_state=workflow,
+                ft_root=ft_root,
+                session_log=session_log,
+                decision_log=decision_log,
+            )
+            first = workflow.read_text(encoding="utf-8")
+            run_lean_production_iteration._register_source_review_audit_artifacts(
+                workflow_state=workflow,
+                ft_root=ft_root,
+                session_log=session_log,
+                decision_log=decision_log,
+            )
+            second = workflow.read_text(encoding="utf-8")
+
+        self.assertEqual(first, second)
+        self.assertIn(
+            "source_assertion_reviewer_session_log: "
+            "work/stage-handoffs/01-small/reviewer-session-log.source-assertion.md",
+            first,
+        )
+        self.assertIn(
+            "source_assertion_reviewer_decision_log: "
+            "work/stage-handoffs/01-small/agent-decision-log.source-assertion-review.md",
+            first,
+        )
+
     def test_one_command_iteration_needs_no_saved_dispatcher_config(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             repo = Path(raw)
@@ -1903,6 +1948,20 @@ class LeanProductionTests(unittest.TestCase):
                 if key == "source_assertions":
                     path.write_text(
                         '{"source_rows":[],"assertions":[]}\n',
+                        encoding="utf-8",
+                    )
+                elif key == "coverage_obligation_table":
+                    path.write_text(
+                        "| obligation_id | linked_atom_id | required_behavior | property_type | obligation_class | source_ref | dictionary_refs | dictionary_coverage |\n"
+                        "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                        "| `OBL-NONE` | `ATOM-NONE` | not applicable | context | not-applicable | SRC-NONE | `none_required` | `none_required` |\n",
+                        encoding="utf-8",
+                    )
+                elif key == "package_test_design_plan":
+                    path.write_text(
+                        "| linked_atoms | status | test_data | input_class |\n"
+                        "| --- | --- | --- | --- |\n"
+                        "| `ATOM-NONE` | `not-applicable` | none_required | none_required |\n",
                         encoding="utf-8",
                     )
                 else:

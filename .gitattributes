@@ -1,0 +1,8 @@
+# These hash-bound fixtures predate the repository whitespace cleanup.
+# Preserve their terminal blank line so immutable benchmark bindings remain valid.
+fts/AutoFin/support/PostFinal-v2/client-addresses-approved-clarifications-v3.md text eol=lf whitespace=-blank-at-eof
+evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v11/bounded-context-template.json text eol=lf whitespace=-blank-at-eof
+evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v11/source-row-extraction-spec.json text eol=lf whitespace=-blank-at-eof
+evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v15/source-row-extraction-spec.json text eol=lf whitespace=-blank-at-eof
+evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v16/source-row-extraction-spec.json text eol=lf whitespace=-blank-at-eof
+fts/AutoFin/support/PostFinal-v2/*26.06.26.md text eol=lf

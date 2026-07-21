@@ -61,6 +61,7 @@ CANDIDATE_SCOPE_OBLIGATION = re.compile(
     flags=re.IGNORECASE,
 )
 FIXTURE_TOKEN = re.compile(r"\b(?:FX|FIX)-[A-Za-z0-9_.-]+\b")
+ACTION_LITERAL = re.compile(r"«(?P<guillemet>[^»]+)»|`(?P<backtick>[^`]+)`")
 BYTE_VALUE = re.compile(
     r"\b\d[\d\s.,_]*\s*(?:байт(?:а|ов)?|bytes?)\b", flags=re.IGNORECASE
 )
@@ -425,6 +426,253 @@ def _compile_dictionary_requirement(
         coverage_mode=coverage_mode,
         required_values=tuple(values),
     )
+
+
+def _unbound_reference_fixture_action_literals(
+    source_assertion: Any,
+    dictionary_requirements: Sequence[PreparedDictionaryRequirement],
+) -> tuple[str, ...]:
+    """Find synthetic action literals that conflict with curated fixtures.
+
+    Source assertions may use synthetic literals for ordinary boundary design, but a
+    reference-only external dictionary must not carry a different invented value into
+    the writer alongside its verified fixture. Source-backed UI labels remain allowed.
+    """
+
+    fixture_values = tuple(
+        item.value
+        for requirement in dictionary_requirements
+        if requirement.coverage_mode == "reference-only"
+        for item in requirement.fixture_values
+        if item.value_kind == "leaf"
+    )
+    if not fixture_values:
+        return ()
+
+    def field(name: str, default: Any) -> Any:
+        if isinstance(source_assertion, Mapping):
+            return source_assertion.get(name, default)
+        return getattr(source_assertion, name, default)
+
+    source_evidence = " ".join(
+        (
+            str(field("exact_source_text", "")),
+            *map(str, field("exact_source_fragments", ())),
+            *(
+                str(
+                    binding.get("exact_source_fragment", "")
+                    if isinstance(binding, Mapping)
+                    else getattr(binding, "exact_source_fragment", "")
+                )
+                for binding in field("clause_evidence_bindings", ())
+            ),
+            *(
+                str(
+                    binding.get("exact_source_fragment", "")
+                    if isinstance(binding, Mapping)
+                    else getattr(binding, "exact_source_fragment", "")
+                )
+                for binding in field("supporting_source_bindings", ())
+            ),
+        )
+    )
+
+    def normalized(value: str) -> str:
+        return _normalize_assertion_contract_text(value).casefold()
+
+    normalized_source = normalized(source_evidence)
+    normalized_fixtures = tuple(
+        value for value in map(normalized, fixture_values) if value
+    )
+    conflicts: list[str] = []
+    for action in field("action_clauses", ()):
+        for match in ACTION_LITERAL.finditer(str(action)):
+            literal = next(value for value in match.groups() if value is not None)
+            normalized_literal = normalized(literal)
+            if not normalized_literal or normalized_literal in normalized_source:
+                continue
+            fixture_bound = any(
+                normalized_literal == fixture
+                or (
+                    min(len(normalized_literal), len(fixture)) >= 8
+                    and (
+                        normalized_literal in fixture
+                        or fixture in normalized_literal
+                    )
+                )
+                for fixture in normalized_fixtures
+            )
+            if not fixture_bound and literal not in conflicts:
+                conflicts.append(literal)
+    return tuple(conflicts)
+
+
+REFERENCE_FIXTURE_ACTION_VALIDATOR = "reference-fixture-action-adequacy-v1"
+
+
+def evaluate_reference_fixture_action_adequacy(
+    manifest_value: Path | Mapping[str, Any],
+    *,
+    coverage_obligation_table: Path,
+    package_test_design_plan: Path,
+    dictionary_inventory: Path | None,
+) -> dict[str, Any]:
+    """Batch-detect reference-only fixture conflicts before model review.
+
+    The compiler retains the same fail-closed check as defense in depth.  This
+    pre-review projection deliberately reports every conflicting assertion in one
+    deterministic pass so a model review is not spent discovering them serially.
+    """
+
+    if isinstance(manifest_value, Path):
+        payload = json.loads(manifest_value.read_text(encoding="utf-8"))
+    else:
+        payload = manifest_value
+    if not isinstance(payload, Mapping) or not isinstance(
+        payload.get("assertions"), list
+    ):
+        raise StageRuntimeError(
+            "reference fixture action adequacy requires a source assertion manifest"
+        )
+    obligation_rows = _table_with(
+        coverage_obligation_table,
+        {
+            "obligation_id",
+            "linked_atom_id",
+            "required_behavior",
+            "property_type",
+            "obligation_class",
+            "source_ref",
+            "dictionary_refs",
+            "dictionary_coverage",
+        },
+    )
+    obligation_by_id = {row["obligation_id"]: row for row in obligation_rows}
+    plan_rows = _table_with(
+        package_test_design_plan,
+        {"linked_atoms", "status", "test_data", "input_class"},
+    )
+    plan_by_atom: dict[str, list[dict[str, str]]] = {}
+    for row in plan_rows:
+        for atom_id in dict.fromkeys(
+            token
+            for token in TOKEN.findall(row.get("linked_atoms", ""))
+            if token.startswith("ATOM-")
+        ):
+            plan_by_atom.setdefault(atom_id, []).append(row)
+
+    referenced_dictionary_ids = {
+        token
+        for row in obligation_rows
+        for token in TOKEN.findall(" ".join(row.values()))
+        if token.startswith("DICT-")
+    }
+    if referenced_dictionary_ids and dictionary_inventory is None:
+        raise StageRuntimeError(
+            "reference fixture action adequacy requires dictionary_inventory "
+            "when coverage obligations reference DICT-*"
+        )
+    dictionary_rows: dict[str, dict[str, str]] = {}
+    dictionary_active_values: dict[str, tuple[str, ...]] = {}
+    if dictionary_inventory is not None:
+        for row in _table_with(
+            dictionary_inventory, {"dictionary_id", "active_values"}
+        ):
+            dictionary_id = row["dictionary_id"]
+            if dictionary_id in dictionary_rows:
+                raise StageRuntimeError(
+                    f"semantic degradation: duplicate dictionary {dictionary_id}"
+                )
+            dictionary_rows[dictionary_id] = row
+            dictionary_active_values[dictionary_id] = _parse_dictionary_active_values(
+                row["active_values"], dictionary_id=dictionary_id
+            )
+
+    dedicated_exhaustive_dictionary_ids = _dedicated_exhaustive_dictionary_ids(
+        obligation_rows
+    )
+    conflicts: list[dict[str, Any]] = []
+    checked_assertions: set[str] = set()
+    for assertion in payload["assertions"]:
+        if not isinstance(assertion, Mapping):
+            continue
+        assertion_id = str(assertion.get("assertion_id", ""))
+        atom_id = str(assertion.get("atom_id", ""))
+        for obligation_id in assertion.get("obligation_ids", []):
+            if not isinstance(obligation_id, str):
+                continue
+            obligation_row = obligation_by_id.get(obligation_id)
+            if obligation_row is None:
+                continue
+            dictionary_ids = list(
+                dict.fromkeys(
+                    token
+                    for token in TOKEN.findall(" ".join(obligation_row.values()))
+                    if token.startswith("DICT-")
+                )
+            )
+            if not dictionary_ids:
+                continue
+            checked_assertions.add(assertion_id)
+            viable_plan_rows = [
+                row
+                for row in plan_by_atom.get(atom_id, [])
+                if row.get("status", "covered").strip().casefold()
+                in {"covered", "testable", "planned"}
+                or row.get("status", "").strip().casefold().startswith(
+                    "covered_with_"
+                )
+            ]
+            reference_fixture_text = " ".join(
+                (
+                    obligation_row.get("required_behavior", ""),
+                    *(row.get("test_data", "") for row in viable_plan_rows),
+                    *(row.get("input_class", "") for row in viable_plan_rows),
+                )
+            )
+            requirements: list[PreparedDictionaryRequirement] = []
+            for dictionary_id in dictionary_ids:
+                if dictionary_id not in dictionary_rows:
+                    raise StageRuntimeError(
+                        "reference fixture action adequacy cannot resolve "
+                        f"{dictionary_id}"
+                    )
+                requirements.append(
+                    _compile_dictionary_requirement(
+                        dictionary_id=dictionary_id,
+                        coverage_mode=_effective_dictionary_coverage_mode(
+                            obligation_row,
+                            dictionary_id=dictionary_id,
+                            dedicated_exhaustive_dictionary_ids=(
+                                dedicated_exhaustive_dictionary_ids
+                            ),
+                        ),
+                        dictionary_rows=dictionary_rows,
+                        dictionary_active_values=dictionary_active_values,
+                        reference_fixture_text=reference_fixture_text,
+                    )
+                )
+            conflicting_literals = _unbound_reference_fixture_action_literals(
+                assertion, requirements
+            )
+            if conflicting_literals:
+                conflicts.append(
+                    {
+                        "assertion_id": assertion_id,
+                        "atom_id": atom_id,
+                        "obligation_id": obligation_id,
+                        "dictionary_ids": dictionary_ids,
+                        "conflicting_literals": list(conflicting_literals),
+                    }
+                )
+    return {
+        "version": 1,
+        "validator": REFERENCE_FIXTURE_ACTION_VALIDATOR,
+        "passed": not conflicts,
+        "checked_assertion_count": len(checked_assertions),
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
+    }
 
 
 def _requires_changed_prestate(
@@ -4833,6 +5081,37 @@ def compile_workflow_package(
             )
             for dictionary_id in dict_tokens
         )
+        conflicting_action_literals = (
+            _unbound_reference_fixture_action_literals(
+                source_assertion,
+                dictionary_requirements,
+            )
+            if source_first_contract and source_assertion is not None
+            else ()
+        )
+        if conflicting_action_literals:
+            assert source_assertions_path is not None
+            raise PreparedCompilerDiagnostic(
+                "source-action-reference-fixture-conflict",
+                "source assertion action contains an unbound synthetic literal that "
+                "conflicts with the curated reference-only fixture",
+                details=(
+                    {
+                        "kind": "source-action-reference-fixture-conflict",
+                        "assertion_id": source_assertion.assertion_id,
+                        "obligation_id": obligation_id,
+                        "dictionary_ids": [
+                            item.dictionary_id for item in dictionary_requirements
+                        ],
+                        "conflicting_literals": list(conflicting_action_literals),
+                        **_artifact_anchor(
+                            source_assertions_path,
+                            source_assertion.assertion_id,
+                            repo_root,
+                        ),
+                    },
+                ),
+            )
         source_refs = tuple(dict.fromkeys(source_tokens + dict_tokens))
         if not source_refs:
             source_ref = obligation_row.get("source_ref") or row.get("source_ref") or row.get("source_property_id")

@@ -48,7 +48,7 @@ from test_case_agent.review_cycle.exec_backend import (  # noqa: E402
 from test_case_agent.review_cycle.metrics import StageMetrics  # noqa: E402
 from test_case_agent.review_cycle.runtime import StageRuntimeError  # noqa: E402
 from test_case_agent.review_cycle.source_model_adequacy import (  # noqa: E402
-    evaluate_exact_length_adequacy,
+    evaluate_pre_review_source_model_adequacy,
 )
 
 
@@ -530,6 +530,78 @@ def _backend_metrics(resolution: ExecCapabilityResolution) -> dict[str, Any]:
     }
 
 
+def _register_source_review_audit_artifacts(
+    *,
+    workflow_state: Path,
+    ft_root: Path,
+    session_log: Path,
+    decision_log: Path,
+) -> None:
+    """Atomically link standard-profile source-review audit artifacts."""
+
+    for label, path in (
+        ("source reviewer session log", session_log),
+        ("source reviewer decision log", decision_log),
+    ):
+        if not path.is_file():
+            raise LeanProductionError(f"{label} was not published: {path}")
+    updates = {
+        "source_assertion_reviewer_session_log": session_log.resolve()
+        .relative_to(ft_root.resolve())
+        .as_posix(),
+        "source_assertion_reviewer_decision_log": decision_log.resolve()
+        .relative_to(ft_root.resolve())
+        .as_posix(),
+    }
+    lines = workflow_state.read_text(encoding="utf-8").splitlines()
+    try:
+        start = lines.index("latest_artifacts:")
+    except ValueError as exc:
+        raise LeanProductionError("workflow-state misses latest_artifacts") from exc
+    end = len(lines)
+    existing: dict[str, str] = {}
+    for index in range(start + 1, len(lines)):
+        line = lines[index]
+        if line and not line.startswith(" "):
+            end = index
+            break
+        if line.startswith("  ") and ":" in line:
+            key, value = line.strip().split(":", 1)
+            if key in updates:
+                if key in existing:
+                    raise LeanProductionError(
+                        f"duplicate workflow-state latest_artifacts key: {key}"
+                    )
+                existing[key] = value.strip()
+    mismatches = {
+        key: (existing.get(key), value)
+        for key, value in updates.items()
+        if key in existing and existing[key] != value
+    }
+    if mismatches:
+        raise LeanProductionError(
+            "workflow-state source-review audit link mismatch: " + repr(mismatches)
+        )
+    additions = [
+        f"  {key}: {value}" for key, value in updates.items() if key not in existing
+    ]
+    if not additions:
+        return
+    rendered = [*lines[:end], *additions, *lines[end:]]
+    descriptor, raw_name = tempfile.mkstemp(
+        prefix=f".{workflow_state.name}.", suffix=".tmp", dir=workflow_state.parent
+    )
+    temporary = Path(raw_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write("\n".join(rendered) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, workflow_state)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def _write_pre_promotion_workflow_state(path: Path) -> None:
     """Advance only the canonical top-level handoff fields after reviewer acceptance."""
 
@@ -635,6 +707,12 @@ def parser() -> argparse.ArgumentParser:
         "--measurement-mode",
         choices=("observational", "production"),
         default="production",
+    )
+    result.add_argument(
+        "--workflow-profile",
+        choices=("lean-production", "standard-production"),
+        default="lean-production",
+        help="Controls profile-specific audit artifacts without changing model semantics.",
     )
     result.add_argument(
         "--model-timeout-seconds",
@@ -880,25 +958,50 @@ def main(argv: Sequence[str] | None = None) -> int:
             latest=latest,
             key=prompt_key,
         )
+        dictionary_inventory = (
+            _latest_path(
+                repo_root=repo_root,
+                ft_root=ft_root,
+                latest=latest,
+                key="dictionary_inventory",
+            )
+            if latest.get("dictionary_inventory")
+            else None
+        )
         source_model_adequacy_path = cycle_dir / "source-model-adequacy.json"
 
         def source_model_adequacy_phase() -> dict[str, Any]:
-            report = evaluate_exact_length_adequacy(paths["source_assertions"])
+            report = evaluate_pre_review_source_model_adequacy(
+                paths["source_assertions"],
+                coverage_obligation_table=paths["coverage_obligation_table"],
+                package_test_design_plan=paths["package_test_design_plan"],
+                dictionary_inventory=dictionary_inventory,
+            )
             _write_immutable_json(source_model_adequacy_path, report)
             if report["passed"] is not True:
+                exact_length = report["exact_length"]
                 failed = [
                     f"{item['source_row_id']}:{','.join(item['missing_classes'])}"
-                    for item in report["rules"]
+                    for item in exact_length["rules"]
                     if item["passed"] is not True
                 ]
+                failed.extend(
+                    f"{item['assertion_id']}:{','.join(item['conflicting_literals'])}"
+                    for item in report["reference_fixture_actions"]["conflicts"]
+                )
                 raise LeanProductionError(
-                    "source model exact-length boundary adequacy failed: "
+                    "pre-review source model adequacy failed: "
                     + "; ".join(failed)
                 )
             return {
                 "validator": report["validator"],
-                "rule_count": report["rule_count"],
-                "failed_rule_count": report["failed_rule_count"],
+                "exact_length_rule_count": report["exact_length"]["rule_count"],
+                "reference_fixture_assertion_count": report[
+                    "reference_fixture_actions"
+                ]["checked_assertion_count"],
+                "conflict_count": report["reference_fixture_actions"][
+                    "conflict_count"
+                ],
                 "output_artifacts": artifact_inventory(
                     (source_model_adequacy_path,)
                 ),
@@ -931,6 +1034,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         runtime = cycle_dir / "_runtime" / "source-review"
         source_summary = cycle_dir / "source-review-summary.json"
+        source_review_session_log = (
+            workflow_state.parent / "reviewer-session-log.source-assertion.md"
+        )
+        source_review_decision_log = (
+            workflow_state.parent / "agent-decision-log.source-assertion-review.md"
+        )
+        source_review_audit_required = args.workflow_profile == "standard-production"
         bounded_extracts = [
             _under(ft_root, value, label=key)
             for key, value in latest.items()
@@ -942,6 +1052,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "source_gate_validation": paths["source_gate_validation"].is_file(),
             "source_assertion_review": paths["source_assertion_review"].is_file(),
             "source_summary": source_summary.is_file(),
+            "source_review_session_log": source_review_session_log.is_file(),
+            "source_review_decision_log": source_review_decision_log.is_file(),
         }
 
         def source_review_phase() -> dict[str, Any]:
@@ -988,6 +1100,17 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ]
                 for extract in bounded_extracts:
                     source_args.extend(("--bounded-extract", str(extract)))
+                if source_review_audit_required:
+                    source_args.extend(
+                        (
+                            "--session-log-output",
+                            str(source_review_session_log),
+                            "--decision-log-output",
+                            str(source_review_decision_log),
+                            "--audit-ft-slug",
+                            ft_slug,
+                        )
+                    )
                 result = source_review_main(source_args)
                 if result != 0:
                     summary = _json(source_summary) if source_summary.is_file() else {}
@@ -1016,6 +1139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                             runtime / "stderr.txt",
                             runtime / "output-schema.json",
                             runtime / "context.json",
+                            source_review_session_log,
+                            source_review_decision_log,
                         )
                         if path.exists()
                     )
@@ -1050,6 +1175,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                         f"source assertion reviewer exited with code {result}",
                         phase_metrics=failure_metrics,
                     )
+            if (
+                source_review_audit_required
+                and source_review_preexisting["source_assertion_review"]
+                and not (
+                    source_review_preexisting["source_review_session_log"]
+                    and source_review_preexisting["source_review_decision_log"]
+                )
+            ):
+                raise LeanProductionError(
+                    "standard-production cannot reuse a source review without its "
+                    "reviewer session and decision audit logs"
+                )
             summary = (
                 _persist_source_review_reuse_receipt(
                     source_assertion_review=paths["source_assertion_review"],
@@ -1058,6 +1195,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if source_review_preexisting["source_assertion_review"]
                 else _json(source_summary)
             )
+            if source_review_audit_required:
+                _register_source_review_audit_artifacts(
+                    workflow_state=workflow_state,
+                    ft_root=ft_root,
+                    session_log=source_review_session_log,
+                    decision_log=source_review_decision_log,
+                )
             entry_inputs = [
                 paths[key]
                 for key in (
@@ -1078,6 +1222,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             ]
             if source_review_preexisting["source_summary"]:
                 reused_inputs.append(source_summary)
+            if source_review_audit_required:
+                for key, path in (
+                    ("source_review_session_log", source_review_session_log),
+                    ("source_review_decision_log", source_review_decision_log),
+                ):
+                    if source_review_preexisting[key]:
+                        reused_inputs.append(path)
             produced_outputs = [
                 paths[key]
                 for key in ("source_gate_validation", "source_assertion_review")
@@ -1085,6 +1236,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             ]
             if not source_review_preexisting["source_summary"]:
                 produced_outputs.append(source_summary)
+            if source_review_audit_required:
+                for key, path in (
+                    ("source_review_session_log", source_review_session_log),
+                    ("source_review_decision_log", source_review_decision_log),
+                ):
+                    if not source_review_preexisting[key]:
+                        produced_outputs.append(path)
             return {
                 "summary": summary,
                 "runtime_configuration": {
@@ -1099,6 +1257,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "input_artifacts": artifact_inventory((*entry_inputs, *reused_inputs)),
                 "reused_artifacts": artifact_inventory(reused_inputs),
                 "output_artifacts": artifact_inventory(produced_outputs),
+                "workflow_audit_links_registered": source_review_audit_required,
             }
 
         source_metrics = _phase(timer, "source-review", source_review_phase)

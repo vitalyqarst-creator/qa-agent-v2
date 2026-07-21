@@ -18,6 +18,8 @@ AGENT_LAYER_MODULES = [
     "tests.test_agent_audit_script",
     "tests.test_agent_artifact_validator",
     "tests.test_autofin_dadata_reference",
+    "tests.test_verify_dadata_negative_fixture",
+    "tests.test_verify_dadata_positive_fixture",
     "tests.test_bounded_scope_analyzer_v2",
     "tests.test_codex_exec_review_cycle_runner",
     "tests.test_codex_output_schema_probe",

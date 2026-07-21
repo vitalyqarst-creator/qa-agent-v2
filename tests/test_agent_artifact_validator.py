@@ -16867,7 +16867,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "",
                         "| dictionary_id | dictionary_name | source_file | source_location | extraction_status | active_values | archived_values | used_by_source_properties | gap_id | notes |",
                         "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-                        "| DICT-001 | Типы занятости | support/Наполнение справочников_v1.xlsx | sheet: Типы занятости | extracted | Работа по найму; Пенсионер (не работает) | - | SRC-001.P01 | - | Архивный = Нет |",
+                        "| DICT-DADATA-ADDR-001 | Адресные подсказки | support/fixtures.json | response suggestions | extracted | г Самара; ул Авроры | - | SRC-001.P01 | - | Внешний reference-only fixture |",
                     ]
                 ),
                 encoding="utf-8",

@@ -11,6 +11,7 @@ from types import ModuleType
 from unittest.mock import patch
 
 from test_case_agent.review_cycle.source_assertions import SourceAssertionContractError
+from tests.frozen_h64_h65_evidence import frozen_h64_h65_support_dictionary
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -109,11 +110,12 @@ class H65PrequalificationContractTests(unittest.TestCase):
         self.assertEqual(set(self.prequal.OFFLINE_CHECKS), set(qualification["checks"]))
 
     def test_current_report_rejects_changed_mutable_package_note(self) -> None:
-        with self.assertRaisesRegex(
-            SourceAssertionContractError,
-            "stale-evidence-source-sha256.*AGENT-NOTES.md",
-        ):
-            self.prequal.offline_qualification()
+        with frozen_h64_h65_support_dictionary(ROOT):
+            with self.assertRaisesRegex(
+                SourceAssertionContractError,
+                "stale-evidence-source-sha256.*AGENT-NOTES.md",
+            ):
+                self.prequal.offline_qualification()
 
     def test_bool_integer_confusion_is_rejected(self) -> None:
         payload = copy.deepcopy(self.report)

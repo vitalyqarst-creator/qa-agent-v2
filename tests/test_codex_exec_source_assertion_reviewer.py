@@ -729,6 +729,8 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
             name: self.root / f"sharded-{name}.output"
             for name in ("receipt", "events", "stderr", "summary", "schema", "context")
         }
+        outputs["session"] = self.root / "reviewer-session-log.source-assertion.md"
+        outputs["decision"] = self.root / "agent-decision-log.source-assertion-review.md"
         evidence = PreparedEvidenceSet(
             inline_files=(),
             image_paths=(),
@@ -787,6 +789,9 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
             "--summary-output", str(outputs["summary"]),
             "--schema-output", str(outputs["schema"]),
             "--context-output", str(outputs["context"]),
+            "--session-log-output", str(outputs["session"]),
+            "--decision-log-output", str(outputs["decision"]),
+            "--audit-ft-slug", "Demo",
         ]
         with (
             patch.object(SourceAssertionManifest, "from_dict", return_value=manifest),
@@ -822,6 +827,14 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
         self.assertEqual(len(manifest.assertions), len(receipt["assertion_reviews"]))
         self.assertEqual([item.shard_id for item in expected_plan], calls)
         self.assertFalse(any(self.root.glob("*.model-output.tmp*")))
+        session_log = outputs["session"].read_text(encoding="utf-8")
+        decision_log = outputs["decision"].read_text(encoding="utf-8")
+        self.assertIn("| skill | `ft-test-case-reviewer` |", session_log)
+        self.assertIn("| ft_slug | `Demo` |", session_log)
+        self.assertIn("## Event Timeline", session_log)
+        self.assertIn("## Artifact Write Strategy", session_log)
+        self.assertIn("| stage | `ft-test-case-reviewer` |", decision_log)
+        self.assertIn("`accepted`", decision_log)
 
     def _write_docx(self, path: Path, text: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)

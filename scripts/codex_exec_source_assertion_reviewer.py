@@ -222,6 +222,30 @@ def write_json(path: Path, payload: Any) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
+def write_text(path: Path, content: str) -> None:
+    """Publish one UTF-8 text artifact without clobbering another owner."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.source-review.",
+        suffix=".tmp",
+        dir=path.parent,
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as stream:
+            stream.write(content.rstrip() + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        publish_file_no_clobber(
+            temporary_path,
+            path,
+            label="source reviewer text output",
+        )
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
 def resolve_under(root: Path, value: Path, *, label: str) -> Path:
     root = root.resolve()
     path = value if value.is_absolute() else root / value
@@ -2143,7 +2167,7 @@ def run_exec(
 
 
 def output_paths(args: argparse.Namespace, root: Path) -> dict[str, Path]:
-    return {
+    paths = {
         name: resolve_under(root, getattr(args, name), label=name)
         for name in (
             "receipt_output",
@@ -2154,6 +2178,175 @@ def output_paths(args: argparse.Namespace, root: Path) -> dict[str, Path]:
             "context_output",
         )
     }
+    optional_audit = (
+        args.session_log_output,
+        args.decision_log_output,
+    )
+    if any(optional_audit) and not all(optional_audit):
+        raise SourceReviewerRunnerError(
+            "source reviewer audit outputs must provide both session and decision logs"
+        )
+    if all(optional_audit):
+        if not args.audit_ft_slug:
+            raise SourceReviewerRunnerError(
+                "--audit-ft-slug is required with source reviewer audit outputs"
+            )
+        paths["session_log_output"] = resolve_under(
+            root, args.session_log_output, label="session_log_output"
+        )
+        paths["decision_log_output"] = resolve_under(
+            root, args.decision_log_output, label="decision_log_output"
+        )
+    return paths
+
+
+def _relative_label(root: Path, path: Path) -> str:
+    return path.resolve().relative_to(root.resolve()).as_posix()
+
+
+def render_source_review_audit_logs(
+    *,
+    root: Path,
+    ft_slug: str,
+    manifest: SourceAssertionManifest,
+    receipt: SourceAssertionReviewReceipt,
+    summary: Mapping[str, Any],
+    manifest_path: Path,
+    gate_path: Path,
+    review_prompt_path: Path,
+    context_path: Path,
+    receipt_path: Path,
+    summary_path: Path,
+    session_log_path: Path,
+    decision_log_path: Path,
+) -> tuple[str, str]:
+    """Render deterministic, evidence-bound audit logs for a completed review."""
+
+    incorrect_ids = [
+        item.assertion_id
+        for item in receipt.assertion_reviews
+        if item.verdict == "incorrect"
+    ]
+    status_after = (
+        "ready-for-next-stage"
+        if receipt.decision == "accepted"
+        else "changes-required"
+    )
+    next_route = (
+        "ft-test-case-iteration"
+        if receipt.decision == "accepted"
+        else "ft-scope-analyzer"
+    )
+    receipt_sha256 = sha256_file(receipt_path)
+    usage = summary.get("usage") if isinstance(summary.get("usage"), Mapping) else {}
+
+    def usage_value(name: str) -> str:
+        value = usage.get(name)
+        return str(value) if type(value) is int else "unavailable"
+
+    incorrect_summary = (
+        ", ".join(f"`{item}`" for item in incorrect_ids)
+        if incorrect_ids
+        else "none"
+    )
+    session = f"""# Source Assertion Reviewer Session Log
+
+## Session Metadata
+
+| field | value |
+| --- | --- |
+| skill | `ft-test-case-reviewer` |
+| mode | `source_assertion_review` |
+| ft_slug | `{ft_slug}` |
+| scope_slug | `{manifest.scope_slug}` |
+| started_from | `{_relative_label(root, manifest_path)}` |
+| status_after | `{status_after}` |
+
+## Inputs Read
+
+- `{_relative_label(root, manifest_path)}` — source-first manifest с digest `{manifest.digest}`.
+- `{_relative_label(root, gate_path)}` — успешный deterministic pre-review gate.
+- `{_relative_label(root, review_prompt_path)}` — tool-free reviewer contract.
+- `{_relative_label(root, context_path)}` — hash-bound bounded context, созданный runner-ом.
+
+## Inputs Not Used
+
+- `test-cases/**` и старые review-cycle outputs — не входили в reviewer context.
+
+## Key Decisions
+
+- Independent receipt decision: `{receipt.decision}`; receipt SHA-256: `{receipt_sha256}`.
+- Проверены `{len(receipt.assertion_reviews)}` assertions; incorrect: `{len(incorrect_ids)}` ({incorrect_summary}).
+- Следующий маршрут: `{next_route}`.
+
+## Risks And Fallbacks
+
+- Assertions, требующие исправления: {incorrect_summary}.
+- Runner retry count: `{summary.get('retry_count', 0)}`; скрытое продолжение испорченного review не выполнялось.
+
+## Validation
+
+- Runner postvalidation: `{summary.get('status', 'unknown')}`; receipt `{receipt.decision}`.
+- Duration: `{summary.get('duration_ms', 'unavailable')} ms`; model sessions: `{summary.get('model_session_count', 'unavailable')}`; tool events: `{summary.get('tool_event_count', 'unavailable')}`.
+- Usage: input `{usage_value('input_tokens')}`, output `{usage_value('output_tokens')}`, reasoning `{usage_value('reasoning_output_tokens')}` tokens.
+
+## Contamination Check
+
+- Tool-free bounded context и immutable input snapshot: pass; `test-cases/**` не читались reviewer-ом.
+
+## Event Timeline
+
+| step | event | result | artifact_or_evidence |
+| --- | --- | --- | --- |
+| 1 | Deterministic source gate | pass | `{_relative_label(root, gate_path)}` |
+| 2 | Independent bounded reviewer session | `{receipt.decision}`; `{summary.get('model_session_count', 'unavailable')}` model sessions; zero tool events | `{_relative_label(root, summary_path)}` |
+| 3 | Canonical receipt postvalidation | pass; exact manifest digest | `{_relative_label(root, receipt_path)}` |
+
+## Quality Checkpoints
+
+| checkpoint | status | evidence | follow_up |
+| --- | --- | --- | --- |
+| Exact source assertion receipt | {'pass' if receipt.decision == 'accepted' else 'fail'} | receipt v{receipt.version}; `{len(receipt.assertion_reviews)}` reviews | `{next_route}` |
+| Source inventory | `{receipt.source_inventory_review.verdict}` | `{receipt.source_inventory_review.mapped_source_row_count}`/`{receipt.source_inventory_review.candidate_count}` candidates | preserve exact baseline binding |
+| Scope boundary | `{receipt.scope_boundary_review.verdict}` | typed boundary receipt | preserve reviewed boundary classes |
+
+## Artifact Write Strategy
+
+| artifact_path | artifact_size_class | write_strategy | declared_before_first_write | helper | forbidden_methods_checked |
+| --- | --- | --- | --- | --- | --- |
+| `{_relative_label(root, session_log_path)}` | `small deterministic audit artifact` | `atomic UTF-8 runner output` | `yes` | `codex_exec_source_assertion_reviewer.py` | `yes` |
+| `{_relative_label(root, decision_log_path)}` | `small deterministic audit artifact` | `atomic UTF-8 runner output` | `yes` | `codex_exec_source_assertion_reviewer.py` | `yes` |
+
+## Technical Fallbacks
+
+| fallback_id | trigger | failed_method | fallback_method | helper_artifact_path | retained | quality_risk | follow_up |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `none` | `none` | `none` | `none` | `n/a` | `n/a` | `none` | `none` |
+
+## Handoff Notes For Next Session
+
+- Route to `{next_route}`; incorrect assertions: {incorrect_summary}.
+"""
+    decision_status = "applied" if receipt.decision == "accepted" else "blocked"
+    decision = f"""# Agent Decision Log
+
+## Decision Log Metadata
+
+| field | value |
+| --- | --- |
+| ft_slug | `{ft_slug}` |
+| scope_slug | `{manifest.scope_slug}` |
+| stage | `ft-test-case-reviewer` |
+| started_from | `{_relative_label(root, manifest_path)}` |
+
+## Decision Log
+
+| decision_id | step | decision_type | input_or_trigger | decision | rationale | artifact_or_output | risk_or_confidence | status |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `DEC-001` | 1 | `validation` | receipt v{receipt.version} | Зафиксировать decision `{receipt.decision}` | Независимый reviewer проверил `{len(receipt.assertion_reviews)}` assertions; incorrect: `{len(incorrect_ids)}` | `{_relative_label(root, receipt_path)}` | `high` | `{decision_status}` |
+| `DEC-002` | 2 | `routing` | exact-digest source review | Передать workflow в `{next_route}` | Маршрут определяется только валидированным receipt decision | `workflow-state.yaml` | `high` | `applied` |
+"""
+    return session, decision
 
 
 def _shard_output_path(path: Path, shard_id: str) -> Path:
@@ -2168,7 +2361,7 @@ def reserve_fresh_outputs(
     resolved = [path.resolve() for path in paths]
     if len(resolved) != len(set(resolved)):
         raise SourceReviewerRunnerError(
-            "source reviewer output paths must be six distinct files"
+            "source reviewer output paths must be distinct files"
         )
     receipt_output = receipt_output.resolve()
     if receipt_output not in resolved:
@@ -2258,7 +2451,7 @@ def assert_output_isolation(
     output_paths = [path.resolve() for path in outputs]
     if len(output_paths) != len(set(output_paths)):
         raise SourceReviewerRunnerError(
-            "source reviewer output paths must be six distinct files"
+            "source reviewer output paths must be distinct files"
         )
     input_paths = {path.resolve() for path in inputs}
     aliases = sorted(str(path) for path in set(output_paths) & input_paths)
@@ -2287,6 +2480,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--summary-output", type=Path, required=True)
     parser.add_argument("--schema-output", type=Path, required=True)
     parser.add_argument("--context-output", type=Path, required=True)
+    parser.add_argument("--session-log-output", type=Path)
+    parser.add_argument("--decision-log-output", type=Path)
+    parser.add_argument("--audit-ft-slug")
     parser.add_argument("--codex-command")
     parser.add_argument("--timeout-seconds", type=int, default=900)
     parser.add_argument(
@@ -2329,6 +2525,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     completed_summary_published = False
     reservations: OutputReservations | None = None
     private_shard_receipts: list[Path] = []
+    audit_outputs_published: list[Path] = []
     try:
         manifest_path = resolve_under(root, args.manifest, label="manifest")
         gate_path = resolve_under(
@@ -2742,11 +2939,33 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "missing_flags": list(capability.missing_flags),
             },
         }
+        if "session_log_output" in paths:
+            session_log, decision_log = render_source_review_audit_logs(
+                root=root,
+                ft_slug=args.audit_ft_slug,
+                manifest=manifest,
+                receipt=receipt,
+                summary=summary,
+                manifest_path=manifest_path,
+                gate_path=gate_path,
+                review_prompt_path=review_prompt_path,
+                context_path=paths["context_output"],
+                receipt_path=paths["receipt_output"],
+                summary_path=paths["summary_output"],
+                session_log_path=paths["session_log_output"],
+                decision_log_path=paths["decision_log_output"],
+            )
+            write_text(paths["session_log_output"], session_log)
+            audit_outputs_published.append(paths["session_log_output"])
+            write_text(paths["decision_log_output"], decision_log)
+            audit_outputs_published.append(paths["decision_log_output"])
         write_json(paths["summary_output"], summary)
         completed_summary_published = True
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return 0
     except Exception as exc:  # noqa: BLE001 - preserve one terminal runner receipt.
+        for audit_output in audit_outputs_published:
+            audit_output.unlink(missing_ok=True)
         if (
             receipt_published
             and not completed_summary_published

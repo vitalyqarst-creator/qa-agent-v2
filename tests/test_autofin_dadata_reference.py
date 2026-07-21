@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -27,6 +28,10 @@ from scripts.repair_autofin_client_addresses_v17_findings import (
 ROOT = Path(__file__).resolve().parents[1]
 FT_ROOT = ROOT / "fts" / "AutoFin"
 REFERENCE = FT_ROOT / "work" / "vendor-references" / "dadata-reference.md"
+DADATA_FIXTURE_ROOT = FT_ROOT / "work" / "vendor-references" / "dadata-fixtures"
+DADATA_FIXTURE_CATALOG = (
+    FT_ROOT / "work" / "vendor-references" / "dadata-fixture-catalog.md"
+)
 UI_NOTES = FT_ROOT / "work" / "ui-automation-prep" / "UI-AGENT-NOTES.md"
 ADDRESS_CLARIFICATIONS = (
     FT_ROOT
@@ -81,6 +86,116 @@ ADDRESS_V18_CYCLE = (
 
 
 class AutoFinDaDataReferenceTests(unittest.TestCase):
+    def test_verified_positive_fixtures_are_exact_reproducible_and_secret_free(self) -> None:
+        expected = {
+            "FX-DADATA-ADDR-POS-001": {
+                "suggestion": "г Самара, ул Авроры, д 7, кв 12",
+                "components": {
+                    "postal_code": "443017",
+                    "region_with_type": "Самарская обл",
+                    "city_with_type": "г Самара",
+                    "street_with_type": "ул Авроры",
+                    "house": "7",
+                    "flat": "12",
+                },
+                "sha256": "1e889abe30cd94b7f83fd847167e9848472a4837bf2a88978c56f53e45b7058a",
+            },
+            "FX-DADATA-REGION-POS-001": {
+                "suggestion": "Саратовская обл",
+                "components": {"region_with_type": "Саратовская обл"},
+                "sha256": "1a6cffc2b87187995bd90db4e4acbae13dbadc9812cf56a5aa2d0906d7d120d3",
+            },
+        }
+        catalog = DADATA_FIXTURE_CATALOG.read_text(encoding="utf-8")
+
+        for fixture_id, fixture_expected in expected.items():
+            with self.subTest(fixture_id=fixture_id):
+                response_path = DADATA_FIXTURE_ROOT / f"{fixture_id}.response.json"
+                verification_path = DADATA_FIXTURE_ROOT / f"{fixture_id}.verification.json"
+                response_bytes = response_path.read_bytes()
+                response = json.loads(response_bytes)
+                verification_text = verification_path.read_text(encoding="utf-8")
+                verification = json.loads(verification_text)
+
+                self.assertEqual(
+                    fixture_expected["sha256"],
+                    hashlib.sha256(response_bytes).hexdigest(),
+                )
+                self.assertEqual("verified", verification["status"])
+                self.assertEqual(fixture_id, verification["fixture_id"])
+                self.assertEqual(
+                    fixture_expected["suggestion"],
+                    verification["expected_response"]["exact_suggestion"],
+                )
+                self.assertEqual(
+                    fixture_expected["components"],
+                    verification["expected_response"]["exact_components"],
+                )
+                self.assertEqual(2, verification["verification"]["attempt_count"])
+                self.assertTrue(verification["verification"]["all_http_200"])
+                self.assertTrue(
+                    verification["verification"]["all_responses_identical"]
+                )
+                suggestion = next(
+                    item
+                    for item in response["suggestions"]
+                    if item["value"] == fixture_expected["suggestion"]
+                )
+                for component, value in fixture_expected["components"].items():
+                    self.assertEqual(value, suggestion["data"][component])
+                lowered = verification_text.lower()
+                for forbidden_name in ("authorization", "api_key", "secret", "token"):
+                    self.assertNotIn(forbidden_name, lowered)
+                for env_name in ("DADATA_API_KEY", "DADATA_SECRET_KEY"):
+                    secret_value = os.environ.get(env_name)
+                    if secret_value:
+                        self.assertNotIn(secret_value, verification_text)
+                self.assertIn(f"`{fixture_id}`", catalog)
+                self.assertIn(fixture_expected["sha256"], catalog)
+
+    def test_verified_negative_fixture_is_reproducible_and_secret_free(self) -> None:
+        response_path = DADATA_FIXTURE_ROOT / "FX-DADATA-ADDR-NEG-001.response.json"
+        verification_path = (
+            DADATA_FIXTURE_ROOT / "FX-DADATA-ADDR-NEG-001.verification.json"
+        )
+        response_bytes = response_path.read_bytes()
+        verification_text = verification_path.read_text(encoding="utf-8")
+        verification = json.loads(verification_text)
+
+        self.assertEqual({"suggestions": []}, json.loads(response_bytes))
+        self.assertEqual(
+            "8e5e36d9bf781113e259d054939c9dfefe858cc0240844aa224405d7a69f482e",
+            hashlib.sha256(response_bytes).hexdigest(),
+        )
+        self.assertEqual("verified", verification["status"])
+        self.assertEqual("FX-DADATA-ADDR-NEG-001", verification["fixture_id"])
+        self.assertEqual(
+            "ZZZNOADDRESS7F3A9C2E20260721",
+            verification["request"]["parameters"]["query"],
+        )
+        self.assertEqual(2, verification["verification"]["attempt_count"])
+        self.assertTrue(verification["verification"]["all_http_200"])
+        self.assertTrue(
+            verification["verification"]["all_exact_empty_suggestions"]
+        )
+        for attempt in verification["verification"]["attempts"]:
+            self.assertEqual(200, attempt["http_status"])
+            self.assertTrue(attempt["exact_empty_suggestions"])
+            self.assertEqual(verification["response_sha256"], attempt["response_sha256"])
+
+        lowered = verification_text.lower()
+        for forbidden_name in ("authorization", "api_key", "secret", "token"):
+            self.assertNotIn(forbidden_name, lowered)
+        for env_name in ("DADATA_API_KEY", "DADATA_SECRET_KEY"):
+            secret_value = os.environ.get(env_name)
+            if secret_value:
+                self.assertNotIn(secret_value, verification_text)
+
+        catalog = DADATA_FIXTURE_CATALOG.read_text(encoding="utf-8")
+        self.assertIn("`FX-DADATA-ADDR-NEG-001`", catalog)
+        self.assertIn("`verified-live-response`", catalog)
+        self.assertIn(verification["response_sha256"], catalog)
+
     def test_v19_fixture_contract_rejects_old_shadow_and_accepts_offline_golden(self) -> None:
         old_result = validate_production_tc_draft(draft_path=ADDRESS_V17_SHADOW)
         old_finding_ids = {item["id"] for item in old_result.findings}

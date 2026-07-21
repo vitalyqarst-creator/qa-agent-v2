@@ -1383,6 +1383,7 @@ def main(
             "--final-artifact", str(final_artifact),
             "--package-id", package_id,
             "--measurement-mode", args.measurement_mode,
+            "--workflow-profile", "standard-production",
         ]
         if timer is not None:
             _option(downstream_args, "--timer", timer)

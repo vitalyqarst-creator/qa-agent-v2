@@ -9,7 +9,10 @@ from test_case_agent.review_cycle.source_assertions import (
     SourceAssertionContractError,
     load_source_assertion_manifest,
 )
-from tests.frozen_h64_h65_evidence import frozen_h64_h65_package_note
+from tests.frozen_h64_h65_evidence import (
+    frozen_h64_h65_package_note,
+    frozen_h64_h65_support_dictionary,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -146,14 +149,15 @@ class H64SourceModelContractsTests(unittest.TestCase):
     def test_current_loader_rejects_historical_manifest_after_package_note_change(
         self,
     ) -> None:
-        with self.assertRaisesRegex(
-            SourceAssertionContractError,
-            "stale-evidence-source-sha256.*AGENT-NOTES.md",
-        ):
-            load_source_assertion_manifest(
-                HANDOFF / "source-assertions.json",
-                ROOT,
-            )
+        with frozen_h64_h65_support_dictionary(ROOT):
+            with self.assertRaisesRegex(
+                SourceAssertionContractError,
+                "stale-evidence-source-sha256.*AGENT-NOTES.md",
+            ):
+                load_source_assertion_manifest(
+                    HANDOFF / "source-assertions.json",
+                    ROOT,
+                )
 
 
 if __name__ == "__main__":

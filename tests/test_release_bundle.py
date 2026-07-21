@@ -34,6 +34,9 @@ class ReleaseBundleTests(unittest.TestCase):
 
         self.assertEqual("production", receipt["profile"])
         self.assertIn("scripts/review_cycle_backend_dispatcher.py", paths)
+        self.assertIn("scripts/verify_dadata_negative_fixture.py", paths)
+        self.assertIn("scripts/verify_dadata_positive_fixture.py", paths)
+        self.assertIn("scripts/validate_source_model_adequacy.py", paths)
         self.assertIn("skills/ft-test-case-iteration/SKILL.md", paths)
         self.assertFalse(any(path.startswith("evals/") for path in paths))
         self.assertFalse(any(path.startswith("tests/") for path in paths))
@@ -65,6 +68,18 @@ class ReleaseBundleTests(unittest.TestCase):
         )
         self.assertIn(
             "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json",
+            paths,
+        )
+        self.assertIn(
+            "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json",
+            paths,
+        )
+        self.assertIn(
+            "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-REGION-POS-001.response.json",
+            paths,
+        )
+        self.assertIn(
+            "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-REGION-POS-001.verification.json",
             paths,
         )
         self.assertTrue(

@@ -8,6 +8,7 @@ import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from test_case_agent.review_cycle.prepared_compiler import (
@@ -19,13 +20,17 @@ from test_case_agent.review_cycle.prepared_compiler import (
     _effective_dictionary_coverage_mode,
     _load_semantic_compiler_projection,
     _resolve_source_first_state_change,
+    _unbound_reference_fixture_action_literals,
     _validate_semantic_projection_graph,
     _validate_source_selection_manifest_binding,
     compile_workflow_package,
+    evaluate_reference_fixture_action_adequacy,
     markdown_tables,
     resolve_workflow_compiler_inputs,
 )
 from test_case_agent.review_cycle.prepared_package import (
+    PreparedDictionaryRequirement,
+    PreparedDictionaryValue,
     PreparedStateChange,
     load_obligations,
     load_prepared_package,
@@ -71,6 +76,200 @@ from scripts.compile_prepared_stage_package import main as compile_cli_main
 
 
 class PreparedWorkflowCompilerTests(unittest.TestCase):
+    def test_reference_fixture_rejects_unbound_synthetic_action_literal(self) -> None:
+        assertion = SimpleNamespace(
+            exact_source_text="Если в DaData не найден адрес",
+            exact_source_fragments=(),
+            clause_evidence_bindings=(
+                SimpleNamespace(exact_source_fragment="Если в DaData не найден адрес"),
+            ),
+            supporting_source_bindings=(),
+            action_clauses=(
+                "Ввести адрес «Несуществующая улица 999999».",
+            ),
+        )
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-DADATA-ADDR-001",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-ADDR-001",),
+                    "leaf",
+                    "ZZZNOADDRESS7F3A9C2E20260721",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            ("Несуществующая улица 999999",),
+            _unbound_reference_fixture_action_literals(assertion, (requirement,)),
+        )
+
+    def test_reference_fixture_accepts_source_label_and_exact_fixture_literal(self) -> None:
+        assertion = SimpleNamespace(
+            exact_source_text="Поле «Адрес регистрации»; адрес не найден DaData",
+            exact_source_fragments=(),
+            clause_evidence_bindings=(),
+            supporting_source_bindings=(),
+            action_clauses=(
+                "В поле «Адрес регистрации» ввести «ZZZNOADDRESS7F3A9C2E20260721».",
+            ),
+        )
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-DADATA-ADDR-001",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-ADDR-001",),
+                    "leaf",
+                    "ZZZNOADDRESS7F3A9C2E20260721",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            (),
+            _unbound_reference_fixture_action_literals(assertion, (requirement,)),
+        )
+
+    def test_pre_review_reference_fixture_guard_reports_all_conflicts_in_one_batch(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            coverage = root / "coverage.md"
+            plan = root / "plan.md"
+            dictionary = root / "dictionary.md"
+            coverage.write_text(
+                "| obligation_id | linked_atom_id | required_behavior | property_type | obligation_class | source_ref | dictionary_refs | dictionary_coverage |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| `OBL-001` | `ATOM-001` | Проверить DaData с `DICT-DADATA-ADDR-001`. | integration | suggestions | BSR 1 | `DICT-DADATA-ADDR-001` | `reference-only` |\n",
+                encoding="utf-8",
+            )
+            plan.write_text(
+                "| linked_atoms | status | test_data | input_class |\n"
+                "| --- | --- | --- | --- |\n"
+                "| `ATOM-001` | `covered` | `ZZZNOADDRESS7F3A9C2E20260721` | verified fixture |\n",
+                encoding="utf-8",
+            )
+            dictionary.write_text(
+                "| dictionary_id | active_values |\n"
+                "| --- | --- |\n"
+                "| `DICT-DADATA-ADDR-001` | `ZZZNOADDRESS7F3A9C2E20260721` |\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "assertions": [
+                    {
+                        "assertion_id": "ASSERT-001",
+                        "atom_id": "ATOM-001",
+                        "obligation_ids": ["OBL-001"],
+                        "exact_source_text": "Если адрес не найден",
+                        "exact_source_fragments": [],
+                        "clause_evidence_bindings": [],
+                        "supporting_source_bindings": [],
+                        "action_clauses": ["Ввести «Несуществующая улица 999999»."],
+                    },
+                    {
+                        "assertion_id": "ASSERT-002",
+                        "atom_id": "ATOM-001",
+                        "obligation_ids": ["OBL-001"],
+                        "exact_source_text": "Если адрес не найден",
+                        "exact_source_fragments": [],
+                        "clause_evidence_bindings": [],
+                        "supporting_source_bindings": [],
+                        "action_clauses": ["Ввести «Другой выдуманный адрес 123»."],
+                    },
+                ]
+            }
+
+            report = evaluate_reference_fixture_action_adequacy(
+                manifest,
+                coverage_obligation_table=coverage,
+                package_test_design_plan=plan,
+                dictionary_inventory=dictionary,
+            )
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(2, report["checked_assertion_count"])
+        self.assertEqual(2, report["conflict_count"])
+        self.assertEqual(
+            ["ASSERT-001", "ASSERT-002"],
+            [item["assertion_id"] for item in report["conflicts"]],
+        )
+
+    def test_pre_review_reference_fixture_guard_accepts_exact_fixture_literal(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            coverage = root / "coverage.md"
+            plan = root / "plan.md"
+            dictionary = root / "dictionary.md"
+            coverage.write_text(
+                "| obligation_id | linked_atom_id | required_behavior | property_type | obligation_class | source_ref | dictionary_refs | dictionary_coverage |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| `OBL-001` | `ATOM-001` | Проверить DaData. | integration | suggestions | BSR 1 | `DICT-DADATA-ADDR-001` | `reference-only` |\n",
+                encoding="utf-8",
+            )
+            plan.write_text(
+                "| linked_atoms | status | test_data | input_class |\n"
+                "| --- | --- | --- | --- |\n"
+                "| `ATOM-001` | `covered` | `ZZZNOADDRESS7F3A9C2E20260721` | verified fixture |\n",
+                encoding="utf-8",
+            )
+            dictionary.write_text(
+                "| dictionary_id | active_values |\n"
+                "| --- | --- |\n"
+                "| `DICT-DADATA-ADDR-001` | `ZZZNOADDRESS7F3A9C2E20260721` |\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "assertions": [
+                    {
+                        "assertion_id": "ASSERT-001",
+                        "atom_id": "ATOM-001",
+                        "obligation_ids": ["OBL-001"],
+                        "exact_source_text": "Если адрес не найден",
+                        "exact_source_fragments": [],
+                        "clause_evidence_bindings": [],
+                        "supporting_source_bindings": [],
+                        "action_clauses": [
+                            "Ввести «ZZZNOADDRESS7F3A9C2E20260721»."
+                        ],
+                    }
+                ]
+            }
+
+            report = evaluate_reference_fixture_action_adequacy(
+                manifest,
+                coverage_obligation_table=coverage,
+                package_test_design_plan=plan,
+                dictionary_inventory=dictionary,
+            )
+
+        self.assertTrue(report["passed"])
+        self.assertEqual(1, report["checked_assertion_count"])
+        self.assertEqual([], report["conflicts"])
+
+    def test_source_first_compiler_surfaces_reference_fixture_action_conflict(self) -> None:
+        self.enable_source_first_contract()
+
+        with patch(
+            "test_case_agent.review_cycle.prepared_compiler."
+            "_unbound_reference_fixture_action_literals",
+            return_value=("Несуществующая улица 999999",),
+        ):
+            with self.assertRaises(PreparedCompilerDiagnostic) as context:
+                self.compile(cycle_name="reference-fixture-action-conflict")
+
+        self.assertEqual(
+            "source-action-reference-fixture-conflict",
+            context.exception.code,
+        )
+        self.assertEqual(
+            ["Несуществующая улица 999999"],
+            context.exception.details[0]["conflicting_literals"],
+        )
+        self.assertEqual("ASSERT-001", context.exception.details[0]["assertion_id"])
+        self.assertEqual("OBL-001", context.exception.details[0]["obligation_id"])
+
     def test_markdown_tables_preserve_escaped_pipe_inside_cell(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "matrix.md"

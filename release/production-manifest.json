@@ -49,6 +49,9 @@
     "scripts/update_markdown_section.py",
     "scripts/validate_agent_artifacts.py",
     "scripts/validate_source_assertion_gate.py",
+    "scripts/validate_source_model_adequacy.py",
+    "scripts/verify_dadata_negative_fixture.py",
+    "scripts/verify_dadata_positive_fixture.py",
     "scripts/workflow_wall_clock.py",
     "scripts/write_artifact_sections.py"
   ],
@@ -68,6 +71,9 @@
     "test_case_agent/review_cycle/prepared_compiler.py",
     "scripts/review_cycle_backend_dispatcher.py",
     "scripts/codex_exec_review_cycle_runner.py",
+    "scripts/verify_dadata_negative_fixture.py",
+    "scripts/verify_dadata_positive_fixture.py",
+    "scripts/validate_source_model_adequacy.py",
     "skills/ft-test-case-iteration/SKILL.md",
     "references/agent/instruction-loading-manifest.md"
   ],

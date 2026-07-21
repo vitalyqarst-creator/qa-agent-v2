@@ -202,7 +202,8 @@ ATOM_ID_RE = re.compile(r"\bATOM-\d{3,}\b")
 SCOPED_ATOM_ID_RE = re.compile(r"[A-Z0-9-]+-ATOM-\d{3,}")
 ANY_ATOM_ID_RE = re.compile(r"\b(?:[A-Z0-9-]+-)?ATOM-\d{3,}\b")
 GAP_ID_RE = re.compile(r"\b(?:GAP-\d{3,}|coverage_gap:[a-z0-9][a-z0-9_-]*)\b")
-DICT_ID_RE = re.compile(r"\bDICT-\d{3,}\b")
+DICT_ID_PATTERN = r"DICT-[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?"
+DICT_ID_RE = re.compile(rf"\b{DICT_ID_PATTERN}\b")
 FINDING_ID_RE = re.compile(r"\b(?:USER-)?FINDING(?:-[A-Z]+)?-\d{3,}\b")
 TEST_CASE_TRACEABILITY_TOKEN_RE = re.compile(
     r"\b(ATOM-\d{3,}|GSR\s+\d+|BSR\s+\d+|REQ[-\s]?\d+)\b|PDF",
@@ -11931,7 +11932,7 @@ BRANCH_CHOICE_RE = re.compile(
 )
 
 SYNTHETIC_QUOTE_RE = re.compile(
-    r"\bDICT-\d{3,}\b|\bGAP-\d{3,}\b|"
+    rf"\b{DICT_ID_PATTERN}\b|\bGAP-\d{{3,}}\b|"
     r"derived|normalized|точн\w*\s+UI-\w*|"
     r"использу\w+\s+все\s+и\s+только\s+активн\w+\s+значен",
     flags=re.IGNORECASE,
@@ -15829,7 +15830,7 @@ def validate_dictionary_inventory(path: Path, root: Path) -> tuple[list[Finding]
         used_by = normalize_markdown_field_value(row.get("used_by_source_properties", ""))
         gap_id = row.get("gap_id", "").strip()
 
-        if not re.fullmatch(r"DICT-\d{3,}", dictionary_id):
+        if DICT_ID_RE.fullmatch(dictionary_id) is None:
             invalid_rows.append(f"row {index}:dictionary_id={dictionary_id or '-'}")
         if status not in DICTIONARY_INVENTORY_ALLOWED_STATUSES:
             invalid_rows.append(f"row {index}:extraction_status={status or '-'}")
@@ -15850,7 +15851,7 @@ def validate_dictionary_inventory(path: Path, root: Path) -> tuple[list[Finding]
                 details="dictionary_id must be DICT-* and extraction_status must use canonical values.",
                 path=display_path,
                 evidence=invalid_rows[:20],
-                recommended_action="Use DICT-001-style ids and extraction_status = extracted | partial | missing | ambiguous | not-needed.",
+                recommended_action="Use stable DICT-* ids and extraction_status = extracted | partial | missing | ambiguous | not-needed.",
             )
         )
     if extracted_without_values:
