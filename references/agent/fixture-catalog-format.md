@@ -32,11 +32,13 @@ verification:
   checked_at: YYYY-MM-DDThh:mm:ssZ
   response_snapshot: <repo-relative path>
   response_sha256: <64 hex>
-  status: verified | stale | blocked-verification
-freshness:
-  recheck_before_release: true
-  stale_after_days: <целое число>
-  invalidation_trigger: <изменение ответа/контракта/источника>
+  status: verified | blocked-verification
+lifecycle:
+  policy: verified-once / revalidate-on-failure
+  revalidation_triggers:
+    - linked-test-failure
+    - confirmed-provider-contract-change
+    - explicit-user-request
 ```
 
 ## Rules
@@ -54,7 +56,14 @@ freshness:
   доказывает отсутствие подсказок.
 - TC содержит `FX-DADATA-*`, точный запрос и ожидаемые литералы, поэтому остаётся
   исполнимым без чтения каталога во время выполнения.
-- Перед release fixture перепроверяется. Изменение vendor-ответа сначала требует
-  reconciliation fixture; дефект продукта создаётся только после подтверждения
-  расхождения с ФТ на новом валидном fixture.
+- Успешно проверенный external-dynamic fixture считается замороженными тестовыми
+  данными по правилу `verified-once / revalidate-on-failure`. Дата проверки и
+  SHA-256 фиксируют исходное evidence, но не задают срок годности fixture.
+- Release-preflight, writer и reviewer используют сохранённые snapshot/literals и
+  не выполняют автоматические live-вызовы внешнего provider-а.
+- Повторная live-проверка допускается только после фактического падения связанного
+  теста, подтверждённого изменения API/контракта provider-а или явного запроса
+  пользователя. Изменение ответа сначала требует reconciliation fixture; дефект
+  продукта создаётся только после подтверждения расхождения с ФТ на новом
+  валидном fixture.
 

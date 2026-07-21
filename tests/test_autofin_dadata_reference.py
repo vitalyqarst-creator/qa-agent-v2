@@ -196,6 +196,39 @@ class AutoFinDaDataReferenceTests(unittest.TestCase):
         self.assertIn("`verified-live-response`", catalog)
         self.assertIn(verification["response_sha256"], catalog)
 
+    def test_fixture_lifecycle_is_verified_once_without_automatic_release_call(self) -> None:
+        catalog = DADATA_FIXTURE_CATALOG.read_text(encoding="utf-8")
+        canonical_format = (
+            ROOT / "references" / "agent" / "fixture-catalog-format.md"
+        ).read_text(encoding="utf-8")
+
+        for text in (catalog, canonical_format):
+            self.assertIn("`verified-once / revalidate-on-failure`", text)
+            self.assertNotIn("recheck before release", text)
+            self.assertNotIn("stale after 7 days", text)
+            self.assertNotIn("recheck_before_release: true", text)
+            self.assertNotIn("stale_after_days:", text)
+
+        self.assertIn(
+            "не выполняют автоматические live-вызовы DaData",
+            catalog,
+        )
+        self.assertIn("Повторная live-проверка не является release-preflight gate", catalog)
+
+        release_entrypoints = (
+            ROOT / "scripts" / "run_lean_production_iteration.py",
+            ROOT / "scripts" / "run_standard_production_iteration.py",
+            ROOT / "scripts" / "codex_exec_review_cycle_runner.py",
+            ROOT / "scripts" / "review_cycle_backend_dispatcher.py",
+            ROOT / "test_case_agent" / "review_cycle" / "prepared_compiler.py",
+        )
+        for entrypoint in release_entrypoints:
+            source = entrypoint.read_text(encoding="utf-8")
+            with self.subTest(entrypoint=entrypoint.name):
+                self.assertNotIn("verify_dadata_negative_fixture", source)
+                self.assertNotIn("verify_dadata_positive_fixture", source)
+                self.assertNotIn("DADATA_API_KEY", source)
+
     def test_v19_fixture_contract_rejects_old_shadow_and_accepts_offline_golden(self) -> None:
         old_result = validate_production_tc_draft(draft_path=ADDRESS_V17_SHADOW)
         old_finding_ids = {item["id"] for item in old_result.findings}
