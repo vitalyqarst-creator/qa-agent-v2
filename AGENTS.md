@@ -35,6 +35,7 @@
 - После выбора FT-пакета проверь, есть ли в его корне файл `AGENT-NOTES.md`. Если он есть, используй его как обязательный package-specific контекст до scope analysis, writing и review.
 - Если работаешь в фазе `ft-ui-automation-prep`, дополнительно проверь, есть ли файл `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`. Если он есть, используй его как обязательный phase-specific context только для UI-прогонов.
 - Если работаешь в фазе `ft-ui-automation-prep` и для нужного scope еще нет файла в `fts/<ft-slug>/test-cases/automation-ready/`, но есть baseline файл в `fts/<ft-slug>/test-cases/`, разрешено сначала создать initial `automation-ready` версию на основе baseline, а уже потом переходить к UI-прогону. Подробный lifecycle и guardrails должны храниться в skill/references, а не разворачиваться целиком в `AGENTS.md`.
+- В `codex/*` после зелёной итерации commit и push выполняются автоматически только для её файлов по `references/agent/green-iteration-publication-policy.md`; посторонние изменения и force-push запрещены.
 
 ## Маршрутизация
 

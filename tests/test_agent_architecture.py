@@ -43,6 +43,7 @@ REQUIRED_AGENT_REFS = {
     "source-assertions-format.md",
     "source-assertion-semantic-rule-card.md",
     "codex-sdk-orchestration-format.md",
+    "green-iteration-publication-policy.md",
 }
 
 REQUIRED_QA_REFS = {
@@ -122,6 +123,18 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("не требует project skill-а", content)
         self.assertIn("task-start-skill-routing-format.md", content)
         self.assertIn("не отдельный этап согласования", content)
+
+    def test_green_iteration_publication_policy_is_wired(self) -> None:
+        agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        policy = (
+            REFERENCES_DIR / "agent" / "green-iteration-publication-policy.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("после зелёной итерации", agents)
+        self.assertIn("green-iteration-publication-policy.md", agents)
+        self.assertIn("`codex/*`", policy)
+        self.assertIn("`git add -A`", policy)
+        self.assertIn("Force-push", policy)
+        self.assertIn("посторонние пользовательские изменения вне индекса", policy)
 
     def test_readme_and_contributing_document_canonical_test_command(self) -> None:
         readme = (ROOT_DIR / "README.md").read_text(encoding="utf-8")
