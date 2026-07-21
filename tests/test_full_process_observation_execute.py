@@ -317,6 +317,43 @@ class FullProcessObservationExecuteTests(unittest.TestCase):
         )
         return config
 
+    def test_schema_v2_accepts_handoff_sequence_above_99(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            config = self._fixture(root)
+            payload = json.loads(config.read_text(encoding="utf-8"))
+            payload["outputs"]["handoff_dir"] = (
+                "work/stage-handoffs/111-demo-scope"
+            )
+            payload["semantic_sharding"] = {
+                "mode": "auto",
+                "max_included_rows": 10,
+                "max_source_rows": 16,
+                "max_shards": 10,
+                "max_semantic_weight": 49,
+            }
+            config.write_text(
+                json.dumps(payload, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+
+            plan = start_full_process_observation.resolve_plan(
+                repo_root=root,
+                config_path=config,
+                request_started_epoch_ms=1000,
+                codex_turn_id="turn-sequence-111",
+            )
+
+            self.assertEqual("111-demo-scope", plan.handoff_dir.name)
+            self.assertEqual(49, plan.semantic_shard_max_weight)
+            fixed = start_full_process_observation.plan_payload(plan)[
+                "production_wrapper_invocation"
+            ]["fixed_arguments"]
+            self.assertEqual(
+                "49",
+                fixed[fixed.index("--semantic-shard-max-weight") + 1],
+            )
+
     @staticmethod
     def _starter(mutate_after_receipt=None):
         def start(plan):

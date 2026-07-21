@@ -1,0 +1,80 @@
+{
+  "schema_version": 2,
+  "benchmark_id": "postfinal-v2-passport-current-and-previous-v4",
+  "ft_root": "fts/AutoFin",
+  "ft_slug": "AutoFin",
+  "scope_slug": "application-card-passport-current-and-previous",
+  "source_files": [
+    "source/PostFinal-v2/PostFinal-v2.docx",
+    "source/PostFinal-v2/PostFinal-v2.xhtml",
+    "source/PostFinal-v2/PostFinal-v2.pdf"
+  ],
+  "scope_inputs": [
+    {
+      "path": "support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification"
+    },
+    {
+      "path": "AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fms-unit-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    }
+  ],
+  "expected_sha256": {
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+    "fts/AutoFin/AGENT-NOTES.md": "5713d2d8d49d34354ae4308701e0ea2162ce41ac21f555ba098d1152a92087bf",
+    "fts/AutoFin/support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md": "30b40efcad309722a9702d25671fe55c66237b0f0f621bbf11a7dfbb07463a16",
+    "fts/AutoFin/work/vendor-references/dadata-fms-unit-reference.md": "a152ef2a2182ef381a02c9976faad65bc33d8ccbc128c3bbe15818453859e4dd",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.response.json": "5575e4fbb9e28df33d8826a00580594eccde839bb6d625bfa84a6bf53d2bf90e",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.verification.json": "0f15a844b59e4095f79f3a499705a23b8f04228db022e0dd2dcdf895bd541ad2",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622",
+    "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v4/bounded-evidence-docx.json": "b3fbff58a6f4a36c37f0842b3eae5d2355fab276bb28ab8e31f736b4b21eb056",
+    "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v4/bounded-evidence-pdf.json": "5a811379b2bd89433d72b30f7de835481b3c69f25e4921d89987ff0896953a74",
+    "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v4/bounded-evidence-xhtml-boundary.json": "813286aa96dcd1f4dded449b0accc68bc3e75236410afb130a14ec3b1997122e",
+    "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v4/bounded-context-template.json": "c5125f85a8509de2497e5c330906192592c41ed4844c141d6cef9dc843efda0f",
+    "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v4/source-row-extraction-spec.json": "33ad0f198329bcbb58f13c0a7241fb36005ef91011ba36fe86c5f9d1908ea118"
+  },
+  "source_preparation": {
+    "context_template": "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v4/bounded-context-template.json",
+    "cache_dir": ".codex-temp/source-preparation-cache"
+  },
+  "outputs": {
+    "handoff_dir": "work/stage-handoffs/114-application-card-passport-current-and-previous-postfinal-v2",
+    "cycle_dir": "work/review-cycles/application-card-passport-current-and-previous-postfinal-v2-20260721-v4",
+    "final_artifact": "test-cases/4.3-application-card-passport-current-and-previous-shadow-20260721-v4.md"
+  },
+  "semantic_sharding": {
+    "mode": "auto",
+    "max_included_rows": 10,
+    "max_source_rows": 16,
+    "max_shards": 10,
+    "max_semantic_weight": 49
+  },
+  "observation_root": "work/full-process-observation",
+  "recorder_entrypoint": "scripts/workflow_wall_clock.py",
+  "production_wrapper": "scripts/run_standard_production_iteration.py",
+  "measurement_mode": "observational"
+}

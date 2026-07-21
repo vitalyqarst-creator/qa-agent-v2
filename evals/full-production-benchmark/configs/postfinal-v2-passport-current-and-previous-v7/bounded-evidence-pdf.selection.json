@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "extraction_method": "pdf-page-literal-fragments-v1",
+  "selections": [
+    {
+      "source_locator": "page:18",
+      "exact_source_text": "BSR 84. Видимость-всегда."
+    },
+    {
+      "source_locator": "page:20",
+      "exact_source_text": "BSR 114."
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "extraction_method": "docx-xml-literal-fragments-v1",
+  "selections": [
+    {
+      "source_locator": "word/document.xml#table-index:6/row-index:15",
+      "exact_source_text": "Блок «Паспортные данные»"
+    },
+    {
+      "source_locator": "word/document.xml#table-index:6/row-index:31",
+      "exact_source_text": "Блок «Адреса клиента»"
+    }
+  ]
+}

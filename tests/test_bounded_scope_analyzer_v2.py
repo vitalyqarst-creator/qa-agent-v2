@@ -182,6 +182,71 @@ class BoundedScopeAnalyzerV2Tests(unittest.TestCase):
     def test_compact_scope_accepts_source_complete_decision(self) -> None:
         _validate_decision(self._decision(), self._context())
 
+    def test_bare_requirement_code_requires_explicit_nonblocking_gap(self) -> None:
+        context = self._context()
+        context["source_rows"][1]["bounded_source_text"] = (
+            "Дата выдачи Если активирован признак = «Да» Да Поле ввода Дата. "
+            "Описание будет приведено в ФТ «Калькулятор». BSR 39."
+        )
+        context = self._bind_context(context)
+        decision = self._decision()
+        decision["source_decisions"][1]["requirement_codes"] = ["BSR 39"]
+
+        with self.assertRaisesRegex(
+            ScopeAnalyzerError,
+            "bare requirement code BSR 39 requires",
+        ):
+            _validate_decision(decision, context)
+
+        decision["gaps"] = [
+            {
+                "gap_id": "GAP-BARE-001",
+                "gap_type": "missing-source-definition",
+                "source_row_ids": ["SRC-002"],
+                "source_refs": ["BSR 39"],
+                "exact_source_fragments": ["BSR 39."],
+                "blocking": False,
+                "clarification_question": (
+                    "Какое поведение определяет нерасшифрованный код BSR 39?"
+                ),
+                "downstream_handling": "carry-to-source-model",
+            }
+        ]
+        _validate_decision(decision, context)
+
+    def test_context_preflight_rejects_declared_field_target_name_mismatch(self) -> None:
+        context = self._context()
+        context["source_rows"][1]["bounded_source_text"] = (
+            "BSR 39. Поле «Дата выдачи» управляет признаком."
+        )
+        context["source_rows"].append(
+            {
+                "source_row_id": "SRC-003",
+                "field_or_action": "Дата выдачи текущего паспорта",
+                "source_ref": "BSR 40",
+                "bounded_source_text": "BSR 40. Дата выдачи текущего паспорта.",
+                "requirement_codes_hint": ["BSR 40"],
+                "in_scope_hint": "yes; dependency target",
+            }
+        )
+        context["expected_dependencies"] = [
+            {
+                "kind": "field",
+                "name": "Дата выдачи",
+                "source_row_ids": ["SRC-002"],
+                "resolution": "declared",
+                "target_source_row_ids": ["SRC-003"],
+                "exact_source_fragments": ["Поле «Дата выдачи»"],
+            }
+        ]
+        context = self._bind_context(context)
+
+        with self.assertRaisesRegex(
+            ScopeAnalyzerError,
+            "declared field target name mismatch: SRC-003",
+        ):
+            _validate_scope_context(context)
+
     def test_compact_scope_standalone_validator_rejects_unknown_fields(self) -> None:
         for location in ("root", "source-decision", "dependency"):
             with self.subTest(location=location):

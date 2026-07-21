@@ -194,6 +194,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             raw,
             context=shard_context,
             boundary=shard_boundary,
+            repo_root=root,
+            fixture_context=context,
         )
         shard_clarifications = tuple(
             item

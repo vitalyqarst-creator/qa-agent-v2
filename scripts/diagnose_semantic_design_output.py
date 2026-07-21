@@ -66,6 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         raw_design,
         context=context,
         boundary=boundary,
+        repo_root=root,
     )
     completeness = semantic_design_completeness_diagnostics(
         context,

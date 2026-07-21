@@ -8,6 +8,7 @@ from pathlib import Path
 
 from scripts.verify_dadata_positive_fixture import (
     DadataFixtureVerificationError,
+    FMS_UNIT_ENDPOINT,
     verify_positive_fixture,
 )
 
@@ -159,6 +160,60 @@ class PositiveDadataFixtureVerifierTests(unittest.TestCase):
                     token="",
                     opener=lambda *_args, **_kwargs: _Response(self.payload),
                 )
+
+    def test_supports_allowlisted_fms_multi_suggestion_fixture(self) -> None:
+        payload = {
+            "suggestions": [
+                {
+                    "value": "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                    "data": {
+                        "code": "772-053",
+                        "name": "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                        "region_code": "77",
+                        "type": "2",
+                    },
+                },
+                {
+                    "value": "ОВД ЗЮЗИНО ПС УВД ЮЗАО Г. МОСКВЫ",
+                    "data": {
+                        "code": "772-053",
+                        "name": "ОВД ЗЮЗИНО ПС УВД ЮЗАО Г. МОСКВЫ",
+                        "region_code": "77",
+                        "type": "2",
+                    },
+                },
+            ]
+        }
+        requests: list[object] = []
+
+        def opener(request: object, timeout: float) -> _Response:
+            requests.append((request, timeout))
+            return _Response(payload)
+
+        with tempfile.TemporaryDirectory() as raw:
+            receipt = verify_positive_fixture(
+                query="772-053",
+                fixture_id="FX-DADATA-FMS-POS-001",
+                expected_suggestion="ОВД ЗЮЗИНО Г. МОСКВЫ",
+                expected_components={
+                    "code": "772-053",
+                    "name": "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                    "region_code": "77",
+                    "type": "2",
+                },
+                endpoint=FMS_UNIT_ENDPOINT,
+                minimum_suggestion_count=2,
+                output_dir=Path(raw) / "fixture",
+                token="secret-token",
+                opener=opener,
+            )
+
+        self.assertEqual(2, len(requests))
+        self.assertEqual(FMS_UNIT_ENDPOINT, receipt["request"]["endpoint"])
+        self.assertEqual(2, receipt["expected_response"]["minimum_suggestion_count"])
+        self.assertTrue(
+            receipt["verification"]["all_minimum_suggestion_count_matched"]
+        )
 
 
 if __name__ == "__main__":

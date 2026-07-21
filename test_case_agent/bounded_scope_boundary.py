@@ -223,6 +223,32 @@ def normalize_entity(value: str) -> str:
     return " ".join(value.split())
 
 
+_REQUIREMENT_CODE_TOKEN = re.compile(
+    r"\b(?P<code>(?:BSR|GSR|DIT)\s+[A-Za-z0-9._/-]+)\b",
+    re.IGNORECASE,
+)
+
+
+def bare_requirement_codes(source_text: str) -> dict[str, str]:
+    """Return coded clauses that contain no statement after the code token.
+
+    Typed table cells before the requirement column remain independently usable;
+    this helper only prevents a bare token such as ``BSR 114.`` from being
+    promoted into invented executable behavior.
+    """
+
+    matches = list(_REQUIREMENT_CODE_TOKEN.finditer(source_text))
+    result: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(source_text)
+        suffix = source_text[match.end() : end]
+        if re.sub(r"[\s\W_]+", "", suffix, flags=re.UNICODE):
+            continue
+        literal = source_text[match.start() : end].strip()
+        result[match.group("code").upper()] = literal
+    return result
+
+
 def declared_dictionary_values(context: Mapping[str, Any]) -> set[str]:
     declared: set[str] = set()
     raw = context.get("dictionary_inventory")
@@ -520,6 +546,31 @@ def expected_dependency_inventory(
             raise BoundedScopeBoundaryError(
                 f"expected dependency {index} has invalid target rows"
             )
+        if kind == "field" and resolution == "declared":
+            if not targets:
+                raise BoundedScopeBoundaryError(
+                    f"expected dependency {index} declared field requires target rows"
+                )
+            expected_name = normalize_entity(str(name))
+            mismatched_targets = [
+                row_id
+                for row_id in targets
+                if normalize_entity(
+                    str(
+                        next(
+                            row.get("field_or_action", "")
+                            for row in rows
+                            if str(row.get("source_row_id")) == row_id
+                        )
+                    )
+                )
+                != expected_name
+            ]
+            if mismatched_targets:
+                raise BoundedScopeBoundaryError(
+                    f"expected dependency {index} declared field target name mismatch: "
+                    + ", ".join(mismatched_targets)
+                )
         for row_id in linked:
             row_text = next(
                 str(row.get("bounded_source_text", ""))
@@ -1068,6 +1119,39 @@ def validate_boundary_decision_v2(
             raise BoundedScopeBoundaryError(
                 "non-blocking gap cannot use block-writer handling"
             )
+
+    gaps_by_row: dict[str, list[Mapping[str, Any]]] = {}
+    for gap in gaps:
+        assert isinstance(gap, Mapping)
+        for row_id in map(str, gap.get("source_row_ids", [])):
+            gaps_by_row.setdefault(row_id, []).append(gap)
+    for decision in decisions:
+        assert isinstance(decision, Mapping)
+        if decision.get("disposition") != "included":
+            continue
+        row_id = str(decision["source_row_id"])
+        bare_codes = bare_requirement_codes(
+            str(source_rows[row_id].get("bounded_source_text", ""))
+        )
+        for code in map(str, decision.get("requirement_codes", [])):
+            literal = bare_codes.get(code.upper())
+            if literal is None:
+                continue
+            matching_gap = any(
+                gap.get("gap_type") == "missing-source-definition"
+                and gap.get("blocking") is False
+                and gap.get("downstream_handling") == "carry-to-source-model"
+                and any(
+                    code.casefold() in str(fragment).casefold()
+                    for fragment in gap.get("exact_source_fragments", [])
+                )
+                for gap in gaps_by_row.get(row_id, [])
+            )
+            if not matching_gap:
+                raise BoundedScopeBoundaryError(
+                    f"{row_id} bare requirement code {code} requires a non-blocking "
+                    "missing-source-definition gap"
+                )
     for item in dependencies:
         assert isinstance(item, Mapping)
         if item.get("resolution") == "missing" and (
@@ -1138,6 +1222,7 @@ def validate_boundary_decision_v2(
 __all__ = [
     "BoundedScopeBoundaryError",
     "CANONICAL_GAP_TYPES",
+    "bare_requirement_codes",
     "declared_dictionary_values",
     "dictionary_has_inline_values",
     "expected_dependency_inventory",

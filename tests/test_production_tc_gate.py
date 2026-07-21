@@ -548,6 +548,38 @@ class ProductionTcGateTests(unittest.TestCase):
 
         self.assertTrue(result.passed, result.findings)
 
+    def test_action_control_calibration_accepts_explicit_no_action(self) -> None:
+        metadata = (
+            "**Название:** Необязательность нажатия кнопки\n"
+            "**Тип:** позитивный\n"
+            "**Приоритет:** средний\n"
+            "**package_id:** passport\n"
+            "**Трассировка:** OBL-053; ATOM-071; SRC-030\n"
+            "**Статус oracle:** ui-calibration-required\n"
+            "**Статус тест-кейса:** candidate-ui-calibration\n"
+            "**Требуется подтверждение:** Какой видимый исход наблюдается без "
+            "нажатия кнопки?"
+        )
+        result = validate_production_tc_content(
+            self._case(
+                metadata=metadata,
+                test_data="- Действие с кнопкой «Добавить паспорт»: не нажимать.",
+                steps=(
+                    "1. Не нажимать кнопку «Добавить паспорт».\n"
+                    "2. Выполнить действие подтверждения формы."
+                ),
+                expected_result=(
+                    "Нажатие кнопки «Добавить паспорт» не требуется. "
+                    "Точный UI-отклик требует калибровки."
+                ),
+            )
+        )
+
+        self.assertNotIn(
+            "production-calibration-value-missing",
+            {finding["id"] for finding in result.findings},
+        )
+
     def test_calibration_candidate_rejects_unconfirmed_transition_semantics(self) -> None:
         metadata = (
             "**Название:** Калибровка пустого поля\n"
@@ -1046,6 +1078,55 @@ class ProductionTcGateTests(unittest.TestCase):
         )
 
         self.assertIn(
+            "production-nonconcrete-runtime-value",
+            self._finding_ids(content),
+        )
+
+    def test_runtime_selected_available_date_is_blocked(self) -> None:
+        content = self._case(
+            test_data=(
+                "- Дата выдачи: выбранное при выполнении доступное значение."
+            ),
+            steps="1. Выбрать доступное значение даты и удалить блок.",
+            expected_result="Заполненный блок удалён.",
+        )
+
+        self.assertIn(
+            "production-nonconcrete-runtime-value",
+            self._finding_ids(content),
+        )
+
+    def test_runtime_selected_birth_date_is_blocked(self) -> None:
+        content = self._case(
+            test_data="- Дата рождения: дата, выбранная во время выполнения теста.",
+            steps="1. Рассчитать дату 14-летия и ввести предыдущий день.",
+            expected_result="Сохранение блокируется.",
+        )
+
+        self.assertIn(
+            "production-nonconcrete-runtime-value",
+            self._finding_ids(content),
+        )
+
+    def test_explicit_runtime_lookup_prohibition_is_not_a_placeholder(self) -> None:
+        content = self._case(
+            test_data=(
+                "- Fixture DaData: `FX-DADATA-FMS-POS-001`.\n"
+                "- Запрос: `772-053`.\n"
+                "- Точное предложение: `ОВД ЗЮЗИНО Г. МОСКВЫ`.\n"
+                "- Поиск актуального значения во время выполнения тест-кейса запрещён."
+            ),
+            steps=(
+                "1. Ввести запрос `772-053`.\n"
+                "2. Выбрать предложение `ОВД ЗЮЗИНО Г. МОСКВЫ`."
+            ),
+            expected_result=(
+                "В поле отображается выбранное значение "
+                "«ОВД ЗЮЗИНО Г. МОСКВЫ»."
+            ),
+        )
+
+        self.assertNotIn(
             "production-nonconcrete-runtime-value",
             self._finding_ids(content),
         )

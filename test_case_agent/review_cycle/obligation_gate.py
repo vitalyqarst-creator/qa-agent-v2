@@ -55,6 +55,10 @@ NON_POLARITY_RETENTION_NEGATION = re.compile(
     r"\b(?:без\s+изменени\w*|without\s+change\w*)\b",
     re.IGNORECASE,
 )
+NON_POLARITY_BOUND_NEGATION = re.compile(
+    r"\b(?:не\s+(?:менее|более)|not\s+(?:less|more)\s+than)\b",
+    re.IGNORECASE,
+)
 LEXICAL_STOPWORDS = {
     "a",
     "an",
@@ -242,6 +246,20 @@ def _dadata_reference_fixture_lines(requirement: Any) -> tuple[str, ...]:
             f"- Параметр `to_bound`: `{values[3]}`.",
             f"- Точное предложение: `{values[4]}`.",
         )
+    if "-FMS-" in fixture_id and len(values) >= 7:
+        labels = (
+            "Fixture DaData",
+            "Запрос",
+            "Точное предложение",
+            "Код подразделения",
+            "Наименование подразделения",
+            "Код региона",
+            "Тип подразделения",
+        )
+        lines = tuple(
+            f"- {label}: `{value}`." for label, value in zip(labels, values)
+        )
+        return lines
     if "-ADDR-" in fixture_id and len(values) >= 9:
         labels = (
             "Fixture DaData",
@@ -336,6 +354,11 @@ def reference_fixture_findings(
         "- Fixture DaData:",
         "- Запрос:",
         "- Точное предложение:",
+        "- Код подразделения:",
+        "- Наименование подразделения:",
+        "- Код региона:",
+        "- Тип подразделения:",
+        "- SHA-256 ответа fixture:",
         "- Почтовый индекс:",
         "- Регион:",
         "- Город:",
@@ -1000,6 +1023,10 @@ def _has_explicit_negation(text: str) -> bool:
     # `без изменения` describes value retention and does not negate a positive
     # acceptance/display oracle.
     normalized = NON_POLARITY_RETENTION_NEGATION.sub(" ", normalized)
+    # Comparative bounds describe a condition, not the polarity of a nearby
+    # observable oracle.  For example, visibility "при дате не менее 3 лет"
+    # remains a positive visibility oracle.
+    normalized = NON_POLARITY_BOUND_NEGATION.sub(" ", normalized)
     tokens = LEXICAL_TOKEN.findall(normalized)
     return bool(
         NEGATION_TOKENS.intersection(tokens)

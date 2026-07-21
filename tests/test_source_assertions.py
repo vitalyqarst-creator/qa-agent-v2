@@ -1117,6 +1117,22 @@ class SourceAssertionManifestTests(unittest.TestCase):
             ),
         )
 
+    def test_clarification_requirement_code_range_expands_to_exact_codes(self) -> None:
+        self.assertEqual(
+            ("BSR 105", "BSR 106", "BSR 107", "BSR 108"),
+            source_assertions_module._clarification_requirement_codes(
+                "BSR 105–108",
+            ),
+        )
+
+    def test_clarification_requirement_code_range_rejects_reversed_bounds(self) -> None:
+        self.assert_contract_error(
+            "invalid-clarification-requirement-code-range",
+            lambda: source_assertions_module._clarification_requirement_codes(
+                "BSR 108-105",
+            ),
+        )
+
     def test_source_context_clarification_cannot_bind_foreign_assertion_row(self) -> None:
         manifest, clarification, _ = self._build_with_source_context_clarification()
         context_assertion = manifest.assertions[0]
@@ -1426,6 +1442,40 @@ class SourceAssertionManifestTests(unittest.TestCase):
                 ),
             ).validate(self.repo_root),
         )
+
+    def test_definition_gap_does_not_reject_an_existing_clarification_binding(self) -> None:
+        manifest, _, _ = self._build_with_user_clarification(
+            requirement_numbers=(3, 6, 9),
+        )
+        gap_path = self.repo_root / manifest.coverage_gaps_artifact.path
+        second = manifest.assertions[1]
+        gap_path.write_text(
+            gap_path.read_text(encoding="utf-8").rstrip()
+            + "\n\n"
+            + "\n".join(
+                (
+                    "## GAP-DEF-001",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    "| gap_id | GAP-DEF-001 |",
+                    "| gap_type | missing-source-definition |",
+                    "| requirement_codes | BSR 6 |",
+                    f"| affected_assertion_id | {second.assertion_id} |",
+                    f"| affected_atom_id | {second.atom_id} |",
+                    "| status | open |",
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        replace(
+            manifest,
+            coverage_gaps_artifact=replace(
+                manifest.coverage_gaps_artifact,
+                sha256=sha256_file(gap_path),
+            ),
+        ).validate(self.repo_root)
 
     def test_clarification_gap_must_be_resolved_by_exact_record(self) -> None:
         manifest, clarification, _ = self._build_with_user_clarification()

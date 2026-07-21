@@ -216,6 +216,30 @@ CAPTURED_INITIAL_STATE_RE = re.compile(
     r"исходн\w*\s+состояни\w*)",
     flags=re.IGNORECASE,
 )
+
+
+def _dictionary_path_qualifiers(path: tuple[str, ...]) -> tuple[str, ...]:
+    """Return stable human labels for machine-owned portable fixture paths."""
+
+    if not path:
+        return ()
+    suffix = path[-1].upper()
+    aliases = {
+        "QUERY": "Запрос",
+        "EXACT-SUGGESTION": "Точное предложение",
+        "EXACT-COMPONENT-CODE": "Код подразделения",
+        "EXACT-COMPONENT-NAME": "Наименование подразделения",
+        "REGION-KLADR-ID": "Код региона",
+        "REGION-CODE": "Код региона",
+        "TYPE": "Тип подразделения",
+        "RESPONSE-SHA256": "SHA-256 ответа fixture",
+    }
+    values = [path[-1]]
+    for marker, label in aliases.items():
+        if suffix == marker or suffix.endswith(f"-{marker}"):
+            values.append(label)
+            break
+    return tuple(dict.fromkeys(values))
 REPAIRABLE_QUALITY_FINDING_IDS = {
     "action-contract-mismatch",
     "ambiguous-dictionary-value-path",
@@ -224,6 +248,9 @@ REPAIRABLE_QUALITY_FINDING_IDS = {
     "production-calibration-question-missing",
     "production-ambiguous-duplicate-execution-path",
     "production-dadata-dynamic-fixture",
+    "production-dadata-fixture-binding-missing",
+    "production-dadata-query-literal-missing",
+    "production-dadata-suggestion-literal-missing",
     "production-forbidden-process-wording",
     "production-internal-fixture-artifact-leak",
     "production-missing-numbered-action-step",
@@ -255,6 +282,16 @@ TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
     "production-dadata-dynamic-fixture": (
         "Remove every runtime instruction to call DaData, obtain or capture a fixture, or discover a current value.",
         "Use only the exact runner-projected FX-DADATA fixture query, suggestion and components.",
+    ),
+    "production-dadata-fixture-binding-missing": (
+        "Bind the test data to the exact preverified FX-DADATA fixture available in the prepared evidence.",
+        "Do not call DaData or discover a current value while executing the test case.",
+    ),
+    "production-dadata-query-literal-missing": (
+        "Add the exact preverified input under the explicit `Запрос` label in test data.",
+    ),
+    "production-dadata-suggestion-literal-missing": (
+        "Add the exact preverified returned value under the explicit `Точное предложение` label in test data.",
     ),
     "production-forbidden-process-wording": (
         "Remove workflow, evidence-recording, calibration, runner, writer and reviewer wording from runtime sections.",
@@ -4896,7 +4933,7 @@ class CodexExecReviewCycleRunner:
                         qualifier
                         for path, _ in paths
                         for qualifier in (
-                            path[-1],
+                            *_dictionary_path_qualifiers(path),
                             dictionary_groups.get((dictionary_id, path), ""),
                         )
                         if qualifier

@@ -32,6 +32,9 @@ from scripts.repair_autofin_client_addresses_v17_findings import (
 ROOT = Path(__file__).resolve().parents[1]
 FT_ROOT = ROOT / "fts" / "AutoFin"
 REFERENCE = FT_ROOT / "work" / "vendor-references" / "dadata-reference.md"
+FMS_REFERENCE = (
+    FT_ROOT / "work" / "vendor-references" / "dadata-fms-unit-reference.md"
+)
 DADATA_FIXTURE_ROOT = FT_ROOT / "work" / "vendor-references" / "dadata-fixtures"
 DADATA_FIXTURE_CATALOG = (
     FT_ROOT / "work" / "vendor-references" / "dadata-fixture-catalog.md"
@@ -42,6 +45,12 @@ ADDRESS_CLARIFICATIONS = (
     / "support"
     / "PostFinal-v2"
     / "client-addresses-approved-clarifications-v3.md"
+)
+PASSPORT_CLARIFICATIONS = (
+    FT_ROOT
+    / "support"
+    / "PostFinal-v2"
+    / "passport-current-and-previous-approved-clarifications.md"
 )
 ADDRESS_V11_CONFIG_ROOT = (
     ROOT
@@ -63,6 +72,13 @@ ADDRESS_V16_CONFIG_ROOT = (
     / "full-production-benchmark"
     / "configs"
     / "postfinal-v2-client-addresses-v16"
+)
+PASSPORT_CONFIG_ROOT = (
+    ROOT
+    / "evals"
+    / "full-production-benchmark"
+    / "configs"
+    / "postfinal-v2-passport-current-and-previous-v4"
 )
 ADDRESS_REMEDIATION_HANDOFF = (
     FT_ROOT
@@ -174,6 +190,121 @@ class AutoFinDaDataReferenceTests(unittest.TestCase):
                         self.assertNotIn(secret_value, verification_text)
                 self.assertIn(f"`{fixture_id}`", catalog)
                 self.assertIn(fixture_expected["sha256"], catalog)
+
+    def test_verified_fms_fixture_is_exact_reproducible_and_secret_free(self) -> None:
+        fixture_id = "FX-DADATA-FMS-POS-001"
+        fixture_root = DADATA_FIXTURE_ROOT / fixture_id
+        response_path = fixture_root / f"{fixture_id}.response.json"
+        verification_path = fixture_root / f"{fixture_id}.verification.json"
+        response_bytes = response_path.read_bytes()
+        response = json.loads(response_bytes)
+        verification_text = verification_path.read_text(encoding="utf-8")
+        verification = json.loads(verification_text)
+
+        self.assertEqual(
+            "5575e4fbb9e28df33d8826a00580594eccde839bb6d625bfa84a6bf53d2bf90e",
+            hashlib.sha256(response_bytes).hexdigest(),
+        )
+        self.assertEqual("verified", verification["status"])
+        self.assertEqual(fixture_id, verification["fixture_id"])
+        self.assertEqual(
+            "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/fms_unit",
+            verification["request"]["endpoint"],
+        )
+        self.assertEqual("772-053", verification["request"]["parameters"]["query"])
+        self.assertEqual(
+            "ОВД ЗЮЗИНО Г. МОСКВЫ",
+            verification["expected_response"]["exact_suggestion"],
+        )
+        self.assertEqual(
+            {
+                "code": "772-053",
+                "name": "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                "region_code": "77",
+                "type": "2",
+            },
+            verification["expected_response"]["exact_components"],
+        )
+        self.assertEqual(2, verification["expected_response"]["minimum_suggestion_count"])
+        self.assertEqual(2, verification["verification"]["attempt_count"])
+        self.assertTrue(verification["verification"]["all_responses_identical"])
+        self.assertTrue(
+            verification["verification"]["all_minimum_suggestion_count_matched"]
+        )
+        self.assertGreaterEqual(len(response["suggestions"]), 2)
+        exact = next(
+            item
+            for item in response["suggestions"]
+            if item["value"] == "ОВД ЗЮЗИНО Г. МОСКВЫ"
+        )
+        for component, value in verification["expected_response"][
+            "exact_components"
+        ].items():
+            self.assertEqual(value, exact["data"][component])
+
+        persisted_text = response_path.read_text(encoding="utf-8") + verification_text
+        lowered = persisted_text.lower()
+        for forbidden_name in ("authorization", "api_key", "secret", "token"):
+            self.assertNotIn(forbidden_name, lowered)
+        for env_name in ("DADATA_API_KEY", "DADATA_SECRET_KEY"):
+            secret_value = os.environ.get(env_name)
+            if secret_value:
+                self.assertNotIn(secret_value, persisted_text)
+
+        catalog = DADATA_FIXTURE_CATALOG.read_text(encoding="utf-8")
+        self.assertIn(f"`{fixture_id}`", catalog)
+        self.assertIn(verification["response_sha256"], catalog)
+        reference = FMS_REFERENCE.read_text(encoding="utf-8")
+        self.assertIn("`CLR-PASS-002`", reference)
+        self.assertIn("`772-053`", reference)
+        clarification = PASSPORT_CLARIFICATIONS.read_text(encoding="utf-8")
+        self.assertIn("`CLR-PASS-002`", clarification)
+        self.assertIn("Публичная документация DaData", clarification)
+
+    def test_passport_profile_is_source_only_hash_bound_and_fresh(self) -> None:
+        config_path = PASSPORT_CONFIG_ROOT / "shadow-benchmark-config.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        template = json.loads(
+            (PASSPORT_CONFIG_ROOT / "bounded-context-template.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertEqual(
+            "postfinal-v2-passport-current-and-previous-v4",
+            config["benchmark_id"],
+        )
+        self.assertEqual(
+            "work/stage-handoffs/114-application-card-passport-current-and-previous-postfinal-v2",
+            config["outputs"]["handoff_dir"],
+        )
+        self.assertEqual(35, len(template["source_rows"]))
+        self.assertEqual(31, len(template["parity"]))
+        self.assertEqual(4, len(template["approved_clarifications"]))
+        self.assertEqual(1, template["scope_execution_facts"]["internal_package_count"])
+        self.assertEqual(49, config["semantic_sharding"]["max_semantic_weight"])
+        issue_date_row = next(
+            item for item in template["source_rows"] if item["source_row_id"] == "SRC-026"
+        )
+        self.assertEqual("Дата выдачи", issue_date_row["field_or_action"])
+        binding = template["external_dictionary_bindings"][0]
+        self.assertEqual("подразделения, выдавшие паспорт", binding["dictionary_name"])
+        self.assertEqual(["SRC-023"], binding["source_row_ids"])
+        self.assertEqual({"query": "772-053"}, binding["query_parameters"])
+        model_inputs = [*config["source_files"]] + [
+            item["path"] for item in config["scope_inputs"]
+        ]
+        for forbidden in ("test-cases/", "stage-handoffs/", "review-cycles/"):
+            self.assertFalse(any(forbidden in item for item in model_inputs))
+        serialized = json.dumps(template, ensure_ascii=False)
+        self.assertNotIn("AutoFinPreFinal", serialized)
+        self.assertNotIn("14-application-card-passport", serialized)
+        for relative_path, expected_hash in config["expected_sha256"].items():
+            self.assertEqual(
+                expected_hash,
+                hashlib.sha256((ROOT / relative_path).read_bytes()).hexdigest(),
+                relative_path,
+            )
 
     def test_verified_negative_fixture_is_reproducible_and_secret_free(self) -> None:
         response_path = DADATA_FIXTURE_ROOT / "FX-DADATA-ADDR-NEG-001.response.json"

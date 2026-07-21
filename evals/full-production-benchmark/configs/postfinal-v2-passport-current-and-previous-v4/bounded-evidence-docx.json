@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "source_sha256": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+  "extraction_method": "docx-xml-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "word/document.xml#table-index:6/row-index:15",
+      "exact_source_text": "Блок «Паспортные данные»",
+      "exact_source_text_sha256": "d388f61a6429730caa413978fd6d391791ded77ae6da3fb9b7c3144beb47d8f2"
+    },
+    {
+      "source_locator": "word/document.xml#table-index:6/row-index:31",
+      "exact_source_text": "Блок «Адреса клиента»",
+      "exact_source_text_sha256": "5fa7d93ef38882c93c7d0348a4bdeca82438b082a624f99f5aec331faeec33b0"
+    }
+  ]
+}

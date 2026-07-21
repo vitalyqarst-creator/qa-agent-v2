@@ -676,6 +676,70 @@ class PreparedObligationGateTests(unittest.TestCase):
         self.assertIn("- Регион: `Самарская обл`.", projected)
         self.assertNotIn("Значение fixture", projected)
 
+    def test_fms_reference_fixture_projection_is_accepted_as_complete(self) -> None:
+        values = (
+            "FX-DADATA-FMS-POS-001",
+            "772-053",
+            "ОВД ЗЮЗИНО Г. МОСКВЫ",
+            "772-053",
+            "ОВД ЗЮЗИНО Г. МОСКВЫ",
+            "77",
+            "2",
+            "5575bdb90c1e51bddb27d168ca354813079620580e994208395e45de5ab7f90e",
+        )
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-DADATA-FMS-POS-001",
+            coverage_mode="reference-only",
+            fixture_values=tuple(
+                PreparedDictionaryValue(
+                    (
+                        "DICT-DADATA-FMS-POS-001",
+                        f"DICT-DADATA-FMS-POS-001-VALUE-{index:02d}",
+                    ),
+                    "leaf",
+                    value,
+                )
+                for index, value in enumerate(values, start=1)
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-dadata-fms-reference-fixture",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-030",
+                    atom_id="ATOM-047",
+                    source_refs=("SRC-019", "BSR 94"),
+                    atomic_statement="DaData возвращает подразделение ФМС.",
+                    observable_oracle="Точное подразделение отображается.",
+                    test_intent="Ввести код и выбрать точное подразделение.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-DADATA-FMS-POS-001",),
+                    notes="",
+                    planned_test_case_id="TC-030",
+                    dictionary_requirements=(requirement,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+        draft = (
+            "## TC-030\n"
+            "**Трассировка:** OBL-030; ATOM-047; SRC-019; BSR 94; "
+            "DICT-DADATA-FMS-POS-001\n\n"
+            "### Тестовые данные\n\n- DaData fixture.\n\n"
+            "### Шаги\n\n1. Ввести код и выбрать точное подразделение.\n"
+        )
+
+        projected, _ = materialize_draft_reference_fixtures(draft, obligations)
+        accepted = self._validate(projected)
+
+        self.assertTrue(accepted.passed, accepted.findings)
+        self.assertIn("- Код подразделения: `772-053`.", projected)
+        self.assertIn("- Код региона: `77`.", projected)
+        self.assertIn("- Тип подразделения: `2`.", projected)
+        self.assertNotIn("- SHA-256 ответа fixture:", projected)
+
     def test_writer_dictionary_ownership_rejects_exhaustive_value_enumeration(self) -> None:
         requirement = PreparedDictionaryRequirement(
             dictionary_id="DICT-001",
@@ -1349,6 +1413,18 @@ class StrictPreparedObligationGateTests(unittest.TestCase):
                     finding_id,
                     {finding["id"] for finding in result.findings},
                 )
+
+    def test_comparative_bound_does_not_invert_positive_oracle(self) -> None:
+        result = self._validate(
+            self._case(
+                expected_result=(
+                    "При длине VIN не менее 3 символов сообщение об ошибке "
+                    "для VIN отображается."
+                )
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
 
     def test_selected_value_display_matches_field_retention_oracle(self) -> None:
         obligations = PreparedObligationSet.create(

@@ -16,9 +16,11 @@ from test_case_agent.review_cycle.prepared_compiler import (
     PreparedCompilerDiagnostic,
     _expected_source_assertion_rows,
     _compile_dictionary_requirement,
+    _compile_portable_fixture_requirements,
     _dedicated_exhaustive_dictionary_ids,
     _effective_dictionary_coverage_mode,
     _load_semantic_compiler_projection,
+    _portable_dictionary_evidence_record,
     _resolve_source_first_state_change,
     _unbound_reference_fixture_action_literals,
     _validate_semantic_projection_graph,
@@ -76,6 +78,78 @@ from scripts.compile_prepared_stage_package import main as compile_cli_main
 
 
 class PreparedWorkflowCompilerTests(unittest.TestCase):
+    def test_verified_portable_fms_contract_compiles_to_reference_fixture(self) -> None:
+        fixture_id = "FX-DADATA-FMS-POS-001"
+        contract = (
+            f"- `{fixture_id}`: request_parameters=`{{\"query\":\"772-053\"}}`; "
+            "expected_response=`{\"exact_components\":{\"code\":\"772-053\","
+            "\"name\":\"ОВД ЗЮЗИНО Г. МОСКВЫ\",\"region_code\":\"77\","
+            "\"type\":\"2\"},\"exact_suggestion\":\"ОВД ЗЮЗИНО Г. МОСКВЫ\"}`; "
+            f"response_sha256=`{'5' * 64}`; status=`verified`; "
+            "runtime_api_call=`prohibited`; product_input=`stored_literals`."
+        )
+        requirements = _compile_portable_fixture_requirements(
+            ({"test_data": fixture_id},),
+            {fixture_id: (contract,)},
+        )
+
+        self.assertEqual(1, len(requirements))
+        requirement = requirements[0]
+        self.assertEqual("DICT-DADATA-FMS-POS-001", requirement.dictionary_id)
+        self.assertEqual("reference-only", requirement.coverage_mode)
+        self.assertEqual(
+            [
+                fixture_id,
+                "772-053",
+                "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                "772-053",
+                "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                "77",
+                "2",
+                "5" * 64,
+            ],
+            [item.value for item in requirement.fixture_values],
+        )
+
+    def test_portable_fixture_dictionary_evidence_deduplicates_literals(self) -> None:
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-DADATA-FMS-POS-001",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-FMS-POS-001", "DICT-Q"), "leaf", "772-053"
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-FMS-POS-001", "DICT-CODE"),
+                    "leaf",
+                    "772-053",
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-FMS-POS-001", "DICT-NAME"),
+                    "leaf",
+                    "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                ),
+            ),
+        )
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            plan = root / "handoff" / "package-test-design-plan.md"
+            plan.parent.mkdir()
+            plan.write_text("fixture", encoding="utf-8")
+            record = _portable_dictionary_evidence_record(
+                requirement,
+                package_plan_path=plan,
+                repo_root=root,
+            )
+        self.assertEqual(
+            ["772-053", "ОВД ЗЮЗИНО Г. МОСКВЫ"],
+            record["active_values"],
+        )
+        self.assertEqual(
+            "handoff/package-test-design-plan.md",
+            record["source_file"],
+        )
+
     def test_reference_fixture_rejects_unbound_synthetic_action_literal(self) -> None:
         assertion = SimpleNamespace(
             exact_source_text="Если в DaData не найден адрес",

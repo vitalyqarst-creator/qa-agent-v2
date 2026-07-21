@@ -554,6 +554,56 @@ class SemanticDesignShardingTests(unittest.TestCase):
         for shard in plan["shards"]:
             project_semantic_shard(context, boundary, shard)
 
+    def test_projection_keeps_only_dependency_fragments_literal_in_every_source_row(self) -> None:
+        context = _context(3)
+        context["source_rows"][0]["bounded_source_text"] = (
+            "BSR 1. поле «Флаг» управляет первой веткой."
+        )
+        context["source_rows"][1]["bounded_source_text"] = (
+            "BSR 2. признак «Флаг» управляет второй веткой."
+        )
+        context["source_rows"][2]["field_or_action"] = "Флаг"
+        dependency = {
+            "kind": "field",
+            "name": "Флаг",
+            "source_row_ids": ["SRC-001", "SRC-002"],
+            "resolution": "declared",
+            "target_source_row_ids": ["SRC-003"],
+            "exact_source_fragments": ["«Флаг»"],
+        }
+        context["expected_dependencies"] = [copy.deepcopy(dependency)]
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["dependencies"] = [
+            {
+                "dependency_id": "DEP-001",
+                **copy.deepcopy(dependency),
+                "exact_source_fragments": ["поле «Флаг»", "«Флаг»"],
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "Both references resolve to the declared field.",
+            }
+        ]
+        shard = {
+            "shard_id": "semantic-shard-001",
+            "owned_source_row_ids": ["SRC-001", "SRC-002", "SRC-003"],
+        }
+
+        projected, projected_boundary = project_semantic_shard(
+            context,
+            boundary,
+            shard,
+        )
+
+        self.assertEqual(
+            ["«Флаг»"],
+            projected["expected_dependencies"][0]["exact_source_fragments"],
+        )
+        self.assertEqual(
+            ["поле «Флаг»", "«Флаг»"],
+            projected_boundary["dependencies"][0]["exact_source_fragments"],
+        )
+
     def test_projected_inline_evidence_does_not_leak_between_shards(self) -> None:
         context = _context(2)
         context["bounded_evidence_inline"] = {

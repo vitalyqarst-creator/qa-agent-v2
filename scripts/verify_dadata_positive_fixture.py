@@ -26,6 +26,16 @@ from scripts.verify_dadata_negative_fixture import (
 )
 
 
+FMS_UNIT_ENDPOINT = (
+    "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/fms_unit"
+)
+ALLOWED_ENDPOINTS = frozenset({ENDPOINT, FMS_UNIT_ENDPOINT})
+SUGGESTION_TYPE_ENDPOINTS = {
+    "address": ENDPOINT,
+    "fms_unit": FMS_UNIT_ENDPOINT,
+}
+
+
 def _component(value: str) -> tuple[str, str]:
     key, separator, expected = value.partition("=")
     if not separator or not key.strip() or not expected.strip():
@@ -40,11 +50,17 @@ def _matched_suggestion(
     *,
     expected_suggestion: str,
     expected_components: Mapping[str, str],
+    minimum_suggestion_count: int,
 ) -> Mapping[str, Any]:
     suggestions = payload.get("suggestions")
     if not isinstance(suggestions, list):
         raise DadataFixtureVerificationError(
             "DaData response misses suggestions array; no fixture was written"
+        )
+    if len(suggestions) < minimum_suggestion_count:
+        raise DadataFixtureVerificationError(
+            "DaData response contains fewer suggestions than required by the fixture "
+            f"contract: required={minimum_suggestion_count} actual={len(suggestions)}"
         )
     matches = [
         item
@@ -91,6 +107,8 @@ def verify_positive_fixture(
     output_dir: Path,
     token: str,
     request_parameters: Mapping[str, Any] | None = None,
+    endpoint: str = ENDPOINT,
+    minimum_suggestion_count: int = 1,
     attempts: int = 2,
     timeout_seconds: float = 30.0,
     opener: Callable[..., Any] = urlopen,
@@ -105,6 +123,14 @@ def verify_positive_fixture(
     if not expected_components:
         raise DadataFixtureVerificationError(
             "expected_components must contain at least one exact component"
+        )
+    if endpoint not in ALLOWED_ENDPOINTS:
+        raise DadataFixtureVerificationError(
+            "endpoint is not an allowlisted DaData suggestions endpoint"
+        )
+    if minimum_suggestion_count < 1:
+        raise DadataFixtureVerificationError(
+            "minimum_suggestion_count must be positive"
         )
     if any(not key.strip() or not value.strip() for key, value in expected_components.items()):
         raise DadataFixtureVerificationError(
@@ -138,11 +164,13 @@ def verify_positive_fixture(
             timeout_seconds=timeout_seconds,
             opener=opener,
             parameters=parameters,
+            endpoint=endpoint,
         )
         _matched_suggestion(
             payload,
             expected_suggestion=expected_suggestion,
             expected_components=expected_components,
+            minimum_suggestion_count=minimum_suggestion_count,
         )
         current_sha256 = hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
         if response_sha256 is not None and current_sha256 != response_sha256:
@@ -161,6 +189,7 @@ def verify_positive_fixture(
                 "response_sha256": current_sha256,
                 "exact_suggestion_matched": True,
                 "exact_components_matched": True,
+                "minimum_suggestion_count_matched": True,
             }
         )
 
@@ -176,13 +205,14 @@ def verify_positive_fixture(
         "status": "verified",
         "request": {
             "method": "POST",
-            "endpoint": ENDPOINT,
+            "endpoint": endpoint,
             "parameters": request,
         },
         "expected_response": {
             "outcome": "suggestions-found",
             "exact_suggestion": expected_suggestion,
             "exact_components": dict(expected_components),
+            "minimum_suggestion_count": minimum_suggestion_count,
         },
         "verification": {
             "attempt_count": attempts,
@@ -190,6 +220,7 @@ def verify_positive_fixture(
             "all_responses_identical": True,
             "all_exact_suggestion_matched": True,
             "all_exact_components_matched": True,
+            "all_minimum_suggestion_count_matched": True,
             "attempts": attempt_receipts,
         },
         "response_snapshot": snapshot_name,
@@ -204,7 +235,7 @@ def verify_positive_fixture(
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
-            "Verify one positive DaData address fixture with repeated identical "
+            "Verify one positive DaData suggestions fixture with repeated identical "
             "responses and write immutable token-free evidence."
         )
     )
@@ -220,6 +251,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--from-bound")
     parser.add_argument("--to-bound")
+    parser.add_argument(
+        "--suggestion-type",
+        choices=sorted(SUGGESTION_TYPE_ENDPOINTS),
+        default="address",
+    )
+    parser.add_argument("--minimum-suggestion-count", type=int, default=1)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--attempts", type=int, default=2)
     parser.add_argument("--timeout-seconds", type=float, default=30.0)
@@ -245,6 +282,8 @@ def main(argv: list[str] | None = None) -> int:
             output_dir=args.output_dir,
             token=os.environ.get(TOKEN_ENV, ""),
             request_parameters=request_parameters,
+            endpoint=SUGGESTION_TYPE_ENDPOINTS[args.suggestion_type],
+            minimum_suggestion_count=args.minimum_suggestion_count,
             attempts=args.attempts,
             timeout_seconds=args.timeout_seconds,
         )

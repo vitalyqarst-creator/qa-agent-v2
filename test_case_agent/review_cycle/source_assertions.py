@@ -231,6 +231,8 @@ def _sha256(value: Any, label: str) -> str:
 @dataclass(frozen=True)
 class _CoverageGapExecutionBinding:
     gap_id: str
+    gap_type: str
+    requirement_codes: tuple[str, ...]
     impact: str
     blocks_ready_for_review: str
     status: str
@@ -332,6 +334,16 @@ def _coverage_gap_execution_bindings(
             )
         result[gap_id] = _CoverageGapExecutionBinding(
             gap_id=gap_id,
+            gap_type=fields.get("gap_type", "").strip().casefold(),
+            requirement_codes=tuple(
+                dict.fromkeys(
+                    re.findall(
+                        r"\b(?:BSR|GSR|DIT)\s+[A-Za-z0-9._/-]+\b",
+                        fields.get("requirement_codes", ""),
+                        flags=re.IGNORECASE,
+                    )
+                )
+            ),
             impact=fields.get("impact", "").strip().casefold().replace("_", "-"),
             blocks_ready_for_review=fields.get(
                 "blocks_ready_for_review", ""
@@ -480,11 +492,31 @@ def _clarification_requirement_codes(
     normalized_value = _markdown_cell(value).strip()
     if allow_empty and normalized_value in {"", "-", "–", "—"}:
         return ()
-    parts = tuple(
-        _markdown_cell(item)
-        for item in re.split(r"\s*;\s*", value)
-        if item.strip()
-    )
+    parts_list: list[str] = []
+    for item in re.split(r"\s*;\s*", value):
+        if not item.strip():
+            continue
+        part = _markdown_cell(item)
+        compact_range = re.fullmatch(
+            r"(?P<prefix>[A-Z][A-Z0-9_-]*)\s+(?P<start>[1-9][0-9]*)"
+            r"\s*[-–—]\s*(?:(?P<end_prefix>[A-Z][A-Z0-9_-]*)\s+)?"
+            r"(?P<end>[1-9][0-9]*)",
+            part,
+        )
+        if compact_range is None:
+            parts_list.append(part)
+            continue
+        prefix = compact_range.group("prefix")
+        end_prefix = compact_range.group("end_prefix")
+        start = int(compact_range.group("start"))
+        end = int(compact_range.group("end"))
+        if end_prefix not in {None, prefix} or end < start or end - start > 100:
+            _fail(
+                "invalid-clarification-requirement-code-range",
+                f"approved clarification requirement code range is invalid: {part}",
+            )
+        parts_list.extend(f"{prefix} {number}" for number in range(start, end + 1))
+    parts = tuple(parts_list)
     if not parts and not allow_empty:
         _fail(
             "clarification-requirement-codes-missing",
@@ -3056,9 +3088,22 @@ class SourceAssertionManifest:
         for clarification_id, clarification in clarification_by_id.items():
             if clarification.binding_scope == "requirement-code":
                 declared_codes = set(clarification.requirement_codes)
+                definition_gapped_codes = {
+                    code
+                    for gap in coverage_gap_bindings.values()
+                    if gap.status == "open"
+                    and gap.gap_type == "missing-source-definition"
+                    and gap.affected_assertion_ids
+                    for code in gap.requirement_codes
+                }
                 bound_codes = bound_requirement_codes_by_clarification.get(
                     clarification_id, set()
                 )
+                # A definition gap permits a declared code to remain unbound only
+                # when no executable assertion can own it.  Do not remove a code
+                # that is already bound by a source-backed assertion: one row can
+                # contain both a testable clause and a narrower definition gap.
+                declared_codes -= definition_gapped_codes - bound_codes
                 if bound_codes != declared_codes:
                     _fail(
                         "clarification-binding-requirement-code-set-mismatch",

@@ -2913,6 +2913,9 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         expected = {
             "production-calibration-question-missing",
             "production-dadata-dynamic-fixture",
+            "production-dadata-fixture-binding-missing",
+            "production-dadata-query-literal-missing",
+            "production-dadata-suggestion-literal-missing",
             "production-internal-fixture-artifact-leak",
             "production-noncanonical-approved-alias",
             "production-nonconcrete-runtime-value",
@@ -4144,6 +4147,103 @@ Draft body.
         )
         self.assertEqual("OBL-002", finding["obligation_id"])
         self.assertEqual(2, len(finding["candidate_paths"]))
+
+    def test_quality_gate_accepts_friendly_portable_fixture_path_qualifier(self) -> None:
+        duplicate_value = "772-053"
+        prepared_values = (
+            PreparedDictionaryValue(
+                ("DICT-001", "DICT-001-QUERY"),
+                "leaf",
+                duplicate_value,
+            ),
+            PreparedDictionaryValue(
+                (
+                    "DICT-001",
+                    "DICT-001-EXACT-COMPONENT-CODE",
+                ),
+                "leaf",
+                duplicate_value,
+            ),
+        )
+        reference_obligation = PreparedObligation(
+            obligation_id="OBL-002",
+            atom_id="ATOM-002",
+            source_refs=("SRC-1",),
+            atomic_statement="Можно выбрать подразделение.",
+            observable_oracle="Выбранное подразделение отображается.",
+            test_intent="Выбрать подразделение по точному запросу.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=("DICT-001",),
+            notes="",
+            dictionary_requirements=(
+                PreparedDictionaryRequirement(
+                    "DICT-001", "reference-only"
+                ),
+            ),
+            planned_test_case_id="TC-DEMO-002",
+        )
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("state-transition-or-navigation",),
+            dictionary_values=(duplicate_value,),
+            prepared_dictionary_values=prepared_values,
+            structured_dictionary_evidence=True,
+            dictionary_coverage_mode="full-hierarchy",
+            extra_prepared_obligations=(reference_obligation,),
+        )
+        draft = f"""# Test cases
+
+## TC-DEMO-001
+
+**Название:** Полный состав справочника
+**Трассировка:** ATOM-001; SRC-1; DICT-001
+
+### Тестовые данные
+
+- Полный `DICT-001`.
+
+### Шаги
+
+1. Открыть список.
+
+### Итоговый ожидаемый результат
+
+Отображается полный справочник.
+
+## TC-DEMO-002
+
+**Название:** Выбор подразделения
+**Трассировка:** OBL-002; ATOM-002; SRC-1; DICT-001
+
+### Тестовые данные
+
+- Запрос: `{duplicate_value}`.
+
+### Шаги
+
+1. Выбрать подразделение по запросу `{duplicate_value}`.
+
+### Итоговый ожидаемый результат
+
+Выбранное подразделение отображается.
+"""
+        executor = ScriptedExecutor(
+            self.structured_writer_step(draft_text=draft),
+            self.reviewer_step(),
+        )
+
+        self.make_prepared_runner(executor, package_path).run()
+        report = json.loads(
+            (self.writer_attempt / "runner-output" / "quality-gate-bundle.json").read_text(
+                encoding="utf-8"
+            )
+        )
+
+        self.assertNotIn(
+            "ambiguous-dictionary-value-path",
+            {item["id"] for item in report["findings"]},
+        )
 
     def test_execution_oracle_eval_rejects_v3_shapes_before_reviewer(self) -> None:
         package_path = self.build_prepared_package(

@@ -1,0 +1,375 @@
+{
+  "version": 1,
+  "ft_slug": "AutoFin",
+  "scope_slug": "application-card-passport-current-and-previous",
+  "section_id": "4.3",
+  "package_id": "WP-01",
+  "request_summary": "Новый чистый PostFinal-v2 production run v7 блока «Паспортные данные» после полного strict replay сохранённого semantic output v6 и целевых регрессий atomic negative splitting и allowed-class calibration splitting; старые паспортные test-cases и model outputs запрещены до post-sign-off evaluation.",
+  "canonical_test_cases": "test-cases/4.3-application-card-passport-current-and-previous-shadow-20260721-v7.md",
+  "main_ft_docx": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "main_ft_xhtml": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+  "main_ft_pdf": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "package_notes": "fts/AutoFin/AGENT-NOTES.md",
+  "source_row_extraction_spec": "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v7/source-row-extraction-spec.json",
+  "bounded_evidence": {
+    "docx": "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v7/bounded-evidence-docx.json",
+    "pdf": "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v7/bounded-evidence-pdf.json",
+    "xhtml_boundary": "evals/full-production-benchmark/configs/postfinal-v2-passport-current-and-previous-v7/bounded-evidence-xhtml-boundary.json"
+  },
+  "sources": [
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+      "role": "main-ft-docx",
+      "manifest_binding": "semantic-source-of-truth",
+      "selection_reason": "Authoritative FT meaning for the selected PostFinal-v2 passport scope.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "DOCX is authoritative when another representation differs."
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+      "role": "main-ft-xhtml",
+      "manifest_binding": "assertion-source",
+      "selection_reason": "Mandatory exact extraction of Table 4 rows, properties, nested BSR lists and boundaries.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Hash-bound by the extraction spec and deterministic source preparation."
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+      "role": "main-ft-pdf",
+      "manifest_binding": "structural-visual-parity",
+      "selection_reason": "Visual and structural parity for BSR 84-114 on pages 18-20.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "PDF does not replace DOCX/XHTML."
+    },
+    {
+      "path": "fts/AutoFin/AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Defines О as requiredness, Р as editability and package-specific DaData guardrails.",
+      "version_or_date": "current",
+      "notes": "Mandatory package context."
+    },
+    {
+      "path": "fts/AutoFin/support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification",
+      "selection_reason": "Binds global exclusions, passport date boundaries, the last-previous-passport scope and DaData FMS authority.",
+      "version_or_date": "2026-07-21",
+      "notes": "Only the four answered canonical clarification rows are authoritative."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fms-unit-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "User-confirmed authoritative dynamic source for FMS unit dictionary values under CLR-PASS-002.",
+      "version_or_date": "checked 2026-07-21",
+      "notes": "Product UI behavior still comes from FT and later UI evidence."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Secret-free immutable response snapshot for the concrete BSR 95 multi-suggestion case.",
+      "version_or_date": "verified 2026-07-21",
+      "notes": "Exact query 772-053; use stored literals, never a runtime request in a test case."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Verification receipt for two identical live FMS responses and exact component matching.",
+      "version_or_date": "verified 2026-07-21",
+      "notes": "Lifecycle verified-once / revalidate-on-failure."
+    }
+  ],
+  "approved_clarifications": [
+    {
+      "clarification_id": "CLR-PASS-001",
+      "gap_id": "GAP-PASS-001",
+      "scope_slug": "application-card-passport-current-and-previous",
+      "requirement_codes": [],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-19",
+      "exact_answer": "«Вообще всё, что касается этого раздела, тестировать не нужно: это проверяется отдельно, не в рамках текущего проекта».",
+      "exact_answer_sha256": "44af53414eda74acfac028ff3e852acc1389217e18a16ba85cc12eb882ccd8c3",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md",
+      "evidence_source_sha256": "30b40efcad309722a9702d25671fe55c66237b0f0f621bbf11a7dfbb07463a16",
+      "binding_scope": "source-context",
+      "source_row_ids": ["SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008", "SRC-009", "SRC-010", "SRC-011", "SRC-012", "SRC-013", "SRC-014", "SRC-015"]
+    },
+    {
+      "clarification_id": "CLR-PASS-002",
+      "gap_id": "GAP-PASS-002",
+      "scope_slug": "application-card-passport-current-and-previous",
+      "requirement_codes": ["BSR 94", "BSR 95"],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-21",
+      "exact_answer": "«Публичная документация DaData этот проектный справочник заменяет».",
+      "exact_answer_sha256": "a8e227c661b37bdb716a872d487e7f346d85d4438749d9a595803fdb40db096c",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md",
+      "evidence_source_sha256": "30b40efcad309722a9702d25671fe55c66237b0f0f621bbf11a7dfbb07463a16"
+    },
+    {
+      "clarification_id": "CLR-PASS-003",
+      "gap_id": "GAP-PASS-003",
+      "scope_slug": "application-card-passport-current-and-previous",
+      "requirement_codes": ["BSR 100", "BSR 101"],
+      "authority": "analyst",
+      "response_status": "answered",
+      "response_type": "analyst-confirmed",
+      "answered_at": "2026-06-30",
+      "exact_answer": "«90 дней считаются календарными; даты 14/20/45 лет вычисляются от даты рождения клиента; дата выдачи раньше 14-летия блокирует сохранение с подсказкой “Выдача паспорта предусмотрена с 14 лет”; паспорт, выданный до или в день 20-летия, действителен до 20-летия + 90 дней включительно; паспорт, выданный после 20-летия и до 45-летия, действителен до 45-летия + 90 дней включительно; паспорт, выданный в 45 лет или позже, бессрочный; просроченный паспорт блокирует сохранение с подсказкой “Паспорт недействителен (просрочен)”; дата выдачи позже текущей даты блокирует сохранение; порядок одновременных сообщений не регламентирован».",
+      "exact_answer_sha256": "b3392b2130728d6e42535776ed6ca3bd55cd7850f3d1db87772cd2660bf7cbc5",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md",
+      "evidence_source_sha256": "30b40efcad309722a9702d25671fe55c66237b0f0f621bbf11a7dfbb07463a16"
+    },
+    {
+      "clarification_id": "CLR-PASS-004",
+      "gap_id": "GAP-PASS-004",
+      "scope_slug": "application-card-passport-current-and-previous",
+      "requirement_codes": ["BSR 105", "BSR 106", "BSR 107", "BSR 108", "BSR 109", "BSR 110", "BSR 111", "BSR 112", "BSR 113", "BSR 114"],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-06-26",
+      "exact_answer": "«Касается последнего предыдущего паспорта».",
+      "exact_answer_sha256": "048f750641bc30334f1dabcdfbcbc57e06dfa64b434b3413a06ad177d31fd8f9",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/passport-current-and-previous-approved-clarifications.md",
+      "evidence_source_sha256": "30b40efcad309722a9702d25671fe55c66237b0f0f621bbf11a7dfbb07463a16"
+    }
+  ],
+  "source_table_column_semantics": [
+    {
+      "table_id": "POSTFINAL-V2-TABLE-4-PASSPORT-CURRENT-AND-PREVIOUS",
+      "header_source_row_id": "SRC-017",
+      "target_source_row_ids": ["SRC-020", "SRC-021", "SRC-022", "SRC-023", "SRC-024", "SRC-025", "SRC-026", "SRC-027", "SRC-028", "SRC-030", "SRC-031", "SRC-032", "SRC-033", "SRC-034"],
+      "columns": [
+        {
+          "property": "requiredness",
+          "physical_column_index": 2,
+          "expected_header": "О",
+          "value_mapping": {
+            "Да": "required",
+            "Нет": "optional",
+            "Да, если признак «Ввести вручную подразделение» = «Нет»": "required",
+            "Если активирован признак «Ввести вручную подразделение» = «Да»": "required",
+            "Да, если дата выдачи текущего паспорта менее 3х лет назад, в остальных случаях «нет»": "required",
+            "Если активирован признак «Клиент менял паспорт» = «Да»": "required"
+          },
+          "interpretation_source": "fts/AutoFin/AGENT-NOTES.md",
+          "interpretation_source_fragment": "В таблицах описания свойств полей формы столбец `О` означает `Обязательность`, а столбец `Р` означает `Редактируемость`."
+        },
+        {
+          "property": "editability",
+          "physical_column_index": 3,
+          "expected_header": "Р",
+          "value_mapping": {
+            "Да": "editable",
+            "Нет": "read-only",
+            "Да, если признак «Ввести вручную подразделение» = «Да»": "editable"
+          },
+          "interpretation_source": "fts/AutoFin/AGENT-NOTES.md",
+          "interpretation_source_fragment": "В таблицах описания свойств полей формы столбец `О` означает `Обязательность`, а столбец `Р` означает `Редактируемость`."
+        }
+      ]
+    }
+  ],
+  "mockups": [
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup",
+      "screen_name": "Анкета клиента, максимальное состояние",
+      "selection_reason": "Shows both current passport and previous-passport blocks in the client questionnaire.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Visually opened; layout hints only, never a source of business rules."
+    }
+  ],
+  "mockup_locators": [
+    "Рисунок 5: блок «Паспортные данные» с текущим паспортом",
+    "Рисунок 5: переключатель ручного ввода подразделения",
+    "Рисунок 5: блок «Данные предыдущих паспортов» и действия добавления/удаления"
+  ],
+  "scope_boundary": {
+    "target": "Таблица 4, блоки «Паспортные данные» и «Данные предыдущих паспортов», BSR 84-114.",
+    "include": [
+      "Поля текущего паспорта: серия, номер, код подразделения, кем выдан, ручной ввод подразделения, дата выдачи и место рождения.",
+      "Видимость, обязательность, редактируемость, форматы и локальные validations BSR 84-104.",
+      "Последний предыдущий паспорт: признак изменения паспорта, видимость блока, добавление, удаление, серия, номер и дата выдачи BSR 105-114.",
+      "DaData fms_unit только в объёме BSR 94-95 и concrete fixture FX-DADATA-FMS-POS-001.",
+      "Макет только для UI hints; текст ФТ имеет приоритет."
+    ],
+    "exclude": [
+      "Персональные данные и распознавание документа до BSR 84; блок «Адреса клиента» начиная с BSR 115; остальные блоки карточки.",
+      "Весь раздел 5 «Ограничения по типам данных» и следующий общий default NULL: они проверяются отдельно вне проекта AutoFin по CLR-PASS-001.",
+      "DaData trigger length, debounce, сортировка, точное число строк UI dropdown, fallback/retry и тексты ошибок, которых нет в ФТ.",
+      "Внутренний HTTPS/API-вызов DaData как отдельный предмет теста: ручной кейс проверяет наблюдаемое поведение UI с сохранёнными concrete values.",
+      "Максимальное количество предыдущих паспортов и произвольная повторяемость: CLR-PASS-004 ограничивает scope последним предыдущим паспортом.",
+      "Поля предыдущего паспорта, названные только в BSR 109, но не определённые строками BSR 105-114: это coverage gap состава удаления, а не разрешение их додумать.",
+      "UI calibration на недоступном стенде; старые test-cases, handoff, review-cycle, findings и прежние model outputs до post-sign-off evaluation."
+    ]
+  },
+  "dependency_gap_gate": true,
+  "dependency_aliases": {},
+  "dependency_alias_provenance": {},
+  "external_dictionary_bindings": [
+    {
+      "dictionary_name": "подразделения, выдавшие паспорт",
+      "binding_type": "external-dynamic-dictionary",
+      "provider": "DaData",
+      "reference_path": "fts/AutoFin/work/vendor-references/dadata-fms-unit-reference.md",
+      "reference_url": "https://dadata.ru/api/suggest/fms_unit/",
+      "source_row_ids": ["SRC-023"],
+      "query_parameters": {"query": "772-053"},
+      "authority": "user-confirmed",
+      "authority_ref": "CLR-PASS-002"
+    }
+  ],
+  "expected_dependencies": [
+    {
+      "kind": "field",
+      "name": "Дата рождения",
+      "source_row_ids": ["SRC-026"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-018"],
+      "exact_source_fragments": ["14-ти летия", "20-летнего возраста", "45-летнего возраста"]
+    },
+    {
+      "kind": "field",
+      "name": "Код подразделения",
+      "source_row_ids": ["SRC-023"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-022"],
+      "exact_source_fragments": ["по вводу кода подразделения"]
+    },
+    {
+      "kind": "field",
+      "name": "Ввести вручную подразделение",
+      "source_row_ids": ["SRC-023", "SRC-025"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-024"],
+      "exact_source_fragments": ["признак «Ввести вручную подразделение»"]
+    },
+    {
+      "kind": "field",
+      "name": "Дата выдачи",
+      "source_row_ids": ["SRC-028"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-026"],
+      "exact_source_fragments": ["дата выдачи текущего паспорта"]
+    },
+    {
+      "kind": "field",
+      "name": "Клиент менял паспорт",
+      "source_row_ids": ["SRC-029", "SRC-030", "SRC-031", "SRC-032", "SRC-033", "SRC-034"],
+      "resolution": "declared",
+      "target_source_row_ids": ["SRC-028"],
+      "exact_source_fragments": ["«Клиент менял паспорт»"]
+    },
+    {
+      "kind": "dictionary",
+      "name": "подразделения, выдавшие паспорт",
+      "source_row_ids": ["SRC-023"],
+      "resolution": "external-dynamic",
+      "target_source_row_ids": [],
+      "exact_source_fragments": ["множества значений из ответа DaData"]
+    },
+    {
+      "kind": "integration",
+      "name": "DaData fms_unit suggestions",
+      "source_row_ids": ["SRC-023"],
+      "resolution": "source-provided",
+      "target_source_row_ids": ["SRC-023"],
+      "exact_source_fragments": ["ответа DaData"]
+    }
+  ],
+  "scope_execution_facts": {
+    "version": 1,
+    "bounded_scope_kind": "contiguous-bounded-fragment-with-cross-referenced-constraint",
+    "expected_testable_assertion_count": null,
+    "expected_tc_count": null,
+    "internal_package_count": 1,
+    "has_heterogeneous_integrations": false,
+    "has_large_dictionary": false,
+    "mockups_ready": true,
+    "standard_profile_reasons": [
+      "The deterministic source profile contains 35 bounded source rows and exceeds the lean source-row limit.",
+      "The scope contains current-passport validation, one conditional previous-passport flow and an external dynamic FMS dictionary.",
+      "One standard package avoids unnecessary shard merge overhead for sixteen contiguous scope rows."
+    ]
+  },
+  "source_rows": [
+    {"source_row_id": "SRC-001", "field_or_action": "Примерные значения макета", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[1]", "source_locator": "/*/*[2]/*[54]/*[1]", "in_scope_hint": "no; document-global context"},
+    {"source_row_id": "SRC-002", "field_or_action": "Приоритет текстового описания", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[2]", "source_locator": "/*/*[2]/*[54]/*[2]", "in_scope_hint": "no; document-global context"},
+    {"source_row_id": "SRC-003", "field_or_action": "Расположение полей на макете", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[3]", "source_locator": "/*/*[2]/*[54]/*[3]", "in_scope_hint": "no; document-global context"},
+    {"source_row_id": "SRC-004", "field_or_action": "Заголовок ограничений типов данных", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[2]", "source_locator": "/*/*[2]/*[55]/*[2]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-005", "field_or_action": "Ограничение типа Текст", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[3]", "source_locator": "/*/*[2]/*[55]/*[3]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-006", "field_or_action": "Ограничение типа Длинный текст", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[4]", "source_locator": "/*/*[2]/*[55]/*[4]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-007", "field_or_action": "Ограничение типа Целое число", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[5]", "source_locator": "/*/*[2]/*[55]/*[5]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-008", "field_or_action": "Ограничение типа Дробное число", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[6]", "source_locator": "/*/*[2]/*[55]/*[6]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-009", "field_or_action": "Ограничение типа Дата", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[7]", "source_locator": "/*/*[2]/*[55]/*[7]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-010", "field_or_action": "Ограничение типа Дата и время", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[8]", "source_locator": "/*/*[2]/*[55]/*[8]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-011", "field_or_action": "Ограничение типа Двоичные данные", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[9]", "source_locator": "/*/*[2]/*[55]/*[9]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-012", "field_or_action": "Ограничение типа Список", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[10]", "source_locator": "/*/*[2]/*[55]/*[10]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-013", "field_or_action": "Ограничение типа Список с множественным выбором", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[11]", "source_locator": "/*/*[2]/*[55]/*[11]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-014", "field_or_action": "Ограничение логического типа", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[12]", "source_locator": "/*/*[2]/*[55]/*[12]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-015", "field_or_action": "Значения по умолчанию NULL", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[56]", "source_locator": "/*/*[2]/*[56]", "in_scope_hint": "no; explicitly excluded by CLR-PASS-001"},
+    {"source_row_id": "SRC-016", "field_or_action": "Таблица 4: описание свойств полей формы", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[115]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]", "source_locator": "/*/*[2]/*[115]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]", "in_scope_hint": "no; ancestor preamble"},
+    {"source_row_id": "SRC-017", "field_or_action": "Заголовок колонок таблицы 4", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[2]", "source_locator": "/*/*[2]/*[116]/*[2]", "in_scope_hint": "no; table header context"},
+    {"source_row_id": "SRC-018", "field_or_action": "Дата рождения", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[11]", "source_locator": "/*/*[2]/*[116]/*[11]", "in_scope_hint": "no; declared dependency for passport age boundaries"},
+    {"source_row_id": "SRC-019", "field_or_action": "Блок «Паспортные данные»", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[17]", "source_locator": "/*/*[2]/*[116]/*[17]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-020", "field_or_action": "Серия текущего паспорта", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[18]", "source_locator": "/*/*[2]/*[116]/*[18]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-021", "field_or_action": "Номер текущего паспорта", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[19]", "source_locator": "/*/*[2]/*[116]/*[19]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-022", "field_or_action": "Код подразделения", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[20]", "source_locator": "/*/*[2]/*[116]/*[20]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-023", "field_or_action": "Кем выдан — список DaData", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[21]", "source_locator": "/*/*[2]/*[116]/*[21]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-024", "field_or_action": "Ввести вручную подразделение", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[22]", "source_locator": "/*/*[2]/*[116]/*[22]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-025", "field_or_action": "Кем выдан — ручной ввод", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[23]", "source_locator": "/*/*[2]/*[116]/*[23]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-026", "field_or_action": "Дата выдачи", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[24]", "source_locator": "/*/*[2]/*[116]/*[24]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-027", "field_or_action": "Место рождения", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[25]", "source_locator": "/*/*[2]/*[116]/*[25]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-028", "field_or_action": "Клиент менял паспорт", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[26]", "source_locator": "/*/*[2]/*[116]/*[26]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-029", "field_or_action": "Блок «Данные предыдущих паспортов»", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[27]", "source_locator": "/*/*[2]/*[116]/*[27]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-030", "field_or_action": "Добавить предыдущий паспорт", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[28]", "source_locator": "/*/*[2]/*[116]/*[28]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-031", "field_or_action": "Корзина предыдущего паспорта", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[29]", "source_locator": "/*/*[2]/*[116]/*[29]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-032", "field_or_action": "Серия предыдущего паспорта", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[30]", "source_locator": "/*/*[2]/*[116]/*[30]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-033", "field_or_action": "Номер предыдущего паспорта", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[31]", "source_locator": "/*/*[2]/*[116]/*[31]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-034", "field_or_action": "Дата выдачи предыдущего паспорта", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[32]", "source_locator": "/*/*[2]/*[116]/*[32]", "in_scope_hint": "yes"},
+    {"source_row_id": "SRC-035", "field_or_action": "Блок «Адреса клиента»", "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[33]", "source_locator": "/*/*[2]/*[116]/*[33]", "in_scope_hint": "no; first excluded sibling boundary"}
+  ],
+  "parity": [
+    {"requirement_code": "BSR 84", "docx_locator": "Table 7 row 17", "xhtml_locator": "/*/*[2]/*[116]/*[18]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 85", "docx_locator": "Table 7 row 17", "xhtml_locator": "/*/*[2]/*[116]/*[18]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 86", "docx_locator": "Table 7 row 17", "xhtml_locator": "/*/*[2]/*[116]/*[18]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 87", "docx_locator": "Table 7 row 18", "xhtml_locator": "/*/*[2]/*[116]/*[19]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 88", "docx_locator": "Table 7 row 18", "xhtml_locator": "/*/*[2]/*[116]/*[19]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 89", "docx_locator": "Table 7 row 18", "xhtml_locator": "/*/*[2]/*[116]/*[19]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 90", "docx_locator": "Table 7 row 19", "xhtml_locator": "/*/*[2]/*[116]/*[20]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 91", "docx_locator": "Table 7 row 19", "xhtml_locator": "/*/*[2]/*[116]/*[20]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 92", "docx_locator": "Table 7 row 19", "xhtml_locator": "/*/*[2]/*[116]/*[20]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 93", "docx_locator": "Table 7 row 20", "xhtml_locator": "/*/*[2]/*[116]/*[21]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 94", "docx_locator": "Table 7 row 20", "xhtml_locator": "/*/*[2]/*[116]/*[21]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 95", "docx_locator": "Table 7 row 20", "xhtml_locator": "/*/*[2]/*[116]/*[21]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 96", "docx_locator": "Table 7 row 21", "xhtml_locator": "/*/*[2]/*[116]/*[22]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 97", "docx_locator": "Table 7 row 21", "xhtml_locator": "/*/*[2]/*[116]/*[22]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 98", "docx_locator": "Table 7 row 22", "xhtml_locator": "/*/*[2]/*[116]/*[23]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 99", "docx_locator": "Table 7 row 23", "xhtml_locator": "/*/*[2]/*[116]/*[24]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 100", "docx_locator": "Table 7 row 23", "xhtml_locator": "/*/*[2]/*[116]/*[24]", "pdf_locator": "page:18", "status": "matched"},
+    {"requirement_code": "BSR 101", "docx_locator": "Table 7 row 23", "xhtml_locator": "/*/*[2]/*[116]/*[24]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 102", "docx_locator": "Table 7 row 24", "xhtml_locator": "/*/*[2]/*[116]/*[25]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 103", "docx_locator": "Table 7 row 25", "xhtml_locator": "/*/*[2]/*[116]/*[26]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 104", "docx_locator": "Table 7 row 25", "xhtml_locator": "/*/*[2]/*[116]/*[26]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 105", "docx_locator": "Table 7 row 26", "xhtml_locator": "/*/*[2]/*[116]/*[27]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 106", "docx_locator": "Table 7 row 27", "xhtml_locator": "/*/*[2]/*[116]/*[28]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 107", "docx_locator": "Table 7 row 27", "xhtml_locator": "/*/*[2]/*[116]/*[28]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 108", "docx_locator": "Table 7 row 28", "xhtml_locator": "/*/*[2]/*[116]/*[29]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 109", "docx_locator": "Table 7 row 28", "xhtml_locator": "/*/*[2]/*[116]/*[29]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 110", "docx_locator": "Table 7 row 29", "xhtml_locator": "/*/*[2]/*[116]/*[30]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 111", "docx_locator": "Table 7 row 29", "xhtml_locator": "/*/*[2]/*[116]/*[30]", "pdf_locator": "page:19", "status": "matched"},
+    {"requirement_code": "BSR 112", "docx_locator": "Table 7 row 30", "xhtml_locator": "/*/*[2]/*[116]/*[31]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 113", "docx_locator": "Table 7 row 30", "xhtml_locator": "/*/*[2]/*[116]/*[31]", "pdf_locator": "page:20", "status": "matched"},
+    {"requirement_code": "BSR 114", "docx_locator": "Table 7 row 31", "xhtml_locator": "/*/*[2]/*[116]/*[32]", "pdf_locator": "page:20", "status": "matched"}
+  ]
+}

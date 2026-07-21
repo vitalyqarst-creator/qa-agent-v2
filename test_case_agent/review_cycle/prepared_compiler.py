@@ -61,6 +61,10 @@ CANDIDATE_SCOPE_OBLIGATION = re.compile(
     flags=re.IGNORECASE,
 )
 FIXTURE_TOKEN = re.compile(r"\b(?:FX|FIX)-[A-Za-z0-9_.-]+\b")
+PORTABLE_FIXTURE_FIELD = re.compile(
+    r"\b(?P<key>request_parameters|expected_response|response_sha256|status|"
+    r"runtime_api_call|product_input)=`(?P<value>[^`]*)`"
+)
 ACTION_LITERAL = re.compile(r"«(?P<guillemet>[^»]+)»|`(?P<backtick>[^`]+)`")
 BYTE_VALUE = re.compile(
     r"\b\d[\d\s.,_]*\s*(?:байт(?:а|ов)?|bytes?)\b", flags=re.IGNORECASE
@@ -925,6 +929,180 @@ def _mapped_plan_intent_context(
         *fixture_context,
         *((f"Test data: {concrete_test_data}",) if concrete_test_data else ()),
     )
+
+
+def _compile_portable_fixture_requirements(
+    plan_rows: Sequence[Mapping[str, str]],
+    fixture_contracts: Mapping[str, Sequence[str]],
+) -> tuple[PreparedDictionaryRequirement, ...]:
+    """Compile verified inline fixture contracts into enforceable requirements.
+
+    External dynamic dictionaries need exact stored literals, but do not always
+    have a project DICT-* inventory.  The package plan's portable contract is
+    already hash/source validated by materialization; this independent compiler
+    pass validates its executable fields again and projects them through the
+    existing reference-only fixture gate.
+    """
+
+    fixture_ids = tuple(
+        dict.fromkeys(
+            fixture_id
+            for row in plan_rows
+            for value in row.values()
+            for fixture_id in FIXTURE_TOKEN.findall(value)
+        )
+    )
+    requirements: list[PreparedDictionaryRequirement] = []
+    for fixture_id in fixture_ids:
+        for contract in fixture_contracts.get(fixture_id, ()):
+            fields = {
+                match.group("key"): match.group("value")
+                for match in PORTABLE_FIXTURE_FIELD.finditer(contract)
+            }
+            if set(fields) != {
+                "request_parameters",
+                "expected_response",
+                "response_sha256",
+                "status",
+                "runtime_api_call",
+                "product_input",
+            }:
+                continue
+            if (
+                fields["status"] != "verified"
+                or fields["runtime_api_call"] != "prohibited"
+                or fields["product_input"] != "stored_literals"
+                or re.fullmatch(r"[0-9a-f]{64}", fields["response_sha256"])
+                is None
+            ):
+                continue
+            try:
+                request = json.loads(fields["request_parameters"])
+                expected = json.loads(fields["expected_response"])
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(request, Mapping) or not isinstance(expected, Mapping):
+                continue
+            dictionary_id = "DICT-" + fixture_id.removeprefix("FX-")
+            def fixture_path(label: str) -> tuple[str, ...]:
+                normalized_label = re.sub(
+                    r"[^A-Za-z0-9._-]+", "-", label
+                ).strip("-")
+                return (
+                    dictionary_id,
+                    f"{dictionary_id}-{normalized_label.upper()}",
+                )
+
+            values: list[tuple[tuple[str, ...], str]] = [
+                (fixture_path("fixture-id"), fixture_id)
+            ]
+            query = request.get("query")
+            exact_suggestion = expected.get("exact_suggestion")
+            exact_components = expected.get("exact_components")
+            if (
+                fixture_id.startswith("FX-DADATA-FMS-")
+                and isinstance(query, str)
+                and query
+                and isinstance(exact_suggestion, str)
+                and exact_suggestion
+                and isinstance(exact_components, Mapping)
+            ):
+                values.extend(
+                    (
+                        (fixture_path("query"), query),
+                        (
+                            fixture_path("exact-suggestion"),
+                            exact_suggestion,
+                        ),
+                    )
+                )
+                for key in ("code", "name", "region_code", "type"):
+                    value = exact_components.get(key)
+                    if isinstance(value, (str, int, float)):
+                        values.append(
+                            (
+                                fixture_path(f"exact-component-{key}"),
+                                str(value),
+                            )
+                        )
+            else:
+                values.extend(
+                    (
+                        (
+                            fixture_path("request-parameters"),
+                            json.dumps(
+                                request,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            ),
+                        ),
+                        (
+                            fixture_path("expected-response"),
+                            json.dumps(
+                                expected,
+                                ensure_ascii=False,
+                                sort_keys=True,
+                                separators=(",", ":"),
+                            ),
+                        ),
+                    )
+                )
+            values.append(
+                (
+                    fixture_path("response-sha256"),
+                    fields["response_sha256"],
+                )
+            )
+            requirement = PreparedDictionaryRequirement(
+                dictionary_id=dictionary_id,
+                coverage_mode="reference-only",
+                fixture_values=tuple(
+                    PreparedDictionaryValue(path, "leaf", value)
+                    for path, value in values
+                ),
+            )
+            requirement.validate()
+            requirements.append(requirement)
+            break
+    return tuple(requirements)
+
+
+def _portable_dictionary_evidence_record(
+    requirement: PreparedDictionaryRequirement,
+    *,
+    package_plan_path: Path,
+    repo_root: Path,
+) -> dict[str, Any]:
+    """Project one portable fixture requirement into immutable evidence."""
+
+    requirement.validate()
+    active_values = list(
+        dict.fromkeys(
+            item.value.strip()
+            for item in requirement.fixture_values
+            if item.value_kind == "leaf" and item.value.strip()
+        )
+    )
+    if not active_values:
+        raise StageRuntimeError(
+            "portable fixture dictionary has no exact active values: "
+            + requirement.dictionary_id
+        )
+    return {
+        "dictionary_id": requirement.dictionary_id,
+        "dictionary_name": (
+            "Verified portable fixture " + requirement.dictionary_id
+        ),
+        "source_file": package_plan_path.relative_to(repo_root).as_posix(),
+        "source_location": "Portable Fixture Contracts",
+        "extraction_status": "verified-portable-fixture",
+        "active_values": active_values,
+        "archived_values": "",
+        "used_by_source_properties": "",
+        "gap_id": "",
+        "notes": "Runtime API call prohibited; stored literals only.",
+    }
 
 
 def _validate_planned_test_case_groups(
@@ -2452,36 +2630,64 @@ def _validate_semantic_projection_graph(
                 )
     assertions_by_row: dict[str, set[str]] = {}
     testable_atom_ids: set[str] = set()
+    primary_atoms_by_gap: dict[str, set[str]] = {}
     for assertion in manifest.assertions:
         assertions_by_row.setdefault(assertion.source_row_id, set()).add(
             assertion.atom_id
         )
         if assertion.semantic_disposition == "testable":
             testable_atom_ids.add(assertion.atom_id)
+        if assertion.primary_gap_id is not None:
+            primary_atoms_by_gap.setdefault(assertion.primary_gap_id, set()).add(
+                assertion.atom_id
+            )
+    actual_affected_atoms = _coverage_gap_affected_atom_sets(
+        coverage_gaps_path
+    )
     expected_atoms_by_gap: dict[str, set[str]] = {}
     for gap_id, gap in boundary_gap_by_id.items():
         oracle_atoms = oracle_atoms_by_gap.get(gap_id, set())
         dependency_atoms = gap_bound_dependency_atoms.get(gap_id, set())
+        primary_atoms = primary_atoms_by_gap.get(gap_id, set())
+        row_atoms = {
+            atom_id
+            for source_row_id in gap.get("source_row_ids", [])
+            for atom_id in assertions_by_row.get(str(source_row_id), set())
+        }
         expected_atoms = (
             set(oracle_atoms)
             if oracle_atoms
             else set(dependency_atoms)
             if dependency_atoms
-            else {
-                atom_id
-                for source_row_id in gap.get("source_row_ids", [])
-                for atom_id in assertions_by_row.get(str(source_row_id), set())
-            }
+            else set(primary_atoms)
+            if primary_atoms
+            else set(actual_affected_atoms.get(gap_id, set()))
+            if gap.get("gap_type") == "missing-source-definition"
+            else row_atoms
         )
         if not expected_atoms:
             raise StageRuntimeError(
                 f"authoritative boundary gap {gap_id} has no accepted affected ATOM"
             )
+        if not expected_atoms.issubset(row_atoms):
+            raise StageRuntimeError(
+                f"authoritative boundary gap {gap_id} affects an ATOM outside its "
+                f"source rows: {sorted(expected_atoms - row_atoms)}"
+            )
+        if (
+            gap.get("gap_type") == "missing-source-definition"
+            and not (oracle_atoms or dependency_atoms or primary_atoms)
+            and any(
+                atom_id in testable_atom_ids
+                for atom_id in expected_atoms
+            )
+        ):
+            raise StageRuntimeError(
+                f"missing-source-definition gap {gap_id} cannot use an executable "
+                "ATOM as its inferred affected chain"
+            )
         expected_atoms_by_gap[gap_id] = expected_atoms
 
-    actual_affected_atoms = _coverage_gap_affected_atom_sets(
-        coverage_gaps_path
-    )
     actual_constraint_atoms_by_gap: dict[str, set[str]] = {
         gap_id: set() for gap_id in boundary_gap_by_id
     }
@@ -4548,6 +4754,9 @@ def compile_workflow_package(
     obligations: list[PreparedObligation] = []
     used_gaps: set[str] = set()
     used_dicts: set[str] = set()
+    portable_dictionary_requirements: dict[
+        str, PreparedDictionaryRequirement
+    ] = {}
     used_atoms: set[str] = set()
     seen_obligation_ids: set[str] = set()
     emitted_atom_evidence: set[str] = set()
@@ -4727,10 +4936,28 @@ def compile_workflow_package(
             semantic_non_executable_boundary_gap_ids_by_atom.get(atom_id, ())
         )
         if non_executable_boundary_gap_tokens:
-            if atom_coverage_status != "not-applicable":
+            source_disposition = (
+                next(
+                    (
+                        assertion.semantic_disposition
+                        for assertion in source_assertion_manifest.assertions
+                        if assertion.atom_id == atom_id
+                    ),
+                    None,
+                )
+                if source_assertion_manifest is not None
+                else None
+            )
+            allowed_non_executable_statuses = (
+                {"gap", "unclear"}
+                if source_disposition == "ambiguous"
+                else {"not-applicable"}
+            )
+            if atom_coverage_status not in allowed_non_executable_statuses:
                 raise StageRuntimeError(
                     "semantic degradation: non-executable boundary gap evidence "
-                    f"requires a not-applicable ATOM: {atom_id}"
+                    f"does not match {source_disposition or 'unknown'} ATOM status: "
+                    f"{atom_id}={atom_coverage_status}"
                 )
             for boundary_gap_id in non_executable_boundary_gap_tokens:
                 if boundary_gap_id not in known_gaps:
@@ -4761,7 +4988,8 @@ def compile_workflow_package(
                             },
                         ),
                     )
-                prepared_constraint_gap_tokens.append(boundary_gap_id)
+                if source_disposition != "ambiguous":
+                    prepared_constraint_gap_tokens.append(boundary_gap_id)
                 used_gaps.add(boundary_gap_id)
         if obligation_status == "covered":
             if atom_coverage_status in {"gap", "unclear", "not-applicable"}:
@@ -5081,6 +5309,33 @@ def compile_workflow_package(
             )
             for dictionary_id in dict_tokens
         )
+        external_dynamic_dependency_refs = (
+            external_dynamic_dependencies_by_obligation.get(obligation_id, ())
+        )
+        if external_dynamic_dependency_refs and not dictionary_requirements:
+            dictionary_requirements = _compile_portable_fixture_requirements(
+                mapped_viable,
+                fixture_contracts,
+            )
+            dict_tokens.extend(
+                requirement.dictionary_id
+                for requirement in dictionary_requirements
+                if requirement.dictionary_id not in dict_tokens
+            )
+        for requirement in dictionary_requirements:
+            if requirement.dictionary_id in dictionary_rows:
+                continue
+            existing = portable_dictionary_requirements.get(
+                requirement.dictionary_id
+            )
+            if existing is not None and existing != requirement:
+                raise StageRuntimeError(
+                    "portable fixture dictionary has conflicting projections: "
+                    + requirement.dictionary_id
+                )
+            portable_dictionary_requirements[
+                requirement.dictionary_id
+            ] = requirement
         conflicting_action_literals = (
             _unbound_reference_fixture_action_literals(
                 source_assertion,
@@ -5156,9 +5411,6 @@ def compile_workflow_package(
                     )
                 )
             )
-        external_dynamic_dependency_refs = (
-            external_dynamic_dependencies_by_obligation.get(obligation_id, ())
-        )
         if external_dynamic_dependency_refs:
             if not dictionary_requirements:
                 raise PreparedCompilerDiagnostic(
@@ -5804,6 +6056,26 @@ def compile_workflow_package(
                 "",
             ]
         )
+    for dictionary_id in sorted(portable_dictionary_requirements):
+        structured_record = _portable_dictionary_evidence_record(
+            portable_dictionary_requirements[dictionary_id],
+            package_plan_path=plan_path,
+            repo_root=repo_root,
+        )
+        evidence_rows.extend(
+            [
+                f"## {dictionary_id}",
+                "",
+                "```json",
+                json.dumps(
+                    structured_record,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ),
+                "```",
+                "",
+            ]
+        )
 
     evidence_text = "\n".join(evidence_rows).rstrip() + "\n"
     evidence_max_bytes = (
@@ -5906,7 +6178,9 @@ def compile_workflow_package(
         stage_package=output_root / "stage-package.json",
         obligation_count=len(obligations),
         gap_count=len(gaps),
-        dictionary_ref_count=len(used_dicts),
+        dictionary_ref_count=len(
+            used_dicts | set(portable_dictionary_requirements)
+        ),
         section_id=section_id,
         execution_profile=execution_profile,
         unsupported_dimensions=unsupported_dimensions,

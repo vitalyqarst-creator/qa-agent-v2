@@ -10,6 +10,7 @@ from typing import Any, Mapping, Sequence
 
 from test_case_agent.bounded_scope_boundary import (
     BoundedScopeBoundaryError,
+    bare_requirement_codes,
     external_dynamic_dictionary_bindings,
     normalize_entity,
     validate_boundary_decision_v2,
@@ -198,18 +199,58 @@ def _canonical_repeated_requirement_code_evidence_span(
     if prefixed is None:
         return None
     body = prefixed.group("body").strip()
-    if not body or source_text.count(body) != 1:
+    if not body:
         return None
-    body_start = source_text.find(body)
-    body_end = body_start + len(body)
     code_pattern = re.compile(rf"(?<!\w){re.escape(requirement_code)}(?!\w)")
-    preceding_codes = [
-        match for match in code_pattern.finditer(source_text) if match.end() <= body_start
-    ]
-    if len(preceding_codes) != 1:
-        return None
-    code_start = preceding_codes[0].start()
-    canonical_span = source_text[code_start:body_end]
+    if source_text.count(body) == 1:
+        body_start = source_text.find(body)
+        body_end = body_start + len(body)
+        preceding_codes = [
+            match
+            for match in code_pattern.finditer(source_text)
+            if match.end() <= body_start
+        ]
+        if len(preceding_codes) != 1:
+            return None
+        code_start = preceding_codes[0].start()
+        canonical_span = source_text[code_start:body_end]
+    else:
+        code_matches = list(code_pattern.finditer(source_text))
+        if len(code_matches) != 1:
+            return None
+        code_start = code_matches[0].start()
+        region_end = len(source_text)
+        for other_code in map(str, source_row.get("requirement_codes_hint", [])):
+            if not other_code or other_code == requirement_code:
+                continue
+            other_match = re.search(
+                rf"(?<!\w){re.escape(other_code)}(?!\w)",
+                source_text[code_matches[0].end() :],
+            )
+            if other_match is not None:
+                region_end = min(
+                    region_end,
+                    code_matches[0].end() + other_match.start(),
+                )
+        source_region = source_text[code_start:region_end].rstrip()
+        common_prefix_length = 0
+        for source_character, fragment_character in zip(source_region, fragment):
+            if source_character != fragment_character:
+                break
+            common_prefix_length += 1
+        if common_prefix_length < len(requirement_code) + 2:
+            return None
+        remainder = fragment[common_prefix_length:]
+        if len(remainder) < 24:
+            return None
+        remainder_start = source_region.find(remainder, common_prefix_length)
+        if (
+            remainder_start <= common_prefix_length
+            or source_region.find(remainder, remainder_start + 1) >= 0
+            or not source_region[common_prefix_length:remainder_start].strip()
+        ):
+            return None
+        canonical_span = source_region[: remainder_start + len(remainder)]
     for other_code in map(str, source_row.get("requirement_codes_hint", [])):
         if not other_code or other_code == requirement_code:
             continue
@@ -730,6 +771,28 @@ def _text_has_missing_required_value(value: Any) -> bool:
     ) is not None
 
 
+def _text_has_no_action(value: Any) -> bool:
+    return re.search(
+        r"(?:не\s+(?:нажимать|использовать|активировать|взаимодействовать)|"
+        r"взаимодействие\s+отсутствует|\bno[- ]action\b)",
+        str(value).casefold(),
+    ) is not None
+
+
+def _action_control_kind(row: Mapping[str, Any]) -> str | None:
+    for cell in row.get("physical_table_cells", []):
+        if not isinstance(cell, Mapping):
+            continue
+        value = normalize_exact_source_text(
+            str(cell.get("bounded_source_text", ""))
+        ).casefold()
+        if value == "кнопка":
+            return "кнопка"
+        if value == "виджет":
+            return "виджет"
+    return None
+
+
 def _unsupported_executable_requiredness_candidate_projections(
     payload: Mapping[str, Any],
     *,
@@ -1213,7 +1276,7 @@ def _binary_optional_candidate_default_projections(
     context: Mapping[str, Any],
     boundary: Mapping[str, Any],
 ) -> list[dict[str, Any]]:
-    """Rebind old empty-value candidates to an explicit binary default contract."""
+    """Rebind typed candidates to a source-backed default or no-action contract."""
 
     clarifications = tuple(
         item
@@ -1229,7 +1292,8 @@ def _binary_optional_candidate_default_projections(
         str(item.get("scope_obligation_id", "")): item
         for item in preflight.get("requiredness_candidate_defaults", [])
         if isinstance(item, Mapping)
-        and item.get("fallback_input_mode") == "binary-logical-default"
+        and item.get("fallback_input_mode")
+        in {"binary-logical-default", "no-action-control"}
     }
     if not defaults_by_scope:
         return []
@@ -1266,7 +1330,7 @@ def _binary_optional_candidate_default_projections(
         if (
             not isinstance(oracle, Mapping)
             or oracle.get("decision") != "candidate_tc_required"
-            or oracle.get("restriction_type") != "optionality"
+            or oracle.get("restriction_type") not in {"requiredness", "optionality"}
         ):
             continue
         scope_id = str(oracle.get("scope_obligation_id", ""))
@@ -1328,6 +1392,10 @@ def _binary_optional_candidate_default_projections(
         ]
         assertion_fields = {
             "canonical_statement": str(default["fallback_canonical_statement"]),
+            # The projected scenario observes a valid source-backed default.
+            # It is positive even when the registry signal itself is typed as
+            # requiredness; no invalid input or rejection is exercised here.
+            "polarity": "positive",
             "action_clauses": [str(default["fallback_action"])],
             "oracle_clauses": [str(default["fallback_expected_behavior"])],
             "clause_evidence": canonical_evidence,
@@ -1335,14 +1403,43 @@ def _binary_optional_candidate_default_projections(
                 default["fallback_disposition_rationale"]
             ),
         }
+        restriction_type = str(oracle.get("restriction_type", ""))
+        optional = restriction_type == "optionality"
+        no_action_control = default.get("fallback_input_mode") == "no-action-control"
         obligation_fields = {
-            "obligation_class": "optionality-binary-default",
+            "obligation_class": (
+                "optionality-action-control"
+                if no_action_control
+                else "optionality-binary-default"
+                if optional
+                else "requiredness-binary-default"
+            ),
             "required_behavior": str(default["fallback_expected_behavior"]),
             "review_notes": str(default["fallback_disposition_rationale"]),
             "planned_check": str(default["fallback_action"]),
-            "check_type": "positive",
-            "coverage_class": "optionality-binary-default",
-            "input_class": str(default["fallback_test_data"]),
+            "check_type": (
+                "positive"
+                if optional
+                else (
+                    "dependency"
+                    if _is_conditional_requiredness_signal(
+                        {"requiredness_source": default["fallback_required_when"]}
+                    )
+                    else "boundary"
+                )
+            ),
+            "coverage_class": (
+                "optionality-action-control"
+                if no_action_control
+                else "optionality-binary-default"
+                if optional
+                else "requiredness-binary-default"
+            ),
+            "input_class": (
+                "no-action"
+                if no_action_control
+                else str(default["fallback_test_data"])
+            ),
             "single_expected_behavior": str(
                 default["fallback_expected_behavior"]
             ),
@@ -1350,8 +1447,14 @@ def _binary_optional_candidate_default_projections(
             "test_data": str(default["fallback_test_data"]),
         }
         oracle_fields = {
-            "requiredness_class": "optional-binary-default",
-            "required_when": "no-user-selection-required",
+            "requiredness_class": (
+                "optional-action-control"
+                if no_action_control
+                else "optional-binary-default"
+                if optional
+                else "required-binary-default"
+            ),
+            "required_when": str(default["fallback_required_when"]),
             "marker_oracle_found": "no",
             "empty_value_oracle_found": "no",
             "oracle_source": "not_found",
@@ -1392,6 +1495,8 @@ def _binary_optional_candidate_default_projections(
                 "source_row_id": source_row_id,
                 "assertion_id": str(assertion.get("assertion_id", "")),
                 "scope_obligation_id": scope_id,
+                "restriction_type": restriction_type,
+                "fallback_input_mode": str(default["fallback_input_mode"]),
                 "previous_value_sha256": canonical_payload_sha256(current),
                 "assertion_fields": assertion_fields,
                 "obligation_fields": obligation_fields,
@@ -1634,6 +1739,852 @@ def _negative_candidate_clause_evidence_projections(
                     }
                 )
     return projections
+
+
+def _executable_negative_signal_evidence_projections(
+    payload: Mapping[str, Any],
+    context: Mapping[str, Any],
+    boundary: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Expand one literal clause span to retain an executable signal anchor.
+
+    The oracle registry already carries a source-row-exact statement and an exact
+    ASSERT/ATOM/OBL link. When the owning assertion cites another literal part of
+    the same row, the smallest contiguous span containing both fragments is a
+    mechanical provenance repair; it does not invent or reinterpret behavior.
+    """
+
+    expected_by_signal = {
+        str(item["signal_id"]): item
+        for item in semantic_source_signal_registry(context, boundary)["negative"]
+    }
+    rows_by_id = {
+        str(row.get("source_row_id", "")): str(row.get("bounded_source_text", ""))
+        for row in context.get("source_rows", [])
+        if isinstance(row, Mapping)
+    }
+    owner_by_atom: dict[str, tuple[int, int, Mapping[str, Any]]] = {}
+    for source_index, source_design in enumerate(payload.get("source_designs", [])):
+        if not isinstance(source_design, Mapping):
+            continue
+        assertions = source_design.get("assertions", [])
+        if not isinstance(assertions, list):
+            continue
+        for assertion_index, assertion in enumerate(assertions):
+            if isinstance(assertion, Mapping):
+                owner_by_atom[str(assertion.get("atom_id", ""))] = (
+                    source_index,
+                    assertion_index,
+                    assertion,
+                )
+
+    projections: list[dict[str, Any]] = []
+    collection = payload.get("negative_oracles", [])
+    if not isinstance(collection, list):
+        return projections
+    for item in collection:
+        if not isinstance(item, Mapping) or item.get("decision") != "executable_tc":
+            continue
+        signal_id = str(item.get("signal_id", ""))
+        expected = expected_by_signal.get(signal_id)
+        if expected is None:
+            continue
+        source_row_id = str(expected.get("source_row_id", ""))
+        source_text = rows_by_id.get(source_row_id, "")
+        source_statement = str(item.get("source_statement", ""))
+        literal_anchor = str(expected.get("literal_anchor", ""))
+        if (
+            not source_text
+            or not source_statement
+            or source_statement not in source_text
+            or literal_anchor not in source_statement
+            or item.get("source_row_id") != source_row_id
+            or item.get("scope_obligation_id")
+            != expected.get("scope_obligation_id")
+            or item.get("requirement_codes") != expected.get("requirement_codes")
+            or item.get("restriction_type") != expected.get("restriction_type")
+        ):
+            continue
+        owner_location = owner_by_atom.get(str(item.get("linked_atom_id", "")))
+        if owner_location is None:
+            continue
+        source_index, assertion_index, owner = owner_location
+        if str(item.get("linked_obligation_id", "")) not in set(
+            map(str, owner.get("obligation_ids", []))
+        ):
+            continue
+        if any(
+            row_id == source_row_id and literal_anchor in fragment
+            for row_id, fragment in _assertion_literal_evidence(owner)
+        ):
+            continue
+        evidence = owner.get("clause_evidence", [])
+        if not isinstance(evidence, list):
+            continue
+        statement_start = source_text.find(source_statement)
+        statement_end = statement_start + len(source_statement)
+        candidates: list[tuple[int, int, int, int, int]] = []
+        for evidence_index, binding in enumerate(evidence):
+            if (
+                not isinstance(binding, Mapping)
+                or binding.get("source_row_id") != source_row_id
+            ):
+                continue
+            fragment = str(binding.get("exact_source_fragment", ""))
+            fragment_start = source_text.find(fragment)
+            if not fragment or fragment_start < 0:
+                continue
+            span_start = min(fragment_start, statement_start)
+            span_end = max(fragment_start + len(fragment), statement_end)
+            priority = {
+                "condition": 0,
+                "action": 1,
+                "oracle": 2,
+            }.get(str(binding.get("clause_kind", "")), 3)
+            candidates.append(
+                (span_end - span_start, priority, evidence_index, span_start, span_end)
+            )
+        if not candidates:
+            continue
+        _span_length, _priority, evidence_index, span_start, span_end = min(candidates)
+        canonical_evidence = copy.deepcopy(evidence)
+        repaired = canonical_evidence[evidence_index]
+        if not isinstance(repaired, dict):
+            continue
+        repaired["exact_source_fragment"] = source_text[span_start:span_end]
+        projections.append(
+            {
+                "source_index": source_index,
+                "assertion_index": assertion_index,
+                "assertion_id": str(owner.get("assertion_id", "")),
+                "signal_id": signal_id,
+                "path": (
+                    f"$.source_designs[{source_index}].assertions"
+                    f"[{assertion_index}].clause_evidence[{evidence_index}]"
+                ),
+                "canonical_evidence": canonical_evidence,
+            }
+        )
+    return projections
+
+
+def _collapsed_executable_negative_oracle_projection(
+    payload: Mapping[str, Any],
+    *,
+    context: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Split one provably branch-aligned negative signal aggregate.
+
+    This repair is deliberately narrow: one shared ASSERT/ATOM/OBL must own two or
+    more executable negative oracle rows, and its condition/action/oracle arrays plus
+    clause evidence must form an exact one-to-one ordered branch matrix. Anything
+    less explicit remains a strict validation failure.
+    """
+
+    if context is None:
+        return None
+    source_text_by_row = {
+        str(row.get("source_row_id", "")): str(row.get("bounded_source_text", ""))
+        for row in context.get("source_rows", [])
+        if isinstance(row, Mapping)
+    }
+    negative_oracles = payload.get("negative_oracles", [])
+    source_designs = payload.get("source_designs", [])
+    obligations = payload.get("obligations", [])
+    dependency_bindings = payload.get("dependency_bindings", [])
+    reset_bindings = payload.get("reset_lifecycle_bindings", [])
+    if not all(
+        isinstance(value, list)
+        for value in (
+            negative_oracles,
+            source_designs,
+            obligations,
+            dependency_bindings,
+            reset_bindings,
+        )
+    ):
+        return None
+
+    grouped_indices: dict[str, list[int]] = {}
+    for oracle_index, oracle in enumerate(negative_oracles):
+        if (
+            isinstance(oracle, Mapping)
+            and oracle.get("decision") == "executable_tc"
+        ):
+            grouped_indices.setdefault(
+                str(oracle.get("linked_obligation_id", "")), []
+            ).append(oracle_index)
+    for obligation_id, oracle_indices in grouped_indices.items():
+        if not obligation_id or len(oracle_indices) < 2:
+            continue
+        oracle_rows = [negative_oracles[index] for index in oracle_indices]
+        if not all(isinstance(item, Mapping) for item in oracle_rows):
+            continue
+        scope_ids = [str(item.get("scope_obligation_id", "")) for item in oracle_rows]
+        signal_ids = [str(item.get("signal_id", "")) for item in oracle_rows]
+        shared_atom_ids = {str(item.get("linked_atom_id", "")) for item in oracle_rows}
+        shared_planned_tc_ids = {
+            str(item.get("planned_tc_or_gap", "")) for item in oracle_rows
+        }
+        if (
+            len(set(scope_ids)) != len(scope_ids)
+            or len(set(signal_ids)) != len(signal_ids)
+            or len(shared_atom_ids) != 1
+            or len(shared_planned_tc_ids) != 1
+        ):
+            continue
+        original_atom_id = next(iter(shared_atom_ids))
+        original_planned_tc_id = next(iter(shared_planned_tc_ids))
+
+        obligation_matches = [
+            (index, item)
+            for index, item in enumerate(obligations)
+            if isinstance(item, Mapping)
+            and item.get("obligation_id") == obligation_id
+        ]
+        owner_matches = [
+            (source_index, assertion_index, assertion)
+            for source_index, source_design in enumerate(source_designs)
+            if isinstance(source_design, Mapping)
+            for assertion_index, assertion in enumerate(
+                source_design.get("assertions", [])
+            )
+            if isinstance(assertion, Mapping)
+            and assertion.get("atom_id") == original_atom_id
+            and obligation_id in set(map(str, assertion.get("obligation_ids", [])))
+        ]
+        if len(obligation_matches) != 1 or len(owner_matches) != 1:
+            continue
+        obligation_index, obligation = obligation_matches[0]
+        source_index, assertion_index, assertion = owner_matches[0]
+        owner_source_row_id = str(source_designs[source_index].get("source_row_id", ""))
+        owner_source_text = source_text_by_row.get(owner_source_row_id, "")
+        if not owner_source_text:
+            continue
+        branch_count = len(oracle_rows)
+        clause_arrays = {
+            field: assertion.get(field, [])
+            for field in ("condition_clauses", "action_clauses", "oracle_clauses")
+        }
+        if not all(
+            isinstance(values, list) and len(values) == branch_count
+            for values in clause_arrays.values()
+        ):
+            continue
+        evidence = assertion.get("clause_evidence", [])
+        if not isinstance(evidence, list) or len(evidence) != branch_count * 3:
+            continue
+        evidence_by_key: dict[tuple[str, int], Mapping[str, Any]] = {}
+        evidence_valid = True
+        for binding in evidence:
+            if (
+                not isinstance(binding, Mapping)
+                or binding.get("clause_kind")
+                not in {"condition", "action", "oracle"}
+                or type(binding.get("clause_index")) is not int
+            ):
+                evidence_valid = False
+                break
+            key = (str(binding["clause_kind"]), int(binding["clause_index"]))
+            if key in evidence_by_key or not 0 <= key[1] < branch_count:
+                evidence_valid = False
+                break
+            evidence_by_key[key] = binding
+        expected_keys = {
+            (kind, index)
+            for kind in ("condition", "action", "oracle")
+            for index in range(branch_count)
+        }
+        if not evidence_valid or set(evidence_by_key) != expected_keys:
+            continue
+        if list(map(str, obligation.get("scope_obligation_ids", []))) != scope_ids:
+            continue
+        if (
+            obligation.get("linked_atom_id") != original_atom_id
+            or obligation.get("planned_tc_id") != original_planned_tc_id
+            or any(
+                isinstance(binding, Mapping)
+                and binding.get("obligation_id") == obligation_id
+                for binding in reset_bindings
+            )
+        ):
+            continue
+
+        existing_assertion_ids = {
+            str(item.get("assertion_id", ""))
+            for source_design in source_designs
+            if isinstance(source_design, Mapping)
+            for item in source_design.get("assertions", [])
+            if isinstance(item, Mapping)
+        }
+        existing_atom_ids = {
+            str(item.get("atom_id", ""))
+            for source_design in source_designs
+            if isinstance(source_design, Mapping)
+            for item in source_design.get("assertions", [])
+            if isinstance(item, Mapping)
+        }
+        existing_obligation_ids = {
+            str(item.get("obligation_id", ""))
+            for item in obligations
+            if isinstance(item, Mapping)
+        }
+        existing_tc_ids = {
+            str(item.get("planned_tc_id", ""))
+            for item in obligations
+            if isinstance(item, Mapping)
+        }
+        new_assertions: list[dict[str, Any]] = []
+        new_obligations: list[dict[str, Any]] = []
+        new_oracles: list[dict[str, Any]] = []
+        new_assertion_ids: list[str] = []
+        new_atom_ids: list[str] = []
+        new_obligation_ids: list[str] = []
+        new_tc_ids: list[str] = []
+        safe = True
+        for branch_index, oracle in enumerate(oracle_rows):
+            suffix = re.sub(
+                r"[^A-Za-z0-9]+",
+                "-",
+                scope_ids[branch_index],
+            ).strip("-")
+            assertion_id = f"{assertion.get('assertion_id')}-{suffix}"
+            atom_id = f"{original_atom_id}-{suffix}"
+            split_obligation_id = f"{obligation_id}-{suffix}"
+            planned_tc_id = f"{original_planned_tc_id}-{suffix}"
+            if (
+                assertion_id in existing_assertion_ids
+                or atom_id in existing_atom_ids
+                or split_obligation_id in existing_obligation_ids
+                or planned_tc_id in existing_tc_ids
+                or not suffix
+            ):
+                safe = False
+                break
+            split_assertion = copy.deepcopy(dict(assertion))
+            condition = str(clause_arrays["condition_clauses"][branch_index])
+            action = str(clause_arrays["action_clauses"][branch_index])
+            oracle_clause = str(clause_arrays["oracle_clauses"][branch_index])
+            split_assertion.update(
+                {
+                    "assertion_id": assertion_id,
+                    "canonical_statement": f"{condition} {oracle_clause}",
+                    "condition_clauses": [condition],
+                    "action_clauses": [action],
+                    "oracle_clauses": [oracle_clause],
+                    "atom_id": atom_id,
+                    "obligation_ids": [split_obligation_id],
+                    "disposition_rationale": (
+                        f"Отдельная атомарная ветвь source-signal {signal_ids[branch_index]}."
+                    ),
+                }
+            )
+            split_evidence: list[dict[str, Any]] = []
+            for kind in ("condition", "action", "oracle"):
+                binding = copy.deepcopy(dict(evidence_by_key[(kind, branch_index)]))
+                binding["clause_index"] = 0
+                split_evidence.append(binding)
+            for dependency in dependency_bindings:
+                if (
+                    not isinstance(dependency, Mapping)
+                    or str(assertion.get("assertion_id", ""))
+                    not in set(map(str, dependency.get("linked_assertion_ids", [])))
+                    or owner_source_row_id
+                    not in set(map(str, dependency.get("source_row_ids", [])))
+                ):
+                    continue
+                dependency_fragments = list(
+                    map(str, dependency.get("exact_source_fragments", []))
+                )
+                if any(
+                    binding.get("source_row_id") == owner_source_row_id
+                    and any(
+                        fragment in str(binding.get("exact_source_fragment", ""))
+                        for fragment in dependency_fragments
+                    )
+                    for binding in split_evidence
+                    if isinstance(binding, Mapping)
+                ):
+                    continue
+                span_candidates: list[tuple[int, int, int, int]] = []
+                for split_evidence_index, binding in enumerate(split_evidence):
+                    if binding.get("source_row_id") != owner_source_row_id:
+                        continue
+                    current_fragment = str(binding.get("exact_source_fragment", ""))
+                    current_start = owner_source_text.find(current_fragment)
+                    if not current_fragment or current_start < 0:
+                        continue
+                    for dependency_fragment in dependency_fragments:
+                        dependency_start = owner_source_text.find(dependency_fragment)
+                        if dependency_start < 0:
+                            continue
+                        span_start = min(current_start, dependency_start)
+                        span_end = max(
+                            current_start + len(current_fragment),
+                            dependency_start + len(dependency_fragment),
+                        )
+                        span_candidates.append(
+                            (
+                                span_end - span_start,
+                                split_evidence_index,
+                                span_start,
+                                span_end,
+                            )
+                        )
+                if not span_candidates:
+                    safe = False
+                    break
+                (
+                    _span_length,
+                    split_evidence_index,
+                    span_start,
+                    span_end,
+                ) = min(span_candidates)
+                split_evidence[split_evidence_index]["exact_source_fragment"] = (
+                    owner_source_text[span_start:span_end]
+                )
+            if not safe:
+                break
+            split_assertion["clause_evidence"] = split_evidence
+            clarification_bindings: list[dict[str, Any]] = []
+            for binding in assertion.get("clarification_clause_bindings", []):
+                if (
+                    not isinstance(binding, Mapping)
+                    or binding.get("clause_kind")
+                    not in {"condition", "action", "oracle"}
+                    or binding.get("clause_index") != branch_index
+                ):
+                    continue
+                split_binding = copy.deepcopy(dict(binding))
+                split_binding["clause_index"] = 0
+                clarification_bindings.append(split_binding)
+            split_assertion["clarification_clause_bindings"] = clarification_bindings
+
+            split_obligation = copy.deepcopy(dict(obligation))
+            split_obligation.update(
+                {
+                    "obligation_id": split_obligation_id,
+                    "linked_atom_id": atom_id,
+                    "obligation_class": str(oracle.get("restriction_type", "")),
+                    "required_behavior": oracle_clause,
+                    "planned_tc_id": planned_tc_id,
+                    "planned_check": action,
+                    "input_class": str(oracle.get("negative_class", "")),
+                    "single_expected_behavior": oracle_clause,
+                    "test_data": str(oracle.get("representative_invalid_value", "")),
+                    "scope_obligation_ids": [scope_ids[branch_index]],
+                }
+            )
+            split_oracle = copy.deepcopy(dict(oracle))
+            split_oracle.update(
+                {
+                    "planned_tc_or_gap": planned_tc_id,
+                    "linked_atom_id": atom_id,
+                    "linked_obligation_id": split_obligation_id,
+                }
+            )
+            new_assertions.append(split_assertion)
+            new_obligations.append(split_obligation)
+            new_oracles.append(split_oracle)
+            new_assertion_ids.append(assertion_id)
+            new_atom_ids.append(atom_id)
+            new_obligation_ids.append(split_obligation_id)
+            new_tc_ids.append(planned_tc_id)
+        if not safe:
+            continue
+
+        canonical_dependency_bindings = copy.deepcopy(dependency_bindings)
+        for binding in canonical_dependency_bindings:
+            if not isinstance(binding, dict):
+                continue
+            linked_assertions = list(map(str, binding.get("linked_assertion_ids", [])))
+            if str(assertion.get("assertion_id", "")) not in linked_assertions:
+                continue
+            position = linked_assertions.index(str(assertion.get("assertion_id", "")))
+            for field, original, replacements in (
+                ("linked_assertion_ids", str(assertion.get("assertion_id", "")), new_assertion_ids),
+                ("linked_atom_ids", original_atom_id, new_atom_ids),
+                ("linked_obligation_ids", obligation_id, new_obligation_ids),
+            ):
+                values = list(map(str, binding.get(field, [])))
+                if original not in values or values.index(original) != position:
+                    safe = False
+                    break
+                binding[field] = [
+                    *values[:position],
+                    *replacements,
+                    *values[position + 1 :],
+                ]
+            if not safe:
+                break
+        if not safe:
+            continue
+        return {
+            "source_index": source_index,
+            "assertion_index": assertion_index,
+            "obligation_index": obligation_index,
+            "oracle_indices": oracle_indices,
+            "original_assertion_id": str(assertion.get("assertion_id", "")),
+            "original_obligation_id": obligation_id,
+            "scope_obligation_ids": scope_ids,
+            "new_assertions": new_assertions,
+            "new_obligations": new_obligations,
+            "new_oracles": new_oracles,
+            "canonical_dependency_bindings": canonical_dependency_bindings,
+        }
+    return None
+
+
+def _combined_calibration_allowed_class_projection(
+    payload: Mapping[str, Any],
+    *,
+    context: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Split a literal valid/invalid calibration pair into two TC chains.
+
+    A model may preserve both values in one candidate TC even though the bridge
+    contract requires the source-backed allowed class to remain executable on its
+    own.  The repair is allowed only for a numeric length restriction whose valid
+    and invalid values, acceptance text, and calibration text are all explicit in
+    the model output and whose two values can be checked against the source rule.
+    """
+
+    if context is None:
+        return None
+    source_text_by_row = {
+        str(row.get("source_row_id", "")): str(row.get("bounded_source_text", ""))
+        for row in context.get("source_rows", [])
+        if isinstance(row, Mapping)
+    }
+    source_designs = payload.get("source_designs", [])
+    obligations = payload.get("obligations", [])
+    negative_oracles = payload.get("negative_oracles", [])
+    dependency_bindings = payload.get("dependency_bindings", [])
+    if not all(
+        isinstance(value, list)
+        for value in (
+            source_designs,
+            obligations,
+            negative_oracles,
+            dependency_bindings,
+        )
+    ):
+        return None
+
+    repeat_words = {
+        "трех": 3,
+        "трёх": 3,
+        "четырех": 4,
+        "четырёх": 4,
+        "пяти": 5,
+        "шести": 6,
+        "семи": 7,
+        "восьми": 8,
+        "девяти": 9,
+        "десяти": 10,
+    }
+    existing_assertion_ids = {
+        str(assertion.get("assertion_id", ""))
+        for source_design in source_designs
+        if isinstance(source_design, Mapping)
+        for assertion in source_design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+    }
+    existing_atom_ids = {
+        str(assertion.get("atom_id", ""))
+        for source_design in source_designs
+        if isinstance(source_design, Mapping)
+        for assertion in source_design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+    }
+    existing_obligation_ids = {
+        str(obligation.get("obligation_id", ""))
+        for obligation in obligations
+        if isinstance(obligation, Mapping)
+    }
+    existing_tc_ids = {
+        str(obligation.get("planned_tc_id", ""))
+        for obligation in obligations
+        if isinstance(obligation, Mapping)
+    }
+
+    for oracle_index, oracle in enumerate(negative_oracles):
+        if (
+            not isinstance(oracle, Mapping)
+            or oracle.get("decision") != "candidate_tc_required"
+            or oracle.get("oracle_status") != "ui-calibration-required"
+            or oracle.get("restriction_type") != "format"
+        ):
+            continue
+        obligation_id = str(oracle.get("linked_obligation_id", ""))
+        atom_id = str(oracle.get("linked_atom_id", ""))
+        obligation_matches = [
+            (index, item)
+            for index, item in enumerate(obligations)
+            if isinstance(item, Mapping)
+            and item.get("obligation_id") == obligation_id
+        ]
+        assertion_matches = [
+            (source_index, assertion_index, assertion)
+            for source_index, source_design in enumerate(source_designs)
+            if isinstance(source_design, Mapping)
+            for assertion_index, assertion in enumerate(
+                source_design.get("assertions", [])
+            )
+            if isinstance(assertion, Mapping)
+            and assertion.get("atom_id") == atom_id
+            and obligation_id in set(map(str, assertion.get("obligation_ids", [])))
+        ]
+        if len(obligation_matches) != 1 or len(assertion_matches) != 1:
+            continue
+        obligation_index, obligation = obligation_matches[0]
+        source_index, assertion_index, assertion = assertion_matches[0]
+        if (
+            obligation.get("check_type") != "negative"
+            or obligation.get("source_property_id") != "none_required"
+            or list(map(str, obligation.get("scope_obligation_ids", [])))
+            != [str(oracle.get("scope_obligation_id", ""))]
+        ):
+            continue
+        source_row_id = str(source_designs[source_index].get("source_row_id", ""))
+        source_text = source_text_by_row.get(source_row_id, "")
+        source_statement = str(oracle.get("source_statement", ""))
+        invalid_value = str(oracle.get("representative_invalid_value", ""))
+        test_values = [
+            value.strip()
+            for value in str(obligation.get("test_data", "")).split(";")
+            if value.strip()
+        ]
+        if (
+            len(test_values) != 2
+            or len(set(test_values)) != 2
+            or test_values[1] != invalid_value
+            or not source_statement
+            or source_statement not in source_text
+        ):
+            continue
+        allowed_value = test_values[0]
+        length_match = re.search(
+            r"только\s+(\d+)\s+числов",
+            source_statement.casefold(),
+        )
+        repeat_match = re.search(
+            r"не\s+должно\s+быть\s+([^ \s]+)\s+одинаковых\s+цифр\s+подряд",
+            source_statement.casefold(),
+        )
+        if length_match is None or repeat_match is None:
+            continue
+        required_length = int(length_match.group(1))
+        repeat_length = repeat_words.get(repeat_match.group(1))
+        if repeat_length is None:
+            continue
+
+        def has_repeated_run(value: str) -> bool:
+            return any(
+                len(set(value[index : index + repeat_length])) == 1
+                for index in range(len(value) - repeat_length + 1)
+            )
+
+        if (
+            not allowed_value.isdigit()
+            or len(allowed_value) != required_length
+            or has_repeated_run(allowed_value)
+            or not invalid_value.isdigit()
+            or len(invalid_value) != required_length
+            or not has_repeated_run(invalid_value)
+        ):
+            continue
+        action_text = " ".join(map(str, assertion.get("action_clauses", [])))
+        oracle_text = " ".join(map(str, assertion.get("oracle_clauses", [])))
+        if not (
+            allowed_value in action_text
+            and invalid_value in action_text
+            and allowed_value in oracle_text
+            and invalid_value in oracle_text
+            and "допустим" in action_text.casefold()
+            and "приним" in oracle_text.casefold()
+            and "калибров" in oracle_text.casefold()
+        ):
+            continue
+
+        scope_suffix = re.sub(
+            r"[^A-Za-z0-9]+",
+            "-",
+            str(oracle.get("scope_obligation_id", "")),
+        ).strip("-")
+        positive_assertion_id = f"{assertion.get('assertion_id')}-POS"
+        positive_atom_id = f"{atom_id}-POS"
+        positive_obligation_id = f"{obligation_id}-POS"
+        positive_tc_id = f"TC-POS-{scope_suffix}"
+        if (
+            not scope_suffix
+            or positive_assertion_id in existing_assertion_ids
+            or positive_atom_id in existing_atom_ids
+            or positive_obligation_id in existing_obligation_ids
+            or positive_tc_id in existing_tc_ids
+        ):
+            continue
+
+        field_or_block = str(assertion.get("field_or_block", "")).strip()
+        condition_clauses = copy.deepcopy(assertion.get("condition_clauses", []))
+        if not isinstance(condition_clauses, list) or not condition_clauses:
+            continue
+        evidence = assertion.get("clause_evidence", [])
+        if not isinstance(evidence, list):
+            continue
+        condition_evidence = [
+            copy.deepcopy(dict(item))
+            for item in evidence
+            if isinstance(item, Mapping) and item.get("clause_kind") == "condition"
+        ]
+        if len(condition_evidence) != len(condition_clauses):
+            continue
+        positive_action = f"Ввести в поле «{field_or_block}» допустимое значение «{allowed_value}»."
+        positive_oracle = f"Поле «{field_or_block}» принимает значение «{allowed_value}»."
+        negative_action = f"Ввести в поле «{field_or_block}» недопустимое значение «{invalid_value}»."
+        negative_oracle = (
+            f"Точный UI-отклик для значения «{invalid_value}» требует "
+            "калибровки."
+        )
+
+        positive_assertion = copy.deepcopy(dict(assertion))
+        positive_assertion.update(
+            {
+                "assertion_id": positive_assertion_id,
+                "canonical_statement": positive_oracle,
+                "polarity": "positive",
+                "action_clauses": [positive_action],
+                "oracle_clauses": [positive_oracle],
+                "clause_evidence": [
+                    *condition_evidence,
+                    {
+                        "clause_kind": "action",
+                        "clause_index": 0,
+                        "source_row_id": source_row_id,
+                        "exact_source_fragment": source_statement,
+                    },
+                    {
+                        "clause_kind": "oracle",
+                        "clause_index": 0,
+                        "source_row_id": source_row_id,
+                        "exact_source_fragment": source_statement,
+                    },
+                ],
+                "atom_id": positive_atom_id,
+                "obligation_ids": [positive_obligation_id],
+                "disposition_rationale": (
+                    "Допустимый класс отделён от UI-calibration для "
+                    "недопустимого класса."
+                ),
+            }
+        )
+        negative_assertion = copy.deepcopy(dict(assertion))
+        negative_assertion.update(
+            {
+                "canonical_statement": negative_oracle,
+                "action_clauses": [negative_action],
+                "oracle_clauses": [negative_oracle],
+                "clause_evidence": [
+                    *condition_evidence,
+                    {
+                        "clause_kind": "action",
+                        "clause_index": 0,
+                        "source_row_id": source_row_id,
+                        "exact_source_fragment": source_statement,
+                    },
+                    {
+                        "clause_kind": "oracle",
+                        "clause_index": 0,
+                        "source_row_id": source_row_id,
+                        "exact_source_fragment": source_statement,
+                    },
+                ],
+                "disposition_rationale": (
+                    "Недопустимый класс сохранён как UI-calibration candidate "
+                    "без выдуманного отклика."
+                ),
+            }
+        )
+        positive_obligation = copy.deepcopy(dict(obligation))
+        positive_obligation.update(
+            {
+                "obligation_id": positive_obligation_id,
+                "linked_atom_id": positive_atom_id,
+                "obligation_class": "format",
+                "required_behavior": positive_oracle,
+                "planned_tc_id": positive_tc_id,
+                "review_notes": "source-backed allowed-class companion",
+                "planned_check": positive_action,
+                "check_type": "positive",
+                "coverage_class": "positive-allowed-class",
+                "input_class": "valid-format",
+                "single_expected_behavior": positive_oracle,
+                "oracle_source": "source_statement",
+                "test_data": allowed_value,
+                "scope_obligation_ids": [],
+            }
+        )
+        negative_obligation = copy.deepcopy(dict(obligation))
+        negative_obligation.update(
+            {
+                "required_behavior": negative_oracle,
+                "planned_check": negative_action,
+                "single_expected_behavior": negative_oracle,
+                "oracle_source": "not_found",
+                "test_data": invalid_value,
+            }
+        )
+
+        canonical_dependencies = copy.deepcopy(dependency_bindings)
+        safe = True
+        for binding in canonical_dependencies:
+            if not isinstance(binding, dict):
+                continue
+            linked_assertions = list(map(str, binding.get("linked_assertion_ids", [])))
+            original_assertion_id = str(assertion.get("assertion_id", ""))
+            if original_assertion_id not in linked_assertions:
+                continue
+            position = linked_assertions.index(original_assertion_id)
+            for field, original, replacements in (
+                (
+                    "linked_assertion_ids",
+                    original_assertion_id,
+                    [positive_assertion_id, original_assertion_id],
+                ),
+                ("linked_atom_ids", atom_id, [positive_atom_id, atom_id]),
+                (
+                    "linked_obligation_ids",
+                    obligation_id,
+                    [positive_obligation_id, obligation_id],
+                ),
+            ):
+                values = list(map(str, binding.get(field, [])))
+                if original not in values or values.index(original) != position:
+                    safe = False
+                    break
+                binding[field] = [
+                    *values[:position],
+                    *replacements,
+                    *values[position + 1 :],
+                ]
+            if not safe:
+                break
+        if not safe:
+            continue
+        return {
+            "source_index": source_index,
+            "assertion_index": assertion_index,
+            "obligation_index": obligation_index,
+            "oracle_index": oracle_index,
+            "scope_obligation_id": str(oracle.get("scope_obligation_id", "")),
+            "original_assertion_id": str(assertion.get("assertion_id", "")),
+            "positive_assertion": positive_assertion,
+            "negative_assertion": negative_assertion,
+            "positive_obligation": positive_obligation,
+            "negative_obligation": negative_obligation,
+            "canonical_dependency_bindings": canonical_dependencies,
+        }
+    return None
 
 
 def _clarification_exclusion_oracle_projections(
@@ -2978,6 +3929,11 @@ def normalize_semantic_design_source_property_transport(
     normalized = copy.deepcopy(dict(payload))
     repairs: list[dict[str, Any]] = []
     source_designs = normalized.get("source_designs", [])
+    obligations_by_id = {
+        str(item.get("obligation_id", "")): item
+        for item in normalized.get("obligations", [])
+        if isinstance(item, dict)
+    }
     source_property_by_atom: dict[str, str] = {}
     if isinstance(source_designs, list):
         for source_index, source_design in enumerate(source_designs):
@@ -3121,19 +4077,21 @@ def _always_visibility_source_backed_clause_projection(
     )
     if always_binding is None:
         return None
-    if all(
-        len(
+    clause_arrays = {
+        field: assertion.get(field)
+        for field in ("condition_clauses", "action_clauses", "oracle_clauses")
+    }
+    condition_clauses = clause_arrays["condition_clauses"]
+    if (
+        all(isinstance(values, list) and len(values) >= 2 for values in clause_arrays.values())
+        and isinstance(condition_clauses, list)
+        and len(
             {
                 normalize_exact_source_text(str(value)).casefold()
-                for value in assertion.get(field, [])
+                for value in condition_clauses
             }
         )
         >= 2
-        for field in ("condition_clauses", "action_clauses", "oracle_clauses")
-        if isinstance(assertion.get(field), list)
-    ) and all(
-        isinstance(assertion.get(field), list)
-        for field in ("condition_clauses", "action_clauses", "oracle_clauses")
     ):
         return None
 
@@ -3213,11 +4171,1511 @@ def _always_visibility_source_backed_clause_projection(
     }
 
 
+def _always_visibility_direct_observation_projection(
+    assertion: Mapping[str, Any],
+    source_row: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Project one direct observation when the owning row names no state pair."""
+
+    if assertion.get("semantic_disposition") != "testable":
+        return None
+    evidence = assertion.get("requirement_code_evidence", [])
+    if not isinstance(evidence, list):
+        return None
+    always_binding = next(
+        (
+            item
+            for item in evidence
+            if isinstance(item, Mapping)
+            and "видимость-всегда"
+            in normalize_exact_source_text(
+                str(item.get("exact_source_fragment", ""))
+            ).casefold()
+        ),
+        None,
+    )
+    if always_binding is None:
+        return None
+    source_text = str(source_row.get("bounded_source_text", ""))
+    if (
+        re.search(r"логическое\s+да\s*/\s*нет", source_text, re.IGNORECASE)
+        is not None
+        or (
+            re.search(r"при\s+ручном\s+заполнении", source_text, re.IGNORECASE)
+            is not None
+            and re.search(
+                r"«ввести\s+вручную»\s*=\s*«нет»",
+                source_text,
+                re.IGNORECASE,
+            )
+            is not None
+        )
+    ):
+        return None
+    row_id = str(source_row.get("source_row_id", ""))
+    field = str(assertion.get("field_or_block", "")).strip() or str(
+        source_row.get("field_or_action", "элемент")
+    ).strip()
+    fragment = str(always_binding.get("exact_source_fragment", "")).strip()
+    if not row_id or not fragment or fragment not in source_text:
+        return None
+    condition = f"Открыта форма, содержащая элемент «{field}»."
+    action = f"Проверить видимость элемента «{field}»."
+    oracle = f"Элемент «{field}» отображается."
+    return {
+        "canonical_statement": f"Элемент «{field}» всегда отображается.",
+        "condition_clauses": [condition],
+        "action_clauses": [action],
+        "oracle_clauses": [oracle],
+        "clause_evidence": [
+            {
+                "clause_kind": kind,
+                "clause_index": 0,
+                "source_row_id": row_id,
+                "exact_source_fragment": fragment,
+            }
+            for kind in ("condition", "action", "oracle")
+        ],
+        "disposition_rationale": (
+            "Owning source row задаёт always-visible без собственной размерности "
+            "состояний, поэтому используется прямое наблюдение без чужого toggle."
+        ),
+        "obligation_fields": {
+            "property_type": "visibility",
+            "obligation_class": "always-visible-direct-observation",
+            "required_behavior": oracle,
+            "planned_check": action,
+            "check_type": "positive",
+            "coverage_class": "always-visible",
+            "input_class": "direct-observation",
+            "single_expected_behavior": oracle,
+            "test_data": "none_required:action-only",
+        },
+    }
+
+
+def _read_only_action_control_projection(
+    assertion: Mapping[str, Any],
+    source_row: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Represent typed read-only on a button/widget without a fake text entry."""
+
+    if (
+        assertion.get("semantic_disposition") != "testable"
+        or _action_control_kind(source_row) is None
+    ):
+        return None
+    editability = source_row.get("field_properties", {}).get("editability", {})
+    if not isinstance(editability, Mapping):
+        return None
+    property_id = str(editability.get("property_id", ""))
+    if (
+        editability.get("normalized_value") != "read-only"
+        or str(assertion.get("source_property_id", "")) != property_id
+    ):
+        return None
+    row_id = str(source_row.get("source_row_id", ""))
+    field = str(assertion.get("field_or_block", "")).strip() or str(
+        source_row.get("field_or_action", "элемент")
+    ).strip()
+    if not row_id or not field:
+        return None
+    condition = f"Элемент «{field}» отображается."
+    action = f"Проверить наличие режима редактирования значения у элемента «{field}»."
+    oracle = f"У элемента «{field}» отсутствует редактируемое значение поля."
+    return {
+        "canonical_statement": (
+            f"Action control «{field}» не предоставляет "
+            "редактируемое значение."
+        ),
+        "polarity": "neutral",
+        "condition_clauses": [condition],
+        "action_clauses": [action],
+        "oracle_clauses": [oracle],
+        "disposition_rationale": (
+            "Typed R=Нет относится к action control; проверяется "
+            "отсутствие редактируемого value interface, а не ввод текста в кнопку."
+        ),
+        "obligation_fields": {
+            "obligation_class": "action-control-read-only",
+            "required_behavior": oracle,
+            "planned_check": action,
+            "check_type": "positive",
+            "coverage_class": "typed-read-only-action-control",
+            "input_class": "direct-observation",
+            "single_expected_behavior": oracle,
+            "test_data": "none_required:action-only",
+        },
+    }
+
+
+def _inclusive_twentieth_birthday_projection(
+    assertion: Mapping[str, Any],
+    clarifications: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    """Preserve an approved inclusive 20th-birthday boundary mechanically.
+
+    The source row names the 20-year interval, while a hash-bound approved
+    clarification states that a passport issued *before or on* the twentieth
+    birthday belongs to that interval.  A model occasionally shortens this to
+    ``before the birthday``.  Repair only that exact, clarification-bound expiry
+    branch; do not infer age rules from free text or from an unrelated assertion.
+    """
+
+    if (
+        assertion.get("semantic_disposition") != "testable"
+        or assertion.get("execution_readiness") != "ready"
+    ):
+        return None
+    bindings = assertion.get("clarification_clause_bindings", [])
+    if not isinstance(bindings, list):
+        return None
+    clarification_by_id = {
+        str(item.get("clarification_id", "")): item
+        for item in clarifications
+        if isinstance(item, Mapping)
+    }
+    matching_bindings = [
+        item
+        for item in bindings
+        if isinstance(item, Mapping)
+        and item.get("clause_kind") == "condition"
+        and isinstance(item.get("clause_index"), int)
+        and (
+            clarification := clarification_by_id.get(
+                str(item.get("clarification_id", ""))
+            )
+        )
+        is not None
+        and item.get("exact_answer_sha256")
+        == clarification.get("exact_answer_sha256")
+        and "до или в день 20-летия" in str(
+            clarification.get("exact_answer", "")
+        ).casefold()
+        and "20-летия + 90 дней включительно" in str(
+            clarification.get("exact_answer", "")
+        ).casefold()
+    ]
+    if len(matching_bindings) != 1:
+        return None
+    binding = matching_bindings[0]
+    condition_index = int(binding["clause_index"])
+    conditions = assertion.get("condition_clauses", [])
+    if not isinstance(conditions, list) or condition_index >= len(conditions):
+        return None
+    condition = str(conditions[condition_index])
+    normalized_condition = normalize_exact_source_text(condition).casefold()
+    if (
+        "20-лет" not in normalized_condition
+        or "90 календар" not in normalized_condition
+        or "текущ" not in normalized_condition
+        or "позже" not in normalized_condition
+        or "до или в день 20-летия" in normalized_condition
+    ):
+        return None
+    canonical = str(assertion.get("canonical_statement", ""))
+    normalized_canonical = normalize_exact_source_text(canonical).casefold()
+    if (
+        "паспорт" not in normalized_canonical
+        or "просроч" not in normalized_canonical
+        or "20-лет" not in normalized_canonical
+        or "14 лет" not in normalized_canonical
+    ):
+        return None
+
+    canonical_conditions = copy.deepcopy(conditions)
+    canonical_conditions[condition_index] = (
+        "Дата выдачи находится в диапазоне от 14 лет до или в день "
+        "20-летия; текущая дата позже 20-летия плюс 90 календарных дней."
+    )
+    return {
+        "canonical_statement": (
+            "Паспорт, выданный в диапазоне от 14 лет до или в день "
+            "20-летия, после допустимого срока признаётся просроченным."
+        ),
+        "condition_clauses": canonical_conditions,
+        "obligation_fields": {
+            "required_behavior": (
+                "Паспорт, выданный до или в день 20-летия, после "
+                "20-летия + 90 календарных дней признаётся просроченным."
+            ),
+            "planned_check": (
+                "Проверить просроченный паспорт, выданный до или в день "
+                "20-летия клиента."
+            ),
+            "test_data": (
+                "Дата рождения клиента; дата выдачи до или в день 20-летия; "
+                "текущая дата = 20-летие + 91 календарный день."
+            ),
+        },
+    }
+
+
+def _future_issue_date_save_block_projection(
+    assertion: Mapping[str, Any],
+    clarifications: Sequence[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    """Preserve the exact save-blocking oracle from an approved clarification."""
+
+    if (
+        assertion.get("semantic_disposition") != "testable"
+        or assertion.get("execution_readiness") != "ready"
+        or "BSR 101" not in set(map(str, assertion.get("requirement_codes", [])))
+    ):
+        return None
+    clarification_by_id = {
+        str(item.get("clarification_id", "")): item
+        for item in clarifications
+        if isinstance(item, Mapping)
+    }
+    bindings = assertion.get("clarification_clause_bindings", [])
+    if not isinstance(bindings, list):
+        return None
+    matching = [
+        binding
+        for binding in bindings
+        if isinstance(binding, Mapping)
+        and binding.get("clause_kind") == "oracle"
+        and isinstance(binding.get("clause_index"), int)
+        and (
+            clarification := clarification_by_id.get(
+                str(binding.get("clarification_id", ""))
+            )
+        )
+        is not None
+        and binding.get("exact_answer_sha256")
+        == clarification.get("exact_answer_sha256")
+        and "дата выдачи позже текущей даты блокирует сохранение"
+        in normalize_exact_source_text(
+            str(clarification.get("exact_answer", ""))
+        ).casefold()
+    ]
+    if len(matching) != 1:
+        return None
+    oracle_index = int(matching[0]["clause_index"])
+    oracles = assertion.get("oracle_clauses", [])
+    if not isinstance(oracles, list) or oracle_index >= len(oracles):
+        return None
+    current = normalize_exact_source_text(str(oracles[oracle_index])).casefold()
+    if "позже текущ" not in current and "будущ" not in current:
+        return None
+    canonical_oracles = copy.deepcopy(oracles)
+    canonical_oracles[oracle_index] = (
+        "Сохранение формы блокируется для даты выдачи позже текущей даты."
+    )
+    return {
+        "oracle_clauses": canonical_oracles,
+        "obligation_fields": {
+            "required_behavior": (
+                "Сохранение формы блокируется для даты выдачи позже текущей даты."
+            ),
+            "single_expected_behavior": (
+                "Сохранение формы блокируется для даты выдачи позже текущей даты."
+            ),
+            "oracle_source": "BSR 101 + CLR-PASS-003",
+        },
+    }
+
+
+def _load_verified_fixture_contracts(
+    context: Mapping[str, Any],
+    repo_root: Path | None,
+) -> dict[str, dict[str, Any]]:
+    """Load only hash-bound verified fixture contracts registered in context."""
+
+    if repo_root is None:
+        return {}
+    fingerprints = {
+        str(item.get("path", "")): item
+        for item in context.get("source_cache", {}).get("input_fingerprints", [])
+        if isinstance(item, Mapping)
+    }
+    contracts: dict[str, dict[str, Any]] = {}
+    root = repo_root.resolve()
+    for source in context.get("sources", []):
+        if not isinstance(source, Mapping):
+            continue
+        relative = str(source.get("path", ""))
+        if not relative.casefold().endswith(".verification.json"):
+            continue
+        fingerprint = fingerprints.get(relative)
+        if (
+            not isinstance(fingerprint, Mapping)
+            or fingerprint.get("role") != "external-vendor-reference"
+        ):
+            continue
+        candidate = (root / Path(relative)).resolve()
+        try:
+            candidate.relative_to(root)
+            raw = candidate.read_bytes()
+        except (OSError, ValueError):
+            continue
+        if hashlib.sha256(raw).hexdigest() != fingerprint.get("sha256"):
+            continue
+        try:
+            payload = json.loads(raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, Mapping) or payload.get("status") not in {
+            "verified",
+            "accepted",
+        }:
+            continue
+        fixture_id = str(payload.get("fixture_id", ""))
+        request = payload.get("request")
+        expected = payload.get("expected_response")
+        if (
+            re.fullmatch(r"(?:FX|FIX)-[A-Za-z0-9_.-]+", fixture_id) is None
+            or not isinstance(request, Mapping)
+            or not isinstance(request.get("parameters"), Mapping)
+            or not isinstance(expected, Mapping)
+        ):
+            continue
+        contracts[fixture_id] = {
+            "request_parameters": dict(request["parameters"]),
+            "expected_response": dict(expected),
+            "response_sha256": str(payload.get("response_sha256", "")),
+        }
+    return contracts
+
+
+_FIXTURE_ID_RE = re.compile(r"\b(?:FX|FIX)-[A-Za-z0-9_.-]+\b")
+
+
+def _verified_fixture_clause_projection(
+    assertion: Mapping[str, Any],
+    obligations_by_id: Mapping[str, Mapping[str, Any]],
+    fixture_contracts: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    """Replace vague dynamic values with literals from one verified fixture."""
+
+    if assertion.get("semantic_disposition") != "testable":
+        return None
+    owners = [
+        obligations_by_id.get(str(obligation_id))
+        for obligation_id in assertion.get("obligation_ids", [])
+    ]
+    owners = [item for item in owners if isinstance(item, Mapping)]
+    fixture_ids = {
+        fixture_id
+        for owner in owners
+        for fixture_id in _FIXTURE_ID_RE.findall(
+            json.dumps(owner, ensure_ascii=False, sort_keys=True)
+        )
+        if fixture_id in fixture_contracts
+    }
+    if len(fixture_ids) != 1 or len(owners) != 1:
+        return None
+    fixture_id = next(iter(fixture_ids))
+    contract = fixture_contracts[fixture_id]
+    expected = contract.get("expected_response")
+    parameters = contract.get("request_parameters")
+    if not isinstance(expected, Mapping) or not isinstance(parameters, Mapping):
+        return None
+    suggestion = str(expected.get("exact_suggestion", "")).strip()
+    query = str(parameters.get("query", "")).strip()
+    if not suggestion or not query:
+        return None
+    owner = owners[0]
+    property_type = str(owner.get("property_type", ""))
+    field = str(assertion.get("field_or_block", "")).split("—", 1)[0].strip()
+    if not field:
+        return None
+    if property_type == "dynamic-prefill":
+        return {
+            "canonical_statement": (
+                f"Ввод кода «{query}» предлагает в поле «{field}» точное "
+                f"значение «{suggestion}» из сохранённой fixture {fixture_id}."
+            ),
+            "oracle_clauses": [
+                f"В списке «{field}» предлагается значение «{suggestion}»."
+            ],
+            "disposition_rationale": (
+                f"Используется hash-bound fixture {fixture_id}; runtime API-вызов "
+                "в тест-кейсе не требуется."
+            ),
+            "obligation_fields": {
+                "required_behavior": f"Предложить значение «{suggestion}» по коду «{query}».",
+                "planned_check": f"Ввести в продуктовом UI код «{query}».",
+                "single_expected_behavior": f"Предложено значение «{suggestion}».",
+                "test_data": (
+                    f"{fixture_id}; query={query}; exact_suggestion={suggestion}"
+                ),
+            },
+        }
+    if property_type == "multi-suggestion-selection":
+        minimum = expected.get("minimum_suggestion_count")
+        if not isinstance(minimum, int) or minimum < 2:
+            return None
+        return {
+            "canonical_statement": (
+                f"Из нескольких предложений fixture {fixture_id} пользователь "
+                f"выбирает «{suggestion}», и это значение отображается в поле «{field}»."
+            ),
+            "condition_clauses": [
+                f"Сохранённая fixture {fixture_id} для кода «{query}» содержит "
+                f"не менее {minimum} предложений."
+            ],
+            "action_clauses": [
+                f"В списке «{field}» выбрать точное значение «{suggestion}» "
+                f"из сохранённой fixture {fixture_id}."
+            ],
+            "oracle_clauses": [
+                f"В поле «{field}» отображается значение «{suggestion}»."
+            ],
+            "disposition_rationale": (
+                f"Выбор привязан к exact suggestion hash-bound fixture {fixture_id}; "
+                "закрытый справочник не утверждается."
+            ),
+            "obligation_fields": {
+                "required_behavior": f"Выбрать и отобразить значение «{suggestion}».",
+                "planned_check": f"Выбрать в списке точное значение «{suggestion}».",
+                "single_expected_behavior": f"Поле отображает значение «{suggestion}».",
+                "test_data": (
+                    f"{fixture_id}; query={query}; exact_suggestion={suggestion}; "
+                    f"minimum_suggestion_count={minimum}"
+                ),
+            },
+        }
+    return None
+
+
+_UI_CALIBRATION_TEXT_RE = re.compile(r"(?:калибр\w*|calibrat\w*)", re.IGNORECASE)
+_CANONICAL_UI_CALIBRATION_SUFFIX = (
+    "точный UI-триггер и отклик требуют калибровки."
+)
+
+
+def _canonicalize_declared_ui_calibration(
+    assertion: dict[str, Any],
+    obligations_by_id: Mapping[str, dict[str, Any]],
+) -> bool:
+    """Align an assertion-declared calibration need with obligation metadata.
+
+    If the model itself says that the observable UI reaction requires
+    calibration, the obligation cannot simultaneously claim a source-backed
+    exact oracle.  Preserve the source-backed business rejection and make the
+    unknown UI trigger/reaction explicit through the canonical candidate marker.
+    """
+
+    if assertion.get("semantic_disposition") != "testable":
+        return False
+    oracle_clauses = assertion.get("oracle_clauses", [])
+    if not isinstance(oracle_clauses, list) or not any(
+        isinstance(clause, str) and _UI_CALIBRATION_TEXT_RE.search(clause)
+        for clause in oracle_clauses
+    ):
+        return False
+    owners = [
+        obligations_by_id.get(str(obligation_id))
+        for obligation_id in assertion.get("obligation_ids", [])
+    ]
+    owners = [item for item in owners if isinstance(item, dict)]
+    if not owners or all(
+        item.get("review_notes") == "candidate-ui-calibration"
+        and item.get("oracle_source") == "not_found"
+        for item in owners
+    ):
+        return False
+
+    canonical_oracles: list[str] = []
+    for raw_clause in oracle_clauses:
+        clause = str(raw_clause).strip()
+        if _UI_CALIBRATION_TEXT_RE.search(clause):
+            prefix = clause.split(";", 1)[0].rstrip(" .")
+            canonical_oracles.append(
+                f"{prefix}; {_CANONICAL_UI_CALIBRATION_SUFFIX}"
+            )
+        else:
+            canonical_oracles.append(clause)
+    assertion["oracle_clauses"] = canonical_oracles
+    canonical_behavior = "; ".join(canonical_oracles)
+    for obligation in owners:
+        obligation.update(
+            {
+                "review_notes": "candidate-ui-calibration",
+                "oracle_source": "not_found",
+                "required_behavior": canonical_behavior,
+                "single_expected_behavior": canonical_behavior,
+            }
+        )
+    return True
+
+
+_VISIBILITY_CODE_FRAGMENT_RE = re.compile(
+    r"^(?P<code>[A-Za-z]+\s+\d+)\.\s*Видимость:\s*Да,\s*если\s+"
+    r"признак\s+«(?P<trigger>[^»]+)»\s*=\s*«(?P<value>[^»]+)»\.?$",
+    re.IGNORECASE,
+)
+
+
+def _split_visibility_code_from_typed_requiredness(
+    payload: dict[str, Any],
+    context: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Separate a visibility BSR from a typed requiredness property chain.
+
+    A typed O-cell owns requiredness.  A BSR whose exact text defines only
+    conditional visibility must own a separate observable assertion instead of
+    being attached to that typed property merely to satisfy per-row code union.
+    """
+
+    rows = {
+        str(row.get("source_row_id", "")): row
+        for row in context.get("source_rows", [])
+        if isinstance(row, Mapping)
+    }
+    existing_assertion_ids = {
+        str(assertion.get("assertion_id", ""))
+        for design in payload.get("source_designs", [])
+        if isinstance(design, Mapping)
+        for assertion in design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+    }
+    existing_atom_ids = {
+        str(assertion.get("atom_id", ""))
+        for design in payload.get("source_designs", [])
+        if isinstance(design, Mapping)
+        for assertion in design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+    }
+    existing_obligation_ids = {
+        str(item.get("obligation_id", ""))
+        for item in payload.get("obligations", [])
+        if isinstance(item, Mapping)
+    }
+    existing_tc_ids = {
+        str(item.get("planned_tc_id", ""))
+        for item in payload.get("obligations", [])
+        if isinstance(item, Mapping)
+    }
+    repairs: list[dict[str, Any]] = []
+    for source_index, design in enumerate(payload.get("source_designs", [])):
+        if not isinstance(design, dict):
+            continue
+        row_id = str(design.get("source_row_id", ""))
+        source_row = rows.get(row_id)
+        assertions = design.get("assertions", [])
+        if source_row is None or not isinstance(assertions, list):
+            continue
+        additions: list[dict[str, Any]] = []
+        for assertion_index, assertion in enumerate(assertions):
+            if (
+                not isinstance(assertion, dict)
+                or assertion.get("semantic_disposition") != "testable"
+                or "-REQUIREDNESS-" not in str(assertion.get("source_property_id", ""))
+            ):
+                continue
+            evidence = assertion.get("requirement_code_evidence", [])
+            if not isinstance(evidence, list):
+                continue
+            for binding in list(evidence):
+                if not isinstance(binding, Mapping):
+                    continue
+                match = _VISIBILITY_CODE_FRAGMENT_RE.fullmatch(
+                    normalize_exact_source_text(
+                        str(binding.get("exact_source_fragment", ""))
+                    )
+                )
+                code = str(binding.get("requirement_code", ""))
+                if match is None or match.group("code").casefold() != code.casefold():
+                    continue
+                suffix = re.sub(r"[^A-Za-z0-9]+", "-", f"{row_id}-{code}").strip("-")
+                assertion_id = f"ASSERT-AUTO-{suffix}-VIS"
+                atom_id = f"ATOM-AUTO-{suffix}-VIS"
+                obligation_id = f"OBL-AUTO-{suffix}-VIS"
+                planned_tc_id = f"TC-AUTO-{suffix}-VIS"
+                if (
+                    assertion_id in existing_assertion_ids
+                    or atom_id in existing_atom_ids
+                    or obligation_id in existing_obligation_ids
+                    or planned_tc_id in existing_tc_ids
+                ):
+                    continue
+                trigger = match.group("trigger")
+                value = match.group("value")
+                field = str(assertion.get("field_or_block", "")).strip() or str(
+                    source_row.get("field_or_action", row_id)
+                )
+                fragment = str(binding.get("exact_source_fragment", ""))
+                moved_clarifications: list[dict[str, Any]] = []
+                retained_clarifications: list[dict[str, Any]] = []
+                for raw_clarification in assertion.get(
+                    "clarification_clause_bindings", []
+                ):
+                    if not isinstance(raw_clarification, Mapping):
+                        continue
+                    clarification = copy.deepcopy(dict(raw_clarification))
+                    codes = list(map(str, clarification.get("requirement_codes", [])))
+                    if code in codes:
+                        clarification["requirement_codes"] = [code]
+                        clarification["clause_kind"] = "condition"
+                        clarification["clause_index"] = 0
+                        moved_clarifications.append(clarification)
+                        remaining = [item for item in codes if item != code]
+                        if remaining:
+                            retained = copy.deepcopy(dict(raw_clarification))
+                            retained["requirement_codes"] = remaining
+                            retained_clarifications.append(retained)
+                    else:
+                        retained_clarifications.append(
+                            copy.deepcopy(dict(raw_clarification))
+                        )
+                previous_sha256 = canonical_payload_sha256(assertion)
+                assertion["requirement_codes"] = [
+                    item
+                    for item in map(str, assertion.get("requirement_codes", []))
+                    if item != code
+                ]
+                assertion["requirement_code_evidence"] = [
+                    item for item in evidence if item is not binding
+                ]
+                assertion["clarification_clause_bindings"] = retained_clarifications
+                condition = f"Признак «{trigger}» доступен для изменения."
+                action = f"Установить признак «{trigger}» в значение «{value}»."
+                oracle = f"Поле «{field}» отображается."
+                additions.append(
+                    {
+                        "assertion_id": assertion_id,
+                        "canonical_statement": (
+                            f"Поле «{field}» отображается, если признак "
+                            f"«{trigger}» = «{value}»."
+                        ),
+                        "polarity": "positive",
+                        "semantic_disposition": "testable",
+                        "execution_readiness": "ready",
+                        "execution_readiness_rationale": "none_required",
+                        "risk": str(assertion.get("risk", "medium")),
+                        "condition_clauses": [condition],
+                        "action_clauses": [action],
+                        "oracle_clauses": [oracle],
+                        "requirement_codes": [code],
+                        "requirement_code_evidence": [copy.deepcopy(dict(binding))],
+                        "clause_evidence": [
+                            {
+                                "clause_kind": kind,
+                                "clause_index": 0,
+                                "source_row_id": row_id,
+                                "exact_source_fragment": fragment,
+                            }
+                            for kind in ("condition", "action", "oracle")
+                        ],
+                        "supporting_source_bindings": copy.deepcopy(
+                            assertion.get("supporting_source_bindings", [])
+                        ),
+                        "clarification_clause_bindings": moved_clarifications,
+                        "atom_id": atom_id,
+                        "obligation_ids": [obligation_id],
+                        "disposition_rationale": (
+                            "BSR-код определяет conditional visibility отдельно от "
+                            "typed requiredness ячейки О."
+                        ),
+                        "source_property_id": "none_required",
+                        "field_or_block": field,
+                        "source_reference": str(
+                            source_row.get("source_ref", assertion.get("source_reference", row_id))
+                        ),
+                    }
+                )
+                payload.setdefault("obligations", []).append(
+                    {
+                        "obligation_id": obligation_id,
+                        "package_id": str(
+                            next(
+                                (
+                                    owner.get("package_id")
+                                    for owner in payload.get("obligations", [])
+                                    if isinstance(owner, Mapping)
+                                    and str(owner.get("obligation_id", ""))
+                                    in set(map(str, assertion.get("obligation_ids", [])))
+                                ),
+                                "WP-01",
+                            )
+                        ),
+                        "linked_atom_id": atom_id,
+                        "source_property_id": "none_required",
+                        "property_type": "conditional-visibility",
+                        "obligation_class": "conditional-visibility",
+                        "required_behavior": oracle,
+                        "source_ref": code,
+                        "planned_tc_id": planned_tc_id,
+                        "review_notes": "none_required",
+                        "design_dimension": "conditional-visibility",
+                        "planned_check": action,
+                        "check_type": "positive",
+                        "coverage_class": code,
+                        "input_class": f"{trigger}={value}",
+                        "single_expected_behavior": oracle,
+                        "oracle_source": code,
+                        "test_data": f"{trigger}={value}",
+                        "dictionary_refs": [],
+                        "dictionary_coverage": "none_required",
+                        "scope_obligation_ids": [],
+                    }
+                )
+                existing_assertion_ids.add(assertion_id)
+                existing_atom_ids.add(atom_id)
+                existing_obligation_ids.add(obligation_id)
+                existing_tc_ids.add(planned_tc_id)
+                repairs.append(
+                    {
+                        "rule": "split-visibility-code-from-typed-requiredness",
+                        "path": (
+                            f"$.source_designs[{source_index}].assertions"
+                            f"[{assertion_index}]"
+                        ),
+                        "source_row_id": row_id,
+                        "requirement_code": code,
+                        "typed_assertion_id": str(assertion.get("assertion_id", "")),
+                        "visibility_assertion_id": assertion_id,
+                        "previous_value_sha256": previous_sha256,
+                    }
+                )
+        assertions.extend(additions)
+    return repairs
+
+
+def _materialize_bare_requirement_definition_gaps(
+    payload: dict[str, Any],
+    context: Mapping[str, Any],
+    boundary: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Turn invented semantics for an authoritative bare-code gap into ambiguity.
+
+    The operation is deterministic: a boundary-v2 missing-source-definition gap
+    and the literal bare token are both required. Typed sibling properties stay
+    executable; only the assertion that claims behavior for the undecoded token
+    loses its OBL/TC chain and remains dependency-blocked by the authoritative GAP.
+    """
+
+    rows_by_id = {
+        str(row.get("source_row_id", "")): row
+        for row in context.get("source_rows", [])
+        if isinstance(row, Mapping)
+    }
+    gapped_codes_by_row: dict[str, set[str]] = defaultdict(set)
+    for gap in boundary.get("gaps", []):
+        if (
+            not isinstance(gap, Mapping)
+            or gap.get("gap_type") != "missing-source-definition"
+            or gap.get("blocking") is not False
+            or gap.get("downstream_handling") != "carry-to-source-model"
+        ):
+            continue
+        fragments = " ".join(map(str, gap.get("exact_source_fragments", [])))
+        for row_id in map(str, gap.get("source_row_ids", [])):
+            row = rows_by_id.get(row_id)
+            if row is None:
+                continue
+            for code in bare_requirement_codes(
+                str(row.get("bounded_source_text", ""))
+            ):
+                if code.casefold() in fragments.casefold():
+                    gapped_codes_by_row[row_id].add(code)
+    if not gapped_codes_by_row:
+        return []
+
+    converted: dict[str, tuple[str, str, tuple[str, ...], tuple[str, ...]]] = {}
+    repairs: list[dict[str, Any]] = []
+    for source_index, source_design in enumerate(payload.get("source_designs", [])):
+        if not isinstance(source_design, dict):
+            continue
+        row_id = str(source_design.get("source_row_id", ""))
+        gapped_codes = gapped_codes_by_row.get(row_id, set())
+        if not gapped_codes:
+            continue
+        for assertion_index, assertion in enumerate(source_design.get("assertions", [])):
+            if (
+                not isinstance(assertion, dict)
+                or assertion.get("semantic_disposition") != "testable"
+                or assertion.get("source_property_id") != "none_required"
+            ):
+                continue
+            assertion_codes = set(map(str, assertion.get("requirement_codes", [])))
+            matched_codes = assertion_codes & gapped_codes
+            if not matched_codes:
+                continue
+            evidence = assertion.get("requirement_code_evidence", [])
+            if not isinstance(evidence, list) or not all(
+                any(
+                    isinstance(binding, Mapping)
+                    and str(binding.get("requirement_code", "")) == code
+                    and str(binding.get("exact_source_fragment", "")).strip()
+                    == bare_requirement_codes(
+                        str(rows_by_id[row_id].get("bounded_source_text", ""))
+                    ).get(code, "").strip()
+                    for binding in evidence
+                )
+                for code in matched_codes
+            ):
+                continue
+            old_obligation_ids = tuple(map(str, assertion.get("obligation_ids", [])))
+            atom_id = str(assertion.get("atom_id", ""))
+            assertion_id = str(assertion.get("assertion_id", ""))
+            previous_sha256 = canonical_payload_sha256(assertion)
+            code_label = ", ".join(sorted(matched_codes))
+            assertion.update(
+                {
+                    "canonical_statement": (
+                        f"{code_label} не содержит расшифрованного поведения в "
+                        "доступном source row."
+                    ),
+                    "polarity": "neutral",
+                    "semantic_disposition": "ambiguous",
+                    "execution_readiness": "dependency-blocked",
+                    "execution_readiness_rationale": (
+                        "Открытый missing-source-definition GAP должен определить "
+                        f"поведение {code_label} до создания исполнимой проверки."
+                    ),
+                    "condition_clauses": [],
+                    "action_clauses": [],
+                    "oracle_clauses": [],
+                    "clause_evidence": [],
+                    "supporting_source_bindings": [],
+                    "clarification_clause_bindings": [],
+                    "obligation_ids": [],
+                    "disposition_rationale": (
+                        "Authoritative boundary фиксирует missing-source-definition; "
+                        "неизвестное поведение по одному коду нельзя признать "
+                        "not-applicable или вывести из соседних typed cells."
+                    ),
+                }
+            )
+            converted[assertion_id] = (
+                row_id,
+                atom_id,
+                old_obligation_ids,
+                tuple(sorted(matched_codes)),
+            )
+            repairs.append(
+                {
+                    "rule": "bind-bare-requirement-code-to-definition-gap",
+                    "path": (
+                        f"$.source_designs[{source_index}].assertions"
+                        f"[{assertion_index}]"
+                    ),
+                    "source_row_id": row_id,
+                    "assertion_id": assertion_id,
+                    "requirement_codes": sorted(matched_codes),
+                    "removed_obligation_ids": list(old_obligation_ids),
+                    "previous_value_sha256": previous_sha256,
+                }
+            )
+    if not converted:
+        return repairs
+
+    removed_obligation_ids = {
+        obligation_id
+        for _row_id, _atom_id, obligation_ids, _codes in converted.values()
+        for obligation_id in obligation_ids
+    }
+    removed_atoms = {atom_id for _row_id, atom_id, _obls, _codes in converted.values()}
+    obligations = payload.get("obligations", [])
+    removed_test_cases = {
+        str(item.get("planned_tc_id", ""))
+        for item in obligations
+        if isinstance(item, Mapping)
+        and str(item.get("obligation_id", "")) in removed_obligation_ids
+    }
+    payload["obligations"] = [
+        item
+        for item in obligations
+        if not isinstance(item, Mapping)
+        or str(item.get("obligation_id", "")) not in removed_obligation_ids
+    ]
+
+    assertion_by_id: dict[str, Mapping[str, Any]] = {}
+    row_by_assertion: dict[str, str] = {}
+    for source_design in payload.get("source_designs", []):
+        if not isinstance(source_design, Mapping):
+            continue
+        row_id = str(source_design.get("source_row_id", ""))
+        for assertion in source_design.get("assertions", []):
+            if isinstance(assertion, Mapping):
+                assertion_id = str(assertion.get("assertion_id", ""))
+                assertion_by_id[assertion_id] = assertion
+                row_by_assertion[assertion_id] = row_id
+
+    for binding in payload.get("dependency_bindings", []):
+        if not isinstance(binding, dict):
+            continue
+        old_ids = list(map(str, binding.get("linked_assertion_ids", [])))
+        if not any(assertion_id in converted for assertion_id in old_ids):
+            continue
+        canonical_ids: list[str] = []
+        for assertion_id in old_ids:
+            converted_item = converted.get(assertion_id)
+            if converted_item is None:
+                canonical_ids.append(assertion_id)
+                continue
+            row_id = converted_item[0]
+            fragments = list(map(str, binding.get("exact_source_fragments", [])))
+            replacement = next(
+                (
+                    candidate_id
+                    for candidate_id, candidate in assertion_by_id.items()
+                    if row_by_assertion.get(candidate_id) == row_id
+                    and candidate.get("semantic_disposition") == "testable"
+                    and candidate.get("obligation_ids")
+                    and any(
+                        fragment in evidence_fragment
+                        for _evidence_row, evidence_fragment in _assertion_literal_evidence(
+                            candidate
+                        )
+                        for fragment in fragments
+                    )
+                ),
+                None,
+            )
+            if replacement is not None and replacement not in canonical_ids:
+                canonical_ids.append(replacement)
+        binding["linked_assertion_ids"] = canonical_ids
+        binding["linked_atom_ids"] = [
+            str(assertion_by_id[item].get("atom_id", "")) for item in canonical_ids
+        ]
+        binding["linked_obligation_ids"] = [
+            str(obligation_id)
+            for item in canonical_ids
+            for obligation_id in assertion_by_id[item].get("obligation_ids", [])
+        ]
+
+    for applicability in payload.get("applicability", []):
+        if not isinstance(applicability, dict):
+            continue
+        applicability["linked_atoms"] = [
+            atom
+            for atom in applicability.get("linked_atoms", [])
+            if str(atom) not in removed_atoms
+        ]
+        applicability["linked_test_cases"] = [
+            tc
+            for tc in applicability.get("linked_test_cases", [])
+            if str(tc) not in removed_test_cases
+        ]
+        if applicability.get("applicable") == "yes" and not applicability[
+            "linked_atoms"
+        ]:
+            applicability.update(
+                {
+                    "applicable": "no",
+                    "source_ref": "none_required",
+                    "reason": "No executable source-backed chain remains for this dimension.",
+                }
+            )
+    for collection_name in ("negative_oracles", "requiredness_oracles"):
+        payload[collection_name] = [
+            item
+            for item in payload.get(collection_name, [])
+            if not isinstance(item, Mapping)
+            or str(item.get("linked_obligation_id", ""))
+            not in removed_obligation_ids
+        ]
+    return repairs
+
+
+_EXACT_DIGIT_LENGTH_PATTERN = re.compile(
+    r"\b(?:только|ровно)\s+(?P<length>[1-9][0-9]*)\s+"
+    r"(?:числов(?:ых|ого)\s+символ(?:ов|а)|цифр(?:ы|а|у)?)\b",
+    re.IGNORECASE,
+)
+_INLINE_REQUIREMENT_CODE_PATTERN = re.compile(
+    r"\b(?:BSR|GSR|DIT)\s+[A-Za-z0-9._/-]+\b"
+)
+_ACTION_DIGIT_VALUE_PATTERN = re.compile(r"(?<![0-9A-Za-zА-Яа-яЁё])[0-9]+(?![0-9A-Za-zА-Яа-яЁё])")
+
+
+def _assertion_action_digit_values(assertion: Mapping[str, Any]) -> tuple[str, ...]:
+    values: list[str] = []
+    for clause in assertion.get("action_clauses", []):
+        if not isinstance(clause, str):
+            continue
+        for match in _ACTION_DIGIT_VALUE_PATTERN.finditer(clause):
+            value = match.group(0)
+            if value not in values:
+                values.append(value)
+    return tuple(values)
+
+
+def _quote_concrete_action_value(
+    assertion: dict[str, Any],
+    value: str,
+) -> bool:
+    clauses = assertion.get("action_clauses", [])
+    if not isinstance(clauses, list):
+        return False
+    changed = False
+    for index, clause in enumerate(clauses):
+        if not isinstance(clause, str) or f"«{value}»" in clause:
+            continue
+        replaced = False
+
+        def replacement(match: re.Match[str]) -> str:
+            nonlocal replaced
+            if not replaced and match.group(0) == value:
+                replaced = True
+                return f"«{value}»"
+            return match.group(0)
+
+        normalized = _ACTION_DIGIT_VALUE_PATTERN.sub(replacement, clause)
+        if replaced:
+            clauses[index] = normalized
+            changed = True
+    return changed
+
+
+def _safe_longer_digit_value(base_value: str, source_text: str) -> str:
+    """Extend a valid digit value without creating a repeated-digit side class."""
+
+    repeated_limit_match = re.search(
+        r"не\s+должно\s+быть\s+([A-Za-zА-Яа-яЁё]+)\s+"
+        r"одинаковых\s+цифр\s+подряд",
+        source_text,
+        re.IGNORECASE,
+    )
+    if repeated_limit_match is None or len(base_value) < 2:
+        return base_value + "0"
+    for digit in "0123456789":
+        if not (base_value[-1] == digit and base_value[-2] == digit):
+            return base_value + digit
+    return base_value + "0"
+
+
+def _materialize_missing_exact_length_boundaries(
+    payload: dict[str, Any],
+    context: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Add deterministic N-1/N+1 calibration chains around a proven exact N.
+
+    The source defines the invalid classes, but usually not their observable UI
+    reaction.  The bridge therefore adds concrete candidate-ui-calibration cases
+    without claiming filtering, an error message, clearing, or navigation blocking.
+    """
+
+    source_designs = payload.get("source_designs", [])
+    obligations = payload.get("obligations", [])
+    applicability = payload.get("applicability", [])
+    if not isinstance(source_designs, list) or not isinstance(obligations, list):
+        return []
+    rows_by_id = {
+        str(row.get("source_row_id", "")): row
+        for row in context.get("source_rows", [])
+        if isinstance(row, Mapping)
+    }
+    obligations_by_id = {
+        str(item.get("obligation_id", "")): item
+        for item in obligations
+        if isinstance(item, Mapping)
+    }
+    existing_ids = {
+        str(value)
+        for source_design in source_designs
+        if isinstance(source_design, Mapping)
+        for assertion in source_design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+        for value in (assertion.get("assertion_id"), assertion.get("atom_id"))
+    } | {
+        str(value)
+        for obligation in obligations
+        if isinstance(obligation, Mapping)
+        for value in (
+            obligation.get("obligation_id"),
+            obligation.get("planned_tc_id"),
+        )
+    }
+    repairs: list[dict[str, Any]] = []
+    for source_index, source_design in enumerate(source_designs):
+        if not isinstance(source_design, dict):
+            continue
+        source_row_id = str(source_design.get("source_row_id", ""))
+        source_row = rows_by_id.get(source_row_id)
+        assertions = source_design.get("assertions", [])
+        if source_row is None or not isinstance(assertions, list):
+            continue
+        source_text = str(source_row.get("bounded_source_text", ""))
+        field_or_block = str(
+            source_row.get("field_or_action", "")
+            or source_design.get("field_or_block", "")
+            or source_row_id
+        )
+        for rule_index, length_match in enumerate(
+            _EXACT_DIGIT_LENGTH_PATTERN.finditer(source_text),
+            start=1,
+        ):
+            exact_length = int(length_match.group("length"))
+            if exact_length < 2:
+                continue
+            preceding_codes = _INLINE_REQUIREMENT_CODE_PATTERN.findall(
+                source_text[: length_match.start()]
+            )
+            requirement_code = preceding_codes[-1] if preceding_codes else ""
+            rule_assertions = [
+                assertion
+                for assertion in assertions
+                if isinstance(assertion, Mapping)
+                and (
+                    not requirement_code
+                    or requirement_code
+                    in set(map(str, assertion.get("requirement_codes", [])))
+                )
+            ]
+            base_assertion: Mapping[str, Any] | None = None
+            base_value = ""
+            for assertion in rule_assertions:
+                if (
+                    assertion.get("semantic_disposition") != "testable"
+                    or assertion.get("polarity") != "positive"
+                    or len(assertion.get("obligation_ids", [])) != 1
+                ):
+                    continue
+                matching_values = [
+                    value
+                    for value in _assertion_action_digit_values(assertion)
+                    if len(value) == exact_length
+                ]
+                if matching_values:
+                    base_assertion = assertion
+                    base_value = matching_values[0]
+                    break
+            if base_assertion is None:
+                continue
+            base_action_quoted = _quote_concrete_action_value(
+                base_assertion,
+                base_value,
+            )
+            if base_action_quoted:
+                repairs.append(
+                    {
+                        "rule": "quote-exact-length-concrete-action-value",
+                        "path": (
+                            f"$.source_designs[{source_index}].assertions"
+                            f"[{assertions.index(base_assertion)}].action_clauses"
+                        ),
+                        "source_row_id": source_row_id,
+                        "requirement_code": requirement_code or "none_required",
+                        "base_assertion_id": str(
+                            base_assertion.get("assertion_id", "")
+                        ),
+                        "value": base_value,
+                    }
+                )
+            base_obligation_id = str(base_assertion["obligation_ids"][0])
+            base_obligation = obligations_by_id.get(base_obligation_id)
+            if not isinstance(base_obligation, Mapping):
+                continue
+            present_classes = {
+                len(value) - exact_length
+                for assertion in rule_assertions
+                for value in _assertion_action_digit_values(assertion)
+                if len(value) - exact_length in {-1, 0, 1}
+            }
+            class_values = (
+                (-1, "N-1", base_value[:-1], "shorter"),
+                (
+                    1,
+                    "N+1",
+                    _safe_longer_digit_value(base_value, source_text),
+                    "longer",
+                ),
+            )
+            additions: list[tuple[dict[str, Any], dict[str, Any]]] = []
+            for offset, class_id, value, slug in class_values:
+                if offset in present_classes:
+                    continue
+                identity = (
+                    f"XLB-{source_row_id}-{rule_index}-{slug.upper()}"
+                )
+                assertion_id = f"ASSERT-{identity}"
+                atom_id = f"ATOM-{identity}"
+                obligation_id = f"OBL-{identity}"
+                test_case_id = f"TC-{identity}"
+                generated_ids = {
+                    assertion_id,
+                    atom_id,
+                    obligation_id,
+                    test_case_id,
+                }
+                if generated_ids & existing_ids:
+                    continue
+                exact_fragment = length_match.group(0)
+                assertion = copy.deepcopy(dict(base_assertion))
+                assertion.update(
+                    {
+                        "assertion_id": assertion_id,
+                        "canonical_statement": (
+                            f"Значение «{value}» класса {class_id} не соответствует "
+                            f"правилу точной длины {exact_length} цифр для поля "
+                            f"«{field_or_block}»; точная UI-реакция требует калибровки."
+                        ),
+                        "polarity": "negative",
+                        "risk": "high",
+                        "action_clauses": [
+                            f"Ввести в поле «{field_or_block}» значение «{value}» "
+                            f"класса {class_id}."
+                        ],
+                        "oracle_clauses": [
+                            f"Точная наблюдаемая UI-реакция на значение «{value}» "
+                            f"класса {class_id} требует candidate-ui-calibration; "
+                            "фильтрация, сообщение, очистка и блокировка перехода "
+                            "не утверждаются."
+                        ],
+                        "atom_id": atom_id,
+                        "obligation_ids": [obligation_id],
+                        "disposition_rationale": (
+                            f"Отдельный {class_id} boundary детерминированно следует "
+                            "из exact-length; механизм UI остаётся неизвестным."
+                        ),
+                        "source_property_id": "none_required",
+                    }
+                )
+                assertion["clause_evidence"] = [
+                    copy.deepcopy(dict(evidence))
+                    for evidence in base_assertion.get("clause_evidence", [])
+                    if isinstance(evidence, Mapping)
+                    and evidence.get("clause_kind") == "condition"
+                ] + [
+                    {
+                        "clause_kind": clause_kind,
+                        "clause_index": 0,
+                        "source_row_id": source_row_id,
+                        "exact_source_fragment": exact_fragment,
+                    }
+                    for clause_kind in ("action", "oracle")
+                ]
+                obligation = copy.deepcopy(dict(base_obligation))
+                obligation.update(
+                    {
+                        "obligation_id": obligation_id,
+                        "linked_atom_id": atom_id,
+                        "source_property_id": "none_required",
+                        "property_type": "exact-length",
+                        "obligation_class": "candidate-ui-calibration",
+                        "required_behavior": (
+                            f"Проверить отдельный класс {class_id} значения «{value}» "
+                            f"для exact-length {exact_length} без выдумывания UI-реакции."
+                        ),
+                        "source_ref": requirement_code or source_row_id,
+                        "planned_tc_id": test_case_id,
+                        "review_notes": "candidate-ui-calibration",
+                        "design_dimension": "boundary",
+                        "planned_check": (
+                            f"Ввести «{value}» ({class_id}) и зафиксировать "
+                            "фактическую наблюдаемую UI-реакцию."
+                        ),
+                        "check_type": "boundary",
+                        "coverage_class": f"exact-length-{slug}",
+                        "input_class": f"{class_id}:{value}",
+                        "single_expected_behavior": (
+                            f"Точная реакция на «{value}» ({class_id}) устанавливается "
+                            "наблюдением UI без предписания механизма."
+                        ),
+                        "oracle_source": "not_found",
+                        "test_data": value,
+                        "dictionary_refs": [],
+                        "dictionary_coverage": "none_required",
+                        "scope_obligation_ids": [],
+                    }
+                )
+                additions.append((assertion, obligation))
+                existing_ids.update(generated_ids)
+            if not additions:
+                continue
+            base_index = assertions.index(base_assertion)
+            new_assertions = [item[0] for item in additions]
+            assertions[base_index + 1 : base_index + 1] = new_assertions
+            new_obligations = [item[1] for item in additions]
+            obligations.extend(new_obligations)
+            obligations_by_id.update(
+                {item["obligation_id"]: item for item in new_obligations}
+            )
+            new_atom_ids = [item["atom_id"] for item in new_assertions]
+            new_test_case_ids = [
+                item["planned_tc_id"] for item in new_obligations
+            ]
+            if isinstance(applicability, list):
+                for row in applicability:
+                    if (
+                        isinstance(row, dict)
+                        and row.get("dimension") in {"traceability", "boundary"}
+                        and row.get("applicable") == "yes"
+                    ):
+                        row.setdefault("linked_atoms", []).extend(new_atom_ids)
+                        row.setdefault("linked_test_cases", []).extend(
+                            new_test_case_ids
+                        )
+            repairs.append(
+                {
+                    "rule": "materialize-exact-length-boundary-candidates",
+                    "path": f"$.source_designs[{source_index}]",
+                    "source_row_id": source_row_id,
+                    "requirement_code": requirement_code or "none_required",
+                    "exact_length": exact_length,
+                    "added_classes": [
+                        item[1]["input_class"].split(":", 1)[0]
+                        for item in additions
+                    ],
+                    "base_assertion_id": str(
+                        base_assertion.get("assertion_id", "")
+                    ),
+                }
+            )
+    return repairs
+
+
+def _materialize_missing_definition_gap_assertions(
+    payload: dict[str, Any],
+    boundary: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Give a partial missing-definition gap its own non-executable atom."""
+
+    designs_by_row = {
+        str(item.get("source_row_id", "")): item
+        for item in payload.get("source_designs", [])
+        if isinstance(item, dict)
+    }
+    existing_assertion_ids = {
+        str(assertion.get("assertion_id", ""))
+        for design in designs_by_row.values()
+        for assertion in design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+    }
+    existing_atom_ids = {
+        str(assertion.get("atom_id", ""))
+        for design in designs_by_row.values()
+        for assertion in design.get("assertions", [])
+        if isinstance(assertion, Mapping)
+    }
+    repairs: list[dict[str, Any]] = []
+    for gap in boundary.get("gaps", []):
+        if (
+            not isinstance(gap, Mapping)
+            or gap.get("gap_type") != "missing-source-definition"
+            or gap.get("blocking") is not False
+            or gap.get("downstream_handling") != "carry-to-source-model"
+        ):
+            continue
+        gap_id = str(gap.get("gap_id", ""))
+        gap_fragments = tuple(
+            normalize_exact_source_text(str(value))
+            for value in gap.get("exact_source_fragments", [])
+            if str(value).strip()
+        )
+        if not gap_id or not gap_fragments:
+            continue
+        for row_id in map(str, gap.get("source_row_ids", [])):
+            source_design = designs_by_row.get(row_id)
+            if source_design is None:
+                continue
+            assertions = source_design.get("assertions", [])
+            if not isinstance(assertions, list):
+                continue
+
+            def matching_evidence(
+                assertion: Mapping[str, Any],
+            ) -> list[dict[str, Any]]:
+                result: list[dict[str, Any]] = []
+                for raw in assertion.get("requirement_code_evidence", []):
+                    if not isinstance(raw, Mapping):
+                        continue
+                    evidence_fragment = normalize_exact_source_text(
+                        str(raw.get("exact_source_fragment", ""))
+                    )
+                    if any(
+                        fragment in evidence_fragment
+                        or evidence_fragment in fragment
+                        for fragment in gap_fragments
+                        if evidence_fragment
+                    ):
+                        result.append(dict(raw))
+                return result
+
+            if any(
+                isinstance(assertion, Mapping)
+                and assertion.get("semantic_disposition")
+                in {"ambiguous", "not-applicable"}
+                and matching_evidence(assertion)
+                for assertion in assertions
+            ):
+                continue
+            owner = next(
+                (
+                    (assertion, evidence)
+                    for assertion in assertions
+                    if isinstance(assertion, Mapping)
+                    for evidence in (matching_evidence(assertion),)
+                    if evidence
+                ),
+                None,
+            )
+            if owner is None:
+                continue
+            owner_assertion, evidence = owner
+            assertion_id = f"ASSERT-{row_id.removeprefix('SRC-')}-{gap_id}"
+            atom_id = f"ATOM-{row_id.removeprefix('SRC-')}-{gap_id}"
+            if assertion_id in existing_assertion_ids or atom_id in existing_atom_ids:
+                continue
+            # The executable sibling remains the sole owner of the requirement
+            # code.  This mixed-observability sibling is code-less and is traced
+            # through the exact GAP/source fragment only.
+            requirement_codes: list[str] = []
+            fragment_label = "; ".join(gap_fragments)
+            assertions.append(
+                {
+                    "assertion_id": assertion_id,
+                    "canonical_statement": (
+                        "Source row не определяет локальное поведение "
+                        f"элементов: {fragment_label}."
+                    ),
+                    "polarity": "neutral",
+                    "semantic_disposition": "not-applicable",
+                    "execution_readiness": "not-applicable",
+                    "execution_readiness_rationale": "none_required",
+                    "risk": "medium",
+                    "condition_clauses": [],
+                    "action_clauses": [],
+                    "oracle_clauses": [],
+                    "requirement_codes": requirement_codes,
+                    "requirement_code_evidence": [],
+                    "clause_evidence": [],
+                    "supporting_source_bindings": [],
+                    "clarification_clause_bindings": [],
+                    "atom_id": atom_id,
+                    "obligation_ids": [],
+                    "disposition_rationale": (
+                        f"{gap_id} из authoritative boundary отделяет "
+                        "неопределённую часть от соседнего исполнимого поведения."
+                    ),
+                    "source_property_id": "none_required",
+                    "field_or_block": str(
+                        owner_assertion.get("field_or_block", row_id)
+                    ),
+                    "source_reference": str(
+                        owner_assertion.get("source_reference", row_id)
+                    ),
+                }
+            )
+            existing_assertion_ids.add(assertion_id)
+            existing_atom_ids.add(atom_id)
+            repairs.append(
+                {
+                    "rule": "split-missing-definition-gap-from-executable-row",
+                    "path": f"$.source_designs[{row_id}].assertions[-1]",
+                    "gap_id": gap_id,
+                    "source_row_id": row_id,
+                    "assertion_id": assertion_id,
+                    "atom_id": atom_id,
+                    "requirement_codes": requirement_codes,
+                }
+            )
+    return repairs
+
+
 def normalize_semantic_design_transport(
     payload: Mapping[str, Any],
     *,
     context: Mapping[str, Any] | None = None,
     boundary: Mapping[str, Any] | None = None,
+    repo_root: Path | None = None,
+    fixture_context: Mapping[str, Any] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Repair only mechanically provable bridge transport fields."""
 
@@ -3244,6 +5702,16 @@ def normalize_semantic_design_transport(
                 }
             )
     source_designs = normalized.get("source_designs", [])
+    obligations_by_id = {
+        str(item.get("obligation_id", "")): item
+        for item in normalized.get("obligations", [])
+        if isinstance(item, dict)
+    }
+    fixture_contracts = (
+        _load_verified_fixture_contracts(fixture_context or context, repo_root)
+        if context is not None
+        else {}
+    )
     if context is not None and isinstance(source_designs, list):
         context_rows = {
             str(row.get("source_row_id", "")): row
@@ -3261,6 +5729,203 @@ def normalize_semantic_design_transport(
             for assertion_index, assertion in enumerate(assertions):
                 if not isinstance(assertion, dict):
                     continue
+                read_only_projection = _read_only_action_control_projection(
+                    assertion,
+                    source_row,
+                )
+                if read_only_projection is not None:
+                    previous_sha256 = canonical_payload_sha256(
+                        {
+                            field: assertion.get(field)
+                            for field in (
+                                "canonical_statement",
+                                "condition_clauses",
+                                "action_clauses",
+                                "oracle_clauses",
+                            )
+                        }
+                    )
+                    obligation_fields = read_only_projection.pop(
+                        "obligation_fields"
+                    )
+                    assertion.update(read_only_projection)
+                    for obligation_id in map(
+                        str, assertion.get("obligation_ids", [])
+                    ):
+                        obligation = obligations_by_id.get(obligation_id)
+                        if isinstance(obligation, dict):
+                            obligation.update(obligation_fields)
+                    repairs.append(
+                        {
+                            "rule": "canonicalize-read-only-action-control",
+                            "path": (
+                                f"$.source_designs[{source_index}].assertions"
+                                f"[{assertion_index}]"
+                            ),
+                            "source_row_id": source_row_id,
+                            "assertion_id": str(
+                                assertion.get("assertion_id", "")
+                            ),
+                            "previous_value_sha256": previous_sha256,
+                        }
+                    )
+                inclusive_projection = _inclusive_twentieth_birthday_projection(
+                    assertion,
+                    [
+                        item
+                        for item in context.get("approved_clarifications", [])
+                        if isinstance(item, Mapping)
+                    ],
+                )
+                if inclusive_projection is not None:
+                    previous_sha256 = canonical_payload_sha256(
+                        {
+                            field: assertion.get(field)
+                            for field in (
+                                "canonical_statement",
+                                "condition_clauses",
+                            )
+                        }
+                    )
+                    obligation_fields = inclusive_projection.pop(
+                        "obligation_fields"
+                    )
+                    assertion.update(inclusive_projection)
+                    for obligation_id in map(
+                        str, assertion.get("obligation_ids", [])
+                    ):
+                        obligation = obligations_by_id.get(obligation_id)
+                        if isinstance(obligation, dict):
+                            obligation.update(obligation_fields)
+                    repairs.append(
+                        {
+                            "rule": "preserve-approved-inclusive-age-boundary",
+                            "path": (
+                                f"$.source_designs[{source_index}].assertions"
+                                f"[{assertion_index}]"
+                            ),
+                            "source_row_id": source_row_id,
+                            "assertion_id": str(
+                                assertion.get("assertion_id", "")
+                            ),
+                            "previous_value_sha256": previous_sha256,
+                        }
+                    )
+                future_date_projection = _future_issue_date_save_block_projection(
+                    assertion,
+                    [
+                        item
+                        for item in context.get("approved_clarifications", [])
+                        if isinstance(item, Mapping)
+                    ],
+                )
+                if future_date_projection is not None:
+                    previous_sha256 = canonical_payload_sha256(
+                        {
+                            "oracle_clauses": assertion.get("oracle_clauses"),
+                            "obligations": [
+                                obligations_by_id.get(str(obligation_id))
+                                for obligation_id in assertion.get(
+                                    "obligation_ids", []
+                                )
+                            ],
+                        }
+                    )
+                    obligation_fields = future_date_projection.pop(
+                        "obligation_fields"
+                    )
+                    assertion.update(future_date_projection)
+                    for obligation_id in map(
+                        str, assertion.get("obligation_ids", [])
+                    ):
+                        obligation = obligations_by_id.get(obligation_id)
+                        if isinstance(obligation, dict):
+                            obligation.update(obligation_fields)
+                    repairs.append(
+                        {
+                            "rule": "preserve-approved-future-date-save-block",
+                            "path": (
+                                f"$.source_designs[{source_index}].assertions"
+                                f"[{assertion_index}]"
+                            ),
+                            "source_row_id": source_row_id,
+                            "assertion_id": str(
+                                assertion.get("assertion_id", "")
+                            ),
+                            "previous_value_sha256": previous_sha256,
+                        }
+                    )
+                fixture_projection = _verified_fixture_clause_projection(
+                    assertion,
+                    obligations_by_id,
+                    fixture_contracts,
+                )
+                if fixture_projection is not None:
+                    previous_sha256 = canonical_payload_sha256(
+                        {
+                            field: assertion.get(field)
+                            for field in (
+                                "canonical_statement",
+                                "condition_clauses",
+                                "action_clauses",
+                                "oracle_clauses",
+                                "disposition_rationale",
+                            )
+                        }
+                    )
+                    obligation_fields = fixture_projection.pop(
+                        "obligation_fields"
+                    )
+                    assertion.update(fixture_projection)
+                    for obligation_id in map(
+                        str, assertion.get("obligation_ids", [])
+                    ):
+                        obligation = obligations_by_id.get(obligation_id)
+                        if isinstance(obligation, dict):
+                            obligation.update(obligation_fields)
+                    repairs.append(
+                        {
+                            "rule": "bind-exact-verified-fixture-literals",
+                            "path": (
+                                f"$.source_designs[{source_index}].assertions"
+                                f"[{assertion_index}]"
+                            ),
+                            "source_row_id": source_row_id,
+                            "assertion_id": str(
+                                assertion.get("assertion_id", "")
+                            ),
+                            "previous_value_sha256": previous_sha256,
+                        }
+                    )
+                calibration_previous_sha256 = canonical_payload_sha256(
+                    {
+                        "oracle_clauses": assertion.get("oracle_clauses"),
+                        "obligations": [
+                            obligations_by_id.get(str(obligation_id))
+                            for obligation_id in assertion.get(
+                                "obligation_ids", []
+                            )
+                        ],
+                    }
+                )
+                if _canonicalize_declared_ui_calibration(
+                    assertion,
+                    obligations_by_id,
+                ):
+                    repairs.append(
+                        {
+                            "rule": "canonicalize-declared-ui-calibration-candidate",
+                            "path": (
+                                f"$.source_designs[{source_index}].assertions"
+                                f"[{assertion_index}]"
+                            ),
+                            "source_row_id": source_row_id,
+                            "assertion_id": str(
+                                assertion.get("assertion_id", "")
+                            ),
+                            "previous_value_sha256": calibration_previous_sha256,
+                        }
+                    )
                 block_heading = _BLOCK_HEADING_SOURCE_PATTERN.fullmatch(
                     str(source_row.get("bounded_source_text", "")).strip()
                 )
@@ -3302,6 +5967,13 @@ def normalize_semantic_design_transport(
                     assertion,
                     source_row,
                 )
+                repair_rule = "materialize-always-visibility-prestate-pair"
+                if projection is None:
+                    projection = _always_visibility_direct_observation_projection(
+                        assertion,
+                        source_row,
+                    )
+                    repair_rule = "canonicalize-always-visibility-direct-observation"
                 if projection is None:
                     continue
                 previous_sha256 = canonical_payload_sha256(
@@ -3315,10 +5987,16 @@ def normalize_semantic_design_transport(
                         )
                     }
                 )
+                obligation_fields = projection.pop("obligation_fields", None)
                 assertion.update(projection)
+                if isinstance(obligation_fields, Mapping):
+                    for obligation_id in map(str, assertion.get("obligation_ids", [])):
+                        obligation = obligations_by_id.get(obligation_id)
+                        if isinstance(obligation, dict):
+                            obligation.update(obligation_fields)
                 repairs.append(
                     {
-                        "rule": "materialize-always-visibility-prestate-pair",
+                        "rule": repair_rule,
                         "path": (
                             f"$.source_designs[{source_index}].assertions"
                             f"[{assertion_index}]"
@@ -3328,6 +6006,129 @@ def normalize_semantic_design_transport(
                         "previous_value_sha256": previous_sha256,
                     }
                 )
+    if context is not None:
+        repairs.extend(
+            _split_visibility_code_from_typed_requiredness(
+                normalized,
+                context,
+            )
+        )
+        obligations_by_id = {
+            str(item.get("obligation_id", "")): item
+            for item in normalized.get("obligations", [])
+            if isinstance(item, dict)
+        }
+    if context is not None and boundary is not None:
+        repairs.extend(
+            _materialize_bare_requirement_definition_gaps(
+                normalized,
+                context,
+                boundary,
+            )
+        )
+        repairs.extend(
+            _materialize_missing_definition_gap_assertions(
+                normalized,
+                boundary,
+            )
+        )
+    while True:
+        split_projection = _collapsed_executable_negative_oracle_projection(
+            normalized,
+            context=context,
+        )
+        if split_projection is None:
+            break
+        split_source_design = normalized["source_designs"][
+            int(split_projection["source_index"])
+        ]
+        split_assertions = split_source_design["assertions"]
+        split_assertion_index = int(split_projection["assertion_index"])
+        split_assertions[split_assertion_index : split_assertion_index + 1] = (
+            split_projection["new_assertions"]
+        )
+        split_obligation_index = int(split_projection["obligation_index"])
+        normalized["obligations"][
+            split_obligation_index : split_obligation_index + 1
+        ] = split_projection["new_obligations"]
+        for oracle_index, new_oracle in zip(
+            split_projection["oracle_indices"],
+            split_projection["new_oracles"],
+            strict=True,
+        ):
+            normalized["negative_oracles"][int(oracle_index)] = new_oracle
+        normalized["dependency_bindings"] = split_projection[
+            "canonical_dependency_bindings"
+        ]
+        repairs.append(
+            {
+                "rule": "split-branch-aligned-negative-oracle-chains",
+                "path": (
+                    f"$.source_designs[{split_projection['source_index']}].assertions"
+                    f"[{split_projection['assertion_index']}]"
+                ),
+                "original_assertion_id": split_projection[
+                    "original_assertion_id"
+                ],
+                "original_obligation_id": split_projection[
+                    "original_obligation_id"
+                ],
+                "scope_obligation_ids": split_projection[
+                    "scope_obligation_ids"
+                ],
+            }
+        )
+    while True:
+        calibration_projection = _combined_calibration_allowed_class_projection(
+            normalized,
+            context=context,
+        )
+        if calibration_projection is None:
+            break
+        calibration_source_design = normalized["source_designs"][
+            int(calibration_projection["source_index"])
+        ]
+        calibration_assertions = calibration_source_design["assertions"]
+        calibration_assertion_index = int(
+            calibration_projection["assertion_index"]
+        )
+        calibration_assertions[
+            calibration_assertion_index : calibration_assertion_index + 1
+        ] = [
+            calibration_projection["positive_assertion"],
+            calibration_projection["negative_assertion"],
+        ]
+        calibration_obligation_index = int(
+            calibration_projection["obligation_index"]
+        )
+        normalized["obligations"][
+            calibration_obligation_index : calibration_obligation_index + 1
+        ] = [
+            calibration_projection["positive_obligation"],
+            calibration_projection["negative_obligation"],
+        ]
+        normalized["dependency_bindings"] = calibration_projection[
+            "canonical_dependency_bindings"
+        ]
+        repairs.append(
+            {
+                "rule": "split-calibration-allowed-class-companion",
+                "path": (
+                    f"$.source_designs[{calibration_projection['source_index']}]"
+                    f".assertions[{calibration_projection['assertion_index']}]"
+                ),
+                "original_assertion_id": calibration_projection[
+                    "original_assertion_id"
+                ],
+                "scope_obligation_id": calibration_projection[
+                    "scope_obligation_id"
+                ],
+            }
+        )
+    if context is not None:
+        repairs.extend(
+            _materialize_missing_exact_length_boundaries(normalized, context)
+        )
     if context is not None and isinstance(source_designs, list):
         projections = _typed_interpretation_support_alias_projections(
             normalized,
@@ -3846,7 +6647,14 @@ def normalize_semantic_design_transport(
             ]
             repairs.append(
                 {
-                    "rule": "bind-binary-optional-candidate-to-source-default",
+                    "rule": (
+                        "bind-optional-action-control-to-no-action-contract"
+                        if projection.get("fallback_input_mode")
+                        == "no-action-control"
+                        else "bind-binary-optional-candidate-to-source-default"
+                        if projection["restriction_type"] == "optionality"
+                        else "bind-binary-requiredness-candidate-to-source-default"
+                    ),
                     "path": projection["path"],
                     "source_row_id": projection["source_row_id"],
                     "assertion_id": projection["assertion_id"],
@@ -3947,6 +6755,29 @@ def normalize_semantic_design_transport(
                     "repaired_clause_keys": projection[
                         "repaired_clause_keys"
                     ],
+                    "previous_value_sha256": canonical_payload_sha256(
+                        {"clause_evidence": assertion.get("clause_evidence", [])}
+                    ),
+                }
+            )
+            assertion["clause_evidence"] = projection["canonical_evidence"]
+        for projection in _executable_negative_signal_evidence_projections(
+            normalized,
+            context,
+            boundary,
+        ):
+            source_design = normalized["source_designs"][
+                int(projection["source_index"])
+            ]
+            assertion = source_design["assertions"][
+                int(projection["assertion_index"])
+            ]
+            repairs.append(
+                {
+                    "rule": "expand-executable-negative-signal-clause-evidence",
+                    "path": projection["path"],
+                    "signal_id": projection["signal_id"],
+                    "assertion_id": projection["assertion_id"],
                     "previous_value_sha256": canonical_payload_sha256(
                         {"clause_evidence": assertion.get("clause_evidence", [])}
                     ),
@@ -4346,8 +7177,9 @@ def _validate_schema_instance(
 def _validate_always_visibility_prestate_cardinality(
     assertion: Mapping[str, Any],
     requirement_evidence: Sequence[Mapping[str, Any]],
+    source_row: Mapping[str, Any] | None = None,
 ) -> None:
-    """Reject a one-state proof of an explicit always-visible requirement."""
+    """Require two states only when the bounded row names both states."""
 
     is_always_visible = any(
         "видимость-всегда"
@@ -4359,17 +7191,38 @@ def _validate_always_visibility_prestate_cardinality(
     )
     if not is_always_visible or assertion.get("semantic_disposition") != "testable":
         return
+    if source_row is not None:
+        source_text = str(source_row.get("bounded_source_text", ""))
+        logical_pair = re.search(
+            r"логическое\s+да\s*/\s*нет",
+            source_text,
+            re.IGNORECASE,
+        )
+        manual_pair = (
+            re.search(r"при\s+ручном\s+заполнении", source_text, re.IGNORECASE)
+            is not None
+            and re.search(
+                r"«ввести\s+вручную»\s*=\s*«нет»",
+                source_text,
+                re.IGNORECASE,
+            )
+            is not None
+        )
+        if logical_pair is None and not manual_pair:
+            return
     for field in ("condition_clauses", "action_clauses", "oracle_clauses"):
         clauses = assertion.get(field)
-        normalized = (
+        if not isinstance(clauses, list) or len(clauses) < 2:
+            raise SemanticDesignBridgeError(
+                f"{assertion.get('assertion_id')} Видимость-всегда requires "
+                f"two distinct source-backed pre-state chains in {field}"
+            )
+        if field == "condition_clauses" and len(
             {
                 normalize_exact_source_text(str(value)).casefold()
                 for value in clauses
             }
-            if isinstance(clauses, list)
-            else set()
-        )
-        if len(normalized) < 2:
+        ) < 2:
             raise SemanticDesignBridgeError(
                 f"{assertion.get('assertion_id')} Видимость-всегда requires "
                 f"two distinct source-backed pre-state chains in {field}"
@@ -4583,16 +7436,13 @@ def semantic_design_output_schema(
             },
             "semantic_disposition": {
                 "type": "string",
-                "enum": ["testable", "not-applicable"],
+                "enum": ["testable", "ambiguous", "not-applicable"],
             },
             "execution_readiness": {
                 "type": "string",
-                "enum": ["ready", "not-applicable"],
+                "enum": ["ready", "dependency-blocked", "not-applicable"],
             },
-            "execution_readiness_rationale": {
-                "type": "string",
-                "enum": ["none_required"] if require_ready else ["none_required", "other"],
-            },
+            "execution_readiness_rationale": {"type": "string"},
             "risk": {
                 "type": "string",
                 "enum": ["low", "medium", "high", "critical"],
@@ -5521,12 +8371,13 @@ def validate_semantic_input_preflight(
         restriction_type = str(signal["restriction_type"])
         binary_default_value = (
             str(signal.get("default_value", ""))
-            if restriction_type == "optionality"
-            and signal.get("value_semantics") == "binary-logical-default"
+            if signal.get("value_semantics") == "binary-logical-default"
             else ""
         )
         if binary_default_value:
             field = str(signal["field_or_block"])
+            optional = restriction_type == "optionality"
+            requiredness_label = "Необязательный" if optional else "Условно обязательный"
             fallback_action = (
                 f"Не изменять значение по умолчанию «{binary_default_value}» "
                 f"логического элемента «{field}»."
@@ -5535,18 +8386,18 @@ def validate_semantic_input_preflight(
                 f"Логическое значение по умолчанию «{binary_default_value}»"
             )
             expected_behavior = (
-                f"Необязательный логический элемент остаётся в заданном значении "
+                f"{requiredness_label} логический элемент остаётся в заданном значении "
                 f"по умолчанию «{binary_default_value}» без обязательной активации; "
                 "точный UI-триггер и итоговый отклик требуют калибровки."
             )
             fallback_canonical_statement = (
-                f"Необязательный логический элемент «{field}» не требует отдельной "
+                f"{requiredness_label} логический элемент «{field}» не требует отдельной "
                 f"активации и остаётся в значении по умолчанию "
                 f"«{binary_default_value}»; точный итоговый UI-отклик калибруется."
             )
             fallback_disposition_rationale = (
-                "Типизированное О=Нет подтверждает отсутствие обязательного выбора, "
-                "а источник задаёт бинарный control и его значение по умолчанию; "
+                "Типизированная ячейка О сохраняет requiredness/optionality, а источник "
+                "задаёт бинарный control и его значение по умолчанию; "
                 "третье пустое состояние не выводится."
             )
             analyst_question = (
@@ -5555,6 +8406,36 @@ def validate_semantic_input_preflight(
                 f"оставить в значении по умолчанию «{binary_default_value}»?"
             )
             fallback_input_mode = "binary-logical-default"
+            fallback_required_when = (
+                "no-user-selection-required"
+                if optional
+                else str(signal.get("requiredness_source", ""))
+            )
+        elif (
+            restriction_type == "optionality"
+            and signal.get("control_semantics") == "action-control"
+        ):
+            field = str(signal["field_or_block"])
+            fallback_action = f"Не нажимать элемент «{field}»."
+            fallback_test_data = f"Не нажимать элемент «{field}»"
+            expected_behavior = (
+                f"Взаимодействие с элементом «{field}» не является обязательным; "
+                "точная точка подтверждения формы требует UI-калибровки."
+            )
+            fallback_canonical_statement = (
+                f"Необязательность action control «{field}» означает отсутствие "
+                "обязательного нажатия, а не пустое значение поля."
+            )
+            fallback_disposition_rationale = (
+                "Типизированная ячейка О относится к action control, поэтому "
+                "optionality проверяется отсутствием обязательного взаимодействия."
+            )
+            analyst_question = (
+                f"В какой точке подтверждения формы проверяется, что элемент «{field}» "
+                "не требуется нажимать?"
+            )
+            fallback_input_mode = "no-action-control"
+            fallback_required_when = "never_required_by_typed_cell"
         else:
             fallback_action = f"Оставить поле из {row_id} пустым."
             fallback_test_data = "Пустое значение"
@@ -5576,6 +8457,11 @@ def validate_semantic_input_preflight(
                 f"отображается для пустого поля из {row_id}?"
             )
             fallback_input_mode = "empty-value"
+            fallback_required_when = (
+                "never_required_by_typed_cell"
+                if restriction_type == "optionality"
+                else str(signal.get("requiredness_source", ""))
+            )
         requiredness_candidate_defaults.append(
             {
                 "signal_id": signal_id,
@@ -5589,6 +8475,7 @@ def validate_semantic_input_preflight(
                 "fallback_expected_behavior": expected_behavior,
                 "fallback_canonical_statement": fallback_canonical_statement,
                 "fallback_disposition_rationale": fallback_disposition_rationale,
+                "fallback_required_when": fallback_required_when,
                 "source_backed_default_value": binary_default_value,
                 "oracle_source": "not_found",
                 "oracle_status": "ui-calibration-required",
@@ -6102,10 +8989,12 @@ Quality contract:
 - Action and oracle clauses must never be textually identical: the action names the user-visible
   trigger or input, while the oracle names the resulting observable product state. Copying a
   system result such as `address is decomposed` into the action is not an executable step.
-- An explicit `Видимость-всегда` / always-visible rule requires one atomic
-  assertion that proves the same visibility result in at least two distinct relevant,
-  source-backed pre-states. Emit separate condition, action and oracle clauses for both
-  states; one default/open-block observation is not proof of `always`.
+- When the bounded source row of an explicit `Видимость-всегда` / always-visible
+  rule itself names two states (for example logical `Да/Нет` or automatic/manual), emit one
+  atomic assertion that proves the same visibility result in both states, with separate
+  condition, action and oracle clauses. When that row names no state dimension, use one
+  direct open-and-observe visibility check; never invent or borrow an unrelated toggle merely
+  to manufacture a two-state proof.
 - A statement about an internal model, persistence or integration field does not authorize
   inventing an API, database query or generic "observable artifact" action. Use only an
   observation interface registered in the bounded context. If none exists, do not return a
@@ -6134,9 +9023,9 @@ Quality contract:
   union of all assertion.obligation_ids exactly; no referenced OBL may be omitted.
 - Requiredness is not covered by entering a valid value. Optionality is a distinct positive
   signal and needs its own ASSERT/ATOM/OBL/TC. For ordinary value fields it proves empty-value
-  acceptance. For a source-typed binary logical switch/checkbox with a source-backed default,
-  it instead proves that no separate activation is required and preserves that default; never
-  invent a third empty state for a Да/Нет control. Do not classify
+  acceptance. For either requiredness or optionality on a source-typed binary logical
+  switch/checkbox with a source-backed default, use the projected binary-default fallback:
+  preserve that default and never invent a third empty state for a Да/Нет control. Do not classify
   a generic success message as negative feedback. When one explicit source sentence says that
   multiple named values must be entered, each named target in semantic_source_signal_registry
   requires its own negative or calibration ASSERT/ATOM/OBL/TC chain; a different validation
@@ -6153,6 +9042,14 @@ Quality contract:
   action and oracle must implement that value. Typed XHTML cells are structural table
   evidence and intentionally have no invented BSR assignment. Requiredness entries also bind
   their matching requiredness inventory signal; editability entries remain independent checks.
+- A named verified fixture must project its exact request literal and exact expected suggestion
+  into the owning condition/action/oracle chain. Vague phrases such as "corresponding value" or
+  "value from the fixture" are not reproducible. A typed field-property chain must not own a
+  requirement code whose literal statement defines a different property; emit a separate chain
+  for that coded behavior (for example BSR visibility versus typed O-cell requiredness).
+- An authoritative open missing-source-definition GAP bound to its own ambiguous/N/A assertion
+  is a hard negative boundary. Do not add its undefined fragments to an executable sibling merely
+  because both originate in one coded source row.
 - Every typed-property assertion must preserve the exact source_value from its matching
   semantic_field_property_registry entry in at least one same-row clause_evidence literal.
   When the cell token alone does not describe the visible action/oracle, use one contiguous
@@ -6912,10 +9809,17 @@ def _source_signal_registry(
                         typed_requiredness.get("source_cell_locator", "")
                     ),
                 }
-            if normalized == "optional":
-                binary_default = _binary_logical_default(row)
-                if binary_default is not None:
-                    typed_signal.update(binary_default)
+            binary_default = _binary_logical_default(row)
+            if binary_default is not None:
+                typed_signal.update(binary_default)
+            action_control_kind = _action_control_kind(row)
+            if action_control_kind is not None:
+                typed_signal.update(
+                    {
+                        "control_semantics": "action-control",
+                        "action_control_kind": action_control_kind,
+                    }
+                )
             requiredness.append(typed_signal)
         compound_targets = _compound_requiredness_targets(text)
         compound_spans = [(start, end) for start, end, _target in compound_targets]
@@ -7289,6 +10193,30 @@ def validate_semantic_design_binding(
                     raise SemanticDesignBridgeError(
                         f"{row_id} N/A assertion requires a substantive rationale"
                     )
+            elif disposition == "ambiguous":
+                rationale = assertion.get("execution_readiness_rationale")
+                if (
+                    readiness != "dependency-blocked"
+                    or not isinstance(rationale, str)
+                    or len(rationale.strip()) < 12
+                    or rationale == "none_required"
+                ):
+                    raise SemanticDesignBridgeError(
+                        f"{row_id} ambiguous assertion must be dependency-blocked "
+                        "with a substantive readiness rationale"
+                    )
+                if condition_clauses or action_clauses or oracle_clauses or obligation_ids:
+                    raise SemanticDesignBridgeError(
+                        f"{row_id} ambiguous assertion cannot own executable semantics"
+                    )
+                disposition_rationale = assertion.get("disposition_rationale")
+                if (
+                    not isinstance(disposition_rationale, str)
+                    or len(disposition_rationale.strip()) < 12
+                ):
+                    raise SemanticDesignBridgeError(
+                        f"{row_id} ambiguous assertion requires a substantive rationale"
+                    )
             else:
                 raise SemanticDesignBridgeError(
                     f"{row_id} semantic_disposition is invalid"
@@ -7304,7 +10232,7 @@ def validate_semantic_design_binding(
                 )
             if boundary_disposition != "included" and disposition != "not-applicable":
                 raise SemanticDesignBridgeError(
-                    f"{row_id} context/excluded row cannot become testable"
+                    f"{row_id} context/excluded row cannot become testable or ambiguous"
                 )
 
             requirement_evidence = assertion.get("requirement_code_evidence")
@@ -7415,6 +10343,7 @@ def validate_semantic_design_binding(
             _validate_always_visibility_prestate_cardinality(
                 assertion,
                 requirement_evidence,
+                rows_by_id[row_id],
             )
 
             supporting = assertion.get("supporting_source_bindings")
@@ -7619,8 +10548,33 @@ def validate_semantic_design_binding(
         str(item.get("source_row_id", "")) for item in eligible_rows
     }
 
+    definition_gap_codes: set[str] = set()
+    boundary_codes_by_row = {
+        str(item.get("source_row_id", "")): set(
+            map(str, item.get("requirement_codes", []))
+        )
+        for item in boundary.get("source_decisions", [])
+        if isinstance(item, Mapping)
+    }
+    for gap in boundary.get("gaps", []):
+        if (
+            not isinstance(gap, Mapping)
+            or gap.get("gap_type") != "missing-source-definition"
+            or gap.get("blocking") is not False
+            or gap.get("downstream_handling") != "carry-to-source-model"
+        ):
+            continue
+        fragments = " ".join(map(str, gap.get("exact_source_fragments", [])))
+        for row_id in map(str, gap.get("source_row_ids", [])):
+            definition_gap_codes.update(
+                code
+                for code in boundary_codes_by_row.get(row_id, set())
+                if code.casefold() in fragments.casefold()
+            )
     for clarification_id, record in clarification_by_id.items():
-        expected_codes = set(map(str, record.get("requirement_codes", [])))
+        expected_codes = set(map(str, record.get("requirement_codes", []))) - (
+            definition_gap_codes
+        )
         expected_rows = set(map(str, record.get("source_row_ids", [])))
         if clarification_binding_codes.get(clarification_id, set()) != expected_codes:
             raise SemanticDesignBridgeError(
@@ -8632,9 +11586,8 @@ def validate_semantic_design_binding(
                     f"{scope_id} source row is outside its ASSERT->ATOM->OBL evidence chain"
                 )
             restriction_type = str(expected_signal["restriction_type"])
-            binary_optional_default = (
-                restriction_type == "optionality"
-                and expected_signal.get("value_semantics")
+            binary_signal_default = (
+                expected_signal.get("value_semantics")
                 == "binary-logical-default"
                 and bool(str(expected_signal.get("default_value", "")))
             )
@@ -8681,7 +11634,7 @@ def validate_semantic_design_binding(
                         allowed_check_types.add("dependency")
                 else:
                     if (
-                        not binary_optional_default
+                        not binary_signal_default
                         and item.get("empty_value_oracle_found") != "yes"
                     ):
                         raise SemanticDesignBridgeError(
@@ -8844,15 +11797,26 @@ def validate_semantic_design_binding(
                         "oracle source"
                     )
                 if registry_name == "requiredness":
-                    if binary_optional_default:
+                    if binary_signal_default:
                         default_value = str(expected_signal["default_value"])
                         if default_value not in str(obligation.get("test_data", "")):
                             raise SemanticDesignBridgeError(
-                                f"{scope_id} binary optionality candidate must preserve "
+                                f"{scope_id} binary requiredness/optionality candidate "
+                                "must preserve "
                                 "its source-backed default test value"
                             )
-                    elif not _text_has_missing_required_value(
-                        obligation.get("test_data", "")
+                    elif not (
+                        _text_has_missing_required_value(
+                            obligation.get("test_data", "")
+                        )
+                        or (
+                            restriction_type == "optionality"
+                            and expected_signal.get("control_semantics")
+                            == "action-control"
+                            and _text_has_no_action(
+                                obligation.get("test_data", "")
+                            )
+                        )
                     ):
                         raise SemanticDesignBridgeError(
                             f"{scope_id} requiredness/optionality candidate requires an "
@@ -9099,7 +12063,19 @@ def legacy_v1_projection(
             {
                 "source_row_id": item["source_row_id"],
                 "scope_disposition": (
-                    "yes" if item["boundary_disposition"] == "included" else "no"
+                    "yes"
+                    if any(
+                        assertion.get("semantic_disposition") == "testable"
+                        for assertion in item["assertions"]
+                    )
+                    else (
+                        "unclear"
+                        if any(
+                            assertion.get("semantic_disposition") == "ambiguous"
+                            for assertion in item["assertions"]
+                        )
+                        else "no"
+                    )
                 ),
                 "requirement_codes": item["requirement_codes"],
                 "assertions": item["assertions"],

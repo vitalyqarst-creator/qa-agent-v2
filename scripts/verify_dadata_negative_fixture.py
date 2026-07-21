@@ -44,11 +44,12 @@ def _request_json_once(
     timeout_seconds: float,
     opener: Callable[..., Any],
     parameters: dict[str, Any] | None = None,
+    endpoint: str = ENDPOINT,
 ) -> tuple[dict[str, Any], int]:
     request_parameters = {"query": query, **(parameters or {})}
     request_body = _canonical_json_bytes(request_parameters)
     request = Request(
-        ENDPOINT,
+        endpoint,
         data=request_body,
         method="POST",
         headers={

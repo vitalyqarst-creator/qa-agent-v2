@@ -1336,6 +1336,11 @@ Contract:
   inspector or generic artifact. Use this gap only for a whole unobservable effect; visible
   behavior in the same row remains included and independently testable.
 - Gap evidence fragments must be literal substrings of the linked source rows.
+- If an included row contains a bare requirement token with no statement after it (for
+  example `BSR 114.`), do not infer behavior from the code. Add a non-blocking
+  `missing-source-definition` gap with `carry-to-source-model`, linked to that row and
+  the literal bare token. Typed table properties in other cells remain independently
+  usable and do not close the missing definition.
 - ready requires no blocking gap or missing blocking dependency and blocking_reason=none_required.
 - blocked requires a substantive blocking_reason. Partial source analysis never authorizes writer.
 - Mockups refine only visible locators; they do not create business rules. Return only locators
@@ -2102,6 +2107,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     decision,
                     context=context,
                     boundary=boundary,
+                    repo_root=root,
                 )
             )
             if deterministic_repairs["repair_count"]:

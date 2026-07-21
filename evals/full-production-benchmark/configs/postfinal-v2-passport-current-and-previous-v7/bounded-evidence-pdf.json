@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "source_sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+  "extraction_method": "pdf-page-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "page:18",
+      "exact_source_text": "BSR 84. Видимость-всегда.",
+      "exact_source_text_sha256": "83a38a7b2c0b415a7684abe88b4969cd87059fdde7f94251a6070087b34c836d"
+    },
+    {
+      "source_locator": "page:20",
+      "exact_source_text": "BSR 114.",
+      "exact_source_text_sha256": "9d5948dffa33c5ccd843e5541cacf3bffa612d66bdb913d846f2fe1d6aaf050b"
+    }
+  ]
+}

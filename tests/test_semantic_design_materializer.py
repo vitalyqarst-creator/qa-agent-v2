@@ -15,6 +15,7 @@ from test_case_agent.bounded_scope_materializer import (
     BoundedScopeMaterializationError,
     _assertion_payload,
     _cell,
+    _portable_fixture_contract_lines,
     _render_clarification_requests,
     _render_coverage_gaps,
     _resolved_scope_exclusion_gap_links,
@@ -27,6 +28,40 @@ OWNER_TOKEN = "11111111-1111-4111-8111-111111111111"
 
 
 class SemanticDesignMaterializerTests(unittest.TestCase):
+    def test_verified_fixture_is_rendered_as_portable_inline_contract(self) -> None:
+        fixture_path = (
+            ROOT
+            / "fts/AutoFin/work/vendor-references/dadata-fixtures"
+            / "FX-DADATA-FMS-POS-001"
+            / "FX-DADATA-FMS-POS-001.verification.json"
+        )
+        relative = fixture_path.relative_to(ROOT).as_posix()
+        lines = _portable_fixture_contract_lines(
+            repo_root=ROOT,
+            source_entries=[{"path": relative}],
+            obligations=[
+                {
+                    "obligation_id": "OBL-001",
+                    "test_data": "query=772-053; FX-DADATA-FMS-POS-001",
+                }
+            ],
+        )
+        self.assertEqual(1, len(lines))
+        self.assertIn('request_parameters=`{"query":"772-053"}`', lines[0])
+        self.assertIn('"exact_suggestion":"ОВД ЗЮЗИНО Г. МОСКВЫ"', lines[0])
+        self.assertIn("runtime_api_call=`prohibited`", lines[0])
+
+    def test_referenced_named_fixture_requires_registered_verification(self) -> None:
+        with self.assertRaisesRegex(
+            BoundedScopeMaterializationError,
+            "named fixture lacks a registered verified portable contract",
+        ):
+            _portable_fixture_contract_lines(
+                repo_root=ROOT,
+                source_entries=[],
+                obligations=[{"test_data": "FX-MISSING-001"}],
+            )
+
     def test_resolved_partial_scope_exclusion_routes_to_na_sibling(self) -> None:
         links = _resolved_scope_exclusion_gap_links(
             clarifications=[
@@ -266,6 +301,24 @@ class SemanticDesignMaterializerTests(unittest.TestCase):
             payload["requirement_code_bindings"][1]["evidence_source_path"]
         )
         self.assertIsNone(payload["requirement_code_bindings"][1]["evidence_locator"])
+
+        ambiguous_payload = _assertion_payload(
+            row,
+            {
+                **assertion,
+                "semantic_disposition": "ambiguous",
+                "execution_readiness": "dependency-blocked",
+                "execution_readiness_rationale": (
+                    "Требуется определить поведение до создания проверки."
+                ),
+                "obligation_ids": [],
+            },
+            primary_gap_id="GAP-001",
+        )
+        self.assertEqual("GAP-001", ambiguous_payload["primary_gap_id"])
+        self.assertEqual(
+            "dependency-blocked", ambiguous_payload["execution_readiness"]
+        )
 
     def test_real_projection_publishes_only_final_handoff(self) -> None:
         context, boundary, design = self._h68_design()

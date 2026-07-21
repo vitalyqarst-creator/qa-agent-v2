@@ -207,6 +207,10 @@ CONCRETE_NAMED_VALUE_RE = re.compile(
     r"[«\"]\s*[^»\"\r\n]{1,100}\s*[»\"]",
     re.IGNORECASE,
 )
+CALIBRATION_NO_ACTION_CONTROL_RE = re.compile(
+    r"(?is)(?=.*\bне\s+(?:нажим\w*|активир\w*|выбира\w*|изменя\w*)\b)"
+    r"(?=.*\b(?:кнопк\w*|виджет\w*|переключател\w*|элемент\w*)\b)"
+)
 CALIBRATION_TRANSITION_OVERCLAIM_RE = re.compile(
     r"(?:\bпродолжени\w*\s+допускается\s+только\s+после\b|"
     r"\bне\s+препятству\w*\s+продолжени\w*\b|"
@@ -284,14 +288,22 @@ FORBIDDEN_PROCESS_RE = re.compile(
 )
 NONCONCRETE_RUNTIME_VALUE_RE = re.compile(
     r"(?:\bлюб\w*\s+значени\w*\b[^.\n]{0,120}\bактуальн\w*\s+списк\w*\b|"
-    r"\bзначени\w*\b[^.\n]{0,120}\bво\s+время\s+выполнени\w*\b)",
+    r"\b(?:значени\w*|дат\w*)\b[^.\n]{0,120}\b"
+    r"(?:во\s+время|при)\s+выполнени\w*\b|"
+    r"\bвыбрат\w*\b[^.\n]{0,80}\bдоступн\w*\s+(?:значени\w*|дат\w*)\b)",
+    re.IGNORECASE,
+)
+PROHIBITED_RUNTIME_LOOKUP_RE = re.compile(
+    r"[^.\n]{0,200}\b(?:значени\w*|fixture)\b[^.\n]{0,120}"
+    r"\bво\s+время\s+выполнени\w*\b[^.\n]{0,100}"
+    r"\b(?:запрещ\w*|не\s+допуска\w*)\b",
     re.IGNORECASE,
 )
 INTERNAL_FIXTURE_ARTIFACT_RE = re.compile(
     r"(?:\bwork[\\/]vendor-references[\\/]|"
     r"\bdadata-fixtures[\\/][^\s`]+|"
     r"\bresponse\s+snapshot\b|\bsnapshot\s+ответ\w*\b|"
-    r"\bverification(?:\.json)?\b)",
+    r"\bverification(?:\.json)?\b|\bSHA-?256\b)",
     re.IGNORECASE,
 )
 OUT_OF_SCOPE_KLADR_DIAGNOSTIC_RE = re.compile(
@@ -957,6 +969,8 @@ def validate_production_tc_content(
                 CONCRETE_CODE_LITERAL_RE.search(calibration_inputs) is None
                 and CONCRETE_EMPTY_VALUE_RE.search(calibration_inputs) is None
                 and CONCRETE_NAMED_VALUE_RE.search(calibration_inputs) is None
+                and CALIBRATION_NO_ACTION_CONTROL_RE.search(calibration_inputs)
+                is None
             ):
                 findings.append(
                     _finding(
@@ -1080,6 +1094,10 @@ def validate_production_tc_content(
                 "A production TC must not contain diagnostics for behavior explicitly excluded from this project scope.",
             ),
         ):
+            if finding_id == "production-nonconcrete-runtime-value":
+                inspected_text = PROHIBITED_RUNTIME_LOOKUP_RE.sub(
+                    "", inspected_text
+                )
             match = pattern.search(inspected_text)
             if match is None:
                 continue

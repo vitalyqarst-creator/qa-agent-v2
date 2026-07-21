@@ -1076,6 +1076,34 @@ blocking_reasons:
         self.assertTrue(reused.reused)
         self.assertEqual(result.basis_sha256, reused.basis_sha256)
 
+    def test_builder_prefers_current_seed_matrix_over_prior_workflow_aliases(self) -> None:
+        prior_outputs = self.ft / "work" / "review-cycles" / "prior" / "outputs"
+        prior_outputs.mkdir(parents=True)
+        prior_md = prior_outputs / "final-traceability-matrix.md"
+        prior_xlsx = prior_outputs / "final-traceability-matrix.xlsx"
+        prior_md.write_bytes(self.matrix.read_bytes())
+        prior_xlsx.write_bytes(self.matrix_xlsx.read_bytes())
+        workflow = self.workflow_state.read_text(encoding="utf-8")
+        workflow = workflow.replace(
+            "  active_transition_prompt: work/review-cycles/demo-scope/prompts/"
+            "prompt.writer-to-reviewer.round-1.md\n",
+            "  active_transition_prompt: work/review-cycles/demo-scope/prompts/"
+            "prompt.writer-to-reviewer.round-1.md\n"
+            "  final_traceability_matrix: work/review-cycles/prior/outputs/"
+            "final-traceability-matrix.md\n"
+            "  final_traceability_matrix_xlsx: work/review-cycles/prior/outputs/"
+            "final-traceability-matrix.xlsx\n",
+        )
+        self.workflow_state.write_text(workflow, encoding="utf-8")
+
+        result = self.build_basis()
+        payload = json.loads(result.basis_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            self.binding(self.matrix),
+            payload["final_aliases"]["final_traceability_matrix"],
+        )
+
     def test_builder_rejects_terminal_artifact_mutated_after_runner_seed(self) -> None:
         self.prompt.write_text(
             "# Mutated handoff\n",

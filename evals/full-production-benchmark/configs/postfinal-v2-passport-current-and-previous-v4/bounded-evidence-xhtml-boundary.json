@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+  "source_sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+  "extraction_method": "utf8-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "/*/*[2]/*[116]/*[33]; first excluded sibling after passport scope",
+      "exact_source_text": "Блок «Адреса клиента»",
+      "exact_source_text_sha256": "5fa7d93ef38882c93c7d0348a4bdeca82438b082a624f99f5aec331faeec33b0"
+    }
+  ]
+}

@@ -1531,37 +1531,70 @@ def _discover_traceability_matrix(
     ft_root: Path,
     cycle_dir: Path,
     workflow_text: str,
+    terminal_bindings: Mapping[str, ArtifactBinding],
 ) -> tuple[Path, Path]:
-    latest = _yaml_mapping(workflow_text, "latest_artifacts")
-    declared_md = latest.get("final_traceability_matrix")
-    declared_xlsx = latest.get("final_traceability_matrix_xlsx")
-    if declared_md is not None or declared_xlsx is not None:
-        if declared_md is None or declared_xlsx is None:
+    bound_md = terminal_bindings.get("final_traceability_matrix")
+    bound_xlsx = terminal_bindings.get("final_traceability_matrix_xlsx")
+    if bound_md is not None or bound_xlsx is not None:
+        if bound_md is None or bound_xlsx is None:
             raise _blocked(
                 "PROMO-MISSING-BUILDER-INPUT",
-                "active workflow-state must declare both traceability matrix aliases",
+                "runner seed must bind both traceability matrix aliases",
             )
-        md = (ft_root / Path(_relative_path(declared_md, "final traceability matrix"))).resolve()
-        xlsx = (
-            ft_root
-            / Path(_relative_path(declared_xlsx, "final traceability matrix XLSX"))
-        ).resolve()
+        md = _resolve(repo_root, bound_md.path, "bound final traceability matrix")
+        xlsx = _resolve(
+            repo_root,
+            bound_xlsx.path,
+            "bound final traceability matrix XLSX",
+        )
         try:
             md.relative_to(cycle_dir)
             xlsx.relative_to(cycle_dir)
         except ValueError as exc:
             raise _blocked(
                 "PROMO-UNSAFE-PATH",
-                "declared traceability matrix aliases must be inside cycle_dir",
+                "runner-bound traceability matrix aliases must be inside cycle_dir",
             ) from exc
         candidates = [(md, xlsx)]
     else:
-        outputs = cycle_dir / "outputs"
-        candidates = [
-            (md.resolve(), md.with_suffix(".xlsx").resolve())
-            for md in sorted(outputs.glob("*traceability-matrix.md"))
-            if md.is_file() and md.with_suffix(".xlsx").is_file()
-        ]
+        latest = _yaml_mapping(workflow_text, "latest_artifacts")
+        declared_md = latest.get("final_traceability_matrix")
+        declared_xlsx = latest.get("final_traceability_matrix_xlsx")
+        if declared_md is None and declared_xlsx is None:
+            outputs = cycle_dir / "outputs"
+            candidates = [
+                (md.resolve(), md.with_suffix(".xlsx").resolve())
+                for md in sorted(outputs.glob("*traceability-matrix.md"))
+                if md.is_file() and md.with_suffix(".xlsx").is_file()
+            ]
+        elif declared_md is None or declared_xlsx is None:
+            raise _blocked(
+                "PROMO-MISSING-BUILDER-INPUT",
+                "active workflow-state must declare both traceability matrix aliases",
+            )
+        else:
+            md = (
+                ft_root
+                / Path(_relative_path(declared_md, "final traceability matrix"))
+            ).resolve()
+            xlsx = (
+                ft_root
+                / Path(
+                    _relative_path(
+                        declared_xlsx,
+                        "final traceability matrix XLSX",
+                    )
+                )
+            ).resolve()
+            try:
+                md.relative_to(cycle_dir)
+                xlsx.relative_to(cycle_dir)
+            except ValueError as exc:
+                raise _blocked(
+                    "PROMO-UNSAFE-PATH",
+                    "declared traceability matrix aliases must be inside cycle_dir",
+                ) from exc
+            candidates = [(md, xlsx)]
     valid = [
         (md, xlsx)
         for md, xlsx in candidates
@@ -1584,7 +1617,6 @@ def _discover_traceability_matrix(
             "traceability matrix Markdown/XLSX must be same-basename siblings",
         )
     _validate_traceability_matrix_pair(md, xlsx)
-    del repo_root
     return md, xlsx
 
 
@@ -1661,6 +1693,7 @@ def _generate_signed_off_state_replacements(
         ft_root=ft_root,
         cycle_dir=cycle_dir,
         workflow_text=workflow_text,
+        terminal_bindings=seed.available_builder_inputs,
     )
     _validate_seed_terminal_binding(
         seed=seed,

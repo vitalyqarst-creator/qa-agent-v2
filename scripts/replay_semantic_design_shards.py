@@ -83,6 +83,8 @@ def replay_semantic_design_shards(
             raw,
             context=shard_context,
             boundary=shard_boundary,
+            repo_root=root,
+            fixture_context=context,
         )
         outputs[shard_id] = normalized
         shard_reports.append(

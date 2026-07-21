@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import tempfile
 from dataclasses import replace
@@ -93,6 +94,90 @@ def _sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+_FIXTURE_TOKEN = re.compile(r"\b(?:FX|FIX)-[A-Za-z0-9_.-]+\b")
+
+
+def _portable_fixture_contract_lines(
+    *,
+    repo_root: Path,
+    source_entries: Sequence[Mapping[str, Any]],
+    obligations: Sequence[Mapping[str, Any]],
+) -> tuple[str, ...]:
+    """Render exact inline contracts for named verified external fixtures."""
+
+    referenced = {
+        fixture_id
+        for obligation in obligations
+        for fixture_id in _FIXTURE_TOKEN.findall(
+            json.dumps(obligation, ensure_ascii=False, sort_keys=True)
+        )
+    }
+    if not referenced:
+        return ()
+    contracts: dict[str, str] = {}
+    for entry in source_entries:
+        repo_path = str(entry.get("path", ""))
+        if not repo_path.casefold().endswith(".verification.json"):
+            continue
+        verification_path = _repo_path(
+            repo_root,
+            repo_path,
+            label="fixture verification source.path",
+        )
+        try:
+            verification = json.loads(verification_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise BoundedScopeMaterializationError(
+                f"fixture verification is unreadable: {repo_path}"
+            ) from exc
+        if not isinstance(verification, Mapping):
+            raise BoundedScopeMaterializationError(
+                f"fixture verification must be an object: {repo_path}"
+            )
+        fixture_id = str(verification.get("fixture_id", ""))
+        if fixture_id not in referenced:
+            continue
+        request = verification.get("request", {})
+        expected_response = verification.get("expected_response")
+        response_sha256 = str(verification.get("response_sha256", ""))
+        status = str(verification.get("status", ""))
+        if (
+            not isinstance(request, Mapping)
+            or not isinstance(request.get("parameters"), Mapping)
+            or not isinstance(expected_response, Mapping)
+            or re.fullmatch(r"[0-9a-f]{64}", response_sha256) is None
+            or status not in {"verified", "accepted"}
+        ):
+            raise BoundedScopeMaterializationError(
+                f"fixture verification lacks a portable exact contract: {fixture_id}"
+            )
+        request_json = json.dumps(
+            request["parameters"],
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        expected_json = json.dumps(
+            expected_response,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        contracts[fixture_id] = (
+            f"- `{fixture_id}`: request_parameters=`{request_json}`; "
+            f"expected_response=`{expected_json}`; "
+            f"response_sha256=`{response_sha256}`; status=`{status}`; "
+            "runtime_api_call=`prohibited`; product_input=`stored_literals`."
+        )
+    missing = sorted(referenced - contracts.keys())
+    if missing:
+        raise BoundedScopeMaterializationError(
+            "named fixture lacks a registered verified portable contract: "
+            + ", ".join(missing)
+        )
+    return tuple(contracts[fixture_id] for fixture_id in sorted(referenced))
 
 
 def _write_atomic(path: Path, text: str) -> None:
@@ -231,8 +316,17 @@ def _decision_registry(
             raise BoundedScopeMaterializationError(
                 f"{source_row_id} requires at least one explicit assertion"
             )
-        has_testable = any(item.get("semantic_disposition") == "testable" for item in row_assertions)
-        expected_disposition = "yes" if has_testable else "no"
+        has_testable = any(
+            item.get("semantic_disposition") == "testable"
+            for item in row_assertions
+        )
+        has_ambiguous = any(
+            item.get("semantic_disposition") == "ambiguous"
+            for item in row_assertions
+        )
+        expected_disposition = (
+            "yes" if has_testable else ("unclear" if has_ambiguous else "no")
+        )
         if by_row[source_row_id].get("scope_disposition") != expected_disposition:
             raise BoundedScopeMaterializationError(
                 f"{source_row_id} scope_disposition must be {expected_disposition}"
@@ -242,7 +336,10 @@ def _decision_registry(
 
 
 def _assertion_payload(
-    source_row: Mapping[str, Any], assertion: Mapping[str, Any]
+    source_row: Mapping[str, Any],
+    assertion: Mapping[str, Any],
+    *,
+    primary_gap_id: str | None = None,
 ) -> dict[str, Any]:
     row_id = str(source_row["source_row_id"])
     row_text = str(source_row["bounded_source_text"])
@@ -326,7 +423,7 @@ def _assertion_payload(
         "atom_id": assertion["atom_id"],
         "obligation_ids": assertion["obligation_ids"],
         "execution_dependency_gap_ids": [],
-        "primary_gap_id": None,
+        "primary_gap_id": primary_gap_id,
         "disposition_rationale": assertion["disposition_rationale"],
         "supporting_source_bindings": list(
             assertion.get("supporting_source_bindings", [])
@@ -391,14 +488,18 @@ def _render_coverage_gaps(
                 label=f"boundary_gap.{gap_id}.exact_source_fragments",
             )
         ]
-        requirement_codes = list(
-            dict.fromkeys(
-                code
-                for source_row_id in source_row_ids
-                for code in requirement_codes_by_row.get(source_row_id, ())
+        links = gap_links.get(gap_id, {})
+        requirement_codes = (
+            list(dict.fromkeys(map(str, links["requirement_codes"])))
+            if "requirement_codes" in links
+            else list(
+                dict.fromkeys(
+                    code
+                    for source_row_id in source_row_ids
+                    for code in requirement_codes_by_row.get(source_row_id, ())
+                )
             )
         )
-        links = gap_links.get(gap_id, {})
         assertion_ids = list(links.get("assertion_ids", ()))
         atom_ids = list(links.get("atom_ids", ()))
         clarification_question = _text(
@@ -802,6 +903,7 @@ def materialize_bounded_scope(
     boundary_requirement_codes_by_row: dict[str, tuple[str, ...]] = {}
     candidate_obligation_ids: set[str] = set()
     constraint_gap_ids_by_atom: dict[str, list[str]] = {}
+    primary_gap_id_by_atom: dict[str, str] = {}
     gap_links: dict[str, dict[str, tuple[str, ...]]] = {}
     if semantic_mode:
         assert _semantic_design is not None
@@ -917,7 +1019,18 @@ def materialize_bounded_scope(
                         for atom_id in atoms_by_row.get(str(row_id), ())
                     )
                 )
-                if gap.get("gap_type") == "missing-observation-interface":
+                if gap.get("gap_type") in {
+                    "missing-observation-interface",
+                    "missing-source-definition",
+                }:
+                    ambiguous_atom_ids = [
+                        atom_id
+                        for atom_id in row_atom_ids
+                        if assertion_by_atom.get(atom_id, {}).get(
+                            "semantic_disposition"
+                        )
+                        == "ambiguous"
+                    ]
                     na_atom_ids = [
                         atom_id
                         for atom_id in row_atom_ids
@@ -926,7 +1039,7 @@ def materialize_bounded_scope(
                         )
                         == "not-applicable"
                     ]
-                    atom_ids = na_atom_ids or row_atom_ids
+                    atom_ids = ambiguous_atom_ids or na_atom_ids or row_atom_ids
                 else:
                     atom_ids = row_atom_ids
             if not atom_ids:
@@ -944,12 +1057,30 @@ def materialize_bounded_scope(
                 str(assertion_by_atom[atom_id]["assertion_id"])
                 for atom_id in atom_ids
             )
+            linked_requirement_codes = tuple(
+                dict.fromkeys(
+                    code
+                    for atom_id in atom_ids
+                    for code in map(
+                        str,
+                        assertion_by_atom[atom_id].get("requirement_codes", []),
+                    )
+                )
+            )
             gap_links[gap_id] = {
                 "assertion_ids": assertion_ids,
                 "atom_ids": tuple(atom_ids),
+                "requirement_codes": linked_requirement_codes,
             }
             for atom_id in atom_ids:
-                if atom_id in testable_assertion_by_atom:
+                assertion = assertion_by_atom[atom_id]
+                if assertion.get("semantic_disposition") == "ambiguous":
+                    if atom_id in primary_gap_id_by_atom:
+                        raise BoundedScopeMaterializationError(
+                            f"ambiguous ATOM {atom_id} cannot own multiple primary GAPs"
+                        )
+                    primary_gap_id_by_atom[atom_id] = gap_id
+                elif atom_id in testable_assertion_by_atom:
                     constraint_gap_ids_by_atom.setdefault(atom_id, []).append(
                         gap_id
                     )
@@ -1033,13 +1164,26 @@ def materialize_bounded_scope(
         )
         for assertion in decisions_by_row[row_id]["assertions"]:
             typed_assertions.append(
-                SourceAssertion.from_dict(_assertion_payload(row, assertion))
+                SourceAssertion.from_dict(
+                    _assertion_payload(
+                        row,
+                        assertion,
+                        primary_gap_id=primary_gap_id_by_atom.get(
+                            str(assertion["atom_id"])
+                        ),
+                    )
+                )
             )
 
     source_entries = [
         _object(item, label="context.sources[]")
         for item in _array(context.get("sources"), label="context.sources")
     ]
+    portable_fixture_lines = _portable_fixture_contract_lines(
+        repo_root=repo_root,
+        source_entries=source_entries,
+        obligations=obligations,
+    )
     mockups = [
         _object(item, label="context.mockups[]")
         for item in _array(context.get("mockups", []), label="context.mockups")
@@ -1083,6 +1227,12 @@ def materialize_bounded_scope(
 
     included = [str(item) for item in decision.get("included", [])]
     excluded = [str(item) for item in decision.get("excluded", [])]
+    scope_gap_gate = (
+        f"Все baseline rows учтены; {len(boundary_gaps)} open non-blocking GAP "
+        "сохранены в scope-coverage-gaps.md и не блокируют независимые obligations."
+        if boundary_gaps
+        else "Все baseline rows учтены; открытые coverage gaps отсутствуют."
+    )
     scope_contract = (
         "# Scope Contract\n\n"
         f"- scope_slug: `{scope_slug}`\n"
@@ -1094,7 +1244,9 @@ def materialize_bounded_scope(
         + "\n\n## Исключено\n\n"
         + "\n".join(f"- {item}" for item in excluded)
         + "\n\n## Gate\n\n"
-        "Scope ограничен одним разделом, все baseline rows учтены, coverage gaps отсутствуют.\n"
+        "Scope ограничен одним разделом. "
+        + scope_gap_gate
+        + "\n"
     )
     _write_atomic(handoff_dir / "scope-contract.md", scope_contract)
 
@@ -1211,8 +1363,17 @@ def materialize_bounded_scope(
                 covered_by = _tokens(planned_targets)
             else:
                 context_counter += 1
-                coverage_status = "not-applicable"
-                covered_by = "not-applicable"
+                primary_gap_id = primary_gap_id_by_atom.get(atom_id)
+                if assertion["semantic_disposition"] == "ambiguous":
+                    if primary_gap_id is None:
+                        raise BoundedScopeMaterializationError(
+                            f"ambiguous ATOM {atom_id} requires one primary GAP"
+                        )
+                    coverage_status = "unclear"
+                    covered_by = primary_gap_id
+                else:
+                    coverage_status = "not-applicable"
+                    covered_by = "not-applicable"
             ledger_rows.append(
                 [
                     f"`{atom_id}`", f"`{assertion_package_id}`", f"`{assertion['source_property_id']}`",
@@ -1225,13 +1386,29 @@ def materialize_bounded_scope(
                 ]
             )
             if not testable:
+                primary_gap_id = primary_gap_id_by_atom.get(atom_id)
+                is_ambiguous = assertion["semantic_disposition"] == "ambiguous"
+                context_obligation_class = (
+                    "ambiguous-behavior"
+                    if is_ambiguous
+                    else "not-applicable-context"
+                )
+                context_planned_target = (
+                    primary_gap_id if is_ambiguous else "not-applicable"
+                )
+                context_status = "unclear" if is_ambiguous else "not-applicable"
+                context_notes = (
+                    "Open primary source-definition GAP; no executable obligation."
+                    if is_ambiguous
+                    else "Explicit boundary/context accounting."
+                )
                 obligation_rows.append(
                     [
                         f"`OBL-CONTEXT-{context_counter:03d}`", f"`{package_id}`",
                         f"`{assertion['source_property_id']}`", f"`{atom_id}`", "`context`",
-                        "`not-applicable-context`", assertion["disposition_rationale"], source_ref,
-                        f"`{row_id}`", f"`{_tokens(codes)}`", "`not-applicable`",
-                        "`not-applicable`", "Explicit boundary/context accounting.",
+                        f"`{context_obligation_class}`", assertion["disposition_rationale"], source_ref,
+                        f"`{row_id}`", f"`{_tokens(codes)}`", f"`{context_planned_target}`",
+                        f"`{context_status}`", context_notes,
                         *(
                             ["`none_required`", "", "`none_required`", "`none`"]
                             if semantic_mode
@@ -1244,9 +1421,9 @@ def materialize_bounded_scope(
                         f"`PD-CONTEXT-{context_counter:03d}`", f"`{package_id}`", "`traceability`",
                         source_ref, f"`{row_id}`", f"`{_tokens(codes)}`", f"`{atom_id}`",
                         assertion["disposition_rationale"], "`not-applicable`",
-                        "`not-applicable-context`", "`none_required:not-applicable`",
-                        "`none_required:not-applicable`", source_ref, "`not-applicable`",
-                        "`not-applicable`",
+                        f"`{context_obligation_class}`", "`none_required:not-applicable`",
+                        "`none_required:not-applicable`", source_ref,
+                        f"`{context_planned_target}`", f"`{context_status}`",
                         *(
                             [
                                 "none_required:not-applicable",
@@ -1353,7 +1530,15 @@ def materialize_bounded_scope(
     )
     _write_atomic(
         handoff_dir / "package-test-design-plan.md",
-        "# Handoff Package Design Input\n\n## Package Test Design Plan\n\n"
+        "# Handoff Package Design Input\n\n"
+        + (
+            "## Portable Fixture Contracts\n\n"
+            + "\n".join(portable_fixture_lines)
+            + "\n\n"
+            if portable_fixture_lines
+            else ""
+        )
+        + "## Package Test Design Plan\n\n"
         + _table(
             (
                 "design_item_id", "package_id", "design_dimension", "source_ref", "source_row_id",

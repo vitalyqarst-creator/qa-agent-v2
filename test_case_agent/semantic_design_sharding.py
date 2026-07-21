@@ -544,7 +544,10 @@ def _project_dependency(
     fragments = [
         fragment
         for fragment in map(str, dependency.get("exact_source_fragments", []))
-        if any(fragment in str(rows_by_id[row_id].get("bounded_source_text", "")) for row_id in sources)
+        if any(
+            fragment in str(rows_by_id[row_id].get("bounded_source_text", ""))
+            for row_id in sources
+        )
     ]
     if not fragments:
         raise SemanticDesignShardingError(
@@ -677,19 +680,32 @@ def project_semantic_shard(
         if item is None:
             continue
         projected_dependencies.append(item)
-        projected_expected.append(
-            {
-                key: copy.deepcopy(item[key])
-                for key in (
-                    "kind",
-                    "name",
-                    "source_row_ids",
-                    "resolution",
-                    "target_source_row_ids",
-                    "exact_source_fragments",
-                )
-            }
-        )
+        expected_item = {
+            key: copy.deepcopy(item[key])
+            for key in (
+                "kind",
+                "name",
+                "source_row_ids",
+                "resolution",
+                "target_source_row_ids",
+                "exact_source_fragments",
+            )
+        }
+        expected_item["exact_source_fragments"] = [
+            fragment
+            for fragment in expected_item["exact_source_fragments"]
+            if all(
+                fragment
+                in str(rows_by_id[row_id].get("bounded_source_text", ""))
+                for row_id in expected_item["source_row_ids"]
+            )
+        ]
+        if not expected_item["exact_source_fragments"]:
+            raise SemanticDesignShardingError(
+                f"{item.get('dependency_id')} has no shared literal evidence "
+                "for projected expected inventory"
+            )
+        projected_expected.append(expected_item)
     projected["expected_dependencies"] = projected_expected
     external_bindings = {
         normalize_entity(str(item.get("dictionary_name", ""))): item

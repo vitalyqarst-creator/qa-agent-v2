@@ -66,6 +66,14 @@ SCHEMA_V2_CONFIG_FIELDS = {
     "production_wrapper",
     "measurement_mode",
 }
+SCHEMA_V2_OPTIONAL_CONFIG_FIELDS = {"semantic_sharding"}
+SEMANTIC_SHARDING_FIELDS = {
+    "mode",
+    "max_included_rows",
+    "max_source_rows",
+    "max_shards",
+    "max_semantic_weight",
+}
 SOURCE_ONLY_FORBIDDEN_FIELDS = {
     "atomic_statement_inventory",
     "atomic_statements",
@@ -201,6 +209,11 @@ class BootstrapPlan:
     request_started_epoch_ms: int
     codex_turn_id: str
     request_start_source: str
+    semantic_sharding_mode: str = "auto"
+    semantic_shard_max_included_rows: int = 10
+    semantic_shard_max_source_rows: int = 16
+    semantic_shard_max_shards: int = 10
+    semantic_shard_max_weight: int = 24
     routing_preflight_breakdown: tuple[dict[str, Any], ...] = ()
 
 
@@ -1120,11 +1133,43 @@ def resolve_plan(
     payload, config_sha256 = _load_config(config)
     schema_version = int(payload["schema_version"])
     if schema_version == 2:
-        _exact_fields(
+        _allowed_fields(
             payload,
             required=SCHEMA_V2_CONFIG_FIELDS,
+            optional=SCHEMA_V2_OPTIONAL_CONFIG_FIELDS,
             label="schema-v2 bootstrap config",
         )
+
+    semantic_sharding_mode = "auto"
+    semantic_shard_max_included_rows = 10
+    semantic_shard_max_source_rows = 16
+    semantic_shard_max_shards = 10
+    semantic_shard_max_weight = 24
+    semantic_sharding = payload.get("semantic_sharding")
+    if semantic_sharding is not None:
+        if schema_version != 2 or not isinstance(semantic_sharding, Mapping):
+            raise BootstrapError("semantic_sharding must be a schema-v2 object")
+        _exact_fields(
+            semantic_sharding,
+            required=SEMANTIC_SHARDING_FIELDS,
+            label="schema-v2 bootstrap config.semantic_sharding",
+        )
+        semantic_sharding_mode = semantic_sharding.get("mode")
+        if semantic_sharding_mode not in {"off", "auto", "on"}:
+            raise BootstrapError("semantic_sharding.mode is invalid")
+        for field in (
+            "max_included_rows",
+            "max_source_rows",
+            "max_shards",
+            "max_semantic_weight",
+        ):
+            value = semantic_sharding.get(field)
+            if type(value) is not int or value <= 0:
+                raise BootstrapError(f"semantic_sharding.{field} must be positive")
+        semantic_shard_max_included_rows = semantic_sharding["max_included_rows"]
+        semantic_shard_max_source_rows = semantic_sharding["max_source_rows"]
+        semantic_shard_max_shards = semantic_sharding["max_shards"]
+        semantic_shard_max_weight = semantic_sharding["max_semantic_weight"]
 
     benchmark_id = _safe_id(
         _required_string(payload, "benchmark_id"), label="benchmark_id"
@@ -1306,10 +1351,10 @@ def resolve_plan(
         )
         expected_handoff_root = (ft_root / "work" / "stage-handoffs").resolve()
         if handoff_dir.parent != expected_handoff_root or not re.fullmatch(
-            r"[0-9]{2}-[A-Za-z0-9][A-Za-z0-9._-]*", handoff_dir.name
+            r"[0-9]{2,}-[A-Za-z0-9][A-Za-z0-9._-]*", handoff_dir.name
         ):
             raise BootstrapError(
-                "outputs.handoff_dir must be one fresh NN-<scope-slug> directory "
+                "outputs.handoff_dir must be one fresh NN...-<scope-slug> directory "
                 f"directly under {expected_handoff_root}"
             )
         cycle_dir = _resolve_under(
@@ -1433,6 +1478,11 @@ def resolve_plan(
         request_started_epoch_ms=request_started_epoch_ms,
         codex_turn_id=turn_id,
         request_start_source=request_start_source,
+        semantic_sharding_mode=semantic_sharding_mode,
+        semantic_shard_max_included_rows=semantic_shard_max_included_rows,
+        semantic_shard_max_source_rows=semantic_shard_max_source_rows,
+        semantic_shard_max_shards=semantic_shard_max_shards,
+        semantic_shard_max_weight=semantic_shard_max_weight,
         routing_preflight_breakdown=tuple(routing_components),
     )
 
@@ -1452,15 +1502,15 @@ def plan_payload(plan: BootstrapPlan) -> dict[str, Any]:
         "--measurement-mode",
         "observational",
         "--semantic-sharding",
-        "auto",
+        plan.semantic_sharding_mode,
         "--semantic-shard-max-included-rows",
-        "10",
+        str(plan.semantic_shard_max_included_rows),
         "--semantic-shard-max-source-rows",
-        "16",
+        str(plan.semantic_shard_max_source_rows),
         "--semantic-shard-max-shards",
-        "10",
+        str(plan.semantic_shard_max_shards),
         "--semantic-shard-max-weight",
-        "24",
+        str(plan.semantic_shard_max_weight),
     ]
     required_dynamic_arguments = [
         "--context",
@@ -1812,15 +1862,15 @@ def _production_arguments(plan: BootstrapPlan) -> list[str]:
         "--measurement-mode",
         "observational",
         "--semantic-sharding",
-        "auto",
+        plan.semantic_sharding_mode,
         "--semantic-shard-max-included-rows",
-        "10",
+        str(plan.semantic_shard_max_included_rows),
         "--semantic-shard-max-source-rows",
-        "16",
+        str(plan.semantic_shard_max_source_rows),
         "--semantic-shard-max-shards",
-        "10",
+        str(plan.semantic_shard_max_shards),
         "--semantic-shard-max-weight",
-        "24",
+        str(plan.semantic_shard_max_weight),
     ]
     for item in plan.scope_inputs:
         if item.role == "mockup":
