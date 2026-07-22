@@ -4062,7 +4062,7 @@ class ScopeBoundaryReview:
         missing_context_evidence = sorted(
             SCOPE_BOUNDARY_CONTEXT_CLASSES - accounted_context_classes
         )
-        if missing_context_evidence:
+        if missing_context_evidence and self.verdict == "verified":
             _fail(
                 "scope-boundary-class-evidence-missing",
                 "each checked boundary class requires either every manifest row in "

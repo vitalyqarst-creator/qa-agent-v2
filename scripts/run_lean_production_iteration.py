@@ -108,6 +108,39 @@ def _validate_runtime_boundaries(
     return ft_root
 
 
+def _validate_source_first_handoff_preflight(
+    *,
+    ft_root: Path,
+    coverage_gaps: Path,
+    terminal_handoff_dir: Path | None,
+) -> None:
+    """Reject a non-terminal source-first handoff before any model call."""
+
+    if terminal_handoff_dir is not None:
+        return
+    handoff_root = (ft_root / "work" / "stage-handoffs").resolve()
+    handoff_dir = coverage_gaps.parent.resolve()
+    try:
+        relative_handoff = handoff_dir.relative_to(handoff_root)
+    except ValueError as exc:
+        raise LeanProductionError(
+            "source-first coverage-gaps artifact must be in the active numbered "
+            "stage-handoff directory before source review"
+        ) from exc
+    if len(relative_handoff.parts) != 1 or re.fullmatch(
+        r"[0-9]+-[A-Za-z0-9_.-]+", relative_handoff.name
+    ) is None:
+        raise LeanProductionError(
+            "source-first coverage-gaps artifact must directly identify one "
+            "numbered stage-handoff directory before source review"
+        )
+    if not (handoff_dir / "workflow-state.yaml").is_file():
+        raise LeanProductionError(
+            "active source-first stage handoff is missing workflow-state.yaml "
+            "before source review"
+        )
+
+
 def _latest_path(
     *,
     repo_root: Path,
@@ -756,6 +789,18 @@ def _effective_stage_timeouts(args: argparse.Namespace) -> dict[str, int]:
     return defaults
 
 
+def _effective_stage_idle_timeouts(args: argparse.Namespace) -> dict[str, int]:
+    """Disable idle termination for observational runs.
+
+    A streaming backend can remain silent while still processing a valid model
+    attempt. Observational timing must measure that attempt instead of replacing
+    it with a runner-induced restart.
+    """
+
+    value = 0 if args.measurement_mode == "observational" else 90
+    return {"writer": value, "reviewer": value}
+
+
 def _write_failure_diagnostic(
     *,
     cycle_dir: Path,
@@ -957,6 +1002,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             ft_root=ft_root,
             latest=latest,
             key=prompt_key,
+        )
+        coverage_gaps_path = _latest_path(
+            repo_root=repo_root,
+            ft_root=ft_root,
+            latest=latest,
+            key="coverage_gaps",
+        )
+        _validate_source_first_handoff_preflight(
+            ft_root=ft_root,
+            coverage_gaps=coverage_gaps_path,
+            terminal_handoff_dir=source_first_terminal_handoff_dir,
         )
         dictionary_inventory = (
             _latest_path(
@@ -1306,6 +1362,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else LEAN_PREPARED_STANDARD_WRITER_CONTEXT_MAX_BYTES
         )
 
+        stage_idle_timeouts = _effective_stage_idle_timeouts(args)
         runner_args = [
             "--ft-root", str(ft_root),
             "--cycle-dir", str(cycle_dir),
@@ -1324,9 +1381,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "--writer-timeout-seconds", str(stage_timeouts["writer"]),
             "--reviewer-timeout-seconds", str(stage_timeouts["reviewer"]),
             "--prepared-reviewer-timeout-seconds", str(stage_timeouts["reviewer"]),
-            "--writer-idle-timeout-seconds", "90",
-            "--reviewer-idle-timeout-seconds", "90",
-            "--prepared-standard-reviewer-idle-timeout-seconds", "90",
+            "--writer-idle-timeout-seconds", str(stage_idle_timeouts["writer"]),
+            "--reviewer-idle-timeout-seconds", str(stage_idle_timeouts["reviewer"]),
+            "--prepared-standard-reviewer-idle-timeout-seconds",
+            str(stage_idle_timeouts["reviewer"]),
             "--writer-command-budget", "1",
             "--reviewer-command-budget", "1",
             "--prepared-reviewer-command-budget", "1",
@@ -1446,8 +1504,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "measurement_mode": args.measurement_mode,
                 "writer_timeout_seconds": stage_timeouts["writer"],
                 "reviewer_timeout_seconds": stage_timeouts["reviewer"],
-                "writer_idle_timeout_seconds": 90,
-                "reviewer_idle_timeout_seconds": 90,
+                "writer_idle_timeout_seconds": stage_idle_timeouts["writer"],
+                "reviewer_idle_timeout_seconds": stage_idle_timeouts["reviewer"],
                 "writer_max_concurrency": writer_max_concurrency,
                 "writer_context_max_bytes": writer_context_max_bytes,
                 "writer_command_budget": 1,

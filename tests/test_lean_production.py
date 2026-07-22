@@ -45,6 +45,36 @@ from test_case_agent.review_cycle.exec_backend import (
 
 
 class LeanProductionTests(unittest.TestCase):
+    def test_source_first_handoff_location_fails_before_model_route(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            ft_root = Path(raw) / "fts" / "Demo"
+            qualification = ft_root / "work" / "qualification" / "candidate"
+            qualification.mkdir(parents=True)
+            coverage_gaps = qualification / "scope-coverage-gaps.md"
+            coverage_gaps.write_text("# Coverage gaps\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                LeanProductionError,
+                "before source review",
+            ):
+                run_lean_production_iteration._validate_source_first_handoff_preflight(
+                    ft_root=ft_root,
+                    coverage_gaps=coverage_gaps,
+                    terminal_handoff_dir=None,
+                )
+
+            handoff = ft_root / "work" / "stage-handoffs" / "151-scope"
+            handoff.mkdir(parents=True)
+            (handoff / "workflow-state.yaml").write_text(
+                "ft_slug: Demo\n",
+                encoding="utf-8",
+            )
+            run_lean_production_iteration._validate_source_first_handoff_preflight(
+                ft_root=ft_root,
+                coverage_gaps=handoff / "scope-coverage-gaps.md",
+                terminal_handoff_dir=None,
+            )
+
     def test_source_review_reuse_persists_missing_local_summary(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -86,8 +116,18 @@ class LeanProductionTests(unittest.TestCase):
             run_lean_production_iteration._effective_stage_timeouts(observational),
         )
         self.assertEqual(
+            {"writer": 0, "reviewer": 0},
+            run_lean_production_iteration._effective_stage_idle_timeouts(
+                observational
+            ),
+        )
+        self.assertEqual(
             {"source_review": 900, "writer": 600, "reviewer": 600},
             run_lean_production_iteration._effective_stage_timeouts(production),
+        )
+        self.assertEqual(
+            {"writer": 90, "reviewer": 90},
+            run_lean_production_iteration._effective_stage_idle_timeouts(production),
         )
 
     def test_full_process_phase_contract_places_semantic_design_after_boundary(self) -> None:
@@ -1933,6 +1973,7 @@ class LeanProductionTests(unittest.TestCase):
                 "source_row_extraction_spec": "source-row-extraction-spec.json",
                 "source_row_baseline": "source-row-baseline.json",
                 "source_assertions": "source-assertions.json",
+                "coverage_gaps": "scope-coverage-gaps.md",
                 "source_gate_validation": "source-gate-validation.json",
                 "source_assertion_review": "source-assertion-review.json",
                 "atomic_requirements_ledger": "atomic-requirements-ledger.md",

@@ -5,6 +5,9 @@ import unittest
 from pathlib import Path
 
 from test_case_agent.review_cycle.obligation_gate import (
+    _oracle_polarity_conflicts,
+    _prepared_action_contract,
+    _semantic_contract_matches,
     materialize_draft_dictionary_projections,
     materialize_draft_reference_fixtures,
     validate_draft_obligation_coverage,
@@ -21,6 +24,25 @@ from test_case_agent.review_cycle.runtime import write_json_atomic
 
 
 class PreparedObligationGateTests(unittest.TestCase):
+    def test_cleared_state_can_explain_that_previous_values_are_not_displayed(self) -> None:
+        examples = (
+            (
+                "Все видимые поля текущего подблока очищены.",
+                "Все видимые поля текущего подблока очищены: в них не отображаются ранее введенные значения.",
+            ),
+            (
+                "Во вновь добавленном экземпляре все видимые поля пусты.",
+                "Во вновь добавленном экземпляре все видимые поля пусты: ранее указанные значения в них не отображаются.",
+            ),
+            (
+                "Все видимые поля текущего подблока очищены.",
+                "Все видимые поля текущего подблока очищены: зафиксированные перед нажатием кнопки значения в них не отображаются.",
+            ),
+        )
+        for contract, actual in examples:
+            with self.subTest(contract=contract):
+                self.assertFalse(_oracle_polarity_conflicts(contract, actual))
+
     def setUp(self) -> None:
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
@@ -622,6 +644,33 @@ class PreparedObligationGateTests(unittest.TestCase):
             {item["id"] for item in incomplete.findings},
         )
 
+    def test_action_contract_treats_set_and_select_as_equivalent(self) -> None:
+        contract = _prepared_action_contract(
+            "Field/block: Среднемесячный доход после вычета налогов; "
+            "Action contract: Установить социальный статус «работа по найму»."
+        )
+        actual = (
+            "1. В поле «Социальный статус» выбрать значение «работа по найму»."
+        )
+
+        self.assertTrue(
+            _semantic_contract_matches(contract, actual, action_contract=True)
+        )
+
+    def test_action_contract_treats_display_and_view_as_ui_observation(self) -> None:
+        contract = _prepared_action_contract(
+            "Field/block: Рабочий телефон; Action contract: Отобразить поле "
+            "«Рабочий телефон», не вводя номер."
+        )
+        actual = (
+            "1. В поле «Социальный статус» выбрать значение «работа по найму».\n"
+            "1. Просмотреть незаполненное поле «Рабочий телефон»."
+        )
+
+        self.assertTrue(
+            _semantic_contract_matches(contract, actual, action_contract=True)
+        )
+
     def test_dadata_reference_fixture_projection_uses_runtime_roles(self) -> None:
         requirement = PreparedDictionaryRequirement(
             dictionary_id="DICT-DADATA-ADDR-POS",
@@ -675,6 +724,70 @@ class PreparedObligationGateTests(unittest.TestCase):
         )
         self.assertIn("- Регион: `Самарская обл`.", projected)
         self.assertNotIn("Значение fixture", projected)
+
+    def test_party_reference_fixture_projection_excludes_integrity_metadata(self) -> None:
+        request = '{"query":"7707083893"}'
+        expected = (
+            '{"exact_components":{"inn":"7707083893","kpp":"773601001",'
+            '"opf.short":"ПАО","state.status":"ACTIVE"},'
+            '"exact_suggestion":"ПАО СБЕРБАНК",'
+            '"minimum_suggestion_count":1,"outcome":"suggestions-found"}'
+        )
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-DADATA-PARTY-ACTIVE-001",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-PARTY-ACTIVE-001",),
+                    "leaf",
+                    "FX-DADATA-PARTY-ACTIVE-001",
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-PARTY-ACTIVE-001",), "leaf", request
+                ),
+                PreparedDictionaryValue(
+                    ("DICT-DADATA-PARTY-ACTIVE-001",), "leaf", expected
+                ),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-dadata-party-reference-fixture",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-009",
+                    atom_id="ATOM-026",
+                    source_refs=("SRC-022", "DICT-DADATA-PARTY-ACTIVE-001"),
+                    atomic_statement="DaData возвращает действующую организацию.",
+                    observable_oracle="Поле ОПФ отображает ПАО.",
+                    test_intent="Ввести ИНН и выбрать точную организацию.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=("DICT-DADATA-PARTY-ACTIVE-001",),
+                    notes="",
+                    planned_test_case_id="TC-009",
+                    dictionary_requirements=(requirement,),
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        draft = (
+            "## TC-009\n"
+            "**Трассировка:** OBL-009; ATOM-026; SRC-022; "
+            "DICT-DADATA-PARTY-ACTIVE-001\n\n"
+            "### Тестовые данные\n\n- DaData fixture.\n\n"
+            "### Шаги\n\n1. Ввести ИНН и выбрать организацию.\n"
+        )
+
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+        projected, _ = materialize_draft_reference_fixtures(draft, obligations)
+        accepted = self._validate(projected)
+
+        self.assertTrue(accepted.passed, accepted.findings)
+        self.assertIn("- Запрос: `7707083893`.", projected)
+        self.assertIn("- Точное предложение: `ПАО СБЕРБАНК`.", projected)
+        self.assertIn("- Компонент `opf.short`: `ПАО`.", projected)
+        self.assertNotIn("SHA-256", projected)
+        self.assertNotIn("runtime_api_call", projected)
 
     def test_fms_reference_fixture_projection_is_accepted_as_complete(self) -> None:
         values = (
@@ -1354,6 +1467,56 @@ class StrictPreparedObligationGateTests(unittest.TestCase):
             {finding["id"] for finding in reduced.findings},
         )
         self.assertTrue(preserved.passed, preserved.findings)
+
+    def test_selected_month_dependency_is_not_treated_as_selection_oracle(self) -> None:
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-selected-month-dependency",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-001",
+                    atom_id="ATOM-001",
+                    source_refs=("SRC-001.P01",),
+                    atomic_statement="Недопустимый день месяца требует калибровки.",
+                    observable_oracle=(
+                        "Значение «31.04.2020» не соответствует ограничению источника "
+                        "«для дня - целые числа в диапазоне от 01 до 28/29/30/31 "
+                        "(в зависимости от выбранного месяца)». Точный способ "
+                        "отклонения или преобразования значения «31.04.2020» "
+                        "требует UI-калибровки."
+                    ),
+                    test_intent=(
+                        "Field/block: Дата начала работы в компании; "
+                        "Action contract: Ввести значение «31.04.2020»."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    planned_test_case_id="TC-AMS-001",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+        write_json_atomic(self.obligations_path, obligations.to_dict())
+
+        result = self._validate(
+            self._case(
+                traceability="OBL-001; ATOM-001; SRC-001.P01",
+                steps=(
+                    "1. Ввести в поле «Дата начала работы в компании» "
+                    "значение «31.04.2020»."
+                ),
+                expected_result=(
+                    "Значение «31.04.2020» не принято как валидное, поскольку день "
+                    "не входит в допустимый для апреля диапазон. Во время "
+                    "UI-калибровки фиксируются точное значение, действие-триггер, "
+                    "видимое состояние поля и фактический исход без выбора "
+                    "механизма отклонения или преобразования."
+                ),
+            )
+        )
+
+        self.assertTrue(result.passed, result.findings)
 
     def test_apply_address_action_matches_entering_that_address(self) -> None:
         obligations = PreparedObligationSet.create(

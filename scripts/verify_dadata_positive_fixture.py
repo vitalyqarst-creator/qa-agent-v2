@@ -29,10 +29,12 @@ from scripts.verify_dadata_negative_fixture import (
 FMS_UNIT_ENDPOINT = (
     "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/fms_unit"
 )
-ALLOWED_ENDPOINTS = frozenset({ENDPOINT, FMS_UNIT_ENDPOINT})
+PARTY_ENDPOINT = "https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party"
+ALLOWED_ENDPOINTS = frozenset({ENDPOINT, FMS_UNIT_ENDPOINT, PARTY_ENDPOINT})
 SUGGESTION_TYPE_ENDPOINTS = {
     "address": ENDPOINT,
     "fms_unit": FMS_UNIT_ENDPOINT,
+    "party": PARTY_ENDPOINT,
 }
 
 
@@ -43,6 +45,15 @@ def _component(value: str) -> tuple[str, str]:
             "expected component must use non-empty key=value syntax"
         )
     return key.strip(), expected.strip()
+
+
+def _component_value(data: Mapping[str, Any], path: str) -> Any:
+    current: Any = data
+    for segment in path.split("."):
+        if not isinstance(current, Mapping):
+            return None
+        current = current.get(segment)
+    return current
 
 
 def _matched_suggestion(
@@ -86,9 +97,9 @@ def _matched_suggestion(
             "matched DaData suggestion misses data object; no fixture was written"
         )
     mismatches = {
-        key: {"expected": expected, "actual": data.get(key)}
+        key: {"expected": expected, "actual": _component_value(data, key)}
         for key, expected in expected_components.items()
-        if data.get(key) != expected
+        if _component_value(data, key) != expected
     }
     if mismatches:
         raise DadataFixtureVerificationError(

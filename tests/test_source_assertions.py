@@ -3873,6 +3873,19 @@ class SourceAssertionManifestTests(unittest.TestCase):
             lambda: without_cross_reference.validate(manifest),
         )
 
+        reported_missing_evidence = replace(
+            without_cross_reference,
+            verdict="incorrect",
+            required_change=(
+                "Add one source-bound cross-reference exclusion before acceptance."
+            ),
+            note=(
+                "The supplied evidence does not account for the cross-reference "
+                "boundary class."
+            ),
+        )
+        reported_missing_evidence.validate(manifest)
+
     def test_scope_boundary_review_retains_all_not_applicable_manifest_rows(self) -> None:
         assertions = (
             self._as_not_applicable(

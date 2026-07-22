@@ -576,6 +576,41 @@ def _validate_source_only_schema(context: Mapping[str, Any]) -> None:
             label="bounded context template.dependency_alias_provenance",
         )
 
+    approved_clarifications = context.get("approved_clarifications", [])
+    if not isinstance(approved_clarifications, list):
+        raise BootstrapError(
+            "bounded context template.approved_clarifications must be an array"
+        )
+    clarification_ids: set[str] = set()
+    for index, clarification in enumerate(approved_clarifications):
+        label = f"bounded context template.approved_clarifications[{index}]"
+        if not isinstance(clarification, Mapping):
+            raise BootstrapError(f"{label} must be an object")
+        clarification_id = clarification.get("clarification_id")
+        _require_non_empty_string(
+            clarification_id,
+            label=f"{label}.clarification_id",
+        )
+        normalized_id = str(clarification_id).strip()
+        if normalized_id in clarification_ids:
+            raise BootstrapError(
+                "bounded context template.approved_clarifications contains "
+                f"duplicate clarification_id: {normalized_id}"
+            )
+        clarification_ids.add(normalized_id)
+
+    provenance_ids = {
+        str(value).strip()
+        for value in context.get("dependency_alias_provenance", {}).values()
+    }
+    missing_clarifications = sorted(provenance_ids - clarification_ids)
+    if missing_clarifications:
+        raise BootstrapError(
+            "bounded context template.dependency_alias_provenance references "
+            "missing approved clarifications: "
+            + ", ".join(missing_clarifications)
+        )
+
     dictionaries = context.get("dictionary_inventory", [])
     if not isinstance(dictionaries, list):
         raise BootstrapError(

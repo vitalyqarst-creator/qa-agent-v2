@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "extraction_method": "pdf-page-literal-fragments-v1",
+  "selections": [
+    {
+      "source_locator": "page:30",
+      "exact_source_text": "BSR 263."
+    },
+    {
+      "source_locator": "page:32",
+      "exact_source_text": "BSR 285."
+    }
+  ]
+}

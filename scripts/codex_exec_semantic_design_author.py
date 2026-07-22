@@ -22,6 +22,14 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--repo-root", type=Path, default=ROOT_DIR)
     result.add_argument("--context", type=Path, required=True)
+    result.add_argument(
+        "--fixture-context",
+        type=Path,
+        help=(
+            "full prepared context for deterministic verified-fixture "
+            "normalization; not exposed to the model prompt"
+        ),
+    )
     result.add_argument("--scope-boundary-decision", type=Path, required=True)
     result.add_argument("--decision-output", type=Path, required=True)
     result.add_argument("--events-output", type=Path, required=True)
@@ -76,6 +84,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--measurement-mode",
         args.measurement_mode,
     ]
+    _append_path(forwarded, "--fixture-context", args.fixture_context)
     for option, value in (
         ("--preflight-output", args.preflight_output),
         ("--terminal-receipt-output", args.terminal_receipt_output),

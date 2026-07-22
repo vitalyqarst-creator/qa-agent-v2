@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "source_sha256": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+  "extraction_method": "docx-xml-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "word/document.xml#table-index:6/row-index:104",
+      "exact_source_text": "Подблок «Основная работа»",
+      "exact_source_text_sha256": "1115539d153643b236949c41283ac57ee2ec13da149403d781153da7f166cdc0"
+    },
+    {
+      "source_locator": "word/document.xml#table-index:6/row-index:116",
+      "exact_source_text": "Подблок «Дополнительный доход»",
+      "exact_source_text_sha256": "e8cfbd7f9a9efe62987f97393bf1c5b7d3ae59d9cc5ca1b320c63086c8b909a9"
+    }
+  ]
+}

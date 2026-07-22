@@ -1,0 +1,104 @@
+{
+  "schema_version": 2,
+  "benchmark_id": "postfinal-v2-employment-main-work-clean-20260722-v16",
+  "ft_root": "fts/AutoFin",
+  "ft_slug": "AutoFin",
+  "scope_slug": "employment-main-work",
+  "source_files": [
+    "source/PostFinal-v2/PostFinal-v2.docx",
+    "source/PostFinal-v2/PostFinal-v2.xhtml",
+    "source/PostFinal-v2/PostFinal-v2.pdf"
+  ],
+  "scope_inputs": [
+    {
+      "path": "support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification"
+    },
+    {
+      "path": "support/PostFinal-v2/АФБ справочники 26.06.26.md",
+      "role": "support",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    },
+    {
+      "path": "mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup"
+    }
+  ],
+  "expected_sha256": {
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+    "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+    "fts/AutoFin/AGENT-NOTES.md": "5713d2d8d49d34354ae4308701e0ea2162ce41ac21f555ba098d1152a92087bf",
+    "fts/AutoFin/support/PostFinal-v2/АФБ справочники 26.06.26.md": "93fb008d3e2e6224e369195201ff5cba3e1c62f593f843e6188adffe2be62204",
+    "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md": "4324e54ab0c311ae913211dc9b869c70fe3552698bf914a14b7bef280c1b10a2",
+    "fts/AutoFin/work/vendor-references/dadata-reference.md": "77f9f57f33860ea059a7b828d39436f19c3944b40fc3dbdf8efd5bfb848a27df",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.response.json": "ea5fe50291bb48b1114c6560ac6ec4196c5f79f99e9f609da594b4847dd0d9b0",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.verification.json": "8fb84b52c24565c9314358ab912ec5861adf68f4daeb9d1f0b5dbec7629027ab",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.response.json": "24f9823c19ddefcdd76b132cda96a4543212d5427fccebc42507d35122d3b3e4",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.verification.json": "da18ff6b32b603486e3b2f22fdc941fc4afbcff61512c331aa66553437cbd567",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg": "0529de9c3d0d20e672453d894a517a79a8e1bd7c29ffa06c703463d2d8d774d5",
+    "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-docx.json": "994ea4d42bd82518066f9fd7abb406bcda7da0482d42427d0258f7253af4c35c",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-pdf.json": "48d567b98dbc6ca6660d1b6f89dcc0f44d7b8442e121471b01cfc64035eb850d",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json": "88db0e19ca55a2a81392a6ebe6569355e527446db170cdbade93d0b7dfd77a7b",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work-v16/bounded-context-template.json": "dc18392828a8a917df9ab94cb715d1a129d1efb1384742b925761b351151e7fc",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work-v16/source-row-extraction-spec.json": "8491b8ef22bc9b87404e64df937a3db1cdd1c107c519478cafe36f8d5ccced77"
+  },
+  "source_preparation": {
+    "context_template": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work-v16/bounded-context-template.json",
+    "cache_dir": ".codex-temp/source-preparation-cache"
+  },
+  "outputs": {
+    "handoff_dir": "work/stage-handoffs/161-employment-main-work-clean-20260722-v16",
+    "cycle_dir": "work/review-cycles/employment-main-work-clean-20260722-v16",
+    "final_artifact": "test-cases/4.3-employment-main-work-clean-eval-20260722-v16.md"
+  },
+  "semantic_sharding": {
+    "mode": "auto",
+    "max_included_rows": 10,
+    "max_source_rows": 16,
+    "max_shards": 10,
+    "max_semantic_weight": 74
+  },
+  "observation_root": "work/full-process-observation",
+  "recorder_entrypoint": "scripts/workflow_wall_clock.py",
+  "production_wrapper": "scripts/run_standard_production_iteration.py",
+  "measurement_mode": "observational"
+}

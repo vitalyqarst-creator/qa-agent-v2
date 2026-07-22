@@ -12,8 +12,8 @@
   "package_notes": "fts/AutoFin/AGENT-NOTES.md",
   "source_row_extraction_spec": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/source-row-extraction-spec.json",
   "bounded_evidence": {
-    "docx": "evals/lean-production-benchmark/h70/bounded-evidence-docx.json",
-    "pdf": "evals/lean-production-benchmark/h70/bounded-evidence-pdf.json",
+    "docx": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-docx.json",
+    "pdf": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-pdf.json",
     "xhtml_boundary": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json"
   },
   "sources": [
@@ -64,6 +64,46 @@
       "selection_reason": "Records the user-approved field alias and repeatable-block cleanup lifecycle.",
       "version_or_date": "2026-07-18",
       "notes": "Only answered canonical rows for this exact scope are eligible."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Defines the bounded public party-suggestions contract used by BSR 265, BSR 266 and BSR 268.",
+      "version_or_date": "checked 2026-07-22",
+      "notes": "Vendor capabilities do not create additional AutoFin requirements."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Immutable exact active-organization response for reproducible DaData test data.",
+      "version_or_date": "2026-07-21T19:55:46Z",
+      "notes": "Use the exact query, suggestion, status and OPF; do not call DaData from a runtime test case."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Token-free verification receipt for the active-organization fixture.",
+      "version_or_date": "2026-07-21T19:55:46Z",
+      "notes": "Lifecycle is verified-once / revalidate-on-failure."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Immutable exact liquidated-organization response for BSR 266.",
+      "version_or_date": "2026-07-21T19:56:15Z",
+      "notes": "Use the exact query, suggestion, LIQUIDATED status and OPF."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Token-free verification receipt for the liquidated-organization fixture.",
+      "version_or_date": "2026-07-21T19:56:15Z",
+      "notes": "Lifecycle is verified-once / revalidate-on-failure."
     }
   ],
   "source_table_column_semantics": [
@@ -153,6 +193,48 @@
   "dependency_alias_provenance": {
     "Тип занятости": "CLR-EMP-001"
   },
+  "approved_clarifications": [
+    {
+      "clarification_id": "CLR-EMP-001",
+      "gap_id": "GAP-EMP-001",
+      "scope_slug": "employment-main-work",
+      "requirement_codes": [
+        "BSR 264",
+        "BSR 267",
+        "BSR 269",
+        "BSR 271",
+        "BSR 274",
+        "BSR 275",
+        "BSR 276",
+        "BSR 277",
+        "BSR 279"
+      ],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-18",
+      "exact_answer": "«Тип занятости» — это то же поле, что «Социальный статус».",
+      "exact_answer_sha256": "4fd35fe835a5cd575f10ece24f7af1ac312c011ddfafaf870555b2c8abdeb339",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "evidence_source_sha256": "4324e54ab0c311ae913211dc9b869c70fe3552698bf914a14b7bef280c1b10a2"
+    },
+    {
+      "clarification_id": "CLR-EMP-002",
+      "gap_id": "GAP-EMP-002",
+      "scope_slug": "employment-main-work",
+      "requirement_codes": [
+        "BSR 284"
+      ],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-18",
+      "exact_answer": "После удаления заполненного блока и последующего добавления нового, поля должны быть пустыми.",
+      "exact_answer_sha256": "b8b71d3bf2cf007e2f2982807c946c8a4af10227f091c70937fc56b1016e1244",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "evidence_source_sha256": "4324e54ab0c311ae913211dc9b869c70fe3552698bf914a14b7bef280c1b10a2"
+    }
+  ],
   "expected_dependencies": [
     {
       "kind": "dictionary",

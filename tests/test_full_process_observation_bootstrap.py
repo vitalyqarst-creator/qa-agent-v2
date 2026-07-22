@@ -227,6 +227,28 @@ class FullProcessObservationBootstrapTests(unittest.TestCase):
                     codex_turn_id="turn-001",
                 )
 
+    def test_source_only_template_rejects_unbound_alias_clarification(self) -> None:
+        repo_root = Path(__file__).resolve().parents[1]
+        template_path = (
+            repo_root
+            / "evals"
+            / "full-production-benchmark"
+            / "configs"
+            / "postfinal-v2-employment-main-work"
+            / "bounded-context-template.json"
+        )
+        template = json.loads(template_path.read_text(encoding="utf-8"))
+        template.pop("approved_clarifications")
+
+        with self.assertRaisesRegex(
+            start_full_process_observation.BootstrapError,
+            "references missing approved clarifications: CLR-EMP-001",
+        ):
+            start_full_process_observation._validate_source_only_template(
+                template,
+                canonical_test_cases=template["canonical_test_cases"],
+            )
+
     def test_rejects_missing_or_out_of_package_scope_input(self) -> None:
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -360,16 +382,22 @@ class FullProcessObservationBootstrapTests(unittest.TestCase):
             (repo_root / "scripts" / "workflow_wall_clock.py").resolve(),
             plan.recorder_entrypoint,
         )
-        self.assertEqual(5, len(plan.scope_inputs))
+        self.assertEqual(10, len(plan.scope_inputs))
         self.assertEqual(
             "fts/AutoFin/support/PostFinal-v2/АФБ справочники 26.06.26.md",
             plan.scope_inputs[0].path.relative_to(repo_root).as_posix(),
         )
         self.assertEqual("approved-clarification", plan.scope_inputs[1].role)
         self.assertEqual("mandatory-package-context", plan.scope_inputs[2].role)
-        self.assertEqual("mockup", plan.scope_inputs[3].role)
-        self.assertEqual("mockup", plan.scope_inputs[4].role)
-        self.assertEqual(13, len(plan.expected_sha256))
+        self.assertTrue(
+            all(
+                item.role == "external-vendor-reference"
+                for item in plan.scope_inputs[3:8]
+            )
+        )
+        self.assertEqual("mockup", plan.scope_inputs[8].role)
+        self.assertEqual("mockup", plan.scope_inputs[9].role)
+        self.assertEqual(18, len(plan.expected_sha256))
         pinned = {
             path.relative_to(repo_root).as_posix(): digest
             for path, digest in plan.expected_sha256
@@ -383,8 +411,8 @@ class FullProcessObservationBootstrapTests(unittest.TestCase):
                 ),
                 "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-context-template.json",
                 "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/source-row-extraction-spec.json",
-                "evals/lean-production-benchmark/h70/bounded-evidence-docx.json",
-                "evals/lean-production-benchmark/h70/bounded-evidence-pdf.json",
+                "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-docx.json",
+                "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-pdf.json",
                 "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json",
             },
             set(pinned),

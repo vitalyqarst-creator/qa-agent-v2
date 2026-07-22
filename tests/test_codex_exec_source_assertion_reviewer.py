@@ -639,6 +639,95 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
             all(len(shard.assertion_ids) <= DEFAULT_MAX_ASSERTIONS_PER_SHARD for shard in plan)
         )
 
+    def test_soft_target_overflow_repacks_under_hard_cap(self) -> None:
+        base = self.manifest()
+        row_template = base.source_rows[0]
+        assertion_template = base.assertions[0]
+        rows = tuple(
+            replace(
+                row_template,
+                source_row_id=f"SRC-{index:03d}",
+                source_locator=f"/*/*[{index}]",
+                bounded_source_text=f"Bound source text {index}",
+                candidate_id=f"SRC-CAND-{'2' * 20}{index:04d}",
+            )
+            for index in range(1, 31)
+        )
+        assertions = tuple(
+            replace(
+                assertion_template,
+                assertion_id=f"ASSERT-{index:03d}",
+                source_row_id=f"SRC-{index:03d}",
+                locator=f"/*/*[{index}]",
+                exact_source_text=f"Bound source text {index}",
+                canonical_statement=f"Testable statement {index}.",
+                atom_id=f"ATOM-{index:03d}",
+            )
+            for index in range(1, 31)
+        )
+        manifest = replace(
+            base,
+            source_rows=rows,
+            assertions=assertions,
+            source_row_candidate_count=30,
+        )
+        evidence = PreparedEvidenceSet(
+            inline_files=(("shared.md", "x" * 60_000),),
+            image_paths=(),
+            bindings=(),
+            snapshot_sha256={},
+            digest="9" * 64,
+        )
+        gate = {"status": "passed", "manifest_digest": manifest.digest}
+        one_id = (assertions[0].assertion_id,)
+        two_ids = (assertions[0].assertion_id, assertions[1].assertion_id)
+        one_bytes = len(
+            render_prompt(
+                manifest=manifest,
+                gate=gate,
+                instruction_files=(),
+                review_prompt="Review.",
+                evidence=evidence,
+                assertion_ids=one_id,
+                shard_id="source-review-shard-999",
+                shard_count=8,
+            ).encode("utf-8")
+        )
+        two_bytes = len(
+            render_prompt(
+                manifest=manifest,
+                gate=gate,
+                instruction_files=(),
+                review_prompt="Review.",
+                evidence=evidence,
+                assertion_ids=two_ids,
+                shard_id="source-review-shard-999",
+                shard_count=8,
+            ).encode("utf-8")
+        )
+        self.assertGreater(two_bytes, one_bytes)
+
+        plan = plan_review_prompt_shards(
+            manifest=manifest,
+            gate=gate,
+            instruction_files=(),
+            review_prompt="Review.",
+            evidence=evidence,
+            max_prompt_bytes=two_bytes + 20_000,
+            max_shards=8,
+            shard_target_prompt_bytes=one_bytes,
+            max_assertions_per_shard=64,
+        )
+
+        self.assertLessEqual(len(plan), 8)
+        self.assertEqual(
+            [item.assertion_id for item in assertions],
+            [assertion_id for shard in plan for assertion_id in shard.assertion_ids],
+        )
+        self.assertTrue(
+            all(shard.prompt_bytes <= two_bytes + 20_000 for shard in plan)
+        )
+
     def test_oversized_prompt_is_sharded_without_splitting_source_row_siblings(
         self,
     ) -> None:

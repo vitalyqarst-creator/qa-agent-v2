@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "source_sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+  "extraction_method": "pdf-page-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "page:30",
+      "exact_source_text": "BSR 263.",
+      "exact_source_text_sha256": "f25b8bd43f33aaa228aea2a49c656dbf9959f46a2e03c58a0be5aaf3bf522422"
+    },
+    {
+      "source_locator": "page:32",
+      "exact_source_text": "BSR 285.",
+      "exact_source_text_sha256": "a7b3c0aa4d326fa2d8136f23640f035b569026a839dd456dd21a9e15cc6976f3"
+    }
+  ]
+}

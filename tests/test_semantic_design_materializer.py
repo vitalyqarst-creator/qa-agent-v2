@@ -62,6 +62,34 @@ class SemanticDesignMaterializerTests(unittest.TestCase):
                 obligations=[{"test_data": "FX-MISSING-001"}],
             )
 
+    def test_party_fixture_contract_includes_hash_bound_address_component(self) -> None:
+        fixture_dir = (
+            ROOT
+            / "fts/AutoFin/work/vendor-references/dadata-fixtures"
+            / "FX-DADATA-PARTY-ACTIVE-001"
+        )
+        verification = fixture_dir / "FX-DADATA-PARTY-ACTIVE-001.verification.json"
+        response = fixture_dir / "FX-DADATA-PARTY-ACTIVE-001.response.json"
+        lines = _portable_fixture_contract_lines(
+            repo_root=ROOT,
+            source_entries=[
+                {"path": verification.relative_to(ROOT).as_posix()},
+                {"path": response.relative_to(ROOT).as_posix()},
+            ],
+            obligations=[
+                {
+                    "obligation_id": "OBL-ADDRESS",
+                    "test_data": "FX-DADATA-PARTY-ACTIVE-001",
+                }
+            ],
+        )
+
+        self.assertEqual(1, len(lines))
+        self.assertIn(
+            '"address.value":"г Москва, ул Вавилова, д 19"',
+            lines[0],
+        )
+
     def test_resolved_partial_scope_exclusion_routes_to_na_sibling(self) -> None:
         links = _resolved_scope_exclusion_gap_links(
             clarifications=[

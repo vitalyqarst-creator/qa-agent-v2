@@ -97,6 +97,105 @@ class ToolContractError(RuntimeError):
     pass
 
 
+_CONTRADICTORY_RANGE_PATTERN = re.compile(
+    r"(?P<range_code>BSR\s+\d+\.\s*)"
+    r"(?P<range_clause>Сумма\s+не\s+менее\s+"
+    r"(?P<lower>[A-ZА-ЯЁ])\s+и\s+более\s+"
+    r"(?P<upper>[A-ZА-ЯЁ])\s*р\.)",
+    re.IGNORECASE,
+)
+
+
+def _materialize_source_contradiction_gaps(
+    payload: Mapping[str, Any],
+    context: Mapping[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Carry a literal allowed-range contradiction as a scoped ambiguity gap.
+
+    This repair is intentionally narrow.  It requires one clause to demand a
+    value above an upper variable and a later coded clause in the same bounded
+    row to reject values above that exact variable.  The gap is non-blocking for
+    the whole scope but blocks the contradictory allowed-class obligation.
+    """
+
+    normalized = json.loads(json.dumps(payload, ensure_ascii=False))
+    gaps = normalized.get("gaps")
+    decisions = normalized.get("source_decisions")
+    if not isinstance(gaps, list) or not isinstance(decisions, list):
+        return normalized, {
+            "version": 1,
+            "status": "not-needed",
+            "repair_count": 0,
+            "repairs": [],
+        }
+    included_rows = {
+        str(item.get("source_row_id", ""))
+        for item in decisions
+        if isinstance(item, Mapping) and item.get("disposition") == "included"
+    }
+    known_gap_rows = {
+        str(row_id)
+        for item in gaps
+        if isinstance(item, Mapping) and item.get("gap_type") == "ambiguity"
+        for row_id in item.get("source_row_ids", [])
+    }
+    repairs: list[dict[str, Any]] = []
+    for row in context.get("source_rows", []):
+        if not isinstance(row, Mapping):
+            continue
+        row_id = str(row.get("source_row_id", ""))
+        if row_id not in included_rows or row_id in known_gap_rows:
+            continue
+        text = str(row.get("bounded_source_text", ""))
+        range_match = _CONTRADICTORY_RANGE_PATTERN.search(text)
+        if range_match is None:
+            continue
+        upper = range_match.group("upper")
+        rejection_pattern = re.compile(
+            r"(?P<reject_code>BSR\s+\d+\.\s*)"
+            r"(?P<reject_clause>При\s+попытке\s+ввести\s+сумму\s+"
+            rf"более\s+{re.escape(upper)}\s+при\s+потере\s+фокуса)",
+            re.IGNORECASE,
+        )
+        rejection_match = rejection_pattern.search(text, range_match.end())
+        if rejection_match is None:
+            continue
+        range_fragment = range_match.group(0).strip()
+        rejection_fragment = rejection_match.group(0).strip()
+        gap_id = f"GAP-SOURCE-RANGE-CONTRADICTION-{row_id}"
+        gap = {
+            "gap_id": gap_id,
+            "gap_type": "ambiguity",
+            "source_row_ids": [row_id],
+            "source_refs": [str(row.get("source_ref", ""))],
+            "exact_source_fragments": [range_fragment, rejection_fragment],
+            "blocking": False,
+            "clarification_question": (
+                f"Какой диапазон допустим: должно ли правило означать "
+                f"«не менее {range_match.group('lower')} и не более {upper}»?"
+            ),
+            "downstream_handling": "carry-to-source-model",
+        }
+        gaps.append(gap)
+        known_gap_rows.add(row_id)
+        repairs.append(
+            {
+                "rule": "materialize-contradictory-source-range-gap",
+                "path": f"$.gaps[{len(gaps) - 1}]",
+                "gap_id": gap_id,
+                "source_row_id": row_id,
+                "range_fragment": range_fragment,
+                "rejection_fragment": rejection_fragment,
+            }
+        )
+    return normalized, {
+        "version": 1,
+        "status": "applied" if repairs else "not-needed",
+        "repair_count": len(repairs),
+        "repairs": repairs,
+    }
+
+
 @dataclass(frozen=True)
 class StreamingExecResult:
     return_code: int
@@ -1675,6 +1774,14 @@ def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(description="Run one isolated tool-free bounded scope semantic model call.")
     result.add_argument("--repo-root", type=Path, default=ROOT_DIR)
     result.add_argument("--context", type=Path, required=True)
+    result.add_argument(
+        "--fixture-context",
+        type=Path,
+        help=(
+            "optional full prepared context used only by deterministic verified-"
+            "fixture normalization; it is never included in the model prompt"
+        ),
+    )
     result.add_argument("--decision-output", type=Path, required=True)
     result.add_argument("--events-output", type=Path, required=True)
     result.add_argument("--stderr-output", type=Path, required=True)
@@ -1746,6 +1853,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not repo_root.is_dir():
             raise ScopeAnalyzerError("repo-root must resolve to an existing directory")
         protected_inputs = [args.context, *args.image]
+        if args.fixture_context is not None:
+            protected_inputs.append(args.fixture_context)
         if args.scope_boundary_decision is not None:
             protected_inputs.append(args.scope_boundary_decision)
         decision_target = args.decision_output.resolve()
@@ -1788,6 +1897,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         context = json.loads(args.context.read_text(encoding="utf-8"))
         if not isinstance(context, dict) or not isinstance(context.get("source_rows"), list):
             raise ScopeAnalyzerError("context must be an object with source_rows")
+        fixture_context = context
+        if args.fixture_context is not None:
+            fixture_context = json.loads(
+                args.fixture_context.read_text(encoding="utf-8")
+            )
+            if not isinstance(fixture_context, dict):
+                raise ScopeAnalyzerError("fixture-context must be a JSON object")
+            _validate_source_cache_binding(fixture_context, required=True)
         error_stage = "dependency-preflight"
         preflight = analyze_dependency_gaps(context)
         if args.preflight_output is not None:
@@ -2107,7 +2224,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     decision,
                     context=context,
                     boundary=boundary,
-                    repo_root=root,
+                    repo_root=repo_root,
+                    fixture_context=fixture_context,
                 )
             )
             if deterministic_repairs["repair_count"]:
@@ -2129,6 +2247,25 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         else:
             assert validator is not None
+            if args.contract_version == 2:
+                normalized_decision, deterministic_repairs = (
+                    _materialize_source_contradiction_gaps(decision, context)
+                )
+                if deterministic_repairs["repair_count"]:
+                    raw_output = args.decision_output.with_name(
+                        f"{args.decision_output.stem}.model-output.json"
+                    )
+                    _write_json(raw_output, decision)
+                    decision = normalized_decision
+                    validate_openai_strict_output_instance(
+                        decision,
+                        strict_instance_schema,
+                    )
+                    _write_json(args.decision_output, decision)
+                    deterministic_repairs["raw_model_output"] = raw_output.name
+                    deterministic_repairs["normalized_output"] = (
+                        args.decision_output.name
+                    )
             validator(decision, context)
         result_validated = True
         duration_ms = (time.perf_counter_ns() - started) // 1_000_000

@@ -1,0 +1,826 @@
+{
+  "version": 1,
+  "ft_slug": "AutoFin",
+  "scope_slug": "employment-main-work",
+  "section_id": "4.3",
+  "package_id": "WP-01",
+  "request_summary": "Новый чистый full-production benchmark для блока «Сведения о занятости», подблока «Основная работа» по PostFinal-v2.",
+  "canonical_test_cases": "test-cases/4.3-employment-main-work-clean-eval-20260722-v18.md",
+  "main_ft_docx": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+  "main_ft_xhtml": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+  "main_ft_pdf": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+  "package_notes": "fts/AutoFin/AGENT-NOTES.md",
+  "source_row_extraction_spec": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work-v18/source-row-extraction-spec.json",
+  "bounded_evidence": {
+    "docx": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-docx.json",
+    "pdf": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-pdf.json",
+    "xhtml_boundary": "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json"
+  },
+  "sources": [
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.docx",
+      "role": "main-ft-docx",
+      "manifest_binding": "semantic-source-of-truth",
+      "selection_reason": "Authoritative FT meaning for the selected PostFinal-v2 scope.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "DOCX is authoritative when another representation differs."
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+      "role": "main-ft-xhtml",
+      "manifest_binding": "assertion-source",
+      "selection_reason": "Mandatory exact table/list/row extraction source.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Hash-bound by the extraction spec and deterministic baseline."
+    },
+    {
+      "path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.pdf",
+      "role": "main-ft-pdf",
+      "manifest_binding": "structural-visual-parity",
+      "selection_reason": "Visual and structural parity for Table 4 and BSR 263-284.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Pages 30-32 visually checked; PDF does not replace DOCX/XHTML."
+    },
+    {
+      "path": "fts/AutoFin/AGENT-NOTES.md",
+      "role": "mandatory-package-context",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Defines table columns О and Р and package-specific guardrails.",
+      "version_or_date": "current",
+      "notes": "О means mandatory; Р means editable."
+    },
+    {
+      "path": "fts/AutoFin/support/PostFinal-v2/АФБ справочники 26.06.26.md",
+      "role": "support",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Provides the fixed values for the referenced position-type dictionary.",
+      "version_or_date": "2026-06-26",
+      "notes": "Support clarifies dictionaries only; FT remains authoritative."
+    },
+    {
+      "path": "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "role": "approved-clarification",
+      "manifest_binding": "approved-clarification",
+      "selection_reason": "Records the user-approved field alias and repeatable-block cleanup lifecycle.",
+      "version_or_date": "2026-07-18",
+      "notes": "Only answered canonical rows for this exact scope are eligible."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Defines the bounded public party-suggestions contract used by BSR 265, BSR 266 and BSR 268.",
+      "version_or_date": "checked 2026-07-22",
+      "notes": "Vendor capabilities do not create additional AutoFin requirements."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Immutable exact active-organization response for reproducible DaData test data.",
+      "version_or_date": "2026-07-21T19:55:46Z",
+      "notes": "Use the exact query, suggestion, status and OPF; do not call DaData from a runtime test case."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Token-free verification receipt for the active-organization fixture.",
+      "version_or_date": "2026-07-21T19:55:46Z",
+      "notes": "Lifecycle is verified-once / revalidate-on-failure."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Immutable exact liquidated-organization response for BSR 266.",
+      "version_or_date": "2026-07-21T19:56:15Z",
+      "notes": "Use the exact query, suggestion, LIQUIDATED status and OPF."
+    },
+    {
+      "path": "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material",
+      "selection_reason": "Token-free verification receipt for the liquidated-organization fixture.",
+      "version_or_date": "2026-07-21T19:56:15Z",
+      "notes": "Lifecycle is verified-once / revalidate-on-failure."
+    }
+  ],
+  "source_table_column_semantics": [
+    {
+      "table_id": "POSTFINAL-V2-TABLE-4-MAIN-WORK-FIELDS",
+      "header_source_row_id": "SRC-017",
+      "target_source_row_ids": [
+        "SRC-020",
+        "SRC-021",
+        "SRC-022",
+        "SRC-023",
+        "SRC-024",
+        "SRC-025",
+        "SRC-026",
+        "SRC-027",
+        "SRC-028",
+        "SRC-029"
+      ],
+      "columns": [
+        {
+          "property": "requiredness",
+          "physical_column_index": 2,
+          "expected_header": "О",
+          "value_mapping": {
+            "Да": "required",
+            "Нет": "optional"
+          },
+          "interpretation_source": "fts/AutoFin/AGENT-NOTES.md",
+          "interpretation_source_fragment": "В таблицах описания свойств полей формы столбец `О` означает `Обязательность`, а столбец `Р` означает `Редактируемость`."
+        },
+        {
+          "property": "editability",
+          "physical_column_index": 3,
+          "expected_header": "Р",
+          "value_mapping": {
+            "Да": "editable",
+            "Нет": "read-only"
+          },
+          "interpretation_source": "fts/AutoFin/AGENT-NOTES.md",
+          "interpretation_source_fragment": "В таблицах описания свойств полей формы столбец `О` означает `Обязательность`, а столбец `Р` означает `Редактируемость`."
+        }
+      ]
+    }
+  ],
+  "mockups": [
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup",
+      "screen_name": "Сведения о занятости при выбранных Госуслугах",
+      "selection_reason": "Shows the Main work block hierarchy and visible Social status control.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Visually opened; not used as a source of business rules."
+    },
+    {
+      "path": "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg",
+      "role": "mockup",
+      "manifest_binding": "mockup",
+      "screen_name": "Анкета клиента, максимальное состояние",
+      "selection_reason": "Shows the full employment block, Main work card and its field layout.",
+      "version_or_date": "PostFinal-v2",
+      "notes": "Visually opened; text requirements have priority."
+    }
+  ],
+  "mockup_locators": [
+    "Рисунок 3: заголовок «Сведения о занятости», подзаголовок «Основная работа», карточка «Сведения о работе», поле «Социальный статус»",
+    "Рисунок 5: блок «Сведения о занятости», подблок «Основная работа», карточка «Сведения о работе», поля основной работы и кнопка-пиктограмма корзины"
+  ],
+  "scope_boundary": {
+    "target": "Таблица 4, блок «Сведения о занятости», подблок «Основная работа», BSR 263-284.",
+    "include": [
+      "Заголовки блока и подблока, строки полей и кнопка очистки подблока «Основная работа».",
+      "Обязательность, редактируемость, типы значений, видимость, форматы, справочники, DaData-поведение, границы дохода и очистка полей из BSR 263-284.",
+      "Применимые document-global ограничения типов данных и приоритет текста ФТ над макетом."
+    ],
+    "exclude": [
+      "Подблок «Дополнительный доход» и BSR 285-292.",
+      "Кнопки в блоке «Сведения о занятости», подтверждение дохода и BSR 293-302.",
+      "Печатные формы, анкета, согласия, проверки и другие блоки карточки заявки.",
+      "Неподтверждённые внутренние эффекты DaData, БД, API и интеграционных ошибок."
+    ]
+  },
+  "dependency_gap_gate": true,
+  "dependency_aliases": {
+    "Тип занятости": "Социальный статус"
+  },
+  "dependency_alias_provenance": {
+    "Тип занятости": "CLR-EMP-001"
+  },
+  "approved_clarifications": [
+    {
+      "clarification_id": "CLR-EMP-001",
+      "gap_id": "GAP-EMP-001",
+      "scope_slug": "employment-main-work",
+      "requirement_codes": [
+        "BSR 264",
+        "BSR 267",
+        "BSR 269",
+        "BSR 271",
+        "BSR 274",
+        "BSR 275",
+        "BSR 276",
+        "BSR 277",
+        "BSR 279"
+      ],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-18",
+      "exact_answer": "«Тип занятости» — это то же поле, что «Социальный статус».",
+      "exact_answer_sha256": "4fd35fe835a5cd575f10ece24f7af1ac312c011ddfafaf870555b2c8abdeb339",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "evidence_source_sha256": "4324e54ab0c311ae913211dc9b869c70fe3552698bf914a14b7bef280c1b10a2"
+    },
+    {
+      "clarification_id": "CLR-EMP-002",
+      "gap_id": "GAP-EMP-002",
+      "scope_slug": "employment-main-work",
+      "requirement_codes": [
+        "BSR 284"
+      ],
+      "authority": "user",
+      "response_status": "answered",
+      "response_type": "user-confirmed",
+      "answered_at": "2026-07-18",
+      "exact_answer": "После удаления заполненного блока и последующего добавления нового, поля должны быть пустыми.",
+      "exact_answer_sha256": "b8b71d3bf2cf007e2f2982807c946c8a4af10227f091c70937fc56b1016e1244",
+      "evidence_source_path": "fts/AutoFin/support/PostFinal-v2/employment-main-work-approved-clarifications.md",
+      "evidence_source_sha256": "4324e54ab0c311ae913211dc9b869c70fe3552698bf914a14b7bef280c1b10a2"
+    }
+  ],
+  "expected_dependencies": [
+    {
+      "kind": "dictionary",
+      "name": "Социальный статус",
+      "source_row_ids": [
+        "SRC-020"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-020"
+      ],
+      "exact_source_fragments": [
+        "справочника «Социальный статус»"
+      ]
+    },
+    {
+      "kind": "field",
+      "name": "Тип занятости",
+      "source_row_ids": [
+        "SRC-021",
+        "SRC-022",
+        "SRC-023",
+        "SRC-024",
+        "SRC-025",
+        "SRC-026",
+        "SRC-027",
+        "SRC-028",
+        "SRC-029"
+      ],
+      "resolution": "approved-alias",
+      "target_source_row_ids": [
+        "SRC-020"
+      ],
+      "exact_source_fragments": [
+        "поле «Тип занятости»"
+      ]
+    },
+    {
+      "kind": "field",
+      "name": "Наименование организации, ИНН",
+      "source_row_ids": [
+        "SRC-022",
+        "SRC-023"
+      ],
+      "resolution": "declared",
+      "target_source_row_ids": [
+        "SRC-021"
+      ],
+      "exact_source_fragments": [
+        "поля «Наименование организации, ИНН»"
+      ]
+    },
+    {
+      "kind": "dictionary",
+      "name": "ОПФ",
+      "source_row_ids": [
+        "SRC-022"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-022"
+      ],
+      "exact_source_fragments": [
+        "справочника «ОПФ»"
+      ]
+    },
+    {
+      "kind": "dictionary",
+      "name": "Типы должности",
+      "source_row_ids": [
+        "SRC-025"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-025"
+      ],
+      "exact_source_fragments": [
+        "справочника «Типы должности»"
+      ]
+    },
+    {
+      "kind": "other",
+      "name": "Ограничение типа Текст",
+      "source_row_ids": [
+        "SRC-005"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-021",
+        "SRC-023",
+        "SRC-026"
+      ],
+      "exact_source_fragments": [
+        "Допустимое количество символов: 2000"
+      ]
+    },
+    {
+      "kind": "other",
+      "name": "Ограничение типа Дата",
+      "source_row_ids": [
+        "SRC-009"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-027"
+      ],
+      "exact_source_fragments": [
+        "Дата в формате дд.мм.гггг.",
+        "для года - целые положительные числа от 1900 до 9999",
+        "для месяца - целые числа в диапазоне от 01 до 12",
+        "для дня - целые числа в диапазоне от 01 до 28/29/30/31 (в зависимости от выбранного месяца)"
+      ]
+    },
+    {
+      "kind": "other",
+      "name": "Ограничение типа Список",
+      "source_row_ids": [
+        "SRC-012"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-020",
+        "SRC-022",
+        "SRC-025"
+      ],
+      "exact_source_fragments": [
+        "Возможен выбор только одного значения"
+      ]
+    },
+    {
+      "kind": "other",
+      "name": "Значения по умолчанию NULL",
+      "source_row_ids": [
+        "SRC-015"
+      ],
+      "resolution": "source-provided",
+      "target_source_row_ids": [
+        "SRC-020",
+        "SRC-021",
+        "SRC-022",
+        "SRC-023",
+        "SRC-024",
+        "SRC-025",
+        "SRC-026",
+        "SRC-027",
+        "SRC-028",
+        "SRC-029"
+      ],
+      "exact_source_fragments": [
+        "По умолчанию значения в виджетах отсутствуют и интерпретируются как NULL"
+      ]
+    }
+  ],
+  "dictionary_inventory": [
+    {
+      "dictionary_id": "DICT-EMP-POSITION-TYPE",
+      "name": "Типы должности",
+      "source_path": "fts/AutoFin/support/PostFinal-v2/АФБ справочники 26.06.26.md",
+      "source_location": "section: Тип должности; columns: Значение, Внутренний код, Архивный",
+      "values": [
+        "Сотрудник/Рабочий/Ассистент",
+        "Индивидуальный предприниматель",
+        "Главный специалист/Руководитель среднего звена",
+        "Топ менеджер/Руководитель высшего звена",
+        "Эксперт/Старший или Ведущий специалист"
+      ],
+      "active_values": [
+        "Сотрудник/Рабочий/Ассистент",
+        "Индивидуальный предприниматель",
+        "Главный специалист/Руководитель среднего звена",
+        "Топ менеджер/Руководитель высшего звена",
+        "Эксперт/Старший или Ведущий специалист"
+      ],
+      "archived_values": [],
+      "entries": [
+        {
+          "value": "Сотрудник/Рабочий/Ассистент",
+          "internal_code": "staff",
+          "archived": false
+        },
+        {
+          "value": "Индивидуальный предприниматель",
+          "internal_code": "sole_proprietor",
+          "archived": false
+        },
+        {
+          "value": "Главный специалист/Руководитель среднего звена",
+          "internal_code": "mid_manager",
+          "archived": false
+        },
+        {
+          "value": "Топ менеджер/Руководитель высшего звена",
+          "internal_code": "top_manager",
+          "archived": false
+        },
+        {
+          "value": "Эксперт/Старший или Ведущий специалист",
+          "internal_code": "expert",
+          "archived": false
+        }
+      ]
+    }
+  ],
+  "scope_execution_facts": {
+    "version": 1,
+    "bounded_scope_kind": "contiguous-bounded-fragment",
+    "expected_testable_assertion_count": null,
+    "expected_tc_count": null,
+    "internal_package_count": 1,
+    "has_heterogeneous_integrations": false,
+    "has_large_dictionary": false,
+    "mockups_ready": true,
+    "standard_profile_reasons": [
+      "The deterministic source profile contains 30 bounded source rows and exceeds the lean source-row limit."
+    ]
+  },
+  "source_rows": [
+    {
+      "source_row_id": "SRC-001",
+      "field_or_action": "Примерные значения макета",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[1]",
+      "source_locator": "/*/*[2]/*[54]/*[1]",
+      "in_scope_hint": "no; document-global context"
+    },
+    {
+      "source_row_id": "SRC-002",
+      "field_or_action": "Приоритет текстового описания",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[2]",
+      "source_locator": "/*/*[2]/*[54]/*[2]",
+      "in_scope_hint": "no; document-global context"
+    },
+    {
+      "source_row_id": "SRC-003",
+      "field_or_action": "Расположение полей на макете",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[54]/*[3]",
+      "source_locator": "/*/*[2]/*[54]/*[3]",
+      "in_scope_hint": "no; document-global context"
+    },
+    {
+      "source_row_id": "SRC-004",
+      "field_or_action": "Заголовок ограничений типов данных",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[2]",
+      "source_locator": "/*/*[2]/*[55]/*[2]",
+      "in_scope_hint": "no; document-global context"
+    },
+    {
+      "source_row_id": "SRC-005",
+      "field_or_action": "Ограничение типа Текст",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[3]",
+      "source_locator": "/*/*[2]/*[55]/*[3]",
+      "in_scope_hint": "no; applicable document-global context",
+      "context_relation_required": true
+    },
+    {
+      "source_row_id": "SRC-006",
+      "field_or_action": "Ограничение типа Длинный текст",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[4]",
+      "source_locator": "/*/*[2]/*[55]/*[4]",
+      "in_scope_hint": "no; not applicable to selected fields"
+    },
+    {
+      "source_row_id": "SRC-007",
+      "field_or_action": "Ограничение типа Целое число",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[5]",
+      "source_locator": "/*/*[2]/*[55]/*[5]",
+      "in_scope_hint": "no; not applicable to selected field types"
+    },
+    {
+      "source_row_id": "SRC-008",
+      "field_or_action": "Ограничение типа Дробное число",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[6]",
+      "source_locator": "/*/*[2]/*[55]/*[6]",
+      "in_scope_hint": "no; not applicable to selected field types"
+    },
+    {
+      "source_row_id": "SRC-009",
+      "field_or_action": "Ограничение типа Дата",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[7]",
+      "source_locator": "/*/*[2]/*[55]/*[7]",
+      "in_scope_hint": "no; applicable document-global context",
+      "context_relation_required": true
+    },
+    {
+      "source_row_id": "SRC-010",
+      "field_or_action": "Ограничение типа Дата и время",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[8]",
+      "source_locator": "/*/*[2]/*[55]/*[8]",
+      "in_scope_hint": "no; not applicable to selected field types"
+    },
+    {
+      "source_row_id": "SRC-011",
+      "field_or_action": "Ограничение типа Двоичные данные",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[9]",
+      "source_locator": "/*/*[2]/*[55]/*[9]",
+      "in_scope_hint": "no; not applicable to selected field types"
+    },
+    {
+      "source_row_id": "SRC-012",
+      "field_or_action": "Ограничение типа Список",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[10]",
+      "source_locator": "/*/*[2]/*[55]/*[10]",
+      "in_scope_hint": "no; applicable document-global context",
+      "context_relation_required": true
+    },
+    {
+      "source_row_id": "SRC-013",
+      "field_or_action": "Ограничение типа Список с множественным выбором",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[11]",
+      "source_locator": "/*/*[2]/*[55]/*[11]",
+      "in_scope_hint": "no; not applicable to selected controls"
+    },
+    {
+      "source_row_id": "SRC-014",
+      "field_or_action": "Ограничение логического типа",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[55]/*[12]",
+      "source_locator": "/*/*[2]/*[55]/*[12]",
+      "in_scope_hint": "no; not applicable to selected controls"
+    },
+    {
+      "source_row_id": "SRC-015",
+      "field_or_action": "Значения по умолчанию NULL",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[56]",
+      "source_locator": "/*/*[2]/*[56]",
+      "in_scope_hint": "no; applicable document-global context unless overridden locally",
+      "context_relation_required": true
+    },
+    {
+      "source_row_id": "SRC-016",
+      "field_or_action": "Таблица 4",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[115]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]",
+      "source_locator": "/*/*[2]/*[115]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]/*[1]",
+      "in_scope_hint": "no; ancestor and section preamble"
+    },
+    {
+      "source_row_id": "SRC-017",
+      "field_or_action": "Заголовок колонок Таблицы 4",
+      "source_ref": "PostFinal-v2.xhtml /*/*[2]/*[116]/*[2]",
+      "source_locator": "/*/*[2]/*[116]/*[2]",
+      "in_scope_hint": "no; ancestor and section preamble"
+    },
+    {
+      "source_row_id": "SRC-018",
+      "field_or_action": "Блок Сведения о занятости",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 105 /*/*[2]/*[116]/*[105]",
+      "source_locator": "/*/*[2]/*[116]/*[105]",
+      "in_scope_hint": "yes; selected block header"
+    },
+    {
+      "source_row_id": "SRC-019",
+      "field_or_action": "Подблок Основная работа",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 106 /*/*[2]/*[116]/*[106]",
+      "source_locator": "/*/*[2]/*[116]/*[106]",
+      "in_scope_hint": "yes; selected subblock header"
+    },
+    {
+      "source_row_id": "SRC-020",
+      "field_or_action": "Социальный статус",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 107 /*/*[2]/*[116]/*[107]",
+      "source_locator": "/*/*[2]/*[116]/*[107]",
+      "in_scope_hint": "yes; BSR 263"
+    },
+    {
+      "source_row_id": "SRC-021",
+      "field_or_action": "Наименование организации, ИНН",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 108 /*/*[2]/*[116]/*[108]",
+      "source_locator": "/*/*[2]/*[116]/*[108]",
+      "in_scope_hint": "yes; BSR 264-266"
+    },
+    {
+      "source_row_id": "SRC-022",
+      "field_or_action": "ОПФ",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 109 /*/*[2]/*[116]/*[109]",
+      "source_locator": "/*/*[2]/*[116]/*[109]",
+      "in_scope_hint": "yes; BSR 267-268"
+    },
+    {
+      "source_row_id": "SRC-023",
+      "field_or_action": "Фактический адрес работы",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 110 /*/*[2]/*[116]/*[110]",
+      "source_locator": "/*/*[2]/*[116]/*[110]",
+      "in_scope_hint": "yes; BSR 269-270"
+    },
+    {
+      "source_row_id": "SRC-024",
+      "field_or_action": "Рабочий телефон",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 111 /*/*[2]/*[116]/*[111]",
+      "source_locator": "/*/*[2]/*[116]/*[111]",
+      "in_scope_hint": "yes; BSR 271-273"
+    },
+    {
+      "source_row_id": "SRC-025",
+      "field_or_action": "Тип должности",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 112 /*/*[2]/*[116]/*[112]",
+      "source_locator": "/*/*[2]/*[116]/*[112]",
+      "in_scope_hint": "yes; BSR 274"
+    },
+    {
+      "source_row_id": "SRC-026",
+      "field_or_action": "Должность",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 113 /*/*[2]/*[116]/*[113]",
+      "source_locator": "/*/*[2]/*[116]/*[113]",
+      "in_scope_hint": "yes; BSR 275"
+    },
+    {
+      "source_row_id": "SRC-027",
+      "field_or_action": "Дата начала работы в компании",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 114 /*/*[2]/*[116]/*[114]",
+      "source_locator": "/*/*[2]/*[116]/*[114]",
+      "in_scope_hint": "yes; BSR 276"
+    },
+    {
+      "source_row_id": "SRC-028",
+      "field_or_action": "Начало общего трудового стажа",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 115 /*/*[2]/*[116]/*[115]",
+      "source_locator": "/*/*[2]/*[116]/*[115]",
+      "in_scope_hint": "yes; BSR 277-278"
+    },
+    {
+      "source_row_id": "SRC-029",
+      "field_or_action": "Среднемесячный доход после вычета налогов",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 116 /*/*[2]/*[116]/*[116]",
+      "source_locator": "/*/*[2]/*[116]/*[116]",
+      "in_scope_hint": "yes; BSR 279-283"
+    },
+    {
+      "source_row_id": "SRC-030",
+      "field_or_action": "Корзина основной работы",
+      "source_ref": "PostFinal-v2.xhtml Table 4 row 117 /*/*[2]/*[116]/*[117]",
+      "source_locator": "/*/*[2]/*[116]/*[117]",
+      "in_scope_hint": "yes; BSR 284"
+    }
+  ],
+  "parity": [
+    {
+      "requirement_code": "BSR 263",
+      "docx_locator": "Table 7 row 106",
+      "xhtml_locator": "/*/*[2]/*[116]/*[107]",
+      "pdf_locator": "page:30",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 264",
+      "docx_locator": "Table 7 row 107",
+      "xhtml_locator": "/*/*[2]/*[116]/*[108]",
+      "pdf_locator": "page:30",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 265",
+      "docx_locator": "Table 7 row 107",
+      "xhtml_locator": "/*/*[2]/*[116]/*[108]",
+      "pdf_locator": "page:30",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 266",
+      "docx_locator": "Table 7 row 107",
+      "xhtml_locator": "/*/*[2]/*[116]/*[108]",
+      "pdf_locator": "page:30",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 267",
+      "docx_locator": "Table 7 row 108",
+      "xhtml_locator": "/*/*[2]/*[116]/*[109]",
+      "pdf_locator": "page:30",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 268",
+      "docx_locator": "Table 7 row 108",
+      "xhtml_locator": "/*/*[2]/*[116]/*[109]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 269",
+      "docx_locator": "Table 7 row 109",
+      "xhtml_locator": "/*/*[2]/*[116]/*[110]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 270",
+      "docx_locator": "Table 7 row 109",
+      "xhtml_locator": "/*/*[2]/*[116]/*[110]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 271",
+      "docx_locator": "Table 7 row 110",
+      "xhtml_locator": "/*/*[2]/*[116]/*[111]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 272",
+      "docx_locator": "Table 7 row 110",
+      "xhtml_locator": "/*/*[2]/*[116]/*[111]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 273",
+      "docx_locator": "Table 7 row 110",
+      "xhtml_locator": "/*/*[2]/*[116]/*[111]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 274",
+      "docx_locator": "Table 7 row 111",
+      "xhtml_locator": "/*/*[2]/*[116]/*[112]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 275",
+      "docx_locator": "Table 7 row 112",
+      "xhtml_locator": "/*/*[2]/*[116]/*[113]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 276",
+      "docx_locator": "Table 7 row 113",
+      "xhtml_locator": "/*/*[2]/*[116]/*[114]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 277",
+      "docx_locator": "Table 7 row 114",
+      "xhtml_locator": "/*/*[2]/*[116]/*[115]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 278",
+      "docx_locator": "Table 7 row 114",
+      "xhtml_locator": "/*/*[2]/*[116]/*[115]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 279",
+      "docx_locator": "Table 7 row 115",
+      "xhtml_locator": "/*/*[2]/*[116]/*[116]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 280",
+      "docx_locator": "Table 7 row 115",
+      "xhtml_locator": "/*/*[2]/*[116]/*[116]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 281",
+      "docx_locator": "Table 7 row 115",
+      "xhtml_locator": "/*/*[2]/*[116]/*[116]",
+      "pdf_locator": "page:31",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 282",
+      "docx_locator": "Table 7 row 115",
+      "xhtml_locator": "/*/*[2]/*[116]/*[116]",
+      "pdf_locator": "page:32",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 283",
+      "docx_locator": "Table 7 row 115",
+      "xhtml_locator": "/*/*[2]/*[116]/*[116]",
+      "pdf_locator": "page:32",
+      "status": "matched"
+    },
+    {
+      "requirement_code": "BSR 284",
+      "docx_locator": "Table 7 row 116",
+      "xhtml_locator": "/*/*[2]/*[116]/*[117]",
+      "pdf_locator": "page:32",
+      "status": "matched"
+    }
+  ]
+}

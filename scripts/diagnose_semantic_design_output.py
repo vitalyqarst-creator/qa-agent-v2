@@ -42,6 +42,14 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--context", type=Path, required=True)
     result.add_argument("--scope-boundary-decision", type=Path, required=True)
     result.add_argument("--semantic-design", type=Path, required=True)
+    result.add_argument(
+        "--fixture-context",
+        type=Path,
+        help=(
+            "Optional full prepared context used only to resolve registered fixtures "
+            "when diagnosing a projected semantic shard."
+        ),
+    )
     result.add_argument("--output", type=Path)
     result.add_argument("--require-ready", action="store_true")
     return result
@@ -53,7 +61,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     context_path = _resolve(root, args.context)
     boundary_path = _resolve(root, args.scope_boundary_decision)
     design_path = _resolve(root, args.semantic_design)
+    fixture_context_path = (
+        _resolve(root, args.fixture_context) if args.fixture_context else context_path
+    )
     context = _load(context_path)
+    fixture_context = _load(fixture_context_path)
     boundary = _load(boundary_path)
     raw_design = _load(design_path)
 
@@ -67,6 +79,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         context=context,
         boundary=boundary,
         repo_root=root,
+        fixture_context=fixture_context,
     )
     completeness = semantic_design_completeness_diagnostics(
         context,

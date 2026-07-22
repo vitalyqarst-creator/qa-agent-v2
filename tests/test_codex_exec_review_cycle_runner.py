@@ -2172,6 +2172,10 @@ class CodexExecReviewCycleRunnerTests(unittest.TestCase):
         )
         self.assertIn("passed", quality)
         self.assertFalse(aggregate["passed"])
+        self.assertIn(
+            "missing-testable-obligation-coverage",
+            {finding["id"] for finding in aggregate["findings"]},
+        )
         self.assertEqual(
             {"validator", "obligation_gate", "quality_gate"},
             set(aggregate["gates"]),
@@ -3762,6 +3766,38 @@ Draft body.
         )
         self.assertEqual("awaiting-ui-calibration", lifecycle["items"][0]["status"])
         self.assertFalse(lifecycle["items"][0]["regression_ready"])
+
+    def test_structured_writer_prompt_forbids_process_titles_and_projects_aliases(self) -> None:
+        package_path = self.build_prepared_package(
+            execution_profile="standard-required",
+            unsupported_dimensions=("evidence-qualified-ui-calibration",),
+            calibration_status="ui-calibration-required",
+            test_case_count=2,
+        )
+        runner = self.make_prepared_runner(ScriptedExecutor(), package_path)
+        runner.prepared_structured_writer_single_session_tc_limit = 1
+        runner.prepared_structured_writer_shard_size = 1
+        runner.validate_configuration()
+        shard = runner._writer_output_capacity_plan["shards"][0]
+
+        with mock.patch.object(
+            runner,
+            "_approved_runtime_aliases",
+            return_value={"Тип занятости": "Социальный статус"},
+        ):
+            prompt = runner._writer_shard_prompt(shard)
+
+        self.assertIn(
+            "Never put calibration, candidate, writer, reviewer, runner or "
+            "fixture-validation process markers in a title",
+            prompt,
+        )
+        self.assertIn(
+            'Approved runtime aliases: {"Тип занятости":"Социальный статус"}',
+            prompt,
+        )
+        self.assertIn("Never use generic `указать`", prompt)
+        self.assertIn("Точное предложение", prompt)
 
     def test_mixed_atom_explicit_calibration_is_authoritative_per_obligation(self) -> None:
         executable = PreparedObligation(

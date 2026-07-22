@@ -19,6 +19,7 @@ from scripts.codex_exec_bounded_scope_analyzer import (
     _backend_protocol_errors,
     _error_category,
     _lifecycle_payload,
+    _materialize_source_contradiction_gaps,
     _prompt,
     _validate_scope_context,
     _validate_decision,
@@ -181,6 +182,39 @@ class BoundedScopeAnalyzerV2Tests(unittest.TestCase):
 
     def test_compact_scope_accepts_source_complete_decision(self) -> None:
         _validate_decision(self._decision(), self._context())
+
+    def test_source_range_contradiction_becomes_scoped_ambiguity_gap(self) -> None:
+        context = self._context()
+        context["source_rows"][1]["bounded_source_text"] = (
+            "BSR 281. Сумма не менее X и более Y р. "
+            "BSR 283. При попытке ввести сумму более Y при потере фокуса "
+            "поле должно окрашиваться красным."
+        )
+        context["source_rows"][1]["requirement_codes_hint"] = [
+            "BSR 281",
+            "BSR 283",
+        ]
+        context = self._bind_context(context)
+        decision = self._decision()
+        decision["dependencies"] = []
+        decision["source_decisions"][1]["requirement_codes"] = [
+            "BSR 281",
+            "BSR 283",
+        ]
+
+        normalized, receipt = _materialize_source_contradiction_gaps(
+            decision,
+            context,
+        )
+
+        self.assertEqual(1, receipt["repair_count"])
+        self.assertEqual("ambiguity", normalized["gaps"][0]["gap_type"])
+        self.assertFalse(normalized["gaps"][0]["blocking"])
+        self.assertEqual(
+            "carry-to-source-model",
+            normalized["gaps"][0]["downstream_handling"],
+        )
+        _validate_decision(normalized, context)
 
     def test_bare_requirement_code_requires_explicit_nonblocking_gap(self) -> None:
         context = self._context()

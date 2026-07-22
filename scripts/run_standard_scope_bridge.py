@@ -587,6 +587,7 @@ def _model_args(
     codex_command: str | None,
     measurement_mode: str,
     timeout_seconds: int | None = None,
+    fixture_context: Path | None = None,
 ) -> list[str]:
     result = [
         "--repo-root", str(repo_root),
@@ -606,6 +607,8 @@ def _model_args(
         result.extend(("--codex-command", codex_command))
     if timeout_seconds is not None:
         result.extend(("--timeout-seconds", str(timeout_seconds)))
+    if fixture_context is not None:
+        result.extend(("--fixture-context", str(fixture_context)))
     for image in images:
         result.extend(("--image", str(image)))
     return result
@@ -861,6 +864,7 @@ def _run_sharded_semantic_design(
                 codex_command=codex_command,
                 measurement_mode=measurement_mode,
                 timeout_seconds=timeout_seconds,
+                fixture_context=context_path,
             )
             arguments.extend(("--scope-boundary-decision", str(shard_boundary_path)))
             return_code = semantic_runner(arguments)

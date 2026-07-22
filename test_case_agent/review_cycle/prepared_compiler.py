@@ -192,6 +192,13 @@ STATE_CHANGE_PLAN_FIELDS = (
     "pre_action_state_oracle",
     "state_relation",
 )
+STATE_CHANGE_EMPTY_VALUES = {
+    "",
+    "none-required",
+    "not-applicable",
+    "n/a",
+    "n-a",
+}
 SOURCE_CONDITION_STATE_BINDING = re.compile(
     r"source-condition:(?P<index>0|[1-9][0-9]*)\Z",
     flags=re.IGNORECASE,
@@ -435,6 +442,8 @@ def _compile_dictionary_requirement(
 def _unbound_reference_fixture_action_literals(
     source_assertion: Any,
     dictionary_requirements: Sequence[PreparedDictionaryRequirement],
+    *,
+    registered_fixture_values: Sequence[str] = (),
 ) -> tuple[str, ...]:
     """Find synthetic action literals that conflict with curated fixtures.
 
@@ -449,7 +458,7 @@ def _unbound_reference_fixture_action_literals(
         if requirement.coverage_mode == "reference-only"
         for item in requirement.fixture_values
         if item.value_kind == "leaf"
-    )
+    ) + tuple(str(value) for value in registered_fixture_values if str(value).strip())
     if not fixture_values:
         return ()
 
@@ -511,6 +520,43 @@ def _unbound_reference_fixture_action_literals(
     return tuple(conflicts)
 
 
+def _portable_fixture_registered_literals(
+    fixture_ids: Sequence[str],
+    fixture_contracts: Mapping[str, Sequence[str]],
+) -> tuple[str, ...]:
+    """Extract exact request/response literals from registered portable contracts."""
+
+    values: list[str] = []
+
+    def collect(value: Any) -> None:
+        if isinstance(value, Mapping):
+            for nested in value.values():
+                collect(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                collect(nested)
+        elif isinstance(value, (str, int, float)) and not isinstance(value, bool):
+            literal = str(value).strip()
+            if literal and literal not in values:
+                values.append(literal)
+
+    for fixture_id in dict.fromkeys(map(str, fixture_ids)):
+        for contract in fixture_contracts.get(fixture_id, ()):
+            fields = {
+                match.group("key"): match.group("value")
+                for match in PORTABLE_FIXTURE_FIELD.finditer(contract)
+            }
+            for key in ("request_parameters", "expected_response"):
+                raw = fields.get(key)
+                if raw is None:
+                    continue
+                try:
+                    collect(json.loads(raw))
+                except json.JSONDecodeError:
+                    continue
+    return tuple(values)
+
+
 REFERENCE_FIXTURE_ACTION_VALIDATOR = "reference-fixture-action-adequacy-v1"
 
 
@@ -564,6 +610,13 @@ def evaluate_reference_fixture_action_adequacy(
             if token.startswith("ATOM-")
         ):
             plan_by_atom.setdefault(atom_id, []).append(row)
+    portable_fixture_contracts: dict[str, tuple[str, ...]] = {}
+    for fixture_id, contract in _fixture_contract_lines(package_test_design_plan):
+        portable_fixture_contracts[fixture_id] = tuple(
+            dict.fromkeys(
+                (*portable_fixture_contracts.get(fixture_id, ()), contract)
+            )
+        )
 
     referenced_dictionary_ids = {
         token
@@ -656,8 +709,28 @@ def evaluate_reference_fixture_action_adequacy(
                         reference_fixture_text=reference_fixture_text,
                     )
                 )
+            referenced_fixture_ids = tuple(
+                dict.fromkeys(
+                    tuple(
+                        FIXTURE_TOKEN.findall(
+                            json.dumps(assertion, ensure_ascii=False, sort_keys=True)
+                        )
+                    )
+                    + tuple(
+                        fixture_id
+                        for row in viable_plan_rows
+                        for value in row.values()
+                        for fixture_id in FIXTURE_TOKEN.findall(value)
+                    )
+                )
+            )
             conflicting_literals = _unbound_reference_fixture_action_literals(
-                assertion, requirements
+                assertion,
+                requirements,
+                registered_fixture_values=_portable_fixture_registered_literals(
+                    referenced_fixture_ids,
+                    portable_fixture_contracts,
+                ),
             )
             if conflicting_literals:
                 conflicts.append(
@@ -688,12 +761,19 @@ def _requires_changed_prestate(
         obligation_row.get("obligation_class", ""),
         *(row.get("coverage_class", "") for row in plan_rows),
     )
-    return any(
+    classified_reset = any(
         normalized == "reset"
         or normalized.startswith("reset-")
         or normalized.endswith("-reset")
         for normalized in map(_normalized_design_value, classified_values)
     )
+    declared_contract = any(
+        row.get(field, "").strip().casefold().replace("_", "-")
+        not in STATE_CHANGE_EMPTY_VALUES
+        for row in plan_rows
+        for field in STATE_CHANGE_PLAN_FIELDS
+    )
+    return classified_reset or declared_contract
 
 
 def _compile_state_change(
@@ -707,7 +787,12 @@ def _compile_state_change(
         return None
     findings: list[dict[str, object]] = []
     for row in plan_rows:
-        missing = [field for field in STATE_CHANGE_PLAN_FIELDS if not row.get(field, "").strip()]
+        missing = [
+            field
+            for field in STATE_CHANGE_PLAN_FIELDS
+            if row.get(field, "").strip().casefold().replace("_", "-")
+            in STATE_CHANGE_EMPTY_VALUES
+        ]
         relation = row.get("state_relation", "").strip()
         if relation and relation != STATE_CHANGE_RELATION:
             missing.append("state_relation=different-from-captured-initial")
@@ -893,6 +978,61 @@ def _fixture_contract_lines(plan_path: Path) -> tuple[tuple[str, str], ...]:
     return tuple(contracts)
 
 
+def _portable_fixture_writer_projection(fixture_id: str, contract: str) -> str:
+    """Project only tester-facing portable fixture values into writer context.
+
+    The full contract contains integrity and orchestration fields used by the
+    compiler.  Those fields must remain outside production test-case runtime
+    text: a tester needs the fixed request, suggestion and response components,
+    not response hashes or instructions for injecting runner-owned snapshots.
+    """
+
+    fields = {
+        match.group("key"): match.group("value")
+        for match in PORTABLE_FIXTURE_FIELD.finditer(contract)
+    }
+    try:
+        request = json.loads(fields["request_parameters"])
+        expected = json.loads(fields["expected_response"])
+    except (KeyError, json.JSONDecodeError):
+        return ""
+    if not isinstance(request, Mapping) or not isinstance(expected, Mapping):
+        return ""
+
+    parts = [f"Fixture DaData: `{fixture_id}`"]
+    query = request.get("query")
+    if isinstance(query, (str, int, float)) and not isinstance(query, bool):
+        parts.append(f"Запрос: `{query}`")
+    for key, value in request.items():
+        if (
+            key == "query"
+            or not isinstance(value, (str, int, float))
+            or isinstance(value, bool)
+        ):
+            continue
+        parts.append(f"Параметр `{key}`: `{value}`")
+
+    suggestion = expected.get("exact_suggestion")
+    if isinstance(suggestion, (str, int, float)) and not isinstance(
+        suggestion, bool
+    ):
+        parts.append(f"Точное предложение: `{suggestion}`")
+    components = expected.get("exact_components")
+    if isinstance(components, Mapping):
+        for key, value in components.items():
+            if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                parts.append(f"Компонент `{key}`: `{value}`")
+    if expected.get("suggestions") == []:
+        parts.append("Ожидаемый ответ fixture: `suggestions=[]`")
+    outcome = expected.get("outcome")
+    if isinstance(outcome, str) and outcome:
+        parts.append(f"Результат fixture: `{outcome}`")
+    minimum = expected.get("minimum_suggestion_count")
+    if isinstance(minimum, (int, float)) and not isinstance(minimum, bool):
+        parts.append(f"Минимальное количество предложений: `{minimum}`")
+    return "Fixture runtime data: " + "; ".join(parts)
+
+
 def _mapped_plan_intent_context(
     row: Mapping[str, str],
     fixture_contracts: Mapping[str, Sequence[str]],
@@ -905,9 +1045,10 @@ def _mapped_plan_intent_context(
         )
     )
     fixture_context = tuple(
-        "Fixture contract: " + contract
+        projection
         for fixture_id in referenced_fixture_ids
         for contract in fixture_contracts.get(fixture_id, ())
+        if (projection := _portable_fixture_writer_projection(fixture_id, contract))
     )
     test_data = row.get("test_data", "").strip()
     concrete_test_data = (
@@ -1048,12 +1189,6 @@ def _compile_portable_fixture_requirements(
                         ),
                     )
                 )
-            values.append(
-                (
-                    fixture_path("response-sha256"),
-                    fields["response_sha256"],
-                )
-            )
             requirement = PreparedDictionaryRequirement(
                 dictionary_id=dictionary_id,
                 coverage_mode="reference-only",
@@ -5312,14 +5447,25 @@ def compile_workflow_package(
         external_dynamic_dependency_refs = (
             external_dynamic_dependencies_by_obligation.get(obligation_id, ())
         )
-        if external_dynamic_dependency_refs and not dictionary_requirements:
-            dictionary_requirements = _compile_portable_fixture_requirements(
-                mapped_viable,
-                fixture_contracts,
+        portable_fixture_requirements = _compile_portable_fixture_requirements(
+            mapped_viable,
+            fixture_contracts,
+        )
+        if portable_fixture_requirements:
+            existing_requirement_ids = {
+                requirement.dictionary_id for requirement in dictionary_requirements
+            }
+            dictionary_requirements = (
+                *dictionary_requirements,
+                *(
+                    requirement
+                    for requirement in portable_fixture_requirements
+                    if requirement.dictionary_id not in existing_requirement_ids
+                ),
             )
             dict_tokens.extend(
                 requirement.dictionary_id
-                for requirement in dictionary_requirements
+                for requirement in portable_fixture_requirements
                 if requirement.dictionary_id not in dict_tokens
             )
         for requirement in dictionary_requirements:
@@ -5336,10 +5482,38 @@ def compile_workflow_package(
             portable_dictionary_requirements[
                 requirement.dictionary_id
             ] = requirement
+        referenced_action_fixture_ids = tuple(
+            dict.fromkeys(
+                FIXTURE_TOKEN.findall(
+                    " ".join(
+                        (
+                            str(getattr(source_assertion, "canonical_statement", "")),
+                            *map(
+                                str,
+                                getattr(source_assertion, "action_clauses", ()),
+                            ),
+                            *map(
+                                str,
+                                getattr(source_assertion, "oracle_clauses", ()),
+                            ),
+                            *(
+                                value
+                                for row in mapped_viable
+                                for value in row.values()
+                            ),
+                        )
+                    )
+                )
+            )
+        )
         conflicting_action_literals = (
             _unbound_reference_fixture_action_literals(
                 source_assertion,
                 dictionary_requirements,
+                registered_fixture_values=_portable_fixture_registered_literals(
+                    referenced_action_fixture_ids,
+                    fixture_contracts,
+                ),
             )
             if source_first_contract and source_assertion is not None
             else ()

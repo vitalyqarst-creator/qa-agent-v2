@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "scope_slug": "employment-main-work",
+  "selected_xhtml": {
+    "relative_path": "fts/AutoFin/source/PostFinal-v2/PostFinal-v2.xhtml",
+    "sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93"
+  },
+  "namespaces": {
+    "xhtml": "http://www.w3.org/1999/xhtml"
+  },
+  "regions": [
+    {
+      "region_id": "REG-GLOBAL-MOCKUP-PRECEDENCE",
+      "source_context_class": "document-global-constraints",
+      "selector": {
+        "kind": "contiguous-sibling-range",
+        "start_xpath": "/*/*[2]/*[54]/*[1]",
+        "end_xpath": "/*/*[2]/*[54]/*[3]",
+        "include_start": true,
+        "include_end": true
+      }
+    },
+    {
+      "region_id": "REG-GLOBAL-TYPE-CONSTRAINTS",
+      "source_context_class": "document-global-constraints",
+      "selector": {
+        "kind": "container",
+        "container_xpath": "/*/*[2]/*[55]"
+      }
+    },
+    {
+      "region_id": "REG-GLOBAL-DEFAULT-NULL",
+      "source_context_class": "document-global-constraints",
+      "selector": {
+        "kind": "container",
+        "container_xpath": "/*/*[2]/*[56]"
+      }
+    },
+    {
+      "region_id": "REG-SCOPE-TABLE-TITLE",
+      "source_context_class": "ancestor-and-section-preamble",
+      "selector": {
+        "kind": "container",
+        "container_xpath": "/*/*[2]/*[115]"
+      }
+    },
+    {
+      "region_id": "REG-SCOPE-TABLE-HEADER",
+      "source_context_class": "ancestor-and-section-preamble",
+      "selector": {
+        "kind": "container",
+        "container_xpath": "/*/*[2]/*[116]/*[2]"
+      }
+    },
+    {
+      "region_id": "REG-SCOPE-MAIN-WORK",
+      "source_context_class": "scope-local",
+      "selector": {
+        "kind": "contiguous-sibling-range",
+        "start_xpath": "/*/*[2]/*[116]/*[105]",
+        "end_xpath": "/*/*[2]/*[116]/*[117]",
+        "include_start": true,
+        "include_end": true
+      }
+    }
+  ]
+}

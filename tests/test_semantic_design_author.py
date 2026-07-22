@@ -270,6 +270,8 @@ class SemanticDesignAuthorTests(unittest.TestCase):
     @staticmethod
     def _arguments(root: Path) -> list[str]:
         return [
+            "--repo-root",
+            str(root),
             "--context",
             str(root / "context.json"),
             "--scope-boundary-decision",
@@ -491,6 +493,8 @@ class SemanticDesignAuthorTests(unittest.TestCase):
                 str(root),
                 "--context",
                 str(root / "context.json"),
+                "--fixture-context",
+                str(root / "fixture-context.json"),
                 "--scope-boundary-decision",
                 str(root / "boundary.json"),
                 "--decision-output",
@@ -530,6 +534,10 @@ class SemanticDesignAuthorTests(unittest.TestCase):
             forwarded[forwarded.index("--scope-execution-profile") + 1],
         )
         self.assertIn("--scope-boundary-decision", forwarded)
+        self.assertEqual(
+            str(root / "fixture-context.json"),
+            forwarded[forwarded.index("--fixture-context") + 1],
+        )
         self.assertEqual(str(root), forwarded[forwarded.index("--repo-root") + 1])
         self.assertIn("--no-timeout", forwarded)
 

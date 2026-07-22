@@ -9,6 +9,7 @@ from pathlib import Path
 from scripts.verify_dadata_positive_fixture import (
     DadataFixtureVerificationError,
     FMS_UNIT_ENDPOINT,
+    PARTY_ENDPOINT,
     verify_positive_fixture,
 )
 
@@ -213,6 +214,42 @@ class PositiveDadataFixtureVerifierTests(unittest.TestCase):
         self.assertEqual(2, receipt["expected_response"]["minimum_suggestion_count"])
         self.assertTrue(
             receipt["verification"]["all_minimum_suggestion_count_matched"]
+        )
+
+    def test_supports_party_fixture_with_nested_status_and_opf(self) -> None:
+        payload = {
+            "suggestions": [
+                {
+                    "value": "ПАО СБЕРБАНК",
+                    "data": {
+                        "inn": "7707083893",
+                        "state": {"status": "ACTIVE"},
+                        "opf": {"short": "ПАО"},
+                    },
+                }
+            ]
+        }
+
+        with tempfile.TemporaryDirectory() as raw:
+            receipt = verify_positive_fixture(
+                query="7707083893",
+                fixture_id="FX-DADATA-PARTY-ACTIVE-001",
+                expected_suggestion="ПАО СБЕРБАНК",
+                expected_components={
+                    "inn": "7707083893",
+                    "state.status": "ACTIVE",
+                    "opf.short": "ПАО",
+                },
+                endpoint=PARTY_ENDPOINT,
+                output_dir=Path(raw) / "fixture",
+                token="secret-token",
+                opener=lambda *_args, **_kwargs: _Response(payload),
+            )
+
+        self.assertEqual(PARTY_ENDPOINT, receipt["request"]["endpoint"])
+        self.assertEqual(
+            "ACTIVE",
+            receipt["expected_response"]["exact_components"]["state.status"],
         )
 
 

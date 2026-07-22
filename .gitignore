@@ -90,6 +90,10 @@ fts/AutoFin/work/vendor-references/dadata-fixtures/*
 !fts/AutoFin/work/vendor-references/dadata-fixtures/*.md
 !fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/
 !fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/*.json
+!fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/
+!fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/*.json
+!fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/
+!fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/*.json
 !fts/AutoFin/work/ui-automation-prep/
 fts/AutoFin/work/ui-automation-prep/*
 !fts/AutoFin/work/ui-automation-prep/UI-AGENT-NOTES.md

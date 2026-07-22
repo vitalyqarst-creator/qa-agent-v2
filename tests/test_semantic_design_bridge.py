@@ -21,6 +21,7 @@ from test_case_agent.semantic_design_bridge import (
     SemanticDesignBridgeError,
     canonical_payload_sha256,
     load_approved_clarifications,
+    normalize_semantic_design_source_property_transport,
     normalize_semantic_design_transport,
     semantic_design_completeness_diagnostics,
     semantic_design_minimum_obligation_count,
@@ -31,27 +32,46 @@ from test_case_agent.semantic_design_bridge import (
     semantic_design_output_schema,
     _validate_always_visibility_prestate_cardinality,
     _required_necessary_condition_negative_controls,
+    _readd_lifecycle_setup_projections,
     _validate_necessary_condition_control_cardinality,
     _unsupported_executable_requiredness_candidate_projections,
     _validate_distinct_action_oracle_clauses,
     _necessary_control_missing_clause_evidence_projections,
+    _clarification_condition_action_evidence_projections,
     _executable_negative_signal_evidence_projections,
+    _collapsed_candidate_negative_oracle_projection,
     _collapsed_executable_negative_oracle_projection,
     _combined_calibration_allowed_class_projection,
     _canonicalize_declared_ui_calibration,
+    _canonicalize_requiredness_calibration_candidate,
     _future_issue_date_save_block_projection,
     _inclusive_twentieth_birthday_projection,
     _load_verified_fixture_contracts,
+    _materialize_distinct_editability_replacements,
+    _materialize_concrete_reset_fixtures,
     _materialize_bare_requirement_definition_gaps,
     _materialize_missing_definition_gap_assertions,
+    _materialize_range_ambiguity_gap_assertions,
+    _remove_range_ambiguity_calibration_candidates,
     _materialize_missing_exact_length_boundaries,
+    _materialize_service_availability_necessary_controls,
+    _normalize_exact_length_acceptance_oracles,
+    _normalize_inclusive_lower_bound_transport,
+    _normalize_negative_candidate_known_violation,
+    _normalize_unbacked_numeric_entry_persistence,
+    _remove_behavior_codes_from_typed_editability,
+    _reassign_dictionary_completeness_ownership,
+    _restore_visibility_after_dictionary_ownership,
+    _separate_explicit_range_rejection_branches,
     _clarification_exclusion_oracle_projections,
     _semantic_transport_header_projection,
     _dependency_transport_projections,
     _missing_scope_excluded_dependency_projection,
     _scope_excluded_na_link_projection,
     _source_signal_registry,
+    _split_candidate_signal_from_incompatible_positive_chain,
     _split_visibility_code_from_typed_requiredness,
+    _verified_party_fixture_clause_projection,
     _verified_fixture_clause_projection,
     validate_bridge_boundary,
     validate_semantic_input_preflight,
@@ -67,6 +87,1139 @@ OWNER_TOKEN = "11111111-1111-4111-8111-111111111111"
 
 
 class SemanticDesignBridgeTests(unittest.TestCase):
+    def test_typed_editability_does_not_own_sibling_behavior_codes(self) -> None:
+        payload = {
+            "obligations": [
+                {
+                    "obligation_id": "OBL-EDIT",
+                    "property_type": "editability",
+                    "input_class": "value-replacement",
+                },
+                {
+                    "obligation_id": "OBL-FORMAT",
+                    "property_type": "phone-format",
+                },
+            ],
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-001",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-EDIT",
+                            "semantic_disposition": "testable",
+                            "obligation_ids": ["OBL-EDIT"],
+                            "requirement_codes": ["BSR 1", "BSR 2"],
+                            "requirement_code_evidence": [
+                                {"requirement_code": "BSR 1"},
+                                {"requirement_code": "BSR 2"},
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-FORMAT",
+                            "semantic_disposition": "testable",
+                            "obligation_ids": ["OBL-FORMAT"],
+                            "requirement_codes": ["BSR 1", "BSR 2"],
+                        },
+                    ],
+                }
+            ],
+        }
+
+        repairs = _remove_behavior_codes_from_typed_editability(payload)
+
+        editability = payload["source_designs"][0]["assertions"][0]
+        self.assertEqual([], editability["requirement_codes"])
+        self.assertEqual([], editability["requirement_code_evidence"])
+        self.assertEqual(
+            ["remove-behavior-codes-from-typed-editability"],
+            [item["rule"] for item in repairs],
+        )
+
+    def test_visibility_chain_is_restored_after_dictionary_duplication(self) -> None:
+        row_text = (
+            "Тип должности Да Да Раскрывающийся список "
+            "Значение из справочника «Типы должности» "
+            "BSR 274. Видимость: Да, если поле «Тип занятости» заполнено "
+            "и значение ≠ «Пенсионер (не работает)», «Самозанятый»"
+        )
+        payload = {
+            "obligations": [
+                {
+                    "obligation_id": "OBL-DICT",
+                    "property_type": "editability",
+                    "dictionary_coverage": "all-leaf-values",
+                },
+                {
+                    "obligation_id": "OBL-VIS",
+                    "property_type": "visibility",
+                    "obligation_class": "dictionary-completeness",
+                    "dictionary_coverage": "all-leaf-values",
+                },
+            ],
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-025",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-DICT",
+                            "obligation_ids": ["OBL-DICT"],
+                            "semantic_disposition": "testable",
+                            "requirement_codes": [],
+                        },
+                        {
+                            "assertion_id": "ASSERT-VIS",
+                            "field_or_block": "Тип должности",
+                            "obligation_ids": ["OBL-VIS"],
+                            "semantic_disposition": "testable",
+                            "requirement_codes": ["BSR 274"],
+                            "canonical_statement": "Повтор полного справочника.",
+                        },
+                    ],
+                }
+            ],
+        }
+        context = {
+            "dictionary_inventory": [
+                {
+                    "name": "Социальный статус",
+                    "active_values": [
+                        "работа по найму",
+                        "пенсионер (не работает)",
+                        "самозанятый",
+                    ],
+                }
+            ],
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-020",
+                    "bounded_source_text": (
+                        "Социальный статус: работа по найму; "
+                        "пенсионер (не работает); самозанятый"
+                    ),
+                },
+                {
+                    "source_row_id": "SRC-025",
+                    "bounded_source_text": row_text,
+                },
+            ],
+        }
+
+        repairs = _restore_visibility_after_dictionary_ownership(payload, context)
+
+        assertion = payload["source_designs"][0]["assertions"][1]
+        obligation = payload["obligations"][1]
+        self.assertEqual(
+            ["Выбрать в поле «Социальный статус» значение «работа по найму»."],
+            assertion["action_clauses"],
+        )
+        self.assertEqual(["Поле «Тип должности» отображается."], assertion["oracle_clauses"])
+        self.assertEqual("none_required", obligation["dictionary_coverage"])
+        self.assertEqual(
+            ["restore-visibility-after-dictionary-ownership"],
+            [item["rule"] for item in repairs],
+        )
+
+    def test_explicit_lower_and_upper_range_rejections_are_separate(self) -> None:
+        row_text = (
+            "Доход. Значения по умолчанию X = 2000, Y = 1 000 000 "
+            "BSR 282. При попытке ввести сумму менее X при потере фокуса "
+            "поле должно окрашиваться красным цветом и должна появляться "
+            "подсказка «Введите сумму более X руб.» "
+            "BSR 283. При попытке ввести сумму более Y при потере фокуса "
+            "поле должно окрашиваться красным цветом и должна появляться "
+            "подсказка «Перепроверьте доход»"
+        )
+        evidence = lambda code: {  # noqa: E731 - compact immutable fixture.
+            "requirement_code": code,
+            "source_row_id": "SRC-029",
+        }
+        payload = {
+            "obligations": [
+                {
+                    "obligation_id": "OBL-UPPER",
+                    "property_type": "range-validation",
+                    "planned_tc_id": "TC-UPPER",
+                },
+                {
+                    "obligation_id": "OBL-LOWER",
+                    "property_type": "source-constraint-negative",
+                    "planned_tc_id": "TC-LOWER",
+                },
+            ],
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-UPPER",
+                            "field_or_block": "Доход",
+                            "polarity": "negative",
+                            "obligation_ids": ["OBL-UPPER"],
+                            "requirement_codes": ["BSR 282", "BSR 283"],
+                            "requirement_code_evidence": [
+                                evidence("BSR 282"),
+                                evidence("BSR 283"),
+                            ],
+                            "action_clauses": [
+                                "Ввести «1999», затем отдельно «1000001»."
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-LOWER",
+                            "field_or_block": "Доход",
+                            "polarity": "negative",
+                            "obligation_ids": ["OBL-LOWER"],
+                            "requirement_codes": ["BSR 281"],
+                            "requirement_code_evidence": [evidence("BSR 281")],
+                            "action_clauses": ["Ввести значение «1999»."],
+                        },
+                    ],
+                }
+            ],
+            "negative_oracles": [
+                {
+                    "linked_obligation_id": "OBL-LOWER",
+                    "requirement_codes": ["BSR 281"],
+                },
+                {
+                    "linked_obligation_id": "OBL-UPPER",
+                    "requirement_codes": ["BSR 283"],
+                },
+            ],
+        }
+        context = {
+            "source_rows": [
+                {"source_row_id": "SRC-029", "bounded_source_text": row_text}
+            ]
+        }
+
+        repairs = _separate_explicit_range_rejection_branches(payload, context)
+
+        upper, lower = payload["source_designs"][0]["assertions"]
+        self.assertEqual(["BSR 283"], upper["requirement_codes"])
+        self.assertIn("1000001", upper["action_clauses"][0])
+        self.assertNotIn("1999", upper["action_clauses"][0])
+        self.assertEqual(["BSR 281", "BSR 282"], lower["requirement_codes"])
+        self.assertIn("Введите сумму более X руб.", lower["oracle_clauses"][0])
+        self.assertEqual("executable_tc", payload["negative_oracles"][0]["decision"])
+        self.assertEqual(
+            ["separate-explicit-range-rejection-branches"],
+            [item["rule"] for item in repairs],
+        )
+
+    def test_reset_lifecycle_reuses_exact_positive_scope_fixtures(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-STATUS",
+                            "field_or_block": "Социальный статус",
+                            "polarity": "positive",
+                            "action_clauses": ["Выбрать значение."],
+                            "obligation_ids": ["OBL-STATUS"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-ORG",
+                            "field_or_block": "ОПФ",
+                            "polarity": "positive",
+                            "action_clauses": [
+                                "В поле «Наименование организации, ИНН» выбрать предложение."
+                            ],
+                            "obligation_ids": ["OBL-ORG"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-RESET",
+                            "field_or_block": "Кнопка «Корзина» и поля",
+                            "polarity": "positive",
+                            "action_clauses": ["Нажать кнопку «Корзина»."],
+                            "obligation_ids": ["OBL-RESET"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-TITLE-VISIBILITY",
+                            "field_or_block": "Должность",
+                            "polarity": "positive",
+                            "action_clauses": ["Выбрать социальный статус."],
+                            "obligation_ids": ["OBL-TITLE-VISIBILITY"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-TITLE",
+                            "field_or_block": "Должность",
+                            "polarity": "positive",
+                            "action_clauses": ["Ввести должность."],
+                            "obligation_ids": ["OBL-TITLE"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-READD",
+                            "field_or_block": "Жизненный цикл блока",
+                            "polarity": "positive",
+                            "action_clauses": ["Удалить блок, затем добавить новый."],
+                            "obligation_ids": ["OBL-READD"],
+                        },
+                    ]
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-STATUS",
+                    "property_type": "editability",
+                    "obligation_class": "typed-property",
+                    "coverage_class": "typed-property",
+                    "check_type": "positive",
+                    "input_class": "dictionary-value",
+                    "test_data": "работа по найму",
+                },
+                {
+                    "obligation_id": "OBL-ORG",
+                    "property_type": "integration",
+                    "obligation_class": "integration",
+                    "coverage_class": "requirements",
+                    "check_type": "action-flow",
+                    "input_class": "registered-fixture",
+                    "test_data": (
+                        "FX-DADATA-PARTY-ACTIVE-001; query=7707083893; "
+                        "exact_suggestion=ПАО СБЕРБАНК; opf.short=ПАО; "
+                        "address.value=г Москва, ул Вавилова, д 19; "
+                        "state.status=ACTIVE"
+                    ),
+                },
+                {
+                    "obligation_id": "OBL-TITLE-VISIBILITY",
+                    "property_type": "visibility",
+                    "obligation_class": "conditional-visibility",
+                    "coverage_class": "requirement",
+                    "design_dimension": "conditional-visibility",
+                    "check_type": "positive",
+                    "input_class": "social-status",
+                    "test_data": "работа по найму",
+                },
+                {
+                    "obligation_id": "OBL-TITLE",
+                    "property_type": "editability",
+                    "obligation_class": "typed-property",
+                    "coverage_class": "typed-property",
+                    "design_dimension": "accessibility-ui",
+                    "check_type": "positive",
+                    "input_class": "text",
+                    "test_data": "Инженер",
+                },
+                {
+                    "obligation_id": "OBL-RESET",
+                    "property_type": "clear-current-subblock",
+                    "obligation_class": "reset",
+                    "coverage_class": "state-change",
+                    "test_data": "Набор допустимых непустых значений.",
+                },
+                {
+                    "obligation_id": "OBL-READD",
+                    "property_type": "repeatable-block-lifecycle",
+                    "obligation_class": "readd-after-delete",
+                    "coverage_class": "status-lifecycle",
+                    "test_data": "Заполненный исходный блок",
+                },
+            ],
+            "reset_lifecycle_bindings": [
+                {
+                    "obligation_id": "OBL-RESET",
+                    "binding_kind": "reset",
+                    "changed_state_setup": "Заполнить поля допустимыми значениями.",
+                },
+                {
+                    "obligation_id": "OBL-READD",
+                    "binding_kind": "readd-after-delete",
+                    "changed_state_setup": "Удалить блок, затем добавить новый блок.",
+                },
+            ],
+        }
+
+        publication_input = copy.deepcopy(payload)
+        repairs = _materialize_concrete_reset_fixtures(payload)
+
+        obligations_by_id = {
+            item["obligation_id"]: item for item in payload["obligations"]
+        }
+        reset_data = obligations_by_id["OBL-RESET"]["test_data"]
+        readd_data = obligations_by_id["OBL-READD"]["test_data"]
+        self.assertEqual(reset_data, readd_data)
+        self.assertIn("Социальный статус=работа по найму", reset_data)
+        self.assertIn(
+            "Наименование организации, ИНН=Fixture DaData: "
+            "FX-DADATA-PARTY-ACTIVE-001; Запрос: 7707083893; "
+            "Точное предложение: ПАО СБЕРБАНК",
+            reset_data,
+        )
+        self.assertIn("ОПФ=ПАО", reset_data)
+        self.assertIn("Должность=Инженер", reset_data)
+        self.assertNotIn("Должность=работа по найму", reset_data)
+        self.assertIn(
+            "Удалить блок, затем добавить новый блок.",
+            payload["reset_lifecycle_bindings"][1]["changed_state_setup"],
+        )
+        self.assertEqual(4, len(repairs))
+
+        published, receipt = normalize_semantic_design_source_property_transport(
+            publication_input
+        )
+        published_by_id = {
+            item["obligation_id"]: item for item in published["obligations"]
+        }
+        self.assertEqual(
+            published_by_id["OBL-RESET"]["test_data"],
+            published_by_id["OBL-READD"]["test_data"],
+        )
+        self.assertIn(
+            "Точное предложение: ПАО СБЕРБАНК",
+            published_by_id["OBL-RESET"]["test_data"],
+        )
+        self.assertTrue(
+            any(
+                item["rule"] == "bind-concrete-reset-filled-state-fixture"
+                for item in receipt["repairs"]
+            )
+        )
+
+    def test_exact_length_acceptance_does_not_claim_raw_rendering(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-LENGTH",
+                            "field_or_block": "Рабочий телефон",
+                            "obligation_ids": ["OBL-LENGTH"],
+                            "canonical_statement": "Сырое значение отображается.",
+                            "oracle_clauses": [
+                                "Поле принимает и отображает значение «9991234567»."
+                            ],
+                        }
+                    ]
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-LENGTH",
+                    "property_type": "exact-length",
+                    "check_type": "positive",
+                    "test_data": "9991234567",
+                    "required_behavior": "Сырое значение отображается.",
+                    "single_expected_behavior": "Сырое значение отображается.",
+                }
+            ],
+        }
+
+        repairs = _normalize_exact_length_acceptance_oracles(payload)
+
+        assertion = payload["source_designs"][0]["assertions"][0]
+        self.assertEqual(1, len(repairs))
+        self.assertNotIn("отображ", assertion["oracle_clauses"][0].casefold())
+        self.assertIn("ограничению длины 10 цифр", assertion["oracle_clauses"][0])
+
+    def test_inclusive_lower_bound_is_separated_from_below_bound_rejection(self) -> None:
+        statement = "BSR 281. Сумма не менее X и не более Y р."
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "requirement_codes": ["BSR 281", "BSR 282"],
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-BELOW",
+                            "atom_id": "ATOM-BELOW",
+                            "polarity": "negative",
+                            "field_or_block": "Доход",
+                            "obligation_ids": ["OBL-BELOW"],
+                            "requirement_codes": ["BSR 282"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 282",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": "BSR 282. Менее X.",
+                                }
+                            ],
+                            "action_clauses": ["Ввести «1999» и перевести фокус."],
+                            "oracle_clauses": ["Отображается точная ошибка."],
+                            "supporting_source_bindings": [],
+                        },
+                        {
+                            "assertion_id": "ASSERT-EQUAL",
+                            "atom_id": "ATOM-EQUAL",
+                            "polarity": "negative",
+                            "field_or_block": "Доход",
+                            "obligation_ids": ["OBL-EQUAL"],
+                            "requirement_codes": ["BSR 281"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 281",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": statement,
+                                }
+                            ],
+                            "action_clauses": ["Ввести «2000»."],
+                            "oracle_clauses": ["Требуется калибровка."],
+                            "supporting_source_bindings": [],
+                        },
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-BELOW",
+                    "linked_atom_id": "ATOM-BELOW",
+                    "check_type": "boundary",
+                    "oracle_source": "BSR 282",
+                    "planned_tc_id": "TC-BELOW",
+                    "scope_obligation_ids": [],
+                },
+                {
+                    "obligation_id": "OBL-EQUAL",
+                    "linked_atom_id": "ATOM-EQUAL",
+                    "check_type": "boundary",
+                    "oracle_source": "not_found",
+                    "planned_tc_id": "TC-EQUAL",
+                    "scope_obligation_ids": ["SO-NEG-011"],
+                },
+            ],
+            "negative_oracles": [
+                {
+                    "signal_id": "SIG-NEG-011",
+                    "scope_obligation_id": "SO-NEG-011",
+                    "source_row_id": "SRC-029",
+                    "requirement_codes": ["BSR 281"],
+                    "restriction_type": "lower-bound",
+                    "source_statement": statement,
+                    "negative_class": "equal-X-disputed",
+                    "representative_invalid_value": "2000",
+                    "decision": "candidate_tc_required",
+                    "linked_atom_id": "ATOM-EQUAL",
+                    "linked_obligation_id": "OBL-EQUAL",
+                }
+            ],
+        }
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-029",
+                    "bounded_source_text": statement + " X = 2000, Y = 1000000.",
+                }
+            ]
+        }
+
+        repairs = _normalize_inclusive_lower_bound_transport(payload, context)
+
+        below, equal = payload["source_designs"][0]["assertions"]
+        oracle = payload["negative_oracles"][0]
+        self.assertEqual(1, len(repairs))
+        self.assertEqual("positive", equal["polarity"])
+        self.assertIn("включённой нижней границе", equal["oracle_clauses"][0])
+        self.assertEqual(["BSR 281", "BSR 282"], below["requirement_codes"])
+        self.assertEqual("1999", oracle["representative_invalid_value"])
+        self.assertEqual("executable_tc", oracle["decision"])
+        self.assertEqual("OBL-BELOW", oracle["linked_obligation_id"])
+
+    def test_contradictory_allowed_range_becomes_ambiguous(self) -> None:
+        statement = "BSR 281. Сумма не менее X и более Y р."
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "requirement_codes": ["BSR 281", "BSR 282"],
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-BELOW",
+                            "atom_id": "ATOM-BELOW",
+                            "polarity": "negative",
+                            "field_or_block": "Доход",
+                            "obligation_ids": ["OBL-BELOW"],
+                            "requirement_codes": ["BSR 282"],
+                            "requirement_code_evidence": [],
+                            "action_clauses": ["Ввести «1999»."],
+                            "oracle_clauses": ["Отображается ошибка."],
+                        },
+                        {
+                            "assertion_id": "ASSERT-EQUAL",
+                            "atom_id": "ATOM-EQUAL",
+                            "polarity": "negative",
+                            "semantic_disposition": "testable",
+                            "execution_readiness": "ready",
+                            "field_or_block": "Доход",
+                            "obligation_ids": ["OBL-EQUAL"],
+                            "requirement_codes": ["BSR 281"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 281",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": statement,
+                                }
+                            ],
+                            "condition_clauses": ["X = 2000."],
+                            "action_clauses": ["Ввести «2000»."],
+                            "oracle_clauses": ["Требуется калибровка."],
+                            "clause_evidence": [],
+                            "supporting_source_bindings": [],
+                            "disposition_rationale": "Требуется калибровка границы.",
+                        },
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-BELOW",
+                    "linked_atom_id": "ATOM-BELOW",
+                    "check_type": "boundary",
+                    "oracle_source": "BSR 282",
+                    "planned_tc_id": "TC-BELOW",
+                },
+                {
+                    "obligation_id": "OBL-EQUAL",
+                    "linked_atom_id": "ATOM-EQUAL",
+                    "check_type": "boundary",
+                    "oracle_source": "not_found",
+                    "planned_tc_id": "TC-EQUAL",
+                },
+            ],
+            "negative_oracles": [
+                {
+                    "signal_id": "SIG-NEG-011",
+                    "scope_obligation_id": "SO-NEG-011",
+                    "source_row_id": "SRC-029",
+                    "requirement_codes": ["BSR 281"],
+                    "restriction_type": "lower-bound",
+                    "source_statement": statement,
+                    "negative_class": "equal-X-disputed",
+                    "representative_invalid_value": "2000",
+                    "decision": "candidate_tc_required",
+                    "linked_atom_id": "ATOM-EQUAL",
+                    "linked_obligation_id": "OBL-EQUAL",
+                }
+            ],
+            "dependency_bindings": [],
+        }
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-029",
+                    "bounded_source_text": statement + " X = 2000, Y = 1000000.",
+                }
+            ]
+        }
+        boundary = {
+            "gaps": [
+                {
+                    "gap_id": "GAP-SOURCE-RANGE-CONTRADICTION-SRC-029",
+                    "gap_type": "ambiguity",
+                    "source_row_ids": ["SRC-029"],
+                    "exact_source_fragments": [statement],
+                    "blocking": False,
+                    "downstream_handling": "carry-to-source-model",
+                }
+            ]
+        }
+
+        repairs = _normalize_inclusive_lower_bound_transport(
+            payload,
+            context,
+            boundary,
+        )
+
+        ambiguous = payload["source_designs"][0]["assertions"][1]
+        self.assertEqual(1, len(repairs))
+        self.assertEqual("ambiguous", ambiguous["semantic_disposition"])
+        self.assertEqual("dependency-blocked", ambiguous["execution_readiness"])
+        self.assertEqual([], ambiguous["obligation_ids"])
+        self.assertEqual(["OBL-BELOW"], [item["obligation_id"] for item in payload["obligations"]])
+        self.assertEqual("OBL-BELOW", payload["negative_oracles"][0]["linked_obligation_id"])
+
+    def test_contradictory_range_gap_gets_own_non_executable_atom(self) -> None:
+        lower = "BSR 281. Сумма не менее X и более Y р."
+        upper = "BSR 283. При попытке ввести сумму более Y при потере фокуса"
+        upper_with_oracle = (
+            f"{upper} поле должно окрашиваться красным цветом и должна "
+            "появляться подсказка «Перепроверьте доход»"
+        )
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "requirement_codes": ["BSR 281", "BSR 282", "BSR 283"],
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-LOW",
+                            "atom_id": "ATOM-LOW",
+                            "semantic_disposition": "testable",
+                            "canonical_statement": "Сумма ниже X отклоняется.",
+                            "obligation_ids": ["OBL-LOW"],
+                            "field_or_block": "Доход",
+                            "source_reference": "SRC-029",
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 281",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": lower,
+                                }
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-LOWER",
+                            "atom_id": "ATOM-LOWER",
+                            "semantic_disposition": "testable",
+                            "field_or_block": "Доход",
+                            "source_reference": "SRC-029",
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 281",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": lower,
+                                }
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-UPPER",
+                            "atom_id": "ATOM-UPPER",
+                            "semantic_disposition": "testable",
+                            "field_or_block": "Доход",
+                            "source_reference": "SRC-029",
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 283",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": upper_with_oracle,
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ]
+        }
+        boundary = {
+            "gaps": [
+                {
+                    "gap_id": "GAP-SOURCE-RANGE-CONTRADICTION-SRC-029",
+                    "gap_type": "ambiguity",
+                    "source_row_ids": ["SRC-029"],
+                    "exact_source_fragments": [lower, upper],
+                    "blocking": False,
+                    "downstream_handling": "carry-to-source-model",
+                }
+            ]
+        }
+
+        repairs = _materialize_range_ambiguity_gap_assertions(payload, boundary)
+
+        ambiguous = payload["source_designs"][0]["assertions"][-1]
+        self.assertEqual("ambiguous", ambiguous["semantic_disposition"])
+        self.assertEqual("dependency-blocked", ambiguous["execution_readiness"])
+        self.assertEqual([], ambiguous["obligation_ids"])
+        self.assertEqual("medium", ambiguous["risk"])
+        self.assertEqual(1, len(repairs))
+        self.assertEqual([], _materialize_range_ambiguity_gap_assertions(payload, boundary))
+
+    def test_range_ambiguity_drops_direct_equal_boundary_calibration(self) -> None:
+        lower = "BSR 281. Сумма не менее X и более Y р."
+        upper = "BSR 283. При попытке ввести сумму более Y при потере фокуса"
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "requirement_codes": ["BSR 281", "BSR 282", "BSR 283"],
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-LOW",
+                            "atom_id": "ATOM-LOW",
+                            "semantic_disposition": "testable",
+                            "canonical_statement": "Сумма ниже X отклоняется.",
+                            "obligation_ids": ["OBL-LOW"],
+                            "field_or_block": "Доход",
+                            "source_reference": "SRC-029",
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 281",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": lower,
+                                }
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-EQX",
+                            "atom_id": "ATOM-EQX",
+                            "semantic_disposition": "testable",
+                            "canonical_statement": (
+                                "Поведение суммы, равной X, требует калибровки."
+                            ),
+                            "condition_clauses": ["Вводимое значение равно X."],
+                            "action_clauses": ["Ввести 2000."],
+                            "oracle_clauses": ["Фактический исход фиксируется."],
+                            "obligation_ids": ["OBL-EQX"],
+                            "field_or_block": "Доход",
+                            "source_reference": "SRC-029",
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 281",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": lower,
+                                }
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-HIGH",
+                            "atom_id": "ATOM-HIGH",
+                            "semantic_disposition": "testable",
+                            "canonical_statement": "Сумма выше Y отклоняется.",
+                            "obligation_ids": ["OBL-HIGH"],
+                            "field_or_block": "Доход",
+                            "source_reference": "SRC-029",
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 283",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": upper,
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-LOW",
+                    "planned_tc_id": "TC-LOW",
+                    "property_type": "boundary",
+                    "review_notes": "none_required",
+                    "check_type": "negative",
+                    "scope_obligation_ids": [],
+                },
+                {
+                    "obligation_id": "OBL-EQX",
+                    "planned_tc_id": "candidate:boundary-X",
+                    "property_type": "disputed-boundary",
+                    "obligation_class": "candidate",
+                    "coverage_class": "contradiction",
+                    "review_notes": "candidate-ui-calibration",
+                    "check_type": "boundary",
+                    "oracle_source": "BSR 281 versus BSR 282",
+                    "scope_obligation_ids": [],
+                },
+                {
+                    "obligation_id": "OBL-HIGH",
+                    "planned_tc_id": "TC-HIGH",
+                    "property_type": "boundary",
+                    "review_notes": "none_required",
+                    "check_type": "negative",
+                    "scope_obligation_ids": [],
+                },
+            ],
+            "negative_oracles": [],
+            "requiredness_oracles": [],
+            "reset_lifecycle_bindings": [],
+            "dependency_bindings": [],
+            "applicability": [
+                {
+                    "linked_atoms": ["ATOM-LOW", "ATOM-EQX", "ATOM-HIGH"],
+                    "linked_test_cases": [
+                        "TC-LOW",
+                        "candidate:boundary-X",
+                        "TC-HIGH",
+                    ],
+                }
+            ],
+        }
+        boundary = {
+            "gaps": [
+                {
+                    "gap_id": "GAP-SOURCE-RANGE-CONTRADICTION-SRC-029",
+                    "gap_type": "ambiguity",
+                    "source_row_ids": ["SRC-029"],
+                    "exact_source_fragments": [lower, upper],
+                    "blocking": False,
+                    "downstream_handling": "carry-to-source-model",
+                }
+            ]
+        }
+
+        repairs = _remove_range_ambiguity_calibration_candidates(payload, boundary)
+
+        self.assertEqual(
+            ["OBL-LOW", "OBL-HIGH"],
+            [item["obligation_id"] for item in payload["obligations"]],
+        )
+        self.assertEqual(
+            ["ASSERT-LOW", "ASSERT-HIGH"],
+            [item["assertion_id"] for item in payload["source_designs"][0]["assertions"]],
+        )
+        self.assertEqual(
+            ["ATOM-LOW", "ATOM-HIGH"],
+            payload["applicability"][0]["linked_atoms"],
+        )
+        self.assertEqual(
+            ["TC-LOW", "TC-HIGH"],
+            payload["applicability"][0]["linked_test_cases"],
+        )
+        self.assertEqual(
+            "drop-range-ambiguity-ui-calibration-candidate",
+            repairs[0]["rule"],
+        )
+        gap_repairs = _materialize_range_ambiguity_gap_assertions(payload, boundary)
+        self.assertEqual(1, len(gap_repairs))
+        self.assertEqual(
+            "ambiguous",
+            payload["source_designs"][0]["assertions"][-1]["semantic_disposition"],
+        )
+
+    def test_unbacked_numeric_entry_does_not_claim_persistence(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-NUMERIC",
+                            "semantic_disposition": "testable",
+                            "polarity": "positive",
+                            "field_or_block": "Доход",
+                            "action_clauses": ["Ввести «50000»."],
+                            "oracle_clauses": [
+                                "Поле видно и сохраняет числовое значение «50000»."
+                            ],
+                            "obligation_ids": ["OBL-NUMERIC"],
+                        }
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-NUMERIC",
+                    "required_behavior": "Значение сохраняется.",
+                    "single_expected_behavior": "Значение сохраняется.",
+                }
+            ],
+        }
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-029",
+                    "bounded_source_text": "BSR 280. Только числовые символы.",
+                }
+            ]
+        }
+
+        repairs = _normalize_unbacked_numeric_entry_persistence(payload, context)
+
+        self.assertEqual(1, len(repairs))
+        oracle = payload["source_designs"][0]["assertions"][0]["oracle_clauses"][0]
+        self.assertNotIn("сохран", oracle.casefold())
+        self.assertIn("отображает введённое", oracle)
+
+    def test_readd_setup_is_completed_from_explicit_assertion_action(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-030",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-READD",
+                            "obligation_ids": ["OBL-READD"],
+                            "condition_clauses": [
+                                "Существующий подблок заполнен непустыми значениями."
+                            ],
+                            "action_clauses": [
+                                "Удалить заполненный подблок, затем добавить новый подблок."
+                            ],
+                        }
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-READD",
+                    "obligation_class": "readd-after-delete",
+                    "coverage_class": "repeatable-block-lifecycle",
+                }
+            ],
+            "reset_lifecycle_bindings": [
+                {
+                    "obligation_id": "OBL-READD",
+                    "binding_kind": "readd-after-delete",
+                    "initial_condition_index": 0,
+                    "changed_state_setup": (
+                        "Заполнить существующий подблок перед удалением."
+                    ),
+                }
+            ],
+        }
+
+        projections = _readd_lifecycle_setup_projections(payload)
+
+        self.assertEqual(1, len(projections))
+        self.assertIn("Удалить", projections[0]["changed_state_setup"])
+        self.assertIn("добавить новый", projections[0]["changed_state_setup"])
+
+    def test_candidate_negative_signal_is_split_from_positive_typed_chain(
+        self,
+    ) -> None:
+        statement = "BSR 280. Только числовые символы."
+        clause_evidence = [
+            {
+                "clause_kind": kind,
+                "clause_index": 0,
+                "source_row_id": "SRC-029",
+                "exact_source_fragment": statement,
+            }
+            for kind in ("condition", "action", "oracle")
+        ]
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-SRC-029-EDIT",
+                            "atom_id": "ATOM-SRC-029-EDIT",
+                            "obligation_ids": ["OBL-SRC-029-EDIT"],
+                            "field_or_block": "Численность сотрудников",
+                            "polarity": "negative",
+                            "source_property_id": (
+                                "FP-SRC-029-EDITABILITY-EDITABLE"
+                            ),
+                            "requirement_codes": ["BSR 280"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 280",
+                                    "source_row_id": "SRC-029",
+                                    "exact_source_fragment": statement,
+                                }
+                            ],
+                            "condition_clauses": ["Поле доступно."],
+                            "action_clauses": ["Ввести значение 50000."],
+                            "oracle_clauses": ["Значение можно изменить."],
+                            "clause_evidence": clause_evidence,
+                            "supporting_source_bindings": [],
+                            "clarification_clause_bindings": [],
+                        }
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-SRC-029-EDIT",
+                    "linked_atom_id": "ATOM-SRC-029-EDIT",
+                    "source_property_id": "FP-SRC-029-EDITABILITY-EDITABLE",
+                    "property_type": "editability",
+                    "obligation_class": "ui-calibration-candidate",
+                    "source_ref": "SRC-029",
+                    "review_notes": "candidate-ui-calibration",
+                    "design_dimension": "boundary",
+                    "check_type": "negative",
+                    "coverage_class": "invalid-numeric-format",
+                    "input_class": "non-numeric",
+                    "oracle_source": "not_found",
+                    "test_data": "50A00",
+                    "scope_obligation_ids": ["SO-NEG-010"],
+                    "planned_tc_id": "candidate:SO-NEG-010",
+                },
+                {
+                    "obligation_id": "OBL-SRC-029-FORMAT",
+                    "linked_atom_id": "ATOM-SRC-029-FORMAT",
+                    "source_property_id": "none_required",
+                    "property_type": "format",
+                    "source_ref": "SRC-029",
+                    "review_notes": "none_required",
+                    "design_dimension": "boundary",
+                    "check_type": "positive",
+                    "test_data": "50000",
+                    "planned_tc_id": "TC-SRC-029-FORMAT",
+                },
+            ],
+            "negative_oracles": [
+                {
+                    "signal_id": "SIG-NEG-010",
+                    "source_row_id": "SRC-029",
+                    "source_statement": statement,
+                    "requirement_codes": ["BSR 280"],
+                    "scope_obligation_id": "SO-NEG-010",
+                    "restriction_type": "numeric",
+                    "negative_class": "non-numeric",
+                    "representative_invalid_value": "50A00",
+                    "decision": "candidate_tc_required",
+                    "oracle_status": "ui-calibration-required",
+                    "linked_atom_id": "ATOM-SRC-029-EDIT",
+                    "linked_obligation_id": "OBL-SRC-029-EDIT",
+                }
+            ],
+        }
+
+        repairs = _split_candidate_signal_from_incompatible_positive_chain(
+            payload,
+            {
+                "source_rows": [
+                    {
+                        "source_row_id": "SRC-029",
+                        "bounded_source_text": statement,
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(1, len(repairs))
+        original = payload["source_designs"][0]["assertions"][0]
+        candidate = payload["source_designs"][0]["assertions"][1]
+        self.assertEqual([], original["requirement_codes"])
+        self.assertEqual(["BSR 280"], candidate["requirement_codes"])
+        self.assertEqual("negative", candidate["polarity"])
+        self.assertEqual("positive", original["polarity"])
+        self.assertIn(
+            "допускает только числовые символы",
+            candidate["canonical_statement"],
+        )
+        self.assertIn(
+            "способ отклонения или преобразования",
+            candidate["canonical_statement"],
+        )
+        self.assertEqual(
+            "none_required",
+            candidate["source_property_id"],
+        )
+        self.assertEqual(
+            "OBL-SIG-NEG-010",
+            payload["negative_oracles"][0]["linked_obligation_id"],
+        )
+        candidate_obligation = next(
+            item
+            for item in payload["obligations"]
+            if item["obligation_id"] == "OBL-SIG-NEG-010"
+        )
+        original_obligation = payload["obligations"][0]
+        self.assertEqual("boundary", candidate_obligation["check_type"])
+        self.assertEqual([], payload["obligations"][0]["scope_obligation_ids"])
+        self.assertEqual("none_required", original_obligation["review_notes"])
+        self.assertEqual("TC-SRC-029-EDIT", original_obligation["planned_tc_id"])
+        self.assertEqual("positive", original_obligation["check_type"])
+        self.assertEqual("50000", original_obligation["test_data"])
+        self.assertEqual("typed-property", original_obligation["obligation_class"])
+
+        replacement_repairs = _materialize_distinct_editability_replacements(payload)
+        self.assertEqual(1, len(replacement_repairs))
+        self.assertEqual(
+            "initial=50000; replacement=60000",
+            original_obligation["test_data"],
+        )
+
+        candidate["canonical_statement"] = "Ввести невалидное значение."
+        candidate["oracle_clauses"] = ["Требуется UI-калибровка."]
+        candidate_obligation["required_behavior"] = "Требуется UI-калибровка."
+        candidate_obligation["single_expected_behavior"] = (
+            "Требуется UI-калибровка."
+        )
+        normalized = _normalize_negative_candidate_known_violation(payload)
+        self.assertEqual(1, len(normalized))
+        self.assertIn(
+            "не соответствует ограничению источника",
+            candidate["oracle_clauses"][0],
+        )
+        self.assertIn(statement.rstrip("."), candidate["oracle_clauses"][0])
+        self.assertIn(
+            "способ отклонения или преобразования",
+            candidate["oracle_clauses"][0],
+        )
+
     def test_future_issue_date_clarification_preserves_save_block(self) -> None:
         answer = "Дата выдачи позже текущей даты блокирует сохранение."
         answer_sha = hashlib.sha256(answer.encode("utf-8")).hexdigest()
@@ -166,6 +1319,351 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             self.assertIn("FX-001", contracts)
             context["source_cache"]["input_fingerprints"][0]["sha256"] = "0" * 64
             self.assertEqual(_load_verified_fixture_contracts(context, root), {})
+
+    def test_verified_fixture_loader_binds_hash_matched_response_data(self) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            root = Path(raw_root)
+            fixture_dir = Path("work/FX-PARTY-001")
+            verification_relative = fixture_dir / "FX-PARTY-001.verification.json"
+            response_relative = fixture_dir / "FX-PARTY-001.response.json"
+            response = {
+                "suggestions": [
+                    {
+                        "value": "ПАО СБЕРБАНК",
+                        "data": {
+                            "state": {"status": "ACTIVE"},
+                            "opf": {"short": "ПАО"},
+                            "address": {"value": "г Москва, ул Вавилова, д 19"},
+                        },
+                    }
+                ]
+            }
+            response_raw = json.dumps(
+                response, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+            response_sha = hashlib.sha256(response_raw).hexdigest()
+            verification = {
+                "fixture_id": "FX-PARTY-001",
+                "status": "verified",
+                "request": {"parameters": {"query": "7707083893"}},
+                "expected_response": {"exact_suggestion": "ПАО СБЕРБАНК"},
+                "response_sha256": response_sha,
+                "response_snapshot": response_relative.name,
+            }
+            verification_raw = json.dumps(
+                verification, ensure_ascii=False, separators=(",", ":")
+            ).encode("utf-8")
+            (root / fixture_dir).mkdir(parents=True)
+            (root / response_relative).write_bytes(response_raw)
+            (root / verification_relative).write_bytes(verification_raw)
+            context = {
+                "sources": [
+                    {"path": verification_relative.as_posix()},
+                    {"path": response_relative.as_posix()},
+                ],
+                "source_cache": {
+                    "input_fingerprints": [
+                        {
+                            "path": verification_relative.as_posix(),
+                            "role": "external-vendor-reference",
+                            "sha256": hashlib.sha256(verification_raw).hexdigest(),
+                        },
+                        {
+                            "path": response_relative.as_posix(),
+                            "role": "external-vendor-reference",
+                            "sha256": response_sha,
+                        },
+                    ]
+                },
+            }
+
+            contracts = _load_verified_fixture_contracts(context, root)
+
+        self.assertEqual(
+            "г Москва, ул Вавилова, д 19",
+            contracts["FX-PARTY-001"]["matched_data"]["address"]["value"],
+        )
+        self.assertEqual(
+            "г Москва, ул Вавилова, д 19",
+            contracts["FX-PARTY-001"]["expected_response"][
+                "exact_components"
+            ]["address.value"],
+        )
+
+    def test_dictionary_completeness_moves_from_visibility_to_selection(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-VIS",
+                            "field_or_block": "Тип должности",
+                            "obligation_ids": ["OBL-VIS"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-EDIT",
+                            "field_or_block": "Тип должности",
+                            "obligation_ids": ["OBL-EDIT"],
+                            "canonical_statement": "Поле редактируемо.",
+                            "action_clauses": ["Выбрать значение."],
+                            "oracle_clauses": ["Значение отображается."],
+                        },
+                    ]
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-VIS",
+                    "source_ref": "SRC-001",
+                    "property_type": "visibility",
+                    "dictionary_refs": ["DICT-001"],
+                    "dictionary_coverage": "all-leaf-values",
+                },
+                {
+                    "obligation_id": "OBL-EDIT",
+                    "source_ref": "SRC-001",
+                    "property_type": "editability",
+                    "dictionary_refs": ["DICT-001"],
+                    "dictionary_coverage": "reference-only",
+                },
+            ],
+            "dependency_bindings": [
+                {
+                    "kind": "dictionary",
+                    "name": "Типы должности",
+                    "linked_obligation_ids": ["OBL-EDIT"],
+                }
+            ],
+        }
+
+        repairs = _reassign_dictionary_completeness_ownership(
+            payload,
+            {
+                "dictionary_inventory": [
+                    {
+                        "name": "Типы должности",
+                        "source_path": "support/dictionaries.md",
+                        "source_location": "section: positions",
+                        "active_values": ["Сотрудник", "Руководитель"],
+                    }
+                ]
+            },
+        )
+
+        self.assertEqual(1, len(repairs))
+        visibility, selection = payload["obligations"]
+        self.assertEqual([], visibility["dictionary_refs"])
+        self.assertEqual("none_required", visibility["dictionary_coverage"])
+        self.assertEqual("all-leaf-values", selection["dictionary_coverage"])
+        self.assertEqual("dictionary-completeness", selection["obligation_class"])
+        self.assertEqual("Сотрудник; Руководитель", selection["test_data"])
+        assertion = payload["source_designs"][0]["assertions"][1]
+        self.assertIn("Количество активных значений в списке: 2", assertion["oracle_clauses"][0])
+        self.assertIn("«Сотрудник»", assertion["oracle_clauses"][0])
+
+    def test_direct_dictionary_owner_materializes_full_inventory_in_action(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-EDIT",
+                            "field_or_block": "Тип должности",
+                            "obligation_ids": ["OBL-EDIT"],
+                            "canonical_statement": "Поле редактируемо.",
+                            "action_clauses": ["Выбрать «Сотрудник»."],
+                            "oracle_clauses": ["Значение сохранено."],
+                        }
+                    ]
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-EDIT",
+                    "dictionary_refs": ["DICT-003"],
+                    "dictionary_coverage": "all-leaf-values",
+                    "test_data": "Все активные значения DICT-003",
+                }
+            ],
+            "dictionaries": [
+                {
+                    "dictionary_id": "DICT-003",
+                    "source_file": "support/dictionaries.md",
+                    "source_location": "section: positions",
+                    "active_values": ["Сотрудник", "Руководитель"],
+                }
+            ],
+        }
+
+        repairs = _reassign_dictionary_completeness_ownership(payload)
+
+        self.assertEqual(1, len(repairs))
+        self.assertEqual(
+            "bind-direct-dictionary-owner-to-full-inventory",
+            repairs[0]["rule"],
+        )
+        obligation = payload["obligations"][0]
+        assertion = payload["source_designs"][0]["assertions"][0]
+        self.assertEqual("Сотрудник; Руководитель", obligation["test_data"])
+        self.assertIn("«Сотрудник»; «Руководитель»", assertion["action_clauses"][0])
+        self.assertIn("Количество активных значений в списке: 2", assertion["oracle_clauses"][0])
+        self.assertEqual([], _reassign_dictionary_completeness_ownership(payload))
+
+    def test_duplicate_editability_uses_second_concrete_value(self) -> None:
+        payload = {
+            "source_designs": [
+                {
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-FORMAT",
+                            "field_or_block": "Рабочий телефон",
+                            "obligation_ids": ["OBL-FORMAT"],
+                        },
+                        {
+                            "assertion_id": "ASSERT-EDIT",
+                            "field_or_block": "Рабочий телефон",
+                            "obligation_ids": ["OBL-EDIT"],
+                            "canonical_statement": "Поле редактируемо.",
+                            "condition_clauses": ["Поле доступно."],
+                            "action_clauses": ["Ввести 9991234567."],
+                            "oracle_clauses": ["Номер отображается."],
+                        },
+                    ]
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-FORMAT",
+                    "source_ref": "SRC-001",
+                    "property_type": "format",
+                    "design_dimension": "boundary",
+                    "test_data": "9991234567",
+                },
+                {
+                    "obligation_id": "OBL-EDIT",
+                    "source_ref": "SRC-001",
+                    "property_type": "editability",
+                    "dictionary_refs": [],
+                    "test_data": "9991234567",
+                },
+            ],
+        }
+
+        repairs = _materialize_distinct_editability_replacements(payload)
+
+        self.assertEqual(1, len(repairs))
+        obligation = payload["obligations"][1]
+        self.assertEqual(
+            "initial=9991234567; replacement=9123456789",
+            obligation["test_data"],
+        )
+        assertion = payload["source_designs"][0]["assertions"][1]
+        self.assertIn("Заменить", assertion["action_clauses"][0])
+        self.assertIn("+7(912)-345-67-89", assertion["oracle_clauses"][0])
+
+    def test_verified_party_fixture_projection_uses_exact_autofill_value(self) -> None:
+        projection = _verified_party_fixture_clause_projection(
+            {
+                "semantic_disposition": "testable",
+                "obligation_ids": ["OBL-001"],
+                "field_or_block": "ОПФ",
+            },
+            {
+                "OBL-001": {
+                    "property_type": "integration-ui",
+                    "input_class": "registered-fixture",
+                }
+            },
+            {
+                "FX-PARTY-001": {
+                    "request_parameters": {"query": "7707083893"},
+                    "expected_response": {"exact_suggestion": "ПАО СБЕРБАНК"},
+                    "matched_data": {
+                        "state": {"status": "ACTIVE"},
+                        "opf": {"short": "ПАО"},
+                        "address": {"value": "г Москва, ул Вавилова, д 19"},
+                    },
+                }
+            },
+        )
+
+        self.assertIsNotNone(projection)
+        assert projection is not None
+        self.assertIn("7707083893", projection["action_clauses"][0])
+        self.assertIn("ПАО СБЕРБАНК", projection["action_clauses"][0])
+        self.assertIn("«ПАО»", projection["oracle_clauses"][0])
+
+    def test_liquidated_party_fixture_projection_is_negative(self) -> None:
+        projection = _verified_party_fixture_clause_projection(
+            {
+                "semantic_disposition": "testable",
+                "obligation_ids": ["OBL-001"],
+                "field_or_block": "Наименование организации, ИНН",
+                "canonical_statement": "Недействующая организация блокирует Далее.",
+            },
+            {"OBL-001": {"property_type": "integration-ui"}},
+            {
+                "FX-PARTY-LIQUIDATED-001": {
+                    "request_parameters": {"query": "7733073764"},
+                    "expected_response": {
+                        "exact_suggestion": "ФОРМАД-ПЛАСТ ООО 7701"
+                    },
+                    "matched_data": {
+                        "state": {"status": "LIQUIDATED"},
+                        "opf": {"short": "ООО"},
+                        "address": {"value": "г Москва"},
+                    },
+                }
+            },
+        )
+
+        self.assertIsNotNone(projection)
+        assert projection is not None
+        self.assertEqual("negative", projection["polarity"])
+        self.assertIn("7733073764", projection["action_clauses"][0])
+
+    def test_verified_party_fixture_projection_uses_exact_address_value(self) -> None:
+        assertion = {
+                "semantic_disposition": "testable",
+                "obligation_ids": ["OBL-001"],
+                "field_or_block": "Фактический адрес работы",
+                "canonical_statement": "Адрес автоматически заполняется после выбора организации.",
+            }
+        obligations = {"OBL-001": {"property_type": "ui-autofill"}}
+        fixtures = {
+                "FX-PARTY-001": {
+                    "request_parameters": {"query": "7707083893"},
+                    "expected_response": {"exact_suggestion": "ПАО СБЕРБАНК"},
+                    "matched_data": {
+                        "state": {"status": "ACTIVE"},
+                        "opf": {"short": "ПАО"},
+                        "address": {"value": "г Москва, ул Вавилова, д 19"},
+                    },
+                }
+            }
+        projection = _verified_party_fixture_clause_projection(
+            assertion,
+            obligations,
+            fixtures,
+        )
+
+        self.assertIsNotNone(projection)
+        assert projection is not None
+        self.assertIn("7707083893", projection["action_clauses"][0])
+        self.assertIn("ПАО СБЕРБАНК", projection["action_clauses"][0])
+        self.assertIn("г Москва, ул Вавилова, д 19", projection["oracle_clauses"][0])
+
+        typed_assertion = copy.deepcopy(assertion)
+        typed_assertion["source_property_id"] = (
+            "FP-SRC-023-EDITABILITY-EDITABLE"
+        )
+        self.assertIsNone(
+            _verified_party_fixture_clause_projection(
+                typed_assertion,
+                obligations,
+                fixtures,
+            )
+        )
 
     def test_visibility_code_is_split_from_typed_requiredness(self) -> None:
         payload = {
@@ -383,6 +1881,35 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             obligation["single_expected_behavior"],
         )
 
+    def test_requiredness_calibration_candidate_drops_editability_branch(self) -> None:
+        assertion = {
+            "semantic_disposition": "testable",
+            "source_property_id": "FP-SRC-029-REQUIREDNESS-REQUIRED",
+            "field_or_block": "Среднемесячный доход",
+            "obligation_ids": ["OBL-001"],
+            "canonical_statement": "Поле обязательно и редактируемо.",
+            "action_clauses": ["Оставить пустым, затем ввести «50000»."],
+            "oracle_clauses": ["Пустое невалидно, затем отображается «50000»."],
+        }
+        obligation = {
+            "property_type": "requiredness",
+            "review_notes": "candidate-ui-calibration",
+            "oracle_source": "not_found",
+        }
+
+        self.assertTrue(
+            _canonicalize_requiredness_calibration_candidate(
+                assertion,
+                {"OBL-001": obligation},
+            )
+        )
+        self.assertEqual(
+            ["Оставить поле «Среднемесячный доход» пустым."],
+            assertion["action_clauses"],
+        )
+        self.assertNotIn("50000", json.dumps(assertion, ensure_ascii=False))
+        self.assertEqual("empty-value", obligation["input_class"])
+
     @staticmethod
     def _bind_context(context: dict[str, object]) -> dict[str, object]:
         payload = copy.deepcopy(context)
@@ -558,6 +2085,151 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         self.assertEqual(
             ["ASSERT-AGE-SO-AGE-1", "ASSERT-AGE-SO-AGE-2"],
             projection["canonical_dependency_bindings"][0]["linked_assertion_ids"],
+        )
+
+    def test_mixed_calibration_and_executable_negative_branches_split(self) -> None:
+        lower = "BSR 281. Сумма не менее X и более Y р."
+        rejection = (
+            "BSR 282. При попытке ввести сумму менее X при потере фокуса "
+            "поле должно окрашиваться красным цветом и должна появляться "
+            "подсказка «Введите сумму более X руб.»"
+        )
+        upper = (
+            "BSR 283. При попытке ввести сумму более Y при потере фокуса "
+            "поле должно окрашиваться красным цветом и должна появляться "
+            "подсказка «Перепроверьте доход»"
+        )
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-029",
+                    "bounded_source_text": (
+                        f"Доход. {lower} X = 2000, Y = 1000000 "
+                        f"{rejection} {upper}"
+                    ),
+                }
+            ]
+        }
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-029",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-BOUND",
+                            "atom_id": "ATOM-BOUND",
+                            "obligation_ids": ["OBL-BOUND"],
+                            "field_or_block": "Доход",
+                            "source_property_id": "none_required",
+                            "condition_clauses": ["X = 2000; Y = 1000000."],
+                            "action_clauses": ["Проверить обе границы."],
+                            "oracle_clauses": ["Проверить две реакции."],
+                            "requirement_code_evidence": [
+                                {"requirement_code": "BSR 281"},
+                                {"requirement_code": "BSR 282"},
+                                {"requirement_code": "BSR 283"},
+                            ],
+                            "clause_evidence": [
+                                {"clause_kind": "condition", "clause_index": 0, "source_row_id": "SRC-029", "exact_source_fragment": "Сумма не менее X"},
+                                {"clause_kind": "action", "clause_index": 0, "source_row_id": "SRC-029", "exact_source_fragment": "потере фокуса"},
+                                {"clause_kind": "oracle", "clause_index": 0, "source_row_id": "SRC-029", "exact_source_fragment": "Перепроверьте доход"},
+                            ],
+                            "clarification_clause_bindings": [],
+                        }
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-BOUND",
+                    "linked_atom_id": "ATOM-BOUND",
+                    "source_property_id": "none_required",
+                    "planned_tc_id": "TC-BSR-281-283",
+                    "check_type": "boundary",
+                    "scope_obligation_ids": ["SO-NEG-011", "SO-NEG-012"],
+                }
+            ],
+            "negative_oracles": [
+                {
+                    "decision": "candidate_tc_required",
+                    "oracle_status": "ui-calibration-required",
+                    "scope_obligation_id": "SO-NEG-011",
+                    "signal_id": "SIG-NEG-011",
+                    "linked_atom_id": "ATOM-BOUND",
+                    "linked_obligation_id": "OBL-BOUND",
+                    "planned_tc_or_gap": "candidate:SO-NEG-011",
+                    "restriction_type": "lower-bound",
+                    "negative_class": "below-X",
+                    "representative_invalid_value": "1999",
+                    "source_row_id": "SRC-029",
+                    "source_statement": lower,
+                    "requirement_codes": ["BSR 281"],
+                    "oracle_source": "not_found",
+                },
+                {
+                    "decision": "executable_tc",
+                    "oracle_status": "source-backed",
+                    "scope_obligation_id": "SO-NEG-012",
+                    "signal_id": "SIG-NEG-012",
+                    "linked_atom_id": "ATOM-BOUND",
+                    "linked_obligation_id": "OBL-BOUND",
+                    "planned_tc_or_gap": "TC-BSR-283",
+                    "restriction_type": "upper-bound",
+                    "negative_class": "above-Y",
+                    "representative_invalid_value": "1000001",
+                    "source_row_id": "SRC-029",
+                    "source_statement": upper,
+                    "requirement_codes": ["BSR 283"],
+                    "oracle_source": "BSR 283",
+                },
+            ],
+            "dependency_bindings": [],
+        }
+
+        projection = _collapsed_candidate_negative_oracle_projection(
+            payload,
+            context=context,
+            boundary={
+                "gaps": [
+                    {
+                        "gap_id": "GAP-SOURCE-RANGE-CONTRADICTION-SRC-029",
+                        "gap_type": "ambiguity",
+                        "source_row_ids": ["SRC-029"],
+                        "exact_source_fragments": [lower, upper],
+                        "blocking": False,
+                        "downstream_handling": "carry-to-source-model",
+                    }
+                ]
+            },
+        )
+
+        self.assertIsNotNone(projection)
+        assert projection is not None
+        self.assertTrue(projection["mixed_decisions"])
+        self.assertEqual(
+            ["TC-BSR-282", "TC-BSR-283"],
+            [item["planned_tc_id"] for item in projection["new_obligations"]],
+        )
+        self.assertEqual(
+            [["SO-NEG-011"], ["SO-NEG-012"]],
+            [item["scope_obligation_ids"] for item in projection["new_obligations"]],
+        )
+        self.assertIn(
+            "Перевести фокус с поля",
+            projection["new_assertions"][1]["action_clauses"][0],
+        )
+        self.assertEqual(
+            ["executable_tc", "executable_tc"],
+            [item["decision"] for item in projection["new_oracles"]],
+        )
+        self.assertEqual(3, len(projection["new_assertions"]))
+        self.assertEqual(
+            "ambiguous",
+            projection["new_assertions"][2]["semantic_disposition"],
+        )
+        self.assertEqual(
+            ["BSR 283"],
+            projection["new_assertions"][1]["requirement_codes"],
         )
 
     def test_combined_calibration_pair_splits_allowed_and_invalid_values(self) -> None:
@@ -793,6 +2465,429 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         repeated = _materialize_missing_exact_length_boundaries(payload, context)
         self.assertEqual([], repeated)
         self.assertEqual(3, len(payload["source_designs"][0]["assertions"]))
+
+    def test_phone_exact_length_projects_concrete_mask_and_separate_default(self) -> None:
+        template_fragment = (
+            "BSR 273. По умолчанию стоит шаблон с кодом страны "
+            "«+7(xxx)-xxx-xx-xx»"
+        )
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-024",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-032",
+                            "atom_id": "ATOM-032",
+                            "obligation_ids": ["OBL-015"],
+                            "semantic_disposition": "testable",
+                            "polarity": "positive",
+                            "risk": "medium",
+                            "condition_clauses": ["Поле отображается."],
+                            "action_clauses": ["Ввести «9991234567»."],
+                            "oracle_clauses": [
+                                "Поле содержит значение в шаблоне «+7(xxx)-xxx-xx-xx»."
+                            ],
+                            "requirement_codes": ["BSR 272", "BSR 273"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 272",
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": (
+                                        "BSR 272. Ограничение на формат: только 10 "
+                                        "числовых символов."
+                                    ),
+                                },
+                                {
+                                    "requirement_code": "BSR 273",
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": template_fragment,
+                                },
+                            ],
+                            "clause_evidence": [
+                                {
+                                    "clause_kind": "condition",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": "Рабочий телефон",
+                                },
+                                {
+                                    "clause_kind": "action",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": "только 10 числовых символов",
+                                },
+                                {
+                                    "clause_kind": "oracle",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": template_fragment,
+                                },
+                            ],
+                            "supporting_source_bindings": [],
+                            "clarification_clause_bindings": [],
+                            "source_property_id": "none_required",
+                            "field_or_block": "Рабочий телефон",
+                        }
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-015",
+                    "package_id": "WP-01",
+                    "linked_atom_id": "ATOM-032",
+                    "source_property_id": "none_required",
+                    "property_type": "format",
+                    "obligation_class": "ui-behavior",
+                    "required_behavior": "Принять десять цифр.",
+                    "source_ref": "SRC-024",
+                    "planned_tc_id": "TC-015",
+                    "review_notes": "none_required",
+                    "design_dimension": "boundary",
+                    "planned_check": "Ввести десять цифр.",
+                    "check_type": "positive",
+                    "coverage_class": "requirements",
+                    "input_class": "ten-digits",
+                    "single_expected_behavior": "Номер принят в шаблоне.",
+                    "oracle_source": "BSR 272-273",
+                    "test_data": "9991234567",
+                    "dictionary_refs": [],
+                    "dictionary_coverage": "none_required",
+                    "scope_obligation_ids": [],
+                }
+            ],
+            "applicability": [
+                {
+                    "dimension": "traceability",
+                    "applicable": "yes",
+                    "linked_atoms": ["ATOM-032"],
+                    "linked_test_cases": ["TC-015"],
+                },
+                {
+                    "dimension": "boundary",
+                    "applicable": "yes",
+                    "linked_atoms": ["ATOM-032"],
+                    "linked_test_cases": ["TC-015"],
+                },
+                {
+                    "dimension": "accessibility-ui",
+                    "applicable": "yes",
+                    "linked_atoms": ["ATOM-032"],
+                    "linked_test_cases": ["TC-015"],
+                },
+            ],
+        }
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-024",
+                    "field_or_action": "Рабочий телефон",
+                    "bounded_source_text": (
+                        "Рабочий телефон BSR 272. Ограничение на формат: только 10 "
+                        f"числовых символов. {template_fragment}"
+                    ),
+                }
+            ]
+        }
+
+        repairs = _materialize_missing_exact_length_boundaries(payload, context)
+
+        assertions = payload["source_designs"][0]["assertions"]
+        self.assertIn("+7(999)-123-45-67", assertions[0]["oracle_clauses"][0])
+        template = next(
+            item
+            for item in assertions
+            if item["assertion_id"] == "ASSERT-PHONE-TEMPLATE-SRC-024-1"
+        )
+        self.assertIn("+7(xxx)-xxx-xx-xx", template["oracle_clauses"][0])
+        self.assertIn(
+            "materialize-phone-default-template-chain",
+            [item["rule"] for item in repairs],
+        )
+        self.assertEqual([], _materialize_missing_exact_length_boundaries(payload, context))
+
+    def test_phone_mask_normalization_is_idempotent_and_keeps_exact_length_distinct(
+        self,
+    ) -> None:
+        length_fragment = (
+            "BSR 272. Ограничение на формат: только 10 числовых символов."
+        )
+        template_fragment = (
+            "BSR 273. По умолчанию стоит шаблон с кодом страны "
+            "«+7(xxx)-xxx-xx-xx»"
+        )
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-024",
+                    "requirement_codes": ["BSR 272", "BSR 273"],
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-EDIT",
+                            "atom_id": "ATOM-EDIT",
+                            "obligation_ids": ["OBL-EDIT"],
+                            "semantic_disposition": "testable",
+                            "polarity": "positive",
+                            "condition_clauses": ["Поле отображается."],
+                            "action_clauses": ["Ввести «9991234567»."],
+                            "oracle_clauses": [
+                                "Поле отображает телефон по шаблону."
+                            ],
+                            "requirement_codes": ["BSR 273"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 273",
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": template_fragment,
+                                }
+                            ],
+                            "clause_evidence": [
+                                {
+                                    "clause_kind": "condition",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": "Рабочий телефон",
+                                },
+                                {
+                                    "clause_kind": "action",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": "только 10 числовых символов",
+                                },
+                                {
+                                    "clause_kind": "oracle",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": template_fragment,
+                                },
+                            ],
+                            "supporting_source_bindings": [],
+                            "clarification_clause_bindings": [],
+                            "source_property_id": (
+                                "FP-SRC-024-EDITABILITY-EDITABLE"
+                            ),
+                            "field_or_block": "Рабочий телефон",
+                        },
+                        {
+                            "assertion_id": "ASSERT-INVALID",
+                            "atom_id": "ATOM-INVALID",
+                            "obligation_ids": ["OBL-INVALID"],
+                            "semantic_disposition": "testable",
+                            "polarity": "negative",
+                            "condition_clauses": ["Поле отображается."],
+                            "action_clauses": ["Ввести «12345abcde»."],
+                            "oracle_clauses": ["Значение не соответствует ограничению."],
+                            "requirement_codes": ["BSR 272"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 272",
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": length_fragment,
+                                }
+                            ],
+                            "clause_evidence": [],
+                            "supporting_source_bindings": [],
+                            "clarification_clause_bindings": [],
+                            "source_property_id": "none_required",
+                            "field_or_block": "Рабочий телефон",
+                        },
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-EDIT",
+                    "linked_atom_id": "ATOM-EDIT",
+                    "source_property_id": "FP-SRC-024-EDITABILITY-EDITABLE",
+                    "property_type": "editability",
+                    "required_behavior": "Номер отображается по шаблону.",
+                    "planned_tc_id": "TC-EDIT",
+                    "planned_check": "Ввести номер.",
+                    "check_type": "positive",
+                    "test_data": "9991234567",
+                    "scope_obligation_ids": [],
+                },
+                {
+                    "obligation_id": "OBL-INVALID",
+                    "linked_atom_id": "ATOM-INVALID",
+                    "source_property_id": "none_required",
+                    "property_type": "format",
+                    "required_behavior": "Нечисловое значение не соответствует ограничению.",
+                    "planned_tc_id": "TC-INVALID",
+                    "planned_check": "Ввести нечисловое значение.",
+                    "check_type": "negative",
+                    "test_data": "12345abcde",
+                    "scope_obligation_ids": [],
+                },
+            ],
+            "applicability": [],
+        }
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-024",
+                    "field_or_action": "Рабочий телефон",
+                    "bounded_source_text": (
+                        f"Рабочий телефон. {length_fragment} {template_fragment}"
+                    ),
+                }
+            ]
+        }
+
+        first_repairs = _materialize_missing_exact_length_boundaries(
+            payload,
+            context,
+        )
+        assertions = payload["source_designs"][0]["assertions"]
+        edit = next(item for item in assertions if item["assertion_id"] == "ASSERT-EDIT")
+        exact = next(
+            item
+            for item in assertions
+            if item["assertion_id"] == "ASSERT-XLB-SRC-024-1-EXACT"
+        )
+        self.assertEqual(["BSR 272", "BSR 273"], edit["requirement_codes"])
+        self.assertEqual(
+            ["BSR 272"],
+            [
+                item["requirement_code"]
+                for item in exact["requirement_code_evidence"]
+            ],
+        )
+        self.assertIn(
+            "bind-phone-format-requirement-code-ownership",
+            [item["rule"] for item in first_repairs],
+        )
+        self.assertNotIn("формате", exact["canonical_statement"].casefold())
+        self.assertEqual([], _materialize_missing_exact_length_boundaries(payload, context))
+
+        exact["canonical_statement"] = edit["canonical_statement"]
+        exact["oracle_clauses"] = copy.deepcopy(edit["oracle_clauses"])
+        exact_obligation = next(
+            item
+            for item in payload["obligations"]
+            if item["obligation_id"] == exact["obligation_ids"][0]
+        )
+        exact_obligation["required_behavior"] = edit["oracle_clauses"][0]
+        repair = _materialize_missing_exact_length_boundaries(payload, context)
+        self.assertIn(
+            "restore-distinct-phone-exact-length-chain",
+            [item["rule"] for item in repair],
+        )
+        self.assertNotIn("формате", exact["canonical_statement"].casefold())
+
+    def test_exact_length_projection_splits_n_from_typed_editability(self) -> None:
+        statement = "BSR 272. Ограничение: только 10 числовых символов."
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-024",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-EDIT",
+                            "atom_id": "ATOM-EDIT",
+                            "obligation_ids": ["OBL-EDIT"],
+                            "semantic_disposition": "testable",
+                            "polarity": "positive",
+                            "risk": "medium",
+                            "condition_clauses": ["Поле доступно."],
+                            "action_clauses": ["Ввести «9991234567»."],
+                            "oracle_clauses": ["Значение отображается."],
+                            "requirement_codes": [],
+                            "requirement_code_evidence": [],
+                            "clause_evidence": [
+                                {
+                                    "clause_kind": kind,
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-024",
+                                    "exact_source_fragment": (
+                                        "только 10 числовых символов"
+                                    ),
+                                }
+                                for kind in ("condition", "action", "oracle")
+                            ],
+                            "supporting_source_bindings": [],
+                            "clarification_clause_bindings": [],
+                            "source_property_id": (
+                                "FP-SRC-024-EDITABILITY-EDITABLE"
+                            ),
+                            "field_or_block": "Рабочий телефон",
+                        },
+                        {
+                            "assertion_id": "ASSERT-INVALID",
+                            "atom_id": "ATOM-INVALID",
+                            "obligation_ids": ["OBL-INVALID"],
+                            "semantic_disposition": "testable",
+                            "polarity": "negative",
+                            "requirement_codes": ["BSR 272"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 272",
+                                    "source_row_id": "SRC-024",
+                                    "provenance_role": "xhtml-row",
+                                    "exact_source_fragment": statement,
+                                    "evidence_source_path": "none_required",
+                                    "evidence_locator": "none_required",
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-EDIT",
+                    "linked_atom_id": "ATOM-EDIT",
+                    "source_property_id": (
+                        "FP-SRC-024-EDITABILITY-EDITABLE"
+                    ),
+                    "planned_tc_id": "TC-EDIT",
+                },
+                {
+                    "obligation_id": "OBL-INVALID",
+                    "linked_atom_id": "ATOM-INVALID",
+                    "source_property_id": "none_required",
+                    "planned_tc_id": "TC-INVALID",
+                },
+            ],
+            "applicability": [
+                {
+                    "dimension": dimension,
+                    "applicable": "yes",
+                    "linked_atoms": ["ATOM-EDIT"],
+                    "linked_test_cases": ["TC-EDIT"],
+                }
+                for dimension in ("traceability", "boundary")
+            ],
+        }
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-024",
+                    "field_or_action": "Рабочий телефон",
+                    "bounded_source_text": f"Рабочий телефон. {statement}",
+                }
+            ]
+        }
+
+        repairs = _materialize_missing_exact_length_boundaries(payload, context)
+
+        added = payload["source_designs"][0]["assertions"][2:]
+        self.assertEqual(3, len(added))
+        self.assertEqual(
+            ["N:9991234567", "N-1:999123456", "N+1:99912345670"],
+            [item["input_class"] for item in payload["obligations"][2:]],
+        )
+        self.assertTrue(
+            all(item["source_property_id"] == "none_required" for item in added)
+        )
+        self.assertTrue(
+            all(item["requirement_codes"] == ["BSR 272"] for item in added)
+        )
+        self.assertIn(
+            "materialize-exact-length-positive-chain",
+            [item["rule"] for item in repairs],
+        )
 
     @classmethod
     def _boundary(cls) -> dict[str, object]:
@@ -1419,6 +3514,103 @@ class SemanticDesignBridgeTests(unittest.TestCase):
                 "SRC-033",
                 assertions[:-1],
             )
+
+    def test_negative_business_case_keeps_polarity_with_service_outage_control(
+        self,
+    ) -> None:
+        fragment = (
+            "BSR 266. В случае, если организация является не действующей, Система "
+            "отображает подсказку красным цветом «Организация не является "
+            "действующей» и блокирует кнопку «Далее». Проверка должна действовать "
+            "только если сервис DaData доступен"
+        )
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-021",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-SRC-021-BSR",
+                            "canonical_statement": "Недействующая организация блокируется.",
+                            "polarity": "negative",
+                            "semantic_disposition": "testable",
+                            "execution_readiness": "ready",
+                            "execution_readiness_rationale": "none_required",
+                            "risk": "high",
+                            "condition_clauses": [
+                                "Социальный статус заполнен; сервис DaData доступен."
+                            ],
+                            "action_clauses": [
+                                "В поле «Наименование организации, ИНН» ввести запрос "
+                                "«7733073764» и выбрать точное предложение fixture."
+                            ],
+                            "oracle_clauses": [
+                                "Показана подсказка «Организация не является действующей»; "
+                                "кнопка «Далее» заблокирована."
+                            ],
+                            "requirement_codes": ["BSR 266"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 266",
+                                    "source_row_id": "SRC-021",
+                                    "exact_source_fragment": fragment,
+                                }
+                            ],
+                            "clause_evidence": [],
+                            "supporting_source_bindings": [],
+                            "clarification_clause_bindings": [],
+                            "atom_id": "ATOM-SRC-021-BSR",
+                            "obligation_ids": ["OBL-SRC-021-BSR"],
+                            "disposition_rationale": "Проверяется наблюдаемый результат.",
+                            "source_property_id": "none_required",
+                            "field_or_block": "Наименование организации, ИНН",
+                            "source_reference": "SRC-021",
+                        }
+                    ],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-SRC-021-BSR",
+                    "package_id": "WP-01",
+                    "linked_atom_id": "ATOM-SRC-021-BSR",
+                    "source_property_id": "none_required",
+                    "property_type": "integration-visible-behavior",
+                    "obligation_class": "integration-action-flow",
+                    "required_behavior": "Показать предупреждение.",
+                    "source_ref": "SRC-021",
+                    "planned_tc_id": "TC-SRC-021-BSR",
+                    "review_notes": "none_required",
+                    "design_dimension": "integration",
+                    "planned_check": "Выбрать fixture.",
+                    "check_type": "negative",
+                    "coverage_class": "dadata-liquidated",
+                    "input_class": "registered-fixture",
+                    "single_expected_behavior": "Предупреждение и блокировка.",
+                    "oracle_source": "BSR 266",
+                    "test_data": "fixture; query=7733073764",
+                    "dictionary_refs": [],
+                    "dictionary_coverage": "none_required",
+                    "scope_obligation_ids": [],
+                }
+            ],
+        }
+
+        repairs = _materialize_service_availability_necessary_controls(payload)
+
+        self.assertEqual(1, len(repairs))
+        assertions = payload["source_designs"][0]["assertions"]
+        self.assertEqual("negative", assertions[0]["polarity"])
+        self.assertEqual(2, len(assertions))
+        self.assertIn("DaData недоступен", assertions[1]["condition_clauses"][0])
+        self.assertEqual(
+            "В поле «Наименование организации, ИНН» ввести запрос «7733073764».",
+            assertions[1]["action_clauses"][0],
+        )
+        self.assertIn("не отображается", assertions[1]["oracle_clauses"][0])
+        self.assertEqual(2, len(payload["obligations"]))
+        _validate_necessary_condition_control_cardinality("SRC-021", assertions)
+        self.assertEqual([], _materialize_service_availability_necessary_controls(payload))
 
     def test_unobservable_executable_requiredness_is_downgraded_to_candidate(
         self,
@@ -2925,7 +5117,11 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         self.assertEqual(["ASSERT-003"], finding["dropped_assertion_ids"])
         self.assertEqual(
             ["drop-dependency-overlinks-without-literal-evidence"],
-            [item["rule"] for item in receipt["repairs"]],
+            [
+                item["rule"]
+                for item in receipt["repairs"]
+                if "dependency-overlink" in item["rule"]
+            ],
         )
         self.assertEqual(
             "verified",
@@ -3968,6 +6164,74 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         with self.assertRaisesRegex(SemanticDesignBridgeError, "absent from bounded row"):
             self._validate(design)
 
+    def test_clarification_derived_action_reuses_literal_condition_evidence(self) -> None:
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-025",
+                    "bounded_source_text": (
+                        "BSR 274. Видимость: Да, если поле «Тип занятости» "
+                        "заполнено и значение ≠ «Пенсионер (не работает)»"
+                    ),
+                }
+            ]
+        }
+        assertion = {
+            "assertion_id": "ASSERT-SRC-025-VIS",
+            "condition_clauses": [
+                "Поле «Тип занятости» заполнено значением «работа по найму»."
+            ],
+            "action_clauses": [
+                "Выбрать социальный статус «работа по найму»."
+            ],
+            "clause_evidence": [
+                {
+                    "clause_kind": "condition",
+                    "clause_index": 0,
+                    "source_row_id": "SRC-025",
+                    "exact_source_fragment": "поле «Тип занятости» заполнено",
+                },
+                {
+                    "clause_kind": "action",
+                    "clause_index": 0,
+                    "source_row_id": "SRC-025",
+                    "exact_source_fragment": "работа по найму",
+                },
+            ],
+            "clarification_clause_bindings": [
+                {
+                    "clarification_id": "CLR-EMP-001",
+                    "clause_kind": "condition",
+                    "clause_index": 0,
+                    "requirement_codes": ["BSR 274"],
+                    "exact_answer_sha256": "a" * 64,
+                    "binding_scope": "requirement-code",
+                    "source_row_ids": [],
+                }
+            ],
+        }
+        payload = {
+            "source_designs": [
+                {"source_row_id": "SRC-025", "assertions": [assertion]}
+            ]
+        }
+
+        projections = _clarification_condition_action_evidence_projections(
+            payload,
+            context,
+        )
+
+        self.assertEqual(1, len(projections))
+        self.assertEqual(
+            "поле «Тип занятости» заполнено",
+            projections[0]["canonical_evidence"][1]["exact_source_fragment"],
+        )
+        assertion["action_clauses"] = ["Открыть произвольный раздел «Настройки». "]
+        self.assertEqual(
+            [],
+            _clarification_condition_action_evidence_projections(payload, context),
+        )
+
     def test_same_row_multi_fragment_clause_evidence_is_merged_to_literal_span(
         self,
     ) -> None:
@@ -4858,7 +7122,7 @@ class SemanticDesignBridgeTests(unittest.TestCase):
                     "Заполнить блок, удалить его и добавить новый экземпляр."
                 ),
                 check_type="action-flow",
-                coverage_class="readd-after-delete-reset-or-gap",
+                coverage_class="repeatable-block-lifecycle",
                 input_class="filled repeatable block",
                 single_expected_behavior="Поля нового блока пустые.",
                 oracle_source="CLR-LIFECYCLE-001",
@@ -5882,6 +8146,16 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         ][0]["value_mapping"]
         optional_mapping["Нет"] = "optional"
         self._bind_context(optional_context)
+        optional_preflight = validate_semantic_input_preflight(
+            optional_context,
+            boundary,
+        )
+        optional_default = optional_preflight["requiredness_candidate_defaults"][0]
+        self.assertEqual(
+            "Оставить поле «Статус» пустым.",
+            optional_default["fallback_action"],
+        )
+        self.assertNotIn("SRC-002", optional_default["analyst_question"])
         optional_candidate = copy.deepcopy(typed_candidate)
         optional_candidate["prepared_context_sha256"] = prepared_context_sha256(
             optional_context

@@ -34,11 +34,14 @@ Return `blocked-input` when these conditions do not hold. Do not open project in
 10. Keep one primary check and one main observable result per TC. Use unique titles that name the field/action and exact positive, boundary or invalid class.
 11. A concrete FT-first fixture may be a synthetic value, relative date or runtime-selected integration response with source-defined observable properties. A stand record ID, locator, token, session or prerecorded provider response is not required until UI-prep.
 12. Return `blocked-input` with empty `draft_markdown` and precise reasons only when inline evidence cannot define the test intent or observable oracle without invention.
+13. For `FX-DADATA-*`, copy only the tester-facing runner projection into test data: the fixture ID, exact `Запрос`, exact suggestion or empty response, and required response components. Never copy response hashes, snapshot paths, verification/status fields, runtime flags, or instruct the tester to inject a stored provider response. The executable product steps enter the exact query and select the exact projected suggestion when one exists.
 
 ### Executable setup projection
 
 - In production test cases, write preconditions as inline numbered setup actions that create, reveal, select or input the required state, using concrete source-backed controls and values.
 - `FX-*`, `FIX-*` and other setup IDs are provenance only; they never substitute for executable setup actions in the test case.
+- A prohibition or untouched-default statement such as “do not enter a value” is test data or part of the target step, not a state-producing precondition.
+- When no setup is required, use the exact `Не требуются.` sentinel instead of a numbered explanation that setup is unnecessary.
 - A passive state statement may appear only after the preceding state-producing action that makes the state true.
 - When the embedded source-backed evidence cannot define the required executable setup without invention, return `blocked-input`; do not emit a passive or identifier-only precondition.
 

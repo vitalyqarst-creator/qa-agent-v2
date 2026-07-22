@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from collections.abc import Collection
@@ -114,7 +115,17 @@ SEMANTIC_FAMILY_ROOTS = {
     "clear": ("очист", "сброс", "clear", "reset"),
     "change": ("измен", "change", "edit"),
     "verify": ("провер", "свер", "убед", "просмотр", "verify", "check", "view"),
-    "display": ("отображ", "показ", "видим", "появ", "display", "show", "visible", "appear"),
+    "display": (
+        "отображ",
+        "отобраз",
+        "показ",
+        "видим",
+        "появ",
+        "display",
+        "show",
+        "visible",
+        "appear",
+    ),
     "accept": ("принима", "принят", "допуст", "accept", "allow"),
     "hide": ("скры", "исчез", "отсутств", "hide", "disappear", "absent"),
     "error": ("ошиб", "валидац", "error", "invalid"),
@@ -149,6 +160,18 @@ FIELD_SELECTION_VISIBLE_AFTER_CHOICE = re.compile(
 PERSISTENCE_LIFECYCLE = re.compile(
     r"(?is)\b(?:повторн\w*\s+откр\w*|переоткр\w*|перезагруз\w*|"
     r"после\s+сохранени\w*|нов\w*\s+сесси\w*)\b"
+)
+EMPTY_OR_CLEARED_STATE = re.compile(
+    r"(?is)\b(?:очищ\w*|пуст\w*|cleared|empty)\b"
+)
+PREVIOUS_VALUES_NOT_DISPLAYED = re.compile(
+    r"(?is)(?:\bзначен\w*\b.{0,140}\b"
+    r"(?:не\s+отображ\w*|not\s+(?:shown|displayed))\b|"
+    r"\b(?:не\s+отображ\w*|not\s+(?:shown|displayed))\b"
+    r".{0,140}\bзначен\w*\b)"
+)
+SELECTED_DEPENDENCY_CONTEXT = re.compile(
+    r"(?is)\bв\s+зависимости\s+от\s+выбран\w*(?:\s+[\w-]+){0,3}"
 )
 NEGATED_REJECTION_ACCEPTANCE = re.compile(
     r"(?is)\bне\s+отклон\w*\b.{0,120}\b(?:недопуст\w*|невалид\w*|invalid)\b"
@@ -275,6 +298,47 @@ def _dadata_reference_fixture_lines(requirement: Any) -> tuple[str, ...]:
         return tuple(
             f"- {label}: `{value}`." for label, value in zip(labels, values)
         )
+    if len(values) >= 3:
+        try:
+            request = json.loads(values[1])
+            expected = json.loads(values[2])
+        except json.JSONDecodeError:
+            return ()
+        if not isinstance(request, dict) or not isinstance(expected, dict):
+            return ()
+        lines = [f"- Fixture DaData: `{fixture_id}`."]
+        query = request.get("query")
+        if isinstance(query, (str, int, float)) and not isinstance(query, bool):
+            lines.append(f"- Запрос: `{query}`.")
+        for key, value in request.items():
+            if (
+                key == "query"
+                or not isinstance(value, (str, int, float))
+                or isinstance(value, bool)
+            ):
+                continue
+            lines.append(f"- Параметр `{key}`: `{value}`.")
+        suggestion = expected.get("exact_suggestion")
+        if isinstance(suggestion, (str, int, float)) and not isinstance(
+            suggestion, bool
+        ):
+            lines.append(f"- Точное предложение: `{suggestion}`.")
+        components = expected.get("exact_components")
+        if isinstance(components, dict):
+            for key, value in components.items():
+                if isinstance(value, (str, int, float)) and not isinstance(value, bool):
+                    lines.append(f"- Компонент `{key}`: `{value}`.")
+        if expected.get("suggestions") == []:
+            lines.append("- Ожидаемый ответ fixture: `suggestions=[]`.")
+        outcome = expected.get("outcome")
+        if isinstance(outcome, str) and outcome:
+            lines.append(f"- Результат fixture: `{outcome}`.")
+        minimum = expected.get("minimum_suggestion_count")
+        if isinstance(minimum, (int, float)) and not isinstance(
+            minimum, bool
+        ):
+            lines.append(f"- Минимальное количество предложений: `{minimum}`.")
+        return tuple(lines)
     return ()
 
 
@@ -317,13 +381,15 @@ def reference_fixture_findings(
         rf"{re.escape(obligation.obligation_id)}\s*-->\s*$"
     )
     match = marker.search(block)
-    expected_lines = {
-        line: (requirement, item)
-        for requirement in requirements
-        for line, item in zip(
-            reference_fixture_lines(requirement), requirement.fixture_values
-        )
-    }
+    expected_lines: dict[str, tuple[Any, Any]] = {}
+    for requirement in requirements:
+        rendered_lines = reference_fixture_lines(requirement)
+        for index, line in enumerate(rendered_lines):
+            source_index = min(index, len(requirement.fixture_values) - 1)
+            expected_lines[line] = (
+                requirement,
+                requirement.fixture_values[source_index],
+            )
     if match is None:
         return (
             {
@@ -368,6 +434,9 @@ def reference_fixture_findings(
         "- Параметр `from_bound`:",
         "- Параметр `to_bound`:",
         "- Ожидаемый ответ fixture:",
+        "- Компонент `",
+        "- Результат fixture:",
+        "- Минимальное количество предложений:",
     )
     actual_lines = {
         line.strip()
@@ -930,6 +999,10 @@ def _action_semantic_families(tokens: set[str]) -> set[str]:
         families.add("change")
     if any(token.startswith(root) for token in tokens for root in ACTION_INPUT_ROOTS):
         families.add("input")
+    if families.intersection({"select", "change"}):
+        families.add("set-value")
+    if families.intersection({"verify", "display"}):
+        families.add("observe-ui")
     return families
 
 
@@ -953,8 +1026,22 @@ def _semantic_contract_matches(
     family_projection = (
         _action_semantic_families if action_contract else _semantic_families
     )
-    contract_families = family_projection(contract_tokens)
-    actual_families = family_projection(actual_tokens)
+    family_contract_tokens = contract_tokens
+    family_actual_tokens = actual_tokens
+    if not action_contract:
+        # A requirement can describe a value range "depending on the selected
+        # month".  The adjective is contextual and must not turn the observable
+        # oracle into a mandatory UI selection operation.  Keep the full text
+        # for lexical overlap, but exclude that dependency clause from the
+        # action-family projection.
+        family_contract_tokens = _lexical_tokens(
+            SELECTED_DEPENDENCY_CONTEXT.sub(" ", contract)
+        )
+        family_actual_tokens = _lexical_tokens(
+            SELECTED_DEPENDENCY_CONTEXT.sub(" ", actual)
+        )
+    contract_families = family_projection(family_contract_tokens)
+    actual_families = family_projection(family_actual_tokens)
     if (
         action_contract
         and EMPTY_FIELD_CONTRACT.search(contract)
@@ -1035,6 +1122,14 @@ def _has_explicit_negation(text: str) -> bool:
 
 
 def _oracle_polarity_conflicts(contract: str, actual: str) -> bool:
+    if (
+        EMPTY_OR_CLEARED_STATE.search(contract)
+        and EMPTY_OR_CLEARED_STATE.search(actual)
+        and PREVIOUS_VALUES_NOT_DISPLAYED.search(actual)
+    ):
+        # "The fields are empty/cleared; previous values are not displayed"
+        # is one positive reset oracle, not an opposite-polarity display claim.
+        return False
     contract_tokens = _lexical_tokens(contract)
     actual_tokens = _lexical_tokens(actual)
     if (

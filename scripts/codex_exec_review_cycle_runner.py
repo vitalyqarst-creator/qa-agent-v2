@@ -288,10 +288,10 @@ TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
         "Do not call DaData or discover a current value while executing the test case.",
     ),
     "production-dadata-query-literal-missing": (
-        "Add the exact preverified input under the explicit `Запрос` label in test data.",
+        "Add the exact preverified input as its own Markdown bullet `- Запрос: `literal`.` in test data; the value itself must be enclosed in backticks.",
     ),
     "production-dadata-suggestion-literal-missing": (
-        "Add the exact preverified returned value under the explicit `Точное предложение` label in test data.",
+        "Add the exact preverified returned value as its own Markdown bullet `- Точное предложение: `literal`.` in test data; the value itself must be enclosed in backticks, not only in typographic quotes.",
     ),
     "production-forbidden-process-wording": (
         "Remove workflow, evidence-recording, calibration, runner, writer and reviewer wording from runtime sections.",
@@ -313,6 +313,8 @@ TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
     "production-non-reproducible-precondition": (
         "Replace passive state assumptions with numbered actions that produce the required visible state.",
         "Move an observation out of preconditions when it is the behavior under test.",
+        "Do not use generic `указать`: use `Выбрать` for a listed value and `Ввести` for a text, phone, date or numeric input.",
+        "For a field populated by a preceding integration action, verify the resulting value after that action instead of manually setting the auto-filled field.",
     ),
     "production-unobservable-address-decomposition": (
         "Use one explicit address branch; do not leave a registration-or-residence alternative in the executable path.",
@@ -327,6 +329,10 @@ TARGETED_REPAIR_ACCEPTANCE_RULES: dict[str, tuple[str, ...]] = {
     "production-process-marker-in-title": (
         "Make the title describe the product behavior under test and remove calibration, writer, reviewer, runner and fixture-process wording.",
         "Keep calibration lifecycle markers only in their dedicated metadata fields.",
+    ),
+    "observable-oracle-contract-mismatch": (
+        "Preserve the complete prepared observable_oracle semantics in the final expected result.",
+        "For a UI-calibration candidate, keep the source-backed invalid or requiredness class and the uncertainty about the exact UI mechanism; do not replace it with an invented reaction.",
     ),
 }
 PACKAGE_ID_LINE_RE = re.compile(
@@ -4319,6 +4325,7 @@ class CodexExecReviewCycleRunner:
         if self._prepared_package is None:
             raise RunnerError("Prepared package is not loaded")
         stage = str(shard["stage"])
+        approved_runtime_aliases = self._approved_runtime_aliases()
         prompt = "\n".join(
             [
                 "# Codex exec prepared writer bounded shard",
@@ -4334,6 +4341,17 @@ class CodexExecReviewCycleRunner:
                 "A calibration_status=ui-calibration-required obligation is not blocked merely because the exact UI trigger or reaction is intentionally unknown. Emit its candidate-ui-calibration TC with the neutral source-backed expected-result class and a specific confirmation question; do not choose one exact message, highlight, filtering, clearing, transition or save behavior.",
                 "For requiredness candidates, state that an empty required field must not be accepted as valid for continuation and that the observed mechanism must be recorded during UI calibration. For invalid-value candidates, state that the invalid value must not be accepted as valid and that the observed mechanism must be recorded during UI calibration.",
                 "Use `Field/block` from the obligation projection and `exact_source_text` from selected evidence to name the actual field. SRC-* is traceability only and must not appear as the user-facing field name.",
+                "Test-case titles must describe only product behavior. Never put calibration, candidate, writer, reviewer, runner or fixture-validation process markers in a title; keep lifecycle state only in the dedicated metadata fields.",
+                "In every runtime section, replace each approved alias below with its canonical field name. An alias may remain only inside quoted source evidence, never in executable TC text.",
+                "Numbered preconditions must use explicit state-producing actions: `Выбрать` for listed values, `Ввести` for text/phone/date/numeric inputs, and `Открыть` or `Нажать` for navigation. Never use generic `указать`. Verify auto-filled fields only after the action that populates them.",
+                "When any assigned TC uses a verified DaData fixture, format test data as separate bullets with code literals: `- Fixture DaData: `FX-*`.`, `- Запрос: `...`.`, and `- Точное предложение: `...`.`.",
+                "Approved runtime aliases: "
+                + json.dumps(
+                    approved_runtime_aliases,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
                 "",
                 self.prepared_writer_profile_path.read_text(encoding="utf-8").strip(),
                 "",
@@ -6019,6 +6037,15 @@ class CodexExecReviewCycleRunner:
                 ),
                 "validator": "prepared-writer-gate-aggregate-v1",
                 "draft_sha256": sha256_file(self.draft_path),
+                # Keep one directly reusable repair contract.  A blocked cycle
+                # must not require an operator to merge validator, obligation
+                # and production-quality reports by hand before starting a new
+                # immutable targeted-repair cycle.
+                "findings": [
+                    *validation.findings,
+                    *obligation_gate.findings,
+                    *quality_bundle["findings"],
+                ],
                 "gates": {
                     "validator": {
                         "passed": validation.passed,

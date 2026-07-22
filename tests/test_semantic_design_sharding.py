@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts import run_standard_scope_bridge
 
@@ -13,9 +14,12 @@ from test_case_agent.semantic_design_bridge import (
     APPLICABILITY_DIMENSIONS,
     SEMANTIC_DESIGN_CONTRACT,
     SEMANTIC_DESIGN_VERSION,
+    _collapsed_candidate_negative_oracle_projection,
     canonical_payload_sha256,
     legacy_v1_projection,
+    normalize_semantic_design_transport,
     prepared_context_sha256,
+    semantic_design_prompt,
     validate_semantic_design_binding,
 )
 from test_case_agent.semantic_design_sharding import (
@@ -305,6 +309,202 @@ def _design(
 
 
 class SemanticDesignShardingTests(unittest.TestCase):
+    def test_collapsed_calibration_candidates_split_into_independent_chains(
+        self,
+    ) -> None:
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-CONTEXT",
+                    "bounded_source_text": "Year must be from 1900 to 9999.",
+                },
+                {
+                    "source_row_id": "SRC-TARGET",
+                    "bounded_source_text": "Start date Field input Date.",
+                },
+            ]
+        }
+        assertion = {
+            "assertion_id": "ASSERT-DATE",
+            "atom_id": "ATOM-DATE",
+            "obligation_ids": ["OBL-DATE"],
+            "condition_clauses": ["The start-date field is visible."],
+            "action_clauses": ["Enter a date."],
+            "oracle_clauses": ["The date is retained."],
+            "clause_evidence": [
+                {
+                    "clause_kind": kind,
+                    "clause_index": 0,
+                    "source_row_id": "SRC-TARGET",
+                    "exact_source_fragment": fragment,
+                }
+                for kind, fragment in (
+                    ("condition", "Start date"),
+                    ("action", "Field input Date"),
+                    ("oracle", "Date"),
+                )
+            ],
+            "field_or_block": "Start date",
+        }
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-TARGET",
+                    "assertions": [assertion],
+                }
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-DATE",
+                    "linked_atom_id": "ATOM-DATE",
+                    "planned_tc_id": "TC-DATE",
+                    "scope_obligation_ids": [],
+                }
+            ],
+            "dependency_bindings": [],
+            "negative_oracles": [
+                {
+                    "signal_id": f"SIG-NEG-00{index}",
+                    "scope_obligation_id": f"SO-NEG-00{index}",
+                    "source_row_id": "SRC-CONTEXT",
+                    "source_statement": "Year must be from 1900 to 9999.",
+                    "representative_invalid_value": value,
+                    "negative_class": classification,
+                    "restriction_type": bound,
+                    "requirement_codes": [],
+                    "decision": "candidate_tc_required",
+                    "oracle_status": "ui-calibration-required",
+                    "planned_tc_or_gap": f"candidate:SO-NEG-00{index}",
+                    "linked_atom_id": "ATOM-DATE",
+                    "linked_obligation_id": "OBL-DATE",
+                }
+                for index, value, classification, bound in (
+                    (1, "31.12.1899", "below minimum", "lower-bound"),
+                    (2, "01.01.10000", "above maximum", "upper-bound"),
+                )
+            ],
+        }
+
+        projection = _collapsed_candidate_negative_oracle_projection(
+            payload,
+            context=context,
+        )
+
+        self.assertIsNotNone(projection)
+        assert projection is not None
+        self.assertEqual(2, len(projection["new_assertions"]))
+        self.assertEqual(2, len(projection["new_obligations"]))
+        self.assertEqual(
+            2,
+            len(
+                {
+                    item["linked_obligation_id"]
+                    for item in projection["new_oracles"]
+                }
+            ),
+        )
+
+    def test_collapsed_candidates_preserve_one_typed_positive_owner(self) -> None:
+        context = {
+            "source_rows": [
+                {
+                    "source_row_id": "SRC-CONTEXT",
+                    "bounded_source_text": "Year must be from 1900 to 9999.",
+                },
+                {
+                    "source_row_id": "SRC-TARGET",
+                    "bounded_source_text": "Start date Field input Date.",
+                },
+            ]
+        }
+        assertion = {
+            "assertion_id": "ASSERT-DATE-EDIT",
+            "atom_id": "ATOM-DATE-EDIT",
+            "obligation_ids": ["OBL-DATE-EDIT"],
+            "source_property_id": "FP-SRC-TARGET-EDITABILITY-EDITABLE",
+            "condition_clauses": ["The start-date field is visible."],
+            "action_clauses": ["Enter a date."],
+            "oracle_clauses": ["The date is retained."],
+            "clause_evidence": [
+                {
+                    "clause_kind": kind,
+                    "clause_index": 0,
+                    "source_row_id": "SRC-TARGET",
+                    "exact_source_fragment": fragment,
+                }
+                for kind, fragment in (
+                    ("condition", "Start date"),
+                    ("action", "Field input Date"),
+                    ("oracle", "Date"),
+                )
+            ],
+            "field_or_block": "Start date",
+        }
+        payload = {
+            "source_designs": [
+                {"source_row_id": "SRC-TARGET", "assertions": [assertion]}
+            ],
+            "obligations": [
+                {
+                    "obligation_id": "OBL-DATE-EDIT",
+                    "linked_atom_id": "ATOM-DATE-EDIT",
+                    "planned_tc_id": "TC-DATE-EDIT",
+                    "source_property_id": (
+                        "FP-SRC-TARGET-EDITABILITY-EDITABLE"
+                    ),
+                    "check_type": "positive",
+                    "scope_obligation_ids": ["SO-NEG-001", "SO-NEG-002"],
+                }
+            ],
+            "dependency_bindings": [],
+            "negative_oracles": [
+                {
+                    "signal_id": f"SIG-NEG-00{index}",
+                    "scope_obligation_id": f"SO-NEG-00{index}",
+                    "source_row_id": "SRC-CONTEXT",
+                    "source_statement": "Year must be from 1900 to 9999.",
+                    "representative_invalid_value": value,
+                    "negative_class": classification,
+                    "restriction_type": bound,
+                    "requirement_codes": [],
+                    "decision": "candidate_tc_required",
+                    "oracle_status": "ui-calibration-required",
+                    "planned_tc_or_gap": f"candidate:SO-NEG-00{index}",
+                    "linked_atom_id": "ATOM-DATE-EDIT",
+                    "linked_obligation_id": "OBL-DATE-EDIT",
+                }
+                for index, value, classification, bound in (
+                    (1, "31.12.1899", "below minimum", "lower-bound"),
+                    (2, "01.01.10000", "above maximum", "upper-bound"),
+                )
+            ],
+        }
+
+        projection = _collapsed_candidate_negative_oracle_projection(
+            payload,
+            context=context,
+        )
+
+        self.assertIsNotNone(projection)
+        assert projection is not None
+        self.assertEqual(3, len(projection["new_assertions"]))
+        self.assertEqual(3, len(projection["new_obligations"]))
+        self.assertEqual(
+            "FP-SRC-TARGET-EDITABILITY-EDITABLE",
+            projection["new_assertions"][0]["source_property_id"],
+        )
+        self.assertEqual(
+            ["none_required", "none_required"],
+            [
+                item["source_property_id"]
+                for item in projection["new_assertions"][1:]
+            ],
+        )
+        self.assertEqual(
+            [],
+            projection["new_obligations"][0]["scope_obligation_ids"],
+        )
+
     def test_oracles_restore_full_registry_order_after_shard_merge(self) -> None:
         registry = [
             {"signal_id": "SIG-REQ-001"},
@@ -653,6 +853,262 @@ class SemanticDesignShardingTests(unittest.TestCase):
             ],
         )
 
+    def test_projected_shard_contract_requires_complete_owned_design(self) -> None:
+        context = _context(2)
+        boundary = _boundary(context)
+        plan = build_semantic_shard_plan(
+            context,
+            boundary,
+            mode="on",
+            max_included_rows=1,
+            max_source_rows=1,
+        )
+
+        projected, projected_boundary = project_semantic_shard(
+            context,
+            boundary,
+            plan["shards"][0],
+        )
+        contract = projected["semantic_shard_contract"]
+        prompt = semantic_design_prompt(projected, projected_boundary, ())
+
+        self.assertEqual("all-owned-source-rows", contract["completeness_scope"])
+        self.assertEqual(["SRC-001"], contract["owned_source_row_ids"])
+        self.assertEqual([], contract["read_only_context_source_row_ids"])
+        self.assertIn(
+            "Their absence is never a reason",
+            prompt,
+        )
+        self.assertIn("to return a placeholder, an ambiguous assertion", prompt)
+        self.assertIn(
+            "do not wait for rows assigned to other shards",
+            prompt,
+        )
+
+    def test_transport_normalizer_repairs_duplicate_owned_row_and_missing_header(
+        self,
+    ) -> None:
+        context = _context(2)
+        context["semantic_shard_contract"] = {
+            "version": 1,
+            "shard_id": "semantic-shard-001",
+            "completeness_scope": "all-owned-source-rows",
+            "owned_source_row_ids": ["SRC-002"],
+            "read_only_context_source_row_ids": ["SRC-001"],
+            "absent_rows_owner": "other-semantic-shards",
+            "merge_mode": "deterministic-full-scope-merge",
+        }
+        context["source_rows"][0]["in_scope_hint"] = (
+            "no; shared typed-column header"
+        )
+        context["source_rows"][0]["requirement_codes_hint"] = []
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["source_decisions"][0].update(
+            {
+                "disposition": "context",
+                "requirement_codes": [],
+                "rationale": "Shared typed-column header; read-only shard context.",
+            }
+        )
+        assertion_a = {
+            "assertion_id": "ASSERT-002-A",
+            "atom_id": "ATOM-002-A",
+            "source_property_id": "none_required",
+        }
+        assertion_b = {
+            "assertion_id": "ASSERT-002-B",
+            "atom_id": "ATOM-002-B",
+            "source_property_id": "none_required",
+        }
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-002",
+                    "boundary_disposition": "included",
+                    "requirement_codes": ["BSR 2"],
+                    "assertions": [assertion_a],
+                },
+                {
+                    "source_row_id": "SRC-002",
+                    "boundary_disposition": "included",
+                    "requirement_codes": ["BSR 2"],
+                    "assertions": [assertion_b],
+                },
+            ],
+            "obligations": [],
+        }
+
+        normalized, receipt = normalize_semantic_design_transport(
+            payload,
+            context=context,
+            boundary=boundary,
+        )
+
+        self.assertEqual(
+            ["SRC-001", "SRC-002"],
+            [item["source_row_id"] for item in normalized["source_designs"]],
+        )
+        self.assertEqual(
+            ["ASSERT-002-A", "ASSERT-002-B"],
+            [
+                item["assertion_id"]
+                for item in normalized["source_designs"][1]["assertions"]
+            ],
+        )
+        self.assertEqual(
+            "not-applicable",
+            normalized["source_designs"][0]["assertions"][0][
+                "semantic_disposition"
+            ],
+        )
+        self.assertEqual(
+            {
+                "merge-duplicate-source-design-envelopes",
+                "materialize-missing-read-only-context-source-design",
+            },
+            {
+                item["rule"]
+                for item in receipt["repairs"]
+                if item["rule"]
+                in {
+                    "merge-duplicate-source-design-envelopes",
+                    "materialize-missing-read-only-context-source-design",
+                }
+            },
+        )
+
+    def test_transport_normalizer_restores_complete_roster_order(self) -> None:
+        context = _context(2)
+        context["semantic_shard_contract"] = {
+            "version": 1,
+            "shard_id": "semantic-shard-001",
+            "completeness_scope": "all-owned-source-rows",
+            "owned_source_row_ids": ["SRC-001", "SRC-002"],
+            "read_only_context_source_row_ids": [],
+            "absent_rows_owner": "other-semantic-shards",
+            "merge_mode": "deterministic-full-scope-merge",
+        }
+        _bind(context)
+        boundary = _boundary(context)
+        payload = _design(context, boundary)
+        payload["source_designs"] = list(reversed(payload["source_designs"]))
+
+        normalized, receipt = normalize_semantic_design_transport(
+            payload,
+            context=context,
+            boundary=boundary,
+        )
+
+        self.assertEqual(
+            ["SRC-001", "SRC-002"],
+            [item["source_row_id"] for item in normalized["source_designs"]],
+        )
+        self.assertIn(
+            "restore-source-design-roster-order",
+            [item["rule"] for item in receipt["repairs"]],
+        )
+
+    def test_transport_normalizer_expands_clause_to_dependency_literal(self) -> None:
+        context = _context(1)
+        boundary = _boundary(context)
+        payload = _design(context, boundary)
+        assertion = payload["source_designs"][0]["assertions"][0]
+        assertion["requirement_code_evidence"][0]["exact_source_fragment"] = (
+            "BSR 1"
+        )
+        assertion["clause_evidence"][0]["exact_source_fragment"] = "action 1"
+        assertion["clause_evidence"][1]["exact_source_fragment"] = "visible"
+        payload["dependency_bindings"] = [
+            {
+                "dependency_id": "DEP-001",
+                "kind": "other",
+                "name": "result dependency",
+                "source_row_ids": ["SRC-001"],
+                "resolution": "source-provided",
+                "target_source_row_ids": ["SRC-001"],
+                "exact_source_fragments": ["result 1"],
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "The source row provides the result dependency.",
+                "semantic_disposition": "bound",
+                "linked_assertion_ids": ["ASSERT-001"],
+                "linked_atom_ids": ["ATOM-001"],
+                "linked_obligation_ids": ["OBL-001"],
+                "mapping_rationale": "The assertion owns the observable result.",
+            }
+        ]
+
+        normalized, receipt = normalize_semantic_design_transport(
+            payload,
+            context=context,
+        )
+
+        evidence = normalized["source_designs"][0]["assertions"][0][
+            "clause_evidence"
+        ]
+        self.assertTrue(
+            any("result 1" in item["exact_source_fragment"] for item in evidence),
+            (evidence, receipt),
+        )
+        self.assertIn(
+            "expand-clause-evidence-to-bound-dependency-fragment",
+            [item["rule"] for item in receipt["repairs"]],
+        )
+
+    def test_transport_normalizer_binds_cross_row_dependency_constraint(self) -> None:
+        context = _context(2)
+        context["source_rows"][0].update(
+            {
+                "in_scope_hint": "no; shared constraint context",
+                "requirement_codes_hint": [],
+            }
+        )
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["source_decisions"][0].update(
+            {
+                "disposition": "context",
+                "requirement_codes": [],
+                "rationale": "Shared source constraint for the owned target row.",
+            }
+        )
+        payload = _design(context, boundary)
+        payload["dependency_bindings"] = [
+            {
+                "dependency_id": "DEP-001",
+                "kind": "other",
+                "name": "shared constraint",
+                "source_row_ids": ["SRC-001"],
+                "resolution": "source-provided",
+                "target_source_row_ids": ["SRC-002"],
+                "exact_source_fragments": ["result 1"],
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "The first row supplies a shared constraint.",
+                "semantic_disposition": "bound",
+                "linked_assertion_ids": ["ASSERT-002"],
+                "linked_atom_ids": ["ATOM-002"],
+                "linked_obligation_ids": ["OBL-002"],
+                "mapping_rationale": "The target assertion applies the constraint.",
+            }
+        ]
+
+        normalized, receipt = normalize_semantic_design_transport(
+            payload,
+            context=context,
+        )
+
+        support = normalized["source_designs"][1]["assertions"][0][
+            "supporting_source_bindings"
+        ]
+        self.assertEqual("SRC-001", support[0]["source_row_id"])
+        self.assertEqual("result 1", support[0]["exact_source_fragment"])
+        self.assertIn(
+            "bind-cross-row-dependency-constraint-evidence",
+            [item["rule"] for item in receipt["repairs"]],
+        )
+
     def test_external_dynamic_dictionary_binding_is_projected_with_owned_rows(self) -> None:
         context = _context(3)
         for index in (1, 2):
@@ -835,6 +1291,76 @@ class SemanticDesignShardingTests(unittest.TestCase):
                 context, boundary, mode="on", max_included_rows=1, max_source_rows=1
             )
 
+    def test_global_constraint_and_targets_form_one_atomic_component(self) -> None:
+        context = _context(3)
+        context["source_rows"][0]["bounded_source_text"] = (
+            "Text fields allow at most 2000 characters."
+        )
+        context["source_rows"][0]["requirement_codes_hint"] = []
+        context["source_rows"][0]["in_scope_hint"] = (
+            "no; document-global constraint context"
+        )
+        dependency = {
+            "kind": "other",
+            "name": "Text length limit",
+            "source_row_ids": ["SRC-001"],
+            "resolution": "source-provided",
+            "target_source_row_ids": ["SRC-002"],
+            "exact_source_fragments": ["at most 2000 characters"],
+        }
+        context["expected_dependencies"] = [copy.deepcopy(dependency)]
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["source_decisions"][0] = {
+            "source_row_id": "SRC-001",
+            "disposition": "context",
+            "requirement_codes": [],
+            "rationale": "The global text limit constrains the target field.",
+        }
+        boundary["dependencies"] = [
+            {
+                "dependency_id": "DEP-001",
+                **copy.deepcopy(dependency),
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "The global constraint applies to SRC-002.",
+            }
+        ]
+
+        plan = build_semantic_shard_plan(
+            context,
+            boundary,
+            mode="on",
+            max_included_rows=1,
+            max_source_rows=2,
+            max_shards=2,
+        )
+        owning_shard = next(
+            shard
+            for shard in plan["shards"]
+            if "SRC-001" in shard["owned_source_row_ids"]
+        )
+        self.assertEqual(
+            ["SRC-001", "SRC-002"],
+            owning_shard["owned_source_row_ids"],
+        )
+        target_context, target_boundary = project_semantic_shard(
+            context, boundary, owning_shard
+        )
+        self.assertEqual(
+            ["SRC-001", "SRC-002"],
+            [row["source_row_id"] for row in target_context["source_rows"]],
+        )
+        self.assertEqual(
+            ["SRC-001"],
+            target_boundary["dependencies"][0]["source_row_ids"],
+        )
+        self.assertEqual(
+            ["SRC-002"],
+            target_boundary["dependencies"][0]["target_source_row_ids"],
+        )
+        self.assertEqual("context", target_boundary["source_decisions"][0]["disposition"])
+
     def test_merge_remaps_colliding_local_ids_and_passes_full_validator(self) -> None:
         context = _context(2)
         boundary = _boundary(context)
@@ -849,10 +1375,19 @@ class SemanticDesignShardingTests(unittest.TestCase):
                 shard_context, shard_boundary, design, require_ready=True
             )
             outputs[str(shard["shard_id"])] = design
-        merged, receipt = merge_semantic_shards(
-            context, boundary, (), plan, outputs
-        )
+        with patch(
+            "test_case_agent.semantic_design_sharding.normalize_semantic_design_transport",
+            wraps=normalize_semantic_design_transport,
+        ) as post_merge_normalize:
+            merged, receipt = merge_semantic_shards(
+                context, boundary, (), plan, outputs
+            )
+        post_merge_normalize.assert_called_once()
         self.assertEqual("verified", receipt["status"])
+        self.assertEqual(
+            "not-needed",
+            receipt["post_merge_normalization"]["status"],
+        )
         self.assertEqual(["ATOM-001", "ATOM-002"], [
             item["assertions"][0]["atom_id"] for item in merged["source_designs"]
         ])
@@ -1042,6 +1577,7 @@ class SemanticDesignShardingTests(unittest.TestCase):
             )
             calls: list[str] = []
             shard_image_flags: list[bool] = []
+            fixture_context_paths: list[Path] = []
 
             def runner(arguments) -> int:
                 args = list(arguments)
@@ -1052,6 +1588,7 @@ class SemanticDesignShardingTests(unittest.TestCase):
                 )
                 calls.append(option("--context").parent.name)
                 shard_image_flags.append("--image" in args)
+                fixture_context_paths.append(option("--fixture-context"))
                 decision = _design(shard_context, shard_boundary)
                 option("--decision-output").write_text(
                     json.dumps(decision), encoding="utf-8"
@@ -1096,6 +1633,7 @@ class SemanticDesignShardingTests(unittest.TestCase):
         self.assertEqual(0, code)
         self.assertEqual(2, len(calls))
         self.assertEqual([False, False], shard_image_flags)
+        self.assertEqual([context_path, context_path], fixture_context_paths)
         self.assertEqual(2, summary["lifecycle"]["runner_attempt_count"])
         self.assertEqual(200, summary["usage"]["input_tokens"])
         self.assertEqual(50, summary["usage"]["output_tokens"])

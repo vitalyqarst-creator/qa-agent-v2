@@ -1766,9 +1766,50 @@ def plan_review_prompt_shards(
             "source reviewer prompt exceeds the one-shot cap but no safe shard split was produced"
         )
     if len(partitions) > max_shards:
-        raise SourceReviewerRunnerError(
-            f"source reviewer requires {len(partitions)} shards, exceeding max_shards={max_shards}"
-        )
+        # The target is a soft latency preference.  A large shared evidence
+        # prefix can make every row exceed that target on its own even though
+        # several complete row groups still fit under the hard prompt cap.
+        # Repack contiguously under the hard cap before declaring the scope
+        # unshardable; source-row siblings and ordered ownership remain intact.
+        hard_partitions: list[tuple[str, ...]] = []
+        current = ()
+        for group in groups:
+            candidate = (*current, *group)
+            if (
+                rendered_size(candidate) <= max_prompt_bytes
+                and len(candidate) <= max_assertions_per_shard
+            ):
+                current = candidate
+                continue
+            if current:
+                hard_partitions.append(current)
+            if (
+                rendered_size(group) > max_prompt_bytes
+                or len(group) > max_assertions_per_shard
+            ):
+                raise SourceReviewerRunnerError(
+                    "one source-row assertion group exceeds the source reviewer "
+                    "hard shard capacity"
+                )
+            current = group
+        if current:
+            hard_partitions.append(current)
+        partitions = hard_partitions
+        if len(partitions) > max_shards:
+            raise SourceReviewerRunnerError(
+                f"source reviewer requires {len(partitions)} hard-cap shards, "
+                f"exceeding max_shards={max_shards}"
+            )
+        if len(partitions) == 1:
+            return (
+                ReviewPromptShard(
+                    shard_id="source-review-shard-001",
+                    assertion_ids=full_ids,
+                    prompt=full_prompt,
+                    prompt_bytes=full_bytes,
+                    schema=receipt_schema(manifest),
+                ),
+            )
 
     result: list[ReviewPromptShard] = []
     for index, assertion_selection in enumerate(partitions, start=1):

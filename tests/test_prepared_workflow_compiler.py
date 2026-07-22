@@ -20,6 +20,7 @@ from test_case_agent.review_cycle.prepared_compiler import (
     _dedicated_exhaustive_dictionary_ids,
     _effective_dictionary_coverage_mode,
     _load_semantic_compiler_projection,
+    _mapped_plan_intent_context,
     _portable_dictionary_evidence_record,
     _resolve_source_first_state_change,
     _unbound_reference_fixture_action_literals,
@@ -106,10 +107,60 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
                 "ОВД ЗЮЗИНО Г. МОСКВЫ",
                 "77",
                 "2",
-                "5" * 64,
             ],
             [item.value for item in requirement.fixture_values],
         )
+
+    def test_portable_fixture_writer_projection_excludes_integrity_metadata(self) -> None:
+        fixture_id = "FX-DADATA-PARTY-ACTIVE-001"
+        contract = (
+            f"- `{fixture_id}`: request_parameters=`{{\"query\":\"7707083893\"}}`; "
+            "expected_response=`{\"exact_components\":{\"address.value\":"
+            "\"г Москва, ул Вавилова, д 19\",\"opf.short\":\"ПАО\","
+            "\"state.status\":\"ACTIVE\"},\"exact_suggestion\":\"ПАО СБЕРБАНК\","
+            "\"minimum_suggestion_count\":1,\"outcome\":\"suggestions-found\"}`; "
+            f"response_sha256=`{'a' * 64}`; status=`verified`; "
+            "runtime_api_call=`prohibited`; product_input=`stored_literals`."
+        )
+
+        context = _mapped_plan_intent_context(
+            {"test_data": fixture_id},
+            {fixture_id: (contract,)},
+        )
+
+        self.assertEqual(1, len(context))
+        projection = context[0]
+        self.assertIn("Запрос: `7707083893`", projection)
+        self.assertIn("Точное предложение: `ПАО СБЕРБАНК`", projection)
+        self.assertIn(
+            "Компонент `address.value`: `г Москва, ул Вавилова, д 19`",
+            projection,
+        )
+        self.assertIn("Компонент `opf.short`: `ПАО`", projection)
+        self.assertNotIn("response_sha256", projection)
+        self.assertNotIn("runtime_api_call", projection)
+        self.assertNotIn("product_input", projection)
+        self.assertNotIn("a" * 64, projection)
+
+    def test_portable_party_contract_compiles_exact_address_component(self) -> None:
+        fixture_id = "FX-DADATA-PARTY-ACTIVE-001"
+        contract = (
+            f"- `{fixture_id}`: request_parameters=`{{\"query\":\"7707083893\"}}`; "
+            "expected_response=`{\"exact_components\":{\"address.value\":"
+            "\"г Москва, ул Вавилова, д 19\",\"state.status\":\"ACTIVE\"},"
+            "\"exact_suggestion\":\"ПАО СБЕРБАНК\"}`; "
+            f"response_sha256=`{'b' * 64}`; status=`verified`; "
+            "runtime_api_call=`prohibited`; product_input=`stored_literals`."
+        )
+
+        requirements = _compile_portable_fixture_requirements(
+            ({"test_data": fixture_id},),
+            {fixture_id: (contract,)},
+        )
+
+        self.assertEqual(1, len(requirements))
+        values = [item.value for item in requirements[0].fixture_values]
+        self.assertIn("г Москва, ул Вавилова, д 19", " ".join(values))
 
     def test_portable_fixture_dictionary_evidence_deduplicates_literals(self) -> None:
         requirement = PreparedDictionaryRequirement(
@@ -204,6 +255,33 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
         self.assertEqual(
             (),
             _unbound_reference_fixture_action_literals(assertion, (requirement,)),
+        )
+
+    def test_reference_fixture_accepts_registered_portable_contract_literals(self) -> None:
+        assertion = SimpleNamespace(
+            exact_source_text="Поле ОПФ автоматически заполняется через DaData",
+            exact_source_fragments=(),
+            clause_evidence_bindings=(),
+            supporting_source_bindings=(),
+            action_clauses=(
+                "Ввести запрос «7707083893» и выбрать «ПАО СБЕРБАНК».",
+            ),
+        )
+        requirement = PreparedDictionaryRequirement(
+            dictionary_id="DICT-OPF",
+            coverage_mode="reference-only",
+            fixture_values=(
+                PreparedDictionaryValue(("DICT-OPF",), "leaf", "ПАО"),
+            ),
+        )
+
+        self.assertEqual(
+            (),
+            _unbound_reference_fixture_action_literals(
+                assertion,
+                (requirement,),
+                registered_fixture_values=("7707083893", "ПАО СБЕРБАНК"),
+            ),
         )
 
     def test_pre_review_reference_fixture_guard_reports_all_conflicts_in_one_batch(self) -> None:
@@ -320,6 +398,59 @@ class PreparedWorkflowCompilerTests(unittest.TestCase):
 
         self.assertTrue(report["passed"])
         self.assertEqual(1, report["checked_assertion_count"])
+        self.assertEqual([], report["conflicts"])
+
+    def test_pre_review_reference_fixture_guard_accepts_named_portable_fixture(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            coverage = root / "coverage.md"
+            plan = root / "plan.md"
+            dictionary = root / "dictionary.md"
+            coverage.write_text(
+                "| obligation_id | linked_atom_id | required_behavior | property_type | obligation_class | source_ref | dictionary_refs | dictionary_coverage |\n"
+                "| --- | --- | --- | --- | --- | --- | --- | --- |\n"
+                "| `OBL-001` | `ATOM-001` | ОПФ автоматически заполняется значением ПАО. | integration-ui | ui-behavior | BSR 1 | `DICT-OPF` | `reference-only` |\n",
+                encoding="utf-8",
+            )
+            plan.write_text(
+                "- `FX-PARTY-001`: request_parameters=`{\"query\":\"7707083893\"}`; expected_response=`{\"exact_suggestion\":\"ПАО СБЕРБАНК\",\"exact_components\":{\"opf.short\":\"ПАО\"}}`; response_sha256=`aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`; status=`verified`; runtime_api_call=`prohibited`; product_input=`stored_literals`.\n\n"
+                "| linked_atoms | status | test_data | input_class |\n"
+                "| --- | --- | --- | --- |\n"
+                "| `ATOM-001` | `covered` | `FX-PARTY-001` | registered-fixture |\n",
+                encoding="utf-8",
+            )
+            dictionary.write_text(
+                "| dictionary_id | active_values |\n"
+                "| --- | --- |\n"
+                "| `DICT-OPF` | `ПАО`; `ООО` |\n",
+                encoding="utf-8",
+            )
+            manifest = {
+                "assertions": [
+                    {
+                        "assertion_id": "ASSERT-001",
+                        "atom_id": "ATOM-001",
+                        "obligation_ids": ["OBL-001"],
+                        "canonical_statement": "После выбора fixture поле ОПФ содержит ПАО.",
+                        "exact_source_text": "ОПФ автоматически заполняется",
+                        "exact_source_fragments": [],
+                        "clause_evidence_bindings": [],
+                        "supporting_source_bindings": [],
+                        "action_clauses": [
+                            "Для fixture FX-PARTY-001 ввести «7707083893» и выбрать «ПАО СБЕРБАНК»."
+                        ],
+                    }
+                ]
+            }
+
+            report = evaluate_reference_fixture_action_adequacy(
+                manifest,
+                coverage_obligation_table=coverage,
+                package_test_design_plan=plan,
+                dictionary_inventory=dictionary,
+            )
+
+        self.assertTrue(report["passed"])
         self.assertEqual([], report["conflicts"])
 
     def test_source_first_compiler_surfaces_reference_fixture_action_conflict(self) -> None:
@@ -3374,6 +3505,24 @@ coverage_gaps:
             compiled.state_change.relation,
         )
 
+    def test_explicit_state_contract_classifies_clear_action_as_reset(self) -> None:
+        self.configure_reset_plan(
+            property_type="clear-current-subblock",
+            include_state_contract=True,
+        )
+
+        result = self.compile()
+        compiled = load_obligations(
+            result.stage_package.parent / "atomic-obligations.json"
+        ).obligations[0]
+
+        self.assertEqual("reset-to-captured-initial", compiled.execution_semantics)
+        self.assertIsNotNone(compiled.state_change)
+        self.assertEqual(
+            "different-from-captured-initial",
+            compiled.state_change.relation,
+        )
+
     def test_blocks_unbound_temporal_initial_state_claim_in_source_first_reset(self) -> None:
         assertions_path, _ = self.enable_source_first_contract()
         assertion = SourceAssertionManifest.from_dict(
@@ -3757,9 +3906,7 @@ coverage_gaps:
                 "Открыть карточку и проверить поле.; Check type: positive",
                 (
                     "По `FX-001` очистить поле и записать evidence.; "
-                    "Check type: negative; "
-                    "Fixture contract: - `FX-001`: portable synthetic source-backed "
-                    "card with the target field present.; Test data: Целевое поле = `Тест`"
+                    "Check type: negative; Test data: Целевое поле = `Тест`"
                 ),
             ],
             [item.test_intent for item in obligations],
@@ -4445,6 +4592,29 @@ coverage_gaps:
             "dictionary-group-locator-not-preserved",
             caught.exception.code,
         )
+
+    def test_full_dictionary_inventory_materialized_in_action_compiles(self) -> None:
+        (self.design / "dictionary-inventory.md").write_text(
+            """| dictionary_id | dictionary_name | active_values |
+| --- | --- | --- |
+| `DICT-001` | `Тип должности` | `Сотрудник`; `Руководитель` |
+""",
+            encoding="utf-8",
+        )
+        (self.design / "package-test-design-plan.md").write_text(
+            """# Package Test Design Plan
+
+| design_item_id | linked_atoms | planned_check | input_class | test_data | single_expected_behavior | planned_tc_or_gap | status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `PLAN-001` | `ATOM-001` | Раскрыть список «Тип должности» и последовательно сверить значения «Сотрудник»; «Руководитель». | `all-active-values` | `Сотрудник`; `Руководитель` | Количество активных значений в списке: 2; точный перечень: «Сотрудник»; «Руководитель»; пропусков и лишних значений нет. | `TC-001` | `covered` |
+| `PLAN-002` | `ATOM-002` | Не создавать негативный кейс. | `none_required` | `none_required` | none_required:blocked | `GAP-001` | `gap` |
+""",
+            encoding="utf-8",
+        )
+
+        result = self.compile()
+
+        self.assertEqual(1, result.dictionary_ref_count)
 
     def test_preserves_source_backed_ui_calibration_without_gap(self) -> None:
         ledger_path = self.design / "atomic-requirements-ledger.md"

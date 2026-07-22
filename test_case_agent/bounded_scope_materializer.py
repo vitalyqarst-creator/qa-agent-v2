@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -117,6 +118,7 @@ def _portable_fixture_contract_lines(
     if not referenced:
         return ()
     contracts: dict[str, str] = {}
+    registered_paths = {str(entry.get("path", "")) for entry in source_entries}
     for entry in source_entries:
         repo_path = str(entry.get("path", ""))
         if not repo_path.casefold().endswith(".verification.json"):
@@ -153,6 +155,68 @@ def _portable_fixture_contract_lines(
             raise BoundedScopeMaterializationError(
                 f"fixture verification lacks a portable exact contract: {fixture_id}"
             )
+        expected_response = copy.deepcopy(dict(expected_response))
+        snapshot_name = verification.get("response_snapshot")
+        if isinstance(snapshot_name, str) and snapshot_name.strip():
+            snapshot_relative = (
+                PurePosixPath(repo_path).parent / snapshot_name
+            ).as_posix()
+            if snapshot_relative in registered_paths:
+                snapshot_path = _repo_path(
+                    repo_root,
+                    snapshot_relative,
+                    label="fixture response source.path",
+                )
+                snapshot_raw = snapshot_path.read_bytes()
+                if hashlib.sha256(snapshot_raw).hexdigest() != response_sha256:
+                    raise BoundedScopeMaterializationError(
+                        f"fixture response hash mismatch: {fixture_id}"
+                    )
+                try:
+                    snapshot = json.loads(snapshot_raw.decode("utf-8"))
+                except (UnicodeError, json.JSONDecodeError) as exc:
+                    raise BoundedScopeMaterializationError(
+                        f"fixture response is unreadable: {fixture_id}"
+                    ) from exc
+                suggestions = (
+                    snapshot.get("suggestions", [])
+                    if isinstance(snapshot, Mapping)
+                    else []
+                )
+                matches = [
+                    item
+                    for item in suggestions
+                    if isinstance(item, Mapping)
+                    and item.get("value")
+                    == expected_response.get("exact_suggestion")
+                    and isinstance(item.get("data"), Mapping)
+                ] if isinstance(suggestions, list) else []
+                if len(matches) != 1:
+                    raise BoundedScopeMaterializationError(
+                        f"fixture response does not uniquely bind exact suggestion: {fixture_id}"
+                    )
+                matched_data = matches[0]["data"]
+                address = matched_data.get("address")
+                address_value = (
+                    str(address.get("value", "")).strip()
+                    if isinstance(address, Mapping)
+                    else ""
+                )
+                if address_value:
+                    exact_components = expected_response.get("exact_components")
+                    if not isinstance(exact_components, Mapping):
+                        exact_components = {}
+                    else:
+                        exact_components = copy.deepcopy(dict(exact_components))
+                    registered_address = str(
+                        exact_components.get("address.value", "")
+                    ).strip()
+                    if registered_address and registered_address != address_value:
+                        raise BoundedScopeMaterializationError(
+                            f"fixture address component conflicts with response: {fixture_id}"
+                        )
+                    exact_components["address.value"] = address_value
+                    expected_response["exact_components"] = exact_components
         request_json = json.dumps(
             request["parameters"],
             ensure_ascii=False,
@@ -1019,18 +1083,20 @@ def materialize_bounded_scope(
                         for atom_id in atoms_by_row.get(str(row_id), ())
                     )
                 )
-                if gap.get("gap_type") in {
+                ambiguous_atom_ids = [
+                    atom_id
+                    for atom_id in row_atom_ids
+                    if assertion_by_atom.get(atom_id, {}).get(
+                        "semantic_disposition"
+                    )
+                    == "ambiguous"
+                ]
+                if ambiguous_atom_ids:
+                    atom_ids = ambiguous_atom_ids
+                elif gap.get("gap_type") in {
                     "missing-observation-interface",
                     "missing-source-definition",
                 }:
-                    ambiguous_atom_ids = [
-                        atom_id
-                        for atom_id in row_atom_ids
-                        if assertion_by_atom.get(atom_id, {}).get(
-                            "semantic_disposition"
-                        )
-                        == "ambiguous"
-                    ]
                     na_atom_ids = [
                         atom_id
                         for atom_id in row_atom_ids
@@ -1039,7 +1105,7 @@ def materialize_bounded_scope(
                         )
                         == "not-applicable"
                     ]
-                    atom_ids = ambiguous_atom_ids or na_atom_ids or row_atom_ids
+                    atom_ids = na_atom_ids or row_atom_ids
                 else:
                     atom_ids = row_atom_ids
             if not atom_ids:

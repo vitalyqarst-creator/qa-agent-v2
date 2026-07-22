@@ -26,6 +26,31 @@
       "manifest_binding": "supporting-material"
     },
     {
+      "path": "work/vendor-references/dadata-reference.md",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.response.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
+      "path": "work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.verification.json",
+      "role": "external-vendor-reference",
+      "manifest_binding": "supporting-material"
+    },
+    {
       "path": "mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg",
       "role": "mockup",
       "manifest_binding": "mockup"
@@ -45,10 +70,15 @@
     "fts/AutoFin/AGENT-NOTES.md": "5713d2d8d49d34354ae4308701e0ea2162ce41ac21f555ba098d1152a92087bf",
     "fts/AutoFin/mockups/PostFinal-v2/Рисунок 3  Анкета клиента. Отображение блока Сведения о занятости, если выбрано значение Госуслуги.jpg": "0529de9c3d0d20e672453d894a517a79a8e1bd7c29ffa06c703463d2d8d774d5",
     "fts/AutoFin/mockups/PostFinal-v2/Рисунок 5 Анкета Клиента. Максимальное состояние.jpg": "e3a20500405da5dc23fac1df2e8ee2ec77876723832cde8b688facb32de93622",
-    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-context-template.json": "e7df1da61a98ec7286458cba83a286f0ac0e000035058b5f564a588b08b2a0cf",
-    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json": "41ac781951d7b95ea95d4e9e584850caa7adc63bdf7785496b350c4c9f1ed792",
-    "evals/lean-production-benchmark/h70/bounded-evidence-docx.json": "fbbffd2d4f52f86cd4953d1b98354d4d1651dd77bf7af482aa6b52808b6e3980",
-    "evals/lean-production-benchmark/h70/bounded-evidence-pdf.json": "eb4998f6d675ecb160e086cd69b763698615cf59683991cac9bd2b09cca252d6",
+    "fts/AutoFin/work/vendor-references/dadata-reference.md": "77f9f57f33860ea059a7b828d39436f19c3944b40fc3dbdf8efd5bfb848a27df",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.response.json": "ea5fe50291bb48b1114c6560ac6ec4196c5f79f99e9f609da594b4847dd0d9b0",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-ACTIVE-001/FX-DADATA-PARTY-ACTIVE-001.verification.json": "8fb84b52c24565c9314358ab912ec5861adf68f4daeb9d1f0b5dbec7629027ab",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.response.json": "24f9823c19ddefcdd76b132cda96a4543212d5427fccebc42507d35122d3b3e4",
+    "fts/AutoFin/work/vendor-references/dadata-fixtures/FX-DADATA-PARTY-LIQUIDATED-001/FX-DADATA-PARTY-LIQUIDATED-001.verification.json": "da18ff6b32b603486e3b2f22fdc941fc4afbcff61512c331aa66553437cbd567",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-context-template.json": "d6e95a6ec5b031d3a2a7188272fdc5ac95a95a496d7b12cbe73b6e283c0ba2d1",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-xhtml-boundary.json": "88db0e19ca55a2a81392a6ebe6569355e527446db170cdbade93d0b7dfd77a7b",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-docx.json": "994ea4d42bd82518066f9fd7abb406bcda7da0482d42427d0258f7253af4c35c",
+    "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/bounded-evidence-pdf.json": "48d567b98dbc6ca6660d1b6f89dcc0f44d7b8442e121471b01cfc64035eb850d",
     "evals/full-production-benchmark/configs/postfinal-v2-employment-main-work/source-row-extraction-spec.json": "8491b8ef22bc9b87404e64df937a3db1cdd1c107c519478cafe36f8d5ccced77"
   },
   "source_preparation": {

@@ -12,6 +12,7 @@ from test_case_agent.semantic_design_bridge import (
     SEMANTIC_DESIGN_CONTRACT,
     SEMANTIC_DESIGN_VERSION,
     canonical_payload_sha256,
+    normalize_semantic_design_transport,
     prepared_context_sha256,
     semantic_source_signal_registry,
     validate_bridge_boundary,
@@ -244,7 +245,14 @@ def build_semantic_shard_plan(
     for dependency in boundary.get("dependencies", []):
         if not isinstance(dependency, Mapping):
             continue
-        if dependency.get("kind") == "field" or dependency.get("resolution") == "approved-alias":
+        if (
+            dependency.get("kind") == "field"
+            or dependency.get("resolution") == "approved-alias"
+            or (
+                dependency.get("resolution") == "source-provided"
+                and dependency.get("kind") != "dictionary"
+            )
+        ):
             dsu.union(
                 [
                     *map(str, dependency.get("source_row_ids", [])),
@@ -665,6 +673,15 @@ def project_semantic_shard(
     projected = copy.deepcopy(dict(context))
     projected_rows = [copy.deepcopy(rows_by_id[row_id]) for row_id in projection_ids]
     projected["source_rows"] = projected_rows
+    projected["semantic_shard_contract"] = {
+        "version": 1,
+        "shard_id": str(shard.get("shard_id", "")),
+        "completeness_scope": "all-owned-source-rows",
+        "owned_source_row_ids": owned_order,
+        "read_only_context_source_row_ids": support_ids,
+        "absent_rows_owner": "other-semantic-shards",
+        "merge_mode": "deterministic-full-scope-merge",
+    }
     projected["source_table_column_semantics"] = semantics
     projected["approved_clarifications"] = _project_clarifications(context, boundary, owned)
     projected_inline = _project_bounded_evidence_inline(context, projected_rows)
@@ -1592,6 +1609,12 @@ def merge_semantic_shards(
         "requiredness_oracles": requiredness_oracles,
         "applicability": applicability,
     }
+    merged, post_merge_normalization = normalize_semantic_design_transport(
+        merged,
+        context=context,
+        boundary=boundary,
+        fixture_context=context,
+    )
     receipt = validate_semantic_design_binding(
         context,
         boundary,
@@ -1606,6 +1629,7 @@ def merge_semantic_shards(
         "plan_sha256": plan["plan_sha256"],
         "semantic_design_sha256": canonical_payload_sha256(merged),
         "shard_count": len(expected_ids),
+        "post_merge_normalization": post_merge_normalization,
         "validation": receipt,
     }
 
