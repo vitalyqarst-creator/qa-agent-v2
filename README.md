@@ -78,6 +78,13 @@ all_sections = load_sections(source)
 
 ## Review-cycle runners
 
+Для уже атомаризированного bounded scope доступен короткий shadow-маршрут
+`lean-v2`: простые свойства полей превращаются в test intents детерминированно,
+writer вызывается только для сложных карточек, после чего один независимый
+reviewer проверяет весь shadow draft. Маршрут не читает benchmark/history и не
+перезаписывает canonical до отдельной интеграции с compiler-v3 promotion boundary. Контракт и команды:
+[references/agent/lean-v2-iteration.md](references/agent/lean-v2-iteration.md).
+
 Каноническая точка запуска — `scripts/review_cycle_backend_dispatcher.py`. Режим `--backend auto` сначала проверяет локальный контракт `codex exec --help` и по умолчанию выбирает stage-per-process backend `scripts/codex_exec_review_cycle_runner.py`. Тихий откат запрещён: SDK разрешён только явно через `--backend sdk` либо через одновременно заданные `--backend auto --allow-sdk-fallback`. `scripts/codex_review_cycle_runner.py` сохраняется как диагностический fallback для v1 SDK/app-server contract, а не как default route. `--run-profile production` является рабочим default и сохраняет все quality gates без расширенного сканирования benchmark evidence; `--run-profile benchmark` требует `--performance-output` и добавляет детальную атрибуцию событий, context и времени.
 
 Dispatcher принимает JSON-конфигурацию v1 с `exec_runner_args`, `sdk_runner_args` и `cycle_dir`, сам выполняет capability probe и добавляет проверенный CLI contract в exec runner. Каждый live-запуск требует нового cycle directory без runner-owned outputs. Writer interruption считается `completed-with-progress` только когда draft существует и проходит deterministic gates; частичный reviewer output никогда не принимается. После остальных прерываний создаётся новый immutable cycle, а prepared package перекомпилируется под его новый attempt — replay старого draft или resume старой LLM-сессии не выполняется. Повторное использование того же package output через `compile_prepared_stage_package.py --reuse-if-current` допускается только при полном совпадении v7 `input_fingerprint`; изменившийся source, compiler evidence, obligation contract или attempt binding требует нового immutable package id. Если help/auth/sandbox contract не подтверждён, `auto` останавливается как `blocked-exec-runtime`; final artifact не создаётся. Полные параметры доступны через `python scripts/review_cycle_backend_dispatcher.py --help` и `python scripts/codex_exec_review_cycle_runner.py --help`.

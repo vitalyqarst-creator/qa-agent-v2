@@ -264,6 +264,15 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["old and new DOCX/XHTML/PDF inputs validate", "unchanged case hashes remain byte-identical", "update review and full-suite gates pass before publication"]
     },
     {
+      "id": "iteration.lean_v2",
+      "task_type": "Run a deterministic-first writer/reviewer iteration from an already localized atomic source packet.",
+      "skill_chain": ["ft-test-case-iteration"],
+      "instruction_scenarios": [
+        {"skill": "ft-test-case-iteration", "scenario": "iteration.lean_v2"}
+      ],
+      "verification_gates": ["DOCX/XHTML hashes and source packet validate", "simple cards materialize deterministically", "writer receives only complex cards", "production gate and independent reviewer pass", "canonical remains unchanged"]
+    },
+    {
       "id": "iteration.full_loop",
       "task_type": "Run writer-reviewer iteration until sign-off or unresolved findings are explicit.",
       "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
@@ -323,6 +332,12 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "expected_route_id": "iteration.incremental_update",
       "expected_skill_chain": ["ft-test-case-iteration"],
       "expected_instruction_scenarios": ["iteration.incremental_update"]
+    },
+    {
+      "prompt": "Запусти короткую deterministic-first итерацию по готовому atomic source packet без benchmark и старых тест-кейсов.",
+      "expected_route_id": "iteration.lean_v2",
+      "expected_skill_chain": ["ft-test-case-iteration"],
+      "expected_instruction_scenarios": ["iteration.lean_v2"]
     },
     {
       "prompt": "Проведи writer-reviewer iteration до sign-off.",

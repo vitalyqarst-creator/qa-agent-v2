@@ -42,6 +42,7 @@
     "scripts/review_cycle_backend_dispatcher.py",
     "scripts/run_cycle.ps1",
     "scripts/run_incremental_update_iteration.py",
+    "scripts/run_lean_v2_iteration.py",
     "scripts/run_lean_production_iteration.py",
     "scripts/run_overnight_controller.py",
     "scripts/run_standard_production_iteration.py",
@@ -74,6 +75,7 @@
     "scripts/verify_dadata_negative_fixture.py",
     "scripts/verify_dadata_positive_fixture.py",
     "scripts/validate_source_model_adequacy.py",
+    "scripts/run_lean_v2_iteration.py",
     "skills/ft-test-case-iteration/SKILL.md",
     "references/agent/instruction-loading-manifest.md"
   ],

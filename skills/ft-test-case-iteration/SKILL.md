@@ -64,6 +64,20 @@ Do not load that reference for a normal `full_loop`, and do not send the entire
 old suite to the writer. Missing XHTML for the new version stops only that
 scope as `blocked-input`.
 
+## Conditional lean-v2 mode
+
+For an already localized, hash-bound scope that has an atomic source packet,
+select `mode: lean_v2` and load scenario `iteration.lean_v2`. Use
+`scripts/run_lean_v2_iteration.py` and the contract in
+[lean-v2-iteration.md](../../references/agent/lean-v2-iteration.md). This route
+materializes simple field-property cases deterministically, calls one writer only
+for `complex` cards, then starts one independent reviewer. Do not load the
+legacy full-loop or bounded-production workflow into this scenario, do not pass
+old test cases to writer, and do not treat source-packet preparation as part of
+the iteration. Output is shadow-only until this route is integrated with the
+existing compiler-v3 and source-review promotion boundary; it must not modify a
+canonical test-case file directly.
+
 `ft-test-case-iteration` prepares and validates the cycle inputs, then uses `scripts/review_cycle_backend_dispatcher.py --backend auto` to select verified Codex exec and start writer and reviewer in separate processes and sessions. The SDK runner is an explicit v1 fallback, never a silent default.
 
 The source of truth for active lifecycle state is:
@@ -217,6 +231,7 @@ When the complete draft is source-correct and the sole blocker is a proven runne
 - Lean production workflow: [../../references/agent/lean-production-workflow.md](../../references/agent/lean-production-workflow.md)
 - Full-process timing observation: [../../references/agent/full-process-timing-observation.md](../../references/agent/full-process-timing-observation.md)
 - Incremental FT-version update: [../../references/agent/incremental-update-iteration.md](../../references/agent/incremental-update-iteration.md)
+- Deterministic-first lean-v2 iteration: [../../references/agent/lean-v2-iteration.md](../../references/agent/lean-v2-iteration.md)
 - Durable overnight queue: [../../references/agent/overnight-controller-format.md](../../references/agent/overnight-controller-format.md)
 - Skill boundaries: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
 

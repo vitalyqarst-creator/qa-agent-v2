@@ -27,6 +27,7 @@ AGENT_LAYER_MODULES = [
     "tests.test_instruction_context_resolver",
     "tests.test_iteration_contracts",
     "tests.test_lean_production",
+    "tests.test_lean_v2_iteration",
     "tests.test_overnight_controller",
     "tests.test_incremental_update",
     "tests.test_probe_environment",
