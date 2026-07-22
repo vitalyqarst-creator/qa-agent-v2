@@ -51,6 +51,15 @@ def parser() -> argparse.ArgumentParser:
         ),
     )
     result.add_argument("--output", type=Path)
+    result.add_argument(
+        "--normalized-output",
+        type=Path,
+        help=(
+            "Write the deterministic normalized design to a fresh path, but only "
+            "when strict validation passes. This reuses a saved model result "
+            "without another model call."
+        ),
+    )
     result.add_argument("--require-ready", action="store_true")
     return result
 
@@ -130,6 +139,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             raise FileExistsError(f"diagnostic output must be fresh: {output}")
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(rendered, encoding="utf-8")
+    if args.normalized_output is not None and report["status"] == "passed":
+        normalized_output = _resolve(root, args.normalized_output)
+        if normalized_output.exists():
+            raise FileExistsError(
+                f"normalized output must be fresh: {normalized_output}"
+            )
+        normalized_output.parent.mkdir(parents=True, exist_ok=True)
+        normalized_output.write_text(
+            json.dumps(normalized, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     print(rendered, end="")
     return 0 if report["status"] == "passed" else 2
 

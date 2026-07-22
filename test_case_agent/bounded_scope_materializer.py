@@ -98,6 +98,29 @@ def _sha256(path: Path) -> str:
 
 
 _FIXTURE_TOKEN = re.compile(r"\b(?:FX|FIX)-[A-Za-z0-9_.-]+\b")
+_DIRECT_CALIBRATION_TARGET = re.compile(
+    r"(?:TC-[A-Za-z0-9_.-]+|candidate:[A-Za-z0-9][A-Za-z0-9_.-]*)"
+)
+
+
+def _is_explicit_direct_calibration_candidate(
+    obligation: Mapping[str, Any],
+) -> bool:
+    """Recognize the typed direct-candidate contract without trusting notes."""
+
+    return (
+        str(obligation.get("obligation_class", "")).strip().casefold()
+        == "candidate-ui-calibration"
+        and str(obligation.get("oracle_source", "")).strip().casefold()
+        == "not_found"
+        and obligation.get("scope_obligation_ids") == []
+        and _DIRECT_CALIBRATION_TARGET.fullmatch(
+            str(obligation.get("planned_tc_id", "")).strip()
+        )
+        is not None
+        and bool(str(obligation.get("single_expected_behavior", "")).strip())
+        and bool(str(obligation.get("test_data", "")).strip())
+    )
 
 
 def _portable_fixture_contract_lines(
@@ -1055,13 +1078,12 @@ def materialize_bounded_scope(
 
         # A single source restriction may require multiple independent boundary
         # candidates (for example N-1 and N+1) while the source-signal registry
-        # owns only one generic negative-oracle slot. Preserve explicit semantic
-        # candidate ownership for those additional obligations as well.
+        # owns only one generic negative-oracle slot. Preserve the explicit typed
+        # candidate contract; a prose review note alone is not authoritative.
         candidate_obligation_ids.update(
             str(obligation["obligation_id"])
             for obligation in obligations
-            if "candidate-ui-calibration"
-            in str(obligation.get("review_notes", "")).casefold()
+            if _is_explicit_direct_calibration_candidate(obligation)
         )
 
         for gap_id, gap in boundary_gap_by_id.items():
@@ -2143,7 +2165,10 @@ def materialize_semantic_design_bridge(
     owner_token = _publication_owner_token(publication_owner_token)
     validate_bridge_boundary(context, scope_boundary_decision)
     normalized_semantic_design, normalization_receipt = (
-        normalize_semantic_design_source_property_transport(semantic_design)
+        normalize_semantic_design_source_property_transport(
+            semantic_design,
+            context=context,
+        )
     )
     semantic_design = normalized_semantic_design
     receipt = {

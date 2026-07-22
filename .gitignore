@@ -1,4 +1,7 @@
 .venv/
+.env
+.env.*
+!.env.example
 node_modules/
 .codex-temp/
 __pycache__/
@@ -64,6 +67,8 @@ fts/
 fts/*
 !fts/AutoFin/
 !fts/AutoFin/**
+# Scope bindings expose local FT topology and remain qualification-only.
+fts/AutoFin/scope-registry.json
 # AutoFin source documents and UI mockups are local qualification inputs.
 # Benchmarks bind them by hashes; never publish the original files.
 fts/AutoFin/source/

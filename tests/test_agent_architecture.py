@@ -95,8 +95,8 @@ class AgentArchitectureTests(unittest.TestCase):
         content = (SKILLS_DIR / "README.md").read_text(encoding="utf-8")
         self.assertIn("script-first workflow", content)
         self.assertIn("audit_agent_architecture.py", content)
-        self.assertIn("scripts/review_cycle_backend_dispatcher.py", content)
-        self.assertIn("SDK используется только как явно выбранный fallback", content)
+        self.assertIn("ft-agent run", content)
+        self.assertIn("qualification/development", content)
         self.assertIn("session-based-review-cycle-format.md", content)
         self.assertIn("codex-sdk-orchestration-format.md", content)
 
@@ -181,9 +181,10 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("`structure_format_final`", reviewer)
         self.assertIn("`semantic_regression`", reviewer)
         self.assertIn("`review_mode`", writer)
-        self.assertIn("session-based writer/reviewer cycle", iteration)
-        self.assertIn("structure preflight", iteration)
-        self.assertIn("semantic review", iteration)
+        self.assertIn("ft-agent run", iteration)
+        self.assertIn("ровно одному независимому reviewer", iteration)
+        self.assertIn("accepted-with-calibration-pending", iteration)
+        self.assertNotIn("review_cycle_backend_dispatcher.py", iteration)
 
     def test_ft_process_skills_describe_pdf_structure_cross_check(self) -> None:
         locator = (SKILLS_DIR / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")
@@ -271,7 +272,7 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("source-row-registry-mismatch", source_contract)
         self.assertIn("legacy-manifest-requires-rematerialization", source_contract)
         self.assertIn("legacy-review-receipt-requires-rereview", source_contract)
-        self.assertIn("compiler contract v3", iteration)
+        self.assertIn("compiler-v3 obligations", iteration)
         self.assertIn("A marker without a parseable manifest/receipt", prepared)
         self.assertIn("`bounded-source-first-assertions-v4`", source_contract)
         self.assertIn("`SOURCE-ASSERTIONS-V4`", source_contract)
@@ -302,7 +303,7 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("`package_version`: currently `9`", prepared)
         self.assertIn("`release_status`", prepared)
         self.assertIn("blocked-execution-dependencies", prepared)
-        self.assertIn("ready subset", iteration)
+        self.assertIn("accepted-with-calibration-pending", iteration)
         self.assertIn("write-ahead recovery journal", controlled_promotion)
         self.assertIn("PROMO-RECOVERY-AMBIGUOUS", controlled_promotion)
         self.assertIn("atomic directory renames", controlled_promotion)
@@ -372,8 +373,8 @@ class AgentArchitectureTests(unittest.TestCase):
 
         self.assertIn("Quality feedback loop and eval candidates", index)
         self.assertIn("references/agent/quality-feedback-loop.md", index)
-        self.assertIn("../../references/agent/quality-feedback-loop.md", iteration)
-        self.assertIn("evals/candidates/YYYY-MM-DD-<failure-class>-<short-scope>.md", iteration)
+        self.assertNotIn("quality-feedback-loop.md", iteration)
+        self.assertNotIn("evals/candidates/", iteration)
         self.assertIn("../references/agent/quality-feedback-loop.md", skills_index)
         self.assertTrue(candidate_readme.exists())
 

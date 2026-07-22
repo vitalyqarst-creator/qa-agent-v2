@@ -45,6 +45,16 @@ class AgentAuditScriptTests(unittest.TestCase):
         self.assertIn("skills_count", payload["summary"])
         finding_ids = {item["id"] for item in payload["findings"]}
         self.assertNotIn("codex-exec-backend-not-default", finding_ids)
+        budget_scenarios = {
+            item["scenario"] for item in payload["instruction_budgets"]
+        }
+        self.assertTrue(
+            {
+                "iteration.incremental_update",
+                "iteration.lean_v2",
+                "iteration.deterministic_production",
+            }.issubset(budget_scenarios)
+        )
 
     def test_script_supports_text_output(self) -> None:
         result = self.run_script("--text")

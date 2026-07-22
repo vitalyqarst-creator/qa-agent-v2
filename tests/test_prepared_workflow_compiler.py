@@ -17,6 +17,7 @@ from test_case_agent.review_cycle.prepared_compiler import (
     _expected_source_assertion_rows,
     _compile_dictionary_requirement,
     _compile_portable_fixture_requirements,
+    _canonical_planned_test_case_id,
     _dedicated_exhaustive_dictionary_ids,
     _effective_dictionary_coverage_mode,
     _load_semantic_compiler_projection,
@@ -79,6 +80,41 @@ from scripts.compile_prepared_stage_package import main as compile_cli_main
 
 
 class PreparedWorkflowCompilerTests(unittest.TestCase):
+    def test_direct_calibration_candidate_requires_hash_bound_typed_owner(self) -> None:
+        row = {
+            "obligation_id": "OBL-FIELD-INVALID",
+            "obligation_class": "candidate-ui-calibration",
+            "planned_tc_or_gap": "candidate:FIELD-INVALID",
+            "status": "covered",
+            "scope_obligation_ids": "",
+            "calibration_status": "ui-calibration-required",
+            "review_notes": "ordinary prose is not authority",
+        }
+
+        self.assertEqual(
+            "TC-CAL-FIELD-INVALID",
+            _canonical_planned_test_case_id(
+                row,
+                direct_candidate_obligation_ids=frozenset(
+                    {"OBL-FIELD-INVALID"}
+                ),
+            ),
+        )
+        self.assertEqual("", _canonical_planned_test_case_id(row))
+
+        notes_only = dict(row)
+        notes_only["obligation_class"] = "format-check"
+        notes_only["review_notes"] = "candidate-ui-calibration"
+        self.assertEqual(
+            "",
+            _canonical_planned_test_case_id(
+                notes_only,
+                direct_candidate_obligation_ids=frozenset(
+                    {"OBL-FIELD-INVALID"}
+                ),
+            ),
+        )
+
     def test_verified_portable_fms_contract_compiles_to_reference_fixture(self) -> None:
         fixture_id = "FX-DADATA-FMS-POS-001"
         contract = (

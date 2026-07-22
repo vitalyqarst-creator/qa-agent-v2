@@ -34,12 +34,13 @@ class IterationLifecycleFormatTests(unittest.TestCase):
         ):
             self.assertIn(token, content)
 
-    def test_iteration_skill_links_to_session_based_lifecycle_reference(self) -> None:
+    def test_production_iteration_excludes_session_lifecycle_reference(self) -> None:
         iteration = (ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
         handoff = (ROOT_DIR / "references" / "agent" / "stage-handoff-model.md").read_text(encoding="utf-8")
         contracts = (ROOT_DIR / "references" / "agent" / "instruction-contract-index.md").read_text(encoding="utf-8")
 
-        self.assertIn("session-based-review-cycle-format.md", iteration)
+        self.assertNotIn("session-based-review-cycle-format.md", iteration)
+        self.assertIn("session/cycle orchestration", iteration)
         self.assertIn("session-based-review-cycle-format.md", handoff)
         self.assertIn("Writer/reviewer cycle lifecycle", contracts)
         self.assertIn("session-based-review-cycle-format.md", contracts)

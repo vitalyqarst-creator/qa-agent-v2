@@ -66,6 +66,21 @@ class ProductionTcGateTests(unittest.TestCase):
             result.as_dict()["validator"],
         )
 
+    def test_unbalanced_russian_quotes_in_title_are_blocked(self) -> None:
+        finding_ids = self._finding_ids(
+            self._case(
+                metadata=(
+                    "**Название:** Ограничение «BSR 182. Только 10 символов\n"
+                    "**Тип:** позитивный\n"
+                    "**Приоритет:** средний\n"
+                    "**package_id:** applications-menu-search-postfinal-v2-test\n"
+                    "**Трассировка:** OBL-001; ATOM-001; SRC-001; BSR 182"
+                )
+            )
+        )
+
+        self.assertIn("production-unbalanced-title-quotes", finding_ids)
+
     def test_exact_no_setup_sentinel_with_bullet_punctuation_passes(self) -> None:
         result = validate_production_tc_content(
             self._case(preconditions="— Не требуются.")

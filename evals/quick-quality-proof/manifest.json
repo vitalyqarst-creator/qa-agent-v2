@@ -1,0 +1,384 @@
+{
+  "schema_version": 2,
+  "proof_id": "quick-qualification-quality-v1",
+  "description": "Быстрая офлайн-проверка контрактов source-qualified shadow-маршрута и безопасности подготовки promotion basis; accepted в replay с предвычисленным ответом доказывает только контракт, не является свидетельством live reviewer, не доказывает качество live-моделей и не публикует canonical.",
+  "target_duration_seconds": 20,
+  "hard_duration_ceiling_seconds": 30,
+  "checks": [
+    {
+      "id": "QP-001",
+      "risk": "source-candidate-ownership",
+      "nodeid": "tests/test_source_row_baseline.py::SourceRowBaselineTests::test_deterministic_candidates_cover_nested_structures_without_double_counting"
+    },
+    {
+      "id": "QP-002",
+      "risk": "scope-overlap",
+      "nodeid": "tests/test_source_row_baseline.py::SourceRowBaselineTests::test_overlapping_regions_fail_closed"
+    },
+    {
+      "id": "QP-003",
+      "risk": "row-wide-requirement-code",
+      "nodeid": "tests/test_source_assertions.py::SourceAssertionManifestTests::test_requirement_codes_must_come_from_exact_bound_rows"
+    },
+    {
+      "id": "QP-004",
+      "risk": "missing-action-oracle",
+      "nodeid": "tests/test_source_assertions.py::SourceAssertionManifestTests::test_testable_assertion_requires_action_oracle_and_obligation"
+    },
+    {
+      "id": "QP-005",
+      "risk": "accepted-review-warning",
+      "nodeid": "tests/test_source_assertions.py::SourceAssertionManifestTests::test_accepted_receipt_rejects_any_incorrect_dimension"
+    },
+    {
+      "id": "QP-006",
+      "risk": "state-cleanup-oracle",
+      "nodeid": "tests/test_prepared_obligation_gate.py::PreparedObligationGateTests::test_cleared_state_can_explain_that_previous_values_are_not_displayed"
+    },
+    {
+      "id": "QP-007",
+      "risk": "dictionary-coverage",
+      "nodeid": "tests/test_prepared_obligation_gate.py::PreparedObligationGateTests::test_dictionary_ref_is_required_and_grouped_union_passes"
+    },
+    {
+      "id": "QP-008",
+      "risk": "duplicate-obligation",
+      "nodeid": "tests/test_prepared_obligation_gate.py::StrictPreparedObligationGateTests::test_duplicate_obligation_across_test_cases_fails"
+    },
+    {
+      "id": "QP-009",
+      "risk": "action-oriented-case",
+      "nodeid": "tests/test_production_tc_gate.py::ProductionTcGateTests::test_good_action_oriented_runtime_case_passes"
+    },
+    {
+      "id": "QP-010",
+      "risk": "runtime-dadata-discovery",
+      "nodeid": "tests/test_production_tc_gate.py::ProductionTcGateTests::test_runtime_dadata_discovery_is_blocked"
+    },
+    {
+      "id": "QP-011",
+      "risk": "calibration-contract",
+      "nodeid": "tests/test_production_tc_gate.py::ProductionTcGateTests::test_calibration_candidate_requires_question_and_concrete_value"
+    },
+    {
+      "id": "QP-012",
+      "risk": "negative-oracle-structure",
+      "nodeid": "tests/test_production_tc_gate.py::ProductionTcGateTests::test_optionality_structured_oracle_rejects_adversarial_variants"
+    },
+    {
+      "id": "QP-013",
+      "risk": "stable-case-identity",
+      "nodeid": "tests/test_case_identity.py::StableCaseIdentityTests::test_reorder_does_not_change_ids"
+    },
+    {
+      "id": "QP-014",
+      "risk": "sibling-property-loss",
+      "nodeid": "tests/test_coverage_graph.py::CoverageGraphTests::test_same_row_sibling_properties_are_retained"
+    },
+    {
+      "id": "QP-015",
+      "risk": "candidate-execution-contract",
+      "nodeid": "tests/test_coverage_graph.py::CoverageGraphTests::test_candidate_requires_so_trigger_fixture_and_question"
+    },
+    {
+      "id": "QP-016",
+      "risk": "foreign-row-requirement-code",
+      "nodeid": "tests/test_coverage_graph.py::CoverageGraphTests::test_foreign_row_wide_requirement_code_is_rejected"
+    },
+    {
+      "id": "QP-017",
+      "risk": "concrete-deterministic-design",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_positive_input_is_deterministic_and_concrete"
+    },
+    {
+      "id": "QP-018",
+      "risk": "unknown-property-disposition",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_unknown_property_is_explicit_writer_card"
+    },
+    {
+      "id": "QP-019",
+      "risk": "fixture-placeholder",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_missing_fixture_never_becomes_placeholder"
+    },
+    {
+      "id": "QP-020",
+      "risk": "dictionary-fixture-completeness",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_dictionary_owns_complete_fixture_set"
+    },
+    {
+      "id": "QP-021",
+      "risk": "requiredness-trigger",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_requiredness_requires_explicit_trigger"
+    },
+    {
+      "id": "QP-022",
+      "risk": "conditional-precondition",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_conditional_case_requires_typed_precondition"
+    },
+    {
+      "id": "QP-023",
+      "risk": "calibration-suite-retention",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_calibration_candidate_stays_in_same_suite_with_markers"
+    },
+    {
+      "id": "QP-024",
+      "risk": "state-change-cleanup",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_state_change_never_gets_default_no_cleanup_case"
+    },
+    {
+      "id": "QP-025",
+      "risk": "rendered-production-gate",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_rendered_simple_case_passes_production_gate"
+    },
+    {
+      "id": "QP-026",
+      "risk": "calibration-question",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_calibration_render_fails_without_question"
+    },
+    {
+      "id": "QP-027",
+      "risk": "bounded-writer-input",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_writer_receives_only_complex_cards_and_runner_owned_contract"
+    },
+    {
+      "id": "QP-028",
+      "risk": "runner-owned-oracle-lifecycle",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_writer_cannot_change_oracle_ids_or_lifecycle"
+    },
+    {
+      "id": "QP-029",
+      "risk": "writer-contract-injection",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_writer_cannot_inject_unregistered_fixture_or_action_identifier"
+    },
+    {
+      "id": "QP-030",
+      "risk": "deterministic-writer-merge",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_runner_merges_writer_case_with_exact_oracle_and_cleanup"
+    },
+    {
+      "id": "QP-031",
+      "risk": "suite-stable-id-drift",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_suite_gate_rejects_stable_id_drift"
+    },
+    {
+      "id": "QP-032",
+      "risk": "compact-reviewer-projection",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_reviewer_request_is_compact_source_first_projection"
+    },
+    {
+      "id": "QP-033",
+      "risk": "accepted-review-warning",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_accepted_review_with_warning_is_rejected"
+    },
+    {
+      "id": "QP-034",
+      "risk": "reviewer-finding-binding",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_reviewer_finding_must_bind_exact_case"
+    },
+    {
+      "id": "QP-035",
+      "risk": "clean-review-acceptance",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_clean_review_is_accepted"
+    },
+    {
+      "id": "QP-036",
+      "risk": "coverage-contract-binding",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_accepted_contract_produces_deterministic_binding"
+    },
+    {
+      "id": "QP-037",
+      "risk": "source-review-staleness",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_rejects_nonaccepted_and_stale_review_receipts"
+    },
+    {
+      "id": "QP-038",
+      "risk": "coverage-scope-digest",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_rejects_scope_and_explicit_digest_mismatches"
+    },
+    {
+      "id": "QP-039",
+      "risk": "coverage-obligation-bijection",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_rejects_missing_extra_and_wrong_atom_obligations"
+    },
+    {
+      "id": "QP-040",
+      "risk": "prepared-package-integrity",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_rejects_invalid_package_digest_before_binding"
+    },
+    {
+      "id": "QP-041",
+      "risk": "source-hash-registry",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_expected_source_hash_registry_must_match_exactly"
+    },
+    {
+      "id": "QP-042",
+      "risk": "source-manifest-validation",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_repo_root_uses_existing_manifest_file_validator"
+    },
+    {
+      "id": "QP-043",
+      "risk": "source-qualified-offline-contract-replay",
+      "nodeid": "tests/test_source_qualified_run.py::SourceQualifiedRunTests::test_offline_run_is_source_qualified_and_preserves_canonical"
+    },
+    {
+      "id": "QP-044",
+      "risk": "selected-scope-independence",
+      "nodeid": "tests/test_scope_registry.py::ScopeRegistryTests::test_selected_scope_resolves_without_unrelated_missing_files"
+    },
+    {
+      "id": "QP-045",
+      "risk": "exact-source-bucket-role-hash",
+      "nodeid": "tests/test_scope_compiler.py::ScopeCompilerTests::test_manifest_rejects_wrong_bucket_role_and_current_hash"
+    },
+    {
+      "id": "QP-046",
+      "risk": "writer-elision-root-token-unavailable",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_deterministic_suite_skips_writer_and_calls_reviewer_once"
+    },
+    {
+      "id": "QP-047",
+      "risk": "precomputed-offline-iteration",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_precomputed_responses_run_fully_offline"
+    },
+    {
+      "id": "QP-048",
+      "risk": "immutable-runner-ownership",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_complex_writer_cannot_own_oracle_traceability_or_lifecycle"
+    },
+    {
+      "id": "QP-049",
+      "risk": "blocked-design-zero-model",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_blocked_card_stops_before_every_model_stage"
+    },
+    {
+      "id": "QP-050",
+      "risk": "source-input-drift",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_input_drift_after_writer_prevents_reviewer_and_acceptance"
+    },
+    {
+      "id": "QP-051",
+      "risk": "review-rejection-terminal",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_review_changes_required_is_not_accepted_shadow"
+    },
+    {
+      "id": "QP-052",
+      "risk": "canonical-input-drift",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_canonical_drift_during_reviewer_overrides_acceptance"
+    },
+    {
+      "id": "QP-053",
+      "risk": "single-attempt-infrastructure-failure",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_failed_backend_call_is_counted_without_retry"
+    },
+    {
+      "id": "QP-054",
+      "risk": "unexpected-writer-response",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_precomputed_writer_is_rejected_for_zero_writer_plan"
+    },
+    {
+      "id": "QP-055",
+      "risk": "forbidden-model-timeout",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_backend_with_hard_timeout_is_rejected_without_call"
+    },
+    {
+      "id": "QP-056",
+      "risk": "immutable-output-directory",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_existing_output_directory_cannot_be_reused"
+    },
+    {
+      "id": "QP-057",
+      "risk": "quality-proof-immutable-output",
+      "nodeid": "tests/test_quality_proof.py::QuickQualityProofTests::test_fresh_result_write_is_atomic_and_never_overwrites"
+    },
+    {
+      "id": "QP-058",
+      "risk": "quality-proof-selector-boundary",
+      "nodeid": "tests/test_quality_proof.py::QuickQualityProofTests::test_arbitrary_paths_and_pytest_options_are_rejected"
+    },
+    {
+      "id": "QP-059",
+      "risk": "public-cli-exit-classification",
+      "nodeid": "tests/test_cli.py::CliTests::test_main_separates_contract_infrastructure_and_internal_errors"
+    },
+    {
+      "id": "QP-060",
+      "risk": "registry-bound-tc-prefix",
+      "nodeid": "tests/test_scope_registry.py::ScopeRegistryTests::test_tc_prefix_is_required_strict_and_digest_bound"
+    },
+    {
+      "id": "QP-061",
+      "risk": "authoritative-graph-validation",
+      "nodeid": "tests/test_coverage_graph.py::CoverageGraphTests::test_authoritative_validator_covers_io_integrity_rules"
+    },
+    {
+      "id": "QP-062",
+      "risk": "invalid-model-token-receipt",
+      "nodeid": "tests/test_immutable_iteration.py::ImmutableIterationTests::test_invalid_token_receipts_fail_closed"
+    },
+    {
+      "id": "QP-063",
+      "risk": "promotion-basis-no-publication",
+      "nodeid": "tests/test_promotion_adapter.py::PromotionAdapterTests::test_builds_and_reuses_minimal_eligibility_basis_without_publication"
+    },
+    {
+      "id": "QP-064",
+      "risk": "forged-obligation-semantic-fields",
+      "nodeid": "tests/test_coverage_contract.py::CoverageContractTests::test_rejects_forged_obligation_semantic_fields"
+    },
+    {
+      "id": "QP-065",
+      "risk": "writer-merge-context-revalidation",
+      "nodeid": "tests/test_iteration_contract.py::IterationContractTests::test_writer_merge_revalidates_context_against_graph"
+    },
+    {
+      "id": "QP-066",
+      "risk": "design-context-behavior-injection",
+      "nodeid": "tests/test_test_design.py::TestDesignTests::test_design_context_cannot_inject_unregistered_ui_behavior"
+    },
+    {
+      "id": "QP-067",
+      "risk": "coverage-gap-input-drift",
+      "nodeid": "tests/test_source_qualified_run.py::SourceQualifiedRunTests::test_coverage_gaps_mutation_is_blocked_as_input_drift"
+    },
+    {
+      "id": "QP-068",
+      "risk": "canonical-presnapshot-race",
+      "nodeid": "tests/test_source_qualified_run.py::SourceQualifiedRunTests::test_presnapshot_canonical_mutation_cannot_rebase_protection"
+    },
+    {
+      "id": "QP-069",
+      "risk": "invalid-utf8-source-contract",
+      "nodeid": "tests/test_source_qualified_run.py::SourceQualifiedRunTests::test_invalid_utf8_source_evidence_is_a_contract_failure"
+    },
+    {
+      "id": "QP-070",
+      "risk": "offline-review-cannot-promote",
+      "nodeid": "tests/test_promotion_adapter.py::PromotionAdapterTests::test_requires_authentic_tool_free_reviewer_receipt"
+    },
+    {
+      "id": "QP-071",
+      "risk": "unprotected-case-cannot-promote",
+      "nodeid": "tests/test_promotion_adapter.py::PromotionAdapterTests::test_rejects_incomplete_or_changed_canonical_baseline"
+    },
+    {
+      "id": "QP-072",
+      "risk": "registry-symlink-escape",
+      "nodeid": "tests/test_scope_registry.py::ScopeRegistryTests::test_resolver_rejects_a_package_local_symlink_that_escapes_root"
+    },
+    {
+      "id": "QP-073",
+      "risk": "source-rehash-before-binding",
+      "nodeid": "tests/test_scope_compiler.py::ScopeCompilerTests::test_manifest_binding_rehashes_declared_files_at_validation_time"
+    },
+    {
+      "id": "QP-074",
+      "risk": "derivation-artifact-drift",
+      "nodeid": "tests/test_derivation_compiler.py::DerivationCompilerTests::test_artifact_drift_fails_closed"
+    },
+    {
+      "id": "QP-075",
+      "risk": "automatic-derivation-production",
+      "nodeid": "tests/test_derivation_compiler.py::DerivationCompilerTests::test_compiles_and_round_trips_without_manual_derivation"
+    }
+  ]
+}

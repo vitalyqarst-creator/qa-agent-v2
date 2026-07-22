@@ -41,6 +41,8 @@ REQUIRED_SCENARIOS = {
     "scope.agent_proposed",
     "iteration.checked_in_observation",
     "iteration.incremental_update",
+    "iteration.deterministic_production",
+    "iteration.lean_v2",
     "iteration.full_loop",
     "ui_automation_prep.signed_off",
     "architecture.audit",
@@ -436,6 +438,24 @@ class InstructionContextResolverTests(unittest.TestCase):
                 budget["min_headroom_kib"],
                 scenario_id,
             )
+
+    def test_deterministic_production_context_is_small_and_single_route(self) -> None:
+        payload = self.resolve_json(
+            "--scenario", "iteration.deterministic_production"
+        )
+        paths = {item["path"] for item in payload["files"]}
+
+        self.assertEqual("pass", payload["budget"]["status"])
+        self.assertLessEqual(payload["budget"]["total_kib"], 40.0)
+        self.assertEqual(
+            {
+                "AGENTS.md",
+                "skills/ft-test-case-iteration/SKILL.md",
+                "references/agent/lean-v2-iteration.md",
+                "references/agent/negative-ui-calibration-policy.md",
+            },
+            paths,
+        )
 
     def test_iteration_full_loop_is_orchestration_only(self) -> None:
         payload = self.resolve_json("--scenario", "iteration.full_loop")

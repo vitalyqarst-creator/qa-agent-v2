@@ -15,6 +15,7 @@ from test_case_agent.bounded_scope_materializer import (
     BoundedScopeMaterializationError,
     _assertion_payload,
     _cell,
+    _is_explicit_direct_calibration_candidate,
     _portable_fixture_contract_lines,
     _render_clarification_requests,
     _render_coverage_gaps,
@@ -28,6 +29,23 @@ OWNER_TOKEN = "11111111-1111-4111-8111-111111111111"
 
 
 class SemanticDesignMaterializerTests(unittest.TestCase):
+    def test_direct_calibration_candidate_is_typed_not_notes_driven(self) -> None:
+        candidate = {
+            "obligation_class": "candidate-ui-calibration",
+            "oracle_source": "not_found",
+            "scope_obligation_ids": [],
+            "planned_tc_id": "candidate:FIELD-INVALID",
+            "single_expected_behavior": "Точный UI-отклик требует калибровки.",
+            "test_data": "Иванов1",
+            "review_notes": "no marker required",
+        }
+        self.assertTrue(_is_explicit_direct_calibration_candidate(candidate))
+
+        notes_only = dict(candidate)
+        notes_only["obligation_class"] = "format-check"
+        notes_only["review_notes"] = "candidate-ui-calibration"
+        self.assertFalse(_is_explicit_direct_calibration_candidate(notes_only))
+
     def test_verified_fixture_is_rendered_as_portable_inline_contract(self) -> None:
         fixture_path = (
             ROOT

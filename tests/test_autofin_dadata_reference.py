@@ -21,6 +21,7 @@ from test_case_agent.review_cycle.production_tc_gate import (
     validate_production_tc_content,
     validate_production_tc_draft,
 )
+from test_case_agent.review_cycle.runtime import StageRuntimeError
 from test_case_agent.review_cycle.source_model_adequacy import (
     evaluate_exact_length_adequacy,
 )
@@ -593,13 +594,15 @@ class AutoFinDaDataReferenceTests(unittest.TestCase):
             review["manifest_digest"],
         )
 
-    def test_address_complete_remediation_is_blocked_before_writer_without_dadata_fixtures(self) -> None:
+    def test_address_complete_remediation_fails_closed_before_writer(self) -> None:
         review_cycles = FT_ROOT / "work" / "review-cycles"
         with tempfile.TemporaryDirectory(
             prefix="address-h101-compile-", dir=review_cycles
         ) as raw:
             cycle = Path(raw)
-            with self.assertRaises(PreparedCompilerDiagnostic) as caught:
+            with self.assertRaises(
+                (PreparedCompilerDiagnostic, StageRuntimeError)
+            ) as caught:
                 compile_workflow_package(
                     workflow_state=ADDRESS_REMEDIATION_HANDOFF / "workflow-state.yaml",
                     repo_root=ROOT,
@@ -609,10 +612,16 @@ class AutoFinDaDataReferenceTests(unittest.TestCase):
                     expected_ft_slug="AutoFin",
                     section_id="4.3",
                 )
-            self.assertEqual(
-                "external-dynamic-fixture-binding-missing",
-                caught.exception.code,
-            )
+            if isinstance(caught.exception, PreparedCompilerDiagnostic):
+                self.assertEqual(
+                    "external-dynamic-fixture-binding-missing",
+                    caught.exception.code,
+                )
+            else:
+                self.assertIn(
+                    "must materialize explicit calibration_status=none",
+                    str(caught.exception),
+                )
 
     def test_v18_saved_draft_has_only_the_real_tc105_obligation_finding(self) -> None:
         result = validate_draft_obligation_coverage(

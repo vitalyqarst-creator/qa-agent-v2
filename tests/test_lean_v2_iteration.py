@@ -649,10 +649,10 @@ class LeanV2IterationTests(unittest.TestCase):
         backend = CodexExecStageBackend()
         with (
             patch(
-                "test_case_agent.lean_v2.backend.resolve_verified_exec_capability",
+                "test_case_agent.stage_backend.resolve_verified_exec_capability",
                 return_value=resolution,
             ),
-            patch("test_case_agent.lean_v2.backend.subprocess.run", side_effect=fake_run),
+            patch("test_case_agent.stage_backend.subprocess.run", side_effect=fake_run),
         ):
             result = backend.run_stage(
                 stage="writer",
@@ -697,10 +697,10 @@ class LeanV2IterationTests(unittest.TestCase):
 
         with (
             patch(
-                "test_case_agent.lean_v2.backend.resolve_verified_exec_capability",
+                "test_case_agent.stage_backend.resolve_verified_exec_capability",
                 return_value=resolution,
             ),
-            patch("test_case_agent.lean_v2.backend.subprocess.run", side_effect=fake_run),
+            patch("test_case_agent.stage_backend.subprocess.run", side_effect=fake_run),
         ):
             with self.assertRaisesRegex(LeanV2BackendError, "forbidden tool events"):
                 CodexExecStageBackend().run_stage(

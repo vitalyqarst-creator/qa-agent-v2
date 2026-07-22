@@ -58,6 +58,7 @@ from test_case_agent.semantic_design_bridge import (
     _normalize_exact_length_acceptance_oracles,
     _normalize_inclusive_lower_bound_transport,
     _normalize_negative_candidate_known_violation,
+    _normalize_positive_check_transport,
     _normalize_unbacked_numeric_entry_persistence,
     _remove_behavior_codes_from_typed_editability,
     _reassign_dictionary_completeness_ownership,
@@ -87,6 +88,83 @@ OWNER_TOKEN = "11111111-1111-4111-8111-111111111111"
 
 
 class SemanticDesignBridgeTests(unittest.TestCase):
+    def test_positive_transport_does_not_claim_sibling_requirement_code(self) -> None:
+        payload = {
+            "obligations": [
+                {"obligation_id": "OBL-TEMPLATE", "check_type": "positive"},
+            ],
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-PHONE",
+                    "requirement_codes": ["BSR 181", "BSR 183"],
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-VISIBILITY",
+                            "semantic_disposition": "testable",
+                            "obligation_ids": [],
+                            "requirement_codes": ["BSR 181"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 181",
+                                    "source_row_id": "SRC-PHONE",
+                                    "exact_source_fragment": (
+                                        "BSR 181. Видимость по умолчанию – нет."
+                                    ),
+                                }
+                            ],
+                        },
+                        {
+                            "assertion_id": "ASSERT-TEMPLATE",
+                            "semantic_disposition": "testable",
+                            "polarity": "negative",
+                            "source_property_id": "none_required",
+                            "obligation_ids": ["OBL-TEMPLATE"],
+                            "requirement_codes": ["BSR 183"],
+                            "requirement_code_evidence": [
+                                {
+                                    "requirement_code": "BSR 183",
+                                    "source_row_id": "SRC-PHONE",
+                                    "exact_source_fragment": (
+                                        "BSR 183. По умолчанию стоит шаблон телефона."
+                                    ),
+                                }
+                            ],
+                            "clause_evidence": [
+                                {
+                                    "source_row_id": "SRC-PHONE",
+                                    "exact_source_fragment": "По умолчанию",
+                                }
+                            ],
+                            "supporting_source_bindings": [],
+                        },
+                    ],
+                }
+            ],
+        }
+
+        repairs = _normalize_positive_check_transport(
+            payload,
+            {
+                "source_rows": [
+                    {
+                        "source_row_id": "SRC-PHONE",
+                        "bounded_source_text": (
+                            "BSR 181. Видимость по умолчанию – нет. "
+                            "BSR 183. По умолчанию стоит шаблон телефона."
+                        ),
+                    }
+                ]
+            },
+        )
+
+        template = payload["source_designs"][0]["assertions"][1]
+        self.assertEqual("positive", template["polarity"])
+        self.assertEqual(["BSR 183"], template["requirement_codes"])
+        self.assertEqual(
+            ["align-positive-check-assertion-polarity"],
+            [item["rule"] for item in repairs],
+        )
+
     def test_typed_editability_does_not_own_sibling_behavior_codes(self) -> None:
         payload = {
             "obligations": [
@@ -8032,6 +8110,89 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             [item["rule"] for item in repeated_receipt["repairs"]],
         )
 
+        ordered_context = copy.deepcopy(context)
+        ordered_row = ordered_context["source_rows"][1]
+        ordered_row["bounded_source_text"] = ordered_row[
+            "bounded_source_text"
+        ].replace("Статус Да Да", "Статус Да Да Поле ввода", 1)
+        ordered_row["physical_table_cells"].append(
+            {
+                "physical_column_index": 4,
+                "source_cell_locator": "/*/*[2]/*[4]",
+                "element_kind": "td",
+                "bounded_source_text": "Поле ввода",
+            }
+        )
+        self._bind_context(ordered_context)
+        ordered_cell_alias = copy.deepcopy(design)
+        ordered_cell_alias["prepared_context_sha256"] = prepared_context_sha256(
+            ordered_context
+        )
+        ordered_cell_alias["source_designs"][1]["assertions"][0][
+            "requirement_code_evidence"
+        ][0]["exact_source_fragment"] = ordered_row["bounded_source_text"]
+        ordered_cell_assertion = ordered_cell_alias["source_designs"][1][
+            "assertions"
+        ][2]
+        for binding in ordered_cell_assertion["clause_evidence"]:
+            binding["exact_source_fragment"] = "Статус Да Поле ввода"
+        repaired_alias, ordered_alias_receipt = normalize_semantic_design_transport(
+            ordered_cell_alias,
+            context=ordered_context,
+            boundary=boundary,
+        )
+        self.assertEqual(
+            ["Статус Да Да Поле ввода"] * 3,
+            [
+                item["exact_source_fragment"]
+                for item in repaired_alias["source_designs"][1]["assertions"][2][
+                    "clause_evidence"
+                ]
+            ],
+        )
+        self.assertEqual(
+            3,
+            sum(
+                item["rule"] == "bind-typed-property-to-exact-source-cell-value"
+                for item in ordered_alias_receipt["repairs"]
+            ),
+        )
+        self.assertEqual(
+            "verified",
+            validate_semantic_design_binding(
+                ordered_context,
+                boundary,
+                repaired_alias,
+            )["status"],
+        )
+
+        hallucinated_nonliteral = copy.deepcopy(design)
+        hallucinated_assertion = hallucinated_nonliteral["source_designs"][1][
+            "assertions"
+        ][2]
+        for binding in hallucinated_assertion["clause_evidence"]:
+            binding["exact_source_fragment"] = "Придуманное действие и результат"
+        unrepaired, hallucination_receipt = normalize_semantic_design_transport(
+            hallucinated_nonliteral,
+            context=context,
+            boundary=boundary,
+        )
+        self.assertEqual(
+            ["Придуманное действие и результат"] * 3,
+            [
+                item["exact_source_fragment"]
+                for item in unrepaired["source_designs"][1]["assertions"][2][
+                    "clause_evidence"
+                ]
+            ],
+        )
+        self.assertNotIn(
+            "bind-typed-property-to-exact-source-cell-value",
+            [item["rule"] for item in hallucination_receipt["repairs"]],
+        )
+        with self.assertRaises(SemanticDesignBridgeError):
+            validate_semantic_design_binding(context, boundary, unrepaired)
+
         compressed = copy.deepcopy(design)
         compressed["source_designs"][1]["assertions"] = [
             compressed["source_designs"][1]["assertions"][0]
@@ -8119,6 +8280,53 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         self.assertEqual("verified", candidate_receipt["status"])
         self.assertEqual(1, candidate_receipt["requiredness_oracle_count"])
 
+        blocked_candidate = copy.deepcopy(typed_candidate)
+        blocked_candidate["obligations"][2][
+            "review_notes"
+        ] = "candidate-ui-calibration"
+        requiredness_assertion = next(
+            assertion
+            for assertion in blocked_candidate["source_designs"][1]["assertions"]
+            if str(assertion.get("source_property_id", "")).endswith(
+                "-REQUIREDNESS-REQUIRED"
+            )
+        )
+        requiredness_assertion["execution_readiness"] = "dependency-blocked"
+        requiredness_assertion["execution_readiness_rationale"] = (
+            "Точный UI-триггер и отклик ещё не откалиброваны."
+        )
+        normalized_candidate, blocked_candidate_receipt = (
+            normalize_semantic_design_transport(
+                blocked_candidate,
+                context=context,
+                boundary=boundary,
+            )
+        )
+        normalized_requiredness = next(
+            assertion
+            for assertion in normalized_candidate["source_designs"][1]["assertions"]
+            if str(assertion.get("source_property_id", "")).endswith(
+                "-REQUIREDNESS-REQUIRED"
+            )
+        )
+        self.assertEqual("ready", normalized_requiredness["execution_readiness"])
+        self.assertEqual(
+            "none_required",
+            normalized_requiredness["execution_readiness_rationale"],
+        )
+        self.assertIn(
+            "isolate-requiredness-calibration-candidate",
+            [item["rule"] for item in blocked_candidate_receipt["repairs"]],
+        )
+        self.assertEqual(
+            "verified",
+            validate_semantic_design_binding(
+                context,
+                boundary,
+                normalized_candidate,
+            )["status"],
+        )
+
         boundary_candidate = copy.deepcopy(typed_candidate)
         boundary_candidate["obligations"][2]["check_type"] = "boundary"
         self.assertEqual(
@@ -8195,6 +8403,111 @@ class SemanticDesignBridgeTests(unittest.TestCase):
                 optional_candidate,
             )["status"],
         )
+        normalized_optional, optional_receipt = normalize_semantic_design_transport(
+            optional_candidate,
+            context=optional_context,
+            boundary=boundary,
+        )
+        self.assertNotIn(
+            "omit-structural-action-control-property",
+            [item["rule"] for item in optional_receipt["repairs"]],
+        )
+        self.assertEqual(
+            "testable",
+            normalized_optional["source_designs"][1]["assertions"][1][
+                "semantic_disposition"
+            ],
+        )
+        self.assertIn(
+            "OBL-003",
+            {item["obligation_id"] for item in normalized_optional["obligations"]},
+        )
+        self.assertEqual(1, len(normalized_optional["requiredness_oracles"]))
+
+        ordinary_read_only_context = copy.deepcopy(optional_context)
+        ordinary_read_only_row = ordinary_read_only_context["source_rows"][1]
+        ordinary_read_only_row["bounded_source_text"] = ordinary_read_only_row[
+            "bounded_source_text"
+        ].replace("Статус Нет Да", "Статус Нет Нет", 1)
+        ordinary_read_only_row["physical_table_cells"][2][
+            "bounded_source_text"
+        ] = "Нет"
+        ordinary_read_only_row["field_properties"]["editability"].update(
+            property_id="FP-SRC-002-EDITABILITY-READ-ONLY",
+            normalized_value="read-only",
+            source_value="Нет",
+        )
+        self._bind_context(ordinary_read_only_context)
+        ordinary_preflight = validate_semantic_input_preflight(
+            ordinary_read_only_context,
+            boundary,
+        )
+        self.assertIn(
+            "FP-SRC-002-EDITABILITY-READ-ONLY",
+            {
+                item["source_property_id"]
+                for item in ordinary_preflight["field_property_registry"]
+            },
+        )
+        ordinary_read_only = copy.deepcopy(optional_candidate)
+        ordinary_read_only["prepared_context_sha256"] = prepared_context_sha256(
+            ordinary_read_only_context
+        )
+        ordinary_read_only["source_designs"][1]["assertions"][0][
+            "requirement_code_evidence"
+        ][0]["exact_source_fragment"] = ordinary_read_only_row["bounded_source_text"]
+        ordinary_assertion = ordinary_read_only["source_designs"][1]["assertions"][2]
+        ordinary_assertion.update(
+            canonical_statement="Поле «Статус» доступно только для чтения.",
+            source_property_id="FP-SRC-002-EDITABILITY-READ-ONLY",
+            condition_clauses=["Поле «Статус» отображается со значением «Открыт»."],
+            action_clauses=["Попытаться заменить значение на «Закрыт»."],
+            oracle_clauses=["В поле остаётся исходное значение «Открыт»."],
+            disposition_rationale=(
+                "Обычное поле ввода с typed R=Нет имеет наблюдаемую read-only "
+                "проверку сохранения исходного значения."
+            ),
+        )
+        for binding in ordinary_assertion["clause_evidence"]:
+            binding["exact_source_fragment"] = "Нет"
+        ordinary_obligation = ordinary_read_only["obligations"][3]
+        ordinary_obligation.update(
+            source_property_id="FP-SRC-002-EDITABILITY-READ-ONLY",
+            obligation_class="read-only-value-field",
+            required_behavior="Не разрешать изменение значения поля «Статус».",
+            planned_check="Попытаться заменить «Открыт» на «Закрыт».",
+            coverage_class="editability-read-only",
+            input_class="attempted-value-replacement",
+            single_expected_behavior="Исходное значение «Открыт» сохраняется.",
+            test_data="Открыт -> Закрыт",
+        )
+        normalized_ordinary, ordinary_receipt = normalize_semantic_design_transport(
+            ordinary_read_only,
+            context=ordinary_read_only_context,
+            boundary=boundary,
+        )
+        self.assertNotIn(
+            "omit-structural-action-control-property",
+            [item["rule"] for item in ordinary_receipt["repairs"]],
+        )
+        self.assertEqual(
+            "testable",
+            normalized_ordinary["source_designs"][1]["assertions"][2][
+                "semantic_disposition"
+            ],
+        )
+        self.assertIn(
+            "OBL-004",
+            {item["obligation_id"] for item in normalized_ordinary["obligations"]},
+        )
+        self.assertEqual(
+            "verified",
+            validate_semantic_design_binding(
+                ordinary_read_only_context,
+                boundary,
+                normalized_ordinary,
+            )["status"],
+        )
 
         action_optional_context = copy.deepcopy(optional_context)
         action_optional_row = action_optional_context["source_rows"][1]
@@ -8212,10 +8525,14 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             action_optional_context,
             boundary,
         )
-        action_default = action_preflight["requiredness_candidate_defaults"][0]
-        self.assertEqual("no-action-control", action_default["fallback_input_mode"])
-        self.assertIn("Не нажимать", action_default["fallback_action"])
-        self.assertNotIn("пуст", action_default["fallback_action"].casefold())
+        self.assertNotIn(
+            "FP-SRC-002-REQUIREDNESS-OPTIONAL",
+            {
+                item["source_property_id"]
+                for item in action_preflight["field_property_registry"]
+            },
+        )
+        self.assertEqual([], action_preflight["requiredness_candidate_defaults"])
 
         action_candidate = copy.deepcopy(optional_candidate)
         action_candidate["prepared_context_sha256"] = prepared_context_sha256(
@@ -8230,13 +8547,21 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             boundary=boundary,
         )
         self.assertIn(
-            "bind-optional-action-control-to-no-action-contract",
+            "omit-structural-action-control-property",
             [item["rule"] for item in action_receipt["repairs"]],
         )
-        action_obligation = normalized_action["obligations"][2]
-        self.assertEqual("no-action", action_obligation["input_class"])
-        self.assertIn("Не нажимать", action_obligation["test_data"])
-        self.assertNotIn("пуст", action_obligation["planned_check"].casefold())
+        self.assertNotIn(
+            "FP-SRC-002-REQUIREDNESS-OPTIONAL",
+            {
+                item["source_property_id"]
+                for item in normalized_action["source_designs"][1]["assertions"]
+            },
+        )
+        self.assertNotIn(
+            "OBL-003",
+            {item["obligation_id"] for item in normalized_action["obligations"]},
+        )
+        self.assertEqual([], normalized_action["requiredness_oracles"])
         self.assertEqual(
             "verified",
             validate_semantic_design_binding(
@@ -8260,6 +8585,24 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             source_value="Нет",
         )
         self._bind_context(read_only_action_context)
+        read_only_preflight = validate_semantic_input_preflight(
+            read_only_action_context,
+            boundary,
+        )
+        self.assertNotIn(
+            "FP-SRC-002-EDITABILITY-READ-ONLY",
+            {
+                item["source_property_id"]
+                for item in read_only_preflight["field_property_registry"]
+            },
+        )
+        self.assertNotIn(
+            "FP-SRC-002-REQUIREDNESS-OPTIONAL",
+            {
+                item["source_property_id"]
+                for item in read_only_preflight["field_property_registry"]
+            },
+        )
         read_only_action_candidate = copy.deepcopy(action_candidate)
         read_only_action_candidate["prepared_context_sha256"] = (
             prepared_context_sha256(read_only_action_context)
@@ -8288,13 +8631,52 @@ class SemanticDesignBridgeTests(unittest.TestCase):
                 boundary=boundary,
             )
         )
-        self.assertIn(
-            "canonicalize-read-only-action-control",
-            [item["rule"] for item in read_only_receipt["repairs"]],
+        structural_repairs = [
+            item
+            for item in read_only_receipt["repairs"]
+            if item["rule"] == "omit-structural-action-control-property"
+        ]
+        self.assertEqual(
+            {"requiredness", "editability"},
+            {item["property_type"] for item in structural_repairs},
         )
-        read_only_obligation = normalized_read_only["obligations"][3]
-        self.assertEqual("direct-observation", read_only_obligation["input_class"])
-        self.assertNotIn("ввести текст", read_only_obligation["planned_check"].casefold())
+        remaining_property_ids = {
+            item["source_property_id"]
+            for item in normalized_read_only["source_designs"][1]["assertions"]
+        }
+        self.assertNotIn(
+            "FP-SRC-002-REQUIREDNESS-OPTIONAL",
+            remaining_property_ids,
+        )
+        self.assertNotIn(
+            "FP-SRC-002-EDITABILITY-READ-ONLY",
+            remaining_property_ids,
+        )
+        self.assertNotIn(
+            "OBL-004",
+            {item["obligation_id"] for item in normalized_read_only["obligations"]},
+        )
+        self.assertNotIn(
+            "OBL-003",
+            {item["obligation_id"] for item in normalized_read_only["obligations"]},
+        )
+        self.assertEqual([], normalized_read_only["requiredness_oracles"])
+        self.assertNotIn(
+            "TC-004",
+            {
+                test_case_id
+                for row in normalized_read_only["applicability"]
+                for test_case_id in row["linked_test_cases"]
+            },
+        )
+        self.assertNotIn(
+            "TC-003",
+            {
+                test_case_id
+                for row in normalized_read_only["applicability"]
+                for test_case_id in row["linked_test_cases"]
+            },
+        )
         self.assertEqual(
             "verified",
             validate_semantic_design_binding(

@@ -60,6 +60,10 @@ CANDIDATE_SCOPE_OBLIGATION = re.compile(
     r"^candidate:(SO-(?:NEG|REQ)-[A-Za-z0-9_.-]+)$",
     flags=re.IGNORECASE,
 )
+DIRECT_CALIBRATION_CANDIDATE = re.compile(
+    r"^candidate:([A-Za-z0-9][A-Za-z0-9_.-]*)$",
+    flags=re.IGNORECASE,
+)
 FIXTURE_TOKEN = re.compile(r"\b(?:FX|FIX)-[A-Za-z0-9_.-]+\b")
 PORTABLE_FIXTURE_FIELD = re.compile(
     r"\b(?P<key>request_parameters|expected_response|response_sha256|status|"
@@ -1321,6 +1325,8 @@ def _validate_planned_test_case_groups(
 
 def _canonical_planned_test_case_id(
     row: Mapping[str, str],
+    *,
+    direct_candidate_obligation_ids: frozenset[str] = frozenset(),
 ) -> str:
     """Resolve a writer-facing TC id without losing candidate lifecycle identity."""
 
@@ -1331,7 +1337,27 @@ def _canonical_planned_test_case_id(
     calibration_status = row.get("calibration_status", "").strip().casefold()
     candidate = CANDIDATE_SCOPE_OBLIGATION.fullmatch(raw)
     if calibration_status != "ui-calibration-required" or candidate is None:
-        return ""
+        direct_candidate = DIRECT_CALIBRATION_CANDIDATE.fullmatch(raw)
+        obligation_id = row.get("obligation_id", "").strip()
+        if (
+            calibration_status != "ui-calibration-required"
+            or direct_candidate is None
+            or obligation_id not in direct_candidate_obligation_ids
+            or row.get("obligation_class", "").strip().casefold()
+            != "candidate-ui-calibration"
+            or row.get("status", "").strip().casefold() != "covered"
+            or re.findall(
+                r"\bSO-(?:NEG|REQ)-[A-Za-z0-9_.-]+\b",
+                row.get("scope_obligation_ids", ""),
+                flags=re.IGNORECASE,
+            )
+        ):
+            return ""
+        # A direct candidate has no SO-* registry identity.  Its explicit,
+        # hash-bound semantic target still needs a stable writer-facing TC id;
+        # prefixing the declared identity avoids both prose-derived IDs and
+        # collisions with normal planned TC-* values.
+        return "TC-CAL-" + direct_candidate.group(1).upper()
     scope_obligation_id = candidate.group(1).upper()
     declared_scope_ids = {
         token.upper()
@@ -2287,6 +2313,47 @@ def _coverage_gap_affected_atom_sets(path: Path) -> dict[str, set[str]]:
     return result
 
 
+def _semantic_direct_calibration_candidate_ids(
+    projection: Mapping[str, Any],
+) -> frozenset[str]:
+    """Return only explicitly typed, non-oracle-registry calibration candidates.
+
+    ``review_notes`` is deliberately excluded from this contract.  A prose marker
+    must never be able to upgrade a normal obligation into a runnable candidate.
+    The remaining fields are typed by the semantic bridge and subsequently
+    checked against the materialized obligation/ATOM chain by
+    ``_validate_semantic_projection_graph``.
+    """
+
+    raw_obligations = projection.get("obligations")
+    if not isinstance(raw_obligations, list):
+        return frozenset()
+    result: set[str] = set()
+    for raw in raw_obligations:
+        if not isinstance(raw, Mapping):
+            continue
+        scope_ids = raw.get("scope_obligation_ids")
+        planned = str(raw.get("planned_tc_id", "")).strip()
+        if (
+            str(raw.get("obligation_class", "")).strip().casefold()
+            != "candidate-ui-calibration"
+            or str(raw.get("oracle_source", "")).strip().casefold()
+            != "not_found"
+            or scope_ids != []
+            or not str(raw.get("single_expected_behavior", "")).strip()
+            or not str(raw.get("test_data", "")).strip()
+            or (
+                TC_TOKEN.fullmatch(planned) is None
+                and DIRECT_CALIBRATION_CANDIDATE.fullmatch(planned) is None
+            )
+        ):
+            continue
+        obligation_id = str(raw.get("obligation_id", "")).strip()
+        if re.fullmatch(r"OBL-[A-Za-z0-9_.-]+", obligation_id):
+            result.add(obligation_id)
+    return frozenset(result)
+
+
 def _validate_semantic_projection_graph(
     *,
     projection: Mapping[str, Any],
@@ -2593,17 +2660,11 @@ def _validate_semantic_projection_graph(
     oracle_owner_by_obligation: dict[str, str] = {}
     # Some source restrictions require more than one independent calibration
     # class (for example N-1 and N+1) while the source-signal registry owns a
-    # single generic oracle slot. The materializer preserves those additional
-    # direct candidates through the semantic obligation marker, so the compiler
-    # must reconstruct the same ownership instead of silently downgrading their
-    # explicit calibration status to `none`.
-    direct_candidate_obligation_ids = {
-        obligation_id
-        for obligation_id, obligation in semantic_obligation_by_id.items()
-        if "candidate-ui-calibration"
-        in str(obligation.get("review_notes", "")).casefold()
-        and not obligation.get("scope_obligation_ids")
-    }
+    # single generic oracle slot.  Preserve only the explicit typed contract;
+    # notes-only markers are intentionally not authoritative.
+    direct_candidate_obligation_ids = set(
+        _semantic_direct_calibration_candidate_ids(projection)
+    )
     candidate_obligation_ids: set[str] = set(direct_candidate_obligation_ids)
     for collection_name, scope_prefix, signal_prefix in (
         ("negative_oracles", "SO-NEG-", "SIG-NEG-"),
@@ -2731,6 +2792,22 @@ def _validate_semantic_projection_graph(
             raise StageRuntimeError(
                 f"direct semantic candidate {obligation_id} requires materialized "
                 "calibration_status=ui-calibration-required"
+            )
+        for semantic_key, materialized_key in (
+            ("obligation_class", "obligation_class"),
+            ("planned_tc_id", "planned_tc_or_gap"),
+        ):
+            if str(semantic_obligation.get(semantic_key, "")).strip() != str(
+                materialized.get(materialized_key, "")
+            ).strip():
+                raise StageRuntimeError(
+                    f"direct semantic candidate {obligation_id} {semantic_key} "
+                    "drifted from its materialized contract"
+                )
+        if str(materialized.get("status", "")).strip().casefold() != "covered":
+            raise StageRuntimeError(
+                f"direct semantic candidate {obligation_id} requires materialized "
+                "status=covered"
             )
         if str(ledger_by_atom[atom_id].get("coverage_status", "")).strip().lower() != (
             "covered_with_ui_calibration"
@@ -4640,6 +4717,7 @@ def compile_workflow_package(
     semantic_non_executable_boundary_gap_ids_by_atom: dict[
         str, tuple[str, ...]
     ] = {}
+    semantic_direct_candidate_obligation_ids: frozenset[str] = frozenset()
     if source_first_contract:
         assert source_row_inventory_path is not None
         assert source_row_extraction_spec_path is not None
@@ -4717,6 +4795,9 @@ def compile_workflow_package(
                     obligation_rows=obligation_rows,
                     coverage_gaps_path=gaps_path,
                 )
+            )
+            semantic_direct_candidate_obligation_ids = (
+                _semantic_direct_calibration_candidate_ids(semantic_projection)
             )
         accepted_testable_assertions = tuple(
             item
@@ -5132,7 +5213,12 @@ def compile_workflow_package(
                     f"semantic degradation: {obligation_id} cannot cover {atom_coverage_status} {atom_id}"
                 )
             coverage_status = "testable"
-            planned_tc_id = _canonical_planned_test_case_id(obligation_row)
+            planned_tc_id = _canonical_planned_test_case_id(
+                obligation_row,
+                direct_candidate_obligation_ids=(
+                    semantic_direct_candidate_obligation_ids
+                ),
+            )
             if not planned_tc_id:
                 raise StageRuntimeError(
                     f"semantic degradation: {obligation_id} covered row must link a TC id "

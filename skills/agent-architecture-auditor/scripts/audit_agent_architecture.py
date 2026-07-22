@@ -28,34 +28,12 @@ REQ_QA={
 }
 STALE=("uv run ft-test-agent"," ft-test-agent "," list-sections ","skills/ft-test-case-writer/references","/output/")
 SECTIONS=("## Входы","## Выходы","## Ограничения")
-INSTRUCTION_CONTEXT_SCENARIOS=(
+REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS=frozenset({
     "source_locator.discovery",
-    "writer.initial_draft.simple",
-    "writer.initial_draft.table",
-    "writer.initial_draft.ui",
-    "writer.initial_draft.numeric",
-    "writer.initial_draft.integration",
-    "writer.revision_from_findings",
-    "writer.remediation.style",
-    "writer.remediation.validator_failure",
-    "writer.session_initial_draft",
-    "writer.session_semantic_revision",
-    "writer.session_format_revision",
-    "reviewer.full_existing_cases",
-    "reviewer.scope_gap_review",
-    "reviewer.structure_preflight",
-    "reviewer.semantic_traceability_test_design",
-    "reviewer.structure_format_final",
-    "reviewer.semantic_regression",
     "scope.bounded_production",
-    "scope.manual",
-    "scope.agent_proposed",
-    "iteration.checked_in_observation",
-    "iteration.full_loop",
-    "ui_automation_prep.signed_off",
+    "iteration.deterministic_production",
     "architecture.audit",
-    "sdk_orchestration.review_cycle",
-)
+})
 TASK_ROUTING_RE=re.compile(r"<!--\s*task-start-skill-routing:v1\s*-->\s*```json\s*(.*?)\s*```",re.DOTALL)
 
 def args_parser():
@@ -130,8 +108,46 @@ def audit_instruction_budgets(root:Path,checks,findings):
             [rel(manifest,root)],
         )
         return []
+    raw_scenarios=data.get("scenarios")
+    scenario_ids=[]
+    if isinstance(raw_scenarios,list):
+        scenario_ids=[
+            item.get("id")
+            for item in raw_scenarios
+            if isinstance(item,dict) and isinstance(item.get("id"),str)
+        ]
+    duplicate_ids=sorted(
+        scenario_id
+        for scenario_id,count in Counter(scenario_ids).items()
+        if count>1
+    )
+    missing_required=sorted(REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS-set(scenario_ids))
+    scenario_contract_valid=(
+        isinstance(raw_scenarios,list)
+        and len(scenario_ids)==len(raw_scenarios)
+        and not duplicate_ids
+        and not missing_required
+    )
+    if not scenario_contract_valid:
+        evidence=[]
+        if not isinstance(raw_scenarios,list):evidence.append("scenarios must be an array")
+        elif len(scenario_ids)!=len(raw_scenarios):evidence.append("every scenario requires a string id")
+        if duplicate_ids:evidence.append("duplicate ids: "+", ".join(duplicate_ids))
+        if missing_required:evidence.append("missing required ids: "+", ".join(missing_required))
+        add_check(checks,"instruction-loading-manifest-scenario-contract","warn","Instruction scenario registry is invalid.",[rel(manifest,root)])
+        add_finding(
+            findings,
+            "instruction-loading-manifest-scenario-contract",
+            "warning",
+            "references",
+            "Instruction loading scenario registry is incomplete",
+            "Architecture audit must resolve every declared scenario and retain the small required production/governance ID set.",
+            evidence,
+            "Fix missing, duplicate or malformed scenario ids in instruction-loading-manifest.md.",
+            [rel(manifest,root)],
+        )
     rows=[]
-    for scenario_id in INSTRUCTION_CONTEXT_SCENARIOS:
+    for scenario_id in dict.fromkeys(scenario_ids):
         try:
             result=resolver.resolve_instruction_context(root=root,manifest=data,scenario_id=scenario_id)
         except Exception as exc:
@@ -189,7 +205,8 @@ def audit_instruction_budgets(root:Path,checks,findings):
                 "Tighten the manifest groups, move rarely used references to conditional/audit-only, or explicitly raise the limit with rationale.",
                 [rel(manifest,root)],
             )
-    add_check(checks,"instruction-loading-manifest-scenarios","pass" if len(rows)==len(INSTRUCTION_CONTEXT_SCENARIOS) else "warn","Required instruction-loading scenarios resolved.",[rel(manifest,root)])
+    all_resolved=scenario_contract_valid and len(rows)==len(scenario_ids)
+    add_check(checks,"instruction-loading-manifest-scenarios","pass" if all_resolved else "warn","All declared instruction-loading scenarios resolved.",[rel(manifest,root)])
     return rows
 
 def load_task_start_routing(root:Path):
@@ -372,14 +389,26 @@ def audit(root:Path):
 
     exec_runner=root/"scripts"/"codex_exec_review_cycle_runner.py"
     backend_dispatcher=root/"scripts"/"review_cycle_backend_dispatcher.py"
+    stage_backend=root/"test_case_agent"/"stage_backend.py"
+    immutable_iteration=root/"test_case_agent"/"immutable_iteration.py"
     readme=root/"README.md"
     readme_content=txt(readme).lower()
-    exec_default_activated=(
+    legacy_exec_default_activated=(
         exec_runner.exists()
         and backend_dispatcher.exists()
         and "review_cycle_backend_dispatcher.py" in readme_content
         and "--backend auto" in readme_content
         and "--backend sdk" in readme_content
+    )
+    source_qualified_exec_default_activated=(
+        stage_backend.exists()
+        and immutable_iteration.exists()
+        and "ft-agent run" in readme_content
+        and "class codexexecstagebackend" in txt(stage_backend).lower()
+        and "codexexecstagebackend(timeout_seconds=none)" in txt(immutable_iteration).lower()
+    )
+    exec_default_activated=(
+        legacy_exec_default_activated or source_qualified_exec_default_activated
     )
     add_check(
         checks,
@@ -387,7 +416,7 @@ def audit(root:Path):
         "pass" if exec_default_activated else ("warn" if exec_runner.exists() else "fail"),
         "Verified exec backend dispatcher is the documented default."
         if exec_default_activated else "Exec backend default activation is incomplete.",
-        [rel(exec_runner,root),rel(backend_dispatcher,root),rel(readme,root)],
+        [rel(exec_runner,root),rel(backend_dispatcher,root),rel(stage_backend,root),rel(immutable_iteration,root),rel(readme,root)],
     )
     if exec_runner.exists() and not exec_default_activated:
         add_finding(
@@ -399,7 +428,7 @@ def audit(root:Path):
             "The repository contains an exec runner, but the documented production route still selects the SDK runner by default.",
             ["Dispatcher file or explicit auto/SDK fallback documentation is missing."],
             "Add an explicit backend dispatcher and make exec the verified default, with SDK retained only as a declared fallback.",
-            [rel(exec_runner,root),rel(backend_dispatcher,root),rel(review_cycle_runner,root),rel(readme,root)],
+            [rel(exec_runner,root),rel(backend_dispatcher,root),rel(stage_backend,root),rel(immutable_iteration,root),rel(review_cycle_runner,root),rel(readme,root)],
         )
 
     prepared_writer_profile=root/"references"/"agent"/"prepared-writer-runtime-profile.md"

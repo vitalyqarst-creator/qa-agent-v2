@@ -871,6 +871,19 @@ def validate_production_tc_content(
 
         title_match = TITLE_METADATA_RE.search(clean_block)
         title = title_match.group(1).strip() if title_match else ""
+        if title.count("«") != title.count("»"):
+            findings.append(
+                _finding(
+                    finding_id="production-unbalanced-title-quotes",
+                    tc_id=tc_id,
+                    section="metadata",
+                    evidence=title,
+                    message=(
+                        "A TC title must not contain an unclosed Russian-style "
+                        "quotation mark."
+                    ),
+                )
+            )
         process_title_match = PROCESS_TITLE_RE.search(_visible_text(title))
         if process_title_match is not None:
             findings.append(

@@ -150,10 +150,10 @@ class SessionBasedReviewCycleContractTests(unittest.TestCase):
 
         self.assertIn("iteration.full_loop", routing)
         self.assertIn("review_cycle.session_based", routing)
-        self.assertIn("session-based-review-cycle-format.md", iteration_skill)
-        self.assertIn("New runs must not create or update", iteration_skill)
-        self.assertIn("work/review-loops", iteration_skill)
-        self.assertIn("legacy-only historical evidence", iteration_skill)
+        self.assertNotIn("session-based-review-cycle-format.md", iteration_skill)
+        self.assertIn("session/cycle orchestration", iteration_skill)
+        self.assertIn("не входят в этот production profile", iteration_skill)
+        self.assertIn("ft-agent run", iteration_skill)
 
     def test_canary_v3_preflight_defines_acceptance_and_runner_protocol(self) -> None:
         preflight_path = ROOT_DIR / "work" / "quality-improvement-canary-v3-preflight.md"

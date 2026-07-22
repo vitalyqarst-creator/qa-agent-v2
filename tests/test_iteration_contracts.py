@@ -26,30 +26,30 @@ class IterationContractTests(unittest.TestCase):
         iteration = (ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
         self.assertIn("PDF-версия основного ФТ для сверки структуры", writer)
         self.assertIn("сверяй по ней структуру разделов", writer)
-        self.assertIn("source-parity-check.md", iteration)
-        self.assertIn("when DOCX and PDF are both available", iteration)
+        self.assertIn("DOCX как source of truth", iteration)
+        self.assertIn("DOCX/XHTML/PDF", iteration)
 
-    def test_iteration_uses_session_based_reviewer_sequence(self) -> None:
+    def test_iteration_uses_single_production_reviewer_sequence(self) -> None:
         iteration = (ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
         lifecycle = (ROOT_DIR / "references" / "agent" / "session-based-review-cycle-format.md").read_text(encoding="utf-8")
 
-        self.assertIn("session-based writer/reviewer cycle", iteration)
-        self.assertIn("scripts/review_cycle_backend_dispatcher.py --backend auto", iteration)
-        self.assertIn("SDK runner is an explicit v1 fallback", iteration)
+        self.assertIn("ft-agent run", iteration)
+        self.assertIn("ровно одному независимому reviewer", iteration)
+        self.assertNotIn("review_cycle_backend_dispatcher.py", iteration)
         self.assertIn("structure_preflight", lifecycle)
         self.assertIn("semantic_traceability_test_design", lifecycle)
         self.assertIn("structure_format_final", lifecycle)
         self.assertIn("semantic_regression", lifecycle)
 
-    def test_iteration_describes_sign_off_and_round_cap_gates(self) -> None:
+    def test_iteration_describes_terminal_and_calibration_gates(self) -> None:
         iteration = (ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
         lifecycle = (ROOT_DIR / "references" / "agent" / "session-based-review-cycle-format.md").read_text(encoding="utf-8")
 
-        self.assertIn("Do not start final format review before semantic review passes", iteration)
-        self.assertIn("Do not start a third semantic review round", iteration)
-        self.assertIn("Do not route `round-cap-reached` or `blocked-input`", iteration)
+        self.assertIn("accepted-shadow", iteration)
+        self.assertIn("accepted-with-calibration-pending", iteration)
+        self.assertIn("promotion_eligible=false", iteration)
+        self.assertIn("не делай внутренний retry", iteration)
         self.assertIn("no findings with `severity = error` or `severity = warning` remain", lifecycle)
-        self.assertIn("traceability matrix has no `coverage_status = gap`", lifecycle)
 
     def test_iteration_preserves_writer_domain_rules_by_reference(self) -> None:
         iteration = (ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
@@ -59,7 +59,9 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("writer_table_artifacts", manifest)
         self.assertIn("writer_revision_artifacts", manifest)
         self.assertIn("reviewer_semantic_core", manifest)
-        self.assertIn("quality-feedback-loop.md", iteration)
+        self.assertNotIn("quality-feedback-loop.md", iteration)
+        production = (ROOT_DIR / "references" / "agent" / "production-instruction-loading.md").read_text(encoding="utf-8")
+        self.assertNotIn("ft-test-case-writer", production)
 
     def test_review_cycle_requires_xlsx_traceability_duplicates(self) -> None:
         writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
@@ -81,10 +83,10 @@ class IterationContractTests(unittest.TestCase):
             / "full-process-timing-observation.md"
         ).read_text(encoding="utf-8")
 
-        self.assertIn("production.checked_in_observation", iteration)
-        self.assertIn("start_full_process_observation.py --execute", iteration)
-        self.assertIn("schema v1 остаётся", iteration)
-        self.assertIn("не более одного раза, без retry или fallback", iteration)
+        self.assertIn("benchmarks", iteration)
+        self.assertIn("не входят в этот production profile", iteration)
+        self.assertIn("ft-agent run", iteration)
+        self.assertNotIn("start_full_process_observation.py", iteration)
         self.assertIn("Config schema v1 остаётся start-only", observation)
         self.assertIn("точное `task_complete`", observation.lower())
 

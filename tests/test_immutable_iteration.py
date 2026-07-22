@@ -1,0 +1,552 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from dataclasses import replace
+from pathlib import Path
+from typing import Any, Mapping
+
+from test_case_agent.immutable_iteration import (
+    ImmutableIterationError,
+    run_immutable_iteration,
+)
+from test_case_agent.iteration_contract import (
+    validate_suite,
+    validate_writer_response,
+)
+from test_case_agent.stage_backend import StageBackendError, StageResult
+from test_case_agent.test_design import build_test_design_plan, render_test_cases
+from tests.test_iteration_contract import _writer_graph
+from tests.test_test_design import _context, _graph
+
+
+def _request(prompt: str) -> dict[str, Any]:
+    return json.loads(prompt.split("REQUEST JSON:\n", 1)[1])
+
+
+def _writer_response(graph) -> dict[str, Any]:
+    plan = build_test_design_plan(graph, context=_context())
+    card = plan.writer_cards[0]
+    return {
+        "schema_version": 1,
+        "graph_digest": graph.digest,
+        "cases": [
+            {
+                "case_key": card.case_key,
+                "case_type": "позитивный",
+                "subject_id": card.subject_id,
+                "expected_result_id": card.expected_result_id,
+                "fixture_ids": [
+                    item.reference_id for item in card.fixture_references
+                ],
+                "data_ids": [item.reference_id for item in card.data_references],
+                "step_ids": [item.reference_id for item in card.action_references],
+            }
+        ],
+        "unresolved": [],
+    }
+
+
+def _accepted_review(graph, draft_sha256: str) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "graph_digest": graph.digest,
+        "draft_sha256": draft_sha256,
+        "decision": "accepted",
+        "case_results": [
+            {
+                "case_key": case.case_key,
+                "tc_id": case.tc_id,
+                "obligation_id": case.obligation_ids[0],
+                "status": (
+                    "calibration-pending"
+                    if case.status == "candidate-ui-calibration"
+                    else "covered"
+                ),
+                "comment": "Проверка полностью покрывает обязательство.",
+            }
+            for case in graph.cases
+        ],
+        "findings": [],
+        "summary": "Набор принят без замечаний.",
+    }
+
+
+class FixtureBackend:
+    def __init__(
+        self,
+        *,
+        review_decision: str = "accepted",
+        mutate_on_stage: tuple[str, Path] | None = None,
+        timeout_seconds: float | None = None,
+        fail_on_stage: str | None = None,
+        receipt_tokens: Any = None,
+    ) -> None:
+        self.calls: list[str] = []
+        self.review_decision = review_decision
+        self.mutate_on_stage = mutate_on_stage
+        self.timeout_seconds = timeout_seconds
+        self.fail_on_stage = fail_on_stage
+        self.receipt_tokens = receipt_tokens
+
+    def run_stage(
+        self,
+        *,
+        stage: str,
+        prompt: str,
+        schema: Mapping[str, Any],
+        artifact_dir: Path,
+    ) -> StageResult:
+        del schema, artifact_dir
+        self.calls.append(stage)
+        if self.fail_on_stage == stage:
+            raise StageBackendError(f"{stage} fixture outage")
+        request = _request(prompt)
+        if stage == "writer":
+            cases = []
+            for card in request["cards"]:
+                cases.append(
+                    {
+                        "case_key": card["case_key"],
+                        "case_type": "позитивный",
+                        "subject_id": card["subject_id"],
+                        "expected_result_id": card["expected_result_id"],
+                        "fixture_ids": [
+                            item["reference_id"]
+                            for item in card["fixture_references"]
+                        ],
+                        "data_ids": [
+                            item["reference_id"]
+                            for item in card["data_references"]
+                        ],
+                        "step_ids": [
+                            item["reference_id"]
+                            for item in card["action_references"]
+                        ],
+                    }
+                )
+            payload = {
+                "schema_version": 1,
+                "graph_digest": request["graph_digest"],
+                "cases": cases,
+                "unresolved": [],
+            }
+        else:
+            findings = []
+            results = []
+            for projection in request["cases"]:
+                results.append(
+                    {
+                        "case_key": projection["case_key"],
+                        "tc_id": projection["tc_id"],
+                        "obligation_id": projection["obligation"]["obligation_id"],
+                        "status": (
+                            (
+                                "calibration-pending"
+                                if projection["status"]
+                                == "candidate-ui-calibration"
+                                else "covered"
+                            )
+                            if self.review_decision == "accepted"
+                            else "incorrect"
+                        ),
+                        "comment": "Проверка выполнена по source-first проекции.",
+                    }
+                )
+                if self.review_decision != "accepted":
+                    findings.append(
+                        {
+                            "severity": "error",
+                            "case_key": projection["case_key"],
+                            "tc_id": projection["tc_id"],
+                            "obligation_id": projection["obligation"][
+                                "obligation_id"
+                            ],
+                            "message": "Кейс требует исправления.",
+                        }
+                    )
+            payload = {
+                "schema_version": 1,
+                "graph_digest": request["graph_digest"],
+                "draft_sha256": request["draft_sha256"],
+                "decision": self.review_decision,
+                "case_results": results,
+                "findings": findings,
+                "summary": "Независимая проверка завершена.",
+            }
+        if self.mutate_on_stage is not None and self.mutate_on_stage[0] == stage:
+            self.mutate_on_stage[1].write_text(
+                "mutated by backend", encoding="utf-8"
+            )
+        return StageResult(
+            payload=payload,
+            receipt={
+                "stage": stage,
+                "backend": "fixture-stage",
+                "attempts": 1,
+                "duration_ms": 1,
+                "tokens": (
+                    self.receipt_tokens
+                    if self.receipt_tokens is not None
+                    else {
+                        "input_tokens": 10,
+                        "output_tokens": 5,
+                        "reasoning_tokens": 1,
+                    }
+                ),
+                "tool_event_count": 0,
+                "timeout_seconds": None,
+            },
+        )
+
+
+class ImmutableIterationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.source = self.root / "source" / "requirements.xhtml"
+        self.source.parent.mkdir()
+        self.source.write_text(
+            "SOURCE-SENTINEL-DO-NOT-SEND-TO-MODEL", encoding="utf-8"
+        )
+        self.canonical = self.root / "test-cases" / "baseline.md"
+        self.canonical.parent.mkdir()
+        self.canonical.write_text(
+            "CANONICAL-SENTINEL-DO-NOT-SEND-TO-MODEL", encoding="utf-8"
+        )
+
+    def run_engine(self, graph, output_name: str, **kwargs: Any):
+        return run_immutable_iteration(
+            repo_root=self.root,
+            graph=graph,
+            context=_context(),
+            output_dir=self.root / output_name,
+            protected_source_paths=(self.source,),
+            protected_canonical_paths=(self.canonical,),
+            **kwargs,
+        )
+
+    def test_deterministic_suite_skips_writer_and_calls_reviewer_once(self) -> None:
+        backend = FixtureBackend()
+
+        result = self.run_engine(_graph(), "deterministic", backend=backend)
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertEqual(["reviewer"], backend.calls)
+        self.assertEqual(0, result.writer_model_calls)
+        self.assertEqual(1, result.reviewer_model_calls)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertTrue(summary["suite_gate_passed"])
+        self.assertTrue(summary["reviewer_accepted_zero_findings"])
+        timing = summary["timing"]
+        self.assertEqual(
+            timing["total_wall_ns"],
+            timing["phase_sum_ns"] + timing["unattributed_interphase_ns"],
+        )
+        writer, reviewer = summary["model_stages"]
+        self.assertEqual("deterministic-zero-call", writer["backend"])
+        self.assertEqual(0, writer["attempts"])
+        self.assertEqual("unavailable", writer["response_sha256"])
+        self.assertGreater(reviewer["input_artifacts"]["bytes"], 0)
+        self.assertGreater(reviewer["output_artifacts"]["bytes"], 0)
+        self.assertRegex(reviewer["response_sha256"], r"^[0-9a-f]{64}$")
+        self.assertIsNone(reviewer["timeout_seconds"])
+        self.assertEqual(
+            "unavailable", summary["root_agent_token_usage"]["availability"]
+        )
+        self.assertEqual(
+            "unavailable",
+            summary["orchestration_token_usage"]["input_tokens"],
+        )
+
+    def test_calibration_candidate_is_successful_but_non_promotable(self) -> None:
+        backend = FixtureBackend()
+        graph = _graph(
+            status="candidate-ui-calibration",
+            trigger="Ввести значение в поле «Имя».",
+            question="Какой точный UI-отклик отображается?",
+        )
+
+        result = self.run_engine(graph, "calibration-pending", backend=backend)
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        self.assertEqual(["reviewer"], backend.calls)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertTrue(summary["reviewer_accepted_zero_findings"])
+        self.assertEqual(1, summary["calibration_pending_count"])
+        self.assertFalse(summary["promotion_eligible"])
+        self.assertEqual(
+            "calibration-pending", summary["non_promotable_reason"]
+        )
+        request = json.loads(
+            (result.output_dir / "reviewer-request.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            "calibration-pending",
+            request["acceptance"]["calibration_candidate_result_status"],
+        )
+        prompt = (
+            result.output_dir / "model-stages" / "reviewer-prompt.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("do not demand hypothetical", prompt)
+        self.assertIn("before/after states", prompt)
+
+    def test_precomputed_responses_run_fully_offline(self) -> None:
+        graph = _writer_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        writer_response = _writer_response(graph)
+        writer_cases, unresolved = validate_writer_response(
+            writer_response,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+        self.assertEqual((), unresolved)
+        draft = render_test_cases(writer_cases, scope_title=_context().scope_title)
+        gate = validate_suite(
+            graph=graph,
+            cases=writer_cases,
+            markdown=draft,
+            checked_path="offline-shadow.md",
+        )
+        self.assertTrue(gate.passed, gate.to_dict())
+        reviewer_response = _accepted_review(graph, gate.draft_sha256)
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "offline",
+            backend=backend,
+            writer_response=writer_response,
+            reviewer_response=reviewer_response,
+        )
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertEqual([], backend.calls)
+        self.assertEqual(0, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            ["precomputed-response", "precomputed-response"],
+            [item["backend"] for item in summary["model_stages"]],
+        )
+
+    def test_complex_writer_cannot_own_oracle_traceability_or_lifecycle(self) -> None:
+        backend = FixtureBackend()
+        graph = _writer_graph()
+
+        result = self.run_engine(graph, "complex", backend=backend)
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        text = result.draft_path.read_text(encoding="utf-8")
+        self.assertIn(graph.obligations[0].observable_oracle, text)
+        self.assertIn("OBL-001", text)
+        self.assertIn("ATOM-001", text)
+        self.assertIn("Добавить удалённую тестовую строку повторно.", text)
+        writer_prompt = (
+            result.output_dir / "model-stages" / "writer-prompt.txt"
+        ).read_text(encoding="utf-8")
+        reviewer_prompt = (
+            result.output_dir / "model-stages" / "reviewer-prompt.txt"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("SOURCE-SENTINEL", writer_prompt + reviewer_prompt)
+        self.assertNotIn("CANONICAL-SENTINEL", writer_prompt + reviewer_prompt)
+        evidence = json.loads(
+            (result.output_dir / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertFalse(evidence["canonical_file_content_in_model_context"])
+        self.assertFalse(evidence["old_test_cases_in_model_context"])
+        self.assertEqual(0, evidence["command_budget"])
+
+    def test_blocked_card_stops_before_every_model_stage(self) -> None:
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            _graph(fixtures=()),
+            "blocked",
+            backend=backend,
+        )
+
+        self.assertEqual("blocked-design", result.status)
+        self.assertEqual([], backend.calls)
+        self.assertFalse((result.output_dir / "shadow-test-cases.md").exists())
+        self.assertTrue((result.output_dir / "blocked-cards.json").is_file())
+        self.assertEqual(0, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+
+    def test_engine_uses_full_authoritative_graph_integrity_validator(self) -> None:
+        graph = _graph()
+        graph = replace(
+            graph,
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_status="mystery",
+                    gap_id="GAP-404",
+                ),
+            ),
+        )
+        backend = FixtureBackend()
+
+        result = self.run_engine(graph, "invalid-graph-integrity", backend=backend)
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual([], backend.calls)
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("CG-INVALID-COVERAGE-STATUS", diagnostic["error"])
+
+    def test_input_drift_after_writer_prevents_reviewer_and_acceptance(self) -> None:
+        backend = FixtureBackend(mutate_on_stage=("writer", self.source))
+
+        result = self.run_engine(_writer_graph(), "source-drift", backend=backend)
+
+        self.assertEqual("blocked-input-drift", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertTrue((result.output_dir / "input-drift.json").is_file())
+
+    def test_review_changes_required_is_not_accepted_shadow(self) -> None:
+        backend = FixtureBackend(review_decision="changes-required")
+
+        result = self.run_engine(_graph(), "review-rejected", backend=backend)
+
+        self.assertEqual("review-changes-required", result.status)
+        self.assertNotEqual("accepted-shadow", result.status)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertFalse(summary["reviewer_accepted_zero_findings"])
+        self.assertTrue(summary["suite_gate_passed"])
+
+    def test_canonical_drift_during_reviewer_overrides_acceptance(self) -> None:
+        backend = FixtureBackend(mutate_on_stage=("reviewer", self.canonical))
+
+        result = self.run_engine(_graph(), "canonical-drift", backend=backend)
+
+        self.assertEqual("blocked-input-drift", result.status)
+        self.assertEqual(["reviewer"], backend.calls)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertFalse(summary["protected_inputs_unchanged"])
+        self.assertFalse(summary["reviewer_accepted_zero_findings"])
+
+    def test_failed_backend_call_is_counted_without_retry(self) -> None:
+        backend = FixtureBackend(fail_on_stage="reviewer")
+
+        result = self.run_engine(_graph(), "backend-outage", backend=backend)
+
+        self.assertEqual("failed-infrastructure", result.status)
+        self.assertEqual(["reviewer"], backend.calls)
+        self.assertEqual(0, result.writer_model_calls)
+        self.assertEqual(1, result.reviewer_model_calls)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        failed_receipt = summary["model_stages"][-1]
+        self.assertEqual("reviewer", failed_receipt["stage"])
+        self.assertEqual(1, failed_receipt["attempts"])
+        self.assertEqual("unavailable", failed_receipt["tokens"])
+        self.assertGreater(failed_receipt["input_artifacts"]["bytes"], 0)
+        self.assertEqual("unavailable", failed_receipt["response_sha256"])
+        self.assertEqual(
+            "reviewer fixture outage",
+            json.loads(
+                (result.output_dir / "failure-diagnostic.json").read_text(
+                    encoding="utf-8"
+                )
+            )["error"],
+        )
+
+    def test_precomputed_writer_is_rejected_for_zero_writer_plan(self) -> None:
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            _graph(),
+            "unexpected-writer-response",
+            backend=backend,
+            writer_response={
+                "schema_version": 1,
+                "graph_digest": _graph().digest,
+                "cases": [],
+                "unresolved": [],
+            },
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual([], backend.calls)
+        self.assertEqual(0, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+
+    def test_backend_with_hard_timeout_is_rejected_without_call(self) -> None:
+        backend = FixtureBackend(timeout_seconds=30)
+
+        result = self.run_engine(_graph(), "timeout", backend=backend)
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual([], backend.calls)
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("hard model timeout", diagnostic["error"])
+
+    def test_invalid_token_receipts_fail_closed(self) -> None:
+        invalid = (
+            {"input_tokens": -1},
+            {"input_tokens": "10"},
+            {"input_tokens": True},
+            {},
+            0,
+        )
+        for index, tokens in enumerate(invalid):
+            with self.subTest(tokens=tokens):
+                result = self.run_engine(
+                    _graph(),
+                    f"invalid-token-receipt-{index}",
+                    backend=FixtureBackend(receipt_tokens=tokens),
+                )
+                self.assertEqual("blocked-contract", result.status)
+                diagnostic = json.loads(
+                    (result.output_dir / "failure-diagnostic.json").read_text(
+                        encoding="utf-8"
+                    )
+                )
+                self.assertIn("token", diagnostic["error"])
+
+    def test_zero_model_token_metrics_are_valid_numeric_measurements(self) -> None:
+        result = self.run_engine(
+            _graph(),
+            "zero-token-metrics",
+            backend=FixtureBackend(
+                receipt_tokens={
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "reasoning_tokens": 0,
+                }
+            ),
+        )
+
+        self.assertEqual("accepted-shadow", result.status)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        reviewer = summary["model_stages"][-1]
+        self.assertEqual(0, reviewer["token_usage"]["input_tokens"])
+        self.assertEqual(
+            "unavailable", summary["root_agent_token_usage"]["input_tokens"]
+        )
+
+    def test_existing_output_directory_cannot_be_reused(self) -> None:
+        output = self.root / "already-exists"
+        output.mkdir()
+
+        with self.assertRaisesRegex(ImmutableIterationError, "must not exist"):
+            self.run_engine(_graph(), "already-exists", backend=FixtureBackend())
+
+
+if __name__ == "__main__":
+    unittest.main()

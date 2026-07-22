@@ -25,6 +25,7 @@
     "evals/full-production-benchmark/configs/**/*.json",
     "evals/full-production-benchmark/configs/**/*.md",
     "evals/schema-canary/qualification-registry/*.json",
+    "evals/quick-quality-proof/manifest.json",
     "fts/AutoFin/AGENT-NOTES.md",
     "fts/AutoFin/support/**/*.md",
     "fts/AutoFin/test-cases/*.md",
@@ -58,6 +59,9 @@
     "test_case_agent/review_cycle/production_tc_gate.py",
     "scripts/review_cycle_backend_dispatcher.py",
     "scripts/build_release_bundle.py",
+    "scripts/run_quick_quality_proof.py",
+    "tests/test_quality_proof.py",
+    "evals/quick-quality-proof/manifest.json",
     "references/agent/instruction-loading-manifest.md",
     "evals/full-production-benchmark/configs/postfinal-v2-client-addresses-v16/shadow-benchmark-config.json",
     "evals/schema-canary/qualification-registry/h65-source-review-schema-v6-20260716.reserved.json"
