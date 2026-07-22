@@ -27,12 +27,14 @@ class FixtureStageBackend:
         *,
         unresolved: bool = False,
         trace_leak: bool = False,
+        unexpected_writer_fields: bool = False,
         wrong_review_tc_id: bool = False,
         mutate_source: Path | None = None,
     ) -> None:
         self.calls: list[str] = []
         self.unresolved = unresolved
         self.trace_leak = trace_leak
+        self.unexpected_writer_fields = unexpected_writer_fields
         self.wrong_review_tc_id = wrong_review_tc_id
         self.mutate_source = mutate_source
 
@@ -72,12 +74,14 @@ class FixtureStageBackend:
                             "card_id": card["card_id"],
                             "title": title,
                             "type": "позитивный",
-                            "priority": "высокий",
-                            "preconditions": ["Открыть карточку заявки и блок сведений о работе."],
                             "test_data": ["ИНН: `7707083893`."],
                             "steps": ["Ввести `7707083893` в поле «ИНН»."],
                             "expected_result": "В поле «ИНН» отображается значение `7707083893`.",
-                            "postconditions": ["Не требуются."],
+                            **(
+                                {"postconditions": ["Сохранить изменения."]}
+                                if self.unexpected_writer_fields
+                                else {}
+                            ),
                         }
                     ],
                     "unresolved_cards": [],
@@ -339,7 +343,40 @@ class LeanV2IterationTests(unittest.TestCase):
 
         self.assertEqual("accepted-shadow", result.status)
         self.assertEqual(["writer", "reviewer"], backend.calls)
-        self.assertIn("`7707083893`", result.draft_path.read_text(encoding="utf-8"))
+        draft = result.draft_path.read_text(encoding="utf-8")
+        self.assertIn("`7707083893`", draft)
+        self.assertIn("Открыть карточку заявки и блок сведений о работе.", draft)
+        self.assertIn("### Постусловия\n\nНе требуются.", draft)
+
+    def test_writer_cannot_override_runner_owned_lifecycle_fields(self) -> None:
+        packet = self._packet(
+            [
+                {
+                    "obligation_id": "OBL-001",
+                    "atom_id": "ATOM-001",
+                    "template": "complex",
+                    "priority": "высокий",
+                    "inputs": {"writer_context": "Проверка ИНН."},
+                }
+            ]
+        )
+
+        result = run_lean_v2_iteration(
+            repo_root=self.root,
+            source_packet=packet,
+            output_dir=self.root / "run-writer-lifecycle-ownership",
+            backend=FixtureStageBackend(unexpected_writer_fields=True),
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        diagnostic = json.loads(
+            (
+                self.root
+                / "run-writer-lifecycle-ownership"
+                / "failure-diagnostic.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertIn("runner-owned", diagnostic["error"])
 
     def test_unresolved_writer_card_stops_before_reviewer(self) -> None:
         packet = self._packet(
@@ -694,6 +731,47 @@ class LeanV2IterationTests(unittest.TestCase):
             )
 
         self.assertFalse((self.root / "run-invalid-prepare-only").exists())
+
+    def test_prepare_only_blocks_non_reproducible_runner_preconditions_before_model(self) -> None:
+        packet = self._packet(
+            [
+                {
+                    "obligation_id": "OBL-001",
+                    "atom_id": "ATOM-001",
+                    "template": "complex",
+                    "priority": "средний",
+                    "inputs": {"writer_context": "Сложное поведение."},
+                }
+            ]
+        )
+        payload = json.loads(packet.read_text(encoding="utf-8"))
+        payload["base_preconditions"] = [
+            "На основной форме нажать «Создать», чтобы открыть новую карточку."
+        ]
+        packet.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        backend = FixtureStageBackend()
+
+        result = run_lean_v2_iteration(
+            repo_root=self.root,
+            source_packet=packet,
+            output_dir=self.root / "run-invalid-runner-preconditions",
+            prepare_only=True,
+            backend=backend,
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual([], backend.calls)
+        diagnostic = json.loads(
+            (
+                self.root
+                / "run-invalid-runner-preconditions"
+                / "failure-diagnostic.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertIn("not production-reproducible", diagnostic["error"])
 
     def test_missing_xhtml_blocks_before_run_directory_is_created(self) -> None:
         packet_path = self._packet(

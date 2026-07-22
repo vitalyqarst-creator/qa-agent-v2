@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Protocol, Sequence
 
-from test_case_agent.review_cycle.production_tc_gate import validate_production_tc_content
+from test_case_agent.review_cycle.production_tc_gate import (
+    production_precondition_problem,
+    validate_production_tc_content,
+)
 
 from .backend import CodexExecStageBackend, LeanV2BackendError, StageResult
 from .contract import (
@@ -378,12 +381,9 @@ def _writer_schema(card_ids: Sequence[str], packet_digest: str) -> dict[str, Any
             "card_id": {"type": "string", "enum": list(card_ids)},
             "title": {"type": "string"},
             "type": {"type": "string", "enum": ["позитивный", "негативный"]},
-            "priority": {"type": "string", "enum": ["низкий", "средний", "высокий"]},
-            "preconditions": string_array,
             "test_data": string_array,
             "steps": string_array,
             "expected_result": {"type": "string"},
-            "postconditions": string_array,
         }
     )
     unresolved = _object(
@@ -439,8 +439,10 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
         rules = (
             "Создай ровно один исполнимый тестовый intent для каждой карточки либо "
             "явно помести карточку в unresolved_cards. Не добавляй ID требований, "
-            "трассировку или сведения, отсутствующие в карточке. Конкретные значения "
-            "обязательны. Не используй старые тест-кейсы."
+            "трассировку или сведения, отсутствующие в карточке. Runner владеет "
+            "priority, preconditions и postconditions: не возвращай эти поля. Если "
+            "тестовые данные не нужны, верни test_data ровно как [\"Не требуются.\"]. "
+            "Конкретные значения обязательны. Не используй старые тест-кейсы."
         )
     else:
         rules = (
@@ -493,6 +495,20 @@ def _validate_writer_response(
     for index, raw in enumerate(intents):
         if not isinstance(raw, Mapping):
             raise LeanV2ContractError(f"writer intents[{index}] must be an object")
+        expected_keys = {
+            "card_id",
+            "title",
+            "type",
+            "test_data",
+            "steps",
+            "expected_result",
+        }
+        unexpected_keys = set(raw) - expected_keys
+        if unexpected_keys:
+            raise LeanV2ContractError(
+                "writer intent contains runner-owned or unknown fields: "
+                + ", ".join(sorted(unexpected_keys))
+            )
         card_id = str(raw.get("card_id", ""))
         if card_id not in allowed or card_id in seen:
             raise LeanV2ContractError(f"writer intent has unknown or duplicate card_id: {card_id}")
@@ -502,24 +518,27 @@ def _validate_writer_response(
             raise LeanV2ContractError(
                 f"writer intent {card_id} contains runner-owned traceability identifiers"
             )
+        card_inputs = allowed[card_id]["inputs"]
         normalized.append(
             {
                 "card_ids": [card_id],
                 "title": _one_line(raw.get("title", ""), f"writer intent {card_id}.title"),
                 "type": str(raw.get("type", "")).casefold(),
-                "priority": str(raw.get("priority", "")).casefold(),
-                "preconditions": _strings(raw.get("preconditions"), packet["base_preconditions"]),
+                "priority": str(allowed[card_id]["priority"]).casefold(),
+                "preconditions": _strings(
+                    card_inputs.get("preconditions"), packet["base_preconditions"]
+                ),
                 "test_data": _strings(raw.get("test_data"), ["Не требуются."]),
                 "steps": _strings(raw.get("steps")),
                 "expected_result": str(raw.get("expected_result", "")).strip(),
-                "postconditions": _strings(raw.get("postconditions"), ["Не требуются."]),
+                "postconditions": _strings(
+                    card_inputs.get("postconditions"), ["Не требуются."]
+                ),
                 "calibration": None,
             }
         )
         if normalized[-1]["type"] not in {"позитивный", "негативный"}:
             raise LeanV2ContractError(f"writer intent {card_id} has unsupported type")
-        if normalized[-1]["priority"] not in {"низкий", "средний", "высокий"}:
-            raise LeanV2ContractError(f"writer intent {card_id} has unsupported priority")
         if not normalized[-1]["title"] or not normalized[-1]["steps"] or not normalized[-1]["expected_result"]:
             raise LeanV2ContractError(f"writer intent {card_id} is incomplete")
     normalized_unresolved: list[dict[str, Any]] = []
@@ -704,6 +723,19 @@ def run_lean_v2_iteration(
                 raise LeanV2ContractError(
                     "writer_response was provided, but this packet requires no writer stage"
                 )
+            for card in cards:
+                runner_preconditions = _strings(
+                    card["inputs"].get("preconditions"), packet["base_preconditions"]
+                )
+                rendered_preconditions = _numbered(runner_preconditions)
+                precondition_problem = production_precondition_problem(
+                    rendered_preconditions
+                )
+                if precondition_problem is not None:
+                    raise LeanV2ContractError(
+                        "runner-owned preconditions are not production-reproducible "
+                        f"for {card['card_id']}: {precondition_problem}"
+                    )
             coverage_plan = {
                 "schema_version": 1,
                 "packet_sha256": digest,
@@ -712,6 +744,7 @@ def run_lean_v2_iteration(
                 "writer_card_ids": [item["card_id"] for item in complex_cards],
                 "writer_attempts_planned": 1 if complex_cards else 0,
                 "reviewer_attempts_planned": 0 if prepare_only else 1,
+                "runner_lifecycle_preflight": "passed",
             }
             _write_json(output_dir / "coverage-plan.json", coverage_plan)
             _write_json(
@@ -745,6 +778,9 @@ def run_lean_v2_iteration(
                 "one_intent_per_card": True,
                 "old_test_cases_available": False,
                 "traceability_owned_by_runner": True,
+                "priority_owned_by_runner": True,
+                "preconditions_owned_by_runner": True,
+                "postconditions_owned_by_runner": True,
                 "concrete_values_required": True,
             },
         }

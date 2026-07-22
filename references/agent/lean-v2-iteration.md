@@ -117,9 +117,14 @@ requiredness/negative restriction с неизвестной UI-реакцией 
 
 Writer получает только `complex` cards. Старые тест-кейсы ему не передаются.
 Writer возвращает один intent на карточку либо явный `unresolved_cards`; он не
-владеет `TC-ID`, `ATOM`, `OBL`, `SRC`, requirement codes или traceability.
-Runner назначает `TC-ID` и добавляет трассировку сам. Любой пропуск карточки,
-повторное владение или traceability identifier в writer output блокирует run.
+владеет `TC-ID`, `ATOM`, `OBL`, `SRC`, requirement codes, traceability,
+приоритетом, предусловиями или постусловиями. Runner переносит source-owned
+setup/lifecycle из packet, назначает `TC-ID` и добавляет трассировку сам. Любой
+пропуск карточки, повторное владение, traceability identifier или попытка
+переопределить runner-owned поле в writer output блокирует run.
+`prepare-only` применяет к runner-owned предусловиям тот же production-runtime
+preflight, что и полный gate, поэтому невоспроизводимый setup останавливается до
+первого model-вызова.
 
 Reviewer запускается свежим tool-free process после полного production gate.
 Он получает все evidence cards, нормализованные intents, точный draft и его

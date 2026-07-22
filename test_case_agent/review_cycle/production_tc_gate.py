@@ -593,6 +593,15 @@ def _line_safe_passive_setup_problem(preconditions: str) -> str | None:
     return None
 
 
+def production_precondition_problem(preconditions: str) -> str | None:
+    """Return the first production-runtime problem in a rendered setup block."""
+
+    problem = _precondition_structure_problem(preconditions)
+    if problem is None:
+        problem = _line_safe_passive_setup_problem(preconditions)
+    return problem
+
+
 def _runtime_sections(block: str) -> dict[str, str]:
     clean = _clean_block(block)
     heading_matches = list(MARKDOWN_HEADING.finditer(clean))
@@ -1292,9 +1301,7 @@ def validate_production_tc_content(
                     )
                 )
 
-        precondition_problem = _precondition_structure_problem(preconditions)
-        if precondition_problem is None:
-            precondition_problem = _line_safe_passive_setup_problem(preconditions)
+        precondition_problem = production_precondition_problem(preconditions)
         if precondition_problem is not None:
             findings.append(
                 _finding(
