@@ -66,6 +66,288 @@ class ProductionTcGateTests(unittest.TestCase):
             result.as_dict()["validator"],
         )
 
+    def test_persistence_oracle_requires_commit_like_action(self) -> None:
+        unsafe = self._case(
+            steps="1. Выбрать «отец/мать» в поле «Отношение к заявителю».",
+            expected_result="В поле сохранено значение «отец/мать».",
+        )
+        self.assertIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(unsafe),
+        )
+
+        safe = self._case(
+            steps=(
+                "1. Выбрать «отец/мать» в поле «Отношение к заявителю».\n"
+                "2. Сохранить карточку."
+            ),
+            expected_result="В поле сохранено значение «отец/мать».",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(safe),
+        )
+
+        transition_before_mutation = self._case(
+            steps=(
+                "1. Перейти в блок «Контактные лица».\n"
+                "2. Выбрать «отец/мать» в поле «Отношение к заявителю»."
+            ),
+            expected_result="В поле сохранено значение «отец/мать».",
+        )
+        self.assertIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(transition_before_mutation),
+        )
+
+        reopen_after_mutation = self._case(
+            steps=(
+                "1. Ввести `X` в поле.\n"
+                "2. Повторно открыть карточку."
+            ),
+            expected_result="Значение остаётся после повторного открытия.",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(reopen_after_mutation),
+        )
+
+        reverse_reopen_without_transition = self._case(
+            steps="1. Выбрать `X` в поле.",
+            expected_result=(
+                "После повторного открытия карточки поле содержит `X`."
+            ),
+        )
+        self.assertIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(reverse_reopen_without_transition),
+        )
+
+        english_save = self._case(
+            steps="1. Enter `X` into the field.\n2. Save the card.",
+            expected_result="The value is saved.",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(english_save),
+        )
+
+        for steps in (
+            "1. Save the card, then enter `X`.",
+            "1. Reopen the card.",
+            "1. Enter `X`.\n2. Close the tooltip.",
+            "1. Enter `X`.\n2. Confirm that the hint is absent.",
+            "1. Enter `X`.\n2. Confirm.",
+            "1. Enter `X`.\n2. Continue editing another field.",
+            "1. Enter `X`.\n2. Refresh the tooltip.",
+            "1. Enter `X`.\n2. Verify that the archive button is visible.",
+            "1. Enter `X`.\n2. Open storage.\n3. Check storage page title.",
+            "1. Ввести `X`.\n2. Отправить SMS.",
+            "1. Ввести `X`.\n2. Проверить кнопку «Сохранить».",
+        ):
+            with self.subTest(steps=steps):
+                case = self._case(
+                    steps=steps,
+                    expected_result="The value is saved.",
+                )
+                self.assertIn(
+                    "production-persistence-without-commit-action",
+                    self._finding_ids(case),
+                )
+
+        blocked_saving = self._case(
+            steps="1. Ввести будущую дату.",
+            expected_result="Сохранение блокируется.",
+        )
+        self.assertIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(blocked_saving),
+        )
+
+        for action in (
+            "Попытаться сохранить карточку.",
+            "Выполнить подтверждение формы.",
+        ):
+            with self.subTest(action=action):
+                attempted_commit = self._case(
+                    steps=f"1. Ввести будущую дату.\n2. {action}",
+                    expected_result="Сохранение формы запрещено.",
+                )
+                self.assertNotIn(
+                    "production-persistence-without-commit-action",
+                    self._finding_ids(attempted_commit),
+                )
+
+        empty_required_field = self._case(
+            steps=(
+                "1. Оставить поле «Дата выдачи» пустым.\n"
+                "2. Попытаться сохранить форму."
+            ),
+            expected_result="Сохранение формы запрещено.",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(empty_required_field),
+        )
+
+        for tc_id, label, filename in (
+            ("TC-AF-DOC-029", "Анкета клиента", "client-questionnaire.pdf"),
+            ("TC-AF-DOC-030", "Паспорт клиента", "passport-client.pdf"),
+            ("TC-AF-DOC-031", "Второй документ", "driver-license.pdf"),
+            ("TC-AFEIG-044", "Подтверждение дохода", "income-proof.pdf"),
+        ):
+            with self.subTest(tc_id=tc_id):
+                archive_case = self._case(
+                    tc_id=tc_id,
+                    steps=(
+                        f"1. Добавить файл `{filename}` в поле «{label}».\n"
+                        "2. Проверить запись о сохранении документа в "
+                        "электронном архиве Банка через доступный evidence source."
+                    ),
+                    expected_result=(
+                        f"Документ «{label}» сохранен в электронном архиве "
+                        "Банка и связан с текущей заявкой."
+                    ),
+                )
+                self.assertNotIn(
+                    "production-persistence-without-commit-action",
+                    self._finding_ids(archive_case),
+                )
+
+        post_save_observation = self._case(
+            steps=(
+                "1. Ввести `X` в поле.\n"
+                "2. Сохранить карточку.\n"
+                "3. Проверить, что кнопка «Добавить» доступна."
+            ),
+            expected_result="Значение сохранено.",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(post_save_observation),
+        )
+
+        for decision in ("Да", "Нет"):
+            with self.subTest(dialog_decision=decision):
+                dialog_branch = self._case(
+                    steps=(
+                        "1. Изменить значение поля.\n"
+                        "2. Нажать `Назад`.\n"
+                        f"3. В уведомлении выбрать `{decision}`.\n"
+                        "4. Вернуться в раздел."
+                    ),
+                    expected_result=(
+                        "При повторном открытии раздела поле отображает "
+                        "сохраненное значение."
+                    ),
+                )
+                self.assertNotIn(
+                    "production-persistence-without-commit-action",
+                    self._finding_ids(dialog_branch),
+                )
+
+                dialog_from_precondition = self._case(
+                    preconditions=(
+                        "Открыт раздел; уведомление `Назад` с вариантами "
+                        "`Да`/`Нет` отображается после изменения значения."
+                    ),
+                    steps=(
+                        f"1. В уведомлении нажать `{decision}`.\n"
+                        "2. Вернуться в раздел."
+                    ),
+                    expected_result=(
+                        "После повторного открытия раздела поле содержит "
+                        "проверяемое значение."
+                    ),
+                )
+                self.assertNotIn(
+                    "production-persistence-without-commit-action",
+                    self._finding_ids(dialog_from_precondition),
+                )
+
+                confirmation_branch = self._case(
+                    steps=(
+                        "1. Изменить поле.\n"
+                        "2. Нажать `Назад`.\n"
+                        f"3. В подтверждении выбрать `{decision}`.\n"
+                        "4. Вернуться в раздел."
+                    ),
+                    expected_result=(
+                        "После возврата в раздел поле содержит проверяемое значение."
+                    ),
+                )
+                self.assertNotIn(
+                    "production-persistence-without-commit-action",
+                    self._finding_ids(confirmation_branch),
+                )
+
+    def test_persistence_gate_ignores_cleanup_and_save_button_label(self) -> None:
+        cleanup_only = self._case(
+            expected_result="В поле отображается введённое значение.",
+            postconditions="- Restore the saved baseline.",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(cleanup_only),
+        )
+
+        save_button = self._case(
+            steps="1. Открыть форму.",
+            expected_result="Кнопка «Сохранить» отображается.",
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(save_button),
+        )
+
+        visibility_invariant = self._case(
+            steps=(
+                "1. Установить переключатель в значение «Нет».\n"
+                "2. Перейти из блока и вернуться в него."
+            ),
+            expected_result=(
+                "Переключатель остаётся видимым после изменения значения и "
+                "возврата в блок."
+            ),
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(visibility_invariant),
+        )
+
+        calibration_hypothesis = self._case(
+            expected_result=(
+                "Точный UI-отклик фиксируется без предварительного выбора "
+                "конкретного сообщения, перехода или сохранения."
+            ),
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(calibration_hypothesis),
+        )
+
+        immediate_selection = self._case(
+            steps="1. Select `X` in the dropdown.",
+            expected_result=(
+                "The selected option is retained in the dropdown after selection."
+            ),
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(immediate_selection),
+        )
+
+        representation_only = self._case(
+            steps="1. Ввести `Петров-Сидоров` в поле.",
+            expected_result=(
+                "Поле отображает `Петров-Сидоров`; символ `-` сохранен."
+            ),
+        )
+        self.assertNotIn(
+            "production-persistence-without-commit-action",
+            self._finding_ids(representation_only),
+        )
+
     def test_unbalanced_russian_quotes_in_title_are_blocked(self) -> None:
         finding_ids = self._finding_ids(
             self._case(
@@ -555,7 +837,7 @@ class ProductionTcGateTests(unittest.TestCase):
                     "действие подтверждения."
                 ),
                 expected_result=(
-                    "Переключатель сохраняет значение по умолчанию «Нет» без "
+                    "Переключатель отображает значение по умолчанию «Нет» без "
                     "обязательной активации."
                 ),
             )

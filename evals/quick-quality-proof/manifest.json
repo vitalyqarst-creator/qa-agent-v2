@@ -379,6 +379,21 @@
       "id": "QP-075",
       "risk": "automatic-derivation-production",
       "nodeid": "tests/test_derivation_compiler.py::DerivationCompilerTests::test_compiles_and_round_trips_without_manual_derivation"
+    },
+    {
+      "id": "QP-076",
+      "risk": "persistence-trigger-order",
+      "nodeid": "tests/test_derivation_compiler.py::DerivationCompilerTests::test_positive_and_negative_persistence_require_commit_trigger"
+    },
+    {
+      "id": "QP-077",
+      "risk": "production-persistence-without-post-mutation-commit",
+      "nodeid": "tests/test_production_tc_gate.py::ProductionTcGateTests::test_persistence_oracle_requires_commit_like_action"
+    },
+    {
+      "id": "QP-078",
+      "risk": "persistence-cleanup-false-positive",
+      "nodeid": "tests/test_production_tc_gate.py::ProductionTcGateTests::test_persistence_gate_ignores_cleanup_and_save_button_label"
     }
   ]
 }

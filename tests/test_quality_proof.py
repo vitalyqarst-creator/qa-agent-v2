@@ -54,9 +54,9 @@ class QuickQualityProofTests(unittest.TestCase):
         self.assertEqual("quick-qualification-quality-v1", manifest.proof_id)
         self.assertEqual(20.0, manifest.target_duration_seconds)
         self.assertEqual(30.0, manifest.hard_duration_ceiling_seconds)
-        self.assertEqual(75, len(manifest.checks))
-        self.assertEqual(75, len({item.check_id for item in manifest.checks}))
-        self.assertEqual(75, len({item.nodeid for item in manifest.checks}))
+        self.assertEqual(78, len(manifest.checks))
+        self.assertEqual(78, len({item.check_id for item in manifest.checks}))
+        self.assertEqual(78, len({item.nodeid for item in manifest.checks}))
         self.assertTrue(all(item.nodeid.startswith("tests/") for item in manifest.checks))
         self.assertTrue(all("AutoFin" not in item.nodeid for item in manifest.checks))
         self.assertIn("не доказывает качество live-моделей", manifest.description)
@@ -80,6 +80,9 @@ class QuickQualityProofTests(unittest.TestCase):
             "tests/test_promotion_adapter.py::PromotionAdapterTests::test_rejects_incomplete_or_changed_canonical_baseline",
             "tests/test_derivation_compiler.py::DerivationCompilerTests::test_artifact_drift_fails_closed",
             "tests/test_derivation_compiler.py::DerivationCompilerTests::test_compiles_and_round_trips_without_manual_derivation",
+            "tests/test_derivation_compiler.py::DerivationCompilerTests::test_positive_and_negative_persistence_require_commit_trigger",
+            "tests/test_production_tc_gate.py::ProductionTcGateTests::test_persistence_oracle_requires_commit_like_action",
+            "tests/test_production_tc_gate.py::ProductionTcGateTests::test_persistence_gate_ignores_cleanup_and_save_button_label",
         }
         self.assertTrue(
             required_nodeids.issubset({item.nodeid for item in manifest.checks})

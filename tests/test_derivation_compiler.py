@@ -86,22 +86,164 @@ class DerivationCompilerTests(unittest.TestCase):
         for polarity, oracle in (
             ("positive", "Поле сохраняет текущую дату."),
             ("negative", "Поле не сохраняет будущую дату."),
+            ("positive", "В поле сохранено значение «отец/мать»."),
         ):
             with self.subTest(polarity=polarity):
+                mutation = (
+                    "Выбрать «отец/мать»."
+                    if "отец/мать" in oracle
+                    else "Ввести тестовое значение."
+                )
                 self.assertTrue(
                     derivation_compiler_module._needs_validation_trigger_calibration(
                         polarity=polarity,
                         oracle=oracle,
-                        action="Ввести тестовое значение.",
+                        action=mutation,
                     )
                 )
                 self.assertFalse(
                     derivation_compiler_module._needs_validation_trigger_calibration(
                         polarity=polarity,
                         oracle=oracle,
-                        action="Сохранить карточку.",
+                        action=f"{mutation}; Сохранить карточку.",
                     )
                 )
+        for action in (
+            "Сохранить карточку; Ввести X.",
+            "Reopen the card.",
+            "Enter X; Close the tooltip.",
+            "Enter X; Confirm that the hint is absent.",
+            "Enter X; Confirm.",
+            "Enter X; Continue editing another field.",
+            "Enter X; Refresh the tooltip.",
+            "Enter X; Verify that the archive button is visible.",
+            "Enter X; Open storage; Check storage page title.",
+            "Ввести X; Отправить SMS.",
+            "Ввести X; Проверить кнопку «Сохранить».",
+        ):
+            with self.subTest(action=action):
+                self.assertTrue(
+                    derivation_compiler_module._needs_validation_trigger_calibration(
+                        polarity="positive",
+                        oracle="The value is saved.",
+                        action=action,
+                    )
+                )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="The value is saved.",
+                action="Enter X and save the card.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="The selected option is retained after selection.",
+                action="Select X.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle=(
+                    "Поле отображает Петров-Сидоров; символ '-' сохранен."
+                ),
+                action="Ввести Петров-Сидоров.",
+            )
+        )
+        self.assertTrue(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle=(
+                    "После повторного открытия карточки поле содержит X."
+                ),
+                action="Выбрать X.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="Значение сохранено.",
+                action=(
+                    "Ввести X; Сохранить карточку; "
+                    "Проверить кнопку «Добавить»."
+                ),
+            )
+        )
+        for decision in ("Да", "Нет"):
+            with self.subTest(decision=decision):
+                self.assertFalse(
+                    derivation_compiler_module._needs_validation_trigger_calibration(
+                        polarity="positive",
+                        oracle=(
+                            "При повторном открытии раздела поле отображает "
+                            "сохраненное значение."
+                        ),
+                        action=(
+                            "Изменить значение; Нажать `Назад`; "
+                            f"В уведомлении выбрать `{decision}`; "
+                            "Вернуться в раздел."
+                        ),
+                    )
+                )
+        self.assertTrue(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="negative",
+                oracle="Сохранение блокируется.",
+                action="Ввести будущую дату.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="negative",
+                oracle="Сохранение блокируется.",
+                action="Ввести будущую дату; Сохранить карточку.",
+            )
+        )
+        for action in (
+            "Ввести будущую дату; Попытаться сохранить карточку.",
+            "Ввести будущую дату; Выполнить подтверждение формы.",
+        ):
+            with self.subTest(action=action):
+                self.assertFalse(
+                    derivation_compiler_module._needs_validation_trigger_calibration(
+                        polarity="negative",
+                        oracle="Сохранение формы запрещено.",
+                        action=action,
+                    )
+                )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="Документ сохранен в электронном архиве.",
+                action=(
+                    "Добавить файл; Проверить запись о сохранении документа "
+                    "в электронном архиве."
+                ),
+            )
+        )
+        self.assertTrue(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="The value is retained after reopening.",
+                action="Navigate to the block; Enter X.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="The value is retained after reopening.",
+                action="Enter X; Reopen the card.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle="Кнопка «Сохранить» отображается.",
+                action="Открыть форму.",
+            )
+        )
         self.assertEqual(
             "его принятие",
             derivation_compiler_module._calibration_outcome("positive"),
@@ -389,6 +531,13 @@ class DerivationCompilerTests(unittest.TestCase):
         projection["bridge_receipt_artifact"]["sha256"] = hashlib.sha256(
             receipt_path.read_bytes()
         ).hexdigest()
+        projection["negative_oracles"] = [
+            {
+                "linked_obligation_id": "OBL-001",
+                "scope_obligation_id": "SO-NEG-001",
+                "analyst_question": "",
+            }
+        ]
 
         compiled = compile_property_derivations(
             repo_root=self.root,
@@ -398,6 +547,10 @@ class DerivationCompilerTests(unittest.TestCase):
             semantic_projection=projection,
         )
         derivation = compiled.document.derivations[0]
+        self.assertEqual(
+            "SO-NEG-001",
+            derivation.source_oracle_ids["OBL-001"],
+        )
         self.assertIn("OBL-001", derivation.calibration_questions)
         self.assertIn("Имя", derivation.calibration_questions["OBL-001"])
         self.assertIn("Иван", derivation.calibration_questions["OBL-001"])

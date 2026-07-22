@@ -9,6 +9,11 @@ from typing import Any, Mapping, Sequence
 
 from test_case_agent.coverage_graph import PropertyDerivation
 from test_case_agent.coverage_io import PropertyDerivationDocument
+from test_case_agent.persistence_safety import (
+    has_commit_or_transition_after_mutation,
+    persistence_claim,
+    split_action_contract,
+)
 from test_case_agent.review_cycle.prepared_package import (
     PreparedObligation,
     PreparedObligationSet,
@@ -382,18 +387,10 @@ def _needs_validation_trigger_calibration(
     """
 
     del polarity  # persistence safety is independent of positive/negative polarity
-    if "сохраня" not in oracle.casefold():
+    if persistence_claim(oracle) is None:
         return False
-    action_text = action.casefold()
-    return not any(
-        marker in action_text
-        for marker in (
-            "сохран",
-            "подтверд",
-            "продолж",
-            "перейти",
-            "отправ",
-        )
+    return not has_commit_or_transition_after_mutation(
+        split_action_contract(action)
     )
 
 
@@ -807,9 +804,13 @@ def compile_property_derivations(
             ):
                 # Never invent a Save, Continue or blur trigger.  Preserve the
                 # requirement in the same suite as a calibration candidate.
-                source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
-                    obligation_id.encode("utf-8")
-                ).hexdigest()[:16].upper()
+                source_oracles.setdefault(
+                    obligation_id,
+                    "SO-CAL-"
+                    + hashlib.sha256(obligation_id.encode("utf-8"))
+                    .hexdigest()[:16]
+                    .upper(),
+                )
                 target = f"элемента «{subject_label.strip('«»')}»"
                 value = fixtures[0] if fixtures else "указанного значения"
                 outcome = _calibration_outcome(assertion.polarity)

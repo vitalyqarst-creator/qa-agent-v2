@@ -321,14 +321,14 @@ class LeanV2IterationTests(unittest.TestCase):
             backend=backend,
         )
 
-        self.assertEqual("accepted-shadow", result.status)
-        self.assertEqual(["reviewer"], backend.calls)
-        self.assertEqual(6, result.test_case_count)
         gate = json.loads(
             (self.root / "run-all-templates" / "production-gate.json").read_text(
                 encoding="utf-8"
             )
         )
+        self.assertEqual("accepted-shadow", result.status, gate["findings"])
+        self.assertEqual(["reviewer"], backend.calls)
+        self.assertEqual(6, result.test_case_count)
         self.assertTrue(gate["passed"], gate["findings"])
         self.assertEqual(2, gate["calibration_candidate_count"])
 

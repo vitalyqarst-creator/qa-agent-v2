@@ -12,6 +12,11 @@ AutoFin DOCX/XHTML/PDF/mockups исключены. Активный `PostFinal-v
 Проверка локальных входов выполняется с `--require-local-inputs`.
 Для запуска offline quality proof используй обычную репозиторную dev-среду после
 `uv sync`; production installation может исключить dev group.
+Live-доказательство downstream-маршрута и последующая детерминированная правка
+зафиксированы в `release/qualification-contact-persons-v28-live.json`. Receipt
+явно отделяет инфраструктурно корректный v28 от найденного после review дефекта
+кейса и офлайн-подтверждения исправления v32. Локальные attempts и AutoFin inputs
+в release не включаются.
 
 ```powershell
 python scripts/build_release_bundle.py `

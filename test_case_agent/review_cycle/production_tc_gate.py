@@ -12,6 +12,10 @@ from test_case_agent.review_cycle.obligation_gate import (
     test_case_sections,
     without_fenced_blocks,
 )
+from test_case_agent.persistence_safety import (
+    has_commit_or_transition_after_mutation,
+    persistence_claim,
+)
 
 
 VALIDATOR_NAME = "production-tc-runtime-gate-v2"
@@ -376,6 +380,14 @@ ACTION_STEP_RE = re.compile(
 RUSSIAN_INFINITIVE_STEP_RE = re.compile(
     r"^[^\S\r\n]*(?:[А-ЯЁ][А-Яа-яЁё-]*"
     r"(?:ть|ти|чь)(?:ся|сь)?)\b",
+    re.IGNORECASE,
+)
+UNSAVED_DIALOG_PRECONDITION_RE = re.compile(
+    r"(?:(?:уведомлени\w*|диалог\w*)[^.\n]{0,160}"
+    r"(?:`да`|`нет`|«да»|«нет»|\bда\b|\bнет\b)[^.\n]{0,160}"
+    r"(?:после\s+изменени\w*|несохраненн\w*)|"
+    r"(?:unsaved|after\s+(?:a\s+)?change)[^.\n]{0,160}"
+    r"(?:notification|dialog)[^.\n]{0,160}\b(?:yes|no)\b)",
     re.IGNORECASE,
 )
 OBSERVATION_ONLY_START_RE = re.compile(
@@ -1330,11 +1342,14 @@ def validate_production_tc_content(
                 )
             )
 
+        numbered_steps = [
+            match.group(1) for match in NUMBERED_LINE_RE.finditer(steps)
+        ]
         numbered_actions = [
-            match.group(1)
-            for match in NUMBERED_LINE_RE.finditer(steps)
-            if ACTION_STEP_RE.search(match.group(1))
-            or RUSSIAN_INFINITIVE_STEP_RE.search(match.group(1))
+            step
+            for step in numbered_steps
+            if ACTION_STEP_RE.search(step)
+            or RUSSIAN_INFINITIVE_STEP_RE.search(step)
         ]
         if not numbered_actions:
             findings.append(
@@ -1346,6 +1361,40 @@ def validate_production_tc_content(
                     message=(
                         "Production TCs require at least one numbered, executable "
                         "action or observation step."
+                    ),
+                )
+            )
+        persistence_evidence = persistence_claim(expected_result)
+        if (
+            not is_calibration_candidate
+            and persistence_evidence is not None
+            and not (
+                has_commit_or_transition_after_mutation(numbered_steps)
+                or (
+                    UNSAVED_DIALOG_PRECONDITION_RE.search(preconditions)
+                    is not None
+                    and has_commit_or_transition_after_mutation(
+                        numbered_steps,
+                        mutation_already_occurred=True,
+                        boundary_prompt_already_open=True,
+                    )
+                )
+            )
+        ):
+            findings.append(
+                _finding(
+                    finding_id="production-persistence-without-commit-action",
+                    tc_id=tc_id,
+                    section="steps",
+                    evidence=(
+                        f"{persistence_evidence}; "
+                        + (" | ".join(numbered_steps) or "<no action>")
+                    ),
+                    message=(
+                        "A persistence oracle requires an explicit source-backed "
+                        "save, confirmation, transition, submit or blur action. "
+                        "Immediate selection/input alone proves only the visible "
+                        "current value."
                     ),
                 )
             )

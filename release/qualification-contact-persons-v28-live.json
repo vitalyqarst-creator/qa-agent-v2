@@ -1,0 +1,162 @@
+{
+  "schema_version": 2,
+  "qualification_id": "contact-persons-v28-live-plus-v32-offline-repair",
+  "recorded_at": "2026-07-23T06:15:13+07:00",
+  "scope": "application-card-contact-persons-repeater",
+  "evidence_level": "live-route-with-independent-post-review-and-offline-repair",
+  "live_attempt": {
+    "runtime_commit": "eb690bb89d00955fbc8eb8736c48890004556dd6",
+    "local_path": "fts/AutoFin/work/iterations/contact-deterministic-v28-live-final",
+    "finished_at": "2026-07-23T05:11:32+07:00",
+    "terminal_status": "accepted-with-calibration-pending",
+    "terminal_summary_sha256": "d0249b9dd20da4fb6911ef5e8ce6a605c18b45ae5a3b1d3092de4fff9b8453a6",
+    "iteration_summary_sha256": "4672caebf6f4e7ba6987d49b1119321f3f675249f139e8413c08f2c254b8c794",
+    "suite": {
+      "test_case_count": 34,
+      "covered_count": 23,
+      "calibration_pending_count": 11,
+      "blocked_count": 0,
+      "production_gate_passed_at_run_time": true,
+      "production_gate_findings_at_run_time": 0,
+      "shadow_draft_sha256": "486439e926a5dd8526df0e1882bdd2d00e3153cf726746eb7ba0c5816dcee43b",
+      "coverage_graph_digest": "fa064c3541a95480249a60ed43f83ee3bf5e5bc6ca7f7bc7db9f2b209ea220f4"
+    },
+    "model_boundary": {
+      "writer_calls": 0,
+      "reviewer_calls": 1,
+      "reviewer_attempts": 1,
+      "reviewer_backend": "codex-exec-tool-free",
+      "codex_version": "codex-cli 0.145.0-alpha.30",
+      "reviewer_decision": "accepted",
+      "reviewer_findings": 0,
+      "tool_event_count": 0,
+      "command_budget": 0,
+      "hard_model_timeout": null,
+      "retry_count": 0,
+      "input_tokens": 34818,
+      "output_tokens": 3733,
+      "reasoning_output_tokens": 174,
+      "root_agent_tokens": "unavailable",
+      "reviewer_response_sha256": "620d23d8a05df1921439eb0be5ba855cdd470672e5ab098f01a6ed73c7786fed",
+      "model_stage_receipts_sha256": "50c0f06f02764ed7b9a5ce57e253d54e868260ae5d30b0d46a2d45c245a9e1fd"
+    },
+    "timing_ms": {
+      "total_observed": 78289,
+      "immutable_iteration": 75433,
+      "reviewer_phase": 74822,
+      "reviewer_backend_call": 74251,
+      "source_contract_binding": 1982,
+      "scope_compilation": 395,
+      "pre_dispatch_verification": 161,
+      "final_reconciliation": 196
+    }
+  },
+  "independent_post_review": {
+    "status": "finding-confirmed",
+    "quality_clean": false,
+    "finding_count": 1,
+    "findings": [
+      {
+        "tc_id": "TC-CP-4FB9E10F20",
+        "obligation_id": "OBL-CP-004-005",
+        "class": "persistence-without-commit-action",
+        "evidence": "The step only selects `отец/мать`, while the expected result claimed that the value was saved.",
+        "impact": "The live reviewer acceptance proves the route and isolation contract, but it is not a clean quality sign-off."
+      }
+    ]
+  },
+  "offline_repair_qualification": {
+    "source_state": "current-release-source-hash-bound",
+    "implementation_binding": {
+      "capture": "immediately-after-successful-v32-replay",
+      "run_artifact_embeds_implementation_hashes": false,
+      "files": {
+        "test_case_agent/persistence_safety.py": "911e42cf853e977055eefef7e42eb42bc8fbe78b58e543c806eb4a39291d3df4",
+        "test_case_agent/derivation_compiler.py": "a4ec201442a4f430b05c5bfa8d2d30e829604b071480377b2c29bf053234adf0",
+        "test_case_agent/review_cycle/production_tc_gate.py": "a66f54ba5f5ebcecff505bce17fe5a11cdc81447e97a34c59424aada9e02844b"
+      }
+    },
+    "local_path": "fts/AutoFin/work/iterations/contact-deterministic-v32-offline-persistence-guard-final",
+    "terminal_status": "accepted-with-calibration-pending",
+    "qualification_only": true,
+    "terminal_summary_sha256": "98cda2cb628d6cb15143dded3a8f1475285098f7062dfaf733d8a7769875479c",
+    "iteration_summary_sha256": "dccdaa290a288dcac60b0b7e7deb26149af82610df172134d0e8bf24572c85dc",
+    "suite": {
+      "test_case_count": 34,
+      "covered_count": 22,
+      "calibration_pending_count": 12,
+      "blocked_count": 0,
+      "production_gate_passed": true,
+      "production_gate_findings": 0,
+      "shadow_draft_sha256": "817cf6a6220895023b3b6444bccd632bb89c84ce65c9a25057736f1c0d954465",
+      "coverage_graph_digest": "aab00116ee2db0c2835e34a885700828b494fed6d15f517eda41fd910f427bc8"
+    },
+    "repair_effect": {
+      "tc_id": "TC-CP-4FB9E10F20",
+      "old_status": "executable",
+      "new_status": "candidate-ui-calibration",
+      "unsupported_persistence_oracle_removed": true,
+      "promotion_eligible": false,
+      "non_promotable_reason": "calibration-pending"
+    },
+    "model_boundary": {
+      "writer_calls": 0,
+      "reviewer_calls": 0,
+      "reviewer_backend": "precomputed-response",
+      "tool_event_count": 0,
+      "hard_model_timeout": null,
+      "retry_count": 0,
+      "tokens": "unavailable",
+      "reviewer_response_sha256": "d5c0a500b50c4b020f129efef9ad0cf9c017b420f660022618a96111de008bf1",
+      "model_stage_receipts_sha256": "9cc3b429d162f0582cf8a3b31262125d114a90f9dc3e48c3e9e6402e913139b0"
+    }
+  },
+  "verification": {
+    "quick_quality_proof": {
+      "status": "passed",
+      "check_count": 78,
+      "model_calls": 0,
+      "hard_ceiling_seconds": 30
+    },
+    "architecture_audit": {
+      "status": "passed",
+      "checks": 72,
+      "findings": 0
+    }
+  },
+  "production_bundle": {
+    "file_count": 50,
+    "total_bytes": 1051902,
+    "tree_sha256": "44b9728b569f6a18c146972c48ff4d21661238f75b8aa72c3ab69ec26baf2aba"
+  },
+  "isolation": {
+    "old_test_cases_in_live_model_context": false,
+    "benchmark_context_in_live_model_context": false,
+    "review_history_in_live_model_context": false,
+    "live_model_tool_access": false,
+    "registered_context_only": true,
+    "live_evidence_access_report_sha256": "4d5006dd5a5eb0e3919eb414609355e8db1678dca3fea8c83dd9c2cbd35df846"
+  },
+  "integrity": {
+    "live_run_input_count": 4,
+    "live_run_input_mismatches": 0,
+    "protected_file_count": 44,
+    "protected_file_mismatches": 0,
+    "protected_inputs_receipt_sha256": "c13eec60f46e469e5359216f22b538446685375de4382fe7916a8ac4fb50590d",
+    "offline_v32_protected_inputs_unchanged": true
+  },
+  "publication": {
+    "canonical_publication": "not-performed",
+    "promotion_eligible": false,
+    "non_promotable_reason": "calibration-pending"
+  },
+  "local_artifacts_embedded": false,
+  "limitations": [
+    "The v28 evidence proves the live downstream route and isolation boundary, not a clean quality sign-off; independent post-review found one missed defect.",
+    "The v32 evidence proves the deterministic repair and gates offline; it is not a second live reviewer run.",
+    "The v32 run artifacts do not embed implementation hashes; this receipt binds the immediately post-run release sources explicitly and discloses that limitation.",
+    "The persistence text guard is conservative lint; authoritative source binding remains the responsibility of typed compiler and coverage-graph contracts.",
+    "Twelve UI calibration candidates remain non-executable until observed UI evidence is available.",
+    "The receipt starts from an independently qualified hash-bound scope package; raw FT discovery and source qualification are outside this attempt."
+  ]
+}

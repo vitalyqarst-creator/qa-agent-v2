@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -40,6 +41,7 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertEqual("production", receipt["profile"])
         self.assertIn("test_case_agent/stage_backend.py", paths)
         self.assertIn("test_case_agent/derivation_compiler.py", paths)
+        self.assertIn("test_case_agent/persistence_safety.py", paths)
         self.assertIn("references/agent/production-instruction-loading.md", paths)
         self.assertIn("references/agent/production-global-rules.md", paths)
         self.assertNotIn("AGENTS.md", paths)
@@ -76,6 +78,39 @@ class ReleaseBundleTests(unittest.TestCase):
             10,
         )
 
+    def test_qualification_receipt_binds_current_sources_and_bundle(self) -> None:
+        receipt = json.loads(
+            (
+                ROOT
+                / "release"
+                / "qualification-contact-persons-v28-live.json"
+            ).read_text(encoding="utf-8")
+        )
+        binding = receipt["offline_repair_qualification"][
+            "implementation_binding"
+        ]
+        self.assertFalse(binding["run_artifact_embeds_implementation_hashes"])
+        for relative_path, expected_sha256 in binding["files"].items():
+            actual_sha256 = hashlib.sha256(
+                (ROOT / relative_path).read_bytes()
+            ).hexdigest()
+            self.assertEqual(expected_sha256, actual_sha256, relative_path)
+
+        current_bundle = build_release_bundle(
+            root=ROOT,
+            manifest_path=ROOT / "release" / "production-manifest.json",
+            output=None,
+            check_only=True,
+            require_local_inputs=False,
+        )
+        self.assertEqual(
+            {
+                "file_count": current_bundle["file_count"],
+                "total_bytes": current_bundle["total_bytes"],
+                "tree_sha256": current_bundle["tree_sha256"],
+            },
+            receipt["production_bundle"],
+        )
     def test_production_iteration_skill_has_one_route_without_legacy_markers(self) -> None:
         skill = (ROOT / "skills/ft-test-case-iteration/SKILL.md").read_text(
             encoding="utf-8"
