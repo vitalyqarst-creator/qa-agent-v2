@@ -33,6 +33,11 @@ CALIBRATION_REQUIREDNESS_RESULT = (
     "требуется зафиксировать при UI calibration: видимый маркер / сообщение / "
     "подсветка / блокировка перехода или сохранения / другое фактическое поведение."
 )
+CALIBRATION_OPTIONALNESS_RESULT = (
+    "Пустое необязательное поле не должно препятствовать продолжению целевого "
+    "пользовательского сценария. Конкретное наблюдаемое состояние успешного "
+    "продолжения требуется зафиксировать при UI calibration."
+)
 CALIBRATION_INVALID_RESULT = (
     "Недопустимое значение не должно быть принято как валидное. Конкретный "
     "наблюдаемый механизм отклонения требуется зафиксировать при UI calibration: "
@@ -242,6 +247,22 @@ def _materialize_card(
                 question, f"{card['card_id']}.inputs.missing_oracle_question"
             )
             intent["calibration"] = {"question": question}
+    elif template == "optionalness":
+        trigger = _one_line(
+            inputs.get("trigger_step", ""), f"{card['card_id']}.inputs.trigger_step"
+        )
+        question = _one_line(
+            inputs.get("missing_oracle_question", ""),
+            f"{card['card_id']}.inputs.missing_oracle_question",
+        )
+        intent.update(
+            title=inputs.get("title", f"Необязательность поля «{field}»"),
+            type="позитивный",
+            test_data=[f"Поле «{field}»: оставить пустым."],
+            steps=_strings(inputs.get("steps"), [f"Оставить поле «{field}» пустым.", trigger]),
+            expected_result=inputs.get("expected_result", CALIBRATION_OPTIONALNESS_RESULT),
+            calibration={"question": question},
+        )
     elif template == "calibration-negative":
         invalid = _one_line(
             inputs.get("invalid_value", ""), f"{card['card_id']}.inputs.invalid_value"
@@ -448,6 +469,12 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
         rules = (
             "Независимо проверь полноту покрытия каждой evidence card, исполнимость, "
             "конкретность данных и наблюдаемость expected result. Не редактируй draft. "
+            "Кейс со статусом candidate-ui-calibration считается корректно покрывающим "
+            "карточку для FT-first shadow suite, если он содержит конкретные входные данные, "
+            "source-backed invariant, canonical calibration markers и точный вопрос о "
+            "неизвестном UI-механизме. Не требуй выдумать сообщение, подсветку или иной "
+            "oracle и не называй такой кейс production-executable; readiness всего набора "
+            "должна оставаться calibration-pending. "
             "accepted допустим только при покрытии каждой карточки и отсутствии error findings."
         )
     return (
@@ -853,6 +880,16 @@ def run_lean_v2_iteration(
             "schema_version": 1,
             "packet_sha256": digest,
             "draft_sha256": draft_digest,
+            "review_contract": {
+                "suite_readiness": gate_payload.get("suite_readiness"),
+                "calibration_candidates_allowed": True,
+                "calibration_candidate_acceptance": (
+                    "Concrete input plus source-backed invariant, canonical calibration "
+                    "markers and an explicit question about the unknown UI mechanism cover "
+                    "the evidence card for an FT-first shadow suite. Do not invent an exact "
+                    "UI oracle and do not classify the candidate as production-executable."
+                ),
+            },
             "evidence_cards": cards,
             "test_intents": normalized_intents,
             "draft": draft,

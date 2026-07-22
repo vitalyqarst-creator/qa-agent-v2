@@ -297,6 +297,19 @@ class LeanV2IterationTests(unittest.TestCase):
                         ),
                     },
                 },
+                {
+                    "obligation_id": "OBL-006",
+                    "atom_id": "ATOM-006",
+                    "template": "optionalness",
+                    "priority": "средний",
+                    "inputs": {
+                        "trigger_step": "Нажать кнопку «Продолжить».",
+                        "missing_oracle_question": (
+                            "Какой экран подтверждает успешное продолжение с пустым "
+                            "необязательным полем «Социальный статус»?"
+                        ),
+                    },
+                },
             ]
         )
         backend = FixtureStageBackend()
@@ -310,13 +323,14 @@ class LeanV2IterationTests(unittest.TestCase):
 
         self.assertEqual("accepted-shadow", result.status)
         self.assertEqual(["reviewer"], backend.calls)
-        self.assertEqual(5, result.test_case_count)
+        self.assertEqual(6, result.test_case_count)
         gate = json.loads(
             (self.root / "run-all-templates" / "production-gate.json").read_text(
                 encoding="utf-8"
             )
         )
         self.assertTrue(gate["passed"], gate["findings"])
+        self.assertEqual(2, gate["calibration_candidate_count"])
 
     def test_complex_card_uses_one_writer_and_one_reviewer(self) -> None:
         packet = self._packet(
@@ -432,6 +446,22 @@ class LeanV2IterationTests(unittest.TestCase):
         gate = json.loads((self.root / "run-4" / "production-gate.json").read_text(encoding="utf-8"))
         self.assertEqual(1, gate["calibration_candidate_count"])
         self.assertEqual("ft-first-reviewed-with-calibration-pending", gate["suite_readiness"])
+        review_request = json.loads(
+            (self.root / "run-4" / "reviewer-request.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertTrue(
+            review_request["review_contract"]["calibration_candidates_allowed"]
+        )
+        self.assertEqual(
+            "ft-first-reviewed-with-calibration-pending",
+            review_request["review_contract"]["suite_readiness"],
+        )
+        self.assertIn(
+            "Do not invent an exact UI oracle",
+            review_request["review_contract"]["calibration_candidate_acceptance"],
+        )
 
     def test_accepted_shadow_does_not_modify_existing_canonical(self) -> None:
         packet = self._packet(

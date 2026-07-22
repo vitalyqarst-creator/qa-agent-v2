@@ -18,6 +18,7 @@ TEMPLATE_KINDS = {
     "dictionary",
     "positive-input",
     "requiredness",
+    "optionalness",
     "calibration-negative",
     "behavior",
     "complex",

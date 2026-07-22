@@ -104,6 +104,7 @@ locator, source row, requirement codes при наличии, `ATOM-*` и `OBL-*
 | `dictionary` | `dictionary_id` закрытого справочника | deterministic |
 | `positive-input` | concrete `value` | deterministic |
 | `requiredness` | `trigger_step`; exact `expected_result` либо `missing_oracle_question` | deterministic executable или calibration candidate |
+| `optionalness` | `trigger_step`, `missing_oracle_question`; optional exact `expected_result` | deterministic calibration candidate для source-backed `required = no` |
 | `calibration-negative` | concrete `invalid_value`, `missing_oracle_question` | deterministic calibration candidate |
 | `behavior` | `title`, concrete `steps`, observable `expected_result` | deterministic explicit behavior |
 | `complex` | bounded `writer_context` | один writer call |
@@ -112,6 +113,9 @@ locator, source row, requirement codes при наличии, `ATOM-*` и `OBL-*
 Закрытый dictionary-кейс проверяет все и только перечисленные значения. Для
 requiredness/negative restriction с неизвестной UI-реакцией кандидат остаётся в
 общем наборе с canonical calibration markers; он не называется execution-ready.
+То же правило применяется к `optionalness`: отсутствие обязательности является
+отдельным source-backed свойством и не считается покрытым одним лишь отсутствием
+requiredness-кейса.
 
 ## Model boundary
 
