@@ -3167,7 +3167,8 @@ def collect_active_source_documents(workflow_path: Path, root: Path) -> list[Pat
 
     def is_source_docx_ref(value: str) -> bool:
         normalized = strip_quotes(value).replace("\\", "/")
-        return Path(normalized).suffix.lower() == ".docx" and (
+        source_path = Path(normalized)
+        return source_path.suffix.lower() == ".docx" and not source_path.name.startswith("~$") and (
             normalized.startswith("source/") or "/source/" in normalized
         )
 

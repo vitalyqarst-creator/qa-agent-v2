@@ -90,3 +90,5 @@
 2. учитывать его как обязательный package-specific context;
 3. не дублировать его содержимое в skill-ах или в глобальном `AGENTS.md`, если для него уже есть канонический источник.
 4. не смешивать его с отдельными UI operational notes, если для пакета используется `work/ui-automation-prep/UI-AGENT-NOTES.md`.
+
+Если выбранный input root является version/variant-подкаталогом `fts/<ft-slug>/...`, дополнительно проверь package root `fts/<ft-slug>/AGENT-NOTES.md`. Чтение этого файла не нарушает clean isolation; sibling version artifacts по-прежнему запрещены.

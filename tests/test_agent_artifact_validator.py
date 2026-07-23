@@ -13,6 +13,7 @@ from pathlib import Path
 from docx import Document
 
 from scripts.validate_agent_artifacts import (
+    collect_active_source_documents,
     expected_transition_prompt,
     transition_prompt_kind,
 )
@@ -10515,6 +10516,52 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("source-quality-unreadable-active-source", finding_ids)
         self.assertEqual(1, payload["summary"]["source_documents_checked"])
+
+    def test_rejected_office_lock_docx_is_not_an_active_source(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            source_dir = fixture_root / "source"
+            handoff_dir = fixture_root / "work" / "stage-handoffs" / "00-source-selection"
+            source_dir.mkdir(parents=True)
+            handoff_dir.mkdir(parents=True)
+            main_docx = source_dir / "main.docx"
+            office_lock = source_dir / "~$main.docx"
+            main_docx.write_bytes(b"main")
+            office_lock.write_bytes(b"lock")
+            (handoff_dir / "source-selection.md").write_text(
+                "\n".join(
+                    [
+                        "# Source Selection",
+                        "",
+                        "## Main FT Documents",
+                        "",
+                        "- `source/main.docx`",
+                        "",
+                        "Rejected source candidates:",
+                        "",
+                        "- `source/~$main.docx` - Office lock file.",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            workflow_path = handoff_dir / "workflow-state.yaml"
+            workflow_path.write_text(
+                "\n".join(
+                    [
+                        "ft_slug: demo",
+                        "required_inputs:",
+                        "  - work/stage-handoffs/00-source-selection/source-selection.md",
+                        "latest_artifacts:",
+                        "  source_selection: work/stage-handoffs/00-source-selection/source-selection.md",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            active_sources = collect_active_source_documents(workflow_path, fixture_root)
+            self.assertEqual(1, len(active_sources))
+            self.assertTrue(os.path.samefile(main_docx, active_sources[0]))
+            self.assertNotIn(office_lock.name, {path.name for path in active_sources})
 
     def test_active_source_oversized_blocks_are_reported_as_info_after_safe_split(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

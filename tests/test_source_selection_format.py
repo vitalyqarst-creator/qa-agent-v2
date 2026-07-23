@@ -26,6 +26,8 @@ class SourceSelectionFormatTests(unittest.TestCase):
         self.assertIn("workflow-state-source-selection-xhtml-missing-routes-downstream", content)
         self.assertIn("source-selection-missing-required-sections", content)
         self.assertIn("workflow-state-source-selection-not-selected", content)
+        self.assertIn("Office lock-файлы `~$*`", content)
+        self.assertIn("До выбора scope support/mockups по умолчанию получают `no`", content)
 
     def test_source_locator_links_to_source_selection_reference(self) -> None:
         locator = (ROOT_DIR / "skills" / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")
@@ -38,6 +40,8 @@ class SourceSelectionFormatTests(unittest.TestCase):
         self.assertIn("main_ft_xhtml", locator)
         self.assertIn("xhtml_available", locator)
         self.assertIn("missing main-ft-xhtml", locator)
+        self.assertIn("version/variant-подкаталоге", locator)
+        self.assertIn("не считается соседним package artifact", locator)
         self.assertIn("source-selection-format.md", handoff)
         self.assertIn("Source selection", contracts)
         self.assertIn("source-selection-format.md", contracts)
@@ -79,11 +83,16 @@ class SourceSelectionFormatTests(unittest.TestCase):
 
     def test_source_locator_defines_clean_diagnostic_isolation(self) -> None:
         locator = (ROOT_DIR / "skills" / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")
+        notes_contract = (ROOT_DIR / "references" / "agent" / "ft-package-agent-notes-template.md").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("Clean Diagnostic Isolation", locator)
         self.assertIn("работай только внутри выбранного `fts/<ft-slug>`", locator)
         self.assertIn("не открывай, не сравнивай и не копируй", locator)
         self.assertIn("Contamination Check", locator)
+        self.assertIn("version/variant-подкаталогом", notes_contract)
+        self.assertIn("sibling version artifacts", notes_contract)
 
 
 if __name__ == "__main__":

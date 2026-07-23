@@ -22,7 +22,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 - `main_ft_xhtml` и `xhtml_available: yes | no`;
 - список PDF-версий основного ФТ для сверки структуры, если они есть в FT-пакете;
 - список support-файлов и макетов;
-- package-specific `AGENT-NOTES.md`, если он есть в корне FT-пакета;
+- package-specific `AGENT-NOTES.md` из выбранного input root и package root `fts/<ft-slug>/`, если он есть;
 - `source-selection.md` в фактической stage-handoff папке; для новых handoff-папок это `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`;
 - структура `source-selection.md` определяется `source-selection-format.md`;
 - `workflow-state.yaml` в фактической stage-handoff папке; для новых handoff-папок это `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`;
@@ -37,12 +37,12 @@ description: Находит нужный FT-пакет, основное ФТ, s
 Для русскоязычных источников перед PowerShell-командами выставляй UTF-8 preamble из `session-log-format.md`; если вывод консоли искажает кириллицу, перечитай источник через явный UTF-8 file/script path, не используй mojibake stdout как evidence и зафиксируй это в `Technical Fallbacks`.
 
 1. Просмотри `fts/` и карточки FT-пакетов.
-2. Определи, к какому `ft-slug` относится запрос.
-3. Зафиксируй, какие документы являются основным ФТ из `source/`, а какие относятся к support или mockups. Основной DOCX ФТ остается authoritative source of truth.
+2. Определи `ft-slug` и отдельно выбранный input root, если материалы лежат в version/variant-подкаталоге `fts/<ft-slug>/...`.
+3. Зафиксируй, какие документы являются основным ФТ из `source/`, а какие относятся к support или mockups. Не считай Office lock-файлы `~$*` source-кандидатами или blocker-ами. Основной DOCX ФТ остается authoritative source of truth.
 4. Найди matching XHTML-версию основного ФТ в `source/`. XHTML обязателен как основной машиночитаемый источник извлечения таблиц, строк, списков, вложенных списков, перечней значений и структуры разделов.
 5. Отдельно найди PDF-версию основного ФТ для сверки структуры разделов. Ищи ее сначала в `source/`, затем в связанных материалах того же FT-пакета.
 6. Если PDF-версия найдена, передай ее следующему skill-у как вход для structural/visual cross-check; PDF не заменяет DOCX или XHTML.
-7. Если в корне FT-пакета есть `AGENT-NOTES.md`, передай его следующему skill-у как обязательный package-specific context.
+7. Проверь `AGENT-NOTES.md` в выбранном input root и в package root `fts/<ft-slug>/`; найденные notes передай как обязательный package-specific context.
 8. Если PDF-версия не найдена, явно зафиксируй отсутствие PDF для сверки структуры, а не игнорируй это молча.
 9. Если XHTML отсутствует, создай `source-selection.md` с секцией `Machine-Readable XHTML Source`, укажи `selection_status: blocked-input`, `xhtml_available: no`, `blocking_reason: missing main-ft-xhtml`, попроси добавить XHTML-версию основного ФТ в `source/` и не передавай задачу в `ft-scope-analyzer`.
 10. Если выбор неоднозначен, сформулируй короткий список вариантов и чего именно не хватает для уверенного выбора.
@@ -62,6 +62,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 - не открывай, не сравнивай и не копируй артефакты из соседних `fts/<ft-slug>*`, старых версий и baseline packages;
 - не используй готовые `00-scope-selection`, `scope-contract.md`, test-cases или review-cycle/legacy review artifacts из соседних пакетов как пример содержания;
 - допустимо прочитать общие `skills/`, `references/`, `scripts/` и validator, потому что это правила агента, а не данные предыдущего FT run;
+- package-level `fts/<ft-slug>/AGENT-NOTES.md` разрешен для nested version/variant input root и не считается соседним package artifact;
 - если случайно был открыт соседний package artifact, зафиксируй contamination risk в `source-locator-session-log.md` и не выдавай run как clean.
 
 ## Канонические references
