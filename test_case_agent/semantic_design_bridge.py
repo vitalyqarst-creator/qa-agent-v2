@@ -23,6 +23,7 @@ from test_case_agent.review_cycle.source_assertions import (
     contains_token_bounded_source_fragment,
     normalize_exact_source_text,
 )
+from test_case_agent.source_constraint_taxonomy import restricted_symbol_classes
 
 
 BRIDGE_CONTRACT_VERSION = 1
@@ -1051,10 +1052,21 @@ def _candidate_signal_code_binding_projections(
                 or not isinstance(clause_evidence, list)
             ):
                 continue
+            owner_code_set = set(map(str, owner_codes))
+            owner_evidence_codes = {
+                str(binding.get("requirement_code", ""))
+                for binding in owner_evidence
+                if isinstance(binding, Mapping)
+            }
             missing_codes = [
                 code for code in expected_codes if code not in set(map(str, owner_codes))
             ]
-            if not missing_codes:
+            missing_evidence_codes = [
+                code
+                for code in expected_codes
+                if code in owner_code_set and code not in owner_evidence_codes
+            ]
+            if not missing_codes and not missing_evidence_codes:
                 continue
             literal_anchor = str(expected.get("literal_anchor", ""))
             if not any(
@@ -1068,7 +1080,7 @@ def _candidate_signal_code_binding_projections(
             assertions = source_design.get("assertions", [])
             donors: list[dict[str, Any]] = []
             provable = True
-            for code in missing_codes:
+            for code in [*missing_codes, *missing_evidence_codes]:
                 matches = [
                     evidence
                     for assertion in assertions
@@ -1100,6 +1112,7 @@ def _candidate_signal_code_binding_projections(
                     "assertion_id": str(owner.get("assertion_id", "")),
                     "signal_id": signal_id,
                     "missing_requirement_codes": missing_codes,
+                    "missing_requirement_evidence_codes": missing_evidence_codes,
                     "canonical_requirement_codes": canonical_codes,
                     "canonical_requirement_code_evidence": [
                         *copy.deepcopy(owner_evidence),
@@ -15649,7 +15662,19 @@ def _source_signal_registry(
         row_id = str(row.get("source_row_id", ""))
         text = str(row.get("bounded_source_text", ""))
         row_codes = code_registry.get(row_id, ())
-        matches: list[tuple[int, int, str, str]] = []
+        classified = restricted_symbol_classes(text)
+        matches: list[tuple[int, int, int, str, str, str, str]] = [
+            (
+                item.start,
+                item.end,
+                index,
+                item.restriction_type,
+                item.literal_anchor,
+                item.negative_class,
+                item.representative_invalid_value,
+            )
+            for index, item in enumerate(classified)
+        ]
         for restriction_type, pattern in _NEGATIVE_SIGNAL_PATTERNS:
             for match in pattern.finditer(text):
                 if restriction_type == "format" and _is_default_template_state_signal(
@@ -15658,14 +15683,34 @@ def _source_signal_registry(
                     signal_end=match.end(),
                 ):
                     continue
+                if any(
+                    item.start <= match.start() and match.end() <= item.end
+                    for item in classified
+                ):
+                    continue
                 matches.append(
-                    (match.start(), match.end(), restriction_type, match.group(0))
+                    (
+                        match.start(),
+                        match.end(),
+                        len(classified),
+                        restriction_type,
+                        match.group(0),
+                        "",
+                        "",
+                    )
                 )
-        matches.sort(key=lambda item: (item[0], item[1], item[2]))
-        for _start, _end, restriction_type, anchor in matches:
+        matches.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
+        for (
+            _start,
+            _end,
+            _class_order,
+            restriction_type,
+            anchor,
+            negative_class,
+            representative_invalid_value,
+        ) in matches:
             signal_id = f"SIG-NEG-{len(negative) + 1:03d}"
-            negative.append(
-                {
+            signal = {
                     "signal_id": signal_id,
                     "scope_obligation_id": "SO-" + signal_id.removeprefix("SIG-"),
                     "source_row_id": row_id,
@@ -15675,7 +15720,15 @@ def _source_signal_registry(
                     "restriction_type": restriction_type,
                     "literal_anchor": anchor,
                 }
-            )
+            if negative_class:
+                signal.update(
+                    {
+                        "negative_class": negative_class,
+                        "representative_invalid_value": representative_invalid_value,
+                        "source_binding": "exclusive-symbol-class-restriction",
+                    }
+                )
+            negative.append(signal)
         field_properties = row.get("field_properties")
         typed_requiredness = (
             field_properties.get("requiredness")
@@ -17415,6 +17468,15 @@ def validate_semantic_design_binding(
                         f"{signal_id or collection_name} {field} drifted from the "
                         "typed source-signal registry"
                     )
+            if registry_name == "negative" and expected_signal.get(
+                "source_binding"
+            ) == "exclusive-symbol-class-restriction":
+                for field in ("negative_class", "representative_invalid_value"):
+                    if item.get(field) != expected_signal[field]:
+                        raise SemanticDesignBridgeError(
+                            f"{signal_id} {field} drifted from the typed "
+                            "source-signal registry"
+                        )
             signal_row_id = str(expected_signal["source_row_id"])
             source_statement = item.get(statement_field)
             _literal_fragment(

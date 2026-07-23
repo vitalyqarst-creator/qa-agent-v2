@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import time
@@ -13,22 +14,31 @@ from test_case_agent.strict_output_schema import (
 )
 from test_case_agent.coverage_graph import CoverageGraph, validate_coverage_graph
 from test_case_agent.iteration_contract import (
+    REVIEWER_FALSIFICATION_PROBES,
     IterationContractError,
-    REVIEWER_PROMPT_INSTRUCTION,
     SuiteGateReport,
     build_reviewer_request,
     build_writer_request,
     request_sha256,
+    reviewer_acceptance_contract,
+    reviewer_prompt_instruction,
     reviewer_response_schema,
     validate_reviewer_response,
     validate_suite,
     validate_writer_response,
     writer_response_schema,
 )
+from test_case_agent.reviewer_evidence import (
+    ReviewerEvidenceBasis,
+    ReviewerEvidenceError,
+    build_reviewer_evidence_pack,
+)
 from test_case_agent.stage_backend import (
     CodexExecStageBackend,
+    RegisteredImageInput,
     StageBackendError,
     StageResult,
+    verify_registered_image_inputs,
 )
 from test_case_agent.review_cycle.runtime import sha256_path, write_json_atomic
 from test_case_agent.test_design import (
@@ -48,6 +58,10 @@ class ImmutableIterationError(ValueError):
     """The deterministic-first attempt cannot continue without guessing."""
 
 
+class ReviewerContextTooLarge(ImmutableIterationError):
+    """The complete reviewer evidence cannot fit without forbidden truncation."""
+
+
 class StageBackend(Protocol):
     def run_stage(
         self,
@@ -56,6 +70,7 @@ class StageBackend(Protocol):
         prompt: str,
         schema: Mapping[str, Any],
         artifact_dir: Path,
+        images: tuple[RegisteredImageInput, ...] = (),
     ) -> StageResult: ...
 
 
@@ -260,7 +275,12 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
             "author case prose or add identifiers that are absent from the card."
         )
     elif stage == "reviewer":
-        instruction = REVIEWER_PROMPT_INSTRUCTION
+        raw_version = request.get("schema_version")
+        if type(raw_version) is not int:
+            raise ImmutableIterationError(
+                "reviewer request schema_version must be an integer"
+            )
+        instruction = reviewer_prompt_instruction(raw_version)
     else:  # pragma: no cover - the runner owns its two-stage call graph
         raise ImmutableIterationError(f"unsupported model stage: {stage}")
     return f"{instruction}\nREQUEST JSON:\n{_json_bytes(request).decode('utf-8')}\n"
@@ -289,6 +309,204 @@ def _load_precomputed_response(
     return payload
 
 
+def _upgrade_precomputed_reviewer_response(
+    payload: Mapping[str, Any],
+    *,
+    request: Mapping[str, Any],
+) -> tuple[dict[str, Any], bool]:
+    """Adapt a clean recorded v1 response for an offline v2 replay only."""
+
+    if request.get("schema_version") != 2 or payload.get("schema_version") != 1:
+        return dict(payload), False
+    expected_fields = {
+        "schema_version",
+        "graph_digest",
+        "draft_sha256",
+        "decision",
+        "case_results",
+        "findings",
+        "summary",
+    }
+    if set(payload) != expected_fields:
+        raise ImmutableIterationError(
+            "legacy reviewer response cannot be adapted because its fields differ"
+        )
+    findings = payload.get("findings")
+    if not isinstance(findings, list):
+        raise ImmutableIterationError(
+            "legacy reviewer findings must be an array"
+        )
+    case_results = payload.get("case_results")
+    if not isinstance(case_results, list) or any(
+        not isinstance(item, Mapping) for item in case_results
+    ):
+        raise ImmutableIterationError(
+            "legacy reviewer case_results must be an array of objects"
+        )
+    legacy_case_result_fields = {
+        "case_key",
+        "tc_id",
+        "obligation_id",
+        "status",
+        "comment",
+    }
+    for index, item in enumerate(case_results):
+        if (
+            set(item) != legacy_case_result_fields
+            or any(
+                not isinstance(item.get(name), str) or not item[name].strip()
+                for name in ("case_key", "tc_id", "obligation_id", "status")
+            )
+            or not isinstance(item.get("comment"), str)
+        ):
+            raise ImmutableIterationError(
+                f"legacy reviewer case result {index} fields are invalid"
+            )
+    if (
+        payload.get("graph_digest") != request.get("graph_digest")
+        or payload.get("draft_sha256") != request.get("draft_sha256")
+    ):
+        raise ImmutableIterationError(
+            "legacy reviewer response is not bound to the v2 graph and draft"
+        )
+    evidence_pack_sha256 = request.get("evidence_pack_sha256")
+    if not isinstance(evidence_pack_sha256, str) or not evidence_pack_sha256:
+        raise ImmutableIterationError("v2 reviewer request omits evidence pack digest")
+    pack = request.get("reviewer_evidence_pack")
+    mapping = pack.get("coverage_mapping") if isinstance(pack, Mapping) else None
+    if not isinstance(mapping, list):
+        raise ImmutableIterationError("v2 reviewer request omits coverage mapping")
+    test_cases = pack.get("test_cases") if isinstance(pack, Mapping) else None
+    raw_designs = test_cases.get("designs") if isinstance(test_cases, Mapping) else None
+    if not isinstance(raw_designs, list):
+        raise ImmutableIterationError("v2 reviewer request omits test-case designs")
+    designs_by_case: dict[str, tuple[str, str]] = {}
+    for index, raw_design in enumerate(raw_designs):
+        steps = raw_design.get("steps") if isinstance(raw_design, Mapping) else None
+        expected_result = (
+            raw_design.get("expected_result")
+            if isinstance(raw_design, Mapping)
+            else None
+        )
+        case_key = raw_design.get("case_key") if isinstance(raw_design, Mapping) else None
+        if (
+            not isinstance(case_key, str)
+            or not case_key
+            or case_key in designs_by_case
+            or not isinstance(steps, list)
+            or not steps
+            or any(not isinstance(step, str) or not step.strip() for step in steps)
+            or not isinstance(expected_result, str)
+            or not expected_result.strip()
+        ):
+            raise ImmutableIterationError(
+                f"v2 reviewer test-case design {index} cannot bind legacy probes"
+            )
+        designs_by_case[case_key] = (steps[-1], expected_result)
+    upgraded_findings: list[dict[str, Any]] = []
+    legacy_fields = {
+        "severity",
+        "case_key",
+        "tc_id",
+        "obligation_id",
+        "message",
+    }
+    for index, raw in enumerate(findings):
+        if not isinstance(raw, Mapping) or set(raw) != legacy_fields:
+            raise ImmutableIterationError(
+                f"legacy reviewer finding {index} cannot be classified safely"
+            )
+        matches = [
+            item
+            for item in mapping
+            if isinstance(item, Mapping)
+            and item.get("case_key") == raw.get("case_key")
+            and item.get("tc_id") == raw.get("tc_id")
+            and item.get("obligation_id") == raw.get("obligation_id")
+        ]
+        chains = {
+            tuple(
+                item.get(name)
+                for name in (
+                    "source_row_id",
+                    "assertion_id",
+                    "property_id",
+                    "obligation_id",
+                    "case_key",
+                    "tc_id",
+                )
+            )
+            for item in matches
+        }
+        if len(chains) != 1:
+            raise ImmutableIterationError(
+                f"legacy reviewer finding {index} has no unique v2 evidence chain"
+            )
+        chain = next(iter(chains))
+        if any(not isinstance(value, str) or not value for value in chain):
+            raise ImmutableIterationError(
+                f"legacy reviewer finding {index} has an incomplete v2 evidence chain"
+            )
+        upgraded_findings.append(
+            {
+                "severity": raw["severity"],
+                "finding_type": "test-case-defect",
+                "binding_role": "primary",
+                "falsification_probe": "",
+                "source_row_id": chain[0],
+                "assertion_id": chain[1],
+                "property_id": chain[2],
+                "obligation_id": chain[3],
+                "case_key": chain[4],
+                "tc_id": chain[5],
+                "message": raw["message"],
+            }
+        )
+    upgraded_case_results: list[dict[str, Any]] = []
+    for index, item in enumerate(case_results):
+        case_key = item.get("case_key")
+        basis = designs_by_case.get(case_key) if isinstance(case_key, str) else None
+        if basis is None:
+            raise ImmutableIterationError(
+                f"legacy reviewer case result {index} has no bound v2 design"
+            )
+        trigger_or_step, oracle = basis
+        upgraded_case_results.append(
+            {
+                **item,
+                "falsification": {
+                    probe: {
+                        "outcome": "not-recorded",
+                        "detail": (
+                            "Legacy v1 response did not record this "
+                            "falsification probe."
+                        ),
+                        "binding_role": "primary",
+                        "obligation_id": item["obligation_id"],
+                        "binding_item_index": -1,
+                        "trigger_or_step": trigger_or_step,
+                        "oracle": oracle,
+                    }
+                    for probe in REVIEWER_FALSIFICATION_PROBES
+                },
+            }
+        )
+    return (
+        {
+            "schema_version": 2,
+            "graph_digest": payload["graph_digest"],
+            "draft_sha256": payload["draft_sha256"],
+            "evidence_pack_sha256": evidence_pack_sha256,
+            "decision": payload["decision"],
+            "case_results": upgraded_case_results,
+            "source_projection_findings": [],
+            "test_case_findings": upgraded_findings,
+            "summary": payload["summary"],
+        },
+        True,
+    )
+
+
 def _normalize_stage_receipt(
     *,
     stage: str,
@@ -299,6 +517,7 @@ def _normalize_stage_receipt(
     schema_path: Path,
     response_path: Path,
     request: Mapping[str, Any],
+    images: tuple[RegisteredImageInput, ...],
 ) -> dict[str, Any]:
     if not isinstance(raw, Mapping):
         raise ImmutableIterationError(f"{stage} backend receipt must be an object")
@@ -332,6 +551,23 @@ def _normalize_stage_receipt(
     if type(tool_event_count) is not int or tool_event_count != 0:
         raise ImmutableIterationError(
             f"{stage} receipt reports forbidden model tool events"
+        )
+    expected_image_count = len(images)
+    expected_image_bytes = sum(item.size_bytes for item in images)
+    raw_images = raw.get("image_attachments")
+    if raw_images is None:
+        if expected_image_count:
+            raise ImmutableIterationError(
+                f"{stage} receipt omits transported image attachments"
+            )
+        raw_images = {"count": 0, "bytes": 0}
+    if (
+        not isinstance(raw_images, Mapping)
+        or raw_images.get("count") != expected_image_count
+        or raw_images.get("bytes") != expected_image_bytes
+    ):
+        raise ImmutableIterationError(
+            f"{stage} image attachment receipt differs from verified inputs"
         )
     tokens = raw.get("tokens", "unavailable")
     if tokens == "unavailable":
@@ -380,11 +616,19 @@ def _normalize_stage_receipt(
         "schema_sha256": sha256_path(schema_path),
         "response_sha256": sha256_path(response_path),
         "input_artifacts": {
-            "count": 2,
-            "bytes": prompt_path.stat().st_size + schema_path.stat().st_size,
+            "count": 2 + expected_image_count,
+            "bytes": (
+                prompt_path.stat().st_size
+                + schema_path.stat().st_size
+                + expected_image_bytes
+            ),
             "prompt_bytes": prompt_path.stat().st_size,
             "schema_bytes": schema_path.stat().st_size,
             "request_bytes": len(_json_bytes(request)),
+        },
+        "image_attachments": {
+            "count": expected_image_count,
+            "bytes": expected_image_bytes,
         },
         "output_artifacts": {
             "count": output_count,
@@ -392,7 +636,11 @@ def _normalize_stage_receipt(
             "response_bytes": response_path.stat().st_size,
         },
     }
-    for name in ("capability_probe_ms", "codex_version"):
+    for name in (
+        "capability_probe_ms",
+        "codex_version",
+        "precomputed_schema_upgrade",
+    ):
         if name in raw:
             result[name] = raw[name]
     return result
@@ -416,6 +664,7 @@ def _zero_writer_receipt(request: Mapping[str, Any]) -> dict[str, Any]:
         "request_sha256": request_sha256(request),
         "response_sha256": "unavailable",
         "input_artifacts": {"count": 0, "bytes": 0, "request_bytes": 0},
+        "image_attachments": {"count": 0, "bytes": 0},
         "output_artifacts": {"count": 0, "bytes": 0, "response_bytes": 0},
     }
 
@@ -430,6 +679,7 @@ def _run_stage(
     backend: StageBackend,
     precomputed: ResponseInput | None,
     on_model_call: Callable[[], None],
+    images: tuple[RegisteredImageInput, ...] = (),
 ) -> tuple[dict[str, Any], dict[str, Any], bool]:
     try:
         validate_openai_strict_output_schema(schema)
@@ -439,9 +689,10 @@ def _run_stage(
     limit = MAX_WRITER_PROMPT_BYTES if stage == "writer" else MAX_REVIEWER_PROMPT_BYTES
     prompt_size = len(prompt.encode("utf-8"))
     if prompt_size > limit:
-        raise ImmutableIterationError(
-            f"{stage} prompt exceeds compact limit: {prompt_size} > {limit} bytes"
-        )
+        message = f"{stage} prompt exceeds compact limit: {prompt_size} > {limit} bytes"
+        if stage == "reviewer":
+            raise ReviewerContextTooLarge(message)
+        raise ImmutableIterationError(message)
     model_dir = output_dir / "model-stages"
     prompt_path = model_dir / f"{stage}-prompt.txt"
     schema_path = model_dir / f"{stage}-output-schema.json"
@@ -449,8 +700,13 @@ def _run_stage(
     _write_text(prompt_path, prompt)
     _write_json(schema_path, dict(schema))
     started_ns = time.perf_counter_ns()
+    precomputed_schema_upgrade = False
     if precomputed is not None:
         payload = _load_precomputed_response(precomputed, repo_root=repo_root)
+        if stage == "reviewer":
+            payload, precomputed_schema_upgrade = (
+                _upgrade_precomputed_reviewer_response(payload, request=request)
+            )
         raw_receipt: Mapping[str, Any] = {
             "stage": stage,
             "backend": "precomputed-response",
@@ -459,30 +715,65 @@ def _run_stage(
             "tokens": "unavailable",
             "tool_event_count": 0,
             "timeout_seconds": None,
+            "image_attachments": {"count": 0, "bytes": 0},
         }
+        if precomputed_schema_upgrade:
+            raw_receipt = {
+                **raw_receipt,
+                "precomputed_schema_upgrade": (
+                    "reviewer-v1-to-v2-bound-findings-and-unrecorded-falsification"
+                ),
+            }
         called_model = False
         expected_attempts = 0
+        transported_images: tuple[RegisteredImageInput, ...] = ()
     else:
         if getattr(backend, "timeout_seconds", None) is not None:
             raise ImmutableIterationError(
                 f"{stage} backend declares a forbidden hard model timeout"
             )
         on_model_call()
-        result = backend.run_stage(
-            stage=stage,
-            prompt=prompt,
-            schema=schema,
-            artifact_dir=model_dir,
-        )
+        stage_kwargs: dict[str, Any] = {
+            "stage": stage,
+            "prompt": prompt,
+            "schema": schema,
+            "artifact_dir": model_dir,
+        }
+        if images:
+            stage_kwargs["images"] = images
+        result = backend.run_stage(**stage_kwargs)
         if not isinstance(result, StageResult):
             raise ImmutableIterationError(f"{stage} backend returned an invalid StageResult")
         payload = result.payload
         raw_receipt = result.receipt
         called_model = True
         expected_attempts = 1
+        transported_images = images
     stage_wall_ms = (time.perf_counter_ns() - started_ns) // 1_000_000
+    instance_schema = schema
+    if precomputed_schema_upgrade:
+        instance_schema = copy.deepcopy(schema)
+        try:
+            probe_schemas = instance_schema["properties"]["case_results"][
+                "items"
+            ]["properties"]["falsification"]["properties"]
+            for probe in REVIEWER_FALSIFICATION_PROBES:
+                outcomes = probe_schemas[probe]["properties"]["outcome"]["enum"]
+                if "not-recorded" not in outcomes:
+                    outcomes.append("not-recorded")
+        except (KeyError, TypeError, AttributeError) as exc:  # pragma: no cover
+            raise ImmutableIterationError(
+                "legacy reviewer adapter cannot extend the v2 falsification schema"
+            ) from exc
+        try:
+            validate_openai_strict_output_schema(instance_schema)
+        except ValueError as exc:  # pragma: no cover - live schema already validated
+            raise ImmutableIterationError(
+                f"legacy reviewer adapter produced an invalid schema: {exc}"
+            ) from exc
+        _write_json(schema_path, dict(instance_schema))
     try:
-        validate_openai_strict_output_instance(payload, schema)
+        validate_openai_strict_output_instance(payload, instance_schema)
     except ValueError as exc:
         raise ImmutableIterationError(
             f"{stage} response failed strict schema validation: {exc}"
@@ -509,6 +800,7 @@ def _run_stage(
         schema_path=schema_path,
         response_path=response_path,
         request=request,
+        images=transported_images,
     )
     return payload, receipt, called_model
 
@@ -534,6 +826,7 @@ def run_immutable_iteration(
     protected_canonical_paths: Sequence[Path] = (),
     writer_response: ResponseInput | None = None,
     reviewer_response: ResponseInput | None = None,
+    reviewer_evidence_basis: ReviewerEvidenceBasis | None = None,
     backend: StageBackend | None = None,
 ) -> ImmutableIterationResult:
     """Run one immutable deterministic-first shadow iteration.
@@ -560,6 +853,12 @@ def run_immutable_iteration(
     protected_inputs_unchanged = True
     writer_request: Mapping[str, Any] | None = None
     reviewer_request: Mapping[str, Any] | None = None
+    reviewer_images: tuple[RegisteredImageInput, ...] = ()
+    reviewer_evidence_pack_sha256 = ""
+    reviewer_source_row_count = 0
+    reviewer_dictionary_count = 0
+    reviewer_registered_image_count = 0
+    reviewer_registered_image_bytes = 0
     calibration_pending_count = sum(
         item.status == "candidate-ui-calibration" for item in graph.cases
     )
@@ -599,6 +898,7 @@ def run_immutable_iteration(
             input_paths = tuple(
                 path for path in (prompt_path, schema_path) if path.is_file()
             )
+            stage_images = reviewer_images if stage == "reviewer" else ()
             response_path = model_dir / f"{stage}-response.json"
             model_receipts.append(
                 {
@@ -622,8 +922,15 @@ def run_immutable_iteration(
                         else "unavailable"
                     ),
                     "input_artifacts": {
-                        "count": len(input_paths),
-                        "bytes": sum(path.stat().st_size for path in input_paths),
+                        "count": len(input_paths) + len(stage_images),
+                        "bytes": (
+                            sum(path.stat().st_size for path in input_paths)
+                            + sum(item.size_bytes for item in stage_images)
+                        ),
+                    },
+                    "image_attachments": {
+                        "count": len(stage_images),
+                        "bytes": sum(item.size_bytes for item in stage_images),
                     },
                     "output_artifacts": {
                         "count": len(output_paths),
@@ -683,6 +990,13 @@ def run_immutable_iteration(
             "reviewer_model_calls": reviewer_model_calls,
             "reviewer_decision": reviewer_decision,
             "reviewer_accepted_zero_findings": reviewer_accepted,
+            "reviewer_evidence_pack_sha256": (
+                reviewer_evidence_pack_sha256 or None
+            ),
+            "reviewer_source_row_count": reviewer_source_row_count,
+            "reviewer_dictionary_count": reviewer_dictionary_count,
+            "reviewer_registered_image_count": reviewer_registered_image_count,
+            "reviewer_registered_image_bytes": reviewer_registered_image_bytes,
             "calibration_pending_count": calibration_pending_count,
             "suite_gate_passed": bool(gate and gate.passed),
             "protected_inputs_unchanged": protected_inputs_unchanged,
@@ -727,6 +1041,12 @@ def run_immutable_iteration(
         with timer.phase("request-validation"):
             if not isinstance(graph, CoverageGraph):
                 raise ImmutableIterationError("graph must be a CoverageGraph")
+            if reviewer_evidence_basis is not None and not isinstance(
+                reviewer_evidence_basis, ReviewerEvidenceBasis
+            ):
+                raise ImmutableIterationError(
+                    "reviewer_evidence_basis must be a ReviewerEvidenceBasis"
+                )
             graph_findings = validate_coverage_graph(graph)
             graph_errors = [item for item in graph_findings if item.severity == "error"]
             if graph_errors:
@@ -763,13 +1083,24 @@ def run_immutable_iteration(
                 "protected_canonical": [
                     item.to_dict() for item in protected if item.role == "canonical"
                 ],
-                "source_file_content_in_model_context": False,
+                "source_file_content_in_model_context": (
+                    reviewer_evidence_basis is not None
+                ),
+                "source_file_content_mode": (
+                    "bounded-literal-scope-elements"
+                    if reviewer_evidence_basis is not None
+                    else "not-provided"
+                ),
                 "canonical_file_content_in_model_context": False,
                 "old_test_cases_in_model_context": False,
                 "benchmark_context_in_model_context": False,
                 "review_history_in_model_context": False,
                 "writer_context": "typed writer cards only",
-                "reviewer_context": "compact source/obligation/case projection only",
+                "reviewer_context": (
+                    "complete ReviewerEvidencePack v2 literal scope evidence"
+                    if reviewer_evidence_basis is not None
+                    else "compact source/obligation/case projection only"
+                ),
                 "runner_owned_fields": [
                     "tc_id",
                     "traceability",
@@ -886,11 +1217,79 @@ def run_immutable_iteration(
                 error="protected inputs changed before reviewer execution",
             )
 
-        reviewer_request = build_reviewer_request(
-            graph=graph,
-            cases=cases,
-            gate=gate,
-        )
+        if reviewer_evidence_basis is not None:
+            _write_json(
+                output_dir / "reviewer-evidence-basis.json",
+                reviewer_evidence_basis.to_document(),
+            )
+            evidence_pack = build_reviewer_evidence_pack(
+                reviewer_evidence_basis,
+                graph,
+                cases,
+                markdown,
+                gate.draft_sha256,
+                reviewer_acceptance_contract(schema_version=2),
+            )
+            evidence_payload = evidence_pack.to_dict()
+            _write_json(output_dir / "reviewer-evidence-pack.json", evidence_payload)
+            reviewer_request = build_reviewer_request(
+                graph=graph,
+                cases=cases,
+                gate=gate,
+                evidence_pack=evidence_pack,
+            )
+            reviewer_evidence_pack_sha256 = evidence_pack.digest
+            reviewer_source_row_count = len(
+                evidence_payload["literal_source_evidence"]
+            )
+            reviewer_dictionary_count = len(evidence_payload["dictionaries"])
+            mockup_attachments = evidence_payload["mockup_attachments"]
+            image_paths = evidence_pack.image_paths
+            if len(image_paths) != len(mockup_attachments):  # pragma: no cover
+                raise ImmutableIterationError(
+                    "reviewer evidence mockup paths differ from attachment metadata"
+                )
+            reviewer_images = verify_registered_image_inputs(
+                tuple(
+                    RegisteredImageInput(
+                        path=path,
+                        sha256=attachment["sha256"],
+                        size_bytes=attachment["size_bytes"],
+                    )
+                    for path, attachment in zip(
+                        image_paths,
+                        mockup_attachments,
+                        strict=True,
+                    )
+                )
+            )
+            reviewer_registered_image_count = len(reviewer_images)
+            reviewer_registered_image_bytes = sum(
+                item.size_bytes for item in reviewer_images
+            )
+            evidence_access.update(
+                {
+                    "reviewer_evidence_schema_version": 2,
+                    "reviewer_evidence_pack_sha256": (
+                        reviewer_evidence_pack_sha256
+                    ),
+                    "reviewer_source_row_count": reviewer_source_row_count,
+                    "reviewer_dictionary_count": reviewer_dictionary_count,
+                    "reviewer_registered_image_count": (
+                        reviewer_registered_image_count
+                    ),
+                    "reviewer_registered_image_bytes": (
+                        reviewer_registered_image_bytes
+                    ),
+                }
+            )
+            _write_json(output_dir / "evidence-access-report.json", evidence_access)
+        else:
+            reviewer_request = build_reviewer_request(
+                graph=graph,
+                cases=cases,
+                gate=gate,
+            )
         _write_json(output_dir / "reviewer-request.json", reviewer_request)
         case_bindings = [
             (item.case_key, item.tc_id, item.obligation_ids[0], item.status)
@@ -901,6 +1300,7 @@ def run_immutable_iteration(
                 case_bindings,
                 graph_digest=graph.digest,
                 draft_sha256=gate.draft_sha256,
+                reviewer_request=reviewer_request,
             )
             payload, receipt, called_model = _run_stage(
                 stage="reviewer",
@@ -911,6 +1311,7 @@ def run_immutable_iteration(
                 backend=active_backend,
                 precomputed=reviewer_response,
                 on_model_call=record_reviewer_call,
+                images=reviewer_images,
             )
             if called_model != (reviewer_response is None):  # pragma: no cover
                 raise ImmutableIterationError("reviewer call accounting mismatch")
@@ -919,6 +1320,11 @@ def run_immutable_iteration(
                 payload,
                 graph=graph,
                 draft_sha256=gate.draft_sha256,
+                reviewer_request=reviewer_request,
+                allow_legacy_unrecorded_falsification=(
+                    receipt.get("precomputed_schema_upgrade")
+                    == "reviewer-v1-to-v2-bound-findings-and-unrecorded-falsification"
+                ),
             )
         if _input_drift(protected):
             return finish("blocked-input-drift")
@@ -932,10 +1338,23 @@ def run_immutable_iteration(
             if calibration_pending_count
             else "accepted-shadow"
         )
+    except ReviewerContextTooLarge as exc:
+        _write_json(
+            output_dir / "failure-diagnostic.json",
+            {
+                "schema_version": 1,
+                "status": "blocked-reviewer-context-too-large",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "safe_recovery": "decompose the external scope and start a new output directory",
+            },
+        )
+        return finish("blocked-reviewer-context-too-large", error=str(exc))
     except (
         DesignError,
         ImmutableIterationError,
         IterationContractError,
+        ReviewerEvidenceError,
         json.JSONDecodeError,
     ) as exc:
         _write_json(

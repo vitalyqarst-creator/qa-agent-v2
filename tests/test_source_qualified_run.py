@@ -10,6 +10,8 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
+from docx import Document
+
 import test_case_agent.source_qualified_run as source_run_module
 from test_case_agent.cli import build_parser, main
 from test_case_agent.coverage_graph import PropertyDerivation, build_coverage_graph
@@ -76,15 +78,25 @@ class SourceQualifiedRunTests(unittest.TestCase):
         (self.ft / "support").mkdir()
         (self.ft / "work" / "prepared").mkdir(parents=True)
         self.docx = self.ft / "source" / "requirements.docx"
-        self.docx.write_bytes(b"PK\x03\x04source-of-truth")
+        document = Document()
+        document.add_paragraph("Global constraints reviewed outside the selected rows.")
+        table = document.add_table(rows=2, cols=1)
+        table.cell(0, 0).text = "Client data: open the client card."
+        table.cell(1, 0).text = (
+            "BSR 1. Open the client card and verify the client name field is visible "
+            "только в блоке данных клиента. Возможен ввод только текстовых "
+            "символов и специальный символ «-»."
+        )
+        document.add_paragraph("Cross-reference context reviewed for this scope.")
+        document.save(self.docx)
         self.xhtml = self.ft / "source" / "requirements.xhtml"
         self.xhtml.write_text(
             """<?xml version="1.0" encoding="UTF-8"?>
 <html xmlns="http://www.w3.org/1999/xhtml"><body>
-<p>Global constraints reviewed outside the selected rows.</p>
+<h1>Global constraints reviewed outside the selected rows.</h1>
 <table>
 <tr><td>Client data: open the client card.</td></tr>
-<tr><td>BSR 1. Open the client card and verify the client name field is visible.</td></tr>
+<tr><td>BSR 1. Open the client card and verify the client name field is visible только в блоке данных клиента. Возможен ввод только текстовых символов и специальный символ «-».</td></tr>
 </table>
 <p>Cross-reference context reviewed for this scope.</p>
 </body></html>
@@ -632,6 +644,20 @@ class SourceQualifiedRunTests(unittest.TestCase):
 
     def test_offline_run_is_source_qualified_and_preserves_canonical(self) -> None:
         output = self.ft / "work" / "source-qualified-runs" / "run-001"
+        poison = "__POISONED_EXCLUDED_CONTEXT_7D419B41__"
+        self.canonical.write_text(
+            f"# Existing canonical\n\n{poison}:canonical\n",
+            encoding="utf-8",
+        )
+        benchmark = self.repo / "evals" / "full-production-benchmark" / "poison.json"
+        benchmark.parent.mkdir(parents=True)
+        benchmark.write_text(f'{{"poison":"{poison}:benchmark"}}', encoding="utf-8")
+        review_history = self.ft / "work" / "review-history" / "poison.json"
+        review_history.parent.mkdir(parents=True)
+        review_history.write_text(
+            f'{{"poison":"{poison}:review-history"}}',
+            encoding="utf-8",
+        )
         canonical_before = self.canonical.read_bytes()
 
         exit_code, stdout, stderr = self._run(output)
@@ -655,6 +681,101 @@ class SourceQualifiedRunTests(unittest.TestCase):
         )
         self.assertTrue(iteration_summary["qualification_only"])
         self.assertFalse(iteration_summary["promotion_eligible"])
+        reviewer_request = json.loads(
+            (output / "iteration" / "reviewer-request.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        evidence_pack = json.loads(
+            (output / "iteration" / "reviewer-evidence-pack.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        reviewer_response = json.loads(
+            (
+                output
+                / "iteration"
+                / "model-stages"
+                / "reviewer-response.json"
+            ).read_text(encoding="utf-8")
+        )
+        receipts = json.loads(
+            (output / "iteration" / "model-stage-receipts.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        evidence_access = json.loads(
+            (output / "iteration" / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(2, reviewer_request["schema_version"])
+        self.assertEqual(evidence_pack, reviewer_request["reviewer_evidence_pack"])
+        self.assertEqual(3, len(evidence_pack["literal_source_evidence"]))
+        self.assertTrue(
+            any(
+                "только" in row["bounded_source_text"]
+                for row in evidence_pack["literal_source_evidence"]
+            )
+        )
+        self.assertEqual(2, reviewer_response["schema_version"])
+        self.assertEqual([], reviewer_response["source_projection_findings"])
+        self.assertEqual([], reviewer_response["test_case_findings"])
+        reviewer_receipt = next(
+            item for item in receipts["stages"] if item["stage"] == "reviewer"
+        )
+        reviewer_schema_path = (
+            output
+            / "iteration"
+            / "model-stages"
+            / "reviewer-output-schema.json"
+        )
+        reviewer_schema = json.loads(reviewer_schema_path.read_text(encoding="utf-8"))
+        self.assertEqual(
+            "reviewer-v1-to-v2-bound-findings-and-unrecorded-falsification",
+            reviewer_receipt["precomputed_schema_upgrade"],
+        )
+        self.assertEqual(
+            hashlib.sha256(reviewer_schema_path.read_bytes()).hexdigest(),
+            reviewer_receipt["schema_sha256"],
+        )
+        probe_schemas = reviewer_schema["properties"]["case_results"]["items"][
+            "properties"
+        ]["falsification"]["properties"]
+        self.assertTrue(
+            all(
+                "not-recorded" in item["properties"]["outcome"]["enum"]
+                for item in probe_schemas.values()
+            )
+        )
+        for item in reviewer_response["case_results"]:
+            self.assertEqual(
+                {"not-recorded"},
+                {
+                    probe["outcome"]
+                    for probe in item["falsification"].values()
+                },
+            )
+        self.assertEqual({"count": 0, "bytes": 0}, reviewer_receipt["image_attachments"])
+        self.assertEqual(
+            reviewer_request["evidence_pack_sha256"],
+            iteration_summary["reviewer_evidence_pack_sha256"],
+        )
+        self.assertTrue(evidence_access["source_file_content_in_model_context"])
+        self.assertFalse(evidence_access["old_test_cases_in_model_context"])
+        self.assertFalse(evidence_access["benchmark_context_in_model_context"])
+        self.assertFalse(evidence_access["review_history_in_model_context"])
+        for artifact in (
+            output / "iteration" / "reviewer-evidence-pack.json",
+            output / "iteration" / "reviewer-request.json",
+            output / "iteration" / "model-stages" / "reviewer-prompt.txt",
+        ):
+            self.assertNotIn(
+                poison,
+                artifact.read_text(encoding="utf-8"),
+                artifact.as_posix(),
+            )
+        self.assertEqual(0, evidence_access["command_budget"])
         self.assertIsNone(terminal["diagnostic"])
         self.assertEqual(terminal, json.loads(stdout))
         self.assertEqual(canonical_before, self.canonical.read_bytes())
@@ -917,6 +1038,25 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertEqual(2, exit_code, stderr)
         self.assertEqual("blocked-contract", terminal["status"])
         self.assertEqual("contract", diagnostic["category"])
+
+    def test_malformed_legacy_case_result_fails_with_contract_diagnostic(self) -> None:
+        review = json.loads(self.reviewer_response.read_text(encoding="utf-8"))
+        del review["case_results"][0]["obligation_id"]
+        self._write_json(self.reviewer_response, review)
+        output = self.ft / "work" / "source-qualified-runs" / "run-bad-legacy-case"
+
+        exit_code, _, stderr = self._run(output)
+
+        terminal = json.loads(
+            (output / "terminal-summary.json").read_text(encoding="utf-8")
+        )
+        diagnostic = json.loads(
+            (output / "diagnostic.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, exit_code, stderr)
+        self.assertEqual("blocked-contract", terminal["status"])
+        self.assertEqual("contract", diagnostic["category"])
+        self.assertIn("legacy reviewer case result 0 fields", diagnostic["message"])
 
     def test_coverage_gaps_mutation_is_blocked_as_input_drift(self) -> None:
         output = self.ft / "work" / "source-qualified-runs" / "run-007"

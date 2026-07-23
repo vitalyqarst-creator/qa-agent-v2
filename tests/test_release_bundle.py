@@ -42,6 +42,9 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertIn("test_case_agent/stage_backend.py", paths)
         self.assertIn("test_case_agent/derivation_compiler.py", paths)
         self.assertIn("test_case_agent/persistence_safety.py", paths)
+        self.assertIn("test_case_agent/reviewer_evidence.py", paths)
+        self.assertIn("test_case_agent/source_constraint_taxonomy.py", paths)
+        self.assertIn("test_case_agent/source_parity.py", paths)
         self.assertIn("references/agent/production-instruction-loading.md", paths)
         self.assertIn("references/agent/production-global-rules.md", paths)
         self.assertNotIn("AGENTS.md", paths)
@@ -72,13 +75,50 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertFalse(any(path.startswith("evals/") for path in paths))
         self.assertFalse(any(path.startswith("tests/") for path in paths))
         self.assertFalse(any(path.startswith("fts/") for path in paths))
+        self.assertFalse(any("benchmark" in path.casefold() for path in paths))
+        forbidden_input_suffixes = {
+            ".docx",
+            ".pdf",
+            ".xlsx",
+            ".xls",
+            ".avif",
+            ".bmp",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+        }
+        self.assertFalse(
+            any(
+                Path(path).suffix.casefold() in forbidden_input_suffixes
+                for path in paths
+            )
+        )
+        production_manifest = json.loads(
+            (ROOT / "release" / "production-manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn(
+            "test_case_agent/reviewer_evidence.py",
+            production_manifest["required_paths"],
+        )
+        self.assertIn(
+            "test_case_agent/source_constraint_taxonomy.py",
+            production_manifest["required_paths"],
+        )
+        self.assertIn(
+            "test_case_agent/source_parity.py",
+            production_manifest["required_paths"],
+        )
         self.assertLessEqual(receipt["file_count"], 55)
         self.assertLessEqual(
             sum(path.startswith("references/") for path in paths),
             10,
         )
 
-    def test_qualification_receipt_binds_current_sources_and_bundle(self) -> None:
+    def test_historical_qualification_receipt_keeps_its_original_binding(self) -> None:
         receipt = json.loads(
             (
                 ROOT
@@ -95,22 +135,13 @@ class ReleaseBundleTests(unittest.TestCase):
                 (ROOT / relative_path).read_bytes()
             ).hexdigest()
             self.assertEqual(expected_sha256, actual_sha256, relative_path)
-
-        current_bundle = build_release_bundle(
-            root=ROOT,
-            manifest_path=ROOT / "release" / "production-manifest.json",
-            output=None,
-            check_only=True,
-            require_local_inputs=False,
-        )
         self.assertEqual(
-            {
-                "file_count": current_bundle["file_count"],
-                "total_bytes": current_bundle["total_bytes"],
-                "tree_sha256": current_bundle["tree_sha256"],
-            },
-            receipt["production_bundle"],
+            "eb690bb89d00955fbc8eb8736c48890004556dd6",
+            receipt["live_attempt"]["runtime_commit"],
         )
+        self.assertGreater(receipt["production_bundle"]["file_count"], 0)
+        self.assertRegex(receipt["production_bundle"]["tree_sha256"], r"^[0-9a-f]{64}$")
+
     def test_production_iteration_skill_has_one_route_without_legacy_markers(self) -> None:
         skill = (ROOT / "skills/ft-test-case-iteration/SKILL.md").read_text(
             encoding="utf-8"

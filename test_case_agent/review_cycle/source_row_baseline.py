@@ -145,6 +145,35 @@ class ResolvedXhtmlTableCell:
 
 
 @dataclass(frozen=True)
+class ResolvedXhtmlSectionHeading:
+    """One visible standalone heading contributing to a candidate section path."""
+
+    level: int
+    canonical_xpath: str
+    bounded_source_text: str
+
+
+@dataclass(frozen=True)
+class ResolvedXhtmlStructuralAncestor:
+    """One exact list or table ancestor of a canonical XHTML candidate."""
+
+    canonical_xpath: str
+    element_kind: str
+
+
+@dataclass(frozen=True)
+class ResolvedXhtmlStructuralContext:
+    """Deterministic document structure surrounding one canonical candidate."""
+
+    canonical_xpath: str
+    section_path: tuple[str, ...]
+    section_headings: tuple[ResolvedXhtmlSectionHeading, ...]
+    table_identity: str | None
+    table_ancestry: tuple[ResolvedXhtmlStructuralAncestor, ...]
+    list_ancestry: tuple[ResolvedXhtmlStructuralAncestor, ...]
+
+
+@dataclass(frozen=True)
 class SelectedXhtml:
     relative_path: str
     sha256: str
@@ -1195,6 +1224,162 @@ def resolve_xhtml_table_cells_at_locators(
             )
         result[locator] = tuple(cells)
     return result
+
+
+def resolve_xhtml_structural_contexts_at_locators(
+    *,
+    xhtml_path: Path,
+    canonical_xpaths: Sequence[str],
+) -> dict[str, ResolvedXhtmlStructuralContext]:
+    """Resolve heading, table and list context for canonical source candidates.
+
+    The section path follows visible standalone ``h1``-``h6`` elements that
+    precede the candidate in XHTML document order.  Heading levels replace the
+    active heading at the same or a deeper level.  Headings owned by a table
+    row or list item are deliberately excluded, matching baseline candidate
+    ownership instead of treating cell/list formatting as document sections.
+    """
+
+    if xhtml_path.suffix.lower() != ".xhtml":
+        _fail(
+            "structural-context-source-is-not-xhtml",
+            "structural context requires an .xhtml source",
+        )
+    locators = tuple(
+        _absolute_xpath(value, "structural context canonical_xpath")
+        for value in canonical_xpaths
+    )
+    if len(locators) != len(set(locators)):
+        _fail(
+            "duplicate-structural-context-locator",
+            "structural context locator batch must not contain duplicates",
+        )
+    root = _parse_xhtml(xhtml_path)
+    parent_map = {
+        child: parent
+        for parent in root.iter()
+        if isinstance(parent.tag, str)
+        for child in _element_children(parent)
+    }
+    target_by_element: dict[ET.Element, str] = {}
+    for locator in locators:
+        _resolve_candidate_element(
+            root=root,
+            parent_map=parent_map,
+            locator=locator,
+        )
+        element = _select_one(
+            root,
+            locator,
+            {"xhtml": XHTML_NAMESPACE},
+            "structural context canonical_xpath",
+        )
+        target_by_element[element] = locator
+
+    if not target_by_element:
+        return {}
+
+    ordered_elements = [
+        element for element in root.iter() if isinstance(element.tag, str)
+    ]
+    positions = {element: index for index, element in enumerate(ordered_elements)}
+    last_target_position = max(positions[element] for element in target_by_element)
+    active_headings: dict[int, ResolvedXhtmlSectionHeading] = {}
+    result: dict[str, ResolvedXhtmlStructuralContext] = {}
+
+    for element in ordered_elements[: last_target_position + 1]:
+        locator = target_by_element.get(element)
+        if locator is not None:
+            ancestors: list[ResolvedXhtmlStructuralAncestor] = []
+            current = parent_map.get(element)
+            while current is not None:
+                kind = _local_name(current).lower()
+                if kind in {"table", "ol", "ul", "li"}:
+                    ancestors.append(
+                        ResolvedXhtmlStructuralAncestor(
+                            canonical_xpath=_canonical_xpath(
+                                current,
+                                root,
+                                parent_map,
+                            ),
+                            element_kind=kind,
+                        )
+                    )
+                current = parent_map.get(current)
+            ancestors.reverse()
+            table_ancestry = tuple(
+                item for item in ancestors if item.element_kind == "table"
+            )
+            list_ancestry = tuple(
+                item for item in ancestors if item.element_kind in {"ol", "ul", "li"}
+            )
+            headings = tuple(
+                active_headings[level] for level in sorted(active_headings)
+            )
+            result[locator] = ResolvedXhtmlStructuralContext(
+                canonical_xpath=locator,
+                section_path=tuple(item.bounded_source_text for item in headings),
+                section_headings=headings,
+                table_identity=(
+                    table_ancestry[-1].canonical_xpath if table_ancestry else None
+                ),
+                table_ancestry=table_ancestry,
+                list_ancestry=list_ancestry,
+            )
+
+        kind = _local_name(element).lower()
+        if kind not in {"h1", "h2", "h3", "h4", "h5", "h6"}:
+            continue
+        current = element
+        owned_or_hidden = False
+        while current is not None:
+            current_kind = _local_name(current).lower()
+            if _is_annotation_metadata_subtree(current) or (
+                current is not element and current_kind in {"tr", "li"}
+            ):
+                owned_or_hidden = True
+                break
+            current = parent_map.get(current)
+        if owned_or_hidden:
+            continue
+        heading_text = _full_element_text(element)
+        if not heading_text:
+            _fail(
+                "empty-structural-heading",
+                "a visible standalone heading preceding a candidate has no text: "
+                + _canonical_xpath(element, root, parent_map),
+            )
+        level = int(kind[1])
+        for stale_level in tuple(
+            value for value in active_headings if value >= level
+        ):
+            del active_headings[stale_level]
+        active_headings[level] = ResolvedXhtmlSectionHeading(
+            level=level,
+            canonical_xpath=_canonical_xpath(element, root, parent_map),
+            bounded_source_text=heading_text,
+        )
+
+    if set(result) != set(locators):
+        _fail(
+            "structural-context-resolution-incomplete",
+            "not every canonical candidate received structural context",
+        )
+    return {locator: result[locator] for locator in locators}
+
+
+def resolve_xhtml_structural_context_at_locator(
+    *,
+    xhtml_path: Path,
+    canonical_xpath: str,
+) -> ResolvedXhtmlStructuralContext:
+    """Resolve document structure for one canonical XHTML candidate."""
+
+    resolved = resolve_xhtml_structural_contexts_at_locators(
+        xhtml_path=xhtml_path,
+        canonical_xpaths=(canonical_xpath,),
+    )
+    return next(iter(resolved.values()))
 
 
 def _source_candidate_hash(

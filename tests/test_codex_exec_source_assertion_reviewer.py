@@ -12,6 +12,8 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from PIL import Image
+
 from scripts.codex_exec_source_assertion_reviewer import (
     DEFAULT_MAX_ASSERTIONS_PER_SHARD,
     DEFAULT_MAX_PROMPT_BYTES,
@@ -951,7 +953,7 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
         docx = self.root / "source" / "truth.docx"
         self._write_docx(docx, "Canonical direct source fragment")
         mockup = self.root / "mockup.jpg"
-        mockup.write_bytes(b"registered-image-bytes")
+        Image.new("RGB", (3, 2), color=(31, 97, 173)).save(mockup)
         inventory = self.root / "source-row-inventory.md"
         extraction_spec = self.root / "source-row-extraction-spec.json"
         baseline = self.root / "source-row-baseline.json"

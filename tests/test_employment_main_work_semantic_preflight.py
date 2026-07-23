@@ -185,7 +185,7 @@ class EmploymentMainWorkSemanticPreflightTests(unittest.TestCase):
             )
             self.assertEqual(20, preflight["field_property_count"])
             self.assertEqual(10, preflight["requiredness_signal_count"])
-            self.assertEqual(12, preflight["negative_signal_count"])
+            self.assertEqual(18, preflight["negative_signal_count"])
             self.assertEqual(3, len(preflight["dictionary_registry"]))
             defaults = preflight["requiredness_candidate_defaults"]
             self.assertEqual(10, len(defaults))
@@ -267,6 +267,23 @@ class EmploymentMainWorkSemanticPreflightTests(unittest.TestCase):
                 eligible_rows,
                 code_registry,
             )["negative"]
+            bsr_272_classes = [
+                signal["negative_class"]
+                for signal in negative
+                if "BSR 272" in signal["requirement_codes"]
+            ]
+            self.assertEqual(
+                [
+                    "length-n-minus-one",
+                    "length-n-plus-one",
+                    "letters",
+                    "spaces",
+                    "special-characters",
+                    "decimal-separator",
+                    "sign",
+                ],
+                bsr_272_classes,
+            )
             codes = {
                 code
                 for signal in negative

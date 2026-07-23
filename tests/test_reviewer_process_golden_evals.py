@@ -42,6 +42,9 @@ class ReviewerProcessGoldenEvalsTests(unittest.TestCase):
             "`incorrect_signoff`",
             "`finding_actionability`",
             "`false_positive_control`",
+            "`counterexample_specificity`",
+            "exact role/OBL/materialized-item/probe binding",
+            "source-only basis",
             "`review_mode`: `traceability`",
             "`review_mode`: `test-design`",
             "`severity`: `error`",
@@ -49,6 +52,16 @@ class ReviewerProcessGoldenEvalsTests(unittest.TestCase):
             "`traceability_ref`: `ATOM-009`",
             "Run Report Template",
             "`verdict`: `pass | partial | fail`",
+            "Concrete false-fail witness",
+            "Adversarial falsification subset",
+            "`AP-001`",
+            "`AP-002`",
+            "`AP-003`",
+            "`AP-004`",
+            "`AP-005`",
+            "Eval Case 13",
+            "Eval Case 14",
+            "`clean_control_findings`",
         ):
             self.assertIn(token, content)
 

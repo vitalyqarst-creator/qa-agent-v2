@@ -158,10 +158,12 @@ class ReviewerContractTests(unittest.TestCase):
             "Eval Case 10 - high-risk access case имеет заниженный priority",
             "Eval Case 11 - расчетный кейс без calculation oracle",
             "Eval Case 12 - applicability matrix ссылается на TC, который не покрывает dimension",
+            "Eval Case 13 - false pass: persistence не проверяется",
+            "Eval Case 14 - failure attribution нарушен невалидным fixture",
         ):
             self.assertIn(token, evals)
 
-        self.assertGreaterEqual(evals.count("**Expected Reviewer Output:**"), 12)
+        self.assertGreaterEqual(evals.count("**Expected Reviewer Output:**"), 14)
         self.assertIn("`severity`: `error`", evals)
         self.assertIn("`severity`: `warning`", evals)
         self.assertIn("Нет `test-design` finding.", evals)
@@ -174,6 +176,56 @@ class ReviewerContractTests(unittest.TestCase):
         self.assertIn("заниженный priority", evals)
         self.assertIn("calculation oracle", evals)
         self.assertIn("direct/API payload bypass", evals)
+        self.assertIn("Concrete false-fail witness", evals)
+        self.assertIn("Concrete false-pass witness", evals)
+        self.assertIn("Concrete alternative-cause witness", evals)
+        self.assertIn("нарушение trigger fidelity", evals)
+        self.assertIn("Falsification gate не является основанием придумать finding", evals)
+
+    def test_reviewer_rubric_requires_concrete_falsification_witnesses(self) -> None:
+        rubric = (ROOT_DIR / "references" / "qa" / "test-design-review-rubric.md").read_text(encoding="utf-8")
+
+        for token in (
+            "Adversarial falsification gate",
+            "`false pass`",
+            "`false fail`",
+            "`failure attribution`",
+            "`trigger fidelity`",
+            "`binding_role`",
+            "`binding_item_index`",
+            "`outcome = passed`",
+            "Source-only trigger или oracle",
+            "той же точной role/source/ATOM/OBL/TC chain",
+            "Один probe может породить несколько findings",
+            "finding основан на одном из этих четырёх probes",
+            "не должен придумывать дефект для достаточного кейса",
+            "source/TC-backed design defect, доказанный",
+            "неатомарности, дублированию",
+        ):
+            self.assertIn(token, rubric)
+
+    def test_prepared_reviewer_projects_the_falsification_gate(self) -> None:
+        profile = (
+            ROOT_DIR / "references" / "agent" / "prepared-reviewer-runtime-profile.md"
+        ).read_text(encoding="utf-8")
+
+        for token in (
+            "Apply the falsification gate to every behavioral TC",
+            "defective implementation under source-consistent",
+            "implementation that fails only because",
+            "invalid fixture or unrelated precondition",
+            "miss the source-backed trigger",
+            "finding caused by one of these probes must name",
+            "Keep the requested prepared contract shape",
+            "ReviewerEvidencePack v2 contract",
+            "materialized-item index",
+            "passing v2 probe binds to an actual TC step",
+            "source-only",
+            "receipt, digest and binding-integrity defects proven",
+            "falsification receipt with an exact evidence-chain binding",
+            "legacy-only `not-recorded` outcome",
+        ):
+            self.assertIn(token, profile)
 
 
     def test_reviewer_requires_applicability_matrix_and_coverage_dimension(self) -> None:

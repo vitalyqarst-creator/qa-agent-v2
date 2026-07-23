@@ -9,6 +9,9 @@ from pathlib import Path
 
 from test_case_agent.review_cycle.prepared_package import (
     EvidenceInput,
+    PreparedDictionaryFixtureProvenance,
+    PreparedDictionaryRequirement,
+    PreparedDictionaryValue,
     PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
@@ -19,6 +22,7 @@ from test_case_agent.review_cycle.prepared_package import (
     StageInstructionConfig,
     load_obligations,
     load_prepared_package,
+    prepared_dictionary_value_set_sha256,
 )
 from test_case_agent.review_cycle.runtime import StageRuntimeError
 
@@ -407,6 +411,115 @@ class PreparedStagePackageTests(unittest.TestCase):
             PreparedObligationSet.create(
                 package_id="pkg-001", obligations=(invalid,), coverage_gaps=()
             )
+
+    def test_dictionary_fixture_provenance_round_trips_and_binds_exact_values(self) -> None:
+        values = (
+            PreparedDictionaryValue(
+                ("DICT-FIXTURE",),
+                "leaf",
+                "Проверенное значение",
+            ),
+        )
+        provenance = PreparedDictionaryFixtureProvenance(
+            evidence_kind="registered-fixture-source",
+            dictionary_id="DICT-FIXTURE",
+            fixture_id="FX-FIXTURE",
+            source_path="work/fixture.json",
+            source_locator="json-pointer:/values",
+            source_sha256="1" * 64,
+            value_set_sha256=prepared_dictionary_value_set_sha256(values),
+            version="not-declared",
+            effective_date="not-declared",
+        )
+        obligation = PreparedObligation(
+            obligation_id="OBL-FIXTURE",
+            atom_id="ATOM-FIXTURE",
+            source_refs=("SRC-1", "DICT-FIXTURE"),
+            atomic_statement="Поле использует проверенное значение справочника.",
+            observable_oracle="В поле отображается проверенное значение.",
+            test_intent="Выбрать замороженный fixture.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=("DICT-FIXTURE",),
+            dictionary_requirements=(
+                PreparedDictionaryRequirement(
+                    dictionary_id="DICT-FIXTURE",
+                    coverage_mode="reference-only",
+                    fixture_values=values,
+                    fixture_provenance=provenance,
+                ),
+            ),
+            notes="",
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-001",
+            obligations=(obligation,),
+            coverage_gaps=(),
+        )
+
+        restored = PreparedObligationSet.from_dict(obligations.to_dict())
+
+        self.assertEqual(obligations.digest, restored.digest)
+        self.assertEqual(
+            provenance,
+            restored.obligations[0].dictionary_requirements[0].fixture_provenance,
+        )
+        with self.assertRaisesRegex(StageRuntimeError, "value_set_sha256"):
+            replace(
+                restored.obligations[0].dictionary_requirements[0],
+                fixture_values=(
+                    PreparedDictionaryValue(
+                        ("DICT-FIXTURE",),
+                        "leaf",
+                        "Подмена",
+                    ),
+                ),
+            ).validate()
+
+    def test_existing_v9_fixture_payload_without_provenance_round_trips_unchanged(
+        self,
+    ) -> None:
+        values = (
+            PreparedDictionaryValue(
+                ("DICT-LEGACY",),
+                "leaf",
+                "Старое замороженное значение",
+            ),
+        )
+        obligation = PreparedObligation(
+            obligation_id="OBL-LEGACY",
+            atom_id="ATOM-LEGACY",
+            source_refs=("SRC-1", "DICT-LEGACY"),
+            atomic_statement="Выбрано значение справочника.",
+            observable_oracle="Значение отображается в поле.",
+            test_intent="Выбрать значение.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=("DICT-LEGACY",),
+            dictionary_requirements=(
+                PreparedDictionaryRequirement(
+                    dictionary_id="DICT-LEGACY",
+                    coverage_mode="reference-only",
+                    fixture_values=values,
+                ),
+            ),
+            notes="",
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="pkg-legacy",
+            obligations=(obligation,),
+            coverage_gaps=(),
+        )
+        payload = obligations.to_dict()
+        requirement_payload = payload["obligations"][0]["dictionary_requirements"][0]
+        self.assertNotIn("fixture_provenance", requirement_payload)
+
+        restored = PreparedObligationSet.from_dict(payload)
+
+        self.assertEqual(payload, restored.to_dict())
+        self.assertIsNone(
+            restored.obligations[0].dictionary_requirements[0].fixture_provenance
+        )
 
     def test_accepts_external_dynamic_dictionary_with_bound_dependency(self) -> None:
         obligation = PreparedObligation(

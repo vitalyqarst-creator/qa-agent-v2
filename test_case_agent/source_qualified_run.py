@@ -41,6 +41,10 @@ from test_case_agent.review_cycle.runtime import (
     sha256_path,
     write_json_atomic,
 )
+from test_case_agent.reviewer_evidence import (
+    ReviewerEvidenceError,
+    prepare_reviewer_evidence_basis,
+)
 from test_case_agent.review_cycle.source_assertions import (
     EmbeddedSourceAssertionContract,
     SourceAssertionContractError,
@@ -104,6 +108,7 @@ _ITERATION_STATUS_CATEGORIES = {
     "blocked-design": "workflow",
     "blocked-writer-unresolved": "workflow",
     "blocked-suite-gate": "workflow",
+    "blocked-reviewer-context-too-large": "workflow",
     "review-changes-required": "workflow",
     "review-blocked": "workflow",
     "failed-infrastructure": "infrastructure",
@@ -166,6 +171,7 @@ _PIPELINE_CONTRACT_ERRORS = (
     StageRuntimeError,
     DesignError,
     DerivationCompilationError,
+    ReviewerEvidenceError,
 )
 
 
@@ -821,6 +827,13 @@ def _run_source_qualified_scope(
             expected_obligation_set_digest=derivations.obligation_set_digest,
             repo_root=repo_root,
         )
+        reviewer_evidence_basis = prepare_reviewer_evidence_basis(
+            repo_root,
+            compiled,
+            contract.manifest,
+            contract.review_receipt,
+            obligations,
+        )
         write_json_atomic(
             bindings_dir / "accepted-coverage-contract.json",
             binding.to_dict(),
@@ -947,6 +960,7 @@ def _run_source_qualified_scope(
             writer_response=writer_path,
             reviewer_response=reviewer_path,
             backend=backend,
+            reviewer_evidence_basis=reviewer_evidence_basis,
         )
         finish_stage()
 

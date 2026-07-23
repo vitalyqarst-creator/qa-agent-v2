@@ -36,6 +36,12 @@ DICTIONARY_COVERAGE_MODES = {
     "full-hierarchy",
 }
 DICTIONARY_VALUE_KINDS = {"group", "leaf"}
+DICTIONARY_FIXTURE_EVIDENCE_KINDS = {
+    "registered-fixture-source",
+    "external-dynamic-fixture",
+}
+DICTIONARY_METADATA_NOT_DECLARED = "not-declared"
+EXTERNAL_FIXTURE_LIFECYCLE_POLICY = "verified-once / revalidate-on-failure"
 CALIBRATION_STATUSES = {"none", "ui-calibration-required"}
 IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -674,12 +680,249 @@ class PreparedDictionaryValue:
         return item
 
 
+def prepared_dictionary_value_set_sha256(
+    values: Sequence[PreparedDictionaryValue],
+) -> str:
+    """Bind fixture provenance to one exact, order-independent value set."""
+
+    payload = sorted(
+        (item.to_dict() for item in values),
+        key=lambda item: (
+            tuple(item["hierarchy_path"]),
+            item["value_kind"],
+            item["value"],
+        ),
+    )
+    return hashlib.sha256(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+
+
+@dataclass(frozen=True)
+class PreparedDictionaryFixtureProvenance:
+    """Hash-bound provenance for a bounded dictionary fixture value set.
+
+    ``source_path`` is the registered JSON artifact containing the exact fixture
+    values.  External-dynamic fixtures additionally require an independently
+    registered verification receipt and a frozen response snapshot.  The
+    lifecycle fields make the no-routine-live-revalidation contract explicit.
+    """
+
+    evidence_kind: str
+    dictionary_id: str
+    fixture_id: str
+    source_path: str
+    source_locator: str
+    source_sha256: str
+    value_set_sha256: str
+    version: str
+    effective_date: str
+    provider: str | None = None
+    verification_receipt_path: str | None = None
+    verification_receipt_locator: str | None = None
+    verification_receipt_sha256: str | None = None
+    lifecycle_source_path: str | None = None
+    lifecycle_source_locator: str | None = None
+    lifecycle_source_sha256: str | None = None
+    verified_at: str | None = None
+    lifecycle_policy: str | None = None
+    contract: str = "dictionary-fixture-provenance-v1"
+
+    def validate(self) -> None:
+        if self.contract != "dictionary-fixture-provenance-v1":
+            raise StageRuntimeError(
+                "dictionary fixture provenance contract must equal "
+                "dictionary-fixture-provenance-v1"
+            )
+        if self.evidence_kind not in DICTIONARY_FIXTURE_EVIDENCE_KINDS:
+            raise StageRuntimeError(
+                "dictionary fixture evidence_kind must be one of "
+                f"{sorted(DICTIONARY_FIXTURE_EVIDENCE_KINDS)}"
+            )
+        _identifier(
+            self.dictionary_id,
+            "dictionary fixture provenance dictionary_id",
+            DICT_ID,
+        )
+        _identifier(self.fixture_id, "dictionary fixture provenance fixture_id")
+        _path(self.source_path, "dictionary fixture provenance source_path")
+        locator = _text(
+            self.source_locator,
+            "dictionary fixture provenance source_locator",
+        )
+        if not locator.startswith("json-pointer:"):
+            raise StageRuntimeError(
+                "dictionary fixture provenance source_locator must use json-pointer:"
+            )
+        _sha(self.source_sha256, "dictionary fixture provenance source_sha256")
+        _sha(
+            self.value_set_sha256,
+            "dictionary fixture provenance value_set_sha256",
+        )
+        version = _text(self.version, "dictionary fixture provenance version")
+        effective_date = _text(
+            self.effective_date,
+            "dictionary fixture provenance effective_date",
+        )
+        if (
+            effective_date != DICTIONARY_METADATA_NOT_DECLARED
+            and re.fullmatch(r"\d{4}-\d{2}-\d{2}", effective_date) is None
+        ):
+            raise StageRuntimeError(
+                "dictionary fixture provenance effective_date must be YYYY-MM-DD "
+                "or not-declared"
+            )
+        if self.evidence_kind == "registered-fixture-source":
+            if any(
+                value is not None
+                for value in (
+                    self.provider,
+                    self.verification_receipt_path,
+                    self.verification_receipt_locator,
+                    self.verification_receipt_sha256,
+                    self.lifecycle_source_path,
+                    self.lifecycle_source_locator,
+                    self.lifecycle_source_sha256,
+                    self.verified_at,
+                    self.lifecycle_policy,
+                )
+            ):
+                raise StageRuntimeError(
+                    "registered fixture source cannot declare external verification fields"
+                )
+            return
+
+        if version == DICTIONARY_METADATA_NOT_DECLARED:
+            raise StageRuntimeError(
+                "external dictionary fixture must declare a contract version"
+            )
+        if effective_date == DICTIONARY_METADATA_NOT_DECLARED:
+            raise StageRuntimeError(
+                "external dictionary fixture must declare an effective date"
+            )
+        _text(self.provider, "dictionary fixture provenance provider")
+        _path(
+            self.verification_receipt_path,
+            "dictionary fixture provenance verification_receipt_path",
+        )
+        receipt_locator = _text(
+            self.verification_receipt_locator,
+            "dictionary fixture provenance verification_receipt_locator",
+        )
+        if not receipt_locator.startswith("json-pointer:"):
+            raise StageRuntimeError(
+                "dictionary fixture provenance verification_receipt_locator must "
+                "use json-pointer:"
+            )
+        _sha(
+            self.verification_receipt_sha256,
+            "dictionary fixture provenance verification_receipt_sha256",
+        )
+        _path(
+            self.lifecycle_source_path,
+            "dictionary fixture provenance lifecycle_source_path",
+        )
+        lifecycle_locator = _text(
+            self.lifecycle_source_locator,
+            "dictionary fixture provenance lifecycle_source_locator",
+        )
+        if not lifecycle_locator.startswith("markdown-table-row:"):
+            raise StageRuntimeError(
+                "dictionary fixture provenance lifecycle_source_locator must use "
+                "markdown-table-row:"
+            )
+        _sha(
+            self.lifecycle_source_sha256,
+            "dictionary fixture provenance lifecycle_source_sha256",
+        )
+        verified_at = _text(
+            self.verified_at,
+            "dictionary fixture provenance verified_at",
+        )
+        if re.fullmatch(
+            r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z",
+            verified_at,
+        ) is None:
+            raise StageRuntimeError(
+                "dictionary fixture provenance verified_at must be a UTC timestamp"
+            )
+        if self.lifecycle_policy != EXTERNAL_FIXTURE_LIFECYCLE_POLICY:
+            raise StageRuntimeError(
+                "external dictionary fixture lifecycle must be verified-once / "
+                "revalidate-on-failure"
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        self.validate()
+        return {
+            "contract": self.contract,
+            "evidence_kind": self.evidence_kind,
+            "dictionary_id": self.dictionary_id,
+            "fixture_id": self.fixture_id,
+            "source_path": self.source_path,
+            "source_locator": self.source_locator,
+            "source_sha256": self.source_sha256,
+            "value_set_sha256": self.value_set_sha256,
+            "version": self.version,
+            "effective_date": self.effective_date,
+            "provider": self.provider,
+            "verification_receipt_path": self.verification_receipt_path,
+            "verification_receipt_locator": self.verification_receipt_locator,
+            "verification_receipt_sha256": self.verification_receipt_sha256,
+            "lifecycle_source_path": self.lifecycle_source_path,
+            "lifecycle_source_locator": self.lifecycle_source_locator,
+            "lifecycle_source_sha256": self.lifecycle_source_sha256,
+            "verified_at": self.verified_at,
+            "lifecycle_policy": self.lifecycle_policy,
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        payload: Mapping[str, Any],
+    ) -> PreparedDictionaryFixtureProvenance:
+        _exact_fields(
+            payload,
+            {
+                "contract",
+                "evidence_kind",
+                "dictionary_id",
+                "fixture_id",
+                "source_path",
+                "source_locator",
+                "source_sha256",
+                "value_set_sha256",
+                "version",
+                "effective_date",
+                "provider",
+                "verification_receipt_path",
+                "verification_receipt_locator",
+                "verification_receipt_sha256",
+                "lifecycle_source_path",
+                "lifecycle_source_locator",
+                "lifecycle_source_sha256",
+                "verified_at",
+                "lifecycle_policy",
+            },
+            "dictionary fixture provenance",
+        )
+        item = cls(**payload)
+        item.validate()
+        return item
+
+
 @dataclass(frozen=True)
 class PreparedDictionaryRequirement:
     dictionary_id: str
     coverage_mode: str
     required_values: tuple[PreparedDictionaryValue, ...] = ()
     fixture_values: tuple[PreparedDictionaryValue, ...] = ()
+    fixture_provenance: PreparedDictionaryFixtureProvenance | None = None
 
     def validate(self, *, package_version: int = PACKAGE_VERSION) -> None:
         _identifier(self.dictionary_id, "dictionary requirement dictionary_id", DICT_ID)
@@ -730,6 +973,25 @@ class PreparedDictionaryRequirement:
             raise StageRuntimeError(
                 "exhaustive dictionary requirement cannot declare fixture_values"
             )
+        if self.fixture_provenance is not None:
+            if not self.fixture_values:
+                raise StageRuntimeError(
+                    "dictionary fixture provenance requires fixture_values"
+                )
+            self.fixture_provenance.validate()
+            if self.fixture_provenance.dictionary_id != self.dictionary_id:
+                raise StageRuntimeError(
+                    "dictionary fixture provenance dictionary_id does not bind its "
+                    "requirement"
+                )
+            if (
+                self.fixture_provenance.value_set_sha256
+                != prepared_dictionary_value_set_sha256(self.fixture_values)
+            ):
+                raise StageRuntimeError(
+                    "dictionary fixture provenance value_set_sha256 does not bind "
+                    "fixture_values"
+                )
 
     def to_dict(self, *, include_fixture_contract: bool = True) -> dict[str, Any]:
         payload = {
@@ -741,6 +1003,8 @@ class PreparedDictionaryRequirement:
             payload["fixture_values"] = [
                 item.to_dict() for item in self.fixture_values
             ]
+            if self.fixture_provenance is not None:
+                payload["fixture_provenance"] = self.fixture_provenance.to_dict()
         return payload
 
     @classmethod
@@ -753,6 +1017,8 @@ class PreparedDictionaryRequirement:
         expected = {"dictionary_id", "coverage_mode", "required_values"}
         if package_version >= 8:
             expected.add("fixture_values")
+            if "fixture_provenance" in payload:
+                expected.add("fixture_provenance")
         _exact_fields(
             payload,
             expected,
@@ -776,6 +1042,13 @@ class PreparedDictionaryRequirement:
                 )
                 if package_version >= 8
                 else ()
+            ),
+            fixture_provenance=(
+                PreparedDictionaryFixtureProvenance.from_dict(
+                    payload["fixture_provenance"]
+                )
+                if package_version >= 8 and "fixture_provenance" in payload
+                else None
             ),
         )
         item.validate(package_version=package_version)

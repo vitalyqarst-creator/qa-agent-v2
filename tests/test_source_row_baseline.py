@@ -14,6 +14,7 @@ from test_case_agent.review_cycle.source_row_baseline import (
     build_source_row_baseline,
     load_source_row_baseline,
     resolve_xhtml_candidate_at_locator,
+    resolve_xhtml_structural_contexts_at_locators,
     resolve_xhtml_table_cells_at_locators,
     validate_candidate_coverage,
     validate_source_row_baseline,
@@ -208,6 +209,89 @@ class SourceRowBaselineTests(unittest.TestCase):
                 [row_locator + f"/*[{index}]" for index in range(1, 4)],
                 [item.canonical_xpath for item in cells],
             )
+
+    def test_structural_context_resolver_materializes_heading_and_exact_ancestry(self) -> None:
+        self._write_xhtml(
+            "<h1>Основной раздел</h1>"
+            "<p>Вводный текст</p>"
+            "<h2>Табличные правила</h2>"
+            "<table><tbody><tr><td>Строка требования</td></tr></tbody></table>"
+            "<h3>Списочные правила</h3>"
+            "<ul><li>Пункт требования</li></ul>"
+            "<h2>Следующий подраздел</h2>"
+            "<p>Завершающий текст</p>"
+        )
+        baseline = build_source_row_baseline(
+            repo_root=self.repo_root,
+            spec=self._spec(),
+        )
+        by_text = {
+            item.bounded_source_text: item for item in baseline.candidates
+        }
+        selected = (
+            by_text["Основной раздел"],
+            by_text["Строка требования"],
+            by_text["Пункт требования"],
+            by_text["Завершающий текст"],
+        )
+
+        resolved = resolve_xhtml_structural_contexts_at_locators(
+            xhtml_path=self.source_path,
+            canonical_xpaths=[item.canonical_xpath for item in selected],
+        )
+
+        heading = resolved[selected[0].canonical_xpath]
+        self.assertEqual((), heading.section_path)
+        table_row = resolved[selected[1].canonical_xpath]
+        self.assertEqual(
+            ("Основной раздел", "Табличные правила"),
+            table_row.section_path,
+        )
+        self.assertEqual("/*/*[1]/*[4]", table_row.table_identity)
+        self.assertEqual(
+            [("table", "/*/*[1]/*[4]")],
+            [
+                (item.element_kind, item.canonical_xpath)
+                for item in table_row.table_ancestry
+            ],
+        )
+        self.assertEqual(
+            [1, 2],
+            [item.level for item in table_row.section_headings],
+        )
+        list_item = resolved[selected[2].canonical_xpath]
+        self.assertEqual(
+            ("Основной раздел", "Табличные правила", "Списочные правила"),
+            list_item.section_path,
+        )
+        self.assertEqual(
+            [("ul", "/*/*[1]/*[6]")],
+            [
+                (item.element_kind, item.canonical_xpath)
+                for item in list_item.list_ancestry
+            ],
+        )
+        following = resolved[selected[3].canonical_xpath]
+        self.assertEqual(
+            ("Основной раздел", "Следующий подраздел"),
+            following.section_path,
+        )
+        self.assertIsNone(following.table_identity)
+
+    def test_structural_context_resolver_rejects_empty_preceding_heading(self) -> None:
+        self._write_xhtml("<h2></h2><p>Требование</p>")
+        baseline = build_source_row_baseline(
+            repo_root=self.repo_root,
+            spec=self._spec(),
+        )
+
+        self.assert_contract_error(
+            "empty-structural-heading",
+            lambda: resolve_xhtml_structural_contexts_at_locators(
+                xhtml_path=self.source_path,
+                canonical_xpaths=[baseline.candidates[0].canonical_xpath],
+            ),
+        )
 
     def test_annotation_metadata_is_excluded_from_tr_li_p_and_locator_resolution(self) -> None:
         self._write_xhtml(

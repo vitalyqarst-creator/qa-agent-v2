@@ -15,6 +15,7 @@
 | `incorrect_signoff` | `no` для каждого case с `severity = error`. |
 | `finding_actionability` | Каждый expected finding содержит `required_change`, `source_reference`, `coverage_dimension` и `traceability_ref`, когда применимо. |
 | `false_positive_control` | Reviewer не требует поведения, которого нет в source. |
+| `counterexample_specificity` | Каждый finding, вызванный false-pass, false-fail, failure-attribution или trigger-fidelity probe, содержит конкретный source-bound witness и exact role/OBL/materialized-item/probe binding. Несколько findings одного probe сохраняют отдельные exact chains. `passed` receipt ссылается на фактический TC step/fixture и TC oracle, а не на отсутствующий в TC source-only basis. Прямые source/TC-design/digest/binding-integrity defects, доказанные артефактами, освобождены от гипотетического witness, но обязаны иметь точное evidence. |
 
 ## Eval Case GP-001 - Lost Requirement Code
 
@@ -137,6 +138,9 @@
 - `category`: `expected-result`
 - `coverage_dimension`: `expected-result`
 - Finding указывает, что цвет, точный текст ошибки и disabled-state не подтверждены source.
+- Concrete false-fail witness: реализация не сохраняет недопустимый ИНН, но не
+  показывает красную подсветку, точный текст и disabled-state; она соответствует
+  `REQ-402`, однако TC ошибочно провалит её.
 - Required change оставляет только source-backed no-save oracle или переводит UI reaction в `unclear`.
 
 ## Eval Case GP-005 - Dictionary Closed Set Not Covered
@@ -215,6 +219,19 @@
 - Finding указывает, что source уже задает observable oracle: черновик отсутствует в списке.
 - Required change требует покрыть проверяемую UI-часть TC и оставить `GAP-*` только на реально недостающую fixture/mechanism часть, если она есть.
 
+## Adversarial falsification subset
+
+Канонические frozen fixtures находятся в
+`evals/reviewer-test-design-rubric-cases.md`; здесь они не дублируются.
+
+| probe | fixture | gate | pass rule |
+| --- | --- | --- | --- |
+| `AP-001` | Eval Case 13 | false-pass | Blocking persistence finding с concrete defect witness. |
+| `AP-002` | Eval Case 2 | false-fail | Blocking finding с concrete conforming implementation. |
+| `AP-003` | Eval Case 14 | failure attribution | Blocking finding с concrete alternative cause. |
+| `AP-004` | Eval Case 3 | trigger fidelity | Blocking finding: проверяемый trigger отсутствует в шагах. |
+| `AP-005` | Eval Case 8 | clean control | Findings отсутствуют; неподтверждённое поведение не придумано. |
+
 ## Run Report Template
 
 ```md
@@ -227,5 +244,7 @@
 - `blocking_misses`: `<N>`
 - `incorrect_signoff`: `yes|no`
 - `false_positives`: `<N + short ids>`
+- `counterexample_specificity`: `<N/M behavioral findings>`
+- `clean_control_findings`: `<0 или ids>`
 - `verdict`: `pass | partial | fail`
 ```

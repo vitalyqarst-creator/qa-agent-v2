@@ -26,20 +26,37 @@ Return a blocking finding when a digest is stale, a draft trace id is unknown, a
    the runner derives and verifies the bound `atom_id`, planned TC and draft
    SHA-256 rather than accepting those values from reviewer prose.
 3. For every testable obligation, verify that its linked TC performs the source-backed condition/action with concrete data and reaches the source-backed observable oracle.
-4. For every gap, unclear or not-applicable obligation, verify that the compiled classification exactly matches the accepted source contract and that the draft does not invent executable coverage. Reclassification requires a fresh source review rather than a TC-review guess.
-5. For every non-blocking constraint gap, verify that the linked TC preserves the `GAP-*` and does not choose an unspecified mechanism.
-6. Apply the embedded context rule card: boundary points remain independent; invalid classes remain independent; branch preconditions and integration triggers remain explicit.
-7. Reject invented UI, literals, messages, API/DB effects or internal state; validate UI locators against the supplied mockup inventory and dictionary claims against projected `active_values`.
-8. Reject non-atomic cases, generic fixtures, placeholder steps, source-rule-only expected results, duplicate titles and nominal traceability.
-9. Classify every semantic-overlap group. Accept a shared body only when the package explicitly groups one observable multi-obligation check.
-10. Review every declared routed cross-cutting dimension exactly once. Repeat
+4. Apply the falsification gate to every behavioral TC using only the accepted
+   semantics: try to construct a defective implementation under source-consistent
+   inputs/preconditions that violates the bound rule but still passes; a conforming
+   implementation that fails only because of an unsupported expectation; a failure
+   caused by an invalid fixture or unrelated precondition; and a case whose steps
+   miss the source-backed trigger. A finding caused by one of these probes must name
+   a concrete witness and exact supplied binding; inability to construct one is not
+   itself a finding. Keep the requested prepared contract shape: do not add fields
+   that its schema does not expose. The separate ReviewerEvidencePack v2 contract
+   records all four typed per-case probe results with exact binding role,
+   obligation and materialized-item index. A passing v2 probe binds to an actual TC step or exact role-bound
+   setup/cleanup item (or, for failure attribution, an actual TC fixture item) and
+   to the TC expected result; source-only
+   trigger/oracle text may support a finding but cannot prove a pass. Direct
+   source/TC-backed design,
+   receipt, digest and binding-integrity defects proven by the supplied artifacts do
+   not need a hypothetical witness.
+5. For every gap, unclear or not-applicable obligation, verify that the compiled classification exactly matches the accepted source contract and that the draft does not invent executable coverage. Reclassification requires a fresh source review rather than a TC-review guess.
+6. For every non-blocking constraint gap, verify that the linked TC preserves the `GAP-*` and does not choose an unspecified mechanism.
+7. Apply the embedded context rule card: boundary points remain independent; invalid classes remain independent; branch preconditions and integration triggers remain explicit.
+8. Reject invented UI, literals, messages, API/DB effects or internal state; validate UI locators against the supplied mockup inventory and dictionary claims against projected `active_values`.
+9. Reject non-atomic cases, generic fixtures, placeholder steps, source-rule-only expected results, duplicate titles and nominal traceability.
+10. Classify every semantic-overlap group. Accept a shared body only when the package explicitly groups one observable multi-obligation check.
+11. Review every declared routed cross-cutting dimension exactly once. Repeat
     the complete canonical sorted source-ref array listed for that same
     dimension in the immutable `reviewer-dimension-source-bindings-v1` map.
     Omitting or reordering a bound ref, or citing a ref listed only for another
     dimension, is invalid. An unverified or unsupported applicable dimension
     prevents sign-off; it cannot be silently accepted as metadata.
-11. For UI-calibration candidates, require `ui-calibration-required`, `candidate-ui-calibration`, every linked constraint GAP when present, and a neutral expected result that does not preselect filtering/message/highlight/save behavior. Package-declared calibration without a GAP remains a valid lifecycle item.
-12. Return exactly the structured review contract requested by the runner. Do not write files.
+12. For UI-calibration candidates, require `ui-calibration-required`, `candidate-ui-calibration`, every linked constraint GAP when present, and a neutral expected result that does not preselect filtering/message/highlight/save behavior. Package-declared calibration without a GAP remains a valid lifecycle item.
+13. Return exactly the structured review contract requested by the runner. Do not write files.
 
 ## Decision Floor
 
@@ -67,6 +84,10 @@ source refs, cross-dimension source refs, a `covered` verdict whose compiler-pla
 absent from the reviewed draft, or a non-passing obligation verdict without a
 linked error finding invalidate the receipt. Legacy source-first output without
 the exact per-obligation receipt is obsolete and must not be promoted.
+
+The ReviewerEvidencePack v2 route separately requires a typed per-case
+falsification receipt with an exact evidence-chain binding. Live output cannot use
+the legacy-only `not-recorded` outcome.
 
 ## Runtime Boundary
 

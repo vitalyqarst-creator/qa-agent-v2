@@ -15,6 +15,44 @@ Reviewer обязан критически проверять заявления
 - Не создавай findings из-за стилистических предпочтений, если кейс исполним, трассируем и семантически достаточен.
 - Не подписывай набор без semantic review layer. Instruction budget не является причиной удалить проверки покрытия, атомарности, observability, test data specificity или source-backed allowed/invalid classes.
 
+## Adversarial falsification gate
+
+Перед sign-off каждого поведенческого `TC-*` reviewer должен попытаться построить
+четыре source-bound witness-а:
+
+1. `false pass`: дефектная реализация, совместимая с источником по входам и
+   предусловиям, которая нарушает проверяемое правило, но всё равно пройдёт TC;
+2. `false fail`: реализация, соответствующая всем принятым source evidence,
+   которая провалит TC только из-за придуманного или хрупкого ожидания;
+3. `failure attribution`: отказ вызван не проверяемым правилом, а невалидной
+   fixture, другим обязательным полем или посторонним предусловием;
+4. `trigger fidelity`: шаги не выполняют точное source-backed условие, действие
+   или trigger, хотя expected result формально повторяет требование.
+
+В typed reviewer route каждый probe обязан указывать точные `binding_role`,
+`obligation_id` и `binding_item_index` (`-1` для primary). Для support chain
+индекс обязан указывать конкретный materialized item этой obligation, а не любой
+элемент того же TC-поля. `outcome = passed` не может опираться только на source-текст:
+`trigger_or_step` должен быть фактическим шагом TC для primary/action либо точным
+элементом связанного TC-поля для setup/cleanup, а для `failure attribution` может
+быть также фактическим предусловием или test-data item; `oracle` должен
+быть итоговым expected result самого TC. Source-only trigger или oracle допустим
+как evidence конкретного `finding`, но не как доказательство достаточности TC.
+
+Если finding основан на одном из этих четырёх probes, он обязан назвать witness
+конкретно и связать его с той же точной role/source/ATOM/OBL/TC chain, которая
+указана в probe receipt. Само предположение,
+что «теоретически может существовать контрпример», finding-ом не является;
+reviewer не должен придумывать дефект для достаточного кейса. Прямой
+source/TC-backed design defect, доказанный самими артефактами, не требует
+гипотетического witness: это относится, например, к неатомарности, дублированию,
+неверному risk priority, отсутствующей source row, stale digest или разорванной
+зарегистрированной binding-цепочке.
+
+Один probe может породить несколько findings по разным зарегистрированным chains.
+Его receipt обязан anchor-ить минимум одну из них, а каждый дополнительный finding
+обязан нести тот же `falsification_probe` и собственную полную evidence chain.
+
 ## Минимальный split reviewer roles
 
 Для сложных или high-risk scope review должен состоять минимум из двух независимых passes:

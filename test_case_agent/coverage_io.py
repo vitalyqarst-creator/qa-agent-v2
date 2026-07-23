@@ -765,6 +765,14 @@ def write_coverage_graph(path: Path, graph: CoverageGraph) -> str:
     return _write_envelope(path, "coverage-graph", normalized.to_dict())
 
 
+def coverage_graph_from_dict(payload: Mapping[str, Any]) -> CoverageGraph:
+    """Parse and integrity-check an in-memory coverage-graph payload."""
+
+    if not isinstance(payload, Mapping):
+        raise CoverageIoError("schema-type", "coverage graph payload must be an object")
+    return _coverage_graph(payload)
+
+
 def load_coverage_graph(
     path: Path,
     *,

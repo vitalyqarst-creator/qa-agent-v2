@@ -40,11 +40,43 @@ entrypoint — `references/agent/production-instruction-loading.md`; он заг
 самодостаточную `production-global-rules.md`, поэтому development-only корневой
 `AGENTS.md` и legacy control plane в production не копируются.
 
+`ReviewerEvidencePack` v2 строится самим runtime из отдельно квалифицированного
+scope package. Зарегистрированные mockups могут входить во внешние runtime inputs
+этого package; их изображения и hash-bound metadata передаются независимому
+reviewer через evidence pack после проверки hash, размера, decoded format,
+структуры и полной декодируемости. Pack содержит вычисленный bounded semantic
+parity proof для каждого XHTML-backed literal элемента с DOCX и PDF (для
+DOCX — с сохранением document order, section region и one-to-one table identity;
+для разбитых табличных строк PDF — по упорядоченным cell anchors и точным
+непересекающимся prefix/suffix-continuations соседних страниц в минимальном
+code-bounded page span; склеенная короткая ячейка допускается только как точное
+заполнение промежутка между двумя доказанными соседними fragments, без общего
+ослабления token boundaries и без заявления о геометрии таблицы), а также
+отдельную точную сверку PDF requirement codes, полный зарегистрированный
+coverage-gap artifact, supporting cross-row
+bindings, отдельные role-tagged design-support chains для sibling obligations в
+setup/action/cleanup и честную provenance-классификацию справочников. Для явных exclusive
+allowed-set правил pack также
+передаёт детерминированную проекцию отдельных недопустимых классов, не выводя из
+ограничения неизвестный UI-отклик. Сами FT-файлы, изображения и mockups в
+production bundle не копируются.
+
+Branch fixtures закрытого справочника принимаются только как exact-token
+подмножество полного qualified value set с per-value source-row bindings.
+External-dynamic/DaData fixtures сохраняют реальные hash-bound response,
+verification receipt и lifecycle catalog row; pack передаёт reviewer точные
+request/expected response и не запускает routine live revalidation.
+
+Promotion принимает только v2 request и не доверяет self-declared pack:
+adapter повторно загружает typed evidence basis, квалифицирует текущие
+зарегистрированные файлы и перестраивает весь pack перед выдачей eligibility.
+
 Профиль не содержит `evals/`, tests, FT inputs, work/history, benchmarks,
 overnight/incremental/standard controllers, dispatcher/cycle-state compatibility,
 UI automation, source qualification skills, legacy writer/reviewer skills и offline quality proof. Эти
 инструменты остаются только в qualification-профиле. Публичный production CLI
-содержит только `ft-agent run`.
+содержит только `ft-agent run`; evidence pack является частью этого существующего
+маршрута и не добавляет promotion или новый entrypoint.
 
 ```powershell
 python scripts/build_release_bundle.py `

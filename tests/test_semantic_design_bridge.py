@@ -5504,20 +5504,63 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             {"SRC-024": ["BSR 272", "BSR 273"]},
         )
 
+        signals = registry["negative"]
+        self.assertEqual(7, len(signals))
         self.assertEqual(
             [
+                "length-n-minus-one",
+                "length-n-plus-one",
+                "letters",
+                "spaces",
+                "special-characters",
+                "decimal-separator",
+                "sign",
+            ],
+            [item["negative_class"] for item in signals],
+        )
+        self.assertTrue(
+            all(item["requirement_codes"] == ["BSR 272"] for item in signals)
+        )
+        self.assertTrue(
+            all(item["restriction_type"] == "numeric" for item in signals)
+        )
+        self.assertEqual(
+            [
+                len(item["representative_invalid_value"])
+                for item in signals
+            ],
+            [9, 11, 10, 10, 10, 10, 10],
+        )
+
+    def test_signal_registry_splits_exclusive_text_symbol_classes(self) -> None:
+        registry = _source_signal_registry(
+            [
                 {
-                    "signal_id": "SIG-NEG-001",
-                    "scope_obligation_id": "SO-NEG-001",
-                    "source_row_id": "SRC-024",
-                    "source_ref": "",
-                    "field_or_block": "",
-                    "requirement_codes": ["BSR 272"],
-                    "restriction_type": "format",
-                    "literal_anchor": "формат",
+                    "source_row_id": "SRC-001",
+                    "source_ref": "BSR 174",
+                    "field_or_action": "Фамилия",
+                    "bounded_source_text": (
+                        "BSR 174. Возможен ввод только текстовых символов и "
+                        "специальный символ «-»."
+                    ),
                 }
             ],
-            registry["negative"],
+            {"SRC-001": ["BSR 174"]},
+        )
+
+        self.assertEqual(
+            [
+                "digits",
+                "special-characters-other-than-hyphen",
+            ],
+            [item["negative_class"] for item in registry["negative"]],
+        )
+        self.assertTrue(
+            all(
+                item["source_binding"]
+                == "exclusive-symbol-class-restriction"
+                for item in registry["negative"]
+            )
         )
 
     def test_transport_normalizer_binds_signal_identity_to_source_row(self) -> None:
@@ -7773,6 +7816,88 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         )
         self.assertIn(
             "bind-negative-candidate-clause-evidence-to-source-row",
+            [item["rule"] for item in receipt["repairs"]],
+        )
+
+    def test_candidate_signal_code_evidence_binds_when_code_already_present(
+        self,
+    ) -> None:
+        context = self._context()
+        row = context["source_rows"][1]
+        row["bounded_source_text"] += " Формат значения: только цифры."
+        self._bind_context(context)
+        boundary = self._boundary()
+        signal = _source_signal_registry(
+            [row],
+            {"SRC-002": ["BSR 1"]},
+        )["negative"][0]
+        donor_evidence = {
+            "requirement_code": "BSR 1",
+            "source_row_id": "SRC-002",
+            "provenance_role": "xhtml-row",
+            "exact_source_fragment": "BSR 1.",
+            "evidence_source_path": "none_required",
+            "evidence_locator": "none_required",
+        }
+        payload = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-002",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-DONOR",
+                            "atom_id": "ATOM-DONOR",
+                            "requirement_codes": ["BSR 1"],
+                            "requirement_code_evidence": [donor_evidence],
+                            "clause_evidence": [],
+                        },
+                        {
+                            "assertion_id": "ASSERT-CANDIDATE",
+                            "atom_id": "ATOM-CANDIDATE",
+                            "requirement_codes": ["BSR 1"],
+                            "requirement_code_evidence": [],
+                            "oracle_clauses": [
+                                "Ограничение нарушено; точный UI-отклик требует "
+                                "калибровки."
+                            ],
+                            "clause_evidence": [
+                                {
+                                    "clause_kind": "action",
+                                    "clause_index": 0,
+                                    "source_row_id": "SRC-002",
+                                    "exact_source_fragment": signal["literal_anchor"],
+                                }
+                            ],
+                        },
+                    ],
+                }
+            ],
+            "obligations": [],
+            "negative_oracles": [
+                {
+                    **signal,
+                    "decision": "candidate_tc_required",
+                    "oracle_status": "ui-calibration-required",
+                    "oracle_source": "not_found",
+                    "source_statement": "Формат значения: только цифры.",
+                    "linked_atom_id": "ATOM-CANDIDATE",
+                    "linked_obligation_id": "OBL-CANDIDATE",
+                }
+            ],
+            "requiredness_oracles": [],
+        }
+
+        normalized, receipt = normalize_semantic_design_transport(
+            payload,
+            context=context,
+            boundary=boundary,
+        )
+
+        candidate = normalized["source_designs"][0]["assertions"][1]
+        self.assertEqual(["BSR 1"], candidate["requirement_codes"])
+        self.assertEqual([donor_evidence], candidate["requirement_code_evidence"])
+        self.assertIn(
+            "bind-candidate-signal-codes-to-owning-assertion",
             [item["rule"] for item in receipt["repairs"]],
         )
 

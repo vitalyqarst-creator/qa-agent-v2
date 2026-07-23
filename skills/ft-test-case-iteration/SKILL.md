@@ -67,7 +67,12 @@ ft-agent run `
      projection и автоматически построенного source-backed design context;
    - детерминированно сформировать все case designs без model-call;
    - детерминированно собрать Markdown и пройти full-suite production gates;
-   - передать допущенный shadow draft ровно одному независимому reviewer;
+   - собрать полный `ReviewerEvidencePack` v2 из буквальных scope-строк,
+     реального bounded DOCX/XHTML/PDF parity proof, полного coverage-gap
+     artifact, supporting cross-row bindings, role-tagged design-support chains
+     для sibling obligations в setup/action/cleanup, релевантных справочников,
+     полной трассировки и зарегистрированных mockups;
+   - передать допущенный shadow draft и pack ровно одному независимому reviewer;
    - повторно проверить все run inputs, sources и canonical hashes.
 5. Считай успехом `accepted-shadow` либо
    `accepted-with-calibration-pending` с реальным reviewer receipt и закрытыми
@@ -85,8 +90,12 @@ ft-agent run `
 - generated typed derivations и coverage graph;
 - bound design context;
 - deterministic designs, shadow Markdown и production-gate result;
+- полный typed `reviewer-evidence-basis.json`, достаточный для независимой
+  повторной квалификации и deterministic rebuild при promotion;
+- полный hash-bound `reviewer-evidence-pack.json` без старых TC,
+  benchmark и review history;
 - ровно один reviewer request/receipt для допущенного draft и ноль других
-  model stages;
+  model stages; receipt отдельно фиксирует количество и байты image attachments;
 - terminal summary с phase wall time, attempts, artifact sizes и доступными
   token metrics.
 
@@ -95,6 +104,17 @@ ft-agent run `
 `promotion_eligible=false` и `non_promotable_reason=calibration-pending`.
 Blocking contract/input/design, review findings и infrastructure failure
 остаются честными terminal outcomes.
+
+Если terminal findings передаются в отдельный remediation cycle, handoff
+сохраняет `affected_traceability_refs`; закрытие traceability gaps проверяется по `traceability_ref` / `atom_id`.
+Такой handoff сохраняется в `stage-handoffs/`, а его единственным process-status
+остается `workflow-state.yaml`; не изменяй его внутри текущего immutable
+production attempt.
+
+После отдельного signed-off handoff дальнейшая проверка в реальном UI — это
+post-iteration вход в `ft-ui-automation-prep` с выпуском отдельной
+automation-ready версии; не запускай этот skill внутри текущего immutable
+production attempt.
 
 ## Out-of-profile
 

@@ -66,6 +66,9 @@ Reviewer должен оценивать не стиль текста, а спо
 - `category`: `expected-result`
 - `test_case_id`: `TC-EVAL-002`
 - Finding должен указать, что точный текст ошибки, цвет и disabled-state не подтверждены требованием.
+- Concrete false-fail witness: реализация отклоняет сохранение недопустимого ИНН,
+  но не показывает красную подсветку, точный текст и disabled-state. Такая
+  реализация соответствует `REQ-002`, однако текущий TC ошибочно провалит её.
 - Required change должен оставить только подтвержденное наблюдаемое поведение: недопустимое значение не сохраняется, либо пометить UI-реакцию как `unclear`.
 
 ## Eval Case 3 - проверяемое действие спрятано в предусловиях
@@ -95,6 +98,11 @@ Reviewer должен оценивать не стиль текста, а спо
 - `category`: `test-design`
 - `test_case_id`: `TC-EVAL-003`
 - Finding должен указать, что проверяемое действие спрятано в предусловиях вместо шагов.
+- Finding должен явно указать нарушение trigger fidelity: ни один шаг TC не
+  выполняет проверяемое действие отмены.
+- Concrete false-pass witness: операция отмены в продукте не работает, но
+  fixture уже содержит отменённую заявку; единственный шаг просмотра списка
+  проходит, хотя возможность пользователя отменить черновик не проверена.
 - Required change должен требовать перенести отмену черновика в детерминированные шаги.
 
 ## Eval Case 4 - positive и negative ветки смешаны
@@ -239,6 +247,13 @@ Reviewer должен оценивать не стиль текста, а спо
 - Нет `test-design` finding.
 - Reviewer может не добавлять finding или добавить `info` input-limitation note только если отсутствует обязательный source artifact.
 - Reviewer не должен требовать точное название кнопки, текст модального окна, анимацию удаления или audit log, если этих деталей нет в источнике.
+- Falsification gate не является основанием придумать finding: TC выполняет
+  source-backed trigger и наблюдает точный source-backed postcondition.
+- Adversarial clean control: дефект удаления, при котором черновик остаётся в
+  списке, будет обнаружен текущим oracle; реализация с любым source-consistent
+  названием действия удаления пройдёт TC.
+- Поскольку supplied evidence не даёт конкретного false-pass, false-fail или
+  alternative-cause witness, reviewer не должен создавать finding.
 
 ## Eval Case 9 - отсутствует pairwise table при 3+ факторах
 
@@ -387,3 +402,76 @@ Reviewer должен оценивать не стиль текста, а спо
 - `test_case_id`: `TC-EVAL-012` или set-level finding
 - Finding должен указать, что matrix заявляет покрытие `api-server-validation`, но связанный `TC-*` проверяет только UI-flow и не выполняет direct/API payload bypass из `REQ-012.1`.
 - Required change должен требовать добавить отдельный server-side/API bypass TC или оформить `GAP-*`, если backend/API проверка не входит в доступный scope или ожидаемая реакция не выводится из источника.
+
+## Eval Case 13 - false pass: persistence не проверяется
+
+**Requirement Source:**
+
+- `REQ-013`: После сохранения изменённый контактный email отображается после
+  повторного открытия заявки.
+
+**Test Case Under Review:**
+
+```md
+## TC-EVAL-013
+**Название:** Изменение контактного email
+**Предусловия:**
+- Открыта заявка с контактным email `old@example.org`.
+**Шаги:**
+1. Ввести `new@example.org`.
+2. Нажать `Сохранить`.
+**Итоговый ожидаемый результат:** В открытой форме отображается `new@example.org`.
+**Ссылка на ФТ:** `REQ-013`
+```
+
+**Expected Reviewer Output:**
+
+- `review_mode`: `test-design`
+- `severity`: `error`
+- `category`: `expected-result`
+- `coverage_dimension`: `persistence`
+- `test_case_id`: `TC-EVAL-013`
+- Finding должен указать, что проверка текущего UI-state не доказывает
+  persistence после повторного открытия.
+- Concrete false-pass witness: UI хранит `new@example.org` только в локальном
+  состоянии формы, запись остаётся `old@example.org`; TC проходит, но `REQ-013`
+  нарушено.
+- Required change должен требовать закрыть и повторно открыть ту же заявку и
+  проверить literal `new@example.org`.
+
+## Eval Case 14 - failure attribution нарушен невалидным fixture
+
+**Requirement Source:**
+
+- `REQ-014`: Поле `ИНН` обязательно; заявка без `ИНН` не сохраняется.
+- `REQ-014.1`: Поле `Наименование` обязательно; заявка без `Наименования` не
+  сохраняется.
+
+**Test Case Under Review:**
+
+```md
+## TC-EVAL-014
+**Название:** Сохранение без ИНН
+**Предусловия:**
+- Открыта новая заявка.
+- Поля `ИНН` и `Наименование` пусты.
+**Шаги:**
+1. Нажать `Сохранить`.
+**Итоговый ожидаемый результат:** Заявка не сохраняется.
+**Ссылка на ФТ:** `REQ-014`
+```
+
+**Expected Reviewer Output:**
+
+- `review_mode`: `test-design`
+- `severity`: `error`
+- `category`: `test-design`
+- `coverage_dimension`: `dependency`
+- `test_case_id`: `TC-EVAL-014`
+- Finding должен указать, что отказ нельзя надёжно связать с отсутствием `ИНН`,
+  потому что fixture содержит второй независимый blocker.
+- Concrete alternative-cause witness: продукт ошибочно принимает пустой `ИНН`,
+  но корректно блокирует сохранение из-за пустого `Наименования`; TC проходит,
+  хотя `REQ-014` нарушено.
+- Required change должен требовать valid fixture для всех остальных обязательных
+  полей и оставить пустым только `ИНН`.

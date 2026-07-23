@@ -1,23 +1,29 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping
+from unittest.mock import patch
+
+from PIL import Image
 
 from test_case_agent.immutable_iteration import (
     ImmutableIterationError,
     run_immutable_iteration,
 )
 from test_case_agent.iteration_contract import (
+    REVIEWER_FALSIFICATION_PROBES,
     validate_suite,
     validate_writer_response,
 )
+from test_case_agent.reviewer_evidence import ReviewerEvidenceBasis
 from test_case_agent.stage_backend import StageBackendError, StageResult
 from test_case_agent.test_design import build_test_design_plan, render_test_cases
-from tests.test_iteration_contract import _writer_graph
+from tests.test_iteration_contract import _v2_pack, _writer_graph
 from tests.test_test_design import _context, _graph
 
 
@@ -73,6 +79,31 @@ def _accepted_review(graph, draft_sha256: str) -> dict[str, Any]:
     }
 
 
+def _passed_falsification(
+    *,
+    obligation_id: str,
+    trigger_or_step: str,
+    oracle: str,
+    binding_role: str = "primary",
+    binding_item_index: int = -1,
+) -> dict[str, dict[str, str | int]]:
+    return {
+        probe: {
+            "outcome": "passed",
+            "detail": (
+                f"The bound {probe} probe was checked against the named step "
+                "and oracle; no concrete witness was found."
+            ),
+            "binding_role": binding_role,
+            "obligation_id": obligation_id,
+            "binding_item_index": binding_item_index,
+            "trigger_or_step": trigger_or_step,
+            "oracle": oracle,
+        }
+        for probe in REVIEWER_FALSIFICATION_PROBES
+    }
+
+
 class FixtureBackend:
     def __init__(
         self,
@@ -89,6 +120,7 @@ class FixtureBackend:
         self.timeout_seconds = timeout_seconds
         self.fail_on_stage = fail_on_stage
         self.receipt_tokens = receipt_tokens
+        self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
         self,
@@ -97,9 +129,11 @@ class FixtureBackend:
         prompt: str,
         schema: Mapping[str, Any],
         artifact_dir: Path,
+        images: tuple[Any, ...] = (),
     ) -> StageResult:
         del schema, artifact_dir
         self.calls.append(stage)
+        self.images_by_stage[stage] = images
         if self.fail_on_stage == stage:
             raise StageBackendError(f"{stage} fixture outage")
         request = _request(prompt)
@@ -132,7 +166,7 @@ class FixtureBackend:
                 "cases": cases,
                 "unresolved": [],
             }
-        else:
+        elif request["schema_version"] == 1:
             findings = []
             results = []
             for projection in request["cases"]:
@@ -175,6 +209,72 @@ class FixtureBackend:
                 "findings": findings,
                 "summary": "Независимая проверка завершена.",
             }
+        else:
+            pack = request["reviewer_evidence_pack"]
+            graph_cases = {
+                item["case_key"]: item
+                for item in pack["normalized_projection"]["cases"]
+            }
+            chains_by_case: dict[str, list[dict[str, str]]] = {}
+            for chain in pack["coverage_mapping"]:
+                if chain["case_key"]:
+                    chains_by_case.setdefault(chain["case_key"], []).append(chain)
+            results = []
+            findings = []
+            for design in pack["test_cases"]["designs"]:
+                case_key = design["case_key"]
+                graph_case = graph_cases[case_key]
+                chain = chains_by_case[case_key][0]
+                results.append(
+                    {
+                        "case_key": case_key,
+                        "tc_id": design["tc_id"],
+                        "obligation_id": graph_case["obligation_ids"][0],
+                        "status": (
+                            (
+                                "calibration-pending"
+                                if graph_case["status"]
+                                == "candidate-ui-calibration"
+                                else "covered"
+                            )
+                            if self.review_decision == "accepted"
+                            else "incorrect"
+                        ),
+                        "comment": "Проверка выполнена по EvidencePack v2.",
+                        "falsification": _passed_falsification(
+                            obligation_id=graph_case["obligation_ids"][0],
+                            trigger_or_step=design["steps"][-1],
+                            oracle=design["expected_result"],
+                        ),
+                    }
+                )
+                if self.review_decision != "accepted":
+                    findings.append(
+                        {
+                            "severity": "error",
+                            "finding_type": "test-case-defect",
+                            "binding_role": "primary",
+                            "falsification_probe": "",
+                            "source_row_id": chain["source_row_id"],
+                            "assertion_id": chain["assertion_id"],
+                            "property_id": chain["property_id"],
+                            "obligation_id": chain["obligation_id"],
+                            "case_key": chain["case_key"],
+                            "tc_id": chain["tc_id"],
+                            "message": "Кейс требует исправления.",
+                        }
+                    )
+            payload = {
+                "schema_version": 2,
+                "graph_digest": request["graph_digest"],
+                "draft_sha256": request["draft_sha256"],
+                "evidence_pack_sha256": request["evidence_pack_sha256"],
+                "decision": self.review_decision,
+                "case_results": results,
+                "source_projection_findings": [],
+                "test_case_findings": findings,
+                "summary": "Независимая проверка EvidencePack v2 завершена.",
+            }
         if self.mutate_on_stage is not None and self.mutate_on_stage[0] == stage:
             self.mutate_on_stage[1].write_text(
                 "mutated by backend", encoding="utf-8"
@@ -197,6 +297,10 @@ class FixtureBackend:
                 ),
                 "tool_event_count": 0,
                 "timeout_seconds": None,
+                "image_attachments": {
+                    "count": len(images),
+                    "bytes": sum(item.size_bytes for item in images),
+                },
             },
         )
 
@@ -495,6 +599,125 @@ class ImmutableIterationTests(unittest.TestCase):
             )
         )
         self.assertIn("hard model timeout", diagnostic["error"])
+
+    def test_oversized_reviewer_context_blocks_without_truncation_or_call(self) -> None:
+        backend = FixtureBackend()
+
+        with patch(
+            "test_case_agent.immutable_iteration.MAX_REVIEWER_PROMPT_BYTES",
+            1,
+        ):
+            result = self.run_engine(
+                _graph(),
+                "reviewer-context-too-large",
+                backend=backend,
+            )
+
+        self.assertEqual("blocked-reviewer-context-too-large", result.status)
+        self.assertEqual([], backend.calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("decompose the external scope", diagnostic["safe_recovery"])
+        self.assertFalse(
+            (result.output_dir / "model-stages" / "reviewer-prompt.txt").exists()
+        )
+
+    def test_v2_registered_mockup_is_forwarded_once_and_receipted(self) -> None:
+        graph = _graph()
+        mockup = self.root / "source" / "screen.png"
+        mockup.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (3, 2), color=(31, 97, 173)).save(mockup)
+        backend = FixtureBackend()
+        basis = ReviewerEvidenceBasis(  # type: ignore[arg-type]
+            repo_root=self.root,
+            compiled_scope=None,
+            manifest=None,
+            source_review_receipt=None,
+            obligation_set=None,
+            registered_files=(),
+            mockup_files=(),
+            basis_digest="unused-by-patched-builder",
+            compiled_snapshot_sha256="unused-by-patched-builder",
+            review_receipt_sha256="unused-by-patched-builder",
+        )
+
+        class FakePack:
+            def __init__(self, payload: dict[str, Any]) -> None:
+                self.payload = payload
+
+            def to_dict(self) -> dict[str, Any]:
+                return json.loads(json.dumps(self.payload, ensure_ascii=False))
+
+            @property
+            def digest(self) -> str:
+                rendered = json.dumps(
+                    self.payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                return hashlib.sha256(rendered).hexdigest()
+
+            @property
+            def image_paths(self) -> tuple[Path, ...]:
+                return (mockup.resolve(),)
+
+        def fake_builder(
+            _basis: Any,
+            bound_graph: Any,
+            cases: Any,
+            markdown: str,
+            draft_sha256: str,
+            _acceptance: Any,
+        ) -> FakePack:
+            gate = type("GateBinding", (), {"draft_sha256": draft_sha256})()
+            payload = _v2_pack(bound_graph, cases, gate, markdown)
+            payload["identity"]["contract"] = "reviewer-evidence-pack-v2"
+            payload["mockup_attachments"] = [
+                {
+                    "path": "source/screen.png",
+                    "role": "scope-mockup",
+                    "scope_id": "sample-scope",
+                    "sha256": hashlib.sha256(mockup.read_bytes()).hexdigest(),
+                    "size_bytes": mockup.stat().st_size,
+                    "screen_description": "Контактное лицо",
+                    "locators": [],
+                }
+            ]
+            return FakePack(payload)
+
+        with patch(
+            "test_case_agent.immutable_iteration.build_reviewer_evidence_pack",
+            side_effect=fake_builder,
+        ), patch.object(
+            ReviewerEvidenceBasis,
+            "to_document",
+            return_value={
+                "schema_version": 1,
+                "contract": "test-only-evidence-basis",
+            },
+        ):
+            result = self.run_engine(
+                graph,
+                "v2-image-forwarding",
+                backend=backend,
+                reviewer_evidence_basis=basis,
+            )
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertEqual(["reviewer"], backend.calls)
+        self.assertEqual(1, len(backend.images_by_stage["reviewer"]))
+        self.assertEqual(mockup.resolve(), backend.images_by_stage["reviewer"][0].path)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        reviewer = summary["model_stages"][-1]
+        self.assertEqual(
+            {"count": 1, "bytes": mockup.stat().st_size},
+            reviewer["image_attachments"],
+        )
 
     def test_invalid_token_receipts_fail_closed(self) -> None:
         invalid = (
