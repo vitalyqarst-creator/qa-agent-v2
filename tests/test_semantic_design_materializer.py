@@ -1261,7 +1261,10 @@ class SemanticDesignMaterializerTests(unittest.TestCase):
         self.assertIn("## Clarification Requests", content)
         self.assertIn("CLR-001", content)
         self.assertIn("CLR-002", content)
-        self.assertIn("clarification_id | gap_id | scope_slug", content)
+        self.assertIn("### CLR-001", content)
+        self.assertIn("**Текст из ФТ:**", content)
+        self.assertIn("#### Ответ БА (`user_response`)", content)
+        self.assertIn("response_status: answered", content)
 
 
 if __name__ == "__main__":

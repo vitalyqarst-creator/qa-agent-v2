@@ -7104,6 +7104,64 @@ class SemanticDesignBridgeTests(unittest.TestCase):
                     ):
                         load_approved_clarifications(root, malformed)
 
+    def test_card_clarification_source_loads_dependency_alias_provenance(self) -> None:
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            answer = "«Тип занятости» — это то же поле, что «Статус»."
+            evidence = root / "clarification.md"
+            evidence.write_text(
+                "\n".join(
+                    (
+                        "# Approved clarification",
+                        "",
+                        "### CLR-001 — GAP-001",
+                        "",
+                        "```yaml",
+                        "clarification_id: CLR-001",
+                        "gap_id: GAP-001",
+                        "scope_slug: employment-main-work",
+                        "requirement_codes: BSR 1",
+                        "related_ft_reference: BSR 1, поле «Статус»",
+                        "question: Являются ли названия одним полем?",
+                        "needed_for: Разрешение alias",
+                        "blocking: yes",
+                        "requested_from: user",
+                        "authority: user",
+                        "response_status: answered",
+                        "response_type: user-confirmed",
+                        "updated_at: 2026-07-18",
+                        "```",
+                        "",
+                        "#### Ответ БА (`user_response`)",
+                        "",
+                        "```text",
+                        answer,
+                        "```",
+                        "",
+                    )
+                ),
+                encoding="utf-8",
+            )
+            context = self._context()
+            context["sources"].append(
+                {
+                    "path": "clarification.md",
+                    "role": "approved-clarification",
+                    "manifest_binding": "approved-clarification",
+                }
+            )
+            context["dependency_aliases"] = {"Тип занятости": "Статус"}
+            context["dependency_alias_provenance"] = {"Тип занятости": "CLR-001"}
+            self._bind_context(context)
+
+            clarifications = load_approved_clarifications(root, context)
+
+            self.assertEqual(
+                ["CLR-001"],
+                [item["clarification_id"] for item in clarifications],
+            )
+            self.assertEqual(answer, clarifications[0]["exact_answer"])
+
     def test_exact_cleanup_clarification_requires_a_guarded_readd_lifecycle_tc(
         self,
     ) -> None:

@@ -420,12 +420,91 @@ def _markdown_cell(value: str) -> str:
     return result
 
 
+_CLARIFICATION_CARD_HEADING_RE = re.compile(
+    r"(?m)^###\s+(?P<clarification_id>CLR-[A-Za-z0-9_-]+)\b[^\r\n]*$"
+)
+_CLARIFICATION_METADATA_RE = re.compile(
+    r"(?ms)^```ya?ml[ \t]*\r?\n(?P<body>.*?)^```[ \t]*(?:\r?\n|$)"
+)
+_CLARIFICATION_ANSWER_RE = re.compile(
+    r"(?ms)^#{4}\s+[^\r\n]*(?:Ответ БА|user_response)[^\r\n]*\r?\n"
+    r"(?:[ \t]*\r?\n)*"
+    r"^```(?:text|md|markdown)?[ \t]*\r?\n(?P<body>.*?)^```"
+)
+
+
+def _strip_structured_value(value: str) -> str:
+    result = value.strip()
+    if (
+        len(result) >= 2
+        and result[0] == result[-1]
+        and result[0] in {'"', "'"}
+    ):
+        result = result[1:-1].strip()
+    return _markdown_cell(result)
+
+
+def _parse_clarification_metadata(section: str) -> dict[str, str]:
+    match = _CLARIFICATION_METADATA_RE.search(section)
+    if match is None:
+        return {}
+    fields: dict[str, str] = {}
+    for line in match.group("body").splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        key_match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.*)", line)
+        if key_match is None:
+            continue
+        fields[key_match.group(1)] = _strip_structured_value(key_match.group(2))
+    return fields
+
+
+def _clarification_card_rows(
+    text: str,
+    *,
+    source_path: str,
+    required: set[str],
+) -> dict[str, Mapping[str, str]]:
+    rows_by_id: dict[str, Mapping[str, str]] = {}
+    matches = list(_CLARIFICATION_CARD_HEADING_RE.finditer(text))
+    for index, match in enumerate(matches):
+        section_start = match.start()
+        section_end = (
+            matches[index + 1].start()
+            if index + 1 < len(matches)
+            else len(text)
+        )
+        section = text[section_start:section_end]
+        row = _parse_clarification_metadata(section)
+        clarification_id = row.get("clarification_id") or match.group(
+            "clarification_id"
+        )
+        row["clarification_id"] = clarification_id
+        answer_match = _CLARIFICATION_ANSWER_RE.search(section)
+        if answer_match is not None:
+            row["user_response"] = answer_match.group("body").strip()
+        missing = sorted(required - set(row))
+        if missing:
+            _fail(
+                "invalid-clarification-card",
+                f"clarification card {clarification_id} in {source_path} "
+                f"misses required fields: {', '.join(missing)}",
+            )
+        if clarification_id in rows_by_id:
+            _fail(
+                "duplicate-clarification-record",
+                f"clarification artifact repeats {clarification_id}",
+            )
+        rows_by_id[clarification_id] = row
+    return rows_by_id
+
+
 def _clarification_table_rows(
     text: str,
     *,
     source_path: str,
 ) -> dict[str, Mapping[str, str]]:
-    """Read canonical clarification rows without accepting prose lookalikes."""
+    """Read canonical clarification records without accepting prose lookalikes."""
 
     required = set(CLARIFICATION_TABLE_COLUMNS)
     lines = text.splitlines()
@@ -476,9 +555,16 @@ def _clarification_table_rows(
             rows_by_id[clarification_id] = row
             index += 1
     if not found_table:
+        card_rows = _clarification_card_rows(
+            text,
+            source_path=source_path,
+            required=required,
+        )
+        if card_rows:
+            return card_rows
         _fail(
-            "clarification-table-missing",
-            f"{source_path} has no canonical clarification table with columns "
+            "clarification-records-missing",
+            f"{source_path} has no canonical clarification table/card with fields "
             + ", ".join(CLARIFICATION_TABLE_COLUMNS),
         )
     return rows_by_id

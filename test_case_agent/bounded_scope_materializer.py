@@ -798,13 +798,57 @@ def _render_clarification_requests(
     requirement_codes_by_row: Mapping[str, Sequence[str]] | None = None,
     gap_links: Mapping[str, Mapping[str, Sequence[str]]] | None = None,
 ) -> str:
-    columns = (
-        "clarification_id", "gap_id", "scope_slug", "requirement_codes",
-        "related_ft_reference", "question", "needed_for", "blocking",
-        "requested_from", "authority", "user_response", "response_status",
-        "response_type", "updated_at",
-    )
-    rows = []
+    def card(
+        *,
+        clarification_id: str,
+        gap_id: str,
+        requirement_codes: str,
+        related_ft_reference: str,
+        source_quote: str,
+        question: str,
+        needed_for: str,
+        blocking: str,
+        requested_from: str,
+        authority: str,
+        user_response: str,
+        response_status: str,
+        response_type: str,
+        updated_at: str,
+    ) -> str:
+        metadata = {
+            "clarification_id": clarification_id,
+            "gap_id": gap_id,
+            "scope_slug": scope_slug,
+            "requirement_codes": requirement_codes,
+            "related_ft_reference": related_ft_reference,
+            "source_quote": source_quote,
+            "question": question,
+            "needed_for": needed_for,
+            "blocking": blocking,
+            "requested_from": requested_from,
+            "authority": authority,
+            "response_status": response_status,
+            "response_type": response_type,
+            "updated_at": updated_at,
+        }
+        metadata_block = "\n".join(
+            f"{key}: {value}" for key, value in metadata.items()
+        )
+        return (
+            f"### {clarification_id} — {gap_id}\n\n"
+            "```yaml\n"
+            f"{metadata_block}\n"
+            "```\n\n"
+            f"**Текст из ФТ:** {source_quote}\n\n"
+            f"**Вопрос:** {question}\n\n"
+            f"**Что станет возможно после ответа:** {needed_for}\n\n"
+            "#### Ответ БА (`user_response`)\n\n"
+            "```text\n"
+            f"{user_response or '-'}\n"
+            "```"
+        )
+
+    cards = []
     codes_by_row = requirement_codes_by_row or {}
     links_by_gap = gap_links or {}
     for index, gap in enumerate(boundary_gaps, start=1):
@@ -837,23 +881,37 @@ def _render_clarification_requests(
                 ]
             )
         )
-        rows.append(
-            [
-                f"CLR-PENDING-{index:03d}",
-                gap_id,
-                scope_slug,
-                _tokens(requirement_codes),
-                _tokens(related_references),
-                gap["clarification_question"],
-                "Уточнить observable semantics без изменения candidate/executable route.",
-                "no",
-                "analyst",
-                "analyst",
-                "-",
-                "unanswered",
-                "not-provided",
-                "-",
-            ]
+        raw_quote_candidates = gap.get("exact_source_fragments")
+        quote_candidates = (
+            [str(item) for item in raw_quote_candidates]
+            if isinstance(raw_quote_candidates, list)
+            else []
+        )
+        source_quote = (
+            quote_candidates[0]
+            if quote_candidates
+            else str(gap.get("source_statement") or gap.get("source_quote") or "-")
+        )
+        cards.append(
+            card(
+                clarification_id=f"CLR-PENDING-{index:03d}",
+                gap_id=gap_id,
+                requirement_codes=_tokens(requirement_codes),
+                related_ft_reference=_tokens(related_references),
+                source_quote=source_quote,
+                question=gap["clarification_question"],
+                needed_for=(
+                    "Уточнить ожидаемое поведение для тестов без изменения "
+                    "границ scope."
+                ),
+                blocking="no",
+                requested_from="analyst",
+                authority="analyst",
+                user_response="-",
+                response_status="unanswered",
+                response_type="not-provided",
+                updated_at="-",
+            )
         )
     for record in records:
         references = (
@@ -861,23 +919,26 @@ def _render_clarification_requests(
             if record.requirement_codes
             else _tokens(record.source_row_ids)
         )
-        rows.append(
-            [
-                record.clarification_id,
-                record.gap_id,
-                record.scope_slug,
-                _tokens(record.requirement_codes),
-                references,
-                f"Resolved by registered evidence {record.evidence_source_path}.",
-                "Точная semantic binding для source assertion.",
-                "yes",
-                record.authority,
-                record.authority,
-                record.exact_answer,
-                record.response_status,
-                record.response_type,
-                record.answered_at,
-            ]
+        cards.append(
+            card(
+                clarification_id=record.clarification_id,
+                gap_id=record.gap_id,
+                requirement_codes=_tokens(record.requirement_codes),
+                related_ft_reference=references,
+                source_quote=(
+                    "См. связанный source assertion и registered evidence "
+                    f"{record.evidence_source_path}."
+                ),
+                question=f"Resolved by registered evidence {record.evidence_source_path}.",
+                needed_for="Точная semantic binding для source assertion.",
+                blocking="yes",
+                requested_from=record.authority,
+                authority=record.authority,
+                user_response=record.exact_answer,
+                response_status=record.response_status,
+                response_type=record.response_type,
+                updated_at=record.answered_at,
+            )
         )
     return (
         "# Scope Clarification Requests\n\n"
@@ -885,10 +946,14 @@ def _render_clarification_requests(
         f"- `scope_slug`: `{scope_slug}`\n"
         "- Coverage gaps: `scope-coverage-gaps.md`\n\n"
         "## Как Заполнять\n\n"
-        "- Для pending строк заполнять только ответ, response status/type и дату.\n"
-        "- Approved строки уже связаны с registered evidence; не редактировать.\n\n"
+        "- БА заполняет только блок `Ответ БА`.\n"
+        "- `response_status`, `response_type` и `updated_at` заполняет агент "
+        "после получения ответа.\n"
+        "- Не редактировать `clarification_id`, `gap_id`, scope, ссылки, "
+        "вопрос и служебные поля.\n"
+        "- Approved карточки уже связаны с registered evidence; не редактировать.\n\n"
         "## Clarification Requests\n\n"
-        + _table(columns, rows)
+        + "\n\n".join(cards)
         + "\n\n## Gaps Without Requests\n\n"
         "| gap_id | related_ft_reference | reason |\n"
         "| --- | --- | --- |\n"

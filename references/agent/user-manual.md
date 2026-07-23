@@ -259,7 +259,7 @@ FT-пакет выбран
 - не хранит process-status;
 - используется writer-ом только для подтвержденных ответов.
 
-Writer может использовать только ответы со `response_status = answered` и `response_type = analyst-confirmed | product-confirmed` как уточняющий вход. `working-assumption` не считается равной тексту ФТ и должна явно отмечаться как assumption.
+Writer может использовать только ответы со `response_status = answered` и `response_type = user-confirmed | analyst-confirmed | product-confirmed` как уточняющий вход. `working-assumption` не считается равной тексту ФТ и должна явно отмечаться как assumption.
 
 ### Выходы для `manual-scope`
 
@@ -662,19 +662,23 @@ ft-test-case-iteration signed-off
 
 ## 16. Как давать ответы на clarification requests
 
-Если агент создал `scope-clarification-requests.md`, пользователь или аналитик должен заполнять только колонки:
+Если агент создал `scope-clarification-requests.md`, пользователь или аналитик отвечает в карточках `CLR-*`. Человек заполняет только:
 
-- `user_response`;
-- `response_status`;
-- `response_type`;
-- `updated_at`.
+- блок `Ответ БА` (`user_response`).
 
-Допустимые статусы:
+Перед вопросом карточка должна содержать `Текст из ФТ`: это конкретная цитата
+или несколько коротких цитат из требований, из-за которых возник вопрос. Если
+цитаты нет, файл нужно вернуть агенту на исправление, а не заставлять БА искать
+исходный текст вручную.
+
+Не меняйте `clarification_id`, `gap_id`, scope, ссылки на ФТ, текст вопроса и служебные поля. После получения ответа агент сам проставляет `response_status`, `response_type` и `updated_at`.
+
+Служебные значения для агента:
 
 | Поле | Значения |
 |---|---|
 | `response_status` | `unanswered`, `answered`, `superseded`, `rejected` |
-| `response_type` | `not-provided`, `working-assumption`, `analyst-confirmed`, `product-confirmed`, `rejected` |
+| `response_type` | `not-provided`, `working-assumption`, `user-confirmed`, `analyst-confirmed`, `product-confirmed`, `rejected` |
 
 Ответы `analyst-confirmed` и `product-confirmed` могут использоваться writer-ом как уточняющий вход. `working-assumption` можно использовать только как явную рабочую гипотезу, не как замену ФТ.
 

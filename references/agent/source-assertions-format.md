@@ -301,10 +301,10 @@ prose или один `status` binding не заменяют typed chain.
 ## Approved clarifications
 
 Для каждого зарегистрированного `approved-clarification` evidence path множество
-canonical строк текущего `scope_slug` с `response_status = answered` и approved
+canonical records текущего `scope_slug` с `response_status = answered` и approved
 `response_type` обязано точно совпадать с `clarifications[]` этого path. Принятый
 ответ нельзя молча оставить незарегистрированным; typed record, clause bindings и
-точный code/row union остаются обязательными. Строки другого scope и ответы с
+точный code/row union остаются обязательными. Записи другого scope и ответы с
 неapproved type не становятся ready semantics и в это множество не входят.
 
 `clarifications[]` — typed registry, а не копия prose. Каждая запись содержит
@@ -336,9 +336,11 @@ Backward-compatible decoder старого v4 payload без новых поле
 всегда пишет оба поля.
 
 Evidence path обязан быть зарегистрирован в source-selection и manifest с ролью
-`approved-clarification`. Hash-bound Markdown должен содержать canonical table
-из `scope-clarification-requests-format.md`; structured row обязана дословно
-совпасть с typed record. Связанный coverage gap остаётся трассируемым, но имеет
+`approved-clarification`. Hash-bound Markdown должен содержать canonical records
+из `scope-clarification-requests-format.md` в карточном формате; legacy table
+decode допускается только для уже существующих artifacts. Structured record
+обязан дословно совпасть с typed record. Связанный coverage gap остаётся
+трассируемым, но имеет
 ровно `status = resolved`, `resolution = approved-clarification:<CLR-ID>` и не
 содержит активную execution chain. Только такой manifest-validated exact gap id
 исключается из `gap-without-obligation`; он не становится `PreparedGap` и не

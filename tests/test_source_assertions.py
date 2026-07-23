@@ -337,6 +337,7 @@ class SourceAssertionManifestTests(unittest.TestCase):
         response_type: str = "user-confirmed",
         authority: str = "user",
         evidence_role: str = "approved-clarification",
+        clarification_format: str = "table",
         exact_answer: str = (
             "Поиск выполняется после заполнения только поля «Фамилия клиента»."
         ),
@@ -347,19 +348,49 @@ class SourceAssertionManifestTests(unittest.TestCase):
         requirement_codes = tuple(
             f"BSR {number}" for number in requirement_numbers
         )
-        clarification_path.write_text(
-            "\n".join(
-                (
-                    "# Scope clarifications",
-                    "",
-                    "| clarification_id | gap_id | scope_slug | requirement_codes | authority | user_response | response_status | response_type | updated_at |",
-                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
-                    f"| {clarification_id} | {gap_id} | applications-menu-search | {'; '.join(requirement_codes)} | {authority} | {exact_answer} | answered | {response_type} | 2026-07-15 |",
-                    "",
-                )
-            ),
-            encoding="utf-8",
-        )
+        if clarification_format == "card":
+            clarification_path.write_text(
+                "\n".join(
+                    (
+                        "# Scope clarifications",
+                        "",
+                        f"### {clarification_id} — {gap_id}",
+                        "",
+                        "```yaml",
+                        f"clarification_id: {clarification_id}",
+                        f"gap_id: {gap_id}",
+                        "scope_slug: applications-menu-search",
+                        f"requirement_codes: {'; '.join(requirement_codes)}",
+                        f"authority: {authority}",
+                        "response_status: answered",
+                        f"response_type: {response_type}",
+                        "updated_at: 2026-07-15",
+                        "```",
+                        "",
+                        "#### Ответ БА (`user_response`)",
+                        "",
+                        "```text",
+                        exact_answer,
+                        "```",
+                        "",
+                    )
+                ),
+                encoding="utf-8",
+            )
+        else:
+            clarification_path.write_text(
+                "\n".join(
+                    (
+                        "# Scope clarifications",
+                        "",
+                        "| clarification_id | gap_id | scope_slug | requirement_codes | authority | user_response | response_status | response_type | updated_at |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        f"| {clarification_id} | {gap_id} | applications-menu-search | {'; '.join(requirement_codes)} | {authority} | {exact_answer} | answered | {response_type} | 2026-07-15 |",
+                        "",
+                    )
+                ),
+                encoding="utf-8",
+            )
         answer_digest = hashlib.sha256(exact_answer.encode("utf-8")).hexdigest()
         clarification = ApprovedClarification(
             clarification_id=clarification_id,
@@ -923,6 +954,15 @@ class SourceAssertionManifestTests(unittest.TestCase):
         )
         self.assertEqual("user", clarification.authority)
         self.assertEqual("user-confirmed", clarification.response_type)
+
+    def test_card_clarification_evidence_is_hash_and_clause_bound(self) -> None:
+        manifest, clarification, _ = self._build_with_user_clarification(
+            clarification_format="card",
+        )
+
+        manifest.validate(self.repo_root)
+        basis = manifest.to_compact_reviewer_basis()
+        self.assertEqual(clarification.to_dict(), basis["clarifications"][0])
 
     def test_source_context_clarification_binds_exact_in_scope_source_row(self) -> None:
         manifest, clarification, _ = self._build_with_source_context_clarification()
