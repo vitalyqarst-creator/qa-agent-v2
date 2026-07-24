@@ -59,6 +59,7 @@ from test_case_agent.source_qualified_run import (
     load_source_qualified_run_config,
     run_source_qualified_scope,
     run_source_qualified_scope_with_fixture_responses,
+    write_source_qualified_run_config,
 )
 from test_case_agent.test_design import (
     DesignContext,
@@ -1052,6 +1053,40 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertEqual("changes-required", captured["revision_input"]["reviewer_decision"])
         terminal = json.loads(result.summary_path.read_text(encoding="utf-8"))
         self.assertTrue(terminal["revision_input_supplied"])
+
+    def test_generated_revision_run_config_is_utf8_without_bom(self) -> None:
+        self._enable_v2_generated_derivations()
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config["writer_mode"] = "model-runtime-prose"
+        config["revision_input"] = (
+            "fts/sample/work/iterations/prev/iteration/revision-input.json"
+        )
+        generated = self.ft / "work" / "stage-handoffs" / "revision-run-config.json"
+
+        write_source_qualified_run_config(generated, config)
+
+        raw = generated.read_bytes()
+        self.assertFalse(raw.startswith(b"\xef\xbb\xbf"))
+        parsed = load_source_qualified_run_config(generated)
+        self.assertEqual("model-runtime-prose", parsed.writer_mode)
+        self.assertEqual(config["revision_input"], parsed.revision_input)
+
+    def test_run_config_reader_accepts_utf8_bom_consistently(self) -> None:
+        self._enable_v2_generated_derivations()
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config["writer_mode"] = "model-runtime-prose"
+        config["revision_input"] = (
+            "fts/sample/work/iterations/prev/iteration/revision-input.json"
+        )
+        bom_config = self.ft / "work" / "stage-handoffs" / "bom-run-config.json"
+        bom_config.parent.mkdir(parents=True, exist_ok=True)
+        raw = json.dumps(config, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        bom_config.write_bytes(b"\xef\xbb\xbf" + raw)
+
+        parsed = load_source_qualified_run_config(bom_config)
+
+        self.assertEqual("model-runtime-prose", parsed.writer_mode)
+        self.assertEqual(config["revision_input"], parsed.revision_input)
 
     def test_registry_source_absent_from_manifest_is_rejected_with_diagnostic(self) -> None:
         unrelated = self.ft / "source" / "unrelated.xhtml"

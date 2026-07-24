@@ -202,7 +202,7 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 def _json_object(path: Path, *, label: str) -> Mapping[str, Any]:
     try:
         payload = json.loads(
-            path.read_text(encoding="utf-8"),
+            path.read_bytes().decode("utf-8-sig"),
             object_pairs_hook=_unique_object,
         )
     except SourceQualifiedRunError:
@@ -216,7 +216,7 @@ def _json_object(path: Path, *, label: str) -> Mapping[str, Any]:
 
 def _json_object_bytes(raw: bytes, *, label: str) -> Mapping[str, Any]:
     try:
-        text = raw.decode("utf-8")
+        text = raw.decode("utf-8-sig")
         payload = json.loads(text, object_pairs_hook=_unique_object)
     except SourceQualifiedRunError:
         raise
@@ -383,6 +383,12 @@ def load_source_qualified_run_config(path: Path) -> SourceQualifiedRunConfig:
     except OSError as exc:
         _fail("invalid-json", f"cannot read source-qualified run config {path}: {exc}")
     return _source_qualified_run_config_from_bytes(raw)
+
+
+def write_source_qualified_run_config(path: Path, payload: Mapping[str, Any]) -> None:
+    """Write a source-qualified run config as UTF-8 JSON without a BOM."""
+
+    write_json_atomic(path, payload)
 
 
 def classify_source_qualified_status(status: str) -> str:
