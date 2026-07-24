@@ -21,6 +21,7 @@ from test_case_agent.iteration_contract import (
     build_runtime_writer_request,
     build_writer_request,
     request_sha256,
+    reviewer_deferred_test_case_findings,
     reviewer_acceptance_contract,
     reviewer_prompt_instruction,
     reviewer_response_schema,
@@ -352,6 +353,21 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
                 "reviewer request schema_version must be an integer"
             )
         instruction = reviewer_prompt_instruction(raw_version)
+        if "revision_review_scope" in request:
+            instruction += (
+                " This is a bounded revision review. Full-review only the "
+                "changed case_keys listed in revision_review_scope.changed_case_keys "
+                "and the directly affected reviewer findings for those cases. "
+                "For unchanged byte-identical cases, check only regression, identity "
+                "drift, and binding drift. Do not escalate unchanged calibration-"
+                "pending baseline issues into blocking errors for this revision; "
+                "record unrelated unchanged issues only as non-blocking baseline "
+                "backlog/deferred findings. Any blocking finding must bind to a "
+                "changed case or to a concrete regression caused by this revision. "
+                "Falsification trigger_or_step and oracle values must be copied "
+                "exactly from the reviewed case/evidence allowed set; if exact "
+                "binding is unavailable, do not emit a blocking case finding."
+            )
     else:  # pragma: no cover - the runner owns its two-stage call graph
         raise ImmutableIterationError(f"unsupported model stage: {stage}")
     return f"{instruction}\nREQUEST JSON:\n{_json_bytes(request).decode('utf-8')}\n"
@@ -1033,6 +1049,105 @@ def _revision_unaffected_manifest(
     return tuple(manifest)
 
 
+def _previous_reviewer_disposition_by_case(
+    revision_input: Mapping[str, Any],
+) -> dict[str, dict[str, Any]]:
+    response = revision_input.get("reviewer_response")
+    if not isinstance(response, Mapping):
+        return {}
+    disposition: dict[str, dict[str, Any]] = {}
+    results = response.get("case_results")
+    if isinstance(results, list):
+        for raw in results:
+            if not isinstance(raw, Mapping):
+                continue
+            case_key = raw.get("case_key")
+            if isinstance(case_key, str) and case_key:
+                disposition.setdefault(case_key, {})["previous_result_status"] = raw.get(
+                    "status"
+                )
+    findings = response.get("test_case_findings")
+    if isinstance(findings, list):
+        for raw in findings:
+            if not isinstance(raw, Mapping):
+                continue
+            case_key = raw.get("case_key")
+            if not isinstance(case_key, str) or not case_key:
+                continue
+            entry = disposition.setdefault(case_key, {})
+            entry.setdefault("previous_findings", []).append(
+                {
+                    "severity": raw.get("severity"),
+                    "finding_type": raw.get("finding_type"),
+                    "tc_id": raw.get("tc_id"),
+                }
+            )
+    return disposition
+
+
+def _revision_reviewer_scope(
+    *,
+    revision_context: _RevisionContext,
+    previous_cases_by_key: Mapping[str, TestCaseDesign],
+    changed_tc_ids: Sequence[str],
+    unchanged_hashes: Mapping[str, str],
+) -> dict[str, Any]:
+    changed_tc_id_set = set(changed_tc_ids)
+    changed_case_keys = tuple(
+        sorted(
+            case.case_key
+            for case in revision_context.previous_cases
+            if case.tc_id in changed_tc_id_set
+        )
+    )
+    previous_disposition = _previous_reviewer_disposition_by_case(
+        revision_context.payload
+    )
+    unchanged_cases: list[dict[str, Any]] = []
+    for case in revision_context.previous_cases:
+        block_sha256 = unchanged_hashes.get(case.tc_id)
+        if block_sha256 is None:
+            continue
+        item = {
+            "case_key": case.case_key,
+            "tc_id": case.tc_id,
+            "title": case.title,
+            "status": case.status,
+            "block_sha256": block_sha256,
+        }
+        disposition = previous_disposition.get(case.case_key)
+        if disposition:
+            item["previous_reviewer_disposition"] = disposition
+        unchanged_cases.append(item)
+    return {
+        "schema_version": 1,
+        "mode": "revision-review-changed-cases-primary",
+        "changed_case_keys": list(changed_case_keys),
+        "changed_tc_ids": list(changed_tc_ids),
+        "affected_case_keys": list(revision_context.affected_case_keys),
+        "affected_tc_ids": sorted(
+            previous_cases_by_key[key].tc_id
+            for key in revision_context.affected_case_keys
+        ),
+        "unchanged_byte_identical_cases": unchanged_cases,
+        "policy": {
+            "changed_cases": "full-review changed cases and directly affected findings",
+            "unchanged_cases": (
+                "check only regression, identity drift, and binding drift; unrelated "
+                "unchanged issues are non-blocking baseline backlog/deferred"
+            ),
+            "calibration_pending_baseline": (
+                "do not escalate unchanged calibration-pending baseline cases from "
+                "previous warning/accepted disposition into current blocking errors"
+            ),
+            "falsification_binding": (
+                "copy trigger_or_step and oracle exactly from the reviewed case or "
+                "evidence allowed set; do not paraphrase blocking falsification basis"
+            ),
+        },
+    }
+
+
 def _revision_findings_by_case(
     revision_input: Mapping[str, Any],
 ) -> dict[str, tuple[Mapping[str, Any], ...]]:
@@ -1236,6 +1351,8 @@ def run_immutable_iteration(
     revision_context: _RevisionContext | None = None
     revision_changed_tc_ids: tuple[str, ...] = ()
     revision_unaffected_byte_identical = False
+    revision_reviewer_scope: Mapping[str, Any] | None = None
+    reviewer_deferred_findings_count = 0
 
     def record_writer_call() -> None:
         nonlocal writer_model_calls
@@ -1386,6 +1503,7 @@ def run_immutable_iteration(
             "reviewer_model_calls": reviewer_model_calls,
             "reviewer_decision": reviewer_decision,
             "reviewer_accepted_zero_findings": reviewer_accepted,
+            "reviewer_deferred_findings_count": reviewer_deferred_findings_count,
             "reviewer_evidence_pack_sha256": (
                 reviewer_evidence_pack_sha256 or None
             ),
@@ -1800,9 +1918,14 @@ def run_immutable_iteration(
                 unchanged_hashes = {
                     tc_id: hashlib.sha256(old_block.encode("utf-8")).hexdigest()
                     for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
-                    if tc_id not in affected_tc_ids
-                    and new_blocks.get(tc_id) == old_block
+                    if new_blocks.get(tc_id) == old_block
                 }
+                revision_reviewer_scope = _revision_reviewer_scope(
+                    revision_context=revision_context,
+                    previous_cases_by_key=previous_cases_by_key,
+                    changed_tc_ids=changed_tc_ids,
+                    unchanged_hashes=unchanged_hashes,
+                )
                 _write_json(
                     output_dir / "revision-diff.json",
                     {
@@ -1863,6 +1986,7 @@ def run_immutable_iteration(
                 cases=cases,
                 gate=gate,
                 evidence_pack=evidence_pack,
+                revision_review_scope=revision_reviewer_scope,
             )
             reviewer_evidence_pack_sha256 = evidence_pack.digest
             reviewer_source_row_count = len(
@@ -1959,6 +2083,21 @@ def run_immutable_iteration(
                     == "reviewer-v1-to-v2-bound-findings-and-unrecorded-falsification"
                 ),
             )
+            deferred_findings = reviewer_deferred_test_case_findings(
+                payload,
+                reviewer_request,
+            )
+            reviewer_deferred_findings_count = len(deferred_findings)
+            if deferred_findings:
+                _write_json(
+                    output_dir / "reviewer-deferred-findings.json",
+                    {
+                        "schema_version": 1,
+                        "mode": "revision-unchanged-byte-identical-backlog",
+                        "deferred_count": reviewer_deferred_findings_count,
+                        "findings": list(deferred_findings),
+                    },
+                )
         if _input_drift(protected):
             return finish("blocked-input-drift")
         if not reviewer_accepted:

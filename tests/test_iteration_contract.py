@@ -13,6 +13,7 @@ from test_case_agent.iteration_contract import (
     build_runtime_writer_request,
     build_writer_request,
     reviewer_acceptance_contract,
+    reviewer_deferred_test_case_findings,
     reviewer_prompt_instruction,
     reviewer_response_schema,
     runtime_writer_response_schema,
@@ -349,6 +350,76 @@ def _accepted_review_v2(graph, request):  # type: ignore[no-untyped-def]
         "source_projection_findings": [],
         "test_case_findings": [],
         "summary": "Набор принят.",
+    }
+
+
+def _v2_multi_case_request(graph, cases, gate, markdown, revision_review_scope=None):  # type: ignore[no-untyped-def]
+    pack = _v2_pack(graph, cases, gate, markdown)
+    prop = graph.properties[0]
+    pack["coverage_mapping"] = [
+        {
+            "source_row_id": prop.source_row_id,
+            "assertion_id": prop.assertion_id,
+            "property_id": prop.property_id,
+            "obligation_id": case.obligation_ids[0],
+            "case_key": case.case_key,
+            "tc_id": case.tc_id,
+        }
+        for case in graph.cases
+    ]
+    pack["coverage_mapping"].append(
+        {
+            "source_row_id": "SRC-CONTEXT",
+            "assertion_id": "",
+            "property_id": "",
+            "obligation_id": "",
+            "case_key": "",
+            "tc_id": "",
+        }
+    )
+    return build_reviewer_request(
+        graph=graph,
+        cases=cases,
+        gate=gate,
+        evidence_pack=pack,
+        revision_review_scope=revision_review_scope,
+    )
+
+
+def _v2_review_for_request(graph, request, findings=()):  # type: ignore[no-untyped-def]
+    graph_cases = {item.case_key: item for item in graph.cases}
+    results = []
+    for design in request["reviewer_evidence_pack"]["test_cases"]["designs"]:
+        case = graph_cases[design["case_key"]]
+        results.append(
+            {
+                "case_key": case.case_key,
+                "tc_id": case.tc_id,
+                "obligation_id": case.obligation_ids[0],
+                "status": (
+                    "calibration-pending"
+                    if design.get("status") == "candidate-ui-calibration"
+                    or case.status == "candidate-ui-calibration"
+                    else "covered"
+                ),
+                "comment": "Reviewed against bound evidence.",
+                "falsification": _passed_falsification(
+                    obligation_id=case.obligation_ids[0],
+                    trigger_or_step=design["steps"][-1],
+                    oracle=design["expected_result"],
+                ),
+            }
+        )
+    return {
+        "schema_version": 2,
+        "graph_digest": graph.digest,
+        "draft_sha256": request["draft_sha256"],
+        "evidence_pack_sha256": request["evidence_pack_sha256"],
+        "decision": "changes-required" if findings else "accepted",
+        "case_results": results,
+        "source_projection_findings": [],
+        "test_case_findings": list(findings),
+        "summary": "Reviewed.",
     }
 
 
@@ -1285,6 +1356,224 @@ class IterationContractTests(unittest.TestCase):
                 draft_sha256=gate.draft_sha256,
                 reviewer_request=request,
             )
+
+    def test_revision_reviewer_request_defers_unchanged_calibration_finding(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        cases = tuple(sorted(plan.deterministic_cases, key=lambda item: item.case_key))
+        markdown = render_test_cases(cases, scope_title=_context().scope_title)
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        changed = cases[0]
+        unchanged = cases[1]
+        request = _v2_multi_case_request(
+            graph,
+            cases,
+            gate,
+            markdown,
+            revision_review_scope={
+                "schema_version": 1,
+                "changed_case_keys": [changed.case_key],
+                "unchanged_byte_identical_cases": [
+                    {
+                        "case_key": unchanged.case_key,
+                        "tc_id": unchanged.tc_id,
+                        "block_sha256": "a" * 64,
+                        "previous_reviewer_disposition": {
+                            "previous_result_status": "calibration-pending",
+                            "previous_findings": [
+                                {
+                                    "severity": "warning",
+                                    "finding_type": "expected-result-unsupported",
+                                }
+                            ],
+                        },
+                    }
+                ],
+            },
+        )
+        chain = next(
+            item
+            for item in request["reviewer_evidence_pack"]["coverage_mapping"]
+            if item["case_key"] == unchanged.case_key
+        )
+        finding = {
+            "severity": "error",
+            "finding_type": "expected-result-unsupported",
+            "binding_role": "primary",
+            "falsification_probe": "",
+            **chain,
+            "message": "Unchanged calibration baseline still needs UI evidence.",
+        }
+
+        response = _v2_review_for_request(graph, request, findings=(finding,))
+        accepted, decision = validate_reviewer_response(
+            response,
+            graph=graph,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+
+        self.assertTrue(accepted)
+        self.assertEqual("accepted", decision)
+        self.assertEqual(
+            (finding,),
+            reviewer_deferred_test_case_findings(response, request),
+        )
+
+    def test_revision_reviewer_request_keeps_changed_case_finding_blocking(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        cases = tuple(sorted(plan.deterministic_cases, key=lambda item: item.case_key))
+        markdown = render_test_cases(cases, scope_title=_context().scope_title)
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        changed = cases[0]
+        unchanged = cases[1]
+        request = _v2_multi_case_request(
+            graph,
+            cases,
+            gate,
+            markdown,
+            revision_review_scope={
+                "schema_version": 1,
+                "changed_case_keys": [changed.case_key],
+                "unchanged_byte_identical_cases": [
+                    {
+                        "case_key": unchanged.case_key,
+                        "tc_id": unchanged.tc_id,
+                        "block_sha256": "a" * 64,
+                    }
+                ],
+            },
+        )
+        chain = next(
+            item
+            for item in request["reviewer_evidence_pack"]["coverage_mapping"]
+            if item["case_key"] == changed.case_key
+        )
+        response = _v2_review_for_request(
+            graph,
+            request,
+            findings=(
+                {
+                    "severity": "error",
+                    "finding_type": "cleanup-missing",
+                    "binding_role": "primary",
+                    "falsification_probe": "",
+                    **chain,
+                    "message": "Changed case still omits cleanup verification.",
+                },
+            ),
+        )
+
+        accepted, decision = validate_reviewer_response(
+            response,
+            graph=graph,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+
+        self.assertFalse(accepted)
+        self.assertEqual("changes-required", decision)
+
+    def test_revision_reviewer_invalid_falsification_binding_still_fails(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        cases = tuple(sorted(plan.deterministic_cases, key=lambda item: item.case_key))
+        markdown = render_test_cases(cases, scope_title=_context().scope_title)
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        changed = cases[0]
+        unchanged = cases[1]
+        request = _v2_multi_case_request(
+            graph,
+            cases,
+            gate,
+            markdown,
+            revision_review_scope={
+                "schema_version": 1,
+                "changed_case_keys": [changed.case_key],
+                "unchanged_byte_identical_cases": [
+                    {
+                        "case_key": unchanged.case_key,
+                        "tc_id": unchanged.tc_id,
+                        "block_sha256": "a" * 64,
+                    }
+                ],
+            },
+        )
+        response = _v2_review_for_request(graph, request)
+        response["case_results"][1]["falsification"]["false_pass"][
+            "oracle"
+        ] = "Paraphrased expected result that is not exact evidence text."
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "falsification basis.*is not bound",
+        ):
+            validate_reviewer_response(
+                response,
+                graph=graph,
+                draft_sha256=gate.draft_sha256,
+                reviewer_request=request,
+            )
+
+    def test_normal_full_reviewer_mode_does_not_defer_unchanged_finding(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        cases = tuple(sorted(plan.deterministic_cases, key=lambda item: item.case_key))
+        markdown = render_test_cases(cases, scope_title=_context().scope_title)
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        request = _v2_multi_case_request(graph, cases, gate, markdown)
+        case = cases[1]
+        chain = next(
+            item
+            for item in request["reviewer_evidence_pack"]["coverage_mapping"]
+            if item["case_key"] == case.case_key
+        )
+        response = _v2_review_for_request(
+            graph,
+            request,
+            findings=(
+                {
+                    "severity": "error",
+                    "finding_type": "expected-result-unsupported",
+                    "binding_role": "primary",
+                    "falsification_probe": "",
+                    **chain,
+                    "message": "Full reviewer mode must keep this blocking.",
+                },
+            ),
+        )
+
+        accepted, decision = validate_reviewer_response(
+            response,
+            graph=graph,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+
+        self.assertFalse(accepted)
+        self.assertEqual("changes-required", decision)
+        self.assertEqual((), reviewer_deferred_test_case_findings(response, request))
 
     def test_reviewer_v2_prompt_requires_symmetric_falsification(self) -> None:
         prompt = reviewer_prompt_instruction(2)

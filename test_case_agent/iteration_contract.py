@@ -1518,6 +1518,7 @@ def build_reviewer_request(
     cases: Sequence[TestCaseDesign],
     gate: SuiteGateReport,
     evidence_pack: Any | None = None,
+    revision_review_scope: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not gate.passed or gate.graph_digest != graph.digest:
         raise IterationContractError("reviewer may receive only a gate-passed suite")
@@ -1671,7 +1672,7 @@ def build_reviewer_request(
             raise IterationContractError(
                 "reviewer evidence pack declared digest differs from its payload"
             )
-        return {
+        request = {
             "schema_version": 2,
             "graph_digest": graph.digest,
             "draft_sha256": gate.draft_sha256,
@@ -1679,6 +1680,13 @@ def build_reviewer_request(
             "reviewer_evidence_pack": pack_payload,
             "acceptance": acceptance,
         }
+        if revision_review_scope is not None:
+            if not isinstance(revision_review_scope, Mapping):
+                raise IterationContractError(
+                    "revision reviewer scope must be an object"
+                )
+            request["revision_review_scope"] = dict(revision_review_scope)
+        return request
     properties = {item.property_id: item for item in graph.properties}
     obligations = {item.obligation_id: item for item in graph.obligations}
     graph_cases = {item.case_key: item for item in graph.cases}
@@ -1730,6 +1738,60 @@ def build_reviewer_request(
         "cases": projections,
         "acceptance": reviewer_acceptance_contract(),
     }
+
+
+def _revision_review_scope_sets(
+    reviewer_request: Mapping[str, Any],
+) -> tuple[set[str], set[str]]:
+    scope = reviewer_request.get("revision_review_scope")
+    if not isinstance(scope, Mapping):
+        return set(), set()
+    changed_raw = scope.get("changed_case_keys")
+    unchanged_raw = scope.get("unchanged_byte_identical_cases")
+    if not isinstance(changed_raw, list) or not isinstance(unchanged_raw, list):
+        raise IterationContractError("revision reviewer scope is invalid")
+    changed = {item for item in changed_raw if isinstance(item, str)}
+    unchanged: set[str] = set()
+    for item in unchanged_raw:
+        if not isinstance(item, Mapping):
+            raise IterationContractError("revision reviewer unchanged manifest is invalid")
+        case_key = item.get("case_key")
+        if not isinstance(case_key, str):
+            raise IterationContractError("revision reviewer unchanged case_key is invalid")
+        unchanged.add(case_key)
+    return changed, unchanged
+
+
+def reviewer_deferred_test_case_findings(
+    response: Mapping[str, Any],
+    reviewer_request: Mapping[str, Any],
+) -> tuple[dict[str, Any], ...]:
+    """Return revision-mode findings on byte-identical unchanged cases.
+
+    The caller still validates the full response first; this helper is for
+    reporting the deterministic revision backlog split.
+    """
+
+    changed_case_keys, unchanged_case_keys = _revision_review_scope_sets(
+        reviewer_request
+    )
+    if not unchanged_case_keys:
+        return ()
+    findings = response.get("test_case_findings")
+    if not isinstance(findings, list):
+        return ()
+    deferred: list[dict[str, Any]] = []
+    for item in findings:
+        if not isinstance(item, Mapping):
+            continue
+        case_key = item.get("case_key")
+        if (
+            isinstance(case_key, str)
+            and case_key in unchanged_case_keys
+            and case_key not in changed_case_keys
+        ):
+            deferred.append(dict(item))
+    return tuple(deferred)
 
 
 def reviewer_response_schema(
@@ -2150,6 +2212,9 @@ def _validate_reviewer_response_v2(
         raise IterationContractError(
             "reviewer results and both finding categories must be arrays"
         )
+    revision_changed_case_keys, revision_unchanged_case_keys = _revision_review_scope_sets(
+        reviewer_request
+    )
     seen: set[str] = set()
     falsification_by_case: dict[
         str,
@@ -2549,6 +2614,10 @@ def _validate_reviewer_response_v2(
     probe_finding_bindings: set[tuple[str, str, str, str, str]] = set()
     same_chain_probe_finding_bindings: set[tuple[str, str, str, str]] = set()
     case_probe_finding_bindings: set[tuple[str, str]] = set()
+    deferred_probe_finding_bindings: set[tuple[str, str, str, str, str]] = set()
+    deferred_same_chain_probe_finding_bindings: set[tuple[str, str, str, str]] = set()
+    deferred_case_probe_finding_bindings: set[tuple[str, str]] = set()
+    blocking_test_findings: list[Any] = []
     for index, raw in enumerate(test_findings):
         falsification_probe = validate_finding(
             raw,
@@ -2559,6 +2628,14 @@ def _validate_reviewer_response_v2(
             require_binding_role=True,
             require_falsification_probe=True,
         )
+        is_deferred_revision_finding = (
+            isinstance(raw, Mapping)
+            and isinstance(raw.get("case_key"), str)
+            and raw["case_key"] in revision_unchanged_case_keys
+            and raw["case_key"] not in revision_changed_case_keys
+        )
+        if not is_deferred_revision_finding:
+            blocking_test_findings.append(raw)
         if isinstance(raw, Mapping) and falsification_probe:
             case_key = str(raw.get("case_key"))
             tc_id = str(raw.get("tc_id"))
@@ -2581,9 +2658,14 @@ def _validate_reviewer_response_v2(
                     f"reviewer test_case_finding for {case_key}/"
                     f"{falsification_probe} has no matching falsification outcome"
                 )
-            probe_finding_bindings.add(finding_binding)
-            same_chain_probe_finding_bindings.add(same_chain_binding)
-            case_probe_finding_bindings.add((case_key, tc_id))
+            if is_deferred_revision_finding:
+                deferred_probe_finding_bindings.add(finding_binding)
+                deferred_same_chain_probe_finding_bindings.add(same_chain_binding)
+                deferred_case_probe_finding_bindings.add((case_key, tc_id))
+            else:
+                probe_finding_bindings.add(finding_binding)
+                same_chain_probe_finding_bindings.add(same_chain_binding)
+                case_probe_finding_bindings.add((case_key, tc_id))
 
     for case_key, probe_results in falsification_by_case.items():
         tc_id = expected[case_key][0]
@@ -2613,6 +2695,9 @@ def _validate_reviewer_response_v2(
                 and exact_binding not in probe_finding_bindings
                 and same_chain_binding not in same_chain_probe_finding_bindings
                 and (case_key, tc_id) not in case_probe_finding_bindings
+                and exact_binding not in deferred_probe_finding_bindings
+                and same_chain_binding not in deferred_same_chain_probe_finding_bindings
+                and (case_key, tc_id) not in deferred_case_probe_finding_bindings
             ):
                 raise IterationContractError(
                     f"reviewer falsification finding for {case_key}/{probe} "
@@ -2625,10 +2710,10 @@ def _validate_reviewer_response_v2(
                 )
 
     accepted = (
-        decision == "accepted"
+        decision in {"accepted", "changes-required"}
         and all_required_statuses
         and not source_findings
-        and not test_findings
+        and not blocking_test_findings
     )
     if decision == "accepted" and not accepted:
         raise IterationContractError(
@@ -2641,7 +2726,7 @@ def _validate_reviewer_response_v2(
         and not test_findings
     ):
         raise IterationContractError("changes-required review has no bound reason")
-    return accepted, decision
+    return accepted, "accepted" if accepted else decision
 
 
 def validate_reviewer_response(

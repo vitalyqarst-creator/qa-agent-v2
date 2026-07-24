@@ -874,7 +874,7 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertNotIn(previous_cases[1].steps[0], manifest_text)
 
     def test_model_runtime_revision_passes_calibration_status_override_to_evidence_builder(self) -> None:
-        graph = _graph()
+        graph = _multi_runtime_graph()
         _, revision_input, previous_cases = self.write_revision_source_attempt(graph)
         backend = FixtureBackend()
         captured_overrides: list[Mapping[str, str] | None] = []
@@ -923,6 +923,28 @@ class ImmutableIterationTests(unittest.TestCase):
             captured_overrides.append(case_status_overrides)
             gate = type("GateBinding", (), {"draft_sha256": draft_sha256})()
             payload = _v2_pack(bound_graph, cases, gate, markdown)
+            prop = bound_graph.properties[0]
+            payload["coverage_mapping"] = [
+                {
+                    "source_row_id": prop.source_row_id,
+                    "assertion_id": prop.assertion_id,
+                    "property_id": prop.property_id,
+                    "obligation_id": case.obligation_ids[0],
+                    "case_key": case.case_key,
+                    "tc_id": case.tc_id,
+                }
+                for case in bound_graph.cases
+            ]
+            payload["coverage_mapping"].append(
+                {
+                    "source_row_id": "SRC-CONTEXT",
+                    "assertion_id": "",
+                    "property_id": "",
+                    "obligation_id": "",
+                    "case_key": "",
+                    "tc_id": "",
+                }
+            )
             payload["identity"]["contract"] = "reviewer-evidence-pack-v2"
             payload["mockup_attachments"] = []
             return FakePack(payload)
@@ -953,6 +975,25 @@ class ImmutableIterationTests(unittest.TestCase):
             {previous_cases[0].case_key: "candidate-ui-calibration"},
             captured_overrides[0],
         )
+        reviewer_request = json.loads(
+            (result.output_dir / "reviewer-request.json").read_text(encoding="utf-8")
+        )
+        scope = reviewer_request["revision_review_scope"]
+        self.assertEqual("revision-review-changed-cases-primary", scope["mode"])
+        self.assertEqual([previous_cases[0].case_key], scope["changed_case_keys"])
+        self.assertEqual([previous_cases[0].tc_id], scope["changed_tc_ids"])
+        self.assertEqual(1, len(scope["unchanged_byte_identical_cases"]))
+        self.assertEqual(
+            previous_cases[1].case_key,
+            scope["unchanged_byte_identical_cases"][0]["case_key"],
+        )
+        prompt = (
+            result.output_dir / "model-stages" / "reviewer-prompt.txt"
+        ).read_text(encoding="utf-8")
+        self.assertIn("bounded revision review", prompt)
+        self.assertIn("Full-review only the changed case_keys", prompt)
+        self.assertIn("non-blocking baseline backlog/deferred", prompt)
+        self.assertIn("must be copied exactly", prompt)
 
     def test_model_runtime_revision_prompt_for_38_case_fixture_stays_under_target(self) -> None:
         affected_cases = [
