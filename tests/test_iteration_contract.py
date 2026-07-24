@@ -467,6 +467,20 @@ class IterationContractTests(unittest.TestCase):
             "Открыта карточка ...",
             preconditions_contract["forbidden_state_only_examples"],
         )
+        self.assertIn(
+            "one exact source-backed UI control/action path",
+            preconditions_contract["single_control_path_policy"],
+        )
+        self.assertIn("или", preconditions_contract["single_control_path_policy"])
+        self.assertIn("/", preconditions_contract["single_control_path_policy"])
+        self.assertIn(
+            "Дважды нажать виджет `+` или кнопку `Добавить контактное лицо`.",
+            preconditions_contract["forbidden_ambiguous_examples"],
+        )
+        self.assertIn(
+            "Нажать кнопку «Добавить контактное лицо» два раза",
+            preconditions_contract["repeated_action_policy"],
+        )
         self.assertFalse(request["constraints"]["old_test_cases_available"])
         self.assertEqual(
             "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
@@ -628,6 +642,67 @@ class IterationContractTests(unittest.TestCase):
             (
                 "Открыть карточку `Заявка`.",
                 "Перейти в блок `Контактные лица`.",
+            ),
+            designs[0].preconditions,
+        )
+
+    def test_runtime_writer_rejects_ambiguous_alternative_precondition(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=[
+                        "Перейти в блок `Контактные лица`.",
+                        "Дважды нажать виджет `+` или кнопку `Добавить контактное лицо`.",
+                    ],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "ambiguous alternative control/action.*Дважды нажать виджет",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_accepts_exact_repeated_precondition(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=[
+                        "Перейти в блок `Контактные лица`.",
+                        "Нажать кнопку «Добавить контактное лицо» два раза.",
+                    ],
+                )
+            ],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(
+            (
+                "Перейти в блок `Контактные лица`.",
+                "Нажать кнопку «Добавить контактное лицо» два раза.",
             ),
             designs[0].preconditions,
         )

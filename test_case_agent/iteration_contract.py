@@ -1022,6 +1022,21 @@ def build_runtime_writer_request(
                     "setup cannot be expressed as an action, put only that case in "
                     "unresolved with a specific reason."
                 ),
+                "single_control_path_policy": (
+                    "Each setup action must name one exact source-backed UI "
+                    "control/action path. Do not list alternative controls or "
+                    "actions joined by `или` or `/`; choose the canonical "
+                    "source-backed control/action instead."
+                ),
+                "forbidden_ambiguous_examples": [
+                    "Дважды нажать виджет `+` или кнопку `Добавить контактное лицо`.",
+                    "Нажать виджет `+` / действие `Добавить контактное лицо`.",
+                ],
+                "repeated_action_policy": (
+                    "Repeated setup must be unambiguous: use separate numbered "
+                    "actions or one exact repeated action with one exact control, "
+                    "for example `Нажать кнопку «Добавить контактное лицо» два раза.`"
+                ),
             },
         },
         "cases": cases,
@@ -1160,9 +1175,37 @@ def _runtime_no_setup_item(value: str) -> bool:
     return _RUNTIME_NO_SETUP_RE.fullmatch(normalized) is not None
 
 
+_RUNTIME_AMBIGUOUS_ALTERNATIVE_RE = re.compile(r"(?<!\w)или(?!\w)|\s+/\s+")
+_RUNTIME_ACTION_OR_CONTROL_RE = re.compile(
+    r"(?:\bнаж\w*|\bклик\w*|\bвыбрать\b|\bоткрыть\b|\bперейти\b|"
+    r"\bдействи\w*|\bкнопк\w*|\bвиджет\w*|\bконтрол\w*|\bполе\b|`?\+`?)",
+    re.IGNORECASE,
+)
+
+
+def _runtime_ambiguous_precondition_problem(
+    preconditions: Sequence[str],
+) -> str | None:
+    for item in preconditions:
+        normalized = _normalized_ui_label(item)
+        if (
+            _RUNTIME_AMBIGUOUS_ALTERNATIVE_RE.search(normalized) is not None
+            and _RUNTIME_ACTION_OR_CONTROL_RE.search(normalized) is not None
+        ):
+            return (
+                "ambiguous alternative control/action in precondition: "
+                f"{item}. Choose one exact source-backed control/action path "
+                "or mark the case unresolved."
+            )
+    return None
+
+
 def _runtime_precondition_problem(preconditions: Sequence[str]) -> str | None:
     if len(preconditions) == 1 and _runtime_no_setup_item(preconditions[0]):
         return None
+    ambiguous = _runtime_ambiguous_precondition_problem(preconditions)
+    if ambiguous is not None:
+        return ambiguous
     numbered = "\n".join(
         f"{index}. {item}" for index, item in enumerate(preconditions, start=1)
     )

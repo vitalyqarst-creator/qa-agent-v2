@@ -120,6 +120,7 @@ class FixtureBackend:
         bad_runtime_writer_response: bool = False,
         all_runtime_writer_unresolved: bool = False,
         runtime_writer_state_only_precondition: bool = False,
+        runtime_writer_ambiguous_precondition: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.review_decision = review_decision
@@ -130,6 +131,7 @@ class FixtureBackend:
         self.bad_runtime_writer_response = bad_runtime_writer_response
         self.all_runtime_writer_unresolved = all_runtime_writer_unresolved
         self.runtime_writer_state_only_precondition = runtime_writer_state_only_precondition
+        self.runtime_writer_ambiguous_precondition = runtime_writer_ambiguous_precondition
         self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
@@ -217,6 +219,11 @@ class FixtureBackend:
                             "preconditions": (
                                 ["Открыта карточка `Заявка`, блок `Контактные лица`."]
                                 if self.runtime_writer_state_only_precondition
+                                else [
+                                    "Перейти в блок `Контактные лица`.",
+                                    "Дважды нажать виджет `+` или кнопку `Добавить контактное лицо`.",
+                                ]
+                                if self.runtime_writer_ambiguous_precondition
                                 else list(runtime["preconditions"])
                             ),
                             "test_data": list(runtime["test_data"]),
@@ -561,8 +568,21 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertIn("Открыта карточка", prompt)
         self.assertIn("Поле доступно", prompt)
         self.assertIn("Блок отображается", prompt)
+        self.assertIn("one exact source-backed UI control/action path", prompt)
+        self.assertIn(
+            "Do not list alternative controls/actions joined by `или` or `/`",
+            prompt,
+        )
+        self.assertIn(
+            "Дважды нажать виджет + или кнопку Добавить контактное лицо",
+            prompt,
+        )
+        self.assertIn("Нажать кнопку «Добавить контактное лицо» два раза", prompt)
         self.assertIn("source-bound setup hint cannot be written", prompt)
         self.assertIn("preconditions_contract", serialized_request)
+        self.assertIn("single_control_path_policy", serialized_request)
+        self.assertIn("forbidden_ambiguous_examples", serialized_request)
+        self.assertIn("repeated_action_policy", serialized_request)
         for legacy_phrase in (
             "registered subject",
             "expected-result, fixture, data",
@@ -629,6 +649,33 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("non-reproducible precondition", diagnostic["error"])
         self.assertIn("Открыта карточка", diagnostic["error"])
+
+    def test_model_runtime_prose_ambiguous_precondition_stops_before_draft_and_reviewer(self) -> None:
+        backend = FixtureBackend(runtime_writer_ambiguous_precondition=True)
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-ambiguous-precondition",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertTrue(
+            (result.output_dir / "model-stages" / "writer-response.json").exists()
+        )
+        self.assertFalse((result.output_dir / "shadow-test-cases.md").exists())
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("ambiguous alternative control/action", diagnostic["error"])
+        self.assertIn("Дважды нажать виджет", diagnostic["error"])
 
     def test_model_runtime_prose_all_unresolved_stops_before_reviewer_with_route_diagnostic(self) -> None:
         backend = FixtureBackend(all_runtime_writer_unresolved=True)
