@@ -14,6 +14,8 @@ from PIL import Image
 from test_case_agent.immutable_iteration import (
     ImmutableIterationError,
     MAX_REVIEWER_PROMPT_BYTES,
+    MAX_REVISION_WRITER_PROMPT_TARGET_BYTES,
+    MAX_WRITER_PROMPT_BYTES,
     _run_stage,
     _stage_prompt,
     run_immutable_iteration,
@@ -802,16 +804,174 @@ class ImmutableIterationTests(unittest.TestCase):
             [previous_cases[0].case_key],
             writer_request["revision_context"]["affected_case_keys"],
         )
+        self.assertNotIn("revision_findings", writer_request)
+        manifest = writer_request["revision_context"]["unaffected_cases_manifest"]
+        self.assertEqual(1, len(manifest))
+        self.assertEqual(previous_cases[1].tc_id, manifest[0]["tc_id"])
+        self.assertNotIn(
+            previous_cases[1].expected_result,
+            json.dumps(manifest, ensure_ascii=False),
+        )
         diff = json.loads(
             (result.output_dir / "revision-diff.json").read_text(encoding="utf-8")
         )
         self.assertTrue(diff["unaffected_byte_identical"])
         self.assertEqual([previous_cases[0].tc_id], diff["changed_tc_ids"])
+        self.assertEqual(1, diff["changed_tc_count"])
+        self.assertEqual(1, diff["unchanged_tc_count"])
+        previous_markdown = (
+            result.output_dir.parent / "previous-iteration" / "shadow-test-cases.md"
+        ).read_text(encoding="utf-8")
+        unchanged_block = f"## {previous_cases[1].tc_id}" + previous_markdown.split(
+            f"## {previous_cases[1].tc_id}",
+            1,
+        )[1]
+        self.assertEqual(
+            hashlib.sha256(unchanged_block.encode("utf-8")).hexdigest(),
+            diff["unchanged_tc_hashes"][previous_cases[1].tc_id],
+        )
         designs = json.loads(
             (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
         )
         self.assertEqual("candidate-ui-calibration", designs["cases"][0]["status"])
         self.assertIn(previous_cases[0].tc_id, designs["cases"][0]["calibration_question"])
+
+    def test_model_runtime_revision_prompt_excludes_unaffected_full_prose(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(graph)
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-compact-prompt",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertIn(result.status, {"accepted-shadow", "accepted-with-calibration-pending"})
+        prompt = (result.output_dir / "model-stages" / "writer-prompt.txt").read_text(
+            encoding="utf-8"
+        )
+        writer_request = json.loads(
+            (result.output_dir / "writer-request.json").read_text(encoding="utf-8")
+        )
+        affected_block = writer_request["revision_context"][
+            "previous_draft_blocks_by_case"
+        ][previous_cases[0].case_key]
+        self.assertIn(json.dumps(affected_block, ensure_ascii=False)[1:-1], prompt)
+        self.assertIn(
+            revision_input["reviewer_response"]["test_case_findings"][0]["message"],
+            prompt,
+        )
+        self.assertNotIn(previous_cases[1].steps[0], prompt)
+        self.assertNotIn(previous_cases[1].expected_result, prompt)
+        manifest_text = json.dumps(
+            writer_request["revision_context"]["unaffected_cases_manifest"],
+            ensure_ascii=False,
+        )
+        self.assertIn(previous_cases[1].tc_id, manifest_text)
+        self.assertNotIn(previous_cases[1].steps[0], manifest_text)
+
+    def test_model_runtime_revision_prompt_for_38_case_fixture_stays_under_target(self) -> None:
+        affected_cases = [
+            {
+                "case_key": f"case-{index:02d}",
+                "tc_id": f"TC-COMPACT-{index:02d}",
+                "case_type": "positive",
+                "runner_traceability": [f"OBL-COMPACT-{index:02d}"],
+                "seed_runtime": {
+                    "title": f"Affected case {index}",
+                    "preconditions": [
+                        f"Open source-bound screen for affected case {index}."
+                    ],
+                    "test_data": [f"source-bound value {index}"],
+                    "steps": [f"Execute affected action {index}."],
+                    "expected_result": f"Observe affected expected result {index}.",
+                    "postconditions": ["No cleanup required."],
+                    "calibration_question": "",
+                },
+            }
+            for index in range(12)
+        ]
+        request = {
+            "schema_version": 2,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": "a" * 64,
+            "route_contract": {
+                "route": "runtime-prose-one-case-per-seed",
+                "runner_owned_fields": ["case_key", "tc_id", "runner_traceability"],
+            },
+            "cases": affected_cases,
+            "revision_context": {
+                "mode": "affected-cases-only",
+                "affected_case_keys": [item["case_key"] for item in affected_cases],
+                "findings_by_case": {
+                    item["case_key"]: [
+                        {
+                            "severity": "error",
+                            "finding_type": "expected-result-unsupported",
+                            "tc_id": item["tc_id"],
+                            "case_key": item["case_key"],
+                            "message": "Use only source-bound observable.",
+                        }
+                    ]
+                    for item in affected_cases
+                },
+                "previous_draft_blocks_by_case": {
+                    item["case_key"]: (
+                        f"## {item['tc_id']}\n"
+                        f"Full affected preconditions and steps for {item['case_key']}.\n"
+                    )
+                    for item in affected_cases
+                },
+                "unaffected_cases_manifest": [
+                    {
+                        "case_key": f"case-{index:02d}",
+                        "tc_id": f"TC-COMPACT-{index:02d}",
+                        "title": f"Unchanged case {index}",
+                        "block_sha256": "b" * 64,
+                    }
+                    for index in range(12, 38)
+                ],
+                "unaffected_cases_policy": (
+                    "The runner preserves absent cases byte-identical."
+                ),
+            },
+        }
+
+        prompt_size = len(_stage_prompt("writer", request).encode("utf-8"))
+
+        self.assertLessEqual(prompt_size, MAX_REVISION_WRITER_PROMPT_TARGET_BYTES)
+        self.assertLess(prompt_size, MAX_WRITER_PROMPT_BYTES)
+
+    def test_model_runtime_revision_context_too_large_stops_before_writer_with_diagnostic(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, _ = self.write_revision_source_attempt(graph)
+        backend = FixtureBackend()
+
+        with patch("test_case_agent.immutable_iteration.MAX_WRITER_PROMPT_BYTES", 1):
+            result = self.run_engine(
+                graph,
+                "model-runtime-revision-too-large",
+                backend=backend,
+                writer_mode="model-runtime-prose",
+                revision_input=revision_input,
+            )
+
+        self.assertEqual("blocked-revision-context-too-large", result.status)
+        self.assertEqual([], backend.calls)
+        self.assertEqual(0, result.writer_model_calls)
+        self.assertFalse((result.output_dir / "model-stages" / "writer-response.json").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("blocked-revision-context-too-large", diagnostic["status"])
+        self.assertEqual("RevisionContextTooLarge", diagnostic["error_type"])
+        self.assertIn("breakdown", diagnostic)
+        self.assertGreater(diagnostic["breakdown"]["prompt_bytes"], 1)
 
     def test_model_runtime_revision_keeps_runner_owned_identity_and_traceability(self) -> None:
         graph = _multi_runtime_graph()

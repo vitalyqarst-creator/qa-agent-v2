@@ -55,6 +55,7 @@ from test_case_agent.test_design import (
 
 
 MAX_WRITER_PROMPT_BYTES = 128 * 1024
+MAX_REVISION_WRITER_PROMPT_TARGET_BYTES = 110 * 1024
 MAX_REVIEWER_PROMPT_BYTES = 384 * 1024
 
 
@@ -64,6 +65,14 @@ class ImmutableIterationError(ValueError):
 
 class ReviewerContextTooLarge(ImmutableIterationError):
     """The complete reviewer evidence cannot fit without forbidden truncation."""
+
+
+class RevisionContextTooLarge(ImmutableIterationError):
+    """The bounded revision writer context exceeds the hard compact limit."""
+
+    def __init__(self, message: str, *, breakdown: Mapping[str, Any]) -> None:
+        self.breakdown = dict(breakdown)
+        super().__init__(message)
 
 
 class StageBackend(Protocol):
@@ -168,6 +177,10 @@ def _write_json(path: Path, value: Mapping[str, Any]) -> None:
 def _write_text(path: Path, value: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding="utf-8", newline="\n")
+
+
+def _json_size(value: Any) -> int:
+    return len(_json_bytes(value))
 
 
 def _resolve_inside_repo(path: Path, repo_root: Path, label: str) -> Path:
@@ -727,6 +740,43 @@ def _zero_writer_receipt(request: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
+def _revision_prompt_size_breakdown(
+    request: Mapping[str, Any],
+    *,
+    prompt_size: int,
+) -> dict[str, Any]:
+    revision_context = request.get("revision_context")
+    if not isinstance(revision_context, Mapping):
+        revision_context = {}
+    top_level = {
+        key: _json_size(value)
+        for key, value in sorted(request.items())
+        if key != "revision_context"
+    }
+    context_parts = {
+        key: _json_size(value)
+        for key, value in sorted(revision_context.items())
+    }
+    affected_keys = revision_context.get("affected_case_keys")
+    unaffected_manifest = revision_context.get("unaffected_cases_manifest")
+    return {
+        "prompt_bytes": prompt_size,
+        "target_bytes": MAX_REVISION_WRITER_PROMPT_TARGET_BYTES,
+        "hard_cap_bytes": MAX_WRITER_PROMPT_BYTES,
+        "top_level_request_bytes": top_level,
+        "revision_context_bytes": context_parts,
+        "case_count": len(request.get("cases", []))
+        if isinstance(request.get("cases"), list)
+        else None,
+        "affected_case_count": len(affected_keys)
+        if isinstance(affected_keys, list)
+        else None,
+        "unaffected_manifest_count": len(unaffected_manifest)
+        if isinstance(unaffected_manifest, list)
+        else None,
+    }
+
+
 def _run_stage(
     *,
     stage: str,
@@ -748,6 +798,14 @@ def _run_stage(
     prompt_size = len(prompt.encode("utf-8"))
     if prompt_size > limit:
         message = f"{stage} prompt exceeds compact limit: {prompt_size} > {limit} bytes"
+        if stage == "writer" and "revision_context" in request:
+            raise RevisionContextTooLarge(
+                message,
+                breakdown=_revision_prompt_size_breakdown(
+                    request,
+                    prompt_size=prompt_size,
+                ),
+            )
         if stage == "reviewer":
             raise ReviewerContextTooLarge(message)
         raise ImmutableIterationError(message)
@@ -950,6 +1008,29 @@ def _case_blocks_by_tc_id(markdown: str) -> dict[str, str]:
         end = starts[index + 1][1] if index + 1 < len(starts) else len(markdown)
         blocks[tc_id] = markdown[start:end]
     return blocks
+
+
+def _revision_unaffected_manifest(
+    *,
+    previous_cases: Sequence[TestCaseDesign],
+    affected_case_keys: Sequence[str],
+    previous_blocks_by_tc_id: Mapping[str, str],
+) -> tuple[dict[str, Any], ...]:
+    affected = set(affected_case_keys)
+    manifest: list[dict[str, Any]] = []
+    for case in previous_cases:
+        if case.case_key in affected:
+            continue
+        block = previous_blocks_by_tc_id.get(case.tc_id, "")
+        manifest.append(
+            {
+                "case_key": case.case_key,
+                "tc_id": case.tc_id,
+                "title": case.title,
+                "block_sha256": hashlib.sha256(block.encode("utf-8")).hexdigest(),
+            }
+        )
+    return tuple(manifest)
 
 
 def _revision_findings_by_case(
@@ -1490,12 +1571,12 @@ def run_immutable_iteration(
                 active_plan,
                 mockup_label_aliases=mockup_label_aliases,
                 revision_findings=(
-                    revision_context.payload
-                    if revision_context is not None
-                    else revision_findings
+                    None if revision_context is not None else revision_findings
                 ),
             )
             if revision_context is not None:
+                writer_request = dict(writer_request)
+                writer_request.pop("revision_findings", None)
                 previous_blocks = {
                     case_key: revision_context.previous_blocks_by_tc_id[
                         previous_cases_by_key[case_key].tc_id
@@ -1504,8 +1585,13 @@ def run_immutable_iteration(
                     if previous_cases_by_key[case_key].tc_id
                     in revision_context.previous_blocks_by_tc_id
                 }
+                unaffected_manifest = _revision_unaffected_manifest(
+                    previous_cases=revision_context.previous_cases,
+                    affected_case_keys=revision_context.affected_case_keys,
+                    previous_blocks_by_tc_id=revision_context.previous_blocks_by_tc_id,
+                )
                 writer_request = {
-                    **dict(writer_request),
+                    **writer_request,
                     "revision_context": {
                         "mode": "affected-cases-only",
                         "source_attempt_dir": (
@@ -1522,9 +1608,11 @@ def run_immutable_iteration(
                             if key in revision_context.affected_case_keys
                         },
                         "previous_draft_blocks_by_case": previous_blocks,
+                        "unaffected_cases_manifest": list(unaffected_manifest),
                         "unaffected_cases_policy": (
                             "The runner will preserve cases absent from this "
-                            "request byte-identical from the previous shadow draft."
+                            "request byte-identical from the previous shadow draft. "
+                            "Do not emit or rewrite unaffected cases."
                         ),
                     },
                 }
@@ -1709,6 +1797,12 @@ def run_immutable_iteration(
                     for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
                     if tc_id not in affected_tc_ids
                 )
+                unchanged_hashes = {
+                    tc_id: hashlib.sha256(old_block.encode("utf-8")).hexdigest()
+                    for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
+                    if tc_id not in affected_tc_ids
+                    and new_blocks.get(tc_id) == old_block
+                }
                 _write_json(
                     output_dir / "revision-diff.json",
                     {
@@ -1721,6 +1815,9 @@ def run_immutable_iteration(
                         ),
                         "affected_tc_ids": sorted(affected_tc_ids),
                         "changed_tc_ids": list(changed_tc_ids),
+                        "changed_tc_count": len(changed_tc_ids),
+                        "unchanged_tc_count": len(unchanged_hashes),
+                        "unchanged_tc_hashes": unchanged_hashes,
                         "unaffected_byte_identical": (
                             revision_unaffected_byte_identical
                         ),
@@ -1880,6 +1977,19 @@ def run_immutable_iteration(
             if calibration_pending_count
             else "accepted-shadow"
         )
+    except RevisionContextTooLarge as exc:
+        _write_json(
+            output_dir / "failure-diagnostic.json",
+            {
+                "schema_version": 1,
+                "status": "blocked-revision-context-too-large",
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "breakdown": exc.breakdown,
+                "safe_recovery": "compact revision context further and start a new output directory",
+            },
+        )
+        return finish("blocked-revision-context-too-large", error=str(exc))
     except ReviewerContextTooLarge as exc:
         _write_json(
             output_dir / "failure-diagnostic.json",

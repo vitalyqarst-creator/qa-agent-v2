@@ -115,6 +115,7 @@ _ITERATION_STATUS_CATEGORIES = {
     "blocked-design": "workflow",
     "blocked-writer-unresolved": "workflow",
     "blocked-suite-gate": "workflow",
+    "blocked-revision-context-too-large": "contract",
     "blocked-reviewer-context-too-large": "workflow",
     "review-changes-required": "workflow",
     "review-blocked": "workflow",
