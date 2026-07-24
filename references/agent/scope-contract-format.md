@@ -9,7 +9,7 @@
 - только для подтвержденного scope;
 - в режиме `manual-scope`;
 - после `agent-proposed-scope` только после того, как пользователь утвердил один candidate scope;
-- до создания handoff к writer.
+- до создания source-first handoff к reviewer.
 
 Перед созданием `scope-contract.md` для большого ФТ должна быть выполнена декомпозиция по `references/agent/scope-decomposition-policy.md`: сначала внешние candidate scope-ы по разделам/подразделам, затем contract только для выбранного внешнего scope.
 
@@ -115,15 +115,10 @@ Complexity decision:
 
 ## Условия Старта Следующего Этапа
 
-- Writer/Iteration используют `scope-contract.md`, `scope-coverage-gaps.md`, matching `prompt.scope-to-writer.md` / `prompt.scope-to-iteration.md` и условные handoff artifacts:
-  - `source-parity-check.md`, если доступны DOCX+PDF;
-  - `source-row-inventory.md`, если нужен row/table parity handoff;
-  - `negative-oracle-inventory.md`, если есть validation/format restrictions;
-  - `requiredness-oracle-inventory.md`, если есть обязательность;
-  - `negative-ui-calibration-policy.md`, если inventories содержат `candidate_tc_required`;
-  - `mockup-visual-inventory.md`, если scope содержит mockup.
-- Scope готов к handoff, когда созданы все обязательные артефакты.
-- Scope готов к handoff только если в `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` явно перенесены package-by-package gate, обязательный `package_id` для `ATOM-*`/`TC-*`, Package Test Design Plan gate и запрет переходить к следующему package без package self-check.
+- Новый production/promotion-capable workflow сначала использует `prompt.scope-assertions-to-reviewer.md` и независимый `source_assertion_review`.
+- Source assertion reviewer использует `scope-contract.md`, `scope-coverage-gaps.md`, `source-assertions.json`, source-row registry и условные parity/oracle/mockup artifacts.
+- Scope готов к source-first handoff, когда созданы все обязательные артефакты и `workflow-state.yaml` указывает active prompt `prompt.scope-assertions-to-reviewer.md`.
+- Writer/iteration prompts создаются после accepted source assertion review либо для явно legacy/non-promotion route; они должны переносить package-by-package gate, обязательный `package_id` для `ATOM-*`/`TC-*`, Package Test Design Plan gate и запрет переходить к следующему package без package self-check.
 
 ## Ограничения И Правила Интерпретации
 

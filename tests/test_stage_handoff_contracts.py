@@ -26,6 +26,8 @@ class StageHandoffContractTests(unittest.TestCase):
         self.assertIn("`scope-contract.md`", handoff)
         self.assertIn("`scope-coverage-gaps.md`", handoff)
         self.assertIn("`prompt.scope-gaps-to-reviewer.md`", handoff)
+        self.assertIn("`prompt.scope-assertions-to-reviewer.md`", handoff)
+        self.assertIn("`source-assertions.json`", handoff)
         self.assertIn("`current_stage`", state)
         self.assertIn("`stage_status`", state)
         self.assertIn("`next_skill`", state)
@@ -49,6 +51,8 @@ class StageHandoffContractTests(unittest.TestCase):
         self.assertIn("`scope-options.md`", scope_options)
         self.assertIn("## Prompt Templates", scope_selection_prompts)
         self.assertIn("`scope-selection-prompts.md`", scope_selection_prompts)
+        self.assertIn("`prompt.scope-assertions-to-reviewer.md`", scope_selection_prompts)
+        self.assertIn("`source_assertion_review`", scope_selection_prompts)
 
     def test_locator_and_scope_analyzer_produce_stage_handoff_artifacts(self) -> None:
         locator = (ROOT_DIR / "skills" / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")

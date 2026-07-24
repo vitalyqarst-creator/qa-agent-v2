@@ -6,7 +6,7 @@
 
 - зафиксировать candidate scope для большого или неоднозначного FT;
 - дать пользователю воспроизводимый список вариантов, а не одноразовый ответ в чате;
-- отделить проектирование scope от подтвержденного scope handoff к writer или iteration.
+- отделить проектирование scope от подтвержденного source-first handoff.
 
 ## Расположение
 
@@ -99,6 +99,7 @@
 
 - `scope-options.md` не заменяет `scope-contract.md`.
 - Пока пользователь не утвердил один конкретный scope, не создавай `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
-- После выбора одного candidate scope следующий шаг должен выпускать уже `scope-contract.md`, `scope-coverage-gaps.md`, `prompt.scope-to-writer.md`, `prompt.scope-to-iteration.md` и handoff к выбранному downstream маршруту.
+- После выбора одного candidate scope следующий шаг должен выпускать `scope-contract.md`, `scope-coverage-gaps.md`, source-first artifacts и `prompt.scope-assertions-to-reviewer.md`.
+- Writer/iteration prompts появляются только после accepted `source_assertion_review` либо в явно legacy/non-promotion route.
 - Для новых candidate scope-ов фиксируй `Scope Order` и `Stage Handoff Dir`, чтобы пользователю не приходилось восстанавливать порядок по содержимому файлов.
 - Все человекочитаемые поля должны быть на русском языке.

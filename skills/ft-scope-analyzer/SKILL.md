@@ -50,30 +50,11 @@ Materialization связывает обязательные compact session/deci
 
 For every new promotion-capable workflow, produce `source-assertions.json` from the
 complete selected `source-row-inventory.md` before writer routing. Follow
-`source-assertions-format.md`: bind current XHTML/mockup SHA-256 values, exact source
-text, one source row -> assertion -> `ATOM-*` -> `OBL-*` chain, polarity,
-disposition, risk and separate condition/action/oracle clauses. Do not create or
-self-approve `source-assertion-review.json` in this skill. An `ambiguous` assertion
-requires one valid `primary_gap_id` and a substantive source-backed
-`disposition_rationale`; `testable` and `not-applicable` use
-`primary_gap_id = null`, and `not-applicable` also requires its rationale. Every
-compiler-contract-v3 gap requires an explicit blocking classification, and
-constraint gaps must be non-blocking. Hash-bind the canonical coverage-gaps
-artifact in manifest v4.
-Every dependency-blocked testable assertion must declare duplicate-free
-`execution_dependency_gap_ids`; each linked open blocking GAP must contain exact
-dedicated `execution_assertion_ids`, `execution_atom_ids` and
-`execution_obligation_ids` plus `blocks_ready_for_review: yes`.
-Before freezing the selected-section row set, inspect document-global constraints,
-ancestor/section preambles and cross-referenced constraints; include every
-applicable context row and preserve concrete exclusion locators for the independent
-boundary attestation defined by the canonical contract.
-Apply `source-assertion-semantic-rule-card.md` to every condition/action/oracle
-chain before declaring it ready. If a confirmed answer resolves source ambiguity,
-register the exact canonical clarification row, its dedicated
-`approved-clarification` source-selection role, typed manifest record and local
-clause/code bindings. Do not bind working assumptions, rejected/superseded
-answers or an answer whose authority is misrepresented.
+`source-assertions-format.md` and `source-assertion-semantic-rule-card.md` for
+hash binding, source row -> assertion -> `ATOM-*` -> `OBL-*` lineage,
+condition/action/oracle clauses, `primary_gap_id`, dependency gaps, document-global constraints
+and approved clarifications. Do not create or self-approve
+`source-assertion-review.json` in this skill.
 
 Create `prompt.scope-assertions-to-reviewer.md` and route one independent
 `source_assertion_review` before writer. That review also challenges gap
@@ -178,7 +159,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 10a. Если complexity/source rows выявляют validation/format/date/email/length/numeric/allowed-values ограничения или обязательность, создай `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` до handoff. Для каждого invalid/requiredness item проверь observable oracle: сообщение, подсветка, blocked transition, input filtering, save rejection, API response, visible marker или другой source-backed pass/fail artifact.
 10b. Если source задает restriction/requiredness, но exact UI oracle отсутствует, не теряй obligation: укажи `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, stable `scope_obligation_id` (`SO-NEG-*` / `SO-REQ-*`) и передай writer-у как candidate TC по `negative-ui-calibration-policy.md`. Parent `GAP-*` используй только для общего неизвестного oracle, но child obligations перечисляй отдельно. `gap_required` оставляй для случаев, когда нельзя сформировать даже candidate TC.
 10c. Если scope содержит буквальный UI-текст/сообщение или неоднозначное преобразование единиц, создай `source-to-package-fidelity.json` по canonical format и зарегистрируй его в `latest_artifacts`. Не преобразуй `МБ` в точные байты без source-backed policy; неизвестную точную boundary fixture сохрани как отдельный `GAP-*` obligation.
-10d. Для нового production/promotion-capable workflow создай `source-assertions.json` по `source-assertions-format.md`. Manifest обязан hash-связать extraction spec/baseline, typed `source_rows` registry и покрывать ровно все строки `source-row-inventory.md`, включая N/A rows. Primary evidence остаётся внутри bounded text своей row; cross-row condition/action/oracle и requirement-code provenance оформляются только через соответствующие typed clause/code bindings, а `supporting_source_bindings` используется только для остальных разрешённых semantic roles. Перед `ready` примени `source-assertion-semantic-rule-card.md`. `testable` assertions связываются с точными executable obligations, `ambiguous` остаются без executable obligation claim и обязаны иметь `primary_gap_id` с содержательным `disposition_rationale`, `no` rows допускают только `not-applicable`, а mockup locators регистрируются только после visual inventory. Если assertion extraction выполняется из XHTML, но DOCX остаётся source of truth, hash-свяжи DOCX через `evidence_sources/semantic-source-of-truth`, PDF parity через `structural-visual-parity`, а каждый реально использованный support-файл через `supporting-material`. Approved clarification регистрируй только из canonical answered row через dedicated role, typed record и clause-level binding; working/superseded/rejected answer не делает assertion ready. Риск, polarity и semantic disposition задаются явно, без text heuristics.
+10d. Для нового production/promotion-capable workflow создай `source-assertions.json` по `source-assertions-format.md`, примени `source-assertion-semantic-rule-card.md` и покрой ровно все строки `source-row-inventory.md`. Если manifest не готов к независимому source review, оставь workflow в `blocked-input`.
 11. Добавь в `scope-contract.md` секцию `Внутренние Рабочие Пакеты` для каждого подтвержденного scope. Если scope простой, создай один `WP-01`; если неоднородный, раздели работу на несколько `WP-*`. Не используй внутренние рабочие пакеты как замену внешнему split для всего ФТ.
 12. Каждый внутренний рабочий пакет должен иметь focus, source_refs, included_requirements, design_method, expected_outputs и split_required. Это рабочий план writer-а, а не новый внешний scope. `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` должны явно требовать `package_id`, package ledger gate, Package Test Design Plan gate и package TC gate.
 13. Если PDF для structural cross-check отсутствует, явно укажи это в промежуточных заметках или `coverage gaps`, а не оставляй неявным.

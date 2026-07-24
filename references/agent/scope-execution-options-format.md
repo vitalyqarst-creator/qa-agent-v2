@@ -2,12 +2,12 @@
 
 Этот документ задает канонический формат для `scope-execution-options.md`.
 
-`scope-execution-options.md` — optional helper artifact после подтверждения scope. Он помогает пользователю выбрать следующий маршрут выполнения, но не заменяет `workflow-state.yaml`, `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
+`scope-execution-options.md` — optional helper artifact после подтверждения scope и source-first review. Он помогает пользователю выбрать следующий маршрут выполнения, но не заменяет `workflow-state.yaml`, `scope-contract.md`, `prompt.scope-assertions-to-reviewer.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
 
 ## Когда создавать
 
 - только после подтвержденного scope;
-- после создания `scope-contract.md`, `scope-coverage-gaps.md`, `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md`;
+- после создания `scope-contract.md`, `scope-coverage-gaps.md` и accepted `source_assertion_review` для production/promotion-capable workflow;
 - только как user-facing helper, а не как обязательный downstream-вход.
 
 ## Где хранить

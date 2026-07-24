@@ -23,8 +23,12 @@ Required guardrails:
 - reviewer mode is `scope_gap_review`;
 - reviewer checks gap anchors, classification, clarification requests and routing readiness;
 - reviewer must not write, rewrite or review test cases in this mode;
-- passed review routes to `prompt.scope-to-writer.md`;
+- passed review routes to `prompt.scope-assertions-to-reviewer.md` for compiler contract v3, or to `prompt.scope-to-writer.md` only for legacy/non-promotion workflow;
 - failed review routes back to `ft-scope-analyzer` or `blocked-input`.
+
+## Special Contract `prompt.scope-assertions-to-reviewer.md`
+
+`prompt.scope-assertions-to-reviewer.md` is the active pre-writer handoff for compiler contract v3. It must route reviewer mode `source_assertion_review`, require `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`, `source-row-inventory.md`, `source-row-extraction-spec.json`, `source-row-baseline.json`, `source-assertions.json`, and conditional parity/mockup/package notes. Reviewer verifies source evidence and digest bindings, does not write/review test cases, routes accepted review to writer/iteration, and routes rejected or ambiguous review back to `ft-scope-analyzer` or `blocked-input`.
 
 ## Специальный Контракт `prompt.scope-to-writer.md`
 
@@ -84,6 +88,7 @@ Prompt-файлы хранятся в:
 - `prompt.scope-to-writer.md`
 - `prompt.scope-to-iteration.md`
 - `prompt.scope-gaps-to-reviewer.md`
+- `prompt.scope-assertions-to-reviewer.md`
 - `prompt.writer-to-reviewer.round-1.md`
 - `prompt.reviewer-to-writer.round-1.md`
 - `prompt.writer-to-reviewer.round-2.md`
@@ -130,7 +135,8 @@ Prompt-файлы хранятся в:
 - Prompt должен ссылаться только на актуальные артефакты текущего `scope-slug`.
 - Prompt не заменяет `workflow-state.yaml`: process-status остается в state-файле.
 - Prompt не должен дублировать полный workflow skill-а; он фиксирует только handoff для конкретного этапа и конкретного scope.
-- Если после scope analysis доступны два варианта запуска, `prompt.scope-to-writer.md` используется для единичного writer-pass, а `prompt.scope-to-iteration.md` — для полного writer-reviewer loop через `ft-test-case-iteration`.
+- В compiler contract v3 после scope analysis активный prompt до writer всегда `prompt.scope-assertions-to-reviewer.md`.
+- `prompt.scope-to-writer.md` используется для единичного writer-pass, а `prompt.scope-to-iteration.md` — для полного writer-reviewer loop через `ft-test-case-iteration` только после accepted source assertion review либо для явно legacy/non-promotion route.
 
 ## Минимум автоматической проверки
 
@@ -144,5 +150,6 @@ Prompt-файлы хранятся в:
 - секция входных артефактов содержит хотя бы одну ссылку на artifact, который разрешается в текущем checkout.
 - Для `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`; если workflow включает `source-parity-check.md`, `source-row-inventory.md`, `mockup-visual-inventory.md` или `scope-clarification-requests.md`, prompt должен ссылаться и на них.
 - Для `prompt.scope-gaps-to-reviewer.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `scope-clarification-requests.md` и `workflow-state.yaml`; если workflow включает `source-parity-check.md`, `source-row-inventory.md` или `mockup-visual-inventory.md`, prompt должен ссылаться и на них.
+- Для `prompt.scope-assertions-to-reviewer.md` секция входных артефактов должна содержать resolving ссылки на `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`, `source-row-inventory.md`, `source-row-extraction-spec.json`, `source-row-baseline.json` и `source-assertions.json`; если workflow включает `source-parity-check.md` или `mockup-visual-inventory.md`, prompt должен ссылаться и на них.
 
 Шесть секций выше остаются каноническим форматом для новых prompt-файлов. Legacy aliases вроде `Inputs`, `Constraints`, `Required Changes` пока принимаются валидатором для обратной совместимости.

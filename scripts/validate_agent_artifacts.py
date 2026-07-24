@@ -111,6 +111,14 @@ REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
     "selection_status",
 }
 ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
+SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:outputs|выходы)\s*:\s*.*prompt\.scope-to-(?:writer|iteration)\.md"
+)
+SCOPE_SELECTION_PROMPT_SOURCE_FIRST_MARKERS = (
+    "source-assertions.json",
+    "prompt.scope-assertions-to-reviewer.md",
+    "source_assertion_review",
+)
 REQUIRED_FINAL_ARTIFACT_ALIASES = {
     "final_findings",
     "final_traceability_matrix",
@@ -4012,6 +4020,79 @@ def validate_source_selection_artifact(
         checks.append(Check("workflow-state-source-selection-selected", "fail", "Source selection is not selected.", rel(workflow_path, root)))
     elif selection_status:
         checks.append(Check("workflow-state-source-selection-selected", "pass", "Source selection status does not block routing.", rel(workflow_path, root)))
+
+    return findings, checks
+
+
+def validate_scope_selection_prompts_artifact(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="scope-selection-prompts-unreadable",
+                severity="error",
+                category="prompt-format",
+                title="scope-selection-prompts.md is not readable as UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save scope-selection-prompts.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("scope-selection-prompts-source-first-route", "fail", "File is not UTF-8.", display_path))
+        return findings, checks
+
+    direct_output_lines = [
+        match.group(0).strip()
+        for match in SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE.finditer(content)
+    ]
+    missing_source_first_markers = [
+        marker for marker in SCOPE_SELECTION_PROMPT_SOURCE_FIRST_MARKERS if marker not in content
+    ]
+    if direct_output_lines and missing_source_first_markers:
+        findings.append(
+            Finding(
+                id="scope-selection-prompts-direct-writer-route",
+                severity="error",
+                category="prompt-format",
+                title="Scope selection prompt routes directly to writer/iteration",
+                details=(
+                    "A scope-selection prompt confirms one candidate scope. New production-capable workflows "
+                    "must route to source_assertion_review before writer or iteration."
+                ),
+                path=display_path,
+                evidence=[
+                    *direct_output_lines[:5],
+                    f"missing_source_first_markers={missing_source_first_markers}",
+                ],
+                recommended_action=(
+                    "Replace direct writer/iteration outputs with source-assertions.json, "
+                    "prompt.scope-assertions-to-reviewer.md and source_assertion_review routing."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "scope-selection-prompts-source-first-route",
+                "fail",
+                "Scope selection prompt bypasses source-first review.",
+                display_path,
+            )
+        )
+    else:
+        checks.append(
+            Check(
+                "scope-selection-prompts-source-first-route",
+                "pass",
+                "Scope selection prompt does not bypass source-first review.",
+                display_path,
+            )
+        )
 
     return findings, checks
 
@@ -19407,6 +19488,7 @@ def validate(
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
+    scope_selection_prompts = iter_named_markdown(root, "scope-selection-prompts.md")
     oracle_inventories = [
         *iter_named_markdown(root, NEGATIVE_ORACLE_INVENTORY_NAME),
         *iter_named_markdown(root, REQUIREDNESS_ORACLE_INVENTORY_NAME),
@@ -19430,6 +19512,7 @@ def validate(
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_source_table_normalization:
         workflow_states = []
@@ -19449,6 +19532,7 @@ def validate(
         generated_source_basis_artifacts = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_dictionary_inventory:
         workflow_states = []
@@ -19468,6 +19552,7 @@ def validate(
         active_text_artifacts = []
         generated_source_basis_artifacts = []
         mockup_visual_inventories = []
+        scope_selection_prompts = []
         oracle_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
     findings: list[Finding] = []
@@ -19720,6 +19805,11 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in scope_selection_prompts:
+        path_findings, path_checks = validate_scope_selection_prompts_artifact(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in active_text_artifacts:
         path_findings, path_checks = validate_text_encoding_damage(path, root)
         findings.extend(path_findings)
@@ -19783,6 +19873,7 @@ def validate(
             "active_text_artifacts_checked": len(active_text_artifacts),
             "generated_source_basis_artifacts_checked": len(generated_source_basis_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
+            "scope_selection_prompts_checked": len(scope_selection_prompts),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
             "findings_count": len(findings),
