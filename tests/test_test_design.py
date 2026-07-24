@@ -316,6 +316,62 @@ class TestDesignTests(unittest.TestCase):
             plan.deterministic_cases[0].steps,
         )
 
+    def test_source_editability_reuses_valid_same_subject_fixture(self) -> None:
+        graph = _graph(
+            kind="source-editability",
+            fixtures=("Тест",),
+            trigger="Ввести или изменить значение поля «Имя».",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(graph.properties[0], polarity="positive"),
+                CoverageProperty(
+                    property_id="PROP-NAME-VALID",
+                    assertion_id="ASSERT-NAME-VALID",
+                    property_key="customer-name:valid-input",
+                    subject_key="customer-name",
+                    property_kind="positive-input",
+                    source_row_id="SRC-VALID",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[2]",
+                    source_text_sha256="9" * 64,
+                    canonical_statement="Поле «Имя» принимает значение `Иван`.",
+                    requirement_codes=("BSR 2",),
+                    disposition="tc",
+                    polarity="positive",
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                graph.obligations[0],
+                CoverageObligation(
+                    obligation_id="OBL-NAME-VALID",
+                    property_id="PROP-NAME-VALID",
+                    atom_id="ATOM-NAME-VALID",
+                    coverage_variant="allowed-class",
+                    condition_key="always",
+                    atomic_statement="Поле «Имя» принимает значение `Иван`.",
+                    observable_oracle="В поле «Имя» отображается значение `Иван`.",
+                    coverage_status="testable",
+                    requirement_codes=("BSR 2",),
+                    gap_id="",
+                    calibration_status="not-required",
+                    validation_trigger="Ввести `Иван` в поле «Имя».",
+                    cleanup_strategy="",
+                    source_oracle_id="",
+                    fixture_values=("Иван",),
+                    calibration_question="",
+                ),
+            ),
+        )
+
+        case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
+
+        self.assertIn("`Иван`", case.test_data[0])
+        self.assertNotIn("`Тест`", case.test_data[0])
+        self.assertIn("`Иван`", case.steps[0])
+
     def test_input_action_without_target_gets_typed_subject_wrapper(self) -> None:
         graph = _graph(
             kind="source-format",
@@ -479,6 +535,44 @@ class TestDesignTests(unittest.TestCase):
             case.steps,
         )
         self.assertNotIn("Перевести фокус", case.steps[0])
+
+    def test_default_with_cursor_oracle_clicks_field_before_observation(self) -> None:
+        graph = _graph(
+            kind="default",
+            fixtures=("+7 (___) ___-__-__",),
+            trigger="",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement=(
+                        "Для поля «Телефон» по умолчанию отображается шаблон; "
+                        "при нажатии на поле курсор отображается внутри скобок."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    atomic_statement=(
+                        "Для поля «Телефон» по умолчанию отображается шаблон; "
+                        "при нажатии на поле курсор отображается внутри скобок."
+                    ),
+                    observable_oracle=(
+                        "Отображается шаблон `+7 (___) ___-__-__`, курсор расположен внутри скобок."
+                    ),
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "Телефон"})
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        self.assertEqual("Нажать на «Телефон».", case.steps[0])
+        self.assertIn("курсор расположен внутри скобок", case.steps[1])
 
     def test_default_with_interaction_trigger_is_blocked_as_contract_drift(self) -> None:
         plan = build_test_design_plan(
@@ -796,10 +890,73 @@ class TestDesignTests(unittest.TestCase):
             context=_context(),
         )
 
-        data = plan.deterministic_cases[0].test_data[0]
+        case = plan.deterministic_cases[0]
+        data = case.test_data[0]
         self.assertIn("`Друг`", data)
         self.assertIn("`Коллега`", data)
         self.assertIn("`Родственник`", data)
+        self.assertIn("`Друг`", case.expected_result)
+        self.assertIn("`Коллега`", case.expected_result)
+        self.assertIn("`Родственник`", case.expected_result)
+
+    def test_source_requiredness_materializes_empty_value_and_validation_action(self) -> None:
+        graph = _graph(
+            kind="source-requiredness",
+            fixtures=(),
+            trigger="Проверить обязательность поля «Имя».",
+        )
+        graph = replace(
+            graph,
+            properties=(replace(graph.properties[0], polarity="positive"), *graph.properties[1:]),
+            obligations=(replace(graph.obligations[0], coverage_variant="required"),),
+        )
+
+        case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
+
+        self.assertEqual("негативный", case.case_type)
+        self.assertIn("оставить пустым", case.test_data[0])
+        self.assertEqual(
+            (
+                "Оставить поле «Имя» пустым.",
+                "Проверить обязательность поля «Имя».",
+            ),
+            case.steps,
+        )
+
+    def test_phone_exact_length_case_materializes_negative_classes(self) -> None:
+        graph = _graph(kind="positive-input", fixtures=("9991234567",))
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement=(
+                        "Поле «Телефон» допускает только 10 числовых символов."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    observable_oracle="Допускаются только 10 числовых символов.",
+                    validation_trigger="Ввести номер телефона.",
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "Телефон"})
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        joined_data = "\n".join(case.test_data)
+        joined_steps = "\n".join(case.steps)
+        self.assertIn("9991234567", joined_data)
+        self.assertIn("999123456", joined_data)
+        self.assertIn("99912345678", joined_data)
+        self.assertIn("99912A4567", joined_data)
+        self.assertIn("999123456", joined_steps)
+        self.assertIn("99912345678", joined_steps)
+        self.assertIn("99912A4567", joined_steps)
 
     def test_requiredness_requires_explicit_trigger(self) -> None:
         plan = build_test_design_plan(

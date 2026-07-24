@@ -44,10 +44,13 @@ _HIDDEN_STATE = re.compile(
 )
 _BEFORE_TRANSITION = re.compile(r"\b(?:до|перед)\b", re.IGNORECASE)
 _DISPLAYED_STATE = re.compile(r"\bотображ\w*\b", re.IGNORECASE)
+_DEFAULT_STATE = re.compile(r"\bпо\s+умолчанию\b", re.IGNORECASE)
+_ALWAYS_INVARIANT = re.compile(r"\bвсегда\b", re.IGNORECASE)
 _OPEN_DISPLAYED_ACTION = re.compile(
     r"^открыть\s+(?:уже\s+)?отображаем\w*\b",
     re.IGNORECASE,
 )
+_OPEN_STATE_ACTION = re.compile(r"^открыть\s+состояние\b", re.IGNORECASE)
 _POST_HIDDEN_TRANSITION = re.compile(
     r"\s+(?:и|,)\s+(?:затем\s+)?(?:отображ|появ)\w*\b",
     re.IGNORECASE,
@@ -719,7 +722,91 @@ def _selection_setup_from_condition(value: str) -> str:
 
 
 def _condition_needs_repeater_row(value: str) -> bool:
+    if _DEFAULT_STATE.search(value) or _HIDDEN_STATE.search(value):
+        return False
+    if _DISPLAYED_STATE.search(value) and _BLOCK_CONTEXT.search(value):
+        return True
     return _REPEATER_ROW_CONTEXT.search(value) is not None
+
+
+def _looks_like_generic_fixture(value: str) -> bool:
+    return _normalized_text(value) in {"тест", "тестовое значение"}
+
+
+def _subject_fixture_values(
+    graph: CoverageGraph,
+    properties: Mapping[str, CoverageProperty],
+) -> dict[str, tuple[str, ...]]:
+    result: dict[str, list[str]] = {}
+    for obligation in graph.obligations:
+        prop = properties.get(obligation.property_id)
+        if prop is None:
+            continue
+        for value in obligation.fixture_values:
+            item = value.strip()
+            if not item or _looks_like_generic_fixture(item):
+                continue
+            result.setdefault(prop.subject_key, [])
+            if item not in result[prop.subject_key]:
+                result[prop.subject_key].append(item)
+    return {key: tuple(values) for key, values in result.items()}
+
+
+def _editability_fixture_values(
+    *,
+    prop: CoverageProperty,
+    obligation: CoverageObligation,
+    subject_fixture_values: Mapping[str, tuple[str, ...]],
+) -> tuple[str, ...]:
+    related = subject_fixture_values.get(prop.subject_key, ())
+    if related:
+        return related[:2]
+    return tuple(
+        value
+        for value in obligation.fixture_values
+        if value.strip() and not _looks_like_generic_fixture(value)
+    )[:2]
+
+
+def _source_input_action_with_value(
+    *,
+    kind: str,
+    action: str,
+    label: str,
+    value: str,
+) -> str:
+    bound_action = _bind_input_action(kind=kind, action=action, label=label)
+    return f"{bound_action.rstrip('. ')}; использовать значение `{value}`."
+
+
+def _repeater_navigation_from_context(context: DesignContext) -> tuple[str, ...]:
+    for value in context.condition_preconditions.values():
+        navigation = _navigation_setup_from_source(value)
+        if any(_BLOCK_CONTEXT.search(item) for item in navigation):
+            return navigation
+    return ()
+
+
+def _requires_phone_exact_length_negatives(
+    *,
+    label: str,
+    obligation: CoverageObligation,
+) -> bool:
+    text = _normalized_text(
+        " ".join((label, obligation.atomic_statement, obligation.observable_oracle))
+    )
+    return "телефон" in text and "10" in text and "числов" in text
+
+
+def _requires_text_hyphen_negatives(obligation: CoverageObligation) -> bool:
+    text = _normalized_text(
+        " ".join((obligation.atomic_statement, obligation.observable_oracle))
+    )
+    return "только" in text and "дефис" in text
+
+
+def _future_date_fixture() -> str:
+    return "31.12.2099"
 
 
 def runtime_preconditions_for_binding(
@@ -757,6 +844,8 @@ def runtime_preconditions_for_binding(
     if condition:
         selected_value_setup = _selection_setup_from_condition(condition)
         if selected_value_setup:
+            if include_repeater_reveal and repeater_add_action.strip():
+                actions.append(repeater_add_action.strip())
             actions.append(selected_value_setup)
         if (
             include_repeater_reveal
@@ -963,6 +1052,7 @@ def _materialize(
     prop: CoverageProperty,
     obligation: CoverageObligation,
     context: DesignContext,
+    subject_fixture_values: Mapping[str, tuple[str, ...]],
     invariant_transition: _InvariantTransition | None = None,
     repeater_support: _RepeaterMutationSupport | None = None,
 ) -> TestCaseDesign | WriterCard | BlockedCard:
@@ -1028,6 +1118,7 @@ def _materialize(
             repeater_add_action=repeater_add_action,
             include_repeater_reveal=(
                 (kind, obligation.coverage_variant) not in _REPEATER_MUTATION_CONTRACTS
+                and obligation.coverage_variant != "default-hidden"
             ),
         )
     except DesignError as exc:
@@ -1042,6 +1133,16 @@ def _materialize(
         if runtime_setup == ("Не требуются.",)
         else list(runtime_setup)
     )
+    if (
+        repeater_support is not None
+        and repeater_add_action.strip()
+        and repeater_add_action.strip() in preconditions
+        and not any(_BLOCK_CONTEXT.search(item) for item in preconditions)
+    ):
+        preconditions = [
+            *_repeater_navigation_from_context(context),
+            *preconditions,
+        ]
     fixtures = obligation.fixture_values
     title = ""
     case_type = "позитивный"
@@ -1090,6 +1191,73 @@ def _materialize(
                     action=delete_action,
                 ),
             )
+    elif kind in {"source-requiredness", "source-optionalness"}:
+        if not obligation.validation_trigger.strip():
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason=f"{kind} requires an explicit validation trigger",
+            )
+        is_required = kind == "source-requiredness"
+        case_type = "негативный" if is_required else "позитивный"
+        title = obligation.atomic_statement.rstrip(". ")
+        test_data = [f"{label}: оставить пустым."]
+        steps = _unique_steps(
+            f"Оставить {label} пустым.",
+            obligation.validation_trigger,
+        )
+    elif kind == "source-editability":
+        if not obligation.validation_trigger.strip():
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason="source-editability requires an exact action contract",
+            )
+        values = _editability_fixture_values(
+            prop=prop,
+            obligation=obligation,
+            subject_fixture_values=subject_fixture_values,
+        )
+        if not values:
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason="source-editability requires a valid same-subject fixture value",
+            )
+        title = obligation.atomic_statement.rstrip(". ")
+        case_type = "негативный" if prop.polarity == "negative" else "позитивный"
+        test_data = [f"Тестовое значение: `{values[0]}`."]
+        steps = _unique_steps(
+            _source_input_action_with_value(
+                kind=kind,
+                action=obligation.validation_trigger,
+                label=label,
+                value=values[0],
+            )
+        )
+    elif kind == "source-date-boundary" and obligation.coverage_variant == "not-future":
+        if not obligation.validation_trigger.strip():
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason="source-date-boundary requires an exact action contract",
+            )
+        future_value = _future_date_fixture()
+        title = obligation.atomic_statement.rstrip(". ")
+        case_type = "негативный"
+        test_data = [f"Недопустимое значение даты больше текущей даты: `{future_value}`."]
+        steps = _unique_steps(
+            _source_input_action_with_value(
+                kind=kind,
+                action=obligation.validation_trigger,
+                label=label,
+                value=future_value,
+            )
+        )
     elif kind.startswith("source-"):
         if not obligation.validation_trigger.strip():
             return _blocked_card(
@@ -1118,8 +1286,24 @@ def _materialize(
     elif kind == "visibility":
         title = f"Отображение: {_display_subject(label)}"
         fallback = f"Проверить отображение {label}."
-        if obligation.coverage_variant == "always-visible":
-            if invariant_transition is None:
+        if obligation.coverage_variant == "always-visible" or _ALWAYS_INVARIANT.search(
+            obligation.atomic_statement
+        ):
+            transition_obligation = (
+                invariant_transition.obligation
+                if invariant_transition is not None
+                else repeater_support.add_obligation
+                if repeater_support is not None
+                else None
+            )
+            transition_cleanup = (
+                invariant_transition.mutation_support.delete_obligation.validation_trigger
+                if invariant_transition is not None
+                else repeater_support.delete_obligation.validation_trigger
+                if repeater_support is not None
+                else ""
+            )
+            if transition_obligation is None:
                 return _blocked_card(
                     case=case,
                     prop=prop,
@@ -1130,7 +1314,7 @@ def _materialize(
                         "calibration/gap instead of testing one state"
                     ),
                 )
-            transition_action = invariant_transition.obligation.validation_trigger.strip()
+            transition_action = transition_obligation.validation_trigger.strip()
             if not transition_action:  # pragma: no cover - selector owns this
                 return _blocked_card(
                     case=case,
@@ -1155,9 +1339,7 @@ def _materialize(
             postconditions_override = (
                 _source_row_action(
                     row="добавленной тестовой строки",
-                    action=(
-                        invariant_transition.mutation_support.delete_obligation.validation_trigger
-                    ),
+                    action=transition_cleanup,
                 ),
             )
         else:
@@ -1175,9 +1357,12 @@ def _materialize(
             )
             trigger = obligation.validation_trigger or fallback
             if (
-                obligation.coverage_variant == "conditional-visibility"
+                obligation.coverage_variant in {"conditional-visibility", "visible"}
                 and _DISPLAYED_STATE.search(condition)
-                and _OPEN_DISPLAYED_ACTION.search(trigger.strip())
+                and (
+                    _OPEN_DISPLAYED_ACTION.search(trigger.strip())
+                    or _OPEN_STATE_ACTION.search(trigger.strip())
+                )
             ):
                 # The exact condition already establishes the displayed container.
                 # Do not turn a generated "open displayed ..." phrase into product
@@ -1207,19 +1392,30 @@ def _materialize(
             )
         title = f"Значение по умолчанию: {_display_subject(label)}"
         test_data = [f"Ожидаемое значение: `{fixtures[0]}`."]
-        # A default is the value present before the user changes the control.
-        # Observe the exact accepted oracle immediately; a focus/click trigger
-        # can itself mutate lazy masks, placeholders, or other initial UI state.
-        steps = _unique_steps(
-            _source_observation_step(
-                prefix=(
-                    f"Не переводя фокус на {_display_subject(label)} "
-                    "и не взаимодействуя с ним, проверить "
-                    "первоначальное значение"
+        if "курсор" in _normalized_text(
+            " ".join((obligation.atomic_statement, expected_result))
+        ):
+            steps = _unique_steps(
+                f"Нажать на {_display_subject(label)}.",
+                _source_observation_step(
+                    prefix="После нажатия проверить наблюдаемое состояние",
+                    source_clause=expected_result,
                 ),
-                source_clause=expected_result,
             )
-        )
+        else:
+            # A default is the value present before the user changes the control.
+            # Observe the exact accepted oracle immediately; a focus/click trigger
+            # can itself mutate lazy masks, placeholders, or other initial UI state.
+            steps = _unique_steps(
+                _source_observation_step(
+                    prefix=(
+                        f"Не переводя фокус на {_display_subject(label)} "
+                        "и не взаимодействуя с ним, проверить "
+                        "первоначальное значение"
+                    ),
+                    source_clause=expected_result,
+                )
+            )
     elif kind == "editability":
         if len(fixtures) != 2 or fixtures[0] == fixtures[1]:
             return _blocked_card(
@@ -1254,6 +1450,11 @@ def _materialize(
             )
         title = f"Состав списка: {_display_subject(label)}"
         test_data = ["Полный перечень: " + ", ".join(f"`{item}`" for item in fixtures) + "."]
+        expected_result = (
+            "Список содержит полный перечень значений: "
+            + ", ".join(f"`{item}`" for item in fixtures)
+            + "."
+        )
         fallback = f"Открыть список {label}."
         steps = _unique_steps(obligation.validation_trigger or fallback)
     elif kind == "positive-input":
@@ -1267,13 +1468,41 @@ def _materialize(
         title = f"Ввод допустимого значения: {_display_subject(label)}"
         test_data = [f"Допустимое значение: `{fixtures[0]}`."]
         fallback = f"Ввести `{fixtures[0]}` в {label}."
-        steps = _unique_steps(
-            _bind_input_action(
-                kind=kind,
-                action=obligation.validation_trigger or fallback,
-                label=label,
+        if _requires_phone_exact_length_negatives(
+            label=label,
+            obligation=obligation,
+        ):
+            test_data = [
+                f"Допустимое значение: `{fixtures[0]}`.",
+                "Недопустимое значение короче 10 цифр: `999123456`.",
+                "Недопустимое значение длиннее 10 цифр: `99912345678`.",
+                "Недопустимое нечисловое значение: `99912A4567`.",
+            ]
+            steps = _unique_steps(
+                f"Ввести `{fixtures[0]}` в {label}.",
+                "Ввести `999123456` в {label}.".format(label=label),
+                "Ввести `99912345678` в {label}.".format(label=label),
+                "Ввести `99912A4567` в {label}.".format(label=label),
             )
-        )
+        elif _requires_text_hyphen_negatives(obligation):
+            test_data = [
+                f"Допустимое значение: `{fixtures[0]}`.",
+                f"Недопустимое значение с цифрой: `{fixtures[0]}1`.",
+                f"Недопустимое значение со спецсимволом: `{fixtures[0]}@`.",
+            ]
+            steps = _unique_steps(
+                f"Ввести `{fixtures[0]}` в {label}.",
+                f"Ввести `{fixtures[0]}1` в {label}.",
+                f"Ввести `{fixtures[0]}@` в {label}.",
+            )
+        else:
+            steps = _unique_steps(
+                _bind_input_action(
+                    kind=kind,
+                    action=obligation.validation_trigger or fallback,
+                    label=label,
+                )
+            )
     elif kind in {"requiredness", "optionalness"}:
         if not obligation.validation_trigger.strip():
             return _blocked_card(
@@ -1391,6 +1620,7 @@ def build_test_design_plan(
         context=context,
         executable_obligations=executable_obligations,
     )
+    fixture_values_by_subject = _subject_fixture_values(graph, properties)
     default_repeater_support = (
         sorted(
             {
@@ -1444,6 +1674,7 @@ def build_test_design_plan(
             prop=prop,
             obligation=obligation,
             context=context,
+            subject_fixture_values=fixture_values_by_subject,
             invariant_transition=(
                 invariant_transitions.get(prop.subject_key, [None])[0]
                 if obligation.coverage_variant == "always-visible"
