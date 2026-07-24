@@ -466,8 +466,9 @@ def _traceability(
     prop: CoverageProperty,
     obligation: CoverageObligation,
     *,
-    invariant_transition: _InvariantTransition | None = None,
-    repeater_support: _RepeaterMutationSupport | None = None,
+    support_obligations: Sequence[
+        tuple[CoverageProperty, CoverageObligation]
+    ] = (),
 ) -> tuple[str, ...]:
     values: list[str] = []
 
@@ -487,22 +488,73 @@ def _traceability(
             values.append(source_obligation.source_oracle_id)
 
     append_projection(prop, obligation)
+    for support_prop, support_obligation in support_obligations:
+        append_projection(support_prop, support_obligation)
+    return tuple(dict.fromkeys(item for item in values if item))
+
+
+def _support_fragments(obligation: CoverageObligation) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            item.strip()
+            for item in (obligation.validation_trigger, obligation.cleanup_strategy)
+            if item.strip()
+        )
+    )
+
+
+def _materialized_support_obligations(
+    *,
+    primary_obligation: CoverageObligation,
+    materialized_items: Sequence[str],
+    invariant_transition: _InvariantTransition | None = None,
+    repeater_support: _RepeaterMutationSupport | None = None,
+) -> tuple[tuple[CoverageProperty, CoverageObligation], ...]:
+    """Return only sibling obligations literally used by this case design.
+
+    Reviewer evidence requires role-tagged support chains only for sibling
+    obligations materialized in setup/action/cleanup.  Tracing every available
+    repeater sibling creates false traceability when a reusable add/delete pair
+    exists in the graph but the current case did not use that exact source
+    action.
+    """
+
+    support: list[tuple[CoverageProperty, CoverageObligation]] = []
+    seen: set[str] = {primary_obligation.obligation_id}
+    rendered_items = tuple(item for item in materialized_items if item.strip())
+
+    def append_if_materialized(
+        source_prop: CoverageProperty,
+        source_obligation: CoverageObligation,
+    ) -> None:
+        if source_obligation.obligation_id in seen:
+            return
+        fragments = _support_fragments(source_obligation)
+        if not fragments:
+            return
+        if not any(
+            fragment in item for fragment in fragments for item in rendered_items
+        ):
+            return
+        seen.add(source_obligation.obligation_id)
+        support.append((source_prop, source_obligation))
+
     if invariant_transition is not None:
-        append_projection(
+        append_if_materialized(
             invariant_transition.prop,
             invariant_transition.obligation,
         )
         repeater_support = invariant_transition.mutation_support
     if repeater_support is not None:
-        append_projection(
+        append_if_materialized(
             repeater_support.add_prop,
             repeater_support.add_obligation,
         )
-        append_projection(
+        append_if_materialized(
             repeater_support.delete_prop,
             repeater_support.delete_obligation,
         )
-    return tuple(dict.fromkeys(item for item in values if item))
+    return tuple(support)
 
 
 def _writer_card(
@@ -1281,6 +1333,17 @@ def _materialize(
             label=label,
             fixtures=fixtures,
         )
+    rendered_preconditions = tuple(preconditions or ["Не требуются."])
+    support_obligations = _materialized_support_obligations(
+        primary_obligation=obligation,
+        materialized_items=(
+            *rendered_preconditions,
+            *steps,
+            *postconditions,
+        ),
+        invariant_transition=invariant_transition,
+        repeater_support=repeater_support,
+    )
     return TestCaseDesign(
         case_key=case.case_key,
         tc_id=case.tc_id,
@@ -1292,10 +1355,9 @@ def _materialize(
         traceability=_traceability(
             prop,
             obligation,
-            invariant_transition=invariant_transition,
-            repeater_support=repeater_support,
+            support_obligations=support_obligations,
         ),
-        preconditions=tuple(preconditions or ["Не требуются."]),
+        preconditions=rendered_preconditions,
         test_data=tuple(test_data or ["Не требуются."]),
         steps=tuple(steps),
         expected_result=expected_result,

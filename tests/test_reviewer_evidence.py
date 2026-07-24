@@ -12,6 +12,7 @@ from docx import Document
 from PIL import Image
 
 from test_case_agent.coverage_graph import (
+    CoverageCase,
     CoverageGraph,
     CoverageObligation,
     CoverageProperty,
@@ -1453,6 +1454,95 @@ class ReviewerEvidenceTests(unittest.TestCase):
             all(item["obligation_id"] in next(
                 case.traceability for case in cases if case.case_key == item["case_key"]
             ) for item in mapping)
+        )
+
+    def test_unmaterialized_repeater_sibling_is_not_traced_as_design_support(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        graph = replace(
+            graph,
+            properties=(
+                graph.properties[0],
+                replace(
+                    graph.properties[1],
+                    canonical_statement="Кнопка «Добавить» добавляет новую строку.",
+                ),
+                graph.properties[2],
+                CoverageProperty(
+                    property_id="PROP-ADD-FULL",
+                    assertion_id="ASSERT-ADD-FULL",
+                    property_key="customer-name:add-full-row",
+                    subject_key="customer-name",
+                    property_kind="source-add-row",
+                    source_row_id="SRC-ADD-FULL",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[4]",
+                    source_text_sha256="7" * 64,
+                    canonical_statement=(
+                        "Кнопка «Добавить» через виджет «+» добавляет новую "
+                        "полную строку и отображает элемент «Корзина»."
+                    ),
+                    requirement_codes=("BSR 4",),
+                    disposition="tc",
+                    polarity="positive",
+                ),
+                *graph.properties[3:],
+            ),
+            obligations=(
+                graph.obligations[0],
+                replace(
+                    graph.obligations[1],
+                    observable_oracle="Новая строка добавлена.",
+                ),
+                graph.obligations[2],
+                CoverageObligation(
+                    obligation_id="OBL-ADD-FULL",
+                    property_id="PROP-ADD-FULL",
+                    atom_id="ATOM-ADD-FULL",
+                    coverage_variant="repeater-add",
+                    condition_key="always",
+                    atomic_statement="Нажатие виджета «+» добавляет полную строку.",
+                    observable_oracle=(
+                        "Появляется новая полная строка и отображается элемент «Корзина»."
+                    ),
+                    coverage_status="testable",
+                    requirement_codes=("BSR 4",),
+                    gap_id="",
+                    calibration_status="not-required",
+                    validation_trigger="Нажать виджет «+».",
+                    cleanup_strategy="",
+                    source_oracle_id="",
+                    fixture_values=(),
+                    calibration_question="",
+                ),
+            ),
+            cases=(
+                *graph.cases,
+                CoverageCase(
+                    case_key="customer|customer-name|source-add-row|repeater-add|full",
+                    tc_id="TC-CUST-FULLADD01",
+                    obligation_ids=("OBL-ADD-FULL",),
+                    status="executable",
+                ),
+            ),
+        )
+
+        cases = build_test_design_plan(graph, context=context).deterministic_cases
+        mapping = build_design_support_mapping(graph, cases)
+
+        primary_add = next(
+            item for item in cases if item.tc_id == "TC-CUST-ADD0000001"
+        )
+        self.assertNotIn("OBL-ADD-FULL", primary_add.traceability)
+        self.assertEqual(
+            [("cleanup", "OBL-DELETE")],
+            [
+                (item["support_role"], item["obligation_id"])
+                for item in mapping
+                if item["case_key"]
+                == "customer|customer-name|source-add-row|repeater-add|always"
+            ],
         )
 
     def test_scope_gap_ids_must_be_materialized_in_registered_artifact(self) -> None:
