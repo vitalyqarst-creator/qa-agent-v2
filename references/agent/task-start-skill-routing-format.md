@@ -274,12 +274,12 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     },
     {
       "id": "iteration.lean_v2",
-      "task_type": "Run one deterministic-first writer/reviewer shadow iteration from compiler-v3 obligations and an independently accepted v4 source contract.",
+      "task_type": "Run one source-qualified writer/reviewer shadow iteration from compiler-v3 obligations and an independently accepted v4 source contract.",
       "skill_chain": ["ft-test-case-iteration"],
       "instruction_scenarios": [
         {"skill": "ft-test-case-iteration", "scenario": "iteration.lean_v2"}
       ],
-      "verification_gates": ["selected registry scope recompiles", "exact DOCX/XHTML/PDF/support/mockup set and accepted source receipt validate", "simple cards materialize deterministically", "writer can select only registered identifiers for complex cards", "production gate and independent reviewer pass", "canonical remains unchanged"]
+      "verification_gates": ["selected registry scope recompiles", "exact DOCX/XHTML/PDF/support/mockup set and accepted source receipt validate", "model-runtime writer cannot change runner-owned identity/traceability", "mockup visible labels are enforced for runtime prose", "production gate and independent reviewer pass", "canonical remains unchanged"]
     },
     {
       "id": "iteration.full_loop",
@@ -349,7 +349,7 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "expected_instruction_scenarios": ["iteration.deterministic_production"]
     },
     {
-      "prompt": "Запусти короткую deterministic-first итерацию по принятому source contract и compiler-v3 obligations без benchmark и старых тест-кейсов.",
+      "prompt": "Запусти короткую source-qualified итерацию по принятому source contract и compiler-v3 obligations без benchmark и старых тест-кейсов.",
       "expected_route_id": "iteration.lean_v2",
       "expected_skill_chain": ["ft-test-case-iteration"],
       "expected_instruction_scenarios": ["iteration.lean_v2"]

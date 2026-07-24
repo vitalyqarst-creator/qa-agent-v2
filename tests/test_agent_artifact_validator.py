@@ -13048,8 +13048,13 @@ class AgentArtifactValidatorTests(unittest.TestCase):
             result = self.run_validator("--root", str(fixture_root), "--json")
 
         payload = json.loads(result.stdout)
-        finding_ids = {finding["id"] for finding in payload["findings"]}
+        findings = {finding["id"]: finding for finding in payload["findings"]}
+        finding_ids = set(findings)
         self.assertIn("test-case-mockup-visible-label-drift", finding_ids)
+        self.assertEqual(
+            "error",
+            findings["test-case-mockup-visible-label-drift"]["severity"],
+        )
 
     def test_test_case_runtime_text_with_exact_mockup_visible_action_alias_passes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

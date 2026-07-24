@@ -12439,7 +12439,7 @@ def mockup_visible_label_aliases_from_inventory(content: str) -> list[tuple[str,
                 continue
             if item_index >= 0 and item_index < len(row):
                 item_type = row[item_index].strip().strip("`").casefold()
-                if item_type not in {"visible_actions", "visible_fields", "visible_blocks"}:
+                if item_type != "visible_actions":
                     continue
             label_from_mockup = row[label_index].strip().strip("`")
             canonical_name = row[canonical_index].strip().strip("`")
@@ -13822,7 +13822,7 @@ def validate_test_case_quality_smells(
         findings.append(
             Finding(
                 id="test-case-mockup-visible-label-drift",
-                severity="warning",
+                severity="error",
                 category="test-case-format",
                 title="Test cases do not use exact visible labels from mockup inventory",
                 details=(

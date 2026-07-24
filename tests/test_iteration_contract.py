@@ -10,11 +10,14 @@ from test_case_agent.iteration_contract import (
     IterationContractError,
     REVIEWER_FALSIFICATION_PROBES,
     build_reviewer_request,
+    build_runtime_writer_request,
     build_writer_request,
     reviewer_acceptance_contract,
     reviewer_prompt_instruction,
     reviewer_response_schema,
+    runtime_writer_response_schema,
     validate_reviewer_response,
+    validate_runtime_writer_response,
     validate_suite,
     validate_writer_response,
 )
@@ -46,6 +49,23 @@ def _writer_case(plan, **changes):  # type: ignore[no-untyped-def]
         "fixture_ids": [item.reference_id for item in card.fixture_references],
         "data_ids": [item.reference_id for item in card.data_references],
         "step_ids": [item.reference_id for item in card.action_references],
+    }
+    payload.update(changes)
+    return payload
+
+
+def _runtime_writer_case(seed, **changes):  # type: ignore[no-untyped-def]
+    payload = {
+        "case_key": seed.case_key,
+        "tc_id": seed.tc_id,
+        "title": f"{seed.title} — модельная редакция",
+        "case_type": seed.case_type,
+        "preconditions": list(seed.preconditions),
+        "test_data": list(seed.test_data),
+        "steps": list(seed.steps),
+        "expected_result": seed.expected_result,
+        "postconditions": list(seed.postconditions),
+        "calibration_question": seed.calibration_question,
     }
     payload.update(changes)
     return payload
@@ -381,6 +401,166 @@ class IterationContractTests(unittest.TestCase):
             ("Добавить удалённую тестовую строку повторно.",),
         )
         self.assertEqual(designs[0].tc_id, graph.cases[0].tc_id)
+
+    def test_runtime_writer_request_uses_model_prose_contract_and_mockup_aliases(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+
+        request = build_runtime_writer_request(
+            graph,
+            plan,
+            mockup_label_aliases=(
+                {
+                    "canonical_ft_name": "Добавить контактное лицо",
+                    "label_from_mockup": "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+                },
+            ),
+        )
+
+        self.assertEqual("model-runtime-prose", request["writer_mode"])
+        self.assertEqual(1, len(request["cases"]))
+        self.assertTrue(request["constraints"]["model_authors_runtime_prose"])
+        self.assertTrue(request["constraints"]["use_label_from_mockup_for_runtime_text"])
+        self.assertFalse(request["constraints"]["old_test_cases_available"])
+        self.assertEqual(
+            "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+            request["mockup_label_aliases"][0]["label_from_mockup"],
+        )
+
+    def test_runtime_writer_schema_accepts_exact_structured_prose_payload(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        schema = runtime_writer_response_schema([seed.case_key], graph.digest)
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [_runtime_writer_case(seed)],
+            "unresolved": [],
+        }
+
+        validate_openai_strict_output_instance(payload, schema)
+
+    def test_runtime_writer_cannot_change_tc_id_or_omit_cases(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        drift = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [_runtime_writer_case(seed, tc_id="TC-DRIFT")],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(IterationContractError, "TC-ID drift"):
+            validate_runtime_writer_response(
+                drift,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+        omitted = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [],
+            "unresolved": [],
+        }
+        with self.assertRaisesRegex(IterationContractError, "omitted cases"):
+            validate_runtime_writer_response(
+                omitted,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_returns_model_prose_but_runner_preserves_identity_and_traceability(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    title="Модельно написанный кейс",
+                    steps=["Ввести `Иван` в поле «Имя»."],
+                    expected_result="Поле «Имя» отображает значение `Иван`.",
+                )
+            ],
+            "unresolved": [],
+        }
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(seed.case_key, designs[0].case_key)
+        self.assertEqual(seed.tc_id, designs[0].tc_id)
+        self.assertEqual(seed.traceability, designs[0].traceability)
+        self.assertEqual("Модельно написанный кейс", designs[0].title)
+        self.assertEqual(("Ввести `Иван` в поле «Имя».",), designs[0].steps)
+
+    def test_runtime_writer_blocks_stale_label_when_mockup_alias_is_declared(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    steps=["Нажать кнопку «Добавить контактное лицо»."],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(IterationContractError, "mockup visible label drift"):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+                mockup_label_aliases=(
+                    {
+                        "canonical_ft_name": "Добавить контактное лицо",
+                        "label_from_mockup": "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+                    },
+                ),
+            )
+
+        payload["cases"][0]["steps"] = [
+            "Нажать кнопку «+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО»."
+        ]
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+            mockup_label_aliases=(
+                {
+                    "canonical_ft_name": "Добавить контактное лицо",
+                    "label_from_mockup": "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+                },
+            ),
+        )
+        self.assertEqual((), unresolved)
+        self.assertEqual(
+            ("Нажать кнопку «+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО».",),
+            designs[0].steps,
+        )
 
     def test_writer_merge_revalidates_context_against_graph(self) -> None:
         graph = _writer_graph()

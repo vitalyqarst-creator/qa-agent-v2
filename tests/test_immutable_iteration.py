@@ -142,33 +142,60 @@ class FixtureBackend:
         request = _request(prompt)
         if stage == "writer":
             cases = []
-            for card in request["cards"]:
-                cases.append(
-                    {
-                        "case_key": card["case_key"],
-                        "case_type": "позитивный",
-                        "subject_id": card["subject_id"],
-                        "expected_result_id": card["expected_result_id"],
-                        "fixture_ids": [
-                            item["reference_id"]
-                            for item in card["fixture_references"]
-                        ],
-                        "data_ids": [
-                            item["reference_id"]
-                            for item in card["data_references"]
-                        ],
-                        "step_ids": [
-                            item["reference_id"]
-                            for item in card["action_references"]
-                        ],
-                    }
-                )
-            payload = {
-                "schema_version": 1,
-                "graph_digest": request["graph_digest"],
-                "cases": cases,
-                "unresolved": [],
-            }
+            if request.get("writer_mode") == "model-runtime-prose":
+                for seed in request["cases"]:
+                    runtime = seed["seed_runtime"]
+                    cases.append(
+                        {
+                            "case_key": seed["case_key"],
+                            "tc_id": seed["tc_id"],
+                            "title": f"{runtime['title']} — уточнённый сценарий",
+                            "case_type": seed["case_type"],
+                            "preconditions": list(runtime["preconditions"]),
+                            "test_data": list(runtime["test_data"]),
+                            "steps": list(runtime["steps"]),
+                            "expected_result": runtime["expected_result"],
+                            "postconditions": list(runtime["postconditions"]),
+                            "calibration_question": runtime[
+                                "calibration_question"
+                            ],
+                        }
+                    )
+                payload = {
+                    "schema_version": 1,
+                    "writer_mode": "model-runtime-prose",
+                    "graph_digest": request["graph_digest"],
+                    "cases": cases,
+                    "unresolved": [],
+                }
+            else:
+                for card in request["cards"]:
+                    cases.append(
+                        {
+                            "case_key": card["case_key"],
+                            "case_type": "позитивный",
+                            "subject_id": card["subject_id"],
+                            "expected_result_id": card["expected_result_id"],
+                            "fixture_ids": [
+                                item["reference_id"]
+                                for item in card["fixture_references"]
+                            ],
+                            "data_ids": [
+                                item["reference_id"]
+                                for item in card["data_references"]
+                            ],
+                            "step_ids": [
+                                item["reference_id"]
+                                for item in card["action_references"]
+                            ],
+                        }
+                    )
+                payload = {
+                    "schema_version": 1,
+                    "graph_digest": request["graph_digest"],
+                    "cases": cases,
+                    "unresolved": [],
+                }
         elif request["schema_version"] == 1:
             findings = []
             results = []
@@ -396,6 +423,81 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertEqual(
             "unavailable",
             summary["orchestration_token_usage"]["input_tokens"],
+        )
+
+    def test_model_runtime_prose_mode_calls_writer_for_deterministic_suite(self) -> None:
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-prose",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            mockup_label_aliases=(
+                {
+                    "canonical_ft_name": "Добавить контактное лицо",
+                    "label_from_mockup": "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+                },
+            ),
+        )
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(1, result.reviewer_model_calls)
+        summary = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertEqual("immutable-model-runtime-prose", summary["mode"])
+        self.assertEqual("model-runtime-prose", summary["writer_mode"])
+        writer_request = json.loads(
+            (result.output_dir / "writer-request.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("model-runtime-prose", writer_request["writer_mode"])
+        self.assertTrue(
+            writer_request["constraints"]["model_authors_runtime_prose"]
+        )
+        self.assertEqual(
+            "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+            writer_request["mockup_label_aliases"][0]["label_from_mockup"],
+        )
+        evidence = json.loads(
+            (result.output_dir / "evidence-access-report.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual("model-runtime-prose", evidence["writer_mode"])
+        self.assertTrue(evidence["writer_model_authors_runtime_prose"])
+        self.assertEqual(1, evidence["mockup_label_alias_count"])
+        text = result.draft_path.read_text(encoding="utf-8")
+        self.assertIn("— уточнённый сценарий", text)
+        self.assertIn(_graph().cases[0].tc_id, text)
+
+    def test_model_runtime_prose_changes_required_writes_revision_input(self) -> None:
+        backend = FixtureBackend(review_decision="changes-required")
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-revision",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_findings={"previous_attempt": "attempt-001"},
+        )
+
+        self.assertEqual("review-changes-required", result.status)
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        revision = json.loads(
+            (result.output_dir / "revision-input.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("model-runtime-prose", revision["writer_mode"])
+        self.assertEqual("changes-required", revision["reviewer_decision"])
+        self.assertEqual("start-new-immutable-attempt", revision["next_attempt_policy"])
+        self.assertFalse(revision["old_test_cases_available"])
+        self.assertEqual("revision_findings", revision["required_next_input"])
+        writer_request = json.loads(
+            (result.output_dir / "writer-request.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            {"previous_attempt": "attempt-001"},
+            writer_request["revision_findings"],
         )
 
     def test_calibration_candidate_is_successful_but_non_promotable(self) -> None:

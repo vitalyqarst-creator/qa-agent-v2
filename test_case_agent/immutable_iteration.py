@@ -18,11 +18,14 @@ from test_case_agent.iteration_contract import (
     IterationContractError,
     SuiteGateReport,
     build_reviewer_request,
+    build_runtime_writer_request,
     build_writer_request,
     request_sha256,
     reviewer_acceptance_contract,
     reviewer_prompt_instruction,
     reviewer_response_schema,
+    runtime_writer_response_schema,
+    validate_runtime_writer_response,
     validate_reviewer_response,
     validate_suite,
     validate_writer_response,
@@ -828,16 +831,23 @@ def run_immutable_iteration(
     reviewer_response: ResponseInput | None = None,
     reviewer_evidence_basis: ReviewerEvidenceBasis | None = None,
     backend: StageBackend | None = None,
+    writer_mode: str = "deterministic-first",
+    mockup_label_aliases: Sequence[Mapping[str, str]] = (),
+    revision_findings: Mapping[str, Any] | None = None,
 ) -> ImmutableIterationResult:
-    """Run one immutable deterministic-first shadow iteration.
+    """Run one immutable shadow iteration.
 
     The runner has no retry loop and no promotion path. It calls writer at most once
-    for non-deterministic cards and reviewer at most once after a green suite gate.
+    and reviewer at most once after a green suite gate.
     """
 
     repo_root = repo_root.resolve()
     if not repo_root.is_dir():
         raise ImmutableIterationError(f"repo_root is missing: {repo_root}")
+    if writer_mode not in {"deterministic-first", "model-runtime-prose"}:
+        raise ImmutableIterationError(
+            "writer_mode must be `deterministic-first` or `model-runtime-prose`"
+        )
     output_dir = _prepare_output_dir(output_dir, repo_root)
     timer = _PhaseTimer()
     active_backend = backend or CodexExecStageBackend(timeout_seconds=None)
@@ -976,7 +986,12 @@ def run_immutable_iteration(
         timing = timer.report()
         summary = {
             "schema_version": 1,
-            "mode": "immutable-deterministic-first",
+            "mode": (
+                "immutable-model-runtime-prose"
+                if writer_mode == "model-runtime-prose"
+                else "immutable-deterministic-first"
+            ),
+            "writer_mode": writer_mode,
             "status": status,
             "error": error,
             "graph_digest": graph.digest,
@@ -1114,6 +1129,7 @@ def run_immutable_iteration(
                 "command_budget": 0,
                 "writer_cards": len(plan.writer_cards),
                 "blocked_cards": len(plan.blocked_cards),
+                "writer_mode": writer_mode,
                 "writer_precomputed": writer_response is not None,
                 "reviewer_precomputed": reviewer_response is not None,
             }
@@ -1137,10 +1153,65 @@ def run_immutable_iteration(
                 error="protected inputs changed before model execution",
             )
 
-        writer_request = build_writer_request(graph, plan)
+        if writer_mode == "model-runtime-prose":
+            writer_request = build_runtime_writer_request(
+                graph,
+                plan,
+                mockup_label_aliases=mockup_label_aliases,
+                revision_findings=revision_findings,
+            )
+            evidence_access.update(
+                {
+                    "writer_context": "model-runtime-prose source-bound cases",
+                    "writer_model_authors_runtime_prose": True,
+                    "mockup_label_alias_count": len(mockup_label_aliases),
+                    "revision_findings_supplied": revision_findings is not None,
+                }
+            )
+            _write_json(output_dir / "evidence-access-report.json", evidence_access)
+        else:
+            writer_request = build_writer_request(graph, plan)
         _write_json(output_dir / "writer-request.json", writer_request)
         writer_cases: tuple[TestCaseDesign, ...] = ()
-        if plan.writer_cards:
+        if writer_mode == "model-runtime-prose":
+            with timer.phase("writer"):
+                schema = runtime_writer_response_schema(
+                    [item.case_key for item in plan.deterministic_cases],
+                    graph.digest,
+                )
+                payload, receipt, called_model = _run_stage(
+                    stage="writer",
+                    request=writer_request,
+                    schema=schema,
+                    output_dir=output_dir,
+                    repo_root=repo_root,
+                    backend=active_backend,
+                    precomputed=writer_response,
+                    on_model_call=record_writer_call,
+                )
+                if called_model != (writer_response is None):  # pragma: no cover
+                    raise ImmutableIterationError("writer call accounting mismatch")
+                model_receipts.append(receipt)
+                writer_cases, unresolved = validate_runtime_writer_response(
+                    payload,
+                    graph=graph,
+                    plan=plan,
+                    context=context,
+                    mockup_label_aliases=mockup_label_aliases,
+                )
+                if unresolved:
+                    _write_json(
+                        output_dir / "writer-unresolved.json",
+                        {"schema_version": 1, "cards": list(unresolved)},
+                    )
+            if _input_drift(protected):
+                return finish("blocked-input-drift")
+            if unresolved:
+                return finish(
+                    "blocked-writer-unresolved",
+                    error="runtime writer returned unresolved cases; no reviewer was run",
+                )
+        elif plan.writer_cards:
             with timer.phase("writer"):
                 schema = writer_response_schema(plan.writer_cards, graph.digest)
                 payload, receipt, called_model = _run_stage(
@@ -1184,7 +1255,11 @@ def run_immutable_iteration(
         with timer.phase("render-and-gate"):
             cases = tuple(
                 sorted(
-                    (*plan.deterministic_cases, *writer_cases),
+                    (
+                        writer_cases
+                        if writer_mode == "model-runtime-prose"
+                        else (*plan.deterministic_cases, *writer_cases)
+                    ),
                     key=lambda item: item.case_key,
                 )
             )
@@ -1329,6 +1404,21 @@ def run_immutable_iteration(
         if _input_drift(protected):
             return finish("blocked-input-drift")
         if not reviewer_accepted:
+            _write_json(
+                output_dir / "revision-input.json",
+                {
+                    "schema_version": 1,
+                    "graph_digest": graph.digest,
+                    "draft_sha256": gate.draft_sha256,
+                    "writer_mode": writer_mode,
+                    "source_attempt_dir": output_dir.relative_to(repo_root).as_posix(),
+                    "reviewer_decision": reviewer_decision,
+                    "reviewer_response": payload,
+                    "next_attempt_policy": "start-new-immutable-attempt",
+                    "old_test_cases_available": False,
+                    "required_next_input": "revision_findings",
+                },
+            )
             return finish(
                 f"review-{reviewer_decision}",
                 error="reviewer did not accept the gate-passed shadow draft",

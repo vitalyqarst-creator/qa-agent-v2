@@ -1,14 +1,14 @@
 ---
 name: ft-test-case-iteration
-description: Run one deterministic-first, source-qualified test-case iteration for an already selected FT package and confirmed scope through the public `ft-agent run` command.
+description: Run one source-qualified test-case iteration for an already selected FT package and confirmed scope through the public `ft-agent run` command.
 ---
 
 # FT Test Case Iteration
 
 Используй этот skill только после выбора FT-пакета и подтверждения внешнего
-scope. Production-профиль имеет один маршрут: schema-v2 config → свежий
-immutable attempt → полностью детерминированный suite → ровно один
-независимый reviewer → `accepted-shadow`, честный
+scope. Production-профиль имеет один публичный entrypoint: schema-v2 config →
+свежий immutable attempt → source-bound writer route → deterministic gates →
+ровно один независимый reviewer → `accepted-shadow`, честный
 `accepted-with-calibration-pending` либо явная terminal failure.
 
 ## Входы
@@ -23,7 +23,7 @@ immutable attempt → полностью детерминированный suit
 - compiler-v3 obligations;
 - package `AGENT-NOTES.md`, если он существует.
 
-Новый `run-config.json` использует только schema v2:
+Новый `run-config.json` использует schema v2. Базовые обязательные поля:
 
 ```json
 {
@@ -36,10 +36,13 @@ immutable attempt → полностью детерминированный suit
 }
 ```
 
-Это закрытая схема ровно из шести полей. Не добавляй `ft_slug`, design context,
-готовые derivations, `tc_prefix`, source/canonical allowlists, model responses,
-publication target или lifecycle status. Runner выводит slug и context из
-принятых контрактов, а derivations строит сам.
+Для новых production попыток добавляй `writer_mode: model-runtime-prose`.
+Допустимые route-поля: `writer_mode`, `mockup_label_aliases`,
+`revision_findings`. Если `writer_mode` отсутствует, runner использует
+compatibility default `deterministic-first`. Не добавляй `ft_slug`, design
+context, готовые derivations, `tc_prefix`, source/canonical allowlists, model
+responses, publication target или lifecycle status. Runner выводит slug и
+context из принятых контрактов, а derivations строит сам.
 
 Если вход отсутствует, stale, неоднозначен или не hash-bound, не обходи
 проверку: верни задачу в `ft-source-locator` / `ft-scope-analyzer` либо заверши
@@ -59,21 +62,11 @@ ft-agent run `
   --output-dir fts/<ft-slug>/work/iterations/<new-attempt-id>
 ```
 
-4. Не выполняй параллельно ручное написание или review. Runner обязан сам:
-   - заново скомпилировать registry boundary и проверить полный source set;
-   - сверить текущие SHA-256, accepted source receipt и compiler-v3 obligations;
-   - автоматически построить typed derivations и coverage graph;
-   - получить subject/condition bindings только из аутентифицированной semantic
-     projection и автоматически построенного source-backed design context;
-   - детерминированно сформировать все case designs без model-call;
-   - детерминированно собрать Markdown и пройти full-suite production gates;
-   - собрать полный `ReviewerEvidencePack` v2 из буквальных scope-строк,
-     реального bounded DOCX/XHTML/PDF parity proof, полного coverage-gap
-     artifact, supporting cross-row bindings, role-tagged design-support chains
-     для sibling obligations в setup/action/cleanup, релевантных справочников,
-     полной трассировки и зарегистрированных mockups;
-   - передать допущенный shadow draft и pack ровно одному независимому reviewer;
-   - повторно проверить все run inputs, sources и canonical hashes.
+4. Не выполняй параллельно ручное написание или review. Runner сам компилирует
+   source set, строит graph/context/seed cases, в `model-runtime-prose` один раз
+   вызывает writer только для runtime prose, затем выполняет gates, собирает
+   `ReviewerEvidencePack` v2, передаёт draft ровно одному независимому reviewer
+   и повторно проверяет run/source/canonical hashes.
 5. Считай успехом `accepted-shadow` либо
    `accepted-with-calibration-pending` с реальным reviewer receipt и закрытыми
    gates. Во втором случае calibration-кандидаты имеют reviewer status
@@ -84,20 +77,11 @@ ft-agent run `
 
 ## Выходы
 
-Один immutable attempt содержит как минимум:
-
-- scope compilation и source/contract bindings;
-- generated typed derivations и coverage graph;
-- bound design context;
-- deterministic designs, shadow Markdown и production-gate result;
-- полный typed `reviewer-evidence-basis.json`, достаточный для независимой
-  повторной квалификации и deterministic rebuild при promotion;
-- полный hash-bound `reviewer-evidence-pack.json` без старых TC,
-  benchmark и review history;
-- ровно один reviewer request/receipt для допущенного draft и ноль других
-  model stages; receipt отдельно фиксирует количество и байты image attachments;
-- terminal summary с phase wall time, attempts, artifact sizes и доступными
-  token metrics.
+Один immutable attempt содержит scope/contract bindings, generated derivations,
+coverage graph, bound context, shadow Markdown, production gate, full
+`reviewer-evidence-basis.json`, hash-bound `reviewer-evidence-pack.json`,
+writer/reviewer receipts по фактически использованному route и terminal summary
+с phase time, attempts, artifact sizes и token metrics.
 
 Допустимые успешные статусы — `accepted-shadow` и
 `accepted-with-calibration-pending`; последний всегда содержит
@@ -127,7 +111,7 @@ session/cycle orchestration не входят в этот production profile. Д
 
 - Production instruction context: [../../references/agent/production-instruction-loading.md](../../references/agent/production-instruction-loading.md)
 - Production global rules: [../../references/agent/production-global-rules.md](../../references/agent/production-global-rules.md)
-- Deterministic-first contract: [../../references/agent/lean-v2-iteration.md](../../references/agent/lean-v2-iteration.md)
+- Source-qualified iteration contract: [../../references/agent/lean-v2-iteration.md](../../references/agent/lean-v2-iteration.md)
 - UI calibration candidates: [../../references/agent/negative-ui-calibration-policy.md](../../references/agent/negative-ui-calibration-policy.md)
 
 ## Ограничения

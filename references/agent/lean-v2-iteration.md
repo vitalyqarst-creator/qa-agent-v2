@@ -1,4 +1,4 @@
-# Deterministic-first source-qualified iteration
+# Source-qualified iteration
 
 Этот reference задаёт короткий production-маршрут `ft-test-case-iteration` для
 уже квалифицированного bounded scope. Историческое имя instruction scenario —
@@ -36,7 +36,7 @@ ft-agent run `
   --output-dir fts/<ft-slug>/work/iterations/<new-attempt-id>
 ```
 
-`run-config.json` имеет закрытую схему:
+`run-config.json` имеет закрытую schema-v2 основу. Базовые обязательные поля:
 
 ```json
 {
@@ -52,13 +52,16 @@ ft-agent run `
 Schema v1 с явным `derivations` остаётся только compatibility API для старых
 внутренних handoff. Новые production-конфиги используют schema v2.
 
-Config принимает ровно шесть полей из примера. Он не принимает `ft_slug`, design
-context, `tc_prefix`, source/canonical allowlists, output status, promotion target
-или готовый файл derivations. Slug и prefix выводятся из `ft_root` и registry;
-защищаемые sources — из accepted manifest и registry; canonical baseline — из
-всех `test-cases/**/*.md` выбранного FT-пакета. Typed derivations и design
-context автоматически строятся из принятого manifest, obligations и hash-bound
-semantic projection и сохраняются внутри immutable attempt.
+Для новых production попыток добавляй `writer_mode: model-runtime-prose`.
+Допустимые route-поля: `writer_mode`, `mockup_label_aliases`,
+`revision_findings`. Если `writer_mode` отсутствует, runner использует
+compatibility default `deterministic-first`. Он не принимает `ft_slug`, design
+context, `tc_prefix`, source/canonical allowlists, output status, promotion
+target или готовый файл derivations. Slug и prefix выводятся из `ft_root` и
+registry; защищаемые sources — из accepted manifest и registry; canonical
+baseline — из всех `test-cases/**/*.md` выбранного FT-пакета. Typed derivations
+и design context автоматически строятся из принятого manifest, obligations и
+hash-bound semantic projection и сохраняются внутри immutable attempt.
 
 ## Последовательность
 
@@ -73,17 +76,18 @@ Runner в одном процессе и одном immutable attempt:
 5. проверяет accepted source-review receipt и obligations, затем автоматически
    строит и hash-bind-ит typed derivations из semantic projection;
 6. строит и полностью валидирует coverage graph;
-7. формирует все test-case designs и весь Markdown детерминированно, без
-   model-call;
-8. запускает production gate;
-9. детерминированно собирает полный `ReviewerEvidencePack` v2 из буквальных
+7. строит source-bound deterministic seed cases;
+8. в `model-runtime-prose` вызывает writer ровно один раз для runtime prose:
+   writer не может менять `TC-ID`, traceability, priority, package или lifecycle;
+9. детерминированно собирает весь Markdown и запускает production gate;
+10. детерминированно собирает полный `ReviewerEvidencePack` v2 из буквальных
    элементов подтверждённого scope, verified DOCX/XHTML/PDF parity, полного
    зарегистрированного coverage-gap artifact, supporting cross-row bindings,
    role-tagged design-support chains для sibling obligations в setup/action/cleanup,
    релевантных справочников, normalized projection, полного draft и
    зарегистрированных mockup attachments, затем
    вызывает ровно одного независимого reviewer;
-10. повторно проверяет run inputs, source/canonical hashes и пишет terminal
+11. повторно проверяет run inputs, source/canonical hashes и пишет terminal
     summary.
 
 Scopes выполняются последовательно. Внутреннего retry и продолжения испорченной
@@ -91,8 +95,16 @@ Scopes выполняются последовательно. Внутренне
 
 ## Model boundary
 
-Единственный model stage — reviewer. Он запускается в свежем tool-free process
-после полного suite gate и получает hash-bound `ReviewerEvidencePack` v2:
+В `deterministic-first` единственный model stage — reviewer. В рекомендуемом
+`model-runtime-prose` есть два model stage: writer для runtime prose и reviewer.
+Writer запускается до suite gate и получает только source-bound seed cases,
+локальный source/obligation projection, mockup label aliases и optional
+`revision_findings`; старые TC и benchmark/history ему недоступны. Runner
+валидирует, что writer вернул ровно все case keys, не изменил runner-owned поля
+и не использовал stale FT label вместо точного visible mockup label.
+
+Reviewer запускается в свежем tool-free process после полного suite gate и
+получает hash-bound `ReviewerEvidencePack` v2:
 буквальный текст всех элементов scope, включая строки без obligations,
 структурный контекст, полный релевантный срез справочников, normalized
 projection, полный coverage-gap artifact, supporting bindings, весь draft и

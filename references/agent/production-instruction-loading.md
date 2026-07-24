@@ -27,7 +27,7 @@ scope; discovery и source qualification, benchmark, incremental, UI automation
       ]
     },
     "production_iteration": {
-      "rationale": "One public schema-v2 deterministic-first iteration and its compact runtime quality contract.",
+      "rationale": "One public schema-v2 source-qualified iteration and its compact runtime quality contract; new production configs use model-runtime-prose writer mode.",
       "paths": [
         "skills/ft-test-case-iteration/SKILL.md",
         "references/agent/lean-v2-iteration.md",

@@ -142,7 +142,7 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertGreater(receipt["production_bundle"]["file_count"], 0)
         self.assertRegex(receipt["production_bundle"]["tree_sha256"], r"^[0-9a-f]{64}$")
 
-    def test_production_iteration_skill_has_one_route_without_legacy_markers(self) -> None:
+    def test_production_iteration_skill_has_one_source_qualified_route_without_legacy_markers(self) -> None:
         skill = (ROOT / "skills/ft-test-case-iteration/SKILL.md").read_text(
             encoding="utf-8"
         )
@@ -154,8 +154,9 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertIn('"schema_version": 2', skill)
         self.assertIn("accepted-shadow", skill)
         self.assertIn("ровно одному независимому reviewer", skill)
-        self.assertNotIn("writer", skill.casefold())
-        self.assertNotIn("writer", contract.casefold())
+        self.assertIn("model-runtime-prose", skill)
+        self.assertIn("model-runtime-prose", contract)
+        self.assertIn("runner-owned", contract)
         self.assertIn("ровно одного независимого reviewer", contract)
         for forbidden in (
             "review_cycle_backend_dispatcher.py",

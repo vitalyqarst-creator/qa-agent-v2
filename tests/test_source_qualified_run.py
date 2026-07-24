@@ -891,6 +891,87 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertIsNone(terminal["diagnostic"])
         self.assertFalse((output / "diagnostic.json").exists())
 
+    def test_v2_run_config_forwards_model_runtime_writer_route(self) -> None:
+        self._enable_v2_generated_derivations()
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config["writer_mode"] = "model-runtime-prose"
+        config["mockup_label_aliases"] = [
+            {
+                "canonical_ft_name": "Добавить контактное лицо",
+                "label_from_mockup": "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+            }
+        ]
+        config["revision_findings"] = {"previous_attempt": "attempt-001"}
+        self._write_json(self.config, config)
+        parsed = load_source_qualified_run_config(self.config)
+        self.assertEqual("model-runtime-prose", parsed.writer_mode)
+        self.assertEqual(1, len(parsed.mockup_label_aliases))
+        output = self.ft / "work" / "source-qualified-runs" / "run-model-runtime"
+        captured: dict[str, object] = {}
+
+        def accepted_iteration(**kwargs):  # type: ignore[no-untyped-def]
+            captured.update(kwargs)
+            iteration_dir = kwargs["output_dir"]
+            iteration_dir.mkdir(parents=True)
+            draft = iteration_dir / "shadow-test-cases.md"
+            draft.write_text("# Model runtime suite\n", encoding="utf-8")
+            summary_path = iteration_dir / "iteration-summary.json"
+            self._write_json(
+                summary_path,
+                {
+                    "schema_version": 1,
+                    "mode": "immutable-model-runtime-prose",
+                    "writer_mode": kwargs["writer_mode"],
+                    "status": "accepted-shadow",
+                    "error": "",
+                    "draft": draft.resolve().relative_to(
+                        self.repo.resolve()
+                    ).as_posix(),
+                    "calibration_pending_count": 0,
+                    "promotion_eligible": True,
+                },
+            )
+            return ImmutableIterationResult(
+                status="accepted-shadow",
+                output_dir=iteration_dir,
+                draft_path=draft,
+                summary_path=summary_path,
+                test_case_count=1,
+                writer_model_calls=1,
+                reviewer_model_calls=1,
+            )
+
+        with patch(
+            "test_case_agent.source_qualified_run.run_immutable_iteration",
+            side_effect=accepted_iteration,
+        ):
+            result = run_source_qualified_scope(
+                repo_root=self.repo,
+                config_path=self.config,
+                output_dir=output,
+            )
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertEqual("model-runtime-prose", captured["writer_mode"])
+        self.assertEqual(
+            (
+                {
+                    "canonical_ft_name": "Добавить контактное лицо",
+                    "label_from_mockup": "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
+                },
+            ),
+            captured["mockup_label_aliases"],
+        )
+        self.assertEqual(
+            {"previous_attempt": "attempt-001"},
+            captured["revision_findings"],
+        )
+        terminal = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertEqual("model-runtime-prose", terminal["writer_mode"])
+        self.assertEqual(1, terminal["mockup_label_alias_count"])
+        self.assertTrue(terminal["revision_findings_supplied"])
+        self.assertEqual(1, terminal["writer_model_calls"])
+
     def test_registry_source_absent_from_manifest_is_rejected_with_diagnostic(self) -> None:
         unrelated = self.ft / "source" / "unrelated.xhtml"
         unrelated.write_text("unrelated", encoding="utf-8")

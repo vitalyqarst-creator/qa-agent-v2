@@ -4,8 +4,8 @@
 
 - `ft-source-locator` - найти нужный FT-пакет и связанные материалы.
 - `ft-scope-analyzer` - предложить внешние scope-ы по разделам/подразделам ФТ, подтвердить границы выбранного scope и зафиксировать `coverage gaps`.
-- `ft-test-case-iteration` - по принятому source package детерминированно собрать
-  shadow-набор и выполнить ровно один независимый review через `ft-agent run`.
+- `ft-test-case-iteration` - по принятому source package собрать source-bound
+  shadow-набор и выполнить writer/gate/reviewer route через `ft-agent run`.
 - `ft-test-case-writer` - написать новые тест-кейсы по уже выбранному scope.
 - `ft-test-case-reviewer` - review существующих тест-кейсов.
 - `ft-ui-automation-prep` - post-iteration проверка signed-off кейсов в реальном UI и подготовка automation-ready версии.
@@ -19,8 +19,9 @@
 - Если scope уже независимо квалифицирован и нужно получить production shadow:
   `ft-test-case-iteration` через `ft-agent run`.
 - Если scope имеет compiler-v3 obligations и независимо принятый v4 source
-  contract: условный deterministic-first режим `ft-test-case-iteration`
-  `lean_v2` через один публичный `ft-agent run`.
+  contract: source-qualified режим `ft-test-case-iteration` `lean_v2`
+  через один публичный `ft-agent run`; для новых production попыток явно
+  указывай `writer_mode: model-runtime-prose`.
 - Если новая версия ФТ должна актуализировать signed-off набор: условный режим
   `ft-test-case-iteration` `incremental-update` через
   `scripts/run_incremental_update_iteration.py`; обычный full-loop его инструкции не загружает.
@@ -64,7 +65,7 @@ python scripts/resolve_instruction_context.py --phase writer --mode initial_draf
 - Instruction contracts: [../references/agent/instruction-contract-index.md](../references/agent/instruction-contract-index.md)
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
-- Deterministic-first source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
+- Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
 - Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
 - Codex SDK orchestration: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)
 - Quality feedback loop: [../references/agent/quality-feedback-loop.md](../references/agent/quality-feedback-loop.md)

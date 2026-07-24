@@ -92,6 +92,12 @@ _RUN_CONFIG_FIELDS_V1 = {
 _RUN_CONFIG_FIELDS_V2 = (
     _RUN_CONFIG_FIELDS_V1 - {"derivations", "design_context"}
 )
+_RUN_CONFIG_OPTIONAL_FIELDS = {
+    "writer_mode",
+    "mockup_label_aliases",
+    "revision_findings",
+}
+_WRITER_MODES = {"deterministic-first", "model-runtime-prose"}
 _DESIGN_CONTEXT_FIELDS_V1 = {
     "package_id",
     "scope_title",
@@ -146,6 +152,9 @@ class SourceQualifiedRunConfig:
     derivations: str | None
     design_context: str | None
     ft_slug: str | None = None
+    writer_mode: str = "deterministic-first"
+    mockup_label_aliases: tuple[Mapping[str, str], ...] = ()
+    revision_findings: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -249,6 +258,52 @@ def _relative_path(value: Any, label: str) -> str:
     return text
 
 
+def _writer_mode(value: Any) -> str:
+    text = _text(value, "writer_mode")
+    if text not in _WRITER_MODES:
+        _fail(
+            "invalid-writer-mode",
+            "writer_mode must be one of " + ", ".join(sorted(_WRITER_MODES)),
+        )
+    return text
+
+
+def _mockup_label_aliases(value: Any) -> tuple[Mapping[str, str], ...]:
+    if not isinstance(value, list):
+        _fail("invalid-mockup-label-aliases", "mockup_label_aliases must be an array")
+    aliases: list[Mapping[str, str]] = []
+    for index, raw in enumerate(value):
+        if not isinstance(raw, Mapping):
+            _fail(
+                "invalid-mockup-label-aliases",
+                f"mockup_label_aliases[{index}] must be an object",
+            )
+        if set(raw) != {"canonical_ft_name", "label_from_mockup"}:
+            _fail(
+                "invalid-mockup-label-aliases",
+                f"mockup_label_aliases[{index}] fields differ",
+            )
+        aliases.append(
+            {
+                "canonical_ft_name": _text(
+                    raw["canonical_ft_name"],
+                    f"mockup_label_aliases[{index}].canonical_ft_name",
+                ),
+                "label_from_mockup": _text(
+                    raw["label_from_mockup"],
+                    f"mockup_label_aliases[{index}].label_from_mockup",
+                ),
+            }
+        )
+    return tuple(aliases)
+
+
+def _revision_findings(value: Any) -> Mapping[str, Any]:
+    if not isinstance(value, Mapping):
+        _fail("invalid-revision-findings", "revision_findings must be an object")
+    return dict(value)
+
+
 def _source_qualified_run_config_from_bytes(
     raw: bytes, *, allow_legacy_v1: bool = False
 ) -> SourceQualifiedRunConfig:
@@ -268,12 +323,13 @@ def _source_qualified_run_config_from_bytes(
     expected_fields = (
         _RUN_CONFIG_FIELDS_V1 if version == 1 else _RUN_CONFIG_FIELDS_V2
     )
-    if set(payload) != expected_fields:
+    allowed_fields = expected_fields | _RUN_CONFIG_OPTIONAL_FIELDS
+    if not expected_fields.issubset(payload) or set(payload) - allowed_fields:
         _fail(
             "run-config-fields",
             "run config fields differ: "
             f"missing={sorted(expected_fields - set(payload)) or 'none'}, "
-            f"unknown={sorted(set(payload) - expected_fields) or 'none'}",
+            f"unknown={sorted(set(payload) - allowed_fields) or 'none'}",
         )
     scope = _text(payload["scope"], "scope")
     if _SCOPE_ID.fullmatch(scope) is None:
@@ -296,6 +352,21 @@ def _source_qualified_run_config_from_bytes(
             else None
         ),
         ft_slug=None,
+        writer_mode=(
+            _writer_mode(payload["writer_mode"])
+            if "writer_mode" in payload
+            else "deterministic-first"
+        ),
+        mockup_label_aliases=(
+            _mockup_label_aliases(payload["mockup_label_aliases"])
+            if "mockup_label_aliases" in payload
+            else ()
+        ),
+        revision_findings=(
+            _revision_findings(payload["revision_findings"])
+            if "revision_findings" in payload
+            else None
+        ),
     )
 
 
@@ -961,6 +1032,9 @@ def _run_source_qualified_scope(
             reviewer_response=reviewer_path,
             backend=backend,
             reviewer_evidence_basis=reviewer_evidence_basis,
+            writer_mode=config.writer_mode,
+            mockup_label_aliases=config.mockup_label_aliases,
+            revision_findings=config.revision_findings,
         )
         finish_stage()
 
@@ -1017,6 +1091,9 @@ def _run_source_qualified_scope(
             "status": iteration.status,
             "ft_root": _relative(ft_root, repo_root),
             "scope": config.scope,
+            "writer_mode": config.writer_mode,
+            "mockup_label_alias_count": len(config.mockup_label_aliases),
+            "revision_findings_supplied": config.revision_findings is not None,
             "registry_digest": registry.digest,
             "source_manifest_digest": contract.manifest.digest,
             "source_review_receipt_digest": binding.source_review_receipt_digest,

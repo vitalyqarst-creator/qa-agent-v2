@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 
@@ -895,6 +896,330 @@ def validate_writer_response(
     if seen != set(cards):
         raise IterationContractError(
             "writer omitted cases: " + ", ".join(sorted(set(cards) - seen))
+        )
+    return tuple(designs), tuple(unresolved)
+
+
+def _property_and_obligation_for_design(
+    graph: CoverageGraph,
+    case: TestCaseDesign,
+) -> tuple[Mapping[str, Any], Mapping[str, Any]]:
+    graph_case = next(item for item in graph.cases if item.case_key == case.case_key)
+    obligation = next(
+        item for item in graph.obligations if item.obligation_id == graph_case.obligation_ids[0]
+    )
+    prop = next(item for item in graph.properties if item.property_id == obligation.property_id)
+    return asdict(prop), asdict(obligation)
+
+
+def build_runtime_writer_request(
+    graph: CoverageGraph,
+    plan: TestDesignPlan,
+    *,
+    mockup_label_aliases: Sequence[Mapping[str, str]] = (),
+    revision_findings: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a source-bound request where the model writes runtime TC prose.
+
+    Unlike ``build_writer_request``, this route intentionally lets the writer
+    author human-facing runtime fields.  The runner still owns identity,
+    lifecycle, traceability, package and promotion fields.
+    """
+
+    if plan.graph_digest != graph.digest:
+        raise IterationContractError("design plan is not bound to this coverage graph")
+    if plan.blocked_cards:
+        raise IterationContractError("blocked cards must be resolved before writer")
+    if plan.writer_cards:
+        raise IterationContractError(
+            "model-runtime-prose requires deterministic seed cases; unsupported writer cards must be split upstream"
+        )
+    cases: list[dict[str, Any]] = []
+    for design in sorted(plan.deterministic_cases, key=lambda item: item.case_key):
+        prop, obligation = _property_and_obligation_for_design(graph, design)
+        cases.append(
+            {
+                "case_key": design.case_key,
+                "tc_id": design.tc_id,
+                "status": design.status,
+                "case_type": design.case_type,
+                "priority": design.priority,
+                "package_id": design.package_id,
+                "runner_traceability": list(design.traceability),
+                "source": {
+                    "property": prop,
+                    "obligation": obligation,
+                },
+                "seed_runtime": {
+                    "title": design.title,
+                    "preconditions": list(design.preconditions),
+                    "test_data": list(design.test_data),
+                    "steps": list(design.steps),
+                    "expected_result": design.expected_result,
+                    "postconditions": list(design.postconditions),
+                    "calibration_question": design.calibration_question,
+                },
+            }
+        )
+    return {
+        "schema_version": 1,
+        "writer_mode": "model-runtime-prose",
+        "graph_digest": graph.digest,
+        "cases": cases,
+        "mockup_label_aliases": [dict(item) for item in mockup_label_aliases],
+        "revision_findings": dict(revision_findings or {}),
+        "constraints": {
+            "return_exactly_one_case_per_input_case": True,
+            "runner_owned_fields": [
+                "case_key",
+                "tc_id",
+                "status",
+                "traceability",
+                "priority",
+                "package_id",
+                "calibration_status",
+            ],
+            "model_authors_runtime_prose": True,
+            "old_test_cases_available": False,
+            "mockups_refine_steps_only": True,
+            "use_label_from_mockup_for_runtime_text": True,
+        },
+    }
+
+
+def runtime_writer_response_schema(
+    case_keys: Sequence[str],
+    graph_digest: str,
+) -> dict[str, Any]:
+    text_array = {
+        "type": "array",
+        "items": {"type": "string"},
+        "minItems": 1,
+    }
+    case = {
+        "type": "object",
+        "properties": {
+            "case_key": {"type": "string", "enum": list(case_keys)},
+            "tc_id": {"type": "string"},
+            "title": {"type": "string"},
+            "case_type": {"type": "string", "enum": ["позитивный", "негативный"]},
+            "preconditions": text_array,
+            "test_data": text_array,
+            "steps": text_array,
+            "expected_result": {"type": "string"},
+            "postconditions": text_array,
+            "calibration_question": {"type": "string"},
+        },
+        "required": [
+            "case_key",
+            "tc_id",
+            "title",
+            "case_type",
+            "preconditions",
+            "test_data",
+            "steps",
+            "expected_result",
+            "postconditions",
+            "calibration_question",
+        ],
+        "additionalProperties": False,
+    }
+    unresolved = {
+        "type": "object",
+        "properties": {
+            "case_key": {"type": "string", "enum": list(case_keys)},
+            "reason": {"type": "string"},
+        },
+        "required": ["case_key", "reason"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "schema_version": {"type": "integer", "enum": [1]},
+            "writer_mode": {"type": "string", "enum": ["model-runtime-prose"]},
+            "graph_digest": {"type": "string", "enum": [graph_digest]},
+            "cases": {"type": "array", "items": case},
+            "unresolved": {"type": "array", "items": unresolved},
+        },
+        "required": [
+            "schema_version",
+            "writer_mode",
+            "graph_digest",
+            "cases",
+            "unresolved",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def _empty_string(value: Any, path: str) -> str:
+    if not isinstance(value, str) or "\n" in value or "\r" in value:
+        raise IterationContractError(f"{path} must be single-line text")
+    return value.strip()
+
+
+def _normalized_ui_label(value: str) -> str:
+    return re.sub(
+        r"\s+",
+        " ",
+        value.replace("`", "").replace("«", "").replace("»", "").strip().casefold(),
+    )
+
+
+def _runtime_text_uses_stale_mockup_alias(
+    runtime_text: str,
+    mockup_label_aliases: Sequence[Mapping[str, str]],
+) -> tuple[str, str] | None:
+    normalized_runtime = _normalized_ui_label(runtime_text)
+    for alias in mockup_label_aliases:
+        canonical_name = str(alias.get("canonical_ft_name", "")).strip()
+        label_from_mockup = str(alias.get("label_from_mockup", "")).strip()
+        if not canonical_name or not label_from_mockup:
+            continue
+        canonical_label = _normalized_ui_label(canonical_name)
+        mockup_label = _normalized_ui_label(label_from_mockup)
+        if (
+            canonical_label
+            and mockup_label
+            and canonical_label in normalized_runtime
+            and mockup_label not in normalized_runtime
+        ):
+            return canonical_name, label_from_mockup
+    return None
+
+
+def validate_runtime_writer_response(
+    response: Mapping[str, Any],
+    *,
+    graph: CoverageGraph,
+    plan: TestDesignPlan,
+    context: DesignContext,
+    mockup_label_aliases: Sequence[Mapping[str, str]] = (),
+) -> tuple[tuple[TestCaseDesign, ...], tuple[dict[str, str], ...]]:
+    try:
+        validate_design_context_for_graph(graph, context)
+    except DesignError as exc:
+        raise IterationContractError(f"writer design context is invalid: {exc}") from exc
+    root = _object(
+        response,
+        "$",
+        {"schema_version", "writer_mode", "graph_digest", "cases", "unresolved"},
+    )
+    if (
+        root["schema_version"] != 1
+        or root["writer_mode"] != "model-runtime-prose"
+        or root["graph_digest"] != graph.digest
+    ):
+        raise IterationContractError("runtime writer response is not bound to this graph")
+    if plan.graph_digest != graph.digest or plan.blocked_cards:
+        raise IterationContractError("writer cannot run for this design plan")
+    if plan.writer_cards:
+        raise IterationContractError(
+            "runtime writer response cannot be validated while unsupported writer cards remain"
+        )
+    expected = {item.case_key: item for item in plan.deterministic_cases}
+    raw_cases = root["cases"]
+    raw_unresolved = root["unresolved"]
+    if not isinstance(raw_cases, list) or not isinstance(raw_unresolved, list):
+        raise IterationContractError("runtime writer cases and unresolved must be arrays")
+    seen: set[str] = set()
+    designs: list[TestCaseDesign] = []
+    unresolved: list[dict[str, str]] = []
+    for index, raw in enumerate(raw_cases):
+        item = _object(
+            raw,
+            f"$.cases[{index}]",
+            {
+                "case_key",
+                "tc_id",
+                "title",
+                "case_type",
+                "preconditions",
+                "test_data",
+                "steps",
+                "expected_result",
+                "postconditions",
+                "calibration_question",
+            },
+        )
+        case_key = _one_line(item["case_key"], f"$.cases[{index}].case_key")
+        if case_key not in expected or case_key in seen:
+            raise IterationContractError(f"unknown or duplicate runtime writer case_key: {case_key}")
+        seen.add(case_key)
+        seed = expected[case_key]
+        tc_id = _one_line(item["tc_id"], f"$.cases[{index}].tc_id")
+        if tc_id != seed.tc_id:
+            raise IterationContractError(f"runtime writer TC-ID drift for {case_key}")
+        case_type = _one_line(item["case_type"], f"$.cases[{index}].case_type").casefold()
+        if case_type not in {"позитивный", "негативный"}:
+            raise IterationContractError(f"unsupported case_type for {case_key}")
+        calibration_question = _empty_string(
+            item["calibration_question"],
+            f"$.cases[{index}].calibration_question",
+        )
+        if seed.status == "candidate-ui-calibration":
+            if not calibration_question:
+                raise IterationContractError(
+                    f"runtime writer omitted calibration question for {case_key}"
+                )
+        elif calibration_question:
+            raise IterationContractError(
+                f"runtime writer added calibration question to executable case {case_key}"
+            )
+        runtime_text = "\n".join(
+            [
+                str(item["title"]),
+                "\n".join(_strings(item["preconditions"], f"$.cases[{index}].preconditions")),
+                "\n".join(_strings(item["test_data"], f"$.cases[{index}].test_data")),
+                "\n".join(_strings(item["steps"], f"$.cases[{index}].steps")),
+                "\n".join(_strings(item["postconditions"], f"$.cases[{index}].postconditions")),
+            ]
+        )
+        stale_alias = _runtime_text_uses_stale_mockup_alias(
+            runtime_text,
+            mockup_label_aliases,
+        )
+        if stale_alias is not None:
+            canonical_name, label_from_mockup = stale_alias
+            raise IterationContractError(
+                "runtime writer mockup visible label drift for "
+                f"{case_key}: uses {canonical_name!r} instead of {label_from_mockup!r}"
+            )
+        designs.append(
+            TestCaseDesign(
+                case_key=case_key,
+                tc_id=seed.tc_id,
+                status=seed.status,
+                title=_one_line(item["title"], f"$.cases[{index}].title"),
+                case_type=case_type,
+                priority=seed.priority,
+                package_id=seed.package_id,
+                traceability=seed.traceability,
+                preconditions=_strings(item["preconditions"], f"$.cases[{index}].preconditions"),
+                test_data=_strings(item["test_data"], f"$.cases[{index}].test_data"),
+                steps=_strings(item["steps"], f"$.cases[{index}].steps"),
+                expected_result=_one_line(
+                    item["expected_result"],
+                    f"$.cases[{index}].expected_result",
+                ),
+                postconditions=_strings(item["postconditions"], f"$.cases[{index}].postconditions"),
+                calibration_question=calibration_question,
+            )
+        )
+    for index, raw in enumerate(raw_unresolved):
+        item = _object(raw, f"$.unresolved[{index}]", {"case_key", "reason"})
+        case_key = _one_line(item["case_key"], f"$.unresolved[{index}].case_key")
+        reason = _one_line(item["reason"], f"$.unresolved[{index}].reason")
+        if case_key not in expected or case_key in seen:
+            raise IterationContractError(
+                f"unknown or duplicate unresolved case_key: {case_key}"
+            )
+        seen.add(case_key)
+        unresolved.append({"case_key": case_key, "reason": reason})
+    if seen != set(expected):
+        raise IterationContractError(
+            "runtime writer omitted cases: " + ", ".join(sorted(set(expected) - seen))
         )
     return tuple(designs), tuple(unresolved)
 
