@@ -20,6 +20,7 @@ from test_case_agent.immutable_iteration import (
 )
 from test_case_agent.iteration_contract import (
     REVIEWER_FALSIFICATION_PROBES,
+    build_runtime_writer_request,
     validate_suite,
     validate_writer_response,
 )
@@ -117,6 +118,7 @@ class FixtureBackend:
         fail_on_stage: str | None = None,
         receipt_tokens: Any = None,
         bad_runtime_writer_response: bool = False,
+        all_runtime_writer_unresolved: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.review_decision = review_decision
@@ -125,6 +127,7 @@ class FixtureBackend:
         self.fail_on_stage = fail_on_stage
         self.receipt_tokens = receipt_tokens
         self.bad_runtime_writer_response = bad_runtime_writer_response
+        self.all_runtime_writer_unresolved = all_runtime_writer_unresolved
         self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
@@ -145,6 +148,44 @@ class FixtureBackend:
         if stage == "writer":
             cases = []
             if request.get("writer_mode") == "model-runtime-prose":
+                if self.all_runtime_writer_unresolved:
+                    payload = {
+                        "schema_version": 1,
+                        "writer_mode": "model-runtime-prose",
+                        "graph_digest": request["graph_digest"],
+                        "route_contract_ack": "runtime-prose-one-case-per-seed",
+                        "cases": [],
+                        "unresolved": [
+                            {
+                                "case_key": seed["case_key"],
+                                "reason": (
+                                    "Requested registered-card projection cannot "
+                                    "be represented by the response schema."
+                                ),
+                            }
+                            for seed in request["cases"]
+                        ],
+                    }
+                    return StageResult(
+                        payload=payload,
+                        receipt={
+                            "stage": stage,
+                            "backend": "fixture-stage",
+                            "attempts": 1,
+                            "duration_ms": 1,
+                            "tokens": {
+                                "input_tokens": 10,
+                                "output_tokens": 5,
+                                "reasoning_tokens": 1,
+                            },
+                            "tool_event_count": 0,
+                            "timeout_seconds": None,
+                            "image_attachments": {
+                                "count": len(images),
+                                "bytes": sum(item.size_bytes for item in images),
+                            },
+                        },
+                    )
                 for seed in request["cases"]:
                     runtime = seed["seed_runtime"]
                     if self.bad_runtime_writer_response:
@@ -185,6 +226,7 @@ class FixtureBackend:
                     "schema_version": 1,
                     "writer_mode": "model-runtime-prose",
                     "graph_digest": request["graph_digest"],
+                    "route_contract_ack": "runtime-prose-one-case-per-seed",
                     "cases": cases,
                     "unresolved": [],
                 }
@@ -491,6 +533,35 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertIn("— уточнённый сценарий", text)
         self.assertIn(_graph().cases[0].tc_id, text)
 
+    def test_model_runtime_prose_prompt_and_request_exclude_legacy_projection_contract(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        request = build_runtime_writer_request(graph, plan)
+        prompt = _stage_prompt("writer", request)
+        serialized_request = json.dumps(request, ensure_ascii=False, sort_keys=True)
+
+        self.assertIn("not the legacy registered-card projection route", prompt)
+        self.assertIn("runtime-prose-one-case-per-seed", prompt)
+        self.assertIn(
+            "Return exactly one item in `cases` for every input seed case",
+            prompt,
+        )
+        for legacy_phrase in (
+            "registered subject",
+            "expected-result, fixture, data",
+            "ordered action identifiers",
+            "Do not author case prose",
+        ):
+            self.assertNotIn(legacy_phrase, prompt)
+        for legacy_field in (
+            "subject_id",
+            "expected_result_id",
+            "fixture_ids",
+            "data_ids",
+            "step_ids",
+        ):
+            self.assertNotIn(f'"{legacy_field}"', serialized_request)
+
     def test_model_runtime_prose_bad_writer_output_stops_before_reviewer(self) -> None:
         backend = FixtureBackend(bad_runtime_writer_response=True)
 
@@ -514,6 +585,30 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("runtime writer leaked internal identifier", diagnostic["error"])
         self.assertIn("subject:", diagnostic["error"])
+
+    def test_model_runtime_prose_all_unresolved_stops_before_reviewer_with_route_diagnostic(self) -> None:
+        backend = FixtureBackend(all_runtime_writer_unresolved=True)
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-all-unresolved",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        self.assertFalse((result.output_dir / "shadow-test-cases.md").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("route failure: all input seed cases", diagnostic["error"])
+        self.assertIn("one human-runtime output case per valid seed case", diagnostic["error"])
 
     def test_model_runtime_prose_changes_required_writes_revision_input(self) -> None:
         backend = FixtureBackend(review_decision="changes-required")

@@ -71,6 +71,44 @@ def _runtime_writer_case(seed, **changes):  # type: ignore[no-untyped-def]
     return payload
 
 
+def _runtime_writer_payload(graph, cases, unresolved=()):  # type: ignore[no-untyped-def]
+    return {
+        "schema_version": 1,
+        "writer_mode": "model-runtime-prose",
+        "graph_digest": graph.digest,
+        "route_contract_ack": "runtime-prose-one-case-per-seed",
+        "cases": list(cases),
+        "unresolved": list(unresolved),
+    }
+
+
+def _multi_runtime_graph():
+    graph = _graph()
+    return replace(
+        graph,
+        obligations=(
+            graph.obligations[0],
+            replace(
+                graph.obligations[0],
+                obligation_id="OBL-002",
+                atom_id="ATOM-002",
+                atomic_statement="РџСЂРѕРІРµСЂРёС‚СЊ РѕС‡РёСЃС‚РєСѓ РїРѕР»СЏ В«РРјСЏВ».",
+                observable_oracle="РџРѕР»Рµ В«РРјСЏВ» РЅРµ СЃРѕРґРµСЂР¶РёС‚ Р·РЅР°С‡РµРЅРёСЏ.",
+                fixture_values=("РџРµС‚СЂ",),
+            ),
+        ),
+        cases=(
+            graph.cases[0],
+            CoverageCase(
+                case_key="customer|customer-name|clear-input|positive|always",
+                tc_id="TC-CUST-9876543210",
+                obligation_ids=("OBL-002",),
+                status="executable",
+            ),
+        ),
+    )
+
+
 def _accepted_review(graph, draft_sha256: str):
     case = graph.cases[0]
     obligation_id = case.obligation_ids[0]
@@ -432,13 +470,7 @@ class IterationContractTests(unittest.TestCase):
         plan = build_test_design_plan(graph, context=_context())
         seed = plan.deterministic_cases[0]
         schema = runtime_writer_response_schema([seed.case_key], graph.digest)
-        payload = {
-            "schema_version": 1,
-            "writer_mode": "model-runtime-prose",
-            "graph_digest": graph.digest,
-            "cases": [_runtime_writer_case(seed)],
-            "unresolved": [],
-        }
+        payload = _runtime_writer_payload(graph, [_runtime_writer_case(seed)])
 
         validate_openai_strict_output_instance(payload, schema)
 
@@ -446,13 +478,10 @@ class IterationContractTests(unittest.TestCase):
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
         seed = plan.deterministic_cases[0]
-        drift = {
-            "schema_version": 1,
-            "writer_mode": "model-runtime-prose",
-            "graph_digest": graph.digest,
-            "cases": [_runtime_writer_case(seed, tc_id="TC-DRIFT")],
-            "unresolved": [],
-        }
+        drift = _runtime_writer_payload(
+            graph,
+            [_runtime_writer_case(seed, tc_id="TC-DRIFT")],
+        )
 
         with self.assertRaisesRegex(IterationContractError, "TC-ID drift"):
             validate_runtime_writer_response(
@@ -462,13 +491,7 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
-        omitted = {
-            "schema_version": 1,
-            "writer_mode": "model-runtime-prose",
-            "graph_digest": graph.digest,
-            "cases": [],
-            "unresolved": [],
-        }
+        omitted = _runtime_writer_payload(graph, [])
         with self.assertRaisesRegex(IterationContractError, "omitted cases"):
             validate_runtime_writer_response(
                 omitted,
@@ -476,6 +499,63 @@ class IterationContractTests(unittest.TestCase):
                 plan=plan,
                 context=_context(),
             )
+
+    def test_runtime_writer_blocks_all_cases_unresolved_as_route_failure(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        payload = _runtime_writer_payload(
+            graph,
+            [],
+            unresolved=(
+                {
+                    "case_key": seed.case_key,
+                    "reason": (
+                        "Requested registered-card projection cannot be represented "
+                        "by the response schema."
+                    ),
+                }
+                for seed in plan.deterministic_cases
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "route failure: all input seed cases",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_accepts_multi_seed_model_runtime_response(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        payload = _runtime_writer_payload(
+            graph,
+            (
+                _runtime_writer_case(
+                    seed,
+                    title=f"Runtime prose case {index}",
+                )
+                for index, seed in enumerate(plan.deterministic_cases, start=1)
+            ),
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(2, len(designs))
+        self.assertEqual(
+            tuple(seed.case_key for seed in plan.deterministic_cases),
+            tuple(design.case_key for design in designs),
+        )
 
     def test_runtime_writer_returns_model_prose_but_runner_preserves_identity_and_traceability(self) -> None:
         graph = _graph()
@@ -485,6 +565,7 @@ class IterationContractTests(unittest.TestCase):
             "schema_version": 1,
             "writer_mode": "model-runtime-prose",
             "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
             "cases": [
                 _runtime_writer_case(
                     seed,
@@ -518,6 +599,7 @@ class IterationContractTests(unittest.TestCase):
             "schema_version": 1,
             "writer_mode": "model-runtime-prose",
             "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
             "cases": [
                 _runtime_writer_case(
                     seed,
@@ -570,6 +652,7 @@ class IterationContractTests(unittest.TestCase):
             "schema_version": 1,
             "writer_mode": "model-runtime-prose",
             "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
             "cases": [
                 _runtime_writer_case(
                     seed,
@@ -617,6 +700,7 @@ class IterationContractTests(unittest.TestCase):
             "schema_version": 1,
             "writer_mode": "model-runtime-prose",
             "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
             "cases": [
                 _runtime_writer_case(
                     seed,
@@ -647,6 +731,7 @@ class IterationContractTests(unittest.TestCase):
             "schema_version": 1,
             "writer_mode": "model-runtime-prose",
             "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
             "cases": [
                 _runtime_writer_case(
                     seed,

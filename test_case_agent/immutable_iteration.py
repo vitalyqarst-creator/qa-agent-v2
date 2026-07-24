@@ -272,11 +272,31 @@ def _context_payload(context: DesignContext) -> dict[str, Any]:
 
 def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
     if stage == "writer":
-        instruction = (
-            "Return JSON only. For every card, return only its registered subject, "
-            "expected-result, fixture, data, and ordered action identifiers. Do not "
-            "author case prose or add identifiers that are absent from the card."
-        )
+        if request.get("writer_mode") == "model-runtime-prose":
+            instruction = (
+                "Return JSON only. This is the model-runtime-prose route, not the "
+                "legacy registered-card projection route. Do not choose or return "
+                "`subject_id`, `expected_result_id`, `fixture_ids`, `data_ids`, or "
+                "`step_ids`. Return `route_contract_ack` exactly as "
+                "`runtime-prose-one-case-per-seed`. Return exactly one item in "
+                "`cases` for every input seed case. Copy each `case_key` and `tc_id` "
+                "without changes. The runner owns identity, traceability, priority, "
+                "package, status, and lifecycle fields. Author only human-executable "
+                "runtime prose: `title`, `preconditions`, `test_data`, `steps`, "
+                "`expected_result`, `postconditions`, and `calibration_question`. "
+                "Use the provided `seed_runtime` as the starting draft and improve "
+                "human wording only when needed. Do not put internal IDs such as "
+                "`subject:*`, `OBL-*`, `ATOM-*`, `ASSERT-*`, `SRC-*`, or `BSR ...` "
+                "in runtime prose. Use `unresolved` only for a concrete individual "
+                "case with a specific source blocker; do not mark all valid seed "
+                "cases unresolved because of schema or route confusion."
+            )
+        else:
+            instruction = (
+                "Return JSON only. For every card, return only its registered subject, "
+                "expected-result, fixture, data, and ordered action identifiers. Do not "
+                "author case prose or add identifiers that are absent from the card."
+            )
     elif stage == "reviewer":
         raw_version = request.get("schema_version")
         if type(raw_version) is not int:

@@ -975,6 +975,35 @@ def build_runtime_writer_request(
         "schema_version": 1,
         "writer_mode": "model-runtime-prose",
         "graph_digest": graph.digest,
+        "route_contract": {
+            "route": "runtime-prose",
+            "not_legacy_id_selection": True,
+            "copy_fields_exactly": ["case_key", "tc_id"],
+            "runner_owned_fields": [
+                "case_key",
+                "tc_id",
+                "status",
+                "traceability",
+                "priority",
+                "package_id",
+                "calibration_status",
+            ],
+            "model_authored_fields": [
+                "title",
+                "preconditions",
+                "test_data",
+                "steps",
+                "expected_result",
+                "postconditions",
+                "calibration_question",
+            ],
+            "one_output_case_per_input_seed_case": True,
+            "unresolved_policy": (
+                "Allowed only for a concrete case with a specific source-backed "
+                "reason. Do not mark all valid seed cases unresolved because of "
+                "schema or route confusion."
+            ),
+        },
         "cases": cases,
         "mockup_label_aliases": [dict(item) for item in mockup_label_aliases],
         "revision_findings": dict(revision_findings or {}),
@@ -1049,6 +1078,10 @@ def runtime_writer_response_schema(
             "schema_version": {"type": "integer", "enum": [1]},
             "writer_mode": {"type": "string", "enum": ["model-runtime-prose"]},
             "graph_digest": {"type": "string", "enum": [graph_digest]},
+            "route_contract_ack": {
+                "type": "string",
+                "enum": ["runtime-prose-one-case-per-seed"],
+            },
             "cases": {"type": "array", "items": case},
             "unresolved": {"type": "array", "items": unresolved},
         },
@@ -1056,6 +1089,7 @@ def runtime_writer_response_schema(
             "schema_version",
             "writer_mode",
             "graph_digest",
+            "route_contract_ack",
             "cases",
             "unresolved",
         ],
@@ -1195,12 +1229,20 @@ def validate_runtime_writer_response(
     root = _object(
         response,
         "$",
-        {"schema_version", "writer_mode", "graph_digest", "cases", "unresolved"},
+        {
+            "schema_version",
+            "writer_mode",
+            "graph_digest",
+            "route_contract_ack",
+            "cases",
+            "unresolved",
+        },
     )
     if (
         root["schema_version"] != 1
         or root["writer_mode"] != "model-runtime-prose"
         or root["graph_digest"] != graph.digest
+        or root["route_contract_ack"] != "runtime-prose-one-case-per-seed"
     ):
         raise IterationContractError("runtime writer response is not bound to this graph")
     if plan.graph_digest != graph.digest or plan.blocked_cards:
@@ -1214,6 +1256,12 @@ def validate_runtime_writer_response(
     raw_unresolved = root["unresolved"]
     if not isinstance(raw_cases, list) or not isinstance(raw_unresolved, list):
         raise IterationContractError("runtime writer cases and unresolved must be arrays")
+    if not raw_cases and len(raw_unresolved) == len(expected) and expected:
+        raise IterationContractError(
+            "runtime writer route failure: all input seed cases were returned as "
+            "unresolved; this route requires one human-runtime output case per "
+            "valid seed case unless a specific individual source blocker exists"
+        )
     seen: set[str] = set()
     designs: list[TestCaseDesign] = []
     unresolved: list[dict[str, str]] = []
