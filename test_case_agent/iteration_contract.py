@@ -1003,6 +1003,26 @@ def build_runtime_writer_request(
                 "reason. Do not mark all valid seed cases unresolved because of "
                 "schema or route confusion."
             ),
+            "preconditions_contract": {
+                "empty_sentinel": "Не требуются.",
+                "allowed": (
+                    "Each precondition item must be a user/tester setup action "
+                    "that makes the required state reproducible, for example "
+                    "`Открыть карточку ...`, `Перейти в блок ...`, or "
+                    "`Нажать ...`."
+                ),
+                "forbidden_state_only_examples": [
+                    "Открыта карточка ...",
+                    "Поле доступно ...",
+                    "Блок отображается ...",
+                ],
+                "state_only_policy": (
+                    "Do not rewrite action-oriented seed_runtime preconditions "
+                    "into passive state descriptions. If the provided source-bound "
+                    "setup cannot be expressed as an action, put only that case in "
+                    "unresolved with a specific reason."
+                ),
+            },
         },
         "cases": cases,
         "mockup_label_aliases": [dict(item) for item in mockup_label_aliases],

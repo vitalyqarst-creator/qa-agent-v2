@@ -119,6 +119,7 @@ class FixtureBackend:
         receipt_tokens: Any = None,
         bad_runtime_writer_response: bool = False,
         all_runtime_writer_unresolved: bool = False,
+        runtime_writer_state_only_precondition: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.review_decision = review_decision
@@ -128,6 +129,7 @@ class FixtureBackend:
         self.receipt_tokens = receipt_tokens
         self.bad_runtime_writer_response = bad_runtime_writer_response
         self.all_runtime_writer_unresolved = all_runtime_writer_unresolved
+        self.runtime_writer_state_only_precondition = runtime_writer_state_only_precondition
         self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
@@ -212,7 +214,11 @@ class FixtureBackend:
                             "tc_id": seed["tc_id"],
                             "title": f"{runtime['title']} — уточнённый сценарий",
                             "case_type": seed["case_type"],
-                            "preconditions": list(runtime["preconditions"]),
+                            "preconditions": (
+                                ["Открыта карточка `Заявка`, блок `Контактные лица`."]
+                                if self.runtime_writer_state_only_precondition
+                                else list(runtime["preconditions"])
+                            ),
                             "test_data": list(runtime["test_data"]),
                             "steps": list(runtime["steps"]),
                             "expected_result": runtime["expected_result"],
@@ -547,6 +553,16 @@ class ImmutableIterationTests(unittest.TestCase):
             "Return exactly one item in `cases` for every input seed case",
             prompt,
         )
+        self.assertIn("preconditions` must contain", prompt)
+        self.assertIn("Не требуются.", prompt)
+        self.assertIn("Открыть карточку", prompt)
+        self.assertIn("Перейти в блок", prompt)
+        self.assertIn("Нажать", prompt)
+        self.assertIn("Открыта карточка", prompt)
+        self.assertIn("Поле доступно", prompt)
+        self.assertIn("Блок отображается", prompt)
+        self.assertIn("source-bound setup hint cannot be written", prompt)
+        self.assertIn("preconditions_contract", serialized_request)
         for legacy_phrase in (
             "registered subject",
             "expected-result, fixture, data",
@@ -586,6 +602,33 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("runtime writer leaked internal identifier", diagnostic["error"])
         self.assertIn("subject:", diagnostic["error"])
+
+    def test_model_runtime_prose_state_only_precondition_stops_before_draft_and_reviewer(self) -> None:
+        backend = FixtureBackend(runtime_writer_state_only_precondition=True)
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-state-only-precondition",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertTrue(
+            (result.output_dir / "model-stages" / "writer-response.json").exists()
+        )
+        self.assertFalse((result.output_dir / "shadow-test-cases.md").exists())
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("non-reproducible precondition", diagnostic["error"])
+        self.assertIn("Открыта карточка", diagnostic["error"])
 
     def test_model_runtime_prose_all_unresolved_stops_before_reviewer_with_route_diagnostic(self) -> None:
         backend = FixtureBackend(all_runtime_writer_unresolved=True)

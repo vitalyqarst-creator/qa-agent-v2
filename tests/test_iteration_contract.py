@@ -459,6 +459,14 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual(1, len(request["cases"]))
         self.assertTrue(request["constraints"]["model_authors_runtime_prose"])
         self.assertTrue(request["constraints"]["use_label_from_mockup_for_runtime_text"])
+        preconditions_contract = request["route_contract"]["preconditions_contract"]
+        self.assertEqual("Не требуются.", preconditions_contract["empty_sentinel"])
+        self.assertIn("Открыть карточку", preconditions_contract["allowed"])
+        self.assertIn("Перейти в блок", preconditions_contract["allowed"])
+        self.assertIn(
+            "Открыта карточка ...",
+            preconditions_contract["forbidden_state_only_examples"],
+        )
         self.assertFalse(request["constraints"]["old_test_cases_available"])
         self.assertEqual(
             "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
@@ -590,6 +598,66 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual(seed.traceability, designs[0].traceability)
         self.assertEqual("Модельно написанный кейс", designs[0].title)
         self.assertEqual(("Ввести `Иван` в поле «Имя».",), designs[0].steps)
+
+    def test_runtime_writer_accepts_action_oriented_preconditions(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=[
+                        "Открыть карточку `Заявка`.",
+                        "Перейти в блок `Контактные лица`.",
+                    ],
+                )
+            ],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(
+            (
+                "Открыть карточку `Заявка`.",
+                "Перейти в блок `Контактные лица`.",
+            ),
+            designs[0].preconditions,
+        )
+
+    def test_runtime_writer_rejects_state_only_preconditions(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=[
+                        "Открыта карточка `Заявка`, блок `Контактные лица`.",
+                    ],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "non-reproducible precondition.*Открыта карточка",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
 
     def test_runtime_writer_blocks_stale_label_when_mockup_alias_is_declared(self) -> None:
         graph = _graph()
