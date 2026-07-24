@@ -5,6 +5,7 @@ import hashlib
 import unittest
 from dataclasses import replace
 
+from test_case_agent.coverage_graph import CoverageCase
 from test_case_agent.iteration_contract import (
     IterationContractError,
     REVIEWER_FALSIFICATION_PROBES,
@@ -18,6 +19,7 @@ from test_case_agent.iteration_contract import (
     validate_writer_response,
 )
 from test_case_agent.reviewer_evidence import build_design_support_mapping
+from test_case_agent.strict_output_schema import validate_openai_strict_output_instance
 from test_case_agent.test_design import (
     DesignContext,
     build_test_design_plan,
@@ -563,8 +565,11 @@ class IterationContractTests(unittest.TestCase):
         self.assertFalse(
             acceptance["live_falsification_receipt_allows_not_recorded"]
         )
+        self.assertIn("never return only changed", reviewer_prompt_instruction(2))
         self.assertIn("source_projection_findings", schema["properties"])
         self.assertIn("test_case_findings", schema["properties"])
+        self.assertEqual(1, schema["properties"]["case_results"]["minItems"])
+        self.assertEqual(1, schema["properties"]["case_results"]["maxItems"])
         falsification_schema = schema["properties"]["case_results"]["items"][
             "properties"
         ]["falsification"]
@@ -1005,6 +1010,93 @@ class IterationContractTests(unittest.TestCase):
 
         self.assertFalse(accepted)
         self.assertEqual("changes-required", decision)
+
+    def test_reviewer_v2_schema_requires_one_case_result_per_case(self) -> None:
+        graph = _graph()
+        graph = replace(
+            graph,
+            obligations=(
+                graph.obligations[0],
+                replace(
+                    graph.obligations[0],
+                    obligation_id="OBL-002",
+                    atom_id="ATOM-002",
+                    observable_oracle="В поле «Имя» отображается второе значение.",
+                ),
+            ),
+            cases=(
+                graph.cases[0],
+                CoverageCase(
+                    case_key="customer|customer-name|positive-input|second|always",
+                    tc_id="TC-CUST-SECOND01",
+                    obligation_ids=("OBL-002",),
+                    status="executable",
+                ),
+            ),
+        )
+        plan = build_test_design_plan(graph, context=_context())
+        cases = plan.deterministic_cases
+        markdown = render_test_cases(cases, scope_title="Данные клиента")
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        pack = _v2_pack(graph, cases, gate, markdown)
+        prop = graph.properties[0]
+        obligations = {item.obligation_id: item for item in graph.obligations}
+        pack["coverage_mapping"] = [
+            {
+                "source_row_id": prop.source_row_id,
+                "assertion_id": prop.assertion_id,
+                "property_id": prop.property_id,
+                "obligation_id": obligations[case.obligation_ids[0]].obligation_id,
+                "case_key": case.case_key,
+                "tc_id": case.tc_id,
+            }
+            for case in graph.cases
+        ]
+        pack["coverage_mapping"].append(
+            {
+                "source_row_id": "SRC-CONTEXT",
+                "assertion_id": "",
+                "property_id": "",
+                "obligation_id": "",
+                "case_key": "",
+                "tc_id": "",
+            }
+        )
+        request = build_reviewer_request(
+            graph=graph,
+            cases=cases,
+            gate=gate,
+            evidence_pack=pack,
+        )
+        schema = reviewer_response_schema(
+            [
+                (
+                    case.case_key,
+                    case.tc_id,
+                    case.obligation_ids[0],
+                    case.status,
+                )
+                for case in graph.cases
+            ],
+            graph_digest=graph.digest,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+
+        case_results_schema = schema["properties"]["case_results"]
+        self.assertEqual(2, case_results_schema["minItems"])
+        self.assertEqual(2, case_results_schema["maxItems"])
+
+        incomplete_response = _accepted_review_v2(graph, request)
+        incomplete_response["decision"] = "changes-required"
+        incomplete_response["summary"] = "Only a changed case was returned."
+        with self.assertRaisesRegex(ValueError, "fewer than minItems=2"):
+            validate_openai_strict_output_instance(incomplete_response, schema)
 
     def test_reviewer_v2_test_finding_can_bind_repeater_design_support_role(self) -> None:
         from tests.test_test_design import _repeater_graph_and_context

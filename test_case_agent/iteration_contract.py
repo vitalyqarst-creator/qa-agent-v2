@@ -138,6 +138,9 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "chain; additional findings for the same probe may use other exact registered "
     "chains. outcome=not-recorded is "
     "reserved for the offline legacy adapter and is forbidden in live output. "
+    "case_results must contain exactly one result for every case in "
+    "reviewer_evidence_pack.normalized_projection.cases, including cases with "
+    "no findings; never return only changed or failed cases. "
     "When a finding is caused by one of these probes, bind its witness to the exact "
     "registered chain; do not manufacture a finding when no such witness exists. "
     "Direct source, TC-design, digest, and binding defects proven by supplied artifacts "
@@ -1466,7 +1469,12 @@ def reviewer_response_schema(
                     "enum": [evidence_pack_sha256],
                 },
                 "decision": {"type": "string", "enum": sorted(_DECISIONS)},
-                "case_results": {"type": "array", "items": v2_result},
+                "case_results": {
+                    "type": "array",
+                    "items": v2_result,
+                    "minItems": len(case_keys),
+                    "maxItems": len(case_keys),
+                },
                 "source_projection_findings": {
                     "type": "array",
                     "items": source_finding,
