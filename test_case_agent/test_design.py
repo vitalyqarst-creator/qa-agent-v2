@@ -779,6 +779,16 @@ def _source_input_action_with_value(
     return f"{bound_action.rstrip('. ')}; использовать значение `{value}`."
 
 
+def _validation_commit_step(*, label: str, action: str) -> str:
+    value = action.strip().rstrip(". ")
+    if _normalized_text(value).startswith("оставить "):
+        return f"{value}."
+    return (
+        f"Выполнить действие проверки/валидации для {label}: "
+        f"{value}."
+    )
+
+
 def _repeater_navigation_from_context(context: DesignContext) -> tuple[str, ...]:
     for value in context.condition_preconditions.values():
         navigation = _navigation_setup_from_source(value)
@@ -802,7 +812,7 @@ def _requires_text_hyphen_negatives(obligation: CoverageObligation) -> bool:
     text = _normalized_text(
         " ".join((obligation.atomic_statement, obligation.observable_oracle))
     )
-    return "только" in text and "дефис" in text
+    return "только" in text and ("дефис" in text or "`-`" in text or "символ `-`" in text)
 
 
 def _future_date_fixture() -> str:
@@ -1128,6 +1138,7 @@ def _materialize(
             obligation=obligation,
             reason=str(exc),
         )
+    fixtures = obligation.fixture_values
     preconditions = (
         []
         if runtime_setup == ("Не требуются.",)
@@ -1143,7 +1154,17 @@ def _materialize(
             *_repeater_navigation_from_context(context),
             *preconditions,
         ]
-    fixtures = obligation.fixture_values
+    if kind == "source-conditional-visibility" and fixtures:
+        selected_fixture = _normalized_text(fixtures[0])
+        preconditions = [
+            item
+            for item in preconditions
+            if not (
+                selected_fixture
+                and selected_fixture in _normalized_text(item)
+                and ("выбрать" in _normalized_text(item) or "установить" in _normalized_text(item))
+            )
+        ]
     title = ""
     case_type = "позитивный"
     test_data: list[str] = []
@@ -1205,7 +1226,10 @@ def _materialize(
         test_data = [f"{label}: оставить пустым."]
         steps = _unique_steps(
             f"Оставить {label} пустым.",
-            obligation.validation_trigger,
+            _validation_commit_step(
+                label=label,
+                action=obligation.validation_trigger,
+            ),
         )
     elif kind == "source-editability":
         if not obligation.validation_trigger.strip():
@@ -1480,9 +1504,22 @@ def _materialize(
             ]
             steps = _unique_steps(
                 f"Ввести `{fixtures[0]}` в {label}.",
+                f"Проверить, что значение `{fixtures[0]}` соответствует правилу: {expected_result.rstrip('. ')}.",
+                f"Очистить {label} после проверки `{fixtures[0]}`.",
                 "Ввести `999123456` в {label}.".format(label=label),
+                "Проверить, что значение `999123456` не соответствует правилу: {oracle}.".format(
+                    oracle=expected_result.rstrip(". ")
+                ),
+                f"Очистить {label} после проверки `999123456`.",
                 "Ввести `99912345678` в {label}.".format(label=label),
+                "Проверить, что значение `99912345678` не соответствует правилу: {oracle}.".format(
+                    oracle=expected_result.rstrip(". ")
+                ),
+                f"Очистить {label} после проверки `99912345678`.",
                 "Ввести `99912A4567` в {label}.".format(label=label),
+                "Проверить, что значение `99912A4567` не соответствует правилу: {oracle}.".format(
+                    oracle=expected_result.rstrip(". ")
+                ),
             )
         elif _requires_text_hyphen_negatives(obligation):
             test_data = [
@@ -1492,8 +1529,13 @@ def _materialize(
             ]
             steps = _unique_steps(
                 f"Ввести `{fixtures[0]}` в {label}.",
+                f"Проверить, что значение `{fixtures[0]}` соответствует правилу: {expected_result.rstrip('. ')}.",
+                f"Очистить {label} после проверки `{fixtures[0]}`.",
                 f"Ввести `{fixtures[0]}1` в {label}.",
+                f"Проверить, что значение `{fixtures[0]}1` не соответствует правилу: {expected_result.rstrip('. ')}.",
+                f"Очистить {label} после проверки `{fixtures[0]}1`.",
                 f"Ввести `{fixtures[0]}@` в {label}.",
+                f"Проверить, что значение `{fixtures[0]}@` не соответствует правилу: {expected_result.rstrip('. ')}.",
             )
         else:
             steps = _unique_steps(
@@ -1520,7 +1562,10 @@ def _materialize(
         test_data = [f"{label}: оставить пустым."]
         steps = _unique_steps(
             f"Оставить {label} пустым.",
-            obligation.validation_trigger,
+            _validation_commit_step(
+                label=label,
+                action=obligation.validation_trigger,
+            ),
         )
     elif kind == "invalid-input":
         if len(fixtures) != 1 or not obligation.validation_trigger.strip():
