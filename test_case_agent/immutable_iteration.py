@@ -1846,6 +1846,15 @@ def run_immutable_iteration(
                 markdown,
                 gate.draft_sha256,
                 reviewer_acceptance_contract(schema_version=2),
+                case_status_overrides=(
+                    {
+                        item.case_key: item.status
+                        for item in cases
+                        if item.status == "candidate-ui-calibration"
+                    }
+                    if revision_context is not None
+                    else None
+                ),
             )
             evidence_payload = evidence_pack.to_dict()
             _write_json(output_dir / "reviewer-evidence-pack.json", evidence_payload)

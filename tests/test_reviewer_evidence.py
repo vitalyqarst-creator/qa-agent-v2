@@ -301,17 +301,26 @@ class ReviewerEvidenceTests(unittest.TestCase):
         )
         return basis, graph
 
-    def _pack(self, *, basis=None, graph=None):  # type: ignore[no-untyped-def]
+    def _pack(
+        self,
+        *,
+        basis=None,
+        graph=None,
+        cases=None,
+        case_status_overrides=None,
+    ):  # type: ignore[no-untyped-def]
         basis = basis or self.basis
         graph = graph or self.graph
-        plan = build_test_design_plan(graph, context=self.fixture.context)
-        cases = plan.deterministic_cases
+        if cases is None:
+            plan = build_test_design_plan(graph, context=self.fixture.context)
+            cases = plan.deterministic_cases
         draft = render_test_cases(cases, scope_title=self.fixture.context.scope_title)
         gate = validate_suite(
             graph=graph,
             cases=cases,
             markdown=draft,
             checked_path="shadow.md",
+            case_status_overrides=case_status_overrides,
         )
         self.assertTrue(gate.passed, gate.to_dict())
         return build_reviewer_evidence_pack(
@@ -321,6 +330,7 @@ class ReviewerEvidenceTests(unittest.TestCase):
             draft,
             gate.draft_sha256,
             reviewer_acceptance_contract(schema_version=2),
+            case_status_overrides=case_status_overrides,
         )
 
     def test_exported_basis_reloads_and_requalifies_registered_files(self) -> None:
@@ -449,6 +459,85 @@ class ReviewerEvidenceTests(unittest.TestCase):
                 draft,
                 hashlib.sha256(draft.encode("utf-8")).hexdigest(),
                 reviewer_acceptance_contract(schema_version=2),
+            )
+
+    def test_status_override_allows_revision_calibration_without_binding_drift(self) -> None:
+        plan = build_test_design_plan(self.graph, context=self.fixture.context)
+        source_case = plan.deterministic_cases[0]
+        revised_case = replace(
+            source_case,
+            status="candidate-ui-calibration",
+            calibration_question=(
+                "Какой точный UI observable нужен для публикации этого кейса?"
+            ),
+        )
+        cases = (revised_case, *plan.deterministic_cases[1:])
+
+        without_override_draft = render_test_cases(
+            cases,
+            scope_title=self.fixture.context.scope_title,
+        )
+        draft_sha256 = hashlib.sha256(
+            without_override_draft.encode("utf-8")
+        ).hexdigest()
+        with self.assertRaisesRegex(
+            ReviewerEvidenceError,
+            source_case.case_key,
+        ):
+            build_reviewer_evidence_pack(
+                self.basis,
+                self.graph,
+                cases,
+                without_override_draft,
+                draft_sha256,
+                reviewer_acceptance_contract(schema_version=2),
+            )
+
+        pack = build_reviewer_evidence_pack(
+            self.basis,
+            self.graph,
+            cases,
+            without_override_draft,
+            draft_sha256,
+            reviewer_acceptance_contract(schema_version=2),
+            case_status_overrides={source_case.case_key: revised_case.status},
+        )
+
+        payload = pack.to_dict()
+        mapped = {
+            item["case_key"]: item["tc_id"]
+            for item in payload["coverage_mapping"]
+            if item["case_key"]
+        }
+        self.assertEqual(source_case.tc_id, mapped[source_case.case_key])
+
+    def test_status_override_does_not_mask_tc_id_binding_drift(self) -> None:
+        plan = build_test_design_plan(self.graph, context=self.fixture.context)
+        source_case = plan.deterministic_cases[0]
+        revised_case = replace(
+            source_case,
+            tc_id="TC-DRIFT",
+            status="candidate-ui-calibration",
+            calibration_question=(
+                "Какой точный UI observable нужен для публикации этого кейса?"
+            ),
+        )
+        cases = (revised_case, *plan.deterministic_cases[1:])
+        draft = render_test_cases(cases, scope_title=self.fixture.context.scope_title)
+        draft_sha256 = hashlib.sha256(draft.encode("utf-8")).hexdigest()
+
+        with self.assertRaisesRegex(
+            ReviewerEvidenceError,
+            "test-case-binding-mismatch",
+        ):
+            build_reviewer_evidence_pack(
+                self.basis,
+                self.graph,
+                cases,
+                draft,
+                draft_sha256,
+                reviewer_acceptance_contract(schema_version=2),
+                case_status_overrides={source_case.case_key: revised_case.status},
             )
 
     def test_missing_compiled_scope_row_is_rejected_before_pack_creation(self) -> None:

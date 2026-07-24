@@ -873,6 +873,87 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertIn(previous_cases[1].tc_id, manifest_text)
         self.assertNotIn(previous_cases[1].steps[0], manifest_text)
 
+    def test_model_runtime_revision_passes_calibration_status_override_to_evidence_builder(self) -> None:
+        graph = _graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(graph)
+        backend = FixtureBackend()
+        captured_overrides: list[Mapping[str, str] | None] = []
+
+        basis = ReviewerEvidenceBasis(  # type: ignore[arg-type]
+            repo_root=self.root,
+            compiled_scope=None,
+            manifest=None,
+            source_review_receipt=None,
+            obligation_set=None,
+            registered_files=(),
+            mockup_files=(),
+            basis_digest="unused-by-patched-builder",
+            compiled_snapshot_sha256="unused-by-patched-builder",
+            review_receipt_sha256="unused-by-patched-builder",
+        )
+
+        class FakePack:
+            def __init__(self, payload: Mapping[str, Any]) -> None:
+                self.payload = dict(payload)
+                rendered = json.dumps(
+                    self.payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+                self.digest = hashlib.sha256(rendered).hexdigest()
+
+            def to_dict(self) -> dict[str, Any]:
+                return dict(self.payload)
+
+            @property
+            def image_paths(self) -> tuple[Path, ...]:
+                return ()
+
+        def fake_builder(
+            _basis: Any,
+            bound_graph: Any,
+            cases: Any,
+            markdown: str,
+            draft_sha256: str,
+            _acceptance: Any,
+            *,
+            case_status_overrides: Mapping[str, str] | None = None,
+        ) -> FakePack:
+            captured_overrides.append(case_status_overrides)
+            gate = type("GateBinding", (), {"draft_sha256": draft_sha256})()
+            payload = _v2_pack(bound_graph, cases, gate, markdown)
+            payload["identity"]["contract"] = "reviewer-evidence-pack-v2"
+            payload["mockup_attachments"] = []
+            return FakePack(payload)
+
+        with patch(
+            "test_case_agent.immutable_iteration.build_reviewer_evidence_pack",
+            side_effect=fake_builder,
+        ), patch.object(
+            ReviewerEvidenceBasis,
+            "to_document",
+            return_value={
+                "schema_version": 1,
+                "contract": "test-only-evidence-basis",
+            },
+        ):
+            result = self.run_engine(
+                graph,
+                "model-runtime-revision-evidence-status-override",
+                backend=backend,
+                writer_mode="model-runtime-prose",
+                revision_input=revision_input,
+                reviewer_evidence_basis=basis,
+            )
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        self.assertEqual(
+            {previous_cases[0].case_key: "candidate-ui-calibration"},
+            captured_overrides[0],
+        )
+
     def test_model_runtime_revision_prompt_for_38_case_fixture_stays_under_target(self) -> None:
         affected_cases = [
             {
@@ -1502,6 +1583,7 @@ class ImmutableIterationTests(unittest.TestCase):
             markdown: str,
             draft_sha256: str,
             _acceptance: Any,
+            **_kwargs: Any,
         ) -> FakePack:
             gate = type("GateBinding", (), {"draft_sha256": draft_sha256})()
             payload = _v2_pack(bound_graph, cases, gate, markdown)

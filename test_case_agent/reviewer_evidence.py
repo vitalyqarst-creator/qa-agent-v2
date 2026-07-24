@@ -2347,6 +2347,8 @@ def build_reviewer_evidence_pack(
     draft_markdown: str,
     draft_sha256: str,
     acceptance_contract: Mapping[str, Any],
+    *,
+    case_status_overrides: Mapping[str, str] | None = None,
 ) -> ReviewerEvidencePack:
     if not isinstance(basis, ReviewerEvidenceBasis):
         _fail("invalid-evidence-basis", "basis has the wrong type")
@@ -2403,9 +2405,26 @@ def build_reviewer_evidence_pack(
     case_designs = sorted(cases, key=lambda item: item.case_key)
     if [item.case_key for item in case_designs] != sorted(graph_cases):
         _fail("test-case-set-mismatch", "test-case designs differ from coverage graph")
+    allowed_status_overrides = dict(case_status_overrides or {})
+    for case_key, status in allowed_status_overrides.items():
+        if case_key not in graph_cases:
+            _fail(
+                "test-case-binding-mismatch",
+                f"status override references unknown case: {case_key}",
+            )
+        if status != "candidate-ui-calibration":
+            _fail(
+                "test-case-binding-mismatch",
+                f"unsupported status override for {case_key}: {status}",
+            )
     for design in case_designs:
         graph_case = graph_cases[design.case_key]
-        if design.tc_id != graph_case.tc_id or design.status != graph_case.status:
+        expected_status = graph_case.status
+        status_allowed = (
+            design.status == expected_status
+            or allowed_status_overrides.get(design.case_key) == design.status
+        )
+        if design.tc_id != graph_case.tc_id or not status_allowed:
             _fail(
                 "test-case-binding-mismatch",
                 f"test-case design differs from graph: {design.case_key}",
