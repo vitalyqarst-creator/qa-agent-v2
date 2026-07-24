@@ -13,6 +13,9 @@ from PIL import Image
 
 from test_case_agent.immutable_iteration import (
     ImmutableIterationError,
+    MAX_REVIEWER_PROMPT_BYTES,
+    _run_stage,
+    _stage_prompt,
     run_immutable_iteration,
 )
 from test_case_agent.iteration_contract import (
@@ -301,6 +304,36 @@ class FixtureBackend:
                     "count": len(images),
                     "bytes": sum(item.size_bytes for item in images),
                 },
+            },
+        )
+
+
+class TinyBackend:
+    def __init__(self) -> None:
+        self.calls: list[str] = []
+
+    def run_stage(
+        self,
+        *,
+        stage: str,
+        prompt: str,
+        schema: Mapping[str, Any],
+        artifact_dir: Path,
+        images: tuple[Any, ...] = (),
+    ) -> StageResult:
+        del prompt, schema, artifact_dir, images
+        self.calls.append(stage)
+        return StageResult(
+            payload={"ok": True},
+            receipt={
+                "stage": stage,
+                "backend": "tiny-fixture-stage",
+                "attempts": 1,
+                "duration_ms": 1,
+                "tokens": "unavailable",
+                "tool_event_count": 0,
+                "timeout_seconds": None,
+                "image_attachments": {"count": 0, "bytes": 0},
             },
         )
 
@@ -625,6 +658,51 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertFalse(
             (result.output_dir / "model-stages" / "reviewer-prompt.txt").exists()
         )
+
+    def test_contact_person_sized_reviewer_prompt_fits_budget(self) -> None:
+        target_prompt_bytes = 296_815
+        request = {
+            "schema_version": 2,
+            "reviewer_evidence_pack": {"padding": ""},
+        }
+        base_size = len(_stage_prompt("reviewer", request).encode("utf-8"))
+        request["reviewer_evidence_pack"]["padding"] = "x" * (
+            target_prompt_bytes - base_size
+        )
+        prompt_size = len(_stage_prompt("reviewer", request).encode("utf-8"))
+        self.assertEqual(target_prompt_bytes, prompt_size)
+        self.assertLess(prompt_size, MAX_REVIEWER_PROMPT_BYTES)
+
+        backend = TinyBackend()
+        output_dir = self.root / "contact-person-sized-reviewer"
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"ok": {"type": "boolean"}},
+            "required": ["ok"],
+        }
+        model_calls = 0
+
+        def record_model_call() -> None:
+            nonlocal model_calls
+            model_calls += 1
+
+        payload, receipt, called_model = _run_stage(
+            stage="reviewer",
+            request=request,
+            schema=schema,
+            output_dir=output_dir,
+            repo_root=self.root,
+            backend=backend,
+            precomputed=None,
+            on_model_call=record_model_call,
+        )
+
+        self.assertEqual({"ok": True}, payload)
+        self.assertTrue(called_model)
+        self.assertEqual(1, model_calls)
+        self.assertEqual(["reviewer"], backend.calls)
+        self.assertEqual(prompt_size, receipt["input_artifacts"]["prompt_bytes"])
 
     def test_v2_registered_mockup_is_forwarded_once_and_receipted(self) -> None:
         graph = _graph()
