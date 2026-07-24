@@ -4,7 +4,7 @@ import copy
 import hashlib
 import json
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol, Sequence
 
@@ -48,6 +48,7 @@ from test_case_agent.test_design import (
     DesignContext,
     DesignError,
     TestCaseDesign,
+    TestDesignPlan,
     build_test_design_plan,
     render_test_cases,
 )
@@ -308,6 +309,23 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
                 "source blocker; do not mark all valid seed cases unresolved "
                 "because of schema or route confusion."
             )
+            if "revision_context" in request:
+                instruction += (
+                    " This is a bounded revision attempt. The request contains only "
+                    "TCs affected by reviewer findings plus their previous draft "
+                    "blocks. Revise only those affected cases. Cases absent from "
+                    "the request are preserved by the runner byte-identical from "
+                    "the previous shadow draft. Do not rewrite unaffected TCs. "
+                    "For affected executable cases, repair only source-backed "
+                    "defects described in `findings_by_case`. If a finding requires "
+                    "an unknown UI observable or validation/commit trigger that is "
+                    "not source-bound, keep the case as calibration-pending by "
+                    "returning the provided `calibration_question`; do not invent "
+                    "UI messages, markers, buttons, or validation responses. If a "
+                    "source-bound commit/validation action is explicit in the seed "
+                    "or source evidence, write it as an action-oriented step. "
+                    "Runner-owned identity and traceability remain immutable."
+                )
         else:
             instruction = (
                 "Return JSON only. For every card, return only its registered subject, "
@@ -856,6 +874,230 @@ def _artifact_inventory(output_dir: Path) -> list[str]:
     return sorted(values)
 
 
+_REVISION_CALIBRATION_FINDING_TYPES = {
+    "commit-action-missing",
+    "expected-result-unsupported",
+}
+_REVISION_SOURCE_BOUND_REPAIR_HINT = (
+    "Masked rendering belongs to ASSERT-019/OBL-BSR-183-PHONE-DEFAULT-MASK"
+)
+
+
+@dataclass(frozen=True)
+class _RevisionContext:
+    payload: Mapping[str, Any]
+    previous_cases: tuple[TestCaseDesign, ...]
+    affected_case_keys: tuple[str, ...]
+    findings_by_case: Mapping[str, tuple[Mapping[str, Any], ...]]
+    previous_blocks_by_tc_id: Mapping[str, str]
+    source_attempt_dir: Path
+
+
+def _text_field(raw: Mapping[str, Any], field: str, label: str) -> str:
+    value = raw.get(field)
+    if not isinstance(value, str) or not value.strip():
+        raise ImmutableIterationError(f"{label}.{field} must be non-empty text")
+    return value
+
+
+def _string_tuple(raw: Mapping[str, Any], field: str, label: str) -> tuple[str, ...]:
+    value = raw.get(field)
+    if (
+        not isinstance(value, list)
+        or not value
+        or any(not isinstance(item, str) or not item.strip() for item in value)
+    ):
+        raise ImmutableIterationError(
+            f"{label}.{field} must be a non-empty string array"
+        )
+    return tuple(value)
+
+
+def _design_from_document(raw: Mapping[str, Any], label: str) -> TestCaseDesign:
+    return TestCaseDesign(
+        case_key=_text_field(raw, "case_key", label),
+        tc_id=_text_field(raw, "tc_id", label),
+        status=_text_field(raw, "status", label),
+        title=_text_field(raw, "title", label),
+        case_type=_text_field(raw, "case_type", label),
+        priority=_text_field(raw, "priority", label),
+        package_id=_text_field(raw, "package_id", label),
+        traceability=_string_tuple(raw, "traceability", label),
+        preconditions=_string_tuple(raw, "preconditions", label),
+        test_data=_string_tuple(raw, "test_data", label),
+        steps=_string_tuple(raw, "steps", label),
+        expected_result=_text_field(raw, "expected_result", label),
+        postconditions=_string_tuple(raw, "postconditions", label),
+        calibration_question=(
+            raw.get("calibration_question")
+            if isinstance(raw.get("calibration_question"), str)
+            else ""
+        ),
+    )
+
+
+def _case_blocks_by_tc_id(markdown: str) -> dict[str, str]:
+    starts: list[tuple[str, int]] = []
+    offset = 0
+    for line in markdown.splitlines(keepends=True):
+        if line.startswith("## "):
+            tc_id = line[3:].strip()
+            if tc_id:
+                starts.append((tc_id, offset))
+        offset += len(line)
+    blocks: dict[str, str] = {}
+    for index, (tc_id, start) in enumerate(starts):
+        end = starts[index + 1][1] if index + 1 < len(starts) else len(markdown)
+        blocks[tc_id] = markdown[start:end]
+    return blocks
+
+
+def _revision_findings_by_case(
+    revision_input: Mapping[str, Any],
+) -> dict[str, tuple[Mapping[str, Any], ...]]:
+    response = revision_input.get("reviewer_response")
+    if not isinstance(response, Mapping):
+        raise ImmutableIterationError("revision_input.reviewer_response must be an object")
+    raw_findings = response.get("test_case_findings")
+    if not isinstance(raw_findings, list):
+        raise ImmutableIterationError(
+            "revision_input.reviewer_response.test_case_findings must be an array"
+        )
+    by_case: dict[str, list[Mapping[str, Any]]] = {}
+    for index, raw in enumerate(raw_findings):
+        if not isinstance(raw, Mapping):
+            raise ImmutableIterationError(
+                f"revision test_case_findings[{index}] must be an object"
+            )
+        case_key = raw.get("case_key")
+        tc_id = raw.get("tc_id")
+        finding_type = raw.get("finding_type")
+        if (
+            not isinstance(case_key, str)
+            or not case_key
+            or not isinstance(tc_id, str)
+            or not tc_id
+            or not isinstance(finding_type, str)
+            or not finding_type
+        ):
+            raise ImmutableIterationError(
+                f"revision test_case_findings[{index}] is missing case binding"
+            )
+        by_case.setdefault(case_key, []).append(dict(raw))
+    return {key: tuple(value) for key, value in by_case.items()}
+
+
+def _revision_requires_calibration(findings: Sequence[Mapping[str, Any]]) -> bool:
+    for finding in findings:
+        finding_type = str(finding.get("finding_type") or "")
+        message = str(finding.get("message") or "")
+        if finding_type not in _REVISION_CALIBRATION_FINDING_TYPES:
+            continue
+        if _REVISION_SOURCE_BOUND_REPAIR_HINT in message:
+            continue
+        return True
+    return False
+
+
+def _revision_calibration_question(findings: Sequence[Mapping[str, Any]]) -> str:
+    tc_id = str(findings[0].get("tc_id") or "affected case")
+    finding_types = ", ".join(
+        sorted({str(item.get("finding_type") or "unknown") for item in findings})
+    )
+    return (
+        f"Какой точный source-backed UI trigger/observable нужно проверить "
+        f"для {tc_id} перед executable publication по reviewer findings "
+        f"{finding_types}?"
+    )
+
+
+def _load_revision_context(
+    *,
+    revision_input: Mapping[str, Any],
+    repo_root: Path,
+    graph: CoverageGraph,
+    writer_mode: str,
+) -> _RevisionContext:
+    if revision_input.get("schema_version") != 1:
+        raise ImmutableIterationError("revision_input.schema_version must be 1")
+    if revision_input.get("graph_digest") != graph.digest:
+        raise ImmutableIterationError("revision_input graph_digest differs")
+    if revision_input.get("writer_mode") != writer_mode:
+        raise ImmutableIterationError("revision_input writer_mode differs")
+    if revision_input.get("reviewer_decision") != "changes-required":
+        raise ImmutableIterationError(
+            "revision_input must come from reviewer changes-required"
+        )
+    source_attempt = revision_input.get("source_attempt_dir")
+    if not isinstance(source_attempt, str) or not source_attempt.strip():
+        raise ImmutableIterationError("revision_input.source_attempt_dir is missing")
+    source_attempt_dir = _resolve_inside_repo(
+        Path(source_attempt),
+        repo_root,
+        "revision source attempt",
+    )
+    designs_path = source_attempt_dir / "test-case-designs.json"
+    draft_path = source_attempt_dir / "shadow-test-cases.md"
+    if not designs_path.is_file() or not draft_path.is_file():
+        raise ImmutableIterationError(
+            "revision_input source attempt is missing draft/design artifacts"
+        )
+    designs_payload = json.loads(designs_path.read_text(encoding="utf-8"))
+    if not isinstance(designs_payload, Mapping) or not isinstance(
+        designs_payload.get("cases"), list
+    ):
+        raise ImmutableIterationError("previous test-case-designs.json is invalid")
+    previous_cases = tuple(
+        _design_from_document(raw, f"previous.cases[{index}]")
+        for index, raw in enumerate(designs_payload["cases"])
+        if isinstance(raw, Mapping)
+    )
+    if len(previous_cases) != len(designs_payload["cases"]):
+        raise ImmutableIterationError("previous test-case-designs contains non-objects")
+    previous_keys = {case.case_key for case in previous_cases}
+    graph_keys = {case.case_key for case in graph.cases}
+    if previous_keys != graph_keys:
+        raise ImmutableIterationError("revision previous cases differ from graph cases")
+    previous_draft = draft_path.read_text(encoding="utf-8")
+    expected_draft_sha = revision_input.get("draft_sha256")
+    if isinstance(expected_draft_sha, str) and expected_draft_sha:
+        actual_draft_sha = hashlib.sha256(previous_draft.encode("utf-8")).hexdigest()
+        if actual_draft_sha != expected_draft_sha:
+            raise ImmutableIterationError("revision_input draft_sha256 differs")
+    findings_by_case = _revision_findings_by_case(revision_input)
+    affected_case_keys = tuple(
+        key for key in sorted(findings_by_case) if key in previous_keys
+    )
+    if not affected_case_keys:
+        raise ImmutableIterationError("revision_input has no bound affected cases")
+    unknown = set(findings_by_case) - previous_keys
+    if unknown:
+        raise ImmutableIterationError(
+            "revision_input references unknown cases: " + ", ".join(sorted(unknown))
+        )
+    return _RevisionContext(
+        payload=revision_input,
+        previous_cases=previous_cases,
+        affected_case_keys=affected_case_keys,
+        findings_by_case=findings_by_case,
+        previous_blocks_by_tc_id=_case_blocks_by_tc_id(previous_draft),
+        source_attempt_dir=source_attempt_dir,
+    )
+
+
+def _revision_seed_case(
+    case: TestCaseDesign,
+    findings: Sequence[Mapping[str, Any]],
+) -> TestCaseDesign:
+    if not _revision_requires_calibration(findings):
+        return case
+    return replace(
+        case,
+        status="candidate-ui-calibration",
+        calibration_question=_revision_calibration_question(findings),
+    )
+
+
 def run_immutable_iteration(
     *,
     repo_root: Path,
@@ -871,6 +1113,7 @@ def run_immutable_iteration(
     writer_mode: str = "deterministic-first",
     mockup_label_aliases: Sequence[Mapping[str, str]] = (),
     revision_findings: Mapping[str, Any] | None = None,
+    revision_input: Mapping[str, Any] | None = None,
 ) -> ImmutableIterationResult:
     """Run one immutable shadow iteration.
 
@@ -909,6 +1152,9 @@ def run_immutable_iteration(
     calibration_pending_count = sum(
         item.status == "candidate-ui-calibration" for item in graph.cases
     )
+    revision_context: _RevisionContext | None = None
+    revision_changed_tc_ids: tuple[str, ...] = ()
+    revision_unaffected_byte_identical = False
 
     def record_writer_call() -> None:
         nonlocal writer_model_calls
@@ -1029,6 +1275,23 @@ def run_immutable_iteration(
                 else "immutable-deterministic-first"
             ),
             "writer_mode": writer_mode,
+            "revision_input_supplied": revision_input is not None,
+            "revision_source_attempt_dir": (
+                revision_context.source_attempt_dir.relative_to(repo_root).as_posix()
+                if revision_context is not None
+                else None
+            ),
+            "revision_affected_case_count": (
+                len(revision_context.affected_case_keys)
+                if revision_context is not None
+                else 0
+            ),
+            "revision_changed_tc_ids": list(revision_changed_tc_ids),
+            "revision_unaffected_byte_identical": (
+                revision_unaffected_byte_identical
+                if revision_context is not None
+                else None
+            ),
             "status": status,
             "error": error,
             "graph_digest": graph.digest,
@@ -1106,12 +1369,23 @@ def run_immutable_iteration(
                     "coverage graph is invalid: "
                     + "; ".join(item.finding_id for item in graph_errors)
                 )
+            if revision_input is not None and writer_mode != "model-runtime-prose":
+                raise ImmutableIterationError(
+                    "revision_input requires writer_mode model-runtime-prose"
+                )
             context.validate()
             protected = _snapshot_files(
                 repo_root=repo_root,
                 source_paths=protected_source_paths,
                 canonical_paths=protected_canonical_paths,
             )
+            if revision_input is not None:
+                revision_context = _load_revision_context(
+                    revision_input=revision_input,
+                    repo_root=repo_root,
+                    graph=graph,
+                    writer_mode=writer_mode,
+                )
             _write_json(output_dir / "coverage-graph.json", graph.to_dict())
             _write_json(output_dir / "design-context.json", _context_payload(context))
             _write_json(
@@ -1190,30 +1464,108 @@ def run_immutable_iteration(
                 error="protected inputs changed before model execution",
             )
 
+        active_plan = plan
+        previous_cases_by_key: dict[str, TestCaseDesign] = {}
+        if writer_mode == "model-runtime-prose" and revision_context is not None:
+            previous_cases_by_key = {
+                item.case_key: item for item in revision_context.previous_cases
+            }
+            affected_cases = tuple(
+                _revision_seed_case(
+                    previous_cases_by_key[case_key],
+                    revision_context.findings_by_case[case_key],
+                )
+                for case_key in revision_context.affected_case_keys
+            )
+            active_plan = TestDesignPlan(
+                schema_version=plan.schema_version,
+                graph_digest=plan.graph_digest,
+                deterministic_cases=affected_cases,
+                writer_cards=(),
+                blocked_cards=(),
+            )
         if writer_mode == "model-runtime-prose":
             writer_request = build_runtime_writer_request(
                 graph,
-                plan,
+                active_plan,
                 mockup_label_aliases=mockup_label_aliases,
-                revision_findings=revision_findings,
+                revision_findings=(
+                    revision_context.payload
+                    if revision_context is not None
+                    else revision_findings
+                ),
             )
+            if revision_context is not None:
+                previous_blocks = {
+                    case_key: revision_context.previous_blocks_by_tc_id[
+                        previous_cases_by_key[case_key].tc_id
+                    ]
+                    for case_key in revision_context.affected_case_keys
+                    if previous_cases_by_key[case_key].tc_id
+                    in revision_context.previous_blocks_by_tc_id
+                }
+                writer_request = {
+                    **dict(writer_request),
+                    "revision_context": {
+                        "mode": "affected-cases-only",
+                        "source_attempt_dir": (
+                            revision_context.source_attempt_dir.relative_to(
+                                repo_root
+                            ).as_posix()
+                        ),
+                        "affected_case_keys": list(
+                            revision_context.affected_case_keys
+                        ),
+                        "findings_by_case": {
+                            key: list(value)
+                            for key, value in revision_context.findings_by_case.items()
+                            if key in revision_context.affected_case_keys
+                        },
+                        "previous_draft_blocks_by_case": previous_blocks,
+                        "unaffected_cases_policy": (
+                            "The runner will preserve cases absent from this "
+                            "request byte-identical from the previous shadow draft."
+                        ),
+                    },
+                }
             evidence_access.update(
                 {
-                    "writer_context": "model-runtime-prose source-bound cases",
+                    "writer_context": (
+                        "model-runtime-prose revision affected cases"
+                        if revision_context is not None
+                        else "model-runtime-prose source-bound cases"
+                    ),
                     "writer_model_authors_runtime_prose": True,
                     "mockup_label_alias_count": len(mockup_label_aliases),
                     "revision_findings_supplied": revision_findings is not None,
+                    "revision_input_supplied": revision_context is not None,
                 }
             )
             _write_json(output_dir / "evidence-access-report.json", evidence_access)
         else:
             writer_request = build_writer_request(graph, plan)
         _write_json(output_dir / "writer-request.json", writer_request)
+        if revision_context is not None:
+            _write_json(
+                output_dir / "revision-context.json",
+                {
+                    "schema_version": 1,
+                    "source_attempt_dir": revision_context.source_attempt_dir.relative_to(
+                        repo_root
+                    ).as_posix(),
+                    "affected_case_keys": list(revision_context.affected_case_keys),
+                    "finding_count": sum(
+                        len(items)
+                        for items in revision_context.findings_by_case.values()
+                    ),
+                    "previous_case_count": len(revision_context.previous_cases),
+                },
+            )
         writer_cases: tuple[TestCaseDesign, ...] = ()
         if writer_mode == "model-runtime-prose":
             with timer.phase("writer"):
                 schema = runtime_writer_response_schema(
-                    [item.case_key for item in plan.deterministic_cases],
+                    [item.case_key for item in active_plan.deterministic_cases],
                     graph.digest,
                 )
                 payload, receipt, called_model = _run_stage(
@@ -1232,7 +1584,7 @@ def run_immutable_iteration(
                 writer_cases, unresolved = validate_runtime_writer_response(
                     payload,
                     graph=graph,
-                    plan=plan,
+                    plan=active_plan,
                     context=context,
                     mockup_label_aliases=mockup_label_aliases,
                 )
@@ -1290,13 +1642,24 @@ def run_immutable_iteration(
             model_receipts.append(_zero_writer_receipt(writer_request))
 
         with timer.phase("render-and-gate"):
+            nonlocal_cases: tuple[TestCaseDesign, ...]
+            if writer_mode == "model-runtime-prose" and revision_context is not None:
+                revised_by_key = {item.case_key: item for item in writer_cases}
+                nonlocal_cases = tuple(
+                    revised_by_key.get(item.case_key, item)
+                    for item in revision_context.previous_cases
+                )
+            elif writer_mode == "model-runtime-prose":
+                nonlocal_cases = writer_cases
+            else:
+                nonlocal_cases = (*plan.deterministic_cases, *writer_cases)
+            calibration_pending_count = sum(
+                item.status == "candidate-ui-calibration"
+                for item in nonlocal_cases
+            )
             cases = tuple(
                 sorted(
-                    (
-                        writer_cases
-                        if writer_mode == "model-runtime-prose"
-                        else (*plan.deterministic_cases, *writer_cases)
-                    ),
+                    nonlocal_cases,
                     key=lambda item: item.case_key,
                 )
             )
@@ -1315,9 +1678,54 @@ def run_immutable_iteration(
                 cases=cases,
                 markdown=markdown,
                 checked_path=str(draft_path),
+                case_status_overrides=(
+                    {
+                        item.case_key: item.status
+                        for item in cases
+                        if item.status == "candidate-ui-calibration"
+                    }
+                    if revision_context is not None
+                    else None
+                ),
             )
             _write_json(output_dir / "suite-gate.json", gate.to_dict())
             test_case_count = gate.actual_case_count
+            if revision_context is not None:
+                new_blocks = _case_blocks_by_tc_id(markdown)
+                affected_tc_ids = {
+                    previous_cases_by_key[key].tc_id
+                    for key in revision_context.affected_case_keys
+                }
+                changed_tc_ids = tuple(
+                    sorted(
+                        tc_id
+                        for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
+                        if new_blocks.get(tc_id) != old_block
+                    )
+                )
+                revision_changed_tc_ids = changed_tc_ids
+                revision_unaffected_byte_identical = all(
+                    new_blocks.get(tc_id) == old_block
+                    for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
+                    if tc_id not in affected_tc_ids
+                )
+                _write_json(
+                    output_dir / "revision-diff.json",
+                    {
+                        "schema_version": 1,
+                        "source_attempt_dir": revision_context.source_attempt_dir.relative_to(
+                            repo_root
+                        ).as_posix(),
+                        "affected_case_keys": list(
+                            revision_context.affected_case_keys
+                        ),
+                        "affected_tc_ids": sorted(affected_tc_ids),
+                        "changed_tc_ids": list(changed_tc_ids),
+                        "unaffected_byte_identical": (
+                            revision_unaffected_byte_identical
+                        ),
+                    },
+                )
         if not gate.passed:
             return finish(
                 "blocked-suite-gate",
@@ -1404,8 +1812,15 @@ def run_immutable_iteration(
             )
         _write_json(output_dir / "reviewer-request.json", reviewer_request)
         case_bindings = [
-            (item.case_key, item.tc_id, item.obligation_ids[0], item.status)
-            for item in graph.cases
+            (
+                item.case_key,
+                item.tc_id,
+                graph_case.obligation_ids[0],
+                item.status,
+            )
+            for item in cases
+            for graph_case in graph.cases
+            if graph_case.case_key == item.case_key
         ]
         with timer.phase("reviewer"):
             schema = reviewer_response_schema(

@@ -1468,8 +1468,10 @@ def validate_suite(
     cases: Sequence[TestCaseDesign],
     markdown: str,
     checked_path: str,
+    case_status_overrides: Mapping[str, str] | None = None,
 ) -> SuiteGateReport:
     expected = {item.case_key: item for item in graph.cases}
+    allowed_status_overrides = dict(case_status_overrides or {})
     actual: dict[str, TestCaseDesign] = {}
     findings: list[str] = []
     for item in cases:
@@ -1483,7 +1485,10 @@ def validate_suite(
             continue
         if item.tc_id != source.tc_id:
             findings.append(f"stable TC-ID drift for {item.case_key}")
-        if item.status != source.status:
+        if (
+            item.status != source.status
+            and allowed_status_overrides.get(item.case_key) != item.status
+        ):
             findings.append(f"case status drift for {item.case_key}")
         if set(source.obligation_ids) - set(item.traceability):
             findings.append(f"missing obligation traceability for {item.case_key}")
@@ -2111,15 +2116,31 @@ def _validate_reviewer_response_v2(
     _one_line(root["summary"], "$.summary")
     expected: dict[str, tuple[str, str, str]] = {}
     obligations = {item.obligation_id: item for item in graph.obligations}
+    request_case_statuses: dict[str, str] = {}
+    pack_cases = reviewer_request.get("reviewer_evidence_pack", {}).get(
+        "test_cases",
+        {},
+    )
+    if isinstance(pack_cases, Mapping):
+        raw_designs = pack_cases.get("designs")
+        if isinstance(raw_designs, list):
+            for raw_design in raw_designs:
+                if not isinstance(raw_design, Mapping):
+                    continue
+                case_key = raw_design.get("case_key")
+                status = raw_design.get("status")
+                if isinstance(case_key, str) and isinstance(status, str):
+                    request_case_statuses[case_key] = status
     for case in graph.cases:
         obligation_id = case.obligation_ids[0]
         if obligation_id not in obligations:  # pragma: no cover
             raise IterationContractError(f"graph case references unknown {obligation_id}")
+        case_status = request_case_statuses.get(case.case_key, case.status)
         expected[case.case_key] = (
             case.tc_id,
             obligation_id,
             "calibration-pending"
-            if case.status == "candidate-ui-calibration"
+            if case_status == "candidate-ui-calibration"
             else "covered",
         )
     raw_results = root["case_results"]
@@ -2666,13 +2687,25 @@ def validate_reviewer_response(
     _one_line(root["summary"], "$.summary")
     expected: dict[str, tuple[str, str, str]] = {}
     obligations = {item.obligation_id: item for item in graph.obligations}
+    request_case_statuses: dict[str, str] = {}
+    if isinstance(reviewer_request, Mapping):
+        raw_cases = reviewer_request.get("cases")
+        if isinstance(raw_cases, list):
+            for raw_case in raw_cases:
+                if not isinstance(raw_case, Mapping):
+                    continue
+                case_key = raw_case.get("case_key")
+                status = raw_case.get("status")
+                if isinstance(case_key, str) and isinstance(status, str):
+                    request_case_statuses[case_key] = status
     for case in graph.cases:
         obligation_id = case.obligation_ids[0]
         if obligation_id not in obligations:  # pragma: no cover
             raise IterationContractError(f"graph case references unknown {obligation_id}")
+        case_status = request_case_statuses.get(case.case_key, case.status)
         required_status = (
             "calibration-pending"
-            if case.status == "candidate-ui-calibration"
+            if case_status == "candidate-ui-calibration"
             else "covered"
         )
         expected[case.case_key] = (case.tc_id, obligation_id, required_status)

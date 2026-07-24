@@ -96,6 +96,7 @@ _RUN_CONFIG_OPTIONAL_FIELDS = {
     "writer_mode",
     "mockup_label_aliases",
     "revision_findings",
+    "revision_input",
 }
 _WRITER_MODES = {"deterministic-first", "model-runtime-prose"}
 _DESIGN_CONTEXT_FIELDS_V1 = {
@@ -155,6 +156,7 @@ class SourceQualifiedRunConfig:
     writer_mode: str = "deterministic-first"
     mockup_label_aliases: tuple[Mapping[str, str], ...] = ()
     revision_findings: Mapping[str, Any] | None = None
+    revision_input: str | None = None
 
 
 @dataclass(frozen=True)
@@ -365,6 +367,11 @@ def _source_qualified_run_config_from_bytes(
         revision_findings=(
             _revision_findings(payload["revision_findings"])
             if "revision_findings" in payload
+            else None
+        ),
+        revision_input=(
+            _relative_path(payload["revision_input"], "revision_input")
+            if "revision_input" in payload
             else None
         ),
     )
@@ -642,6 +649,11 @@ def _run_source_qualified_scope(
     config = _source_qualified_run_config_from_bytes(
         config_raw, allow_legacy_v1=allow_legacy_v1
     )
+    if config.revision_findings is not None and config.revision_input is not None:
+        _fail(
+            "ambiguous-revision-input",
+            "run config must not define both revision_findings and revision_input",
+        )
     config_binding = {
         "role": "run-config",
         "path": _relative(config_path, repo_root),
@@ -700,6 +712,16 @@ def _run_source_qualified_scope(
             if config.design_context is not None
             else None
         )
+        revision_input_path = (
+            _repo_path(config.revision_input, repo_root, "revision input")
+            if config.revision_input is not None
+            else None
+        )
+        revision_input_payload = (
+            _json_object(revision_input_path, label="revision input")
+            if revision_input_path is not None
+            else None
+        )
         material_paths = [
             registry_path,
             source_evidence_path,
@@ -736,6 +758,8 @@ def _run_source_qualified_scope(
             input_paths.append(("design-context", design_context_path))
         if derivations_path is not None:
             input_paths.append(("derivations", derivations_path))
+        if revision_input_path is not None:
+            input_paths.append(("revision-input", revision_input_path))
         if writer_path is not None:
             input_paths.append(("precomputed-writer-response", writer_path))
         if reviewer_path is not None:
@@ -1035,6 +1059,7 @@ def _run_source_qualified_scope(
             writer_mode=config.writer_mode,
             mockup_label_aliases=config.mockup_label_aliases,
             revision_findings=config.revision_findings,
+            revision_input=revision_input_payload,
         )
         finish_stage()
 
@@ -1094,6 +1119,7 @@ def _run_source_qualified_scope(
             "writer_mode": config.writer_mode,
             "mockup_label_alias_count": len(config.mockup_label_aliases),
             "revision_findings_supplied": config.revision_findings is not None,
+            "revision_input_supplied": config.revision_input is not None,
             "registry_digest": registry.digest,
             "source_manifest_digest": contract.manifest.digest,
             "source_review_receipt_digest": binding.source_review_receipt_digest,

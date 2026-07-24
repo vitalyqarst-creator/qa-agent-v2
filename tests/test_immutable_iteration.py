@@ -27,7 +27,7 @@ from test_case_agent.iteration_contract import (
 from test_case_agent.reviewer_evidence import ReviewerEvidenceBasis, ReviewerEvidenceError
 from test_case_agent.stage_backend import StageBackendError, StageResult
 from test_case_agent.test_design import build_test_design_plan, render_test_cases
-from tests.test_iteration_contract import _v2_pack, _writer_graph
+from tests.test_iteration_contract import _multi_runtime_graph, _v2_pack, _writer_graph
 from tests.test_test_design import _context, _graph
 
 
@@ -121,6 +121,7 @@ class FixtureBackend:
         all_runtime_writer_unresolved: bool = False,
         runtime_writer_state_only_precondition: bool = False,
         runtime_writer_ambiguous_precondition: bool = False,
+        runtime_writer_tc_id_drift: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.review_decision = review_decision
@@ -132,6 +133,7 @@ class FixtureBackend:
         self.all_runtime_writer_unresolved = all_runtime_writer_unresolved
         self.runtime_writer_state_only_precondition = runtime_writer_state_only_precondition
         self.runtime_writer_ambiguous_precondition = runtime_writer_ambiguous_precondition
+        self.runtime_writer_tc_id_drift = runtime_writer_tc_id_drift
         self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
@@ -213,7 +215,11 @@ class FixtureBackend:
                     cases.append(
                         {
                             "case_key": seed["case_key"],
-                            "tc_id": seed["tc_id"],
+                            "tc_id": (
+                                "TC-DRIFT"
+                                if self.runtime_writer_tc_id_drift
+                                else seed["tc_id"]
+                            ),
                             "title": f"{runtime['title']} — уточнённый сценарий",
                             "case_type": seed["case_type"],
                             "preconditions": (
@@ -330,6 +336,7 @@ class FixtureBackend:
                 case_key = design["case_key"]
                 graph_case = graph_cases[case_key]
                 chain = chains_by_case[case_key][0]
+                design_status = design.get("status")
                 results.append(
                     {
                         "case_key": case_key,
@@ -338,8 +345,12 @@ class FixtureBackend:
                         "status": (
                             (
                                 "calibration-pending"
-                                if graph_case["status"]
-                                == "candidate-ui-calibration"
+                                if (
+                                    design_status
+                                    == "candidate-ui-calibration"
+                                    or graph_case["status"]
+                                    == "candidate-ui-calibration"
+                                )
                                 else "covered"
                             )
                             if self.review_decision == "accepted"
@@ -467,6 +478,72 @@ class ImmutableIterationTests(unittest.TestCase):
             protected_canonical_paths=(self.canonical,),
             **kwargs,
         )
+
+    def write_revision_source_attempt(
+        self,
+        graph,
+        *,
+        affected_index: int = 0,
+        finding_type: str = "expected-result-unsupported",
+        message: str = "The TC supplies no observable rejection behavior or validation trigger.",
+    ) -> tuple[Path, dict[str, Any], tuple[Any, ...]]:
+        plan = build_test_design_plan(graph, context=_context())
+        cases = plan.deterministic_cases
+        previous_dir = self.root / "previous-iteration"
+        previous_dir.mkdir()
+        markdown = render_test_cases(cases, scope_title=_context().scope_title)
+        draft_path = previous_dir / "shadow-test-cases.md"
+        draft_path.write_text(markdown, encoding="utf-8")
+        (previous_dir / "test-case-designs.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "cases": [case.to_dict() for case in cases],
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+        affected = cases[affected_index]
+        revision_input = {
+            "schema_version": 1,
+            "graph_digest": graph.digest,
+            "draft_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+            "writer_mode": "model-runtime-prose",
+            "source_attempt_dir": previous_dir.relative_to(self.root).as_posix(),
+            "reviewer_decision": "changes-required",
+            "reviewer_response": {
+                "schema_version": 2,
+                "graph_digest": graph.digest,
+                "draft_sha256": hashlib.sha256(markdown.encode("utf-8")).hexdigest(),
+                "evidence_pack_sha256": "1" * 64,
+                "decision": "changes-required",
+                "case_results": [],
+                "source_projection_findings": [],
+                "test_case_findings": [
+                    {
+                        "severity": "error",
+                        "finding_type": finding_type,
+                        "case_key": affected.case_key,
+                        "tc_id": affected.tc_id,
+                        "obligation_id": graph.cases[affected_index].obligation_ids[0],
+                        "property_id": graph.properties[affected_index].property_id,
+                        "assertion_id": graph.properties[affected_index].assertion_id,
+                        "source_row_id": graph.properties[affected_index].source_row_id,
+                        "binding_role": "primary",
+                        "falsification_probe": "trigger_fidelity",
+                        "message": message,
+                    }
+                ],
+                "summary": "Changes required.",
+            },
+            "next_attempt_policy": "start-new-immutable-attempt",
+            "old_test_cases_available": False,
+            "required_next_input": "revision_findings",
+        }
+        return previous_dir, revision_input, cases
 
     def test_deterministic_suite_skips_writer_and_calls_reviewer_once(self) -> None:
         backend = FixtureBackend()
@@ -700,6 +777,137 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("route failure: all input seed cases", diagnostic["error"])
         self.assertIn("one human-runtime output case per valid seed case", diagnostic["error"])
+
+    def test_model_runtime_revision_consumes_revision_input_and_preserves_unaffected_cases(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(graph)
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-input",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        writer_request = json.loads(
+            (result.output_dir / "writer-request.json").read_text(encoding="utf-8")
+        )
+        self.assertIn("revision_context", writer_request)
+        self.assertEqual(1, len(writer_request["cases"]))
+        self.assertEqual(
+            [previous_cases[0].case_key],
+            writer_request["revision_context"]["affected_case_keys"],
+        )
+        diff = json.loads(
+            (result.output_dir / "revision-diff.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(diff["unaffected_byte_identical"])
+        self.assertEqual([previous_cases[0].tc_id], diff["changed_tc_ids"])
+        designs = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("candidate-ui-calibration", designs["cases"][0]["status"])
+        self.assertIn(previous_cases[0].tc_id, designs["cases"][0]["calibration_question"])
+
+    def test_model_runtime_revision_keeps_runner_owned_identity_and_traceability(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(graph)
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-identity",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        designs = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
+        )["cases"]
+        self.assertEqual(previous_cases[0].case_key, designs[0]["case_key"])
+        self.assertEqual(previous_cases[0].tc_id, designs[0]["tc_id"])
+        self.assertEqual(list(previous_cases[0].traceability), designs[0]["traceability"])
+
+    def test_model_runtime_revision_commit_action_missing_becomes_calibration_pending(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(
+            graph,
+            finding_type="commit-action-missing",
+            message="No source-backed marker oracle or commit action proves enforcement.",
+        )
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-commit-missing",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        designs = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
+        )["cases"]
+        self.assertEqual("candidate-ui-calibration", designs[0]["status"])
+        self.assertIn(previous_cases[0].tc_id, designs[0]["calibration_question"])
+
+    def test_model_runtime_revision_source_bound_expected_result_can_be_repaired(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(
+            graph,
+            finding_type="expected-result-unsupported",
+            message=(
+                "Masked rendering belongs to ASSERT-019/OBL-BSR-183-PHONE-DEFAULT-MASK "
+                "but is not registered as primary or design support."
+            ),
+        )
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-source-bound-repair",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("accepted-shadow", result.status)
+        designs = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
+        )["cases"]
+        self.assertEqual("executable", designs[0]["status"])
+        self.assertEqual("", designs[0]["calibration_question"])
+        self.assertIn(previous_cases[0].tc_id, json.dumps(designs, ensure_ascii=False))
+
+    def test_model_runtime_revision_skips_reviewer_when_writer_breaks_identity(self) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, _ = self.write_revision_source_attempt(graph)
+        backend = FixtureBackend(runtime_writer_tc_id_drift=True)
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-identity-drift",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("TC-ID drift", diagnostic["error"])
 
     def test_model_runtime_prose_design_support_contract_failure_skips_reviewer(self) -> None:
         backend = FixtureBackend()

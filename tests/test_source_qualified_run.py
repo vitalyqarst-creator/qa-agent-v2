@@ -972,6 +972,87 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertTrue(terminal["revision_findings_supplied"])
         self.assertEqual(1, terminal["writer_model_calls"])
 
+    def test_v2_run_config_consumes_revision_input_package(self) -> None:
+        self._enable_v2_generated_derivations()
+        revision_input = self.ft / "work" / "iterations" / "prev" / "iteration" / "revision-input.json"
+        revision_input.parent.mkdir(parents=True)
+        self._write_json(
+            revision_input,
+            {
+                "schema_version": 1,
+                "graph_digest": "filled-by-test-double",
+                "draft_sha256": "0" * 64,
+                "writer_mode": "model-runtime-prose",
+                "source_attempt_dir": "fts/sample/work/iterations/prev/iteration",
+                "reviewer_decision": "changes-required",
+                "reviewer_response": {
+                    "schema_version": 2,
+                    "test_case_findings": [],
+                    "source_projection_findings": [],
+                },
+                "next_attempt_policy": "start-new-immutable-attempt",
+                "old_test_cases_available": False,
+                "required_next_input": "revision_findings",
+            },
+        )
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config["writer_mode"] = "model-runtime-prose"
+        config["revision_input"] = revision_input.relative_to(self.repo).as_posix()
+        self._write_json(self.config, config)
+        parsed = load_source_qualified_run_config(self.config)
+        self.assertEqual(config["revision_input"], parsed.revision_input)
+        output = self.ft / "work" / "source-qualified-runs" / "run-revision-input"
+        captured: dict[str, object] = {}
+
+        def accepted_iteration(**kwargs):  # type: ignore[no-untyped-def]
+            captured.update(kwargs)
+            iteration_dir = kwargs["output_dir"]
+            iteration_dir.mkdir(parents=True)
+            draft = iteration_dir / "shadow-test-cases.md"
+            draft.write_text("# Revision suite\n", encoding="utf-8")
+            summary_path = iteration_dir / "iteration-summary.json"
+            self._write_json(
+                summary_path,
+                {
+                    "schema_version": 1,
+                    "mode": "immutable-model-runtime-prose",
+                    "writer_mode": kwargs["writer_mode"],
+                    "status": "accepted-shadow",
+                    "error": "",
+                    "draft": draft.resolve().relative_to(
+                        self.repo.resolve()
+                    ).as_posix(),
+                    "calibration_pending_count": 0,
+                    "promotion_eligible": True,
+                    "revision_input_supplied": kwargs["revision_input"] is not None,
+                },
+            )
+            return ImmutableIterationResult(
+                status="accepted-shadow",
+                output_dir=iteration_dir,
+                draft_path=draft,
+                summary_path=summary_path,
+                test_case_count=1,
+                writer_model_calls=1,
+                reviewer_model_calls=1,
+            )
+
+        with patch(
+            "test_case_agent.source_qualified_run.run_immutable_iteration",
+            side_effect=accepted_iteration,
+        ):
+            result = run_source_qualified_scope(
+                repo_root=self.repo,
+                config_path=self.config,
+                output_dir=output,
+            )
+
+        self.assertEqual("accepted-shadow", result.status)
+        self.assertIsNotNone(captured["revision_input"])
+        self.assertEqual("changes-required", captured["revision_input"]["reviewer_decision"])
+        terminal = json.loads(result.summary_path.read_text(encoding="utf-8"))
+        self.assertTrue(terminal["revision_input_supplied"])
+
     def test_registry_source_absent_from_manifest_is_rejected_with_diagnostic(self) -> None:
         unrelated = self.ft / "source" / "unrelated.xhtml"
         unrelated.write_text("unrelated", encoding="utf-8")
