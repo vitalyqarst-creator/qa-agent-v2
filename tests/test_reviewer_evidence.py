@@ -1456,6 +1456,94 @@ class ReviewerEvidenceTests(unittest.TestCase):
             ) for item in mapping)
         )
 
+    def test_repeater_delete_sibling_model_prose_cleanup_materializes(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        cases = list(build_test_design_plan(graph, context=context).deterministic_cases)
+        add_index = next(
+            index
+            for index, item in enumerate(cases)
+            if item.tc_id == "TC-CUST-ADD0000001"
+        )
+        cases[add_index] = replace(
+            cases[add_index],
+            postconditions=(
+                "Удалить добавленную строку кнопкой `Корзина` в этой строке.",
+            ),
+        )
+
+        mapping = build_design_support_mapping(graph, cases)
+
+        add_case = "customer|customer-name|source-add-row|repeater-add|always"
+        delete_support = [
+            item
+            for item in mapping
+            if item["case_key"] == add_case
+            and item["obligation_id"] == "OBL-DELETE"
+        ]
+        self.assertEqual(1, len(delete_support))
+        self.assertEqual("cleanup", delete_support[0]["support_role"])
+        self.assertEqual(
+            "Удалить добавленную строку кнопкой `Корзина` в этой строке.",
+            delete_support[0]["materialized_text"],
+        )
+
+    def test_repeater_delete_sibling_without_explicit_action_fails_closed(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        cases = list(build_test_design_plan(graph, context=context).deterministic_cases)
+        add_index = next(
+            index
+            for index, item in enumerate(cases)
+            if item.tc_id == "TC-CUST-ADD0000001"
+        )
+        cases[add_index] = replace(
+            cases[add_index],
+            postconditions=("Добавленная строка остаётся тестовой строкой.",),
+        )
+
+        with self.assertRaisesRegex(
+            ReviewerEvidenceError,
+            "OBL-DELETE without a source-bound setup/action/cleanup action",
+        ):
+            build_design_support_mapping(graph, cases)
+
+    def test_repeater_add_sibling_model_prose_setup_still_materializes(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        cases = list(build_test_design_plan(graph, context=context).deterministic_cases)
+        delete_index = next(
+            index
+            for index, item in enumerate(cases)
+            if item.tc_id == "TC-CUST-DEL0000001"
+        )
+        cases[delete_index] = replace(
+            cases[delete_index],
+            preconditions=(
+                "Открыть карточку `Заявка` и перейти к блоку контактных лиц.",
+                "Добавить две строки контактных лиц.",
+            ),
+        )
+
+        mapping = build_design_support_mapping(graph, cases)
+
+        delete_case = "customer|delete-control|source-delete-row|repeater-delete|always"
+        add_support = [
+            item
+            for item in mapping
+            if item["case_key"] == delete_case
+            and item["obligation_id"] == "OBL-ADD"
+        ]
+        self.assertEqual(1, len(add_support))
+        self.assertEqual("setup", add_support[0]["support_role"])
+        self.assertEqual(
+            "Добавить две строки контактных лиц.",
+            add_support[0]["materialized_text"],
+        )
+
     def test_unmaterialized_repeater_sibling_is_not_traced_as_design_support(self) -> None:
         from tests.test_test_design import _repeater_graph_and_context
 

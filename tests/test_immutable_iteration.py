@@ -24,7 +24,7 @@ from test_case_agent.iteration_contract import (
     validate_suite,
     validate_writer_response,
 )
-from test_case_agent.reviewer_evidence import ReviewerEvidenceBasis
+from test_case_agent.reviewer_evidence import ReviewerEvidenceBasis, ReviewerEvidenceError
 from test_case_agent.stage_backend import StageBackendError, StageResult
 from test_case_agent.test_design import build_test_design_plan, render_test_cases
 from tests.test_iteration_contract import _v2_pack, _writer_graph
@@ -444,10 +444,11 @@ class ImmutableIterationTests(unittest.TestCase):
         )
 
     def run_engine(self, graph, output_name: str, **kwargs: Any):
+        context = kwargs.pop("context", _context())
         return run_immutable_iteration(
             repo_root=self.root,
             graph=graph,
-            context=_context(),
+            context=context,
             output_dir=self.root / output_name,
             protected_source_paths=(self.source,),
             protected_canonical_paths=(self.canonical,),
@@ -609,6 +610,57 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("route failure: all input seed cases", diagnostic["error"])
         self.assertIn("one human-runtime output case per valid seed case", diagnostic["error"])
+
+    def test_model_runtime_prose_design_support_contract_failure_skips_reviewer(self) -> None:
+        backend = FixtureBackend()
+        basis = ReviewerEvidenceBasis(  # type: ignore[arg-type]
+            repo_root=self.root,
+            compiled_scope=None,
+            manifest=None,
+            source_review_receipt=None,
+            obligation_set=None,
+            registered_files=(),
+            mockup_files=(),
+            basis_digest="unused-by-patched-builder",
+            compiled_snapshot_sha256="unused-by-patched-builder",
+            review_receipt_sha256="unused-by-patched-builder",
+        )
+
+        with patch(
+            "test_case_agent.immutable_iteration.build_reviewer_evidence_pack",
+            side_effect=ReviewerEvidenceError(
+                "design-support-traceability-not-materialized",
+                "TC-CUST-0123456789 traces sibling OBL-DELETE without a "
+                "source-bound setup/action/cleanup action",
+            ),
+        ), patch.object(
+            ReviewerEvidenceBasis,
+            "to_document",
+            return_value={
+                "schema_version": 1,
+                "contract": "test-only-evidence-basis",
+            },
+        ):
+            result = self.run_engine(
+                _graph(),
+                "model-runtime-design-support-failure",
+                backend=backend,
+                writer_mode="model-runtime-prose",
+                reviewer_evidence_basis=basis,
+            )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("design-support-traceability-not-materialized", diagnostic["error"])
+        self.assertIn("source-bound setup/action/cleanup action", diagnostic["error"])
 
     def test_model_runtime_prose_changes_required_writes_revision_input(self) -> None:
         backend = FixtureBackend(review_decision="changes-required")

@@ -2155,6 +2155,95 @@ def _supporting_evidence_mapping(
     return result
 
 
+_REPEATER_ADD_CONTRACTS = frozenset(
+    {
+        ("source-add-row", "repeater-add"),
+        ("source-action", "repeatable-add"),
+    }
+)
+_REPEATER_DELETE_CONTRACTS = frozenset(
+    {
+        ("source-delete-row", "repeater-delete"),
+        ("source-action", "repeatable-delete"),
+    }
+)
+_ACTION_VERBS = (
+    "наж",
+    "клик",
+    "выб",
+    "актив",
+    "выполн",
+    "click",
+    "press",
+    "select",
+    "activate",
+)
+_ADD_MARKERS = ("добавить", "добавьте", "добавь", "add", "+", "плюс")
+_DELETE_MARKERS = ("удал", "корзин", "delete", "trash")
+_ROW_MARKERS = ("строк", "row")
+
+
+def _normalized_action_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.replace("ё", "е").casefold()).strip()
+
+
+def _contains_any(value: str, markers: Sequence[str]) -> bool:
+    return any(marker in value for marker in markers)
+
+
+def _matches_repeater_action(
+    *,
+    prop_kind: str,
+    coverage_variant: str,
+    materialized_text: str,
+) -> bool:
+    contract = (prop_kind, coverage_variant)
+    text = _normalized_action_text(materialized_text)
+    if contract in _REPEATER_ADD_CONTRACTS:
+        return _contains_any(text, _ADD_MARKERS) and (
+            _contains_any(text, _ACTION_VERBS)
+            or "действие" in text
+            or "+" in materialized_text
+            or text.startswith(("добав", "add"))
+        )
+    if contract in _REPEATER_DELETE_CONTRACTS:
+        return (
+            _contains_any(text, _ROW_MARKERS)
+            and _contains_any(text, _DELETE_MARKERS)
+            and (
+                _contains_any(text, _ACTION_VERBS)
+                or "удал" in text
+            )
+        )
+    return False
+
+
+def _matched_source_action_fragment(
+    *,
+    prop: Any,
+    obligation: Any,
+    source_fragments: Sequence[str],
+    materialized_text: str,
+) -> tuple[str, str]:
+    exact = [
+        fragment
+        for fragment in source_fragments
+        if fragment in materialized_text
+    ]
+    if exact:
+        return (
+            sorted(exact, key=lambda value: (-len(value), value))[0],
+            "exact-fragment",
+        )
+    if source_fragments and _matches_repeater_action(
+        prop_kind=prop.property_kind,
+        coverage_variant=obligation.coverage_variant,
+        materialized_text=materialized_text,
+    ):
+        return (source_fragments[0], "normalized-repeater-action")
+    return ("", "")
+
+
 def build_design_support_mapping(
     graph: CoverageGraph,
     cases: Sequence[TestCaseDesign],
@@ -2215,20 +2304,15 @@ def build_design_support_mapping(
             for support_role, field_name in sections:
                 field_items = getattr(design, field_name)
                 for item_index, materialized_text in enumerate(field_items):
-                    matching_fragments = [
-                        fragment
-                        for fragment in source_fragments
-                        if fragment in materialized_text
-                    ]
-                    if not matching_fragments:
+                    source_fragment, _match_type = _matched_source_action_fragment(
+                        prop=prop,
+                        obligation=obligation,
+                        source_fragments=source_fragments,
+                        materialized_text=materialized_text,
+                    )
+                    if not source_fragment:
                         continue
                     materialized = True
-                    # The longer exact fragment is the most specific binding if
-                    # a contract contains nested action text.
-                    source_fragment = sorted(
-                        matching_fragments,
-                        key=lambda value: (-len(value), value),
-                    )[0]
                     result.append(
                         {
                             "support_role": support_role,
@@ -2250,8 +2334,8 @@ def build_design_support_mapping(
             if not materialized:
                 _fail(
                     "design-support-traceability-not-materialized",
-                    f"{design.tc_id} traces sibling {obligation_id} without an exact "
-                    "setup/action/cleanup action",
+                    f"{design.tc_id} traces sibling {obligation_id} without a "
+                    "source-bound setup/action/cleanup action",
                 )
     return result
 
