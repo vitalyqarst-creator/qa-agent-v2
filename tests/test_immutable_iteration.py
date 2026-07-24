@@ -116,6 +116,7 @@ class FixtureBackend:
         timeout_seconds: float | None = None,
         fail_on_stage: str | None = None,
         receipt_tokens: Any = None,
+        bad_runtime_writer_response: bool = False,
     ) -> None:
         self.calls: list[str] = []
         self.review_decision = review_decision
@@ -123,6 +124,7 @@ class FixtureBackend:
         self.timeout_seconds = timeout_seconds
         self.fail_on_stage = fail_on_stage
         self.receipt_tokens = receipt_tokens
+        self.bad_runtime_writer_response = bad_runtime_writer_response
         self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
@@ -145,6 +147,24 @@ class FixtureBackend:
             if request.get("writer_mode") == "model-runtime-prose":
                 for seed in request["cases"]:
                     runtime = seed["seed_runtime"]
+                    if self.bad_runtime_writer_response:
+                        cases.append(
+                            {
+                                "case_key": seed["case_key"],
+                                "tc_id": seed["tc_id"],
+                                "title": "subject:4b12af7e368d24cd",
+                                "case_type": seed["case_type"],
+                                "preconditions": ["супруг/супруга", "иное"],
+                                "test_data": list(runtime["test_data"]),
+                                "steps": list(seed["runner_traceability"]),
+                                "expected_result": runtime["expected_result"],
+                                "postconditions": list(runtime["postconditions"]),
+                                "calibration_question": runtime[
+                                    "calibration_question"
+                                ],
+                            }
+                        )
+                        continue
                     cases.append(
                         {
                             "case_key": seed["case_key"],
@@ -470,6 +490,30 @@ class ImmutableIterationTests(unittest.TestCase):
         text = result.draft_path.read_text(encoding="utf-8")
         self.assertIn("— уточнённый сценарий", text)
         self.assertIn(_graph().cases[0].tc_id, text)
+
+    def test_model_runtime_prose_bad_writer_output_stops_before_reviewer(self) -> None:
+        backend = FixtureBackend(bad_runtime_writer_response=True)
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-bad-writer-output",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        self.assertFalse((result.output_dir / "shadow-test-cases.md").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("runtime writer leaked internal identifier", diagnostic["error"])
+        self.assertIn("subject:", diagnostic["error"])
 
     def test_model_runtime_prose_changes_required_writes_revision_input(self) -> None:
         backend = FixtureBackend(review_decision="changes-required")

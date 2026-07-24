@@ -562,6 +562,113 @@ class IterationContractTests(unittest.TestCase):
             designs[0].steps,
         )
 
+    def test_runtime_writer_rejects_internal_ids_in_human_runtime_fields(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    title="subject:4b12af7e368d24cd",
+                    steps=[
+                        "OBL-BSR-179-DEFAULT-HIDDEN",
+                        "ATOM-012",
+                        "ASSERT-012",
+                        "SRC-ROW-006",
+                        "BSR 179",
+                    ],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "internal identifier in title.*subject:4b12af7e368d24cd",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+        payload["cases"][0]["title"] = "Проверка видимости поля"
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "internal identifier in steps.*OBL-BSR-179-DEFAULT-HIDDEN",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_value_only_preconditions(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    title="Проверка значения справочника",
+                    preconditions=["супруг/супруга", "отец/мать"],
+                    steps=["Выбрать значение `супруг/супруга` в списке."],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "non-reproducible precondition.*супруг/супруга",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_steps_without_user_action_or_check(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    title="Проверка отображения поля",
+                    preconditions=["Не требуются."],
+                    steps=["Поле `Имя` отображается."],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "omitted executable user action/check step",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_writer_merge_revalidates_context_against_graph(self) -> None:
         graph = _writer_graph()
         plan = build_test_design_plan(graph, context=_context())

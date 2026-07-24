@@ -8,6 +8,9 @@ from typing import Any, Mapping, Sequence
 
 from test_case_agent.coverage_graph import CoverageGraph
 from test_case_agent.review_cycle.production_tc_gate import (
+    ACTION_STEP_RE,
+    RUSSIAN_INFINITIVE_STEP_RE,
+    production_precondition_problem,
     validate_production_tc_content,
 )
 from test_case_agent.test_design import (
@@ -84,6 +87,13 @@ _DESIGN_SUPPORT_MAPPING_FIELDS = {
     "case_key",
     "tc_id",
 }
+_INTERNAL_RUNTIME_TOKEN_RE = re.compile(
+    r"(?:\bsubject:[0-9a-f][0-9a-f_-]{7,}\b|"
+    r"\b(?:OBL|ATOM|ASSERT|SRC)(?:-[A-Z0-9]+)+\b|"
+    r"\bBSR\s+\d+\b)",
+    re.IGNORECASE,
+)
+_RUNTIME_NO_SETUP_RE = re.compile(r"^не\s+требуются$", re.IGNORECASE)
 
 REVIEWER_POLICY_VERSION_V2 = 2
 
@@ -1089,6 +1099,87 @@ def _runtime_text_uses_stale_mockup_alias(
     return None
 
 
+def _runtime_no_setup_item(value: str) -> bool:
+    normalized = _normalized_ui_label(value)
+    normalized = re.sub(r"[^\w\s]+", "", normalized, flags=re.UNICODE)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return _RUNTIME_NO_SETUP_RE.fullmatch(normalized) is not None
+
+
+def _runtime_precondition_problem(preconditions: Sequence[str]) -> str | None:
+    if len(preconditions) == 1 and _runtime_no_setup_item(preconditions[0]):
+        return None
+    numbered = "\n".join(
+        f"{index}. {item}" for index, item in enumerate(preconditions, start=1)
+    )
+    return production_precondition_problem(numbered)
+
+
+def _runtime_has_executable_step(steps: Sequence[str]) -> bool:
+    return any(
+        ACTION_STEP_RE.search(step) is not None
+        or RUSSIAN_INFINITIVE_STEP_RE.search(step) is not None
+        for step in steps
+    )
+
+
+def _runtime_internal_token(
+    *,
+    case_key: str,
+    field: str,
+    values: Sequence[str],
+) -> str | None:
+    for value in values:
+        match = _INTERNAL_RUNTIME_TOKEN_RE.search(value)
+        if match is not None:
+            return (
+                f"runtime writer leaked internal identifier in {field} "
+                f"for {case_key}: {match.group(0)}"
+            )
+    return None
+
+
+def _validate_runtime_writer_prose(
+    *,
+    case_key: str,
+    title: str,
+    preconditions: Sequence[str],
+    test_data: Sequence[str],
+    steps: Sequence[str],
+    expected_result: str,
+    postconditions: Sequence[str],
+    calibration_question: str,
+) -> None:
+    fields = (
+        ("title", (title,)),
+        ("preconditions", preconditions),
+        ("test_data", test_data),
+        ("steps", steps),
+        ("expected_result", (expected_result,)),
+        ("postconditions", postconditions),
+        ("calibration_question", (calibration_question,)),
+    )
+    for field, values in fields:
+        problem = _runtime_internal_token(
+            case_key=case_key,
+            field=field,
+            values=values,
+        )
+        if problem is not None:
+            raise IterationContractError(problem)
+    precondition_problem = _runtime_precondition_problem(preconditions)
+    if precondition_problem is not None:
+        raise IterationContractError(
+            "runtime writer returned non-reproducible precondition for "
+            f"{case_key}: {precondition_problem}"
+        )
+    if not _runtime_has_executable_step(steps):
+        raise IterationContractError(
+            "runtime writer omitted executable user action/check step for "
+            f"{case_key}"
+        )
+
+
 def validate_runtime_writer_response(
     response: Mapping[str, Any],
     *,
@@ -1167,13 +1258,38 @@ def validate_runtime_writer_response(
             raise IterationContractError(
                 f"runtime writer added calibration question to executable case {case_key}"
             )
+        title = _one_line(item["title"], f"$.cases[{index}].title")
+        preconditions = _strings(
+            item["preconditions"],
+            f"$.cases[{index}].preconditions",
+        )
+        test_data = _strings(item["test_data"], f"$.cases[{index}].test_data")
+        steps = _strings(item["steps"], f"$.cases[{index}].steps")
+        expected_result = _one_line(
+            item["expected_result"],
+            f"$.cases[{index}].expected_result",
+        )
+        postconditions = _strings(
+            item["postconditions"],
+            f"$.cases[{index}].postconditions",
+        )
+        _validate_runtime_writer_prose(
+            case_key=case_key,
+            title=title,
+            preconditions=preconditions,
+            test_data=test_data,
+            steps=steps,
+            expected_result=expected_result,
+            postconditions=postconditions,
+            calibration_question=calibration_question,
+        )
         runtime_text = "\n".join(
             [
-                str(item["title"]),
-                "\n".join(_strings(item["preconditions"], f"$.cases[{index}].preconditions")),
-                "\n".join(_strings(item["test_data"], f"$.cases[{index}].test_data")),
-                "\n".join(_strings(item["steps"], f"$.cases[{index}].steps")),
-                "\n".join(_strings(item["postconditions"], f"$.cases[{index}].postconditions")),
+                title,
+                "\n".join(preconditions),
+                "\n".join(test_data),
+                "\n".join(steps),
+                "\n".join(postconditions),
             ]
         )
         stale_alias = _runtime_text_uses_stale_mockup_alias(
@@ -1191,19 +1307,16 @@ def validate_runtime_writer_response(
                 case_key=case_key,
                 tc_id=seed.tc_id,
                 status=seed.status,
-                title=_one_line(item["title"], f"$.cases[{index}].title"),
+                title=title,
                 case_type=case_type,
                 priority=seed.priority,
                 package_id=seed.package_id,
                 traceability=seed.traceability,
-                preconditions=_strings(item["preconditions"], f"$.cases[{index}].preconditions"),
-                test_data=_strings(item["test_data"], f"$.cases[{index}].test_data"),
-                steps=_strings(item["steps"], f"$.cases[{index}].steps"),
-                expected_result=_one_line(
-                    item["expected_result"],
-                    f"$.cases[{index}].expected_result",
-                ),
-                postconditions=_strings(item["postconditions"], f"$.cases[{index}].postconditions"),
+                preconditions=preconditions,
+                test_data=test_data,
+                steps=steps,
+                expected_result=expected_result,
+                postconditions=postconditions,
                 calibration_question=calibration_question,
             )
         )
