@@ -6189,6 +6189,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-value-type-list-selection-smell",
     "test-case-dependency-placeholder-setup-smell",
     "test-case-mockup-interaction-hints-not-used",
+    "test-case-mockup-visible-label-drift",
     "test-case-positive-type-with-negative-oracle",
     "test-case-negative-type-without-negative-oracle",
     "test-case-generic-valid-fixture-smell",
@@ -12395,6 +12396,104 @@ def has_persistence_calibration_package(path: Path, root: Path) -> bool:
     return not persistence_calibration_package_missing_files(path, root)
 
 
+def normalized_ui_label(value: str) -> str:
+    return re.sub(
+        r"\s+",
+        " ",
+        value.replace("`", "").replace("«", "").replace("»", "").strip().casefold(),
+    )
+
+
+def iter_simple_markdown_tables(content: str) -> list[list[list[str]]]:
+    tables: list[list[list[str]]] = []
+    current: list[list[str]] = []
+    for raw_line in content.splitlines():
+        line = raw_line.strip()
+        if line.startswith("|"):
+            if "---" not in line:
+                current.append(
+                    [cell.strip().strip("`") for cell in line.strip("|").split("|")]
+                )
+            continue
+        if current:
+            tables.append(current)
+            current = []
+    if current:
+        tables.append(current)
+    return tables
+
+
+def mockup_visible_label_aliases_from_inventory(content: str) -> list[tuple[str, str]]:
+    aliases: list[tuple[str, str]] = []
+    for rows in iter_simple_markdown_tables(content):
+        if not rows:
+            continue
+        header = normalize_table_header(rows[0])
+        if "label_from_mockup" not in header or "canonical_ft_name" not in header:
+            continue
+        label_index = header.index("label_from_mockup")
+        canonical_index = header.index("canonical_ft_name")
+        item_index = header.index("item_type") if "item_type" in header else -1
+        for row in rows[1:]:
+            if label_index >= len(row) or canonical_index >= len(row):
+                continue
+            if item_index >= 0 and item_index < len(row):
+                item_type = row[item_index].strip().strip("`").casefold()
+                if item_type not in {"visible_actions", "visible_fields", "visible_blocks"}:
+                    continue
+            label_from_mockup = row[label_index].strip().strip("`")
+            canonical_name = row[canonical_index].strip().strip("`")
+            if not label_from_mockup or not canonical_name:
+                continue
+            if normalized_ui_label(label_from_mockup) == normalized_ui_label(canonical_name):
+                continue
+            aliases.append((canonical_name, label_from_mockup))
+    return aliases
+
+
+def mockup_visible_label_aliases_for_test_case_path(
+    path: Path,
+    root: Path,
+) -> list[tuple[str, str, str]]:
+    ft_root = ft_package_root_for_path(path)
+    if ft_root is None:
+        return []
+    aliases: list[tuple[str, str, str]] = []
+    for inventory_path in sorted((ft_root / "work").glob(f"**/{MOCKUP_VISUAL_INVENTORY_NAME}")):
+        try:
+            content = inventory_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            continue
+        for canonical_name, label_from_mockup in mockup_visible_label_aliases_from_inventory(content):
+            aliases.append(
+                (
+                    canonical_name,
+                    label_from_mockup,
+                    rel(inventory_path, root),
+                )
+            )
+    return aliases
+
+
+def mockup_visible_label_drift_evidence(
+    test_case_id: str,
+    runtime_text: str,
+    aliases: Sequence[tuple[str, str, str]],
+) -> list[str]:
+    normalized_runtime = normalized_ui_label(runtime_text)
+    evidence: list[str] = []
+    for canonical_name, label_from_mockup, inventory_ref in aliases:
+        canonical_label = normalized_ui_label(canonical_name)
+        mockup_label = normalized_ui_label(label_from_mockup)
+        if not canonical_label or not mockup_label:
+            continue
+        if canonical_label in normalized_runtime and mockup_label not in normalized_runtime:
+            evidence.append(
+                f"{test_case_id}:uses=`{canonical_name}`; expected_mockup_label=`{label_from_mockup}`; inventory={inventory_ref}"
+            )
+    return evidence
+
+
 def validate_test_case_quality_smells(
     content: str,
     path: Path,
@@ -12417,6 +12516,7 @@ def validate_test_case_quality_smells(
         and re.search(r"used_for_steps\s*\|\s*yes|used_for_steps\s*[:=]\s*yes", mockup_usage_section, flags=re.IGNORECASE)
         and MOCKUP_INTERACTION_HINT_RE.search(mockup_usage_section)
     )
+    mockup_label_aliases = mockup_visible_label_aliases_for_test_case_path(path, root)
     generic_atoms: list[str] = []
     production_diagnostic_sections: list[str] = []
     production_setup_profile_refs: list[str] = []
@@ -12501,6 +12601,7 @@ def validate_test_case_quality_smells(
     broad_scenario_test_cases: list[str] = []
     excessive_atom_fan_in: list[str] = []
     mockup_generic_ui_steps: list[str] = []
+    mockup_visible_label_drift: list[str] = []
     generic_titles: list[str] = []
     process_marker_titles: list[str] = []
     positive_type_negative_oracle: list[str] = []
@@ -12961,6 +13062,22 @@ def validate_test_case_quality_smells(
             extraction_artifact_oracles.append(f"{test_case_id}:{extraction_context[:220]}")
         if mockup_hints_expected and steps and MOCKUP_GENERIC_UI_STEP_RE.search(steps):
             mockup_generic_ui_steps.append(f"{test_case_id}:{steps[:180]}")
+        if mockup_label_aliases:
+            mockup_visible_label_drift.extend(
+                mockup_visible_label_drift_evidence(
+                    test_case_id,
+                    "\n".join(
+                        [
+                            title,
+                            preconditions,
+                            test_data,
+                            steps,
+                            postconditions,
+                        ]
+                    ),
+                    mockup_label_aliases,
+                )
+            )
         boundary_context = " ".join([title, goal, test_data, steps, expected_result])
         boundary_group = boundary_groups.setdefault(
             boundary_group_label(title, goal),
@@ -13697,6 +13814,27 @@ def validate_test_case_quality_smells(
                 recommended_action=(
                     "Rewrite affected UI steps using the interaction hints from mockup-visual-inventory.md. "
                     "Keep FT/source artifacts as the source of business rules and expected results."
+                ),
+            )
+        )
+
+    if mockup_visible_label_drift:
+        findings.append(
+            Finding(
+                id="test-case-mockup-visible-label-drift",
+                severity="warning",
+                category="test-case-format",
+                title="Test cases do not use exact visible labels from mockup inventory",
+                details=(
+                    "When mockup-visual-inventory.md records a UI alias, TC runtime text must use the exact visible "
+                    "label for steps and setup. The FT canonical name may stay in traceability/source fields, but "
+                    "manual execution should not lose visible prefixes, casing or action wording from the mockup."
+                ),
+                path=display_path,
+                evidence=mockup_visible_label_drift[:20],
+                recommended_action=(
+                    "Replace affected runtime labels with label_from_mockup from mockup-visual-inventory.md, or "
+                    "document why the mockup alias is not applicable."
                 ),
             )
         )
@@ -14914,6 +15052,7 @@ def validate_test_case_quality_smells(
         or value_type_list_selection_smells
         or dependency_placeholder_setup_smells
         or mockup_generic_ui_steps
+        or mockup_visible_label_drift
         or positive_type_negative_oracle
         or negative_type_without_negative_oracle
         or generic_valid_fixture_placeholders

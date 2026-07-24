@@ -114,6 +114,13 @@ _REPEATER_ROW_CONTEXT = re.compile(
     r"\bпол(?:е|я|ю|ем)\b[^.\n;]{0,120}\bблок(?:е|а|у|ом|и)?\b)",
     re.IGNORECASE,
 )
+_GENERIC_VALIDATION_TRIGGER = re.compile(
+    r"(?:проверить\s+обязательност|проверить\s+валидац|"
+    r"выполнить\s+действие\s+проверки/валидации|"
+    r"инициир\w*\s+доступн\w*\s+точк\w*\s+проверк|"
+    r"check\s+requiredness|trigger\s+validation)",
+    re.IGNORECASE,
+)
 
 
 DETERMINISTIC_PROPERTY_KINDS = frozenset(
@@ -779,10 +786,20 @@ def _source_input_action_with_value(
     return f"{bound_action.rstrip('. ')}; использовать значение `{value}`."
 
 
-def _validation_commit_step(*, label: str, action: str) -> str:
+def _validation_commit_step(
+    *,
+    label: str,
+    action: str,
+    calibration_candidate: bool = False,
+) -> str:
     value = action.strip().rstrip(". ")
     if _normalized_text(value).startswith("оставить "):
         return f"{value}."
+    if calibration_candidate and _GENERIC_VALIDATION_TRIGGER.search(value):
+        return (
+            f"Инициировать проверку для {label}: завершить ввод, перевести "
+            "фокус из поля или выполнить другое доступное действие проверки."
+        )
     return (
         f"Выполнить действие проверки/валидации для {label}: "
         f"{value}."
@@ -1116,6 +1133,27 @@ def _materialize(
             subject_label=label,
             reason=f"unsupported deterministic property_kind: {prop.property_kind}",
         )
+    if (
+        case.status == "candidate-ui-calibration"
+        and kind == "positive-input"
+        and (
+            _requires_phone_exact_length_negatives(
+                label=label,
+                obligation=obligation,
+            )
+            or _requires_text_hyphen_negatives(obligation)
+        )
+    ):
+        return _blocked_card(
+            case=case,
+            prop=prop,
+            obligation=obligation,
+            reason=(
+                "candidate positive-input bundles derived invalid classes; "
+                "semantic design must split positive acceptance and each "
+                "invalid-input candidate before TC rendering"
+            ),
+        )
 
     repeater_add_action = (
         repeater_support.add_obligation.validation_trigger if repeater_support else ""
@@ -1229,6 +1267,7 @@ def _materialize(
             _validation_commit_step(
                 label=label,
                 action=obligation.validation_trigger,
+                calibration_candidate=case.status == "candidate-ui-calibration",
             ),
         )
     elif kind == "source-editability":
@@ -1565,6 +1604,7 @@ def _materialize(
             _validation_commit_step(
                 label=label,
                 action=obligation.validation_trigger,
+                calibration_candidate=case.status == "candidate-ui-calibration",
             ),
         )
     elif kind == "invalid-input":

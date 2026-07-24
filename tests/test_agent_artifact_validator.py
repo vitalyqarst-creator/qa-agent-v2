@@ -12985,6 +12985,145 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertIn("mockup-visual-inventory-not-opened", finding_ids)
         self.assertIn("mockup-visual-inventory-missing-requirement-source-guard", finding_ids)
 
+    def test_test_case_runtime_text_must_use_mockup_visible_action_alias(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "Demo"
+            inventory = ft_root / "work" / "stage-handoffs" / "09-contact-persons" / "mockup-visual-inventory.md"
+            inventory.parent.mkdir(parents=True, exist_ok=True)
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "# Mockup Visual Inventory",
+                        "",
+                        "## Metadata",
+                        "",
+                        "| item | value | evidence |",
+                        "| --- | --- | --- |",
+                        "| mockup_path | `mockups/figure-5.jpg` | `sha256:demo` |",
+                        "| opened | `yes` | `visual inspection` |",
+                        "| method | `visual-inspection` | `image viewer` |",
+                        "| screen_name | `Контактные лица` | `mockup caption` |",
+                        "| source_priority | `FT-over-mockup` | `AGENTS.md` |",
+                        "",
+                        "## Visual Inventory",
+                        "",
+                        "| item_type | label_from_mockup | canonical_ft_name | visible_state | notes |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `visible_actions` | `+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО` | `Добавить контактное лицо` | `visible/enabled` | `UI alias` |",
+                        "| `visible_fields` | `ФИО` | `Фамилия` | `visible/editable` | `mockup grouped FIO` |",
+                        "",
+                        "## Interaction Hints",
+                        "",
+                        "| element | interaction_hint | source | used_for_steps | limitation |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО` | `click` | `mockup` | `yes` | `not a business rule` |",
+                        "",
+                        "## Mockup-Only Items",
+                        "",
+                        "| item | mockup_observation | ft_reference | handling |",
+                        "| --- | --- | --- | --- |",
+                        "| `none` | `none` | `not applicable` | `ignore-out-of-scope` |",
+                        "",
+                        "## FT Conflicts",
+                        "",
+                        "| item | ft_statement | mockup_observation | decision |",
+                        "| --- | --- | --- | --- |",
+                        "| `none` | `none` | `none` | `FT wins` |",
+                        "",
+                        "## Usage Decision",
+                        "",
+                        "| item | value | evidence |",
+                        "| --- | --- | --- |",
+                        "| used_for_steps | `yes` | `TC-PROD-001` |",
+                        "| not_used_as_requirement_source | `yes` | `mockup refines interaction only` |",
+                        "| open_questions | `-` | `none` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            test_case_file = ft_root / "test-cases" / "contact-persons.md"
+            self.write_production_contact_test_case(test_case_file)
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-mockup-visible-label-drift", finding_ids)
+
+    def test_test_case_runtime_text_with_exact_mockup_visible_action_alias_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            ft_root = fixture_root / "fts" / "Demo"
+            inventory = ft_root / "work" / "stage-handoffs" / "09-contact-persons" / "mockup-visual-inventory.md"
+            inventory.parent.mkdir(parents=True, exist_ok=True)
+            inventory.write_text(
+                "\n".join(
+                    [
+                        "# Mockup Visual Inventory",
+                        "",
+                        "## Metadata",
+                        "",
+                        "| item | value | evidence |",
+                        "| --- | --- | --- |",
+                        "| mockup_path | `mockups/figure-5.jpg` | `sha256:demo` |",
+                        "| opened | `yes` | `visual inspection` |",
+                        "| method | `visual-inspection` | `image viewer` |",
+                        "| screen_name | `Контактные лица` | `mockup caption` |",
+                        "| source_priority | `FT-over-mockup` | `AGENTS.md` |",
+                        "",
+                        "## Visual Inventory",
+                        "",
+                        "| item_type | label_from_mockup | canonical_ft_name | visible_state | notes |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `visible_actions` | `+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО` | `Добавить контактное лицо` | `visible/enabled` | `UI alias` |",
+                        "",
+                        "## Interaction Hints",
+                        "",
+                        "| element | interaction_hint | source | used_for_steps | limitation |",
+                        "| --- | --- | --- | --- | --- |",
+                        "| `+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО` | `click` | `mockup` | `yes` | `not a business rule` |",
+                        "",
+                        "## Mockup-Only Items",
+                        "",
+                        "| item | mockup_observation | ft_reference | handling |",
+                        "| --- | --- | --- | --- |",
+                        "| `none` | `none` | `not applicable` | `ignore-out-of-scope` |",
+                        "",
+                        "## FT Conflicts",
+                        "",
+                        "| item | ft_statement | mockup_observation | decision |",
+                        "| --- | --- | --- | --- |",
+                        "| `none` | `none` | `none` | `FT wins` |",
+                        "",
+                        "## Usage Decision",
+                        "",
+                        "| item | value | evidence |",
+                        "| --- | --- | --- |",
+                        "| used_for_steps | `yes` | `TC-PROD-001` |",
+                        "| not_used_as_requirement_source | `yes` | `mockup refines interaction only` |",
+                        "| open_questions | `-` | `none` |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            test_case_file = ft_root / "test-cases" / "contact-persons.md"
+            self.write_production_contact_test_case(
+                test_case_file,
+                preconditions=[
+                    "1. Открыть карточку заявки, доступную для редактирования.",
+                    "2. Перейти в раздел «Контакты клиента».",
+                    "3. В секции «Контактные лица» нажать кнопку «+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО».",
+                    "4. Убедиться, что отображается блок добавления контактного лица с полями «Фамилия», «Имя», «Отчество».",
+                ],
+            )
+
+            result = self.run_validator("--root", str(fixture_root), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-mockup-visible-label-drift", finding_ids)
+
     def test_generic_ui_step_smells_include_new_placeholder_phrases(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)

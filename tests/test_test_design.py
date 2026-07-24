@@ -924,6 +924,30 @@ class TestDesignTests(unittest.TestCase):
             case.steps,
         )
 
+    def test_calibration_requiredness_generic_trigger_is_not_rendered_as_executable_action(self) -> None:
+        graph = _graph(
+            kind="requiredness",
+            fixtures=(),
+            status="candidate-ui-calibration",
+            trigger="Проверить обязательность поля «Имя».",
+            question="Какое действие запускает проверку пустого обязательного поля?",
+        )
+        graph = replace(
+            graph,
+            properties=(replace(graph.properties[0], polarity="negative"), *graph.properties[1:]),
+            obligations=(replace(graph.obligations[0], coverage_variant="required"),),
+        )
+
+        plan = build_test_design_plan(graph, context=_context())
+        case = plan.deterministic_cases[0]
+        markdown = render_test_cases((case,), scope_title="Данные клиента")
+        report = validate_production_tc_content(markdown, checked_path="shadow.md")
+
+        self.assertTrue(report.passed, report.as_dict())
+        self.assertNotIn("Выполнить действие проверки/валидации", "\n".join(case.steps))
+        self.assertIn("Инициировать проверку", "\n".join(case.steps))
+        self.assertIn("другое доступное действие проверки", "\n".join(case.steps))
+
     def test_phone_exact_length_case_materializes_negative_classes(self) -> None:
         graph = _graph(kind="positive-input", fixtures=("9991234567",))
         graph = replace(
@@ -958,6 +982,41 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("999123456", joined_steps)
         self.assertIn("99912345678", joined_steps)
         self.assertIn("99912A4567", joined_steps)
+
+    def test_calibration_positive_input_with_derived_invalid_classes_blocks_until_semantic_split(self) -> None:
+        graph = _graph(
+            kind="positive-input",
+            fixtures=("9991234567",),
+            status="candidate-ui-calibration",
+            trigger="Ввести номер телефона.",
+            question="Как UI отклоняет значение телефона не из 10 цифр?",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement=(
+                        "Поле «Телефон» допускает только 10 числовых символов."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    observable_oracle="Допускаются только 10 числовых символов.",
+                    validation_trigger="Ввести номер телефона.",
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "Телефон"})
+
+        plan = build_test_design_plan(graph, context=context)
+
+        self.assertEqual((), plan.deterministic_cases)
+        self.assertEqual((), plan.writer_cards)
+        self.assertIn("semantic design must split", plan.blocked_cards[0].reason)
 
     def test_requiredness_requires_explicit_trigger(self) -> None:
         plan = build_test_design_plan(

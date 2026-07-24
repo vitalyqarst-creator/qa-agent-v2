@@ -36,6 +36,12 @@ Candidate TC requirements:
 - contain a concrete representative invalid or empty-required value in `Тестовые данные` or in the action step;
 - preserve positive allowed-class TC for the same source-backed restriction;
 - do not replace a positive allowed-class TC with a negative candidate;
+- do not merge valid acceptance and invalid rejection classes into one candidate TC; split
+  them into separate source-backed positive and candidate-negative obligations before
+  rendering `TC-*`;
+- if the exact validation trigger is unknown, do not render a generic executable step
+  such as `Выполнить действие проверки/валидации`; keep the case as calibration-pending
+  and state that the exact trigger must be recorded during UI calibration;
 - do not invent exact UI rejection mechanism, message, color, filtering, clearing, blocking or save/no-save effect.
 
 ## Expected Result
