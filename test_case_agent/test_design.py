@@ -52,16 +52,65 @@ _POST_HIDDEN_TRANSITION = re.compile(
     r"\s+(?:и|,)\s+(?:затем\s+)?(?:отображ|появ)\w*\b",
     re.IGNORECASE,
 )
+_REPEATER_ADD_CONTRACT = ("source-add-row", "repeater-add")
+_REPEATER_DELETE_CONTRACT = ("source-delete-row", "repeater-delete")
+_REPEATER_ADD_CONTRACTS = frozenset(
+    {
+        _REPEATER_ADD_CONTRACT,
+        ("source-action", "repeatable-add"),
+    }
+)
+_REPEATER_DELETE_CONTRACTS = frozenset(
+    {
+        _REPEATER_DELETE_CONTRACT,
+        ("source-action", "repeatable-delete"),
+    }
+)
+_REPEATER_MUTATION_CONTRACTS = _REPEATER_ADD_CONTRACTS | _REPEATER_DELETE_CONTRACTS
 _INVARIANT_TRANSITION_CONTRACTS = frozenset(
     {
         # An add-row action changes the repeater state without consuming the
         # add control.  Other state changes (especially delete) are not assumed
         # to preserve the invariant subject.
-        ("source-add-row", "repeater-add"),
+        *_REPEATER_ADD_CONTRACTS,
     }
 )
-_REPEATER_ADD_CONTRACT = ("source-add-row", "repeater-add")
-_REPEATER_DELETE_CONTRACT = ("source-delete-row", "repeater-delete")
+_SETUP_ACTION_START = re.compile(
+    r"^(?:авторизоваться|войти|открыть|перейти|нажать|удалить|"
+    r"очистить|создать|добавить|выбрать|установить|ввести|заполнить|"
+    r"оставить|загрузить|перетащить|вставить|раскрыть|развернуть|"
+    r"закрыть|активировать|выделить|прокрутить|получить|сохранить|указать|"
+    r"найти|включить|выполнить|"
+    r"log\s+in|open|navigate|click|delete|clear|create|add|select|set|"
+    r"enter|fill|leave|upload|drag|drop|insert|expand|close|activate|"
+    r"scroll)\b",
+    re.IGNORECASE,
+)
+_LOCATIVE_SETUP_ACTION = re.compile(
+    r"^(?:в|на)\s+(?:[А-ЯЁа-яё-]+\s+){0,3}"
+    r"(?:пол(?:е|я|ю|ем)|блок(?:е|а|у|ом)|списк(?:е|а|у|ом)|"
+    r"переключател(?:е|ь|я|ю|ем))\b[^.\n;]{0,160}\b"
+    r"(?:выбрать|установить|ввести|заполнить|оставить|очистить|нажать|"
+    r"выполнить)\b",
+    re.IGNORECASE,
+)
+_RUNTIME_LABEL = re.compile(r"`([^`\r\n]+)`|«([^»\r\n]+)»")
+_CARD_CONTEXT = re.compile(r"\bкарточк\w*\b", re.IGNORECASE)
+_BLOCK_CONTEXT = re.compile(r"\bблок(?:е|а|у|ом|и|ов)?(?:-повторител[ья])?\b", re.IGNORECASE)
+_FIELD_CONTEXT = re.compile(r"\bпол(?:е|я|ю|ем)\b", re.IGNORECASE)
+_SELECTED_VALUE_STATE = re.compile(
+    r"\b(?:выбран(?:а|о|ы|ным|ной|ную|ного|ному|ном|ные|ных|ными)?|"
+    r"установлен(?:а|о|ы|ным|ной|ную|ного|ному|ном|ные|ных|ными)?)\b"
+    r"[^.\n;]{0,80}\bзначени\w*\b",
+    re.IGNORECASE,
+)
+_REPEATER_ROW_CONTEXT = re.compile(
+    r"(?:после\s+(?:действия\s+)?добавлен\w+|"
+    r"\bстрок(?:а|и|у|ой|е)\b|"
+    r"\b(?:ввод|выбор)\s+(?:значени\w*|дат\w*)\s+в\s+пол(?:е|я|ю|ем)\b|"
+    r"\bпол(?:е|я|ю|ем)\b[^.\n;]{0,120}\bблок(?:е|а|у|ом|и)?\b)",
+    re.IGNORECASE,
+)
 
 
 DETERMINISTIC_PROPERTY_KINDS = frozenset(
@@ -562,6 +611,118 @@ def _unique_steps(*values: str) -> list[str]:
     return result
 
 
+def _is_setup_action(value: str) -> bool:
+    text = value.strip()
+    return (
+        _SETUP_ACTION_START.match(text) is not None
+        or _LOCATIVE_SETUP_ACTION.match(text) is not None
+    )
+
+
+def _runtime_labels_with_context(value: str) -> tuple[tuple[str, str], ...]:
+    labels: list[tuple[str, str]] = []
+    for match in _RUNTIME_LABEL.finditer(value):
+        label = (match.group(1) or match.group(2) or "").strip()
+        prefix = value[max(0, match.start() - 80) : match.start()]
+        labels.append((label, prefix))
+    return tuple(labels)
+
+
+def _navigation_setup_from_source(value: str) -> tuple[str, ...]:
+    """Infer only card/block navigation from exact source labels.
+
+    This does not turn a passive source condition into a runtime assertion.  It
+    uses already accepted UI container labels to build the minimum executable
+    path required before a TC can interact with controls inside that container.
+    """
+
+    card = ""
+    block = ""
+    for label, prefix in _runtime_labels_with_context(value):
+        if not any(character.isalnum() for character in label):
+            continue
+        if not card and _CARD_CONTEXT.search(prefix):
+            card = label
+        if not block and _BLOCK_CONTEXT.search(prefix):
+            block = label
+    if card and block:
+        return (f"Открыть карточку `{card}` и перейти к блоку `{block}`.",)
+    if block:
+        return (f"Перейти к блоку `{block}`.",)
+    if card:
+        return (f"Открыть карточку `{card}`.",)
+    return ()
+
+
+def _selection_setup_from_condition(value: str) -> str:
+    labels = _runtime_labels_with_context(value)
+    if len(labels) < 2 or _SELECTED_VALUE_STATE.search(value) is None:
+        return ""
+    first_label = labels[0][0]
+    second_label = labels[1][0]
+    first_prefix = labels[0][1]
+    if _FIELD_CONTEXT.search(first_prefix):
+        return f"В поле `{first_label}` выбрать значение `{second_label}`."
+    return ""
+
+
+def _condition_needs_repeater_row(value: str) -> bool:
+    return _REPEATER_ROW_CONTEXT.search(value) is not None
+
+
+def runtime_preconditions_for_binding(
+    *,
+    prop: CoverageProperty,
+    obligation: CoverageObligation,
+    context: DesignContext,
+    repeater_add_action: str = "",
+    include_repeater_reveal: bool = True,
+) -> tuple[str, ...]:
+    """Build production-runtime setup without losing source condition evidence.
+
+    ``DesignContext.condition_preconditions`` remains the source-first binding
+    for reviewer projection.  Runtime TC preconditions are a different layer:
+    they must be executable actions.  Passive source states are therefore used
+    only to infer safe navigation/reveal setup from source labels or exact
+    source action triggers; if that cannot be done, the case is blocked.
+    """
+
+    condition = ""
+    if obligation.condition_key != "always":
+        condition = context.condition_preconditions.get(obligation.condition_key, "").strip()
+        if not condition:
+            raise DesignError(f"missing precondition for {obligation.condition_key}")
+
+    actions: list[str] = []
+    for item in (*context.base_preconditions, condition):
+        value = item.strip()
+        if not value:
+            continue
+        if _is_setup_action(value):
+            actions.append(value)
+            continue
+        actions.extend(_navigation_setup_from_source(value))
+    if condition:
+        selected_value_setup = _selection_setup_from_condition(condition)
+        if selected_value_setup:
+            actions.append(selected_value_setup)
+        if (
+            include_repeater_reveal
+            and repeater_add_action.strip()
+            and _condition_needs_repeater_row(condition)
+        ):
+            actions.append(repeater_add_action.strip())
+
+    unique = tuple(_unique_steps(*actions))
+    if unique:
+        return unique
+    if condition:
+        raise DesignError(
+            f"{obligation.condition_key} has no executable runtime setup path"
+        )
+    return ("Не требуются.",)
+
+
 def _display_subject(label: str) -> str:
     """Render a typed label without guessing grammatical gender or UI kind."""
 
@@ -639,7 +800,7 @@ def _select_repeater_mutation_support(
     """Pair exact add/delete actions; ordinal row identity needs no field data."""
 
     def mutation_candidates(
-        contract: tuple[str, str],
+        contracts: frozenset[tuple[str, str]],
     ) -> list[tuple[CoverageProperty, CoverageObligation]]:
         result: list[tuple[CoverageProperty, CoverageObligation]] = []
         for item in graph.obligations:
@@ -647,7 +808,7 @@ def _select_repeater_mutation_support(
             if prop is None:
                 continue
             if (
-                (prop.property_kind, item.coverage_variant) == contract
+                (prop.property_kind, item.coverage_variant) in contracts
                 and item.obligation_id in executable_obligations
                 and item.coverage_status == "testable"
                 and item.validation_trigger.strip()
@@ -655,8 +816,8 @@ def _select_repeater_mutation_support(
                 result.append((prop, item))
         return sorted(result, key=lambda pair: pair[1].obligation_id)
 
-    adds = mutation_candidates(_REPEATER_ADD_CONTRACT)
-    deletes = mutation_candidates(_REPEATER_DELETE_CONTRACT)
+    adds = mutation_candidates(_REPEATER_ADD_CONTRACTS)
+    deletes = mutation_candidates(_REPEATER_DELETE_CONTRACTS)
     if not adds or not deletes:
         return {}
 
@@ -761,7 +922,7 @@ def _materialize(
             obligation=obligation,
             reason="missing typed subject label",
         )
-    preconditions = list(context.base_preconditions)
+    kind = prop.property_kind
     condition = ""
     if obligation.condition_key != "always":
         condition = context.condition_preconditions.get(obligation.condition_key, "").strip()
@@ -784,13 +945,6 @@ def _materialize(
                     f"{obligation.condition_key} has no source-backed setup/action trigger"
                 ),
             )
-        # The exact accepted condition remains typed on the property/context and
-        # is runner-owned.  Keep it separate from the action trigger: an action
-        # cannot silently replace the state in which that action is applicable.
-        if _normalized_text(condition) not in {
-            _normalized_text(item) for item in preconditions
-        }:
-            preconditions.append(condition)
     expected_result = obligation.observable_oracle.strip()
     if not expected_result:
         return _blocked_card(
@@ -811,7 +965,31 @@ def _materialize(
             reason=f"unsupported deterministic property_kind: {prop.property_kind}",
         )
 
-    kind = prop.property_kind
+    repeater_add_action = (
+        repeater_support.add_obligation.validation_trigger if repeater_support else ""
+    )
+    try:
+        runtime_setup = runtime_preconditions_for_binding(
+            prop=prop,
+            obligation=obligation,
+            context=context,
+            repeater_add_action=repeater_add_action,
+            include_repeater_reveal=(
+                (kind, obligation.coverage_variant) not in _REPEATER_MUTATION_CONTRACTS
+            ),
+        )
+    except DesignError as exc:
+        return _blocked_card(
+            case=case,
+            prop=prop,
+            obligation=obligation,
+            reason=str(exc),
+        )
+    preconditions = (
+        []
+        if runtime_setup == ("Не требуются.",)
+        else list(runtime_setup)
+    )
     fixtures = obligation.fixture_values
     title = ""
     case_type = "позитивный"
@@ -819,10 +997,7 @@ def _materialize(
     steps: list[str] = []
     postconditions_override: tuple[str, ...] = ()
 
-    if (kind, obligation.coverage_variant) in {
-        _REPEATER_ADD_CONTRACT,
-        _REPEATER_DELETE_CONTRACT,
-    }:
+    if (kind, obligation.coverage_variant) in _REPEATER_MUTATION_CONTRACTS:
         if repeater_support is None:
             return _blocked_card(
                 case=case,
@@ -837,7 +1012,7 @@ def _materialize(
         case_type = "негативный" if prop.polarity == "negative" else "позитивный"
         add_action = repeater_support.add_obligation.validation_trigger
         delete_action = repeater_support.delete_obligation.validation_trigger
-        if (kind, obligation.coverage_variant) == _REPEATER_ADD_CONTRACT:
+        if (kind, obligation.coverage_variant) in _REPEATER_ADD_CONTRACTS:
             steps = [obligation.validation_trigger]
             postconditions_override = (
                 _source_row_action(
@@ -850,11 +1025,7 @@ def _materialize(
                 "Первая тестовая строка: первая по порядку.",
                 "Вторая тестовая строка: вторая по порядку.",
             ]
-            if condition and condition in preconditions:
-                preconditions.remove(condition)
             preconditions.extend((add_action, add_action))
-            if condition:
-                preconditions.append(condition)
             steps = [
                 _source_row_action(
                     row="первой тестовой строки",
@@ -1158,6 +1329,17 @@ def build_test_design_plan(
         context=context,
         executable_obligations=executable_obligations,
     )
+    default_repeater_support = (
+        sorted(
+            {
+                support.add_obligation.obligation_id: support
+                for support in mutation_supports.values()
+            }.values(),
+            key=lambda item: item.add_obligation.obligation_id,
+        )[0]
+        if mutation_supports
+        else None
+    )
     invariant_transitions: dict[str, list[_InvariantTransition]] = {}
     for candidate in graph.obligations:
         candidate_prop = properties.get(candidate.property_id)
@@ -1205,7 +1387,10 @@ def build_test_design_plan(
                 if obligation.coverage_variant == "always-visible"
                 else None
             ),
-            repeater_support=mutation_supports.get(obligation.obligation_id),
+            repeater_support=(
+                mutation_supports.get(obligation.obligation_id)
+                or default_repeater_support
+            ),
         )
         if isinstance(result, TestCaseDesign):
             deterministic.append(result)

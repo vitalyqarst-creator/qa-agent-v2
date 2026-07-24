@@ -15,6 +15,7 @@ from test_case_agent.test_design import (
     TestCaseDesign,
     TestDesignPlan,
     WriterCard,
+    runtime_preconditions_for_binding,
     validate_design_context_for_graph,
 )
 
@@ -769,6 +770,8 @@ def validate_writer_response(
     cards = {item.case_key: item for item in plan.writer_cards}
     if plan.graph_digest != graph.digest or plan.blocked_cards:
         raise IterationContractError("writer cannot run for this design plan")
+    properties = {item.property_id: item for item in graph.properties}
+    obligations = {item.obligation_id: item for item in graph.obligations}
     raw_cases = root["cases"]
     raw_unresolved = root["unresolved"]
     if not isinstance(raw_cases, list) or not isinstance(raw_unresolved, list):
@@ -830,21 +833,21 @@ def validate_writer_response(
             raise IterationContractError(
                 f"writer card {case_key} has no registered source-backed action"
             )
-        preconditions = list(context.base_preconditions)
-        if card.condition_key != "always":
-            condition = context.condition_preconditions.get(card.condition_key, "").strip()
-            if not condition:
-                raise IterationContractError(
-                    f"missing runner-owned precondition for {card.condition_key}"
-                )
-            if not card.validation_trigger.strip():
-                raise IterationContractError(
-                    f"condition {card.condition_key} has no source-backed action trigger"
-                )
-            if condition.casefold() not in {
-                item.strip().casefold() for item in preconditions
-            }:
-                preconditions.append(condition)
+        try:
+            runtime_setup = runtime_preconditions_for_binding(
+                prop=properties[card.property_id],
+                obligation=obligations[card.obligation_id],
+                context=context,
+            )
+        except (KeyError, DesignError) as exc:
+            raise IterationContractError(
+                f"writer runner-owned preconditions are not executable: {exc}"
+            ) from exc
+        preconditions = (
+            []
+            if runtime_setup == ("Не требуются.",)
+            else list(runtime_setup)
+        )
         postconditions = (
             (card.cleanup_strategy,)
             if card.cleanup_strategy.strip()
@@ -932,28 +935,7 @@ def validate_suite(
         findings.append(f"missing case: {case_key}")
     production = validate_production_tc_content(markdown, checked_path=checked_path)
     production_payload = production.as_dict()
-    accepted_conditions = {
-        clause
-        for prop in graph.properties
-        for clause in prop.condition_clauses
-    }
-    condition_evidence_by_tc = {
-        item.tc_id: {
-            " ".join(precondition.split())[:280]
-            for precondition in item.preconditions
-            if precondition in accepted_conditions
-        }
-        for item in cases
-    }
-    remaining_production_findings = [
-        item
-        for item in production_payload["findings"]
-        if not (
-            item.get("id") == "production-non-reproducible-precondition"
-            and item.get("evidence")
-            in condition_evidence_by_tc.get(str(item.get("tc_id", "")), set())
-        )
-    ]
+    remaining_production_findings = list(production_payload["findings"])
     production_payload["findings"] = remaining_production_findings
     production_payload["passed"] = not remaining_production_findings
     if remaining_production_findings:
@@ -1151,10 +1133,6 @@ def build_reviewer_request(
                 if len(prop.condition_clauses) == 1
                 else prop.canonical_statement
             )
-            if condition_precondition not in design.preconditions:
-                raise IterationContractError(
-                    f"{design.tc_id} omits exact condition {obligation.condition_key}"
-                )
         projections.append(
             {
                 "case_key": design.case_key,

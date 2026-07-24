@@ -610,7 +610,144 @@ class TestDesignTests(unittest.TestCase):
         self.assertNotIn("Не требуются.", add_case.postconditions)
         self.assertNotIn("Не требуются.", delete_case.postconditions)
 
-    def test_exact_condition_is_in_case_and_reviewer_projection(self) -> None:
+    def test_contact_person_passive_conditions_become_executable_setup(self) -> None:
+        graph, context = _repeater_graph_and_context()
+        add_condition = (
+            "Кнопка/виджет добавления контактного лица доступна в блоке "
+            "`Контактные лица`."
+        )
+        delete_condition = (
+            "В блоке `Контактные лица` отображается строка контактного "
+            "лица с кнопкой `Корзина`."
+        )
+        family_condition = (
+            "Поле `Фамилия` в блоке `Контактные лица` после действия "
+            "добавления контактного лица."
+        )
+        graph = replace(
+            graph,
+            properties=(
+                graph.properties[0],
+                replace(
+                    graph.properties[1],
+                    property_kind="source-action",
+                    condition_clauses=(add_condition,),
+                ),
+                replace(
+                    graph.properties[2],
+                    property_kind="source-action",
+                    condition_clauses=(delete_condition,),
+                ),
+                CoverageProperty(
+                    property_id="PROP-FAMILY",
+                    assertion_id="ASSERT-FAMILY",
+                    property_key="contact-person-family:source-format",
+                    subject_key="contact-person-family",
+                    property_kind="source-format",
+                    source_row_id="SRC-FAMILY",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[4]",
+                    source_text_sha256="7" * 64,
+                    canonical_statement=(
+                        "Поле `Фамилия` в блоке `Контактные лица` "
+                        "принимает текстовое значение."
+                    ),
+                    requirement_codes=("BSR 173",),
+                    disposition="tc",
+                    polarity="positive",
+                    condition_clauses=(family_condition,),
+                ),
+                *graph.properties[3:],
+            ),
+            obligations=(
+                graph.obligations[0],
+                replace(
+                    graph.obligations[1],
+                    coverage_variant="repeatable-add",
+                    condition_key="condition:add-available",
+                ),
+                replace(
+                    graph.obligations[2],
+                    coverage_variant="repeatable-delete",
+                    condition_key="condition:delete-row-visible",
+                ),
+                CoverageObligation(
+                    obligation_id="OBL-FAMILY",
+                    property_id="PROP-FAMILY",
+                    atom_id="ATOM-FAMILY",
+                    coverage_variant="positive",
+                    condition_key="condition:family-after-add",
+                    atomic_statement=(
+                        "Поле `Фамилия` в блоке `Контактные лица` "
+                        "принимает текстовое значение."
+                    ),
+                    observable_oracle=(
+                        "В поле `Фамилия` отображается введённое значение."
+                    ),
+                    coverage_status="testable",
+                    requirement_codes=("BSR 173",),
+                    gap_id="",
+                    calibration_status="not-required",
+                    validation_trigger="Ввести `Иванов` в поле `Фамилия`.",
+                    cleanup_strategy="",
+                    source_oracle_id="",
+                    fixture_values=("Иванов",),
+                    calibration_question="",
+                ),
+            ),
+            cases=(
+                *graph.cases,
+                CoverageCase(
+                    case_key=(
+                        "contact-person|family|source-format|positive|"
+                        "condition:family-after-add"
+                    ),
+                    tc_id="TC-CUST-FAMILY001",
+                    obligation_ids=("OBL-FAMILY",),
+                    status="executable",
+                ),
+            ),
+        )
+        context = replace(
+            context,
+            base_preconditions=(),
+            subject_labels={
+                **context.subject_labels,
+                "contact-person-family": "Фамилия",
+            },
+            condition_preconditions={
+                "condition:add-available": add_condition,
+                "condition:delete-row-visible": delete_condition,
+                "condition:family-after-add": family_condition,
+            },
+        )
+
+        plan = build_test_design_plan(graph, context=context)
+        markdown = render_test_cases(
+            plan.deterministic_cases,
+            scope_title=context.scope_title,
+        )
+        gate = validate_suite(
+            graph=graph,
+            cases=plan.deterministic_cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+
+        self.assertTrue(gate.passed, gate.to_dict())
+        self.assertNotIn(add_condition, markdown)
+        self.assertNotIn(delete_condition, markdown)
+        self.assertNotIn(family_condition, markdown)
+        family_case = next(
+            item for item in plan.deterministic_cases if item.tc_id == "TC-CUST-FAMILY001"
+        )
+        self.assertIn(
+            "Перейти к блоку `Контактные лица`.",
+            family_case.preconditions,
+        )
+        self.assertIn("Нажать «Добавить».", family_case.preconditions)
+
+    def test_exact_condition_is_kept_in_reviewer_projection_not_runtime_setup(self) -> None:
         graph = _graph(trigger="Ввести значение в поле «Имя».")
         condition = "Поле «Имя» отображается."
         graph = replace(
@@ -629,7 +766,8 @@ class TestDesignTests(unittest.TestCase):
         )
         plan = build_test_design_plan(graph, context=context)
         case = plan.deterministic_cases[0]
-        self.assertIn(condition, case.preconditions)
+        self.assertNotIn(condition, case.preconditions)
+        self.assertEqual(("Открыть карточку клиента.",), case.preconditions)
         markdown = render_test_cases((case,), scope_title=context.scope_title)
         gate = validate_suite(
             graph=graph,
