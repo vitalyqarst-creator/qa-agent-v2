@@ -133,10 +133,13 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "and oracle to the TC expected_result. A source-only validation trigger "
     "or observable oracle may support outcome=finding, never outcome=passed. Use "
     "outcome=passed with this concrete basis, or outcome=finding with a concrete "
-    "witness and one or more matching test_case_findings whose falsification_probe "
-    "names that exact probe. The probe receipt must anchor at least one finding "
-    "chain; additional findings for the same probe may use other exact registered "
-    "chains. outcome=not-recorded is "
+    "witness and one or more bound test_case_findings. A finding should name the "
+    "exact falsification_probe when it is specific to one probe; if the same root "
+    "defect affects multiple probes on the same case/evidence chain, one finding "
+    "may name the most specific affected probe and the case_results.falsification "
+    "receipt must record the remaining affected probes. The probe receipt must "
+    "anchor at least one same-case bound finding; additional findings for the same "
+    "probe may use other exact registered chains. outcome=not-recorded is "
     "reserved for the offline legacy adapter and is forbidden in live output. "
     "case_results must contain exactly one result for every case in "
     "reviewer_evidence_pack.normalized_projection.cases, including cases with "
@@ -213,7 +216,8 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "failure_attribution_check": True,
                 "trigger_fidelity_check": True,
                 "probe_findings_require_concrete_witness": True,
-                "probe_findings_require_exact_probe_binding": True,
+                "probe_findings_require_same_chain_bound_finding": True,
+                "related_probe_findings_may_share_same_case_root_finding": True,
                 "per_probe_evidence_chain_binding_required": True,
                 "per_probe_evidence_item_binding_required": True,
                 "artifact_proven_findings_do_not_require_hypothetical_witness": True,
@@ -1973,6 +1977,8 @@ def _validate_reviewer_response_v2(
             allowed_chains=primary_chains | supporting_chains,
         )
     probe_finding_bindings: set[tuple[str, str, str, str, str]] = set()
+    same_chain_probe_finding_bindings: set[tuple[str, str, str, str]] = set()
+    case_probe_finding_bindings: set[tuple[str, str]] = set()
     for index, raw in enumerate(test_findings):
         falsification_probe = validate_finding(
             raw,
@@ -1993,6 +1999,12 @@ def _validate_reviewer_response_v2(
                 str(raw.get("binding_role")),
                 str(raw.get("obligation_id")),
             )
+            same_chain_binding = (
+                case_key,
+                tc_id,
+                str(raw.get("binding_role")),
+                str(raw.get("obligation_id")),
+            )
             probe_result = falsification_by_case[case_key][falsification_probe]
             if probe_result[0] != "finding":
                 raise IterationContractError(
@@ -2000,6 +2012,8 @@ def _validate_reviewer_response_v2(
                     f"{falsification_probe} has no matching falsification outcome"
                 )
             probe_finding_bindings.add(finding_binding)
+            same_chain_probe_finding_bindings.add(same_chain_binding)
+            case_probe_finding_bindings.add((case_key, tc_id))
 
     for case_key, probe_results in falsification_by_case.items():
         tc_id = expected[case_key][0]
@@ -2018,7 +2032,18 @@ def _validate_reviewer_response_v2(
                 binding_role,
                 probe_obligation_id,
             )
-            if outcome == "finding" and exact_binding not in probe_finding_bindings:
+            same_chain_binding = (
+                case_key,
+                tc_id,
+                binding_role,
+                probe_obligation_id,
+            )
+            if (
+                outcome == "finding"
+                and exact_binding not in probe_finding_bindings
+                and same_chain_binding not in same_chain_probe_finding_bindings
+                and (case_key, tc_id) not in case_probe_finding_bindings
+            ):
                 raise IterationContractError(
                     f"reviewer falsification finding for {case_key}/{probe} "
                     "has no bound test_case_finding"

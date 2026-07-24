@@ -548,7 +548,10 @@ class IterationContractTests(unittest.TestCase):
             acceptance["probe_findings_require_concrete_witness"]
         )
         self.assertTrue(
-            acceptance["probe_findings_require_exact_probe_binding"]
+            acceptance["probe_findings_require_same_chain_bound_finding"]
+        )
+        self.assertTrue(
+            acceptance["related_probe_findings_may_share_same_case_root_finding"]
         )
         self.assertTrue(
             acceptance["per_probe_evidence_chain_binding_required"]
@@ -703,6 +706,41 @@ class IterationContractTests(unittest.TestCase):
         self.assertFalse(accepted)
         self.assertEqual("changes-required", decision)
 
+        same_chain_root_finding = copy.deepcopy(bound_probe_finding)
+        same_chain_root_finding["case_results"][0]["falsification"][
+            "failure_attribution"
+        ].update(
+            {
+                "outcome": "finding",
+                "detail": (
+                    "The same missing persistence check also makes the failure "
+                    "attribution ambiguous."
+                ),
+            }
+        )
+        same_chain_root_finding["case_results"][0]["falsification"][
+            "trigger_fidelity"
+        ].update(
+            {
+                "outcome": "finding",
+                "detail": (
+                    "The same root defect is exposed through the trigger/oracle "
+                    "chain and is represented by one bound finding."
+                ),
+            }
+        )
+        same_chain_root_finding["test_case_findings"][0][
+            "falsification_probe"
+        ] = "trigger_fidelity"
+        accepted, decision = validate_reviewer_response(
+            same_chain_root_finding,
+            graph=graph,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+        self.assertFalse(accepted)
+        self.assertEqual("changes-required", decision)
+
         mismatched_probe = copy.deepcopy(bound_probe_finding)
         mismatched_probe["test_case_findings"][0][
             "falsification_probe"
@@ -746,6 +784,7 @@ class IterationContractTests(unittest.TestCase):
             "binding_item_index (-1 for primary)",
             "bind trigger_or_step to an actual TC step",
             "additional findings for the same probe",
+            "same root defect affects multiple probes",
             "source-only validation trigger",
             "outcome=not-recorded",
             "Direct source, TC-design, digest, and binding defects",
@@ -1306,6 +1345,35 @@ class IterationContractTests(unittest.TestCase):
         ] = "failure_attribution"
         accepted, decision = validate_reviewer_response(
             probe_response,
+            graph=graph,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+        self.assertFalse(accepted)
+        self.assertEqual("changes-required", decision)
+
+        same_case_root_finding = copy.deepcopy(probe_response)
+        root_case_result = next(
+            item
+            for item in same_case_root_finding["case_results"]
+            if item["case_key"] == support["case_key"]
+        )
+        root_case_result["falsification"]["false_pass"].update(
+            {
+                "outcome": "finding",
+                "binding_role": "primary",
+                "obligation_id": root_case_result["obligation_id"],
+                "binding_item_index": -1,
+                "trigger_or_step": designs_by_case[support["case_key"]]["steps"][-1],
+                "oracle": designs_by_case[support["case_key"]]["expected_result"],
+                "detail": (
+                    "The same setup-root defect also creates a false-pass risk "
+                    "on the primary chain."
+                ),
+            }
+        )
+        accepted, decision = validate_reviewer_response(
+            same_case_root_finding,
             graph=graph,
             draft_sha256=gate.draft_sha256,
             reviewer_request=request,
