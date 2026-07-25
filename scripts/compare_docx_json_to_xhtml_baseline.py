@@ -145,28 +145,21 @@ def _match_candidate(candidate_text: str, blocks: list[dict[str, Any]]) -> dict[
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Compare DOCX JSON projection coverage against an XHTML source-row "
-            "baseline built from an extraction spec."
-        )
-    )
-    parser.add_argument("--repo-root", required=True, type=Path)
-    parser.add_argument("--spec", required=True, type=Path)
-    parser.add_argument("--docx-json", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--selected-xhtml", type=Path)
-    args = parser.parse_args()
-
+def compare_docx_json_to_xhtml_baseline(
+    *,
+    repo_root: Path,
+    spec_path: Path,
+    docx_json_path: Path,
+    selected_xhtml: Path | None = None,
+) -> dict[str, Any]:
     spec_payload = _load_spec(
-        args.spec,
-        repo_root=args.repo_root,
-        selected_xhtml=args.selected_xhtml,
+        spec_path,
+        repo_root=repo_root,
+        selected_xhtml=selected_xhtml,
     )
     spec = SourceRowExtractionSpec.from_dict(spec_payload)
-    baseline = build_source_row_baseline(repo_root=args.repo_root, spec=spec)
-    projection = load_docx_source_json(args.docx_json)
+    baseline = build_source_row_baseline(repo_root=repo_root, spec=spec)
+    projection = load_docx_source_json(docx_json_path)
     blocks = projection["blocks"]
 
     candidate_results = []
@@ -201,17 +194,33 @@ def main() -> int:
     matched = sum(
         count for kind, count in counts.items() if kind != "missing"
     )
-    report = {
+    weak_match_count = sum(
+        count
+        for kind, count in counts.items()
+        if kind.startswith("requirement-code") or kind.startswith("ambiguous-")
+    )
+    selected_xhtml_path = repo_root / PurePosixPath(spec.selected_xhtml.relative_path)
+    return {
         "schema_version": 1,
         "scope_slug": spec.scope_slug,
+        "spec_path": _repo_relative(spec_path, repo_root),
         "xhtml_candidate_count": baseline.candidate_count,
         "docx_json_block_count": projection["block_count"],
         "match_counts": counts,
         "matched_candidate_count": matched,
         "missing_candidate_count": counts.get("missing", 0),
+        "weak_match_count": weak_match_count,
         "order_violations": order_violations,
         "order_preserved": order_violations == 0,
         "selected_xhtml": spec.selected_xhtml.to_dict(),
+        "source_size_bytes": {
+            "selected_xhtml": selected_xhtml_path.stat().st_size
+            if selected_xhtml_path.is_file()
+            else None,
+            "docx_json": docx_json_path.stat().st_size
+            if docx_json_path.is_file()
+            else None,
+        },
         "docx_json_projection": {
             "source_path": projection["source_path"],
             "source_sha256": projection["source_sha256"],
@@ -219,6 +228,28 @@ def main() -> int:
         },
         "candidate_results": candidate_results,
     }
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(
+        description=(
+            "Compare DOCX JSON projection coverage against an XHTML source-row "
+            "baseline built from an extraction spec."
+        )
+    )
+    parser.add_argument("--repo-root", required=True, type=Path)
+    parser.add_argument("--spec", required=True, type=Path)
+    parser.add_argument("--docx-json", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--selected-xhtml", type=Path)
+    args = parser.parse_args()
+
+    report = compare_docx_json_to_xhtml_baseline(
+        repo_root=args.repo_root,
+        spec_path=args.spec,
+        docx_json_path=args.docx_json,
+        selected_xhtml=args.selected_xhtml,
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         json.dumps(report, ensure_ascii=False, indent=2) + "\n",

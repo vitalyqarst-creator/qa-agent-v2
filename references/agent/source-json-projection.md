@@ -27,6 +27,16 @@ python scripts/compare_docx_json_to_xhtml_baseline.py `
   --docx-json <main>.source.json `
   --selected-xhtml <repo-root>\fts\<ft>\source\<main>.xhtml `
   --output <scope>.json-compare.json
+
+python scripts/evaluate_docx_json_projection.py `
+  --repo-root <repo-root> `
+  --docx <repo-root>\fts\<ft>\source\<main>.docx `
+  --selected-xhtml <repo-root>\fts\<ft>\source\<main>.xhtml `
+  --spec <scope-a>\source-row-extraction-spec.json `
+  --spec <scope-b>\source-row-extraction-spec.json `
+  --spec <scope-c>\source-row-extraction-spec.json `
+  --output-json <work>\source-json-evaluation\summary.json `
+  --output-md <work>\source-json-evaluation\summary.md
 ```
 
 Comparison treats DOCX JSON table-cell delimiters (`|`) as transport syntax.
@@ -50,6 +60,8 @@ Production switch criteria:
 - `missing_candidate_count = 0` for at least three materially different real
   scopes;
 - `order_preserved = true` for table-heavy scopes;
+- `weak_match_count = 0`, including ambiguous matches and requirement-code-only
+  matches;
 - no stale or shifted requirement codes;
 - no duplicated merged-cell text in bounded source rows;
 - source assertion review and production iteration still pass without weakening

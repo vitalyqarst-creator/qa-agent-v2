@@ -40,6 +40,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 2. Определи `ft-slug` и отдельно выбранный input root, если материалы лежат в version/variant-подкаталоге `fts/<ft-slug>/...`.
 3. Зафиксируй, какие документы являются основным ФТ из `source/`, а какие относятся к support или mockups. Не считай Office lock-файлы `~$*` source-кандидатами или blocker-ами. Основной DOCX ФТ остается authoritative source of truth.
 4. Найди matching XHTML-версию основного ФТ в `source/`. XHTML обязателен как основной машиночитаемый источник извлечения таблиц, строк, списков, вложенных списков, перечней значений и структуры разделов.
+   Если пользователь просит проверить JSON вместо XHTML, используй `docx-json-projection` только как diagnostic/evaluation route по `source-json-projection.md`: JSON не заменяет обязательный XHTML в production workflow, пока multi-scope parity evaluation не докажет критерии переключения.
 5. Отдельно найди PDF-версию основного ФТ для сверки структуры разделов. Ищи ее сначала в `source/`, затем в связанных материалах того же FT-пакета.
 6. Если PDF-версия найдена, передай ее следующему skill-у как вход для structural/visual cross-check; PDF не заменяет DOCX или XHTML.
 7. Проверь `AGENT-NOTES.md` в выбранном input root и в package root `fts/<ft-slug>/`; найденные notes передай как обязательный package-specific context.
@@ -79,6 +80,7 @@ description: Находит нужный FT-пакет, основное ФТ, s
 - Artifact manifest: [../../references/agent/artifact-manifest-format.md](../../references/agent/artifact-manifest-format.md)
 - Шаблон package-specific notes: [../../references/agent/ft-package-agent-notes-template.md](../../references/agent/ft-package-agent-notes-template.md)
 - Source parsing quality: [../../references/agent/source-parsing-quality.md](../../references/agent/source-parsing-quality.md)
+- DOCX JSON diagnostic projection: [../../references/agent/source-json-projection.md](../../references/agent/source-json-projection.md)
 - Legacy strict source-quality warnings: [../../references/agent/source-quality-strict-warning-review-2026-05-25.md](../../references/agent/source-quality-strict-warning-review-2026-05-25.md)
 
 ## Ограничения
