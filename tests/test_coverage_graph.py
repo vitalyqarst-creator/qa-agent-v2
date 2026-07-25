@@ -12,6 +12,7 @@ from test_case_agent.coverage_graph import (
     PropertyDerivation,
     build_coverage_graph,
     validate_coverage_graph,
+    with_sequential_tc_ids,
 )
 from test_case_agent.review_cycle.prepared_package import (
     PreparedObligation,
@@ -164,6 +165,58 @@ class CoverageGraphTests(unittest.TestCase):
         )
         self.assertEqual(first.to_dict(), second.to_dict())
         self.assertEqual(first.digest, second.digest)
+
+    def test_public_tc_ids_are_sequential_with_stable_case_key_remap(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (
+                FakeAssertion("ASSERT-001", "SRC-001", (), ("OBL-001",)),
+                FakeAssertion("ASSERT-002", "SRC-002", (), ("OBL-002",)),
+            ),
+        )
+        prepared = obligation_set(
+            obligation("OBL-001", "ATOM-001", "SRC-001"),
+            obligation("OBL-002", "ATOM-002", "SRC-002"),
+        )
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "phone.visible",
+                    "visibility",
+                    {"OBL-001": "visible"},
+                ),
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-002",
+                    "phone.editable",
+                    "editability",
+                    {"OBL-002": "replace"},
+                ),
+            ),
+        )
+
+        public_graph, remap = with_sequential_tc_ids(graph, tc_prefix="SMP")
+
+        self.assertEqual(
+            ["TC-SMP-001", "TC-SMP-002"],
+            [item.tc_id for item in public_graph.cases],
+        )
+        self.assertEqual(graph.digest, remap["source_graph_digest"])
+        self.assertEqual(public_graph.digest, remap["target_graph_digest"])
+        self.assertTrue(
+            all(
+                entry["stable_hash_tc_id"] != entry["public_tc_id"]
+                for entry in remap["entries"]
+            )
+        )
 
     def test_same_row_sibling_properties_are_retained(self) -> None:
         manifest = FakeManifest(

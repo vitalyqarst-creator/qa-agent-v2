@@ -5,6 +5,7 @@ import unittest
 
 from test_case_agent.case_identity import (
     CaseIdentityError,
+    assign_sequential_ids,
     assign_stable_ids,
     semantic_case_key,
     stable_tc_id,
@@ -65,6 +66,21 @@ class StableCaseIdentityTests(unittest.TestCase):
     def test_duplicate_semantic_identity_is_rejected(self) -> None:
         with self.assertRaisesRegex(CaseIdentityError, "duplicate"):
             assign_stable_ids([key("valid"), key("valid")], prefix="SMP")
+
+    def test_sequential_ids_are_suite_local_and_continuous(self) -> None:
+        ids = assign_sequential_ids(
+            [key("letters"), key("valid"), key("spaces")],
+            prefix="SMP",
+        )
+
+        self.assertEqual(
+            ["TC-SMP-001", "TC-SMP-002", "TC-SMP-003"],
+            [ids[item] for item in sorted(ids)],
+        )
+
+    def test_sequential_ids_reject_duplicate_semantic_identity(self) -> None:
+        with self.assertRaisesRegex(CaseIdentityError, "duplicate"):
+            assign_sequential_ids([key("valid"), key("valid")], prefix="SMP")
 
 
 if __name__ == "__main__":

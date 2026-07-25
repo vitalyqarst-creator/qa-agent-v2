@@ -277,6 +277,7 @@ def build_semantic_shard_plan(
     ordered_components = sorted(
         components.values(), key=lambda values: min(order[value] for value in values)
     )
+    oversized_semantic_components: set[tuple[str, ...]] = set()
     for component in ordered_components:
         included_count = len(set(component) & included)
         component_semantic_weight = sum(
@@ -285,15 +286,16 @@ def build_semantic_shard_plan(
         if (
             included_count > max_included_rows
             or len(component) > max_source_rows
-            or (
-                max_semantic_weight is not None
-                and component_semantic_weight > max_semantic_weight
-            )
         ):
             raise SemanticDesignShardingError(
                 "an atomic semantic component exceeds shard capacity: "
                 + ", ".join(component)
             )
+        if (
+            max_semantic_weight is not None
+            and component_semantic_weight > max_semantic_weight
+        ):
+            oversized_semantic_components.add(tuple(component))
 
     bins: list[list[str]] = []
     current: list[str] = []
@@ -332,17 +334,34 @@ def build_semantic_shard_plan(
         )
 
     shards = []
+    capacity_exceptions: list[dict[str, Any]] = []
     for index, values in enumerate(bins, start=1):
         included_count = len(set(values) & included)
+        owned_semantic_weight = sum(
+            int(model_weight_by_row[row_id]) for row_id in values
+        )
+        shard_id = f"semantic-shard-{index:03d}"
+        if tuple(values) in oversized_semantic_components:
+            capacity_exceptions.append(
+                {
+                    "shard_id": shard_id,
+                    "kind": "semantic-weight-oversized-atomic-component",
+                    "owned_source_row_ids": values,
+                    "owned_semantic_weight": owned_semantic_weight,
+                    "max_semantic_weight": max_semantic_weight,
+                    "rationale": (
+                        "The connected source component is atomic and cannot be "
+                        "split without losing source-bound dependencies."
+                    ),
+                }
+            )
         shards.append(
             {
-                "shard_id": f"semantic-shard-{index:03d}",
+                "shard_id": shard_id,
                 "owned_source_row_ids": values,
                 "owned_included_row_count": included_count,
                 "owned_source_row_count": len(values),
-                "owned_semantic_weight": sum(
-                    int(model_weight_by_row[row_id]) for row_id in values
-                ),
+                "owned_semantic_weight": owned_semantic_weight,
                 "execution_mode": _execution_mode(included_count),
             }
         )
@@ -371,6 +390,7 @@ def build_semantic_shard_plan(
             "max_semantic_weight": max_semantic_weight,
         },
         "complexity": complexity,
+        "capacity_exceptions": capacity_exceptions,
         "shards": shards,
     }
     plan["plan_sha256"] = canonical_payload_sha256(plan)
@@ -435,8 +455,26 @@ def rebind_semantic_shard_plan_ownership(
             f"preferred semantic shard count {len(preferred_shards)} "
             f"exceeds max_shards={max_shards}"
         )
+    raw_exceptions = preferred_plan.get("capacity_exceptions", [])
+    if raw_exceptions is None:
+        raw_exceptions = []
+    if not isinstance(raw_exceptions, list) or any(
+        not isinstance(item, Mapping) for item in raw_exceptions
+    ):
+        raise SemanticDesignShardingError(
+            "preferred semantic shard capacity exceptions must be objects"
+        )
+    preferred_oversized_exceptions = {
+        (
+            str(item.get("shard_id", "")),
+            tuple(map(str, item.get("owned_source_row_ids", []))),
+        )
+        for item in raw_exceptions
+        if item.get("kind") == "semantic-weight-oversized-atomic-component"
+    }
     order = {row_id: index for index, row_id in enumerate(row_ids)}
     rebound_shards: list[dict[str, Any]] = []
+    capacity_exceptions: list[dict[str, Any]] = []
     owned_rows: list[str] = []
     shard_ids: set[str] = set()
     for raw_shard in preferred_shards:
@@ -461,13 +499,28 @@ def rebind_semantic_shard_plan_ownership(
         if (
             included_count > max_included_rows
             or len(values) > max_source_rows
-            or (
-                max_semantic_weight is not None
-                and semantic_weight > max_semantic_weight
-            )
         ):
             raise SemanticDesignShardingError(
                 f"preferred shard {shard_id} exceeds current capacity"
+            )
+        if max_semantic_weight is not None and semantic_weight > max_semantic_weight:
+            if (shard_id, tuple(values)) not in preferred_oversized_exceptions:
+                raise SemanticDesignShardingError(
+                    f"preferred shard {shard_id} exceeds current semantic weight "
+                    "without a declared atomic capacity exception"
+                )
+            capacity_exceptions.append(
+                {
+                    "shard_id": shard_id,
+                    "kind": "semantic-weight-oversized-atomic-component",
+                    "owned_source_row_ids": values,
+                    "owned_semantic_weight": semantic_weight,
+                    "max_semantic_weight": max_semantic_weight,
+                    "rationale": (
+                        "The connected source component is atomic and cannot be "
+                        "split without losing source-bound dependencies."
+                    ),
+                }
             )
         rebound_shards.append(
             {
@@ -502,6 +555,7 @@ def rebind_semantic_shard_plan_ownership(
             "max_semantic_weight": max_semantic_weight,
         },
         "complexity": complexity,
+        "capacity_exceptions": capacity_exceptions,
         "shards": rebound_shards,
     }
     plan["plan_sha256"] = canonical_payload_sha256(plan)

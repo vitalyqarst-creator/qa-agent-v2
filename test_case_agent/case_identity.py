@@ -93,3 +93,27 @@ def assign_stable_ids(
     if len(assigned.values()) != len(set(assigned.values())):
         raise CaseIdentityError("stable TC-ID hash collision detected")
     return assigned
+
+
+def assign_sequential_ids(
+    case_keys: Iterable[str],
+    *,
+    prefix: str,
+) -> dict[str, str]:
+    """Assign human-readable suite-local IDs in deterministic case-key order."""
+
+    if _PREFIX.fullmatch(prefix) is None:
+        raise CaseIdentityError(
+            "prefix must match [A-Z0-9][A-Z0-9-]{1,30}"
+        )
+    keys = tuple(case_keys)
+    if len(keys) != len(set(keys)):
+        raise CaseIdentityError("case_keys contain a duplicate semantic identity")
+    for key in keys:
+        if not isinstance(key, str) or key.count("|") != 4:
+            raise CaseIdentityError("case_key must be produced by semantic_case_key")
+    width = max(3, len(str(len(keys))))
+    return {
+        key: f"TC-{prefix}-{index:0{width}d}"
+        for index, key in enumerate(sorted(keys), start=1)
+    }

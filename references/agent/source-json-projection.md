@@ -69,3 +69,11 @@ Production switch criteria:
 
 If these criteria fail, JSON may augment reviewer diagnostics but must not become
 the primary machine-readable source.
+
+Latest real multi-scope check:
+
+- `evals/source-json-projection/20260726-v0.2-multiscope-summary.md`
+- Verdict: `not-ready-for-production-replacement`.
+- Reason: 4 missing XHTML candidates, 8 order violations and 9
+  requirement-code-only matches across client addresses, passport and employment
+  scopes.

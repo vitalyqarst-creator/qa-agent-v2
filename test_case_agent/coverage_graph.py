@@ -6,7 +6,11 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 
-from test_case_agent.case_identity import assign_stable_ids, semantic_case_key
+from test_case_agent.case_identity import (
+    assign_sequential_ids,
+    assign_stable_ids,
+    semantic_case_key,
+)
 from test_case_agent.review_cycle.prepared_package import PreparedObligationSet
 from test_case_agent.review_cycle.source_assertions import SourceAssertionManifest
 
@@ -598,6 +602,67 @@ def build_coverage_graph(
             + "; ".join(f"{item.finding_id}: {item.message}" for item in blockers)
         )
     return graph
+
+
+def with_sequential_tc_ids(
+    graph: CoverageGraph,
+    *,
+    tc_prefix: str,
+) -> tuple[CoverageGraph, dict[str, Any]]:
+    """Return a graph with suite-local readable TC IDs and an audit remap.
+
+    ``case_key`` remains the stable semantic identity for revision and audit.
+    ``tc_id`` becomes the human-facing, continuous suite-local identifier used in
+    rendered test cases and reviewer contracts.
+    """
+
+    sequential_ids = assign_sequential_ids(
+        (case.case_key for case in graph.cases),
+        prefix=tc_prefix,
+    )
+    cases = tuple(
+        CoverageCase(
+            case_key=case.case_key,
+            tc_id=sequential_ids[case.case_key],
+            obligation_ids=case.obligation_ids,
+            status=case.status,
+        )
+        for case in sorted(graph.cases, key=lambda item: item.case_key)
+    )
+    remap = {
+        "schema_version": 1,
+        "contract": "suite-local-sequential-tc-id-map-v1",
+        "tc_prefix": tc_prefix,
+        "source_graph_digest": graph.digest,
+        "entries": [
+            {
+                "case_key": case.case_key,
+                "stable_hash_tc_id": case.tc_id,
+                "public_tc_id": sequential_ids[case.case_key],
+            }
+            for case in sorted(graph.cases, key=lambda item: item.case_key)
+        ],
+    }
+    renumbered = CoverageGraph(
+        schema_version=graph.schema_version,
+        ft_slug=graph.ft_slug,
+        scope_slug=graph.scope_slug,
+        source_manifest_digest=graph.source_manifest_digest,
+        obligation_set_digest=graph.obligation_set_digest,
+        properties=graph.properties,
+        obligations=graph.obligations,
+        cases=cases,
+        gaps=graph.gaps,
+    )
+    remap["target_graph_digest"] = renumbered.digest
+    findings = validate_coverage_graph(renumbered)
+    blockers = [item for item in findings if item.severity == "error"]
+    if blockers:
+        raise CoverageGraphError(
+            "sequential TC-ID graph failed validation: "
+            + "; ".join(item.message or item.finding_id for item in blockers)
+        )
+    return renumbered, remap
 
 
 def validate_coverage_graph(graph: CoverageGraph) -> tuple[CoverageFinding, ...]:

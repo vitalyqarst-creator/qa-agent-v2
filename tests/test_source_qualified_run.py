@@ -15,7 +15,11 @@ from docx import Document
 
 import test_case_agent.source_qualified_run as source_run_module
 from test_case_agent.cli import build_parser, main
-from test_case_agent.coverage_graph import PropertyDerivation, build_coverage_graph
+from test_case_agent.coverage_graph import (
+    PropertyDerivation,
+    build_coverage_graph,
+    with_sequential_tc_ids,
+)
 from test_case_agent.coverage_io import (
     PropertyDerivationDocument,
     write_property_derivations,
@@ -395,6 +399,7 @@ class SourceQualifiedRunTests(unittest.TestCase):
             obligation_set=obligations,
             derivations=derivation_document.derivations,
         )
+        graph, _tc_id_map = with_sequential_tc_ids(graph, tc_prefix="SMP")
         plan = build_test_design_plan(graph, context=self.context)
         draft = render_test_cases(
             plan.deterministic_cases,
@@ -856,6 +861,7 @@ class SourceQualifiedRunTests(unittest.TestCase):
             obligation_set=self.prepared_obligations,
             derivations=compiled.document.derivations,
         )
+        graph, _tc_id_map = with_sequential_tc_ids(graph, tc_prefix="SMP")
         plan = build_test_design_plan(graph, context=context)
         draft = render_test_cases(
             plan.deterministic_cases, scope_title=compiled.scope_title
@@ -969,6 +975,24 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertEqual(2, reviewer_response["schema_version"])
         self.assertEqual([], reviewer_response["source_projection_findings"])
         self.assertEqual([], reviewer_response["test_case_findings"])
+        tc_id_map = json.loads(
+            (output / "graph" / "tc-id-map.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            "suite-local-sequential-tc-id-map-v1",
+            tc_id_map["contract"],
+        )
+        self.assertEqual("TC-SMP-001", tc_id_map["entries"][0]["public_tc_id"])
+        draft_text = (
+            output / "iteration" / "shadow-test-cases.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("## TC-SMP-001", draft_text)
+        self.assertEqual(
+            "TC-SMP-001",
+            reviewer_request["reviewer_evidence_pack"]["test_cases"]["designs"][0][
+                "tc_id"
+            ],
+        )
         reviewer_receipt = next(
             item for item in receipts["stages"] if item["stage"] == "reviewer"
         )
@@ -1032,6 +1056,7 @@ class SourceQualifiedRunTests(unittest.TestCase):
             "scope-compilation/compiled-scope.json",
             "bindings/accepted-coverage-contract.json",
             "graph/coverage-graph.json",
+            "graph/tc-id-map.json",
             "context/design-context.json",
             "iteration/iteration-summary.json",
             "run-input-receipt.json",

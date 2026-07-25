@@ -740,6 +740,64 @@ class SemanticDesignShardingTests(unittest.TestCase):
             [item["owned_semantic_weight"] for item in plan["shards"]],
         )
 
+    def test_oversized_atomic_semantic_component_is_declared_not_split(self) -> None:
+        context = _context(3)
+        dependency = {
+            "kind": "field",
+            "name": "Action 2",
+            "source_row_ids": ["SRC-001"],
+            "resolution": "declared",
+            "target_source_row_ids": ["SRC-002"],
+            "exact_source_fragments": ["action 1"],
+        }
+        context["expected_dependencies"] = [copy.deepcopy(dependency)]
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["dependencies"] = [
+            {
+                "dependency_id": "DEP-001",
+                **copy.deepcopy(dependency),
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "The target field is declared in SRC-002.",
+            }
+        ]
+
+        plan = build_semantic_shard_plan(
+            context,
+            boundary,
+            mode="auto",
+            max_included_rows=10,
+            max_source_rows=10,
+            max_shards=3,
+            max_semantic_weight=2,
+        )
+
+        self.assertEqual("sharded", plan["mode"])
+        owning_shard = next(
+            shard
+            for shard in plan["shards"]
+            if shard["owned_source_row_ids"] == ["SRC-001", "SRC-002"]
+        )
+        self.assertGreater(owning_shard["owned_semantic_weight"], 2)
+        self.assertEqual(
+            [
+                {
+                    "shard_id": owning_shard["shard_id"],
+                    "kind": "semantic-weight-oversized-atomic-component",
+                    "owned_source_row_ids": ["SRC-001", "SRC-002"],
+                    "owned_semantic_weight": owning_shard["owned_semantic_weight"],
+                    "max_semantic_weight": 2,
+                    "rationale": (
+                        "The connected source component is atomic and cannot be "
+                        "split without losing source-bound dependencies."
+                    ),
+                }
+            ],
+            plan["capacity_exceptions"],
+        )
+        project_semantic_shard(context, boundary, owning_shard)
+
     def test_capacity_plan_is_complete_disjoint_and_projects_valid_scopes(self) -> None:
         context = _context(5)
         boundary = _boundary(context)
@@ -1461,6 +1519,103 @@ class SemanticDesignShardingTests(unittest.TestCase):
             [item["owned_source_row_ids"] for item in preferred["shards"]],
             [item["owned_source_row_ids"] for item in rebound["shards"]],
         )
+
+    def test_rebind_preserves_declared_oversized_atomic_exception(self) -> None:
+        context = _context(3)
+        dependency = {
+            "kind": "field",
+            "name": "Action 2",
+            "source_row_ids": ["SRC-001"],
+            "resolution": "declared",
+            "target_source_row_ids": ["SRC-002"],
+            "exact_source_fragments": ["action 1"],
+        }
+        context["expected_dependencies"] = [copy.deepcopy(dependency)]
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["dependencies"] = [
+            {
+                "dependency_id": "DEP-001",
+                **copy.deepcopy(dependency),
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "The target field is declared in SRC-002.",
+            }
+        ]
+        preferred = build_semantic_shard_plan(
+            context,
+            boundary,
+            mode="auto",
+            max_included_rows=10,
+            max_source_rows=10,
+            max_shards=3,
+            max_semantic_weight=2,
+        )
+
+        rebound = rebind_semantic_shard_plan_ownership(
+            context,
+            boundary,
+            preferred,
+            max_included_rows=10,
+            max_source_rows=10,
+            max_shards=3,
+            max_semantic_weight=2,
+        )
+
+        self.assertEqual(
+            preferred["capacity_exceptions"],
+            rebound["capacity_exceptions"],
+        )
+
+    def test_rebind_rejects_undeclared_oversized_atomic_exception(self) -> None:
+        context = _context(3)
+        dependency = {
+            "kind": "field",
+            "name": "Action 2",
+            "source_row_ids": ["SRC-001"],
+            "resolution": "declared",
+            "target_source_row_ids": ["SRC-002"],
+            "exact_source_fragments": ["action 1"],
+        }
+        context["expected_dependencies"] = [copy.deepcopy(dependency)]
+        _bind(context)
+        boundary = _boundary(context)
+        boundary["dependencies"] = [
+            {
+                "dependency_id": "DEP-001",
+                **copy.deepcopy(dependency),
+                "gap_ids": [],
+                "blocking": False,
+                "rationale": "The target field is declared in SRC-002.",
+            }
+        ]
+        preferred = build_semantic_shard_plan(
+            context,
+            boundary,
+            mode="auto",
+            max_included_rows=10,
+            max_source_rows=10,
+            max_shards=3,
+            max_semantic_weight=2,
+        )
+        tampered = dict(preferred)
+        tampered["capacity_exceptions"] = []
+        tampered.pop("plan_sha256", None)
+        tampered["plan_sha256"] = canonical_payload_sha256(tampered)
+
+        with self.assertRaisesRegex(
+            SemanticDesignShardingError,
+            "without a declared atomic capacity exception",
+        ):
+            rebind_semantic_shard_plan_ownership(
+                context,
+                boundary,
+                tampered,
+                max_included_rows=10,
+                max_source_rows=10,
+                max_shards=3,
+                max_semantic_weight=2,
+            )
 
     def test_reset_binding_survives_shard_merge_and_legacy_projection(self) -> None:
         context = _context(2)

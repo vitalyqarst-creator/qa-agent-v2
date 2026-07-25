@@ -13,7 +13,11 @@ from test_case_agent.coverage_contract import (
     CoverageContractError,
     bind_accepted_source_contract,
 )
-from test_case_agent.coverage_graph import CoverageGraphError, build_coverage_graph
+from test_case_agent.coverage_graph import (
+    CoverageGraphError,
+    build_coverage_graph,
+    with_sequential_tc_ids,
+)
 from test_case_agent.coverage_io import (
     CoverageIoError,
     DesignContextDocument,
@@ -1042,10 +1046,15 @@ def _run_source_qualified_scope(
             obligation_set=obligations,
             derivations=derivations.derivations,
         )
+        graph, tc_id_map = with_sequential_tc_ids(
+            graph,
+            tc_prefix=compiled.definition.tc_prefix,
+        )
         graph_dir = output_dir / "graph"
         graph_dir.mkdir()
         graph_path = graph_dir / "coverage-graph.json"
         write_coverage_graph(graph_path, graph)
+        write_json_atomic(graph_dir / "tc-id-map.json", tc_id_map)
         finish_stage()
 
         stage = "design-context"
