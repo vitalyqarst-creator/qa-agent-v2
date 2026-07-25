@@ -426,6 +426,95 @@ class CoverageGraphTests(unittest.TestCase):
         )
         self.assertEqual((), validate_coverage_graph(graph))
 
+    def test_format_calibration_splits_valid_and_invalid_case_intents(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (FakeAssertion("ASSERT-001", "SRC-001", ("BSR 1",), ("OBL-001",)),),
+        )
+        prepared = obligation_set(
+            obligation("OBL-001", "ATOM-001", "SRC-001", calibration=True)
+        )
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "phone.format",
+                    "source-format",
+                    {"OBL-001": "allowed-class"},
+                    validation_trigger="Ввести значение.",
+                    source_oracle_ids={"OBL-001": "SO-CAL-001"},
+                    fixture_values={"OBL-001": ("9991234567", "999123456")},
+                    calibration_questions={"OBL-001": "Как UI отклоняет значение?"},
+                ),
+            ),
+        )
+
+        self.assertEqual((), validate_coverage_graph(graph))
+        self.assertEqual(2, len(graph.cases))
+        by_variant = {
+            case.case_key.split("|")[3]: case.status for case in graph.cases
+        }
+        self.assertEqual("executable", by_variant["allowed-class-valid"])
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["allowed-class-invalid"],
+        )
+        self.assertEqual(
+            {"OBL-001"},
+            {case.obligation_ids[0] for case in graph.cases},
+        )
+
+    def test_date_boundary_calibration_splits_valid_boundary_and_future_case(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (FakeAssertion("ASSERT-001", "SRC-001", ("BSR 2",), ("OBL-001",)),),
+        )
+        prepared = obligation_set(
+            obligation("OBL-001", "ATOM-001", "SRC-001", calibration=True)
+        )
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "birthdate.not-future",
+                    "source-date-boundary",
+                    {"OBL-001": "not-future"},
+                    validation_trigger="Ввести дату.",
+                    source_oracle_ids={"OBL-001": "SO-CAL-002"},
+                    fixture_values={
+                        "OBL-001": (
+                            "текущая дата - 1 день",
+                            "текущая дата",
+                            "текущая дата + 1 день",
+                        )
+                    },
+                    calibration_questions={"OBL-001": "Как UI отклоняет дату?"},
+                ),
+            ),
+        )
+
+        self.assertEqual((), validate_coverage_graph(graph))
+        by_variant = {
+            case.case_key.split("|")[3]: case.status for case in graph.cases
+        }
+        self.assertEqual("executable", by_variant["not-future-valid-boundary"])
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["not-future-invalid-future"],
+        )
+
     def test_derivation_is_hash_bound_to_manifest_obligations_and_source_text(self) -> None:
         manifest = FakeManifest(
             "sample-scope",

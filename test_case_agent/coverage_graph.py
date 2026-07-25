@@ -20,6 +20,12 @@ _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
 _PROPERTY_DISPOSITIONS = {"tc", "gap", "not-applicable"}
 _CASE_STATUSES = {"executable", "candidate-ui-calibration"}
 _SHA256 = re.compile(r"[0-9a-f]{64}")
+_SPLIT_CASE_VARIANTS_BY_KIND = {
+    "source-format": frozenset({"allowed-class-valid", "allowed-class-invalid"}),
+    "source-date-boundary": frozenset(
+        {"not-future-valid-boundary", "not-future-invalid-future"}
+    ),
+}
 
 
 def _canonical_bytes(value: Any) -> bytes:
@@ -33,6 +39,129 @@ def _canonical_bytes(value: Any) -> bytes:
 
 def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical_bytes(value)).hexdigest()
+
+
+def _case_coverage_variant(case_key: str) -> str:
+    parts = case_key.split("|")
+    return parts[3] if len(parts) == 5 else ""
+
+
+def _split_case_specs_for_obligation(
+    *,
+    scope_slug: str,
+    subject_key: str,
+    property_kind: str,
+    variant: str,
+    condition_key: str,
+    fixture_values: Sequence[str],
+    effective_calibration_status: str,
+) -> tuple[tuple[str, str], ...]:
+    if (
+        property_kind == "source-format"
+        and variant == "allowed-class"
+        and len(tuple(fixture_values)) >= 2
+        and effective_calibration_status == "ui-calibration-required"
+    ):
+        return (
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="allowed-class-valid",
+                    condition_key=condition_key,
+                ),
+                "executable",
+            ),
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="allowed-class-invalid",
+                    condition_key=condition_key,
+                ),
+                "candidate-ui-calibration",
+            ),
+        )
+    if (
+        property_kind == "source-date-boundary"
+        and variant == "not-future"
+        and len(tuple(fixture_values)) >= 3
+        and effective_calibration_status == "ui-calibration-required"
+    ):
+        return (
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="not-future-valid-boundary",
+                    condition_key=condition_key,
+                ),
+                "executable",
+            ),
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="not-future-invalid-future",
+                    condition_key=condition_key,
+                ),
+                "candidate-ui-calibration",
+            ),
+        )
+    status = (
+        "candidate-ui-calibration"
+        if effective_calibration_status == "ui-calibration-required"
+        else "executable"
+    )
+    return (
+        (
+            semantic_case_key(
+                scope_slug=scope_slug,
+                subject_key=subject_key,
+                property_kind=property_kind,
+                coverage_variant=variant,
+                condition_key=condition_key,
+            ),
+            status,
+        ),
+    )
+
+
+def _duplicate_obligation_case_coverage_allowed(
+    *,
+    obligation: CoverageObligation,
+    property_kind: str,
+    cases: Sequence[CoverageCase],
+) -> bool:
+    allowed_variants = _SPLIT_CASE_VARIANTS_BY_KIND.get(property_kind)
+    if allowed_variants is None:
+        return False
+    variants = tuple(_case_coverage_variant(case.case_key) for case in cases)
+    if len(variants) != len(set(variants)):
+        return False
+    if not set(variants).issubset(allowed_variants):
+        return False
+    if len(cases) > len(allowed_variants):
+        return False
+    statuses = {variant: case.status for variant, case in zip(variants, cases)}
+    if property_kind == "source-format":
+        return (
+            obligation.coverage_variant == "allowed-class"
+            and statuses.get("allowed-class-valid") == "executable"
+            and statuses.get("allowed-class-invalid") == "candidate-ui-calibration"
+        )
+    if property_kind == "source-date-boundary":
+        return (
+            obligation.coverage_variant == "not-future"
+            and statuses.get("not-future-valid-boundary") == "executable"
+            and statuses.get("not-future-invalid-future")
+            == "candidate-ui-calibration"
+        )
+    return False
 
 
 def _typed_key(value: str, label: str) -> str:
@@ -380,19 +509,17 @@ def build_coverage_graph(
                 )
             )
             if item.coverage_status == "testable":
-                case_key = semantic_case_key(
+                split_specs = _split_case_specs_for_obligation(
                     scope_slug=source_manifest.scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant=variant,
+                    variant=variant,
                     condition_key=condition_key,
+                    fixture_values=fixture_values,
+                    effective_calibration_status=effective_calibration_status,
                 )
-                status = (
-                    "candidate-ui-calibration"
-                    if effective_calibration_status == "ui-calibration-required"
-                    else "executable"
-                )
-                case_specs.append((case_key, obligation_id, status))
+                for case_key, status in split_specs:
+                    case_specs.append((case_key, obligation_id, status))
             elif item.coverage_status in {"gap", "unclear"}:
                 gap_properties.setdefault(item.gap_id, []).append(property_id)
                 gap_obligations.setdefault(item.gap_id, []).append(obligation_id)
@@ -478,7 +605,7 @@ def validate_coverage_graph(graph: CoverageGraph) -> tuple[CoverageFinding, ...]
     properties = {item.property_id: item for item in graph.properties}
     obligations = {item.obligation_id: item for item in graph.obligations}
     gaps = {item.gap_id: item for item in graph.gaps}
-    case_owner: dict[str, str] = {}
+    case_owner: dict[str, list[CoverageCase]] = {}
     if graph.schema_version != 1:
         findings.append(
             CoverageFinding(
@@ -649,17 +776,6 @@ def validate_coverage_graph(graph: CoverageGraph) -> tuple[CoverageFinding, ...]
                 )
             )
         for obligation_id in case.obligation_ids:
-            if obligation_id in case_owner:
-                findings.append(
-                    CoverageFinding(
-                        "CG-DUPLICATE-CASE-COVERAGE",
-                        "error",
-                        obligation_id=obligation_id,
-                        tc_id=case.tc_id,
-                        message=f"also covered by {case_owner[obligation_id]}",
-                    )
-                )
-            case_owner[obligation_id] = case.tc_id
             obligation = obligations.get(obligation_id)
             if obligation is None:
                 findings.append(
@@ -672,6 +788,27 @@ def validate_coverage_graph(graph: CoverageGraph) -> tuple[CoverageFinding, ...]
                     )
                 )
                 continue
+            current_cases = [*case_owner.get(obligation_id, ()), case]
+            prop = properties.get(obligation.property_id)
+            if len(current_cases) > 1 and not (
+                prop is not None
+                and _duplicate_obligation_case_coverage_allowed(
+                    obligation=obligation,
+                    property_kind=prop.property_kind,
+                    cases=current_cases,
+                )
+            ):
+                previous = ", ".join(item.tc_id for item in current_cases[:-1])
+                findings.append(
+                    CoverageFinding(
+                        "CG-DUPLICATE-CASE-COVERAGE",
+                        "error",
+                        obligation_id=obligation_id,
+                        tc_id=case.tc_id,
+                        message=f"also covered by {previous}",
+                    )
+                )
+            case_owner.setdefault(obligation_id, []).append(case)
             if case.status == "candidate-ui-calibration":
                 required = {
                     "source oracle": obligation.source_oracle_id,

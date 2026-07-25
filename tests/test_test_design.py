@@ -390,17 +390,17 @@ class TestDesignTests(unittest.TestCase):
 
         self.assertEqual(
             (
-                "В целевом элементе (поле «Имя») выполнить действие: "
-                "Ввести «9123456789».",
+                "Ввести `9123456789` в поле «Имя».",
+                "Проверить, что значение `9123456789` не отклоняется по правилу формата.",
             ),
             plan.deterministic_cases[0].steps,
         )
         self.assertIn(
-            "Ввести «9123456789».",
+            "Ввести `9123456789` в поле «Имя».",
             plan.deterministic_cases[0].steps[0],
         )
 
-    def test_source_format_with_invalid_fixtures_materializes_each_invalid_step(self) -> None:
+    def test_source_format_with_invalid_fixtures_materializes_each_prepared_value_step(self) -> None:
         graph = _graph(
             kind="source-format",
             fixtures=("Иван-Петров", "Иванов1", "Иван Петров", "Иванов@"),
@@ -414,22 +414,148 @@ class TestDesignTests(unittest.TestCase):
         graph = replace(
             graph,
             properties=(replace(graph.properties[0], polarity="negative"), *graph.properties[1:]),
+            cases=(
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-format|"
+                        "allowed-class-valid|always"
+                    ),
+                    tc_id="TC-CUST-VALIDFMT",
+                    obligation_ids=("OBL-001",),
+                    status="executable",
+                ),
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-format|"
+                        "allowed-class-invalid|always"
+                    ),
+                    tc_id="TC-CUST-INVALIDFMT",
+                    obligation_ids=("OBL-001",),
+                    status="candidate-ui-calibration",
+                ),
+            ),
         )
 
-        case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
+        cases = build_test_design_plan(graph, context=_context()).deterministic_cases
+        valid_case = next(
+            item for item in cases if "allowed-class-valid" in item.case_key
+        )
+        invalid_case = next(
+            item for item in cases if "allowed-class-invalid" in item.case_key
+        )
 
-        joined_data = "\n".join(case.test_data)
-        joined_steps = "\n".join(case.steps)
+        self.assertEqual("позитивный", valid_case.case_type)
+        joined_data = "\n".join(valid_case.test_data)
+        joined_steps = "\n".join(valid_case.steps)
         self.assertIn("Допустимое значение: `Иван-Петров`.", joined_data)
-        self.assertNotIn("Ввести `Иван-Петров`", joined_steps)
+        self.assertIn("Ввести `Иван-Петров`", joined_steps)
+        self.assertIn("`Иван-Петров` не отклоняется", joined_steps)
+        self.assertEqual("негативный", invalid_case.case_type)
+        joined_data = "\n".join(invalid_case.test_data)
+        joined_steps = "\n".join(invalid_case.steps)
+        self.assertNotIn("Иван-Петров", joined_data)
+        self.assertNotIn("Иван-Петров", joined_steps)
         for value in ("Иванов1", "Иван Петров", "Иванов@"):
             self.assertIn(f"Недопустимое значение: `{value}`.", joined_data)
             self.assertIn(f"Ввести `{value}`", joined_steps)
             self.assertIn(f"для значения `{value}`", joined_steps)
-        self.assertIn("точное ожидаемое поведение требует UI-калибровки", case.expected_result)
-        text = render_test_cases((case,), scope_title="Данные клиента")
+        self.assertIn(
+            "точное ожидаемое поведение требует UI-калибровки",
+            invalid_case.expected_result,
+        )
+        text = render_test_cases(cases, scope_title="Данные клиента")
         report = validate_production_tc_content(text, checked_path="shadow.md")
         self.assertTrue(report.passed, report.as_dict())
+
+    def test_date_boundary_not_future_materializes_current_date_boundary_trio(self) -> None:
+        graph = _graph(
+            kind="source-date-boundary",
+            fixtures=("текущая дата",),
+            status="candidate-ui-calibration",
+            trigger="Ввести дату рождения.",
+            question=(
+                "Какой точный UI-отклик подтверждает, что будущая дата "
+                "не принимается?"
+            ),
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    polarity="negative",
+                    canonical_statement=(
+                        "Поле «Дата рождения» допускает дату не больше текущей даты."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="not-future",
+                    atomic_statement=(
+                        "Дата рождения не может быть больше текущей даты."
+                    ),
+                    observable_oracle=(
+                        "Дата рождения не может быть больше текущей даты."
+                    ),
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "поле «Дата рождения»"})
+
+        graph = replace(
+            graph,
+            cases=(
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-date-boundary|"
+                        "not-future-valid-boundary|always"
+                    ),
+                    tc_id="TC-CUST-VALIDDATE",
+                    obligation_ids=("OBL-001",),
+                    status="executable",
+                ),
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-date-boundary|"
+                        "not-future-invalid-future|always"
+                    ),
+                    tc_id="TC-CUST-FUTUREDATE",
+                    obligation_ids=("OBL-001",),
+                    status="candidate-ui-calibration",
+                ),
+            ),
+        )
+
+        cases = build_test_design_plan(graph, context=context).deterministic_cases
+        valid_case = next(
+            item for item in cases if "not-future-valid-boundary" in item.case_key
+        )
+        future_case = next(
+            item for item in cases if "not-future-invalid-future" in item.case_key
+        )
+
+        valid_data = "\n".join(valid_case.test_data)
+        valid_steps = "\n".join(valid_case.steps)
+        for value in ("текущая дата - 1 день", "текущая дата"):
+            self.assertIn(f"`{value}`", valid_data)
+            self.assertIn(f"`{value}`", valid_steps)
+        self.assertNotIn("текущая дата + 1 день", valid_data)
+        self.assertNotIn("текущая дата + 1 день", valid_steps)
+        self.assertEqual("позитивный", valid_case.case_type)
+        self.assertNotIn("31.12.2099", valid_data)
+        self.assertNotIn("31.12.2099", valid_steps)
+
+        future_data = "\n".join(future_case.test_data)
+        future_steps = "\n".join(future_case.steps)
+        self.assertIn("`текущая дата + 1 день`", future_data)
+        self.assertIn("`текущая дата + 1 день`", future_steps)
+        self.assertNotIn("текущая дата - 1 день", future_data)
+        self.assertNotIn("текущая дата - 1 день", future_steps)
+        self.assertEqual("негативный", future_case.case_type)
+        self.assertIn("требует UI-калибровки", future_case.expected_result)
 
     def test_subject_label_can_bind_to_sibling_from_same_source_row(self) -> None:
         graph = _graph(
@@ -929,6 +1055,31 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("`Друг`", case.expected_result)
         self.assertIn("`Коллега`", case.expected_result)
         self.assertIn("`Родственник`", case.expected_result)
+        self.assertIn("дополнительных значений нет", case.expected_result)
+        self.assertIn("полностью совпадают", "\n".join(case.steps))
+
+    def test_source_requiredness_negative_text_is_treated_as_optional(self) -> None:
+        graph = _graph(
+            kind="source-requiredness",
+            fixtures=(),
+            trigger="Проверить обязательность поля «Отчество».",
+        )
+        graph = replace(
+            graph,
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="optional",
+                    atomic_statement="Поле «Отчество» не является обязательным.",
+                    observable_oracle="Поле «Отчество» может быть пустым.",
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "поле «Отчество»"})
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        self.assertEqual("позитивный", case.case_type)
 
     def test_source_requiredness_materializes_empty_value_and_validation_action(self) -> None:
         graph = _graph(
@@ -954,6 +1105,7 @@ class TestDesignTests(unittest.TestCase):
             ),
             case.steps,
         )
+        self.assertEqual("высокий", case.priority)
 
     def test_calibration_requiredness_generic_trigger_is_not_rendered_as_executable_action(self) -> None:
         graph = _graph(

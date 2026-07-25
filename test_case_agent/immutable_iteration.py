@@ -55,7 +55,7 @@ from test_case_agent.test_design import (
 )
 
 
-MAX_WRITER_PROMPT_BYTES = 128 * 1024
+MAX_WRITER_PROMPT_BYTES = 192 * 1024
 MAX_REVISION_WRITER_PROMPT_TARGET_BYTES = 110 * 1024
 MAX_REVIEWER_PROMPT_BYTES = 384 * 1024
 
@@ -301,11 +301,12 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
                 "`expected_result`, `postconditions`, and `calibration_question`. "
                 "Use the provided `seed_runtime` as the starting draft and improve "
                 "human wording only when needed. If `seed_runtime.test_data` "
-                "contains `Недопустимое значение: `...``` items, every exact "
-                "backticked invalid value from those items must appear in `steps` "
-                "as a concrete input/check action. Do not replace prepared values "
+                "contains source-prepared `Допустимое ...: `...``` or "
+                "`Недопустимое ...: `...``` items, every exact backticked "
+                "prepared value from those items must appear in `steps` as a "
+                "concrete input/check action. Do not replace prepared values "
                 "with aggregate wording such as `поочередно вводить каждое "
-                "недопустимое значение`. `preconditions` must contain only the "
+                "значение`. `preconditions` must contain only the "
                 "exact sentinel `Не требуются.` or user/tester setup "
                 "actions that reproduce the required state, such as `Открыть "
                 "карточку ...`, `Перейти в блок ...`, or `Нажать ...`. Do not "

@@ -121,6 +121,12 @@ _GENERIC_VALIDATION_TRIGGER = re.compile(
     r"check\s+requiredness|trigger\s+validation)",
     re.IGNORECASE,
 )
+_ISO_DATE_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+_DATE_LABEL_RE = re.compile(r"\bдат\w*\b", re.IGNORECASE)
+_OPTIONAL_REQUIREDNESS_RE = re.compile(
+    r"(?:не\s+является\s+обязательн|не\s+обязательн)",
+    re.IGNORECASE,
+)
 
 
 DETERMINISTIC_PROPERTY_KINDS = frozenset(
@@ -832,8 +838,93 @@ def _requires_text_hyphen_negatives(obligation: CoverageObligation) -> bool:
     return "только" in text and ("дефис" in text or "`-`" in text or "символ `-`" in text)
 
 
-def _future_date_fixture() -> str:
-    return "31.12.2099"
+def _date_boundary_fixtures() -> tuple[str, str, str]:
+    return (
+        "текущая дата - 1 день",
+        "текущая дата",
+        "текущая дата + 1 день",
+    )
+
+
+def _manual_date_fixture(value: str) -> str:
+    match = _ISO_DATE_RE.fullmatch(value.strip())
+    if match is None:
+        return value
+    year, month, day = match.groups()
+    return f"{day}.{month}.{year}"
+
+
+def _display_fixture_for_label(label: str, value: str) -> str:
+    if _DATE_LABEL_RE.search(label):
+        return _manual_date_fixture(value)
+    return value
+
+
+def _source_requiredness_is_required(
+    *,
+    kind: str,
+    obligation: CoverageObligation,
+) -> bool:
+    if kind == "source-optionalness":
+        return False
+    text = " ".join(
+        (
+            obligation.atomic_statement,
+            obligation.observable_oracle,
+            obligation.validation_trigger,
+        )
+    )
+    return not _OPTIONAL_REQUIREDNESS_RE.search(text)
+
+
+def _case_coverage_variant(case: CoverageCase) -> str:
+    parts = case.case_key.split("|")
+    return parts[3] if len(parts) == 5 else ""
+
+
+def _default_priority(
+    *,
+    kind: str,
+    coverage_variant: str,
+    status: str,
+    obligation: CoverageObligation,
+) -> str:
+    if status == "candidate-ui-calibration":
+        return "высокий"
+    high_risk_kinds = {
+        "dictionary",
+        "source-format",
+        "source-date-boundary",
+        "source-requiredness",
+        "source-optionalness",
+        "requiredness",
+        "optionalness",
+        "invalid-input",
+    }
+    if kind in high_risk_kinds:
+        return "высокий"
+    if coverage_variant in {
+        "repeatable-add",
+        "repeatable-delete",
+        "repeater-add",
+        "repeater-delete",
+        "not-future",
+        "required",
+        "all-values",
+    }:
+        return "высокий"
+    text = _normalized_text(
+        " ".join(
+            (
+                obligation.atomic_statement,
+                obligation.observable_oracle,
+                obligation.validation_trigger,
+            )
+        )
+    )
+    if any(token in text for token in ("обязател", "недопуст", "не допуска", "только")):
+        return "высокий"
+    return "средний"
 
 
 def runtime_preconditions_for_binding(
@@ -1092,6 +1183,7 @@ def _materialize(
             reason="missing typed subject label",
         )
     kind = prop.property_kind
+    case_variant = _case_coverage_variant(case)
     condition = ""
     if obligation.condition_key != "always":
         condition = context.condition_preconditions.get(obligation.condition_key, "").strip()
@@ -1258,7 +1350,10 @@ def _materialize(
                 obligation=obligation,
                 reason=f"{kind} requires an explicit validation trigger",
             )
-        is_required = kind == "source-requiredness"
+        is_required = _source_requiredness_is_required(
+            kind=kind,
+            obligation=obligation,
+        )
         case_type = "негативный" if is_required else "позитивный"
         title = obligation.atomic_statement.rstrip(". ")
         test_data = [f"{label}: оставить пустым."]
@@ -1292,13 +1387,14 @@ def _materialize(
             )
         title = obligation.atomic_statement.rstrip(". ")
         case_type = "негативный" if prop.polarity == "negative" else "позитивный"
-        test_data = [f"Тестовое значение: `{values[0]}`."]
+        value = _display_fixture_for_label(label, values[0])
+        test_data = [f"Тестовое значение: `{value}`."]
         steps = _unique_steps(
             _source_input_action_with_value(
                 kind=kind,
                 action=obligation.validation_trigger,
                 label=label,
-                value=values[0],
+                value=value,
             )
         )
     elif kind == "source-date-boundary" and obligation.coverage_variant == "not-future":
@@ -1309,46 +1405,125 @@ def _materialize(
                 obligation=obligation,
                 reason="source-date-boundary requires an exact action contract",
             )
-        future_value = _future_date_fixture()
-        title = obligation.atomic_statement.rstrip(". ")
-        case_type = "негативный"
-        test_data = [f"Недопустимое значение даты больше текущей даты: `{future_value}`."]
-        steps = _unique_steps(
-            _source_input_action_with_value(
-                kind=kind,
-                action=obligation.validation_trigger,
-                label=label,
-                value=future_value,
+        previous_day, current_day, next_day = _date_boundary_fixtures()
+        if case_variant == "not-future-valid-boundary":
+            title = f"Допустимые граничные даты: {_display_subject(label)}"
+            case_type = "позитивный"
+            test_data = [
+                f"Допустимое граничное значение: `{previous_day}`.",
+                f"Допустимое граничное значение: `{current_day}`.",
+            ]
+            steps = _unique_steps(
+                "Рассчитать граничные даты относительно даты выполнения проверки.",
+                f"Ввести `{previous_day}` в {label}.",
+                (
+                    f"Проверить, что значение `{previous_day}` не отклоняется "
+                    "по правилу запрета будущей даты."
+                ),
+                f"Очистить {label} после проверки `{previous_day}`.",
+                f"Ввести `{current_day}` в {label}.",
+                (
+                    f"Проверить, что значение `{current_day}` не отклоняется "
+                    "по правилу запрета будущей даты."
+                ),
+                f"Очистить {label} после проверки `{current_day}`.",
             )
-        )
+            expected_result = (
+                "Значения `текущая дата - 1 день` и `текущая дата` "
+                "не отклоняются по правилу запрета будущей даты."
+            )
+        else:
+            title = obligation.atomic_statement.rstrip(". ")
+            case_type = "негативный"
+            test_data = [
+                f"Недопустимое значение больше текущей даты: `{next_day}`.",
+            ]
+            steps = _unique_steps(
+                "Рассчитать дату, равную `текущая дата + 1 день`, относительно даты выполнения проверки.",
+                f"Ввести `{next_day}` в {label}.",
+                (
+                    "Зафиксировать фактический UI-отклик для значения "
+                    f"`{next_day}` без подмены его ожидаемым сообщением."
+                ),
+                f"Очистить {label} после проверки `{next_day}`.",
+            )
+            expected_result = (
+                "Для значения `текущая дата + 1 день` зафиксирован "
+                "фактический UI-отклик; точное ожидаемое поведение требует "
+                "UI-калибровки."
+            )
     elif kind == "source-format" and len(fixtures) >= 2:
         valid_fixture = fixtures[0]
         invalid_fixtures = fixtures[1:]
-        title = f"Ограничение формата ввода: {_display_subject(label)}"
-        case_type = "негативный"
-        test_data = [
-            f"Допустимое значение: `{valid_fixture}`.",
-            *(
+        if case_variant == "allowed-class-valid":
+            title = f"Допустимое значение формата: {_display_subject(label)}"
+            case_type = "позитивный"
+            test_data = [f"Допустимое значение: `{valid_fixture}`."]
+            steps = _unique_steps(
+                f"Ввести `{valid_fixture}` в {label}.",
+                (
+                    f"Проверить, что значение `{valid_fixture}` не отклоняется "
+                    "по правилу формата."
+                ),
+                f"Очистить {label} после проверки `{valid_fixture}`.",
+            )
+            expected_result = (
+                f"Значение `{valid_fixture}` не отклоняется по правилу формата."
+            )
+        else:
+            title = f"Недопустимые классы формата: {_display_subject(label)}"
+            case_type = "негативный"
+            test_data = [
                 f"Недопустимое значение: `{item}`."
                 for item in invalid_fixtures
-            ),
-        ]
-        steps: list[str] = []
-        for item in invalid_fixtures:
-            steps.extend(
-                (
-                    f"Ввести `{item}` в {label}.",
+            ]
+            steps = []
+            for item in invalid_fixtures:
+                steps.extend(
                     (
-                        "Зафиксировать фактический UI-отклик для значения "
-                        f"`{item}` без подмены его ожидаемым сообщением."
-                    ),
-                    f"Очистить {label} после проверки `{item}`.",
+                        f"Ввести `{item}` в {label}.",
+                        (
+                            "Зафиксировать фактический UI-отклик для значения "
+                            f"`{item}` без подмены его ожидаемым сообщением."
+                        ),
+                        f"Очистить {label} после проверки `{item}`.",
+                    )
                 )
+            steps = _unique_steps(*steps)
+            expected_result = (
+                "Для каждого недопустимого значения зафиксирован фактический "
+                "UI-отклик; точное ожидаемое поведение требует UI-калибровки."
             )
-        steps = _unique_steps(*steps)
-        expected_result = (
-            "Для каждого недопустимого значения зафиксирован фактический "
-            "UI-отклик; точное ожидаемое поведение требует UI-калибровки."
+    elif kind == "source-format" and len(fixtures) == 1:
+        fixture = fixtures[0]
+        if prop.polarity == "negative":
+            title = obligation.atomic_statement.rstrip(". ")
+            case_type = "негативный"
+            test_data = [f"Недопустимое значение: `{fixture}`."]
+            steps = _unique_steps(
+                f"Ввести `{fixture}` в {label}.",
+                (
+                    "Зафиксировать фактический UI-отклик для значения "
+                    f"`{fixture}` без подмены его ожидаемым сообщением."
+                ),
+            )
+        else:
+            title = f"Допустимое значение формата: {_display_subject(label)}"
+            case_type = "позитивный"
+            test_data = [f"Допустимое значение: `{fixture}`."]
+            steps = _unique_steps(
+                f"Ввести `{fixture}` в {label}.",
+                (
+                    f"Проверить, что значение `{fixture}` не отклоняется "
+                    "по правилу формата."
+                ),
+            )
+    elif kind == "source-format":
+        return _blocked_card(
+            case=case,
+            prop=prop,
+            obligation=obligation,
+            reason="source-format requires at least one concrete fixture value",
         )
     elif kind.startswith("source-"):
         if not obligation.validation_trigger.strip():
@@ -1543,12 +1718,19 @@ def _materialize(
         title = f"Состав списка: {_display_subject(label)}"
         test_data = ["Полный перечень: " + ", ".join(f"`{item}`" for item in fixtures) + "."]
         expected_result = (
-            "Список содержит полный перечень значений: "
+            "Список полностью совпадает с перечнем значений: "
             + ", ".join(f"`{item}`" for item in fixtures)
-            + "."
+            + "; дополнительных значений нет."
         )
         fallback = f"Открыть список {label}."
-        steps = _unique_steps(obligation.validation_trigger or fallback)
+        steps = _unique_steps(
+            obligation.validation_trigger or fallback,
+            (
+                "Сверить, что отображаемые значения полностью совпадают "
+                "с полным перечнем из тестовых данных и не содержат "
+                "дополнительных значений."
+            ),
+        )
     elif kind == "positive-input":
         if len(fixtures) != 1:
             return _blocked_card(
@@ -1693,7 +1875,15 @@ def _materialize(
         status=case.status,
         title=title,
         case_type=case_type,
-        priority=(context.priorities or {}).get(case.case_key, "средний"),
+        priority=(context.priorities or {}).get(
+            case.case_key,
+            _default_priority(
+                kind=kind,
+                coverage_variant=obligation.coverage_variant,
+                status=case.status,
+                obligation=obligation,
+            ),
+        ),
         package_id=context.package_id,
         traceability=_traceability(
             prop,

@@ -2178,7 +2178,12 @@ _ACTION_VERBS = (
     "select",
     "activate",
 )
-_ADD_MARKERS = ("добавить", "добавьте", "добавь", "add", "+", "плюс")
+_ADD_MARKERS = ("добавить", "добавьте", "добавь", "add")
+_PLUS_ADD_ACTION_RE = re.compile(
+    r"\b(?:наж\w*|клик\w*|click|press)\b[^.\n;]{0,40}(?:`?\+`?|плюс)|"
+    r"(?:`?\+`?|плюс)[^.\n;]{0,40}\b(?:наж\w*|клик\w*|click|press)\b",
+    re.IGNORECASE,
+)
 _DELETE_MARKERS = ("удал", "корзин", "delete", "trash")
 _ROW_MARKERS = ("строк", "row")
 
@@ -2200,10 +2205,13 @@ def _matches_repeater_action(
     contract = (prop_kind, coverage_variant)
     text = _normalized_action_text(materialized_text)
     if contract in _REPEATER_ADD_CONTRACTS:
-        return _contains_any(text, _ADD_MARKERS) and (
+        has_add_marker = (
+            _contains_any(text, _ADD_MARKERS)
+            or _PLUS_ADD_ACTION_RE.search(text) is not None
+        )
+        return has_add_marker and (
             _contains_any(text, _ACTION_VERBS)
             or "действие" in text
-            or "+" in materialized_text
             or text.startswith(("добав", "add"))
         )
     if contract in _REPEATER_DELETE_CONTRACTS:

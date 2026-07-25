@@ -658,12 +658,14 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("Нажать кнопку «Добавить контактное лицо» два раза", prompt)
         self.assertIn("source-bound setup hint cannot be written", prompt)
-        self.assertIn("every exact backticked invalid value", prompt)
-        self.assertIn("поочередно вводить каждое недопустимое значение", prompt)
+        self.assertIn("every exact backticked prepared value", prompt)
+        self.assertIn("Допустимое", prompt)
+        self.assertIn("Недопустимое", prompt)
+        self.assertIn("поочередно вводить каждое значение", prompt)
         self.assertIn("preconditions_contract", serialized_request)
-        self.assertIn("prepared_invalid_value_execution", serialized_request)
+        self.assertIn("prepared_value_execution", serialized_request)
         self.assertIn(
-            "preserve_prepared_invalid_values_in_steps",
+            "preserve_prepared_values_in_steps",
             serialized_request,
         )
         self.assertIn("single_control_path_policy", serialized_request)

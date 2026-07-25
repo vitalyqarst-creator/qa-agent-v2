@@ -102,7 +102,7 @@ _BACKTICK_VALUE_RE = re.compile(r"`([^`]+)`")
 _RUNTIME_NO_SETUP_RE = re.compile(r"^не\s+требуются$", re.IGNORECASE)
 _RUNTIME_REJECTION_ORACLE_RE = re.compile(
     r"(?:ошибк\w*|валидаци\w*|недопустим\w*|невалидн\w*|"
-    r"отклон\w*|не\s+принима\w*|не\s+сохраня\w*|"
+    r"(?<!не\s)отклон\w*|не\s+принима\w*|не\s+сохраня\w*|"
     r"(?:переход|кнопк\w*|действи\w*)[^.\n;]{0,80}заблок\w*|"
     r"невозможн\w*[^.\n;]{0,80}(?:сохран|перейти|продолж))",
     re.IGNORECASE,
@@ -1081,13 +1081,13 @@ def build_runtime_writer_request(
                 ),
             },
             "test_design_contract": {
-                "prepared_invalid_value_execution": (
-                    "When `seed_runtime.test_data` contains lines like "
-                    "`Недопустимое значение: `...```, every exact backticked "
-                    "invalid value from those lines must appear in `steps` as a "
-                    "concrete input/check action. Do not replace concrete prepared "
-                    "values with aggregate wording such as `поочередно вводить "
-                    "каждое недопустимое значение`."
+                "prepared_value_execution": (
+                    "When `seed_runtime.test_data` contains source-prepared lines "
+                    "like `Допустимое ...: `...``` or `Недопустимое ...: `...```, "
+                    "every exact backticked prepared value from those lines must "
+                    "appear in `steps` as a concrete input/check action. Do not "
+                    "replace concrete prepared values with aggregate wording such "
+                    "as `поочередно вводить каждое значение`."
                 ),
                 "one_dominant_oracle_polarity_per_case": (
                     "Do not combine acceptance of a valid value and rejection of an "
@@ -1141,7 +1141,7 @@ def build_runtime_writer_request(
             "old_test_cases_available": False,
             "mockups_refine_steps_only": True,
             "use_label_from_mockup_for_runtime_text": True,
-            "preserve_prepared_invalid_values_in_steps": True,
+            "preserve_prepared_values_in_steps": True,
         },
     }
 
@@ -1418,29 +1418,55 @@ def _validate_runtime_writer_prose(
         )
 
 
-def _seed_invalid_values(seed: TestCaseDesign) -> tuple[str, ...]:
+def _seed_values_from_labeled_lines(
+    seed: TestCaseDesign,
+    *,
+    labels: Sequence[str],
+) -> tuple[str, ...]:
     values: list[str] = []
     for item in seed.test_data:
-        if "Недопустимое значение" not in item:
+        if not any(label in item for label in labels):
             continue
         values.extend(value.strip() for value in _BACKTICK_VALUE_RE.findall(item))
     return tuple(dict.fromkeys(value for value in values if value))
 
 
-def _validate_runtime_writer_executes_seed_invalid_values(
+def _seed_valid_values(seed: TestCaseDesign) -> tuple[str, ...]:
+    return _seed_values_from_labeled_lines(
+        seed,
+        labels=(
+            "Допустимое значение",
+            "Допустимое граничное значение",
+        ),
+    )
+
+
+def _seed_invalid_values(seed: TestCaseDesign) -> tuple[str, ...]:
+    return _seed_values_from_labeled_lines(
+        seed,
+        labels=(
+            "Недопустимое значение",
+            "Недопустимое граничное значение",
+        ),
+    )
+
+
+def _validate_runtime_writer_executes_seed_prepared_values(
     *,
     case_key: str,
     seed: TestCaseDesign,
     steps: Sequence[str],
 ) -> None:
-    invalid_values = _seed_invalid_values(seed)
-    if not invalid_values:
+    prepared_values = tuple(
+        dict.fromkeys((*_seed_valid_values(seed), *_seed_invalid_values(seed)))
+    )
+    if not prepared_values:
         return
     steps_text = "\n".join(steps)
-    missing = tuple(value for value in invalid_values if value not in steps_text)
+    missing = tuple(value for value in prepared_values if value not in steps_text)
     if missing:
         raise IterationContractError(
-            "runtime writer left seed invalid values unexecuted for "
+            "runtime writer left seed prepared values unexecuted for "
             f"{case_key}: " + ", ".join(repr(value) for value in missing)
         )
 
@@ -1568,7 +1594,7 @@ def validate_runtime_writer_response(
             postconditions=postconditions,
             calibration_question=calibration_question,
         )
-        _validate_runtime_writer_executes_seed_invalid_values(
+        _validate_runtime_writer_executes_seed_prepared_values(
             case_key=case_key,
             seed=seed,
             steps=steps,
@@ -1982,7 +2008,8 @@ def reviewer_response_schema(
 ) -> dict[str, Any]:
     case_keys = [item[0] for item in case_bindings]
     tc_ids = [item[1] for item in case_bindings]
-    obligation_ids = [item[2] for item in case_bindings]
+    case_obligation_ids = [item[2] for item in case_bindings]
+    obligation_ids = sorted(set(case_obligation_ids))
     result = {
         "type": "object",
         "properties": {
@@ -2076,7 +2103,7 @@ def reviewer_response_schema(
             for case_key, tc_id, obligation_id in zip(
                 case_keys,
                 tc_ids,
-                obligation_ids,
+                case_obligation_ids,
             )
         }
         if (

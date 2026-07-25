@@ -1634,6 +1634,43 @@ class ReviewerEvidenceTests(unittest.TestCase):
             add_support[0]["materialized_text"],
         )
 
+    def test_date_plus_one_is_not_repeater_add_design_support_action(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        cases = list(build_test_design_plan(graph, context=context).deterministic_cases)
+        delete_index = next(
+            index
+            for index, item in enumerate(cases)
+            if item.tc_id == "TC-CUST-DEL0000001"
+        )
+        cases[delete_index] = replace(
+            cases[delete_index],
+            preconditions=(
+                "Открыть карточку `Заявка` и перейти к блоку контактных лиц.",
+                "Нажать кнопку `Добавить контактное лицо`.",
+            ),
+            steps=(
+                *cases[delete_index].steps,
+                "Ввести `текущая дата + 1 день` в поле `Дата рождения`.",
+            ),
+        )
+
+        mapping = build_design_support_mapping(graph, cases)
+
+        delete_case = "customer|delete-control|source-delete-row|repeater-delete|always"
+        add_support = [
+            item
+            for item in mapping
+            if item["case_key"] == delete_case
+            and item["obligation_id"] == "OBL-ADD"
+        ]
+        self.assertEqual(["setup"], [item["support_role"] for item in add_support])
+        self.assertEqual(
+            "Нажать кнопку `Добавить контактное лицо`.",
+            add_support[0]["materialized_text"],
+        )
+
     def test_unmaterialized_repeater_sibling_is_not_traced_as_design_support(self) -> None:
         from tests.test_test_design import _repeater_graph_and_context
 

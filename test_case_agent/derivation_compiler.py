@@ -46,6 +46,16 @@ _PROJECTION_FIELDS = {
     "oracle_inventories",
 }
 _GAP_ID = re.compile(r"\bGAP-[A-Za-z0-9._-]+\b")
+_REQUIREDNESS_MARKER_ACTION = re.compile(
+    r"(?:проверить\s+обязательност|признак\s+обязательност|"
+    r"check\s+requiredness)",
+    re.IGNORECASE,
+)
+_DATE_NOT_FUTURE_TEXT = re.compile(
+    r"(?:не\s+может\s+быть\s+больше\s+текущ|не\s+больше\s+текущ|"
+    r"больше\s+текущ\w*\s+дат\w*\s+не\s+допуска)",
+    re.IGNORECASE,
+)
 
 
 class DerivationCompilationError(ValueError):
@@ -398,6 +408,44 @@ def _needs_validation_trigger_calibration(
     )
 
 
+def _needs_requiredness_calibration(
+    *,
+    property_type: str,
+    action: str,
+) -> bool:
+    if property_type not in {"requiredness", "optionalness"}:
+        return False
+    if has_commit_or_transition_after_mutation(split_action_contract(action)):
+        return False
+    return bool(_REQUIREDNESS_MARKER_ACTION.search(action))
+
+
+def _needs_date_boundary_calibration(
+    *,
+    property_type: str,
+    coverage_class: str,
+    statement: str,
+    oracle: str,
+    action: str,
+) -> bool:
+    if property_type != "date-boundary" or coverage_class != "not-future":
+        return False
+    source_text = " ".join((statement, oracle))
+    if not _DATE_NOT_FUTURE_TEXT.search(source_text):
+        return False
+    # A field input action proves the value used, but not the exact rejection
+    # trigger or UI reaction for the future-date boundary.
+    return not has_commit_or_transition_after_mutation(split_action_contract(action))
+
+
+def _date_boundary_fixture_values() -> tuple[str, str, str]:
+    return (
+        "текущая дата - 1 день",
+        "текущая дата",
+        "текущая дата + 1 день",
+    )
+
+
 def _safe_property_kind(
     semantic: Mapping[str, Any],
     fixtures: Sequence[str],
@@ -498,7 +546,10 @@ def _semantic_source_signal_registry(
 ) -> dict[str, list[dict[str, Any]]]:
     rows: list[dict[str, Any]] = []
     code_registry: dict[str, list[str]] = {}
-    for row in manifest.source_rows:
+    source_rows = tuple(getattr(manifest, "source_rows", ()) or ())
+    if not source_rows:
+        return {}
+    for row in source_rows:
         codes = list(row.requirement_codes)
         rows.append(
             {
@@ -632,6 +683,8 @@ def _validate_source_signal_accounting(
     semantic_obligations: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, tuple[Mapping[str, Any], ...]]:
     registry = _semantic_source_signal_registry(manifest)
+    if not registry:
+        return {}
     materialized_gap_ids = _coverage_gap_artifact_ids(
         repo_root=repo_root,
         manifest=manifest,
@@ -1075,6 +1128,48 @@ def compile_property_derivations(
                     "Какое точное действие запускает проверку значения "
                     f"«{value}» для {target} и какой точный наблюдаемый "
                     f"UI-отклик подтверждает {outcome}?"
+                )
+            elif _needs_requiredness_calibration(
+                property_type=str(semantic.get("property_type", "")).casefold(),
+                action=action_contract,
+            ):
+                source_oracles.setdefault(
+                    obligation_id,
+                    "SO-CAL-"
+                    + hashlib.sha256(obligation_id.encode("utf-8"))
+                    .hexdigest()[:16]
+                    .upper(),
+                )
+                if not fixtures:
+                    fixtures = ("пустое значение",)
+                    fixtures_by_obligation[obligation_id] = fixtures
+                target = f"элемента «{subject_label.strip('«»')}»"
+                questions[obligation_id] = (
+                    "Какое точное действие запускает проверку пустого значения "
+                    f"для {target} и какой точный наблюдаемый UI-отклик "
+                    "подтверждает обязательность или необязательность?"
+                )
+            elif _needs_date_boundary_calibration(
+                property_type=str(semantic.get("property_type", "")).casefold(),
+                coverage_class=variant.casefold(),
+                statement=prepared.atomic_statement,
+                oracle=expected_oracle,
+                action=action_contract,
+            ):
+                source_oracles.setdefault(
+                    obligation_id,
+                    "SO-CAL-"
+                    + hashlib.sha256(obligation_id.encode("utf-8"))
+                    .hexdigest()[:16]
+                    .upper(),
+                )
+                fixtures = _date_boundary_fixture_values()
+                fixtures_by_obligation[obligation_id] = fixtures
+                target = f"элемента «{subject_label.strip('«»')}»"
+                questions[obligation_id] = (
+                    "Какой точный UI-отклик подтверждает, что для "
+                    f"{target} значение `текущая дата + 1 день` не "
+                    "принимается, и какое действие запускает эту проверку?"
                 )
         if len(property_kinds) != 1:
             _fail(

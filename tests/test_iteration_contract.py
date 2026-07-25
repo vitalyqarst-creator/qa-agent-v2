@@ -23,7 +23,10 @@ from test_case_agent.iteration_contract import (
     validate_writer_response,
 )
 from test_case_agent.reviewer_evidence import build_design_support_mapping
-from test_case_agent.strict_output_schema import validate_openai_strict_output_instance
+from test_case_agent.strict_output_schema import (
+    validate_openai_strict_output_instance,
+    validate_openai_strict_output_schema,
+)
 from test_case_agent.test_design import (
     DesignContext,
     build_test_design_plan,
@@ -554,12 +557,12 @@ class IterationContractTests(unittest.TestCase):
         )
         test_design_contract = request["route_contract"]["test_design_contract"]
         self.assertIn(
-            "every exact backticked invalid value",
-            test_design_contract["prepared_invalid_value_execution"],
+            "every exact backticked prepared value",
+            test_design_contract["prepared_value_execution"],
         )
         self.assertIn(
-            "поочередно вводить каждое недопустимое значение",
-            test_design_contract["prepared_invalid_value_execution"],
+            "поочередно вводить каждое значение",
+            test_design_contract["prepared_value_execution"],
         )
         self.assertIn(
             "Do not combine acceptance of a valid value and rejection",
@@ -587,7 +590,7 @@ class IterationContractTests(unittest.TestCase):
         )
         self.assertFalse(request["constraints"]["old_test_cases_available"])
         self.assertTrue(
-            request["constraints"]["preserve_prepared_invalid_values_in_steps"]
+            request["constraints"]["preserve_prepared_values_in_steps"]
         )
         self.assertEqual(
             "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
@@ -686,15 +689,45 @@ class IterationContractTests(unittest.TestCase):
             tuple(design.case_key for design in designs),
         )
 
-    def test_runtime_writer_must_execute_seed_invalid_values(self) -> None:
+    def test_runtime_writer_must_execute_seed_prepared_values(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
+        valid_seed = replace(
+            plan.deterministic_cases[0],
+            case_type="позитивный",
+            test_data=("Допустимое значение: `Иван-Петров`.",),
+            steps=(
+                "Ввести `Иван-Петров` в поле «Фамилия».",
+                "Проверить, что значение `Иван-Петров` не отклоняется по правилу формата.",
+            ),
+            expected_result="Значение `Иван-Петров` не отклоняется по правилу формата.",
+        )
+        valid_plan = replace(plan, deterministic_cases=(valid_seed,))
+        missing_valid_payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    valid_seed,
+                    steps=["Проверить поле «Фамилия»."],
+                )
+            ],
+        )
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "left seed prepared values unexecuted.*Иван-Петров",
+        ):
+            validate_runtime_writer_response(
+                missing_valid_payload,
+                graph=graph,
+                plan=valid_plan,
+                context=_context(),
+            )
+
         seed = replace(
             plan.deterministic_cases[0],
             status="candidate-ui-calibration",
             case_type="негативный",
             test_data=(
-                "Допустимое значение: `Иван-Петров`.",
                 "Недопустимое значение: `Иванов1`.",
                 "Недопустимое значение: `Иван Петров`.",
                 "Недопустимое значение: `Иванов@`.",
@@ -746,7 +779,7 @@ class IterationContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             IterationContractError,
-            "left seed invalid values unexecuted.*Иван Петров.*Иванов@",
+            "left seed prepared values unexecuted.*Иван Петров.*Иванов@",
         ):
             validate_runtime_writer_response(
                 invalid_payload,
@@ -990,7 +1023,10 @@ class IterationContractTests(unittest.TestCase):
             "cases": [
                 _runtime_writer_case(
                     seed,
-                    steps=["Нажать кнопку «Добавить контактное лицо»."],
+                    steps=[
+                        "Ввести `Иван` в поле «Имя».",
+                        "Нажать кнопку «Добавить контактное лицо».",
+                    ],
                 )
             ],
             "unresolved": [],
@@ -1011,6 +1047,7 @@ class IterationContractTests(unittest.TestCase):
             )
 
         payload["cases"][0]["steps"] = [
+            "Ввести `Иван` в поле «Имя».",
             "Нажать кнопку «+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО»."
         ]
         designs, unresolved = validate_runtime_writer_response(
@@ -1027,7 +1064,10 @@ class IterationContractTests(unittest.TestCase):
         )
         self.assertEqual((), unresolved)
         self.assertEqual(
-            ("Нажать кнопку «+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО».",),
+            (
+                "Ввести `Иван` в поле «Имя».",
+                "Нажать кнопку «+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО».",
+            ),
             designs[0].steps,
         )
 
@@ -2048,6 +2088,22 @@ class IterationContractTests(unittest.TestCase):
 
         self.assertFalse(accepted)
         self.assertEqual("changes-required", decision)
+
+    def test_reviewer_schema_dedupes_obligation_enum_for_split_cases(self) -> None:
+        schema = reviewer_response_schema(
+            (
+                ("case-a", "TC-A", "OBL-SHARED"),
+                ("case-b", "TC-B", "OBL-SHARED"),
+            ),
+            graph_digest="a" * 64,
+            draft_sha256="b" * 64,
+        )
+
+        validate_openai_strict_output_schema(schema)
+        obligation_enum = schema["properties"]["case_results"]["items"][
+            "properties"
+        ]["obligation_id"]["enum"]
+        self.assertEqual(["OBL-SHARED"], obligation_enum)
 
     def test_reviewer_v2_schema_requires_one_case_result_per_case(self) -> None:
         graph = _graph()
