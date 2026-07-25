@@ -32,7 +32,7 @@ from test_case_agent.test_design import (
     build_test_design_plan,
     render_test_cases,
 )
-from tests.test_test_design import _context, _graph
+from tests.test_test_design import _context, _graph, _repeater_graph_and_context
 
 
 def _writer_graph():
@@ -614,6 +614,12 @@ class IterationContractTests(unittest.TestCase):
             test_design_contract["no_sibling_template_or_mask_oracle"],
         )
         self.assertIn(
+            "always-visible/invariant seed",
+            test_design_contract["bounded_invariant_language"],
+        )
+        self.assertIn("всегда", test_design_contract["bounded_invariant_language"])
+        self.assertIn("постоянно", test_design_contract["bounded_invariant_language"])
+        self.assertIn(
             "Do not combine acceptance of a valid value and rejection",
             test_design_contract["one_dominant_oracle_polarity_per_case"],
         )
@@ -659,8 +665,6 @@ class IterationContractTests(unittest.TestCase):
         )
 
     def test_runtime_writer_request_exposes_protected_cleanup_oracles(self) -> None:
-        from tests.test_test_design import _repeater_graph_and_context
-
         graph, context = _repeater_graph_and_context()
         plan = build_test_design_plan(graph, context=context)
 
@@ -1000,6 +1004,38 @@ class IterationContractTests(unittest.TestCase):
                 graph=graph,
                 plan=plan,
                 context=_context(),
+            )
+
+    def test_runtime_writer_rejects_unbounded_language_for_bounded_invariant(
+        self,
+    ) -> None:
+        graph, context = _repeater_graph_and_context()
+        plan = build_test_design_plan(graph, context=context)
+        seed = next(
+            item
+            for item in plan.deterministic_cases
+            if item.tc_id == "TC-CUST-0123456789"
+        )
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    title="Постоянное отображение кнопки `Добавить`",
+                    expected_result="Кнопка `Добавить` всегда отображается.",
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "overclaimed bounded invariant visibility",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=context,
             )
 
     def test_runtime_writer_returns_model_prose_but_runner_preserves_identity_and_traceability(self) -> None:

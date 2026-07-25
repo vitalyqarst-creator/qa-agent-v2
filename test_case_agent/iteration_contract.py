@@ -150,6 +150,10 @@ _RUNTIME_TEMPLATE_ORACLE_RE = re.compile(
     r"(?:маск\w*|шаблон\w*|template)",
     re.IGNORECASE,
 )
+_RUNTIME_UNBOUNDED_INVARIANT_RE = re.compile(
+    r"(?:\bвсегда\b|постоянн\w*|\balways\b|\bpermanent(?:ly)?\b)",
+    re.IGNORECASE,
+)
 _RUNTIME_ENTRYPOINT_PRECONDITION_RE = re.compile(
     r"^(?:Открыть\s+карточк\w*|Перейти\s+(?:к|в)\s+блок\w*)\b",
     re.IGNORECASE,
@@ -1220,6 +1224,14 @@ def build_runtime_writer_request(
                     "own source-bound case or an explicitly registered "
                     "design-support chain."
                 ),
+                "bounded_invariant_language": (
+                    "When an always-visible/invariant seed verifies only concrete "
+                    "source-backed states such as before and after one transition, "
+                    "title and expected_result must name those covered states. Do "
+                    "not use unbounded words such as `всегда`, `постоянно`, "
+                    "`always`, or `permanent` unless the seed explicitly enumerates "
+                    "all source-defined states."
+                ),
                 "one_dominant_oracle_polarity_per_case": (
                     "Do not combine acceptance of a valid value and rejection of an "
                     "invalid value in one TC. Keep recovery flows out unless the "
@@ -1803,6 +1815,68 @@ def _validate_runtime_writer_does_not_add_unseeded_template_oracle(
     )
 
 
+def _seed_is_bounded_invariant_visibility(
+    *,
+    seed: TestCaseDesign,
+    obligation_ids: Sequence[str],
+    obligations_by_id: Mapping[str, Any],
+) -> bool:
+    has_invariant_visibility = False
+    for obligation_id in obligation_ids:
+        obligation = obligations_by_id.get(obligation_id)
+        if obligation is None:
+            continue
+        if (
+            obligation.coverage_variant == "always-visible"
+            or _RUNTIME_UNBOUNDED_INVARIANT_RE.search(obligation.atomic_statement)
+            is not None
+        ):
+            has_invariant_visibility = True
+            break
+    if not has_invariant_visibility:
+        return False
+    seed_runtime = "\n".join(
+        (
+            seed.title,
+            "\n".join(seed.steps),
+            seed.expected_result,
+        )
+    ).casefold()
+    return (
+        ("исходное состояние" in seed_runtime and "после" in seed_runtime)
+        or "до и после" in seed_runtime
+        or ("before" in seed_runtime and "after" in seed_runtime)
+    )
+
+
+def _validate_runtime_writer_does_not_overclaim_bounded_invariant(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    obligation_ids: Sequence[str],
+    obligations_by_id: Mapping[str, Any],
+    title: str,
+    expected_result: str,
+) -> None:
+    if not _seed_is_bounded_invariant_visibility(
+        seed=seed,
+        obligation_ids=obligation_ids,
+        obligations_by_id=obligations_by_id,
+    ):
+        return
+    for field, value in (
+        ("title", title),
+        ("expected_result", expected_result),
+    ):
+        match = _RUNTIME_UNBOUNDED_INVARIANT_RE.search(value)
+        if match is not None:
+            raise IterationContractError(
+                "runtime writer overclaimed bounded invariant visibility for "
+                f"{case_key} in {field}: {match.group(0)!r}; name the exact "
+                "source-backed states checked by this TC instead"
+            )
+
+
 def validate_runtime_writer_response(
     response: Mapping[str, Any],
     *,
@@ -1841,6 +1915,8 @@ def validate_runtime_writer_response(
             "runtime writer response cannot be validated while unsupported writer cards remain"
         )
     expected = {item.case_key: item for item in plan.deterministic_cases}
+    cases_by_key = {item.case_key: item for item in graph.cases}
+    obligations_by_id = {item.obligation_id: item for item in graph.obligations}
     raw_cases = root["cases"]
     raw_unresolved = root["unresolved"]
     if not isinstance(raw_cases, list) or not isinstance(raw_unresolved, list):
@@ -1950,6 +2026,17 @@ def validate_runtime_writer_response(
         _validate_runtime_writer_does_not_add_unseeded_template_oracle(
             case_key=case_key,
             seed=seed,
+            expected_result=expected_result,
+        )
+        coverage_case = cases_by_key.get(case_key)
+        _validate_runtime_writer_does_not_overclaim_bounded_invariant(
+            case_key=case_key,
+            seed=seed,
+            obligation_ids=(
+                coverage_case.obligation_ids if coverage_case is not None else ()
+            ),
+            obligations_by_id=obligations_by_id,
+            title=title,
             expected_result=expected_result,
         )
         runtime_text = "\n".join(
