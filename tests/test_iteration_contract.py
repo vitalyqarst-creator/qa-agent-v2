@@ -1644,6 +1644,23 @@ class IterationContractTests(unittest.TestCase):
         self.assertFalse(gate.passed)
         self.assertIn("stable TC-ID drift", gate.findings[0])
 
+    def test_suite_gate_requires_sequential_display_numbers(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        cases = plan.deterministic_cases
+        markdown = render_test_cases(cases, scope_title="Данные клиента")
+        missing_number_markdown = markdown.replace("**№:** 2\n", "", 1)
+
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=missing_number_markdown,
+            checked_path="shadow.md",
+        )
+
+        self.assertFalse(gate.passed)
+        self.assertIn("display number missing or duplicated", " ".join(gate.findings))
+
     def test_reviewer_request_is_compact_source_first_projection(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

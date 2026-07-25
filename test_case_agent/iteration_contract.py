@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Mapping, Sequence
 
 from test_case_agent.coverage_graph import CoverageGraph
+from test_case_agent.review_cycle.obligation_gate import test_case_sections
 from test_case_agent.review_cycle.production_tc_gate import (
     ACTION_STEP_RE,
     NONCONCRETE_RUNTIME_VALUE_RE,
@@ -44,6 +45,7 @@ REVIEWER_FALSIFICATION_PROBES = (
     "trigger_fidelity",
 )
 _FALSIFICATION_OUTCOMES = {"passed", "finding", "not-recorded"}
+DISPLAY_NUMBER_RE = re.compile(r"(?m)^\*\*№:\*\*[^\S\r\n]*([1-9][0-9]*)[^\S\r\n]*$")
 _SOURCE_PROJECTION_FINDING_TYPES = {
     "dictionary-incomplete",
     "ft-mockup-contradiction",
@@ -2007,6 +2009,18 @@ def validate_suite(
     production_payload["passed"] = not remaining_production_findings
     if remaining_production_findings:
         findings.append("production gate failed")
+    for ordinal, (tc_id, block) in enumerate(test_case_sections(markdown), start=1):
+        display_numbers = DISPLAY_NUMBER_RE.findall(block)
+        if len(display_numbers) != 1:
+            findings.append(
+                f"display number missing or duplicated for {tc_id}: expected {ordinal}"
+            )
+            continue
+        actual_ordinal = int(display_numbers[0])
+        if actual_ordinal != ordinal:
+            findings.append(
+                f"display number mismatch for {tc_id}: expected {ordinal}, got {actual_ordinal}"
+            )
     return SuiteGateReport(
         passed=not findings,
         graph_digest=graph.digest,
