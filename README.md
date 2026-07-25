@@ -29,6 +29,10 @@ canonical никогда не изменяются.
 - `accepted-with-calibration-pending` — reviewer принял исполнимую часть, а UI-
   calibration candidates явно оставлены pending; promotion запрещён.
 
+После успешного запуска актуальный результат для просмотра указан в
+`terminal-summary.json` → `publication_candidate.path`. Это shadow-файл текущего
+run; `test-cases/*.md` не перезаписывается внутри `ft-agent run`.
+
 Полный runtime-контракт: [lean-v2-iteration.md](references/agent/lean-v2-iteration.md).
 
 ## Честная граница bundle

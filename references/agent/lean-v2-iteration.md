@@ -194,6 +194,13 @@ Promotion выполняется вне этого downstream bundle отдел�
 - `terminal-summary.json`;
 - отдельный diagnostic для terminal failure.
 
+Для успешных statuses `terminal-summary.json` обязан содержать
+`publication_candidate`: путь к текущему reviewable shadow-файлу, число кейсов,
+число UI-calibration pending cases, `promotion_eligible` и причину, почему
+canonical publication не выполнялась. Это единственная человекочитаемая ссылка
+на актуальный результат `ft-agent run`; canonical файлы остаются неизменными до
+отдельной promotion/finalization операции.
+
 Summary охватывает загрузку config, scope compilation, source binding, graph,
 design context, единственный reviewer stage и final reconciliation. Для reviewer
 указывай wall time, attempts, input/output artifact count и bytes, а токены —

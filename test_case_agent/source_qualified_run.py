@@ -629,6 +629,61 @@ def _write_terminal_failure(
     write_json_atomic(output_dir / "terminal-summary.json", terminal)
 
 
+def _publication_candidate(
+    *,
+    status: str,
+    iteration_summary: Mapping[str, Any],
+    test_case_count: int,
+    qualification_only: bool,
+) -> dict[str, Any] | None:
+    if status not in _SUCCESSFUL_ITERATION_STATUSES:
+        return None
+    draft = iteration_summary.get("draft")
+    if not isinstance(draft, str) or not draft:
+        return None
+    calibration_pending_count = int(
+        iteration_summary.get("calibration_pending_count", 0) or 0
+    )
+    promotion_eligible = bool(iteration_summary.get("promotion_eligible", False))
+    non_promotable_reason = iteration_summary.get("non_promotable_reason")
+    if not isinstance(non_promotable_reason, str):
+        non_promotable_reason = ""
+    if qualification_only:
+        promotion_eligible = False
+        non_promotable_reason = non_promotable_reason or "fixture-test-hook"
+    elif status == "accepted-with-calibration-pending":
+        promotion_eligible = False
+        non_promotable_reason = non_promotable_reason or "calibration-pending"
+    recommended_next_action = (
+        "Use the shadow draft as the current FT-first reviewed result, then run "
+        "UI calibration before any production promotion."
+        if status == "accepted-with-calibration-pending"
+        else (
+            "Use a separate promotion transaction if this accepted shadow should "
+            "become canonical; ft-agent run intentionally did not edit canonical."
+        )
+    )
+    if qualification_only:
+        recommended_next_action = (
+            "Inspect the shadow draft only as a qualification artifact; fixture "
+            "runs are not promotable."
+        )
+    return {
+        "kind": "shadow-test-cases",
+        "path": draft,
+        "status": status,
+        "test_case_count": test_case_count,
+        "calibration_pending_count": calibration_pending_count,
+        "canonical_publication": "not-performed",
+        "canonical_publication_reason": (
+            "ft-agent run is immutable and does not edit canonical test-case files"
+        ),
+        "promotion_eligible": promotion_eligible,
+        "non_promotable_reason": non_promotable_reason or None,
+        "recommended_next_action": recommended_next_action,
+    }
+
+
 def _run_source_qualified_scope(
     *,
     repo_root: Path,
@@ -1165,6 +1220,14 @@ def _run_source_qualified_scope(
             summary["qualification_only"] = True
             summary.setdefault("promotion_eligible", False)
             summary.setdefault("non_promotable_reason", "fixture-test-hook")
+        candidate = _publication_candidate(
+            status=iteration.status,
+            iteration_summary=iteration_summary,
+            test_case_count=iteration.test_case_count,
+            qualification_only=qualification_only,
+        )
+        if candidate is not None:
+            summary["publication_candidate"] = candidate
         finish_stage()
         summary["stage_timings_ms"] = stage_timings_ms
         summary["total_duration_ms"] = (

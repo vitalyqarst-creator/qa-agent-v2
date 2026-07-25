@@ -1191,6 +1191,15 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertEqual(
             "calibration-pending", terminal["non_promotable_reason"]
         )
+        candidate = terminal["publication_candidate"]
+        self.assertEqual("shadow-test-cases", candidate["kind"])
+        self.assertEqual("accepted-with-calibration-pending", candidate["status"])
+        self.assertEqual(2, candidate["test_case_count"])
+        self.assertEqual(1, candidate["calibration_pending_count"])
+        self.assertFalse(candidate["promotion_eligible"])
+        self.assertEqual("calibration-pending", candidate["non_promotable_reason"])
+        self.assertEqual("not-performed", candidate["canonical_publication"])
+        self.assertIn("UI calibration", candidate["recommended_next_action"])
         self.assertIsNone(terminal["diagnostic"])
         self.assertFalse((output / "diagnostic.json").exists())
 
@@ -1274,6 +1283,15 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertEqual(1, terminal["mockup_label_alias_count"])
         self.assertTrue(terminal["revision_findings_supplied"])
         self.assertEqual(1, terminal["writer_model_calls"])
+        candidate = terminal["publication_candidate"]
+        self.assertEqual("shadow-test-cases", candidate["kind"])
+        self.assertEqual("accepted-shadow", candidate["status"])
+        self.assertEqual(1, candidate["test_case_count"])
+        self.assertEqual(0, candidate["calibration_pending_count"])
+        self.assertTrue(candidate["promotion_eligible"])
+        self.assertIsNone(candidate["non_promotable_reason"])
+        self.assertEqual("not-performed", candidate["canonical_publication"])
+        self.assertIn("separate promotion transaction", candidate["recommended_next_action"])
 
     def test_v2_run_config_consumes_revision_input_package(self) -> None:
         self._enable_v2_generated_derivations()
