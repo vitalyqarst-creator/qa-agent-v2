@@ -552,6 +552,27 @@ class IterationContractTests(unittest.TestCase):
             "Нажать кнопку «Добавить контактное лицо» два раза",
             preconditions_contract["repeated_action_policy"],
         )
+        test_design_contract = request["route_contract"]["test_design_contract"]
+        self.assertIn(
+            "Do not combine acceptance of a valid value and rejection",
+            test_design_contract["one_dominant_oracle_polarity_per_case"],
+        )
+        self.assertIn(
+            "Use `негативный` for rejection",
+            test_design_contract["case_type_consistency"],
+        )
+        self.assertIn(
+            "whitespace",
+            test_design_contract["input_restriction_classes"],
+        )
+        self.assertIn(
+            "Implementation observations",
+            test_design_contract["unsupported_observation_policy"],
+        )
+        self.assertIn(
+            "source-bound risk",
+            test_design_contract["priority_policy"],
+        )
         self.assertFalse(request["constraints"]["old_test_cases_available"])
         self.assertEqual(
             "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
@@ -716,6 +737,74 @@ class IterationContractTests(unittest.TestCase):
             ),
             designs[0].preconditions,
         )
+
+    def test_runtime_writer_rejects_case_type_drift_and_rejection_oracle_mismatch(
+        self,
+    ) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        drift = _runtime_writer_payload(
+            graph,
+            [_runtime_writer_case(seed, case_type="негативный")],
+        )
+
+        with self.assertRaisesRegex(IterationContractError, "case_type drift"):
+            validate_runtime_writer_response(
+                drift,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+        rejection_oracle = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    expected_result="Поле показывает ошибку валидации и значение не сохраняется.",
+                )
+            ],
+        )
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "positive case_type conflicts",
+        ):
+            validate_runtime_writer_response(
+                rejection_oracle,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_mixed_valid_and_invalid_input_actions(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    steps=[
+                        "Ввести недопустимое значение `1` в поле «Имя».",
+                        "Ввести допустимое значение `Иван` в поле «Имя».",
+                    ],
+                    expected_result="Поле «Имя» отображает значение `Иван`.",
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "mixed positive/negative runtime prose",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
 
     def test_runtime_writer_rejects_ambiguous_alternative_precondition(self) -> None:
         graph = _graph()
@@ -1154,7 +1243,20 @@ class IterationContractTests(unittest.TestCase):
         self.assertFalse(
             acceptance["live_falsification_receipt_allows_not_recorded"]
         )
+        self.assertTrue(acceptance["one_oracle_polarity_per_case"])
+        self.assertTrue(acceptance["positive_tc_must_not_expect_rejection"])
+        self.assertTrue(acceptance["input_restrictions_require_equivalence_classes"])
+        self.assertTrue(
+            acceptance[
+                "unsupported_alphabet_or_integration_observation_requires_gap"
+            ]
+        )
+        self.assertTrue(acceptance["priority_must_follow_source_bound_risk"])
         self.assertIn("never return only changed", reviewer_prompt_instruction(2))
+        self.assertIn("one dominant oracle polarity", reviewer_prompt_instruction(2))
+        self.assertIn("whitespace", reviewer_prompt_instruction(2))
+        self.assertIn("alphabet/script", reviewer_prompt_instruction(2))
+        self.assertIn("priority follows source-bound risk", reviewer_prompt_instruction(2))
         self.assertIn("source_projection_findings", schema["properties"])
         self.assertIn("test_case_findings", schema["properties"])
         self.assertEqual(1, schema["properties"]["case_results"]["minItems"])
@@ -1192,6 +1294,15 @@ class IterationContractTests(unittest.TestCase):
             {"", *REVIEWER_FALSIFICATION_PROBES},
             set(finding_schema["properties"]["falsification_probe"]["enum"]),
         )
+        finding_type_enum = set(finding_schema["properties"]["finding_type"]["enum"])
+        for finding_type in (
+            "case-type-expected-result-mismatch",
+            "missing-equivalence-class",
+            "unsupported-alphabet-assumption",
+            "priority-risk-mismatch",
+            "implementation-observation-as-baseline",
+        ):
+            self.assertIn(finding_type, finding_type_enum)
 
         accepted, decision = validate_reviewer_response(
             _accepted_review_v2(graph, request),

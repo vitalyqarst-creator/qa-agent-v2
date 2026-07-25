@@ -643,8 +643,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "reviewer_core", "reviewer_process_artifacts"],
       "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_table_artifacts", "writer_revision_artifacts", "style_remediation", "reviewer_handoff_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 262,
-      "rationale": "Direct review of an existing test-case set for an already confirmed FT package and scope; includes mandatory semantic rubric, defect taxonomy and dictionary checks."
+      "budget_limit_kib": 272,
+      "rationale": "Direct review of an existing test-case set for an already confirmed FT package and scope; includes mandatory semantic rubric, defect taxonomy and dictionary checks. The limit includes a small explicit reserve for source-bound runtime quality rules such as oracle polarity, equivalence classes and priority-risk checks."
     },
     {
       "id": "reviewer.session_prepared_semantic",

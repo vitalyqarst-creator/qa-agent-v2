@@ -424,6 +424,34 @@ class QaRulesTests(unittest.TestCase):
         self.assertIn("недопустимые enum-значения", findings)
         self.assertIn("blocking `structure` / `format` finding", findings)
 
+    def test_runtime_rule_cards_cover_writer_reviewer_quality_regressions(self) -> None:
+        rules = (
+            ROOT_DIR / "references" / "agent" / "runtime-quality-rule-cards.md"
+        ).read_text(encoding="utf-8")
+        coverage = (
+            ROOT_DIR / "references" / "qa" / "coverage-runtime-checklist.md"
+        ).read_text(encoding="utf-8")
+        boundaries = (
+            ROOT_DIR / "references" / "qa" / "coverage-input-boundaries.md"
+        ).read_text(encoding="utf-8")
+        runtime_format = (
+            ROOT_DIR / "references" / "qa" / "test-case-runtime-format.md"
+        ).read_text(encoding="utf-8")
+
+        for token in (
+            "R-ORACLE-POLARITY",
+            "R-INPUT-CLASS-DECOMPOSITION",
+            "R-UNSUPPORTED-OBSERVATION",
+            "R-PRIORITY-RISK",
+        ):
+            self.assertIn(token, rules)
+        self.assertIn("one dominant oracle polarity", rules)
+        self.assertIn("allowed-symbol/input restrictions", coverage)
+        self.assertIn("whitespace", boundaries)
+        self.assertIn("Alphabet/script behavior", boundaries)
+        self.assertIn("Implementation observations", runtime_format)
+        self.assertIn("rejection, validation feedback", runtime_format)
+
 
     def test_test_case_example_warns_against_unsupported_ui_specificity(self) -> None:
         content = (ROOT_DIR / "references" / "qa" / "test-case-format.md").read_text(encoding="utf-8")

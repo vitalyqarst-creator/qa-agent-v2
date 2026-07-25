@@ -281,6 +281,12 @@ class ReviewerContractTests(unittest.TestCase):
             "`generic-editability`",
             "`derived-obligation-contamination`",
             "blocking for semantic sign-off",
+            "`missing-equivalence-class`",
+            "`unsupported-alphabet-assumption`",
+            "`tc-priority-source-risk-mismatch`",
+            "`implementation-observation-as-baseline`",
+            "whitespace, alphabet/script class",
+            "registered FT/support/UI evidence",
         ):
             self.assertIn(token, rubric)
 

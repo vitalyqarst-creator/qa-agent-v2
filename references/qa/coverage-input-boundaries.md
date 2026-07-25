@@ -31,3 +31,5 @@ Deep coverage reference for numeric, date/time, length, mask and allowed-symbol 
 - Split independently checkable classes when source says `only ...`.
 - Do not collapse all invalid symbols into one generic TC if classes are source-derivable.
 - Use concrete values in TC test data, not placeholders like `invalid value`.
+- whitespace is its own class when the source lists allowed symbols and does not include spaces.
+- Alphabet/script behavior (Latin, Cyrillic, mixed script, transliteration) requires explicit source/support/UI evidence. If the source only says `text symbols`, do not invent Latin/Cyrillic acceptance or rejection; record a class-specific `GAP-*` / `candidate-ui-calibration` instead.

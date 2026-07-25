@@ -33,6 +33,7 @@
 - Для closed list проверяй expected values and absence of extra values только если закрытость следует из source.
 - Для numeric/date/length/mask rules подгружай deep coverage reference по соответствующему scenario.
 - Для numeric-only, exact length, repeatable/action-created blocks, checkbox-list и generated documents используй `Coverage Obligation Table` и не ограничивайся одним generic TC.
+- Для allowed-symbol/input restrictions не заменяй класс покрытия одним смешанным негативным значением. Если source формулирует `только ...`, разложи на отдельные source-derivable classes: valid representative, whitespace, alphabet/script class, special/disallowed symbols and relevant boundaries. Unknown UI reaction for a class becomes a narrow `GAP-*` / `candidate-ui-calibration`, not silent coverage.
 - Для 3+ независимых факторов с несколькими значениями рассмотрение pairwise/combinatorial coverage обязательно; выбери `2-way | 3-way | t-way`, докажи coverage strength или фиксируй gap.
 - Для reusable baseline и negative transition используй concrete fixture или `fixture-catalog.md`.
 - Для applicable dimensions фиксируй coverage metrics; отсутствие метрики считается незакрытой design work.

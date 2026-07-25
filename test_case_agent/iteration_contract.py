@@ -54,19 +54,24 @@ _SOURCE_PROJECTION_FINDING_TYPES = {
 }
 _TEST_CASE_FINDING_TYPES = {
     "calibration-status-incorrect",
+    "case-type-expected-result-mismatch",
     "cleanup-missing",
     "commit-action-missing",
     "editability-incorrect",
     "execution-status-incorrect",
     "expected-result-unsupported",
+    "implementation-observation-as-baseline",
+    "missing-equivalence-class",
     "negative-branch-missing",
     "positive-branch-missing",
+    "priority-risk-mismatch",
     "repeater-lifecycle-incomplete",
     "requiredness-incorrect",
     "test-case-defect",
     "test-data-nonconcrete",
     "traceability-incorrect",
     "trigger-missing",
+    "unsupported-alphabet-assumption",
 }
 _DESIGN_SUPPORT_ROLE_FIELDS = {
     "setup": "preconditions",
@@ -94,6 +99,28 @@ _INTERNAL_RUNTIME_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 _RUNTIME_NO_SETUP_RE = re.compile(r"^не\s+требуются$", re.IGNORECASE)
+_RUNTIME_REJECTION_ORACLE_RE = re.compile(
+    r"(?:ошибк\w*|валидаци\w*|недопустим\w*|невалидн\w*|"
+    r"отклон\w*|не\s+принима\w*|не\s+сохраня\w*|"
+    r"(?:переход|кнопк\w*|действи\w*)[^.\n;]{0,80}заблок\w*|"
+    r"невозможн\w*[^.\n;]{0,80}(?:сохран|перейти|продолж))",
+    re.IGNORECASE,
+)
+_RUNTIME_INVALID_CLASS_ACTION_RE = re.compile(
+    r"(?:ввести|заполнить|указать|выбрать|enter|fill|select|set)"
+    r"[^.\n;]{0,120}(?:недопустим\w*|невалидн\w*|invalid)",
+    re.IGNORECASE,
+)
+_RUNTIME_VALID_CLASS_ACTION_RE = re.compile(
+    r"(?:ввести|заполнить|указать|выбрать|enter|fill|select|set)"
+    r"[^.\n;]{0,120}(?:допустим\w*|валидн\w*|valid)",
+    re.IGNORECASE,
+)
+_RUNTIME_VALID_ACCEPTANCE_RE = re.compile(
+    r"(?:допустим\w*|валидн\w*|valid)[^.\n;]{0,120}"
+    r"(?:принима\w*|сохраня\w*|отобража\w*|accepted|saved|displayed)",
+    re.IGNORECASE,
+)
 
 REVIEWER_POLICY_VERSION_V2 = 2
 
@@ -166,8 +193,17 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "source_projection_findings and case defects only in test_case_findings, with "
     "the most specific registered source/assertion/obligation/case bindings. Do not "
     "rewrite requirements or invent UI behavior. Images are supporting evidence; "
-    "the literal FT remains authoritative. Accepted requires every case's required "
-    "status and zero errors or warnings in both finding arrays."
+    "the literal FT remains authoritative. Enforce one dominant oracle polarity per "
+    "case: a positive TC must not expect rejection/error/no-save behavior, and a "
+    "negative/input-restriction TC must not also prove acceptance of a valid value "
+    "unless it is an explicitly source-backed recovery scenario. Review source-backed "
+    "input restrictions as equivalence classes: allowed-symbol wording requires "
+    "separate representative classes such as valid value, whitespace, alphabet/script "
+    "class and disallowed symbols when derivable from source; unsupported alphabet, "
+    "integration or implementation observations must become narrow gaps or calibration "
+    "notes, not FT-first baseline coverage. Check that priority follows source-bound "
+    "risk instead of a flat default. Accepted requires every case's required status "
+    "and zero errors or warnings in both finding arrays."
 )
 
 
@@ -236,6 +272,11 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "live_falsification_receipt_allows_not_recorded": False,
                 "benchmark_context_available": False,
                 "review_history_available": False,
+                "one_oracle_polarity_per_case": True,
+                "positive_tc_must_not_expect_rejection": True,
+                "input_restrictions_require_equivalence_classes": True,
+                "unsupported_alphabet_or_integration_observation_requires_gap": True,
+                "priority_must_follow_source_bound_risk": True,
             }
         )
     elif schema_version != 1:
@@ -1038,6 +1079,39 @@ def build_runtime_writer_request(
                     "for example `Нажать кнопку «Добавить контактное лицо» два раза.`"
                 ),
             },
+            "test_design_contract": {
+                "one_dominant_oracle_polarity_per_case": (
+                    "Do not combine acceptance of a valid value and rejection of an "
+                    "invalid value in one TC. Keep recovery flows out unless the "
+                    "seed/source explicitly asks for recovery."
+                ),
+                "case_type_consistency": (
+                    "Use `позитивный` only for acceptance/visibility/editability/list "
+                    "composition checks. Use `негативный` for rejection, validation, "
+                    "blocked transition, error/no-save or requiredness feedback."
+                ),
+                "input_restriction_classes": (
+                    "If source says only a symbol class is allowed, do not cover it "
+                    "with one mixed invalid value. The design must have separate "
+                    "source-derived classes such as valid value, whitespace, "
+                    "alphabet/script class and disallowed symbols, or a narrow "
+                    "calibration/gap for the missing class."
+                ),
+                "unsupported_observation_policy": (
+                    "Implementation observations, including discovered integrations, "
+                    "must not become FT-first baseline behavior unless they are "
+                    "registered as source/support/UI evidence. Otherwise preserve "
+                    "them as exploratory note, gap or calibration candidate."
+                ),
+                "priority_policy": (
+                    "Do not assign a flat default priority; use source-bound risk. "
+                    "Requiredness, validation, "
+                    "closed dictionaries, create/delete, integration, persistence, "
+                    "legal/financial or blocking transition checks are high risk "
+                    "unless source-bound rationale says otherwise; pure visibility "
+                    "or editability is normally medium."
+                ),
+            },
         },
         "cases": cases,
         "mockup_label_aliases": [dict(item) for item in mockup_label_aliases],
@@ -1220,6 +1294,43 @@ def _runtime_has_executable_step(steps: Sequence[str]) -> bool:
     )
 
 
+def _runtime_case_type_problem(*, case_type: str, expected_result: str) -> str | None:
+    if (
+        case_type == "позитивный"
+        and _RUNTIME_REJECTION_ORACLE_RE.search(expected_result) is not None
+    ):
+        return (
+            "positive case_type conflicts with a rejection/error/no-save "
+            "expected result"
+        )
+    return None
+
+
+def _runtime_mixed_polarity_problem(
+    *,
+    steps: Sequence[str],
+    expected_result: str,
+) -> str | None:
+    steps_text = "\n".join(steps)
+    if (
+        _RUNTIME_INVALID_CLASS_ACTION_RE.search(steps_text) is not None
+        and _RUNTIME_VALID_CLASS_ACTION_RE.search(steps_text) is not None
+    ):
+        return (
+            "one TC contains both invalid-class and valid-class input actions; "
+            "split positive and negative checks"
+        )
+    if (
+        _RUNTIME_REJECTION_ORACLE_RE.search(expected_result) is not None
+        and _RUNTIME_VALID_ACCEPTANCE_RE.search(expected_result) is not None
+    ):
+        return (
+            "one expected result asserts both rejection and valid-value acceptance; "
+            "split the checks or use an explicit source-backed recovery scenario"
+        )
+    return None
+
+
 def _runtime_internal_token(
     *,
     case_key: str,
@@ -1239,6 +1350,7 @@ def _runtime_internal_token(
 def _validate_runtime_writer_prose(
     *,
     case_key: str,
+    case_type: str,
     title: str,
     preconditions: Sequence[str],
     test_data: Sequence[str],
@@ -1274,6 +1386,24 @@ def _validate_runtime_writer_prose(
         raise IterationContractError(
             "runtime writer omitted executable user action/check step for "
             f"{case_key}"
+        )
+    case_type_problem = _runtime_case_type_problem(
+        case_type=case_type,
+        expected_result=expected_result,
+    )
+    if case_type_problem is not None:
+        raise IterationContractError(
+            f"runtime writer returned inconsistent case_type for {case_key}: "
+            f"{case_type_problem}"
+        )
+    mixed_polarity_problem = _runtime_mixed_polarity_problem(
+        steps=steps,
+        expected_result=expected_result,
+    )
+    if mixed_polarity_problem is not None:
+        raise IterationContractError(
+            f"runtime writer returned mixed positive/negative runtime prose for "
+            f"{case_key}: {mixed_polarity_problem}"
         )
 
 
@@ -1356,6 +1486,11 @@ def validate_runtime_writer_response(
         case_type = _one_line(item["case_type"], f"$.cases[{index}].case_type").casefold()
         if case_type not in {"позитивный", "негативный"}:
             raise IterationContractError(f"unsupported case_type for {case_key}")
+        if case_type != seed.case_type.casefold():
+            raise IterationContractError(
+                f"runtime writer case_type drift for {case_key}: "
+                f"expected {seed.case_type!r}, got {case_type!r}"
+            )
         calibration_question = _empty_string(
             item["calibration_question"],
             f"$.cases[{index}].calibration_question",
@@ -1386,6 +1521,7 @@ def validate_runtime_writer_response(
         )
         _validate_runtime_writer_prose(
             case_key=case_key,
+            case_type=case_type,
             title=title,
             preconditions=preconditions,
             test_data=test_data,

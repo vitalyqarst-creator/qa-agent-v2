@@ -56,6 +56,8 @@
 - Для branch choices (`Да`/`Нет`, confirm/cancel, save/discard, back/stay) expected result должен различать выбранную ветку. Две ветки с одинаковым oracle допустимы только если source прямо задает одинаковое поведение или оформлен `GAP-*`.
 - Negative input TC не должен объединять несколько независимых invalid classes под одним generic oracle. Разделяй классы или используй параметризованный набор только когда реакция на каждый класс source-backed и наблюдаемо одинаковая.
 - Representative/pairwise coverage across similar fields/classes must state selected combinations, omitted combinations and residual risk. Without that, add missing TC/GAP coverage instead of relying on an implicit sample.
+- `Тип` должен соответствовать oracle: rejection, validation feedback, blocked transition, no-save or requiredness feedback = `Negative`; acceptance, visibility, editability or closed-list composition without invalid action = `Positive`.
+- Implementation observations, including discovered integrations, are not FT-first requirements by themselves. Add baseline TC only after the behavior is registered as FT/support/UI evidence; otherwise keep the observation in exploratory notes, a narrow `GAP-*` or a calibration candidate.
 
 ## Field-Level Checks
 
