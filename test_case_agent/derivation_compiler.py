@@ -568,6 +568,46 @@ def _signal_has_registered_gap(
     return False
 
 
+def _signal_can_be_format_calibration(signal: Mapping[str, Any]) -> bool:
+    return (
+        str(signal.get("source_binding", ""))
+        == "exclusive-symbol-class-restriction"
+        or str(signal.get("restriction_type", "")) == "numeric"
+    )
+
+
+def _matching_format_obligation_id(
+    *,
+    signal: Mapping[str, Any],
+    manifest: SourceAssertionManifest,
+    semantic_obligations: Mapping[str, Mapping[str, Any]],
+) -> str | None:
+    if not _signal_can_be_format_calibration(signal):
+        return None
+    signal_row_id = str(signal.get("source_row_id", ""))
+    signal_codes = set(map(str, signal.get("requirement_codes", []) or []))
+    for assertion in manifest.assertions:
+        if (
+            assertion.semantic_disposition != "testable"
+            or assertion.source_row_id != signal_row_id
+        ):
+            continue
+        owner_codes = set(map(str, assertion.requirement_codes))
+        if signal_codes and not signal_codes.issubset(owner_codes):
+            continue
+        for obligation_id in assertion.obligation_ids:
+            semantic = semantic_obligations.get(obligation_id)
+            if semantic is None:
+                continue
+            if (
+                str(semantic.get("property_type", "")).casefold() == "format"
+                and str(semantic.get("coverage_class", "")).casefold()
+                == "allowed-class"
+            ):
+                return obligation_id
+    return None
+
+
 def _projection_oracles_by_signal(
     projection: Mapping[str, Any],
     collection: str,
@@ -589,7 +629,8 @@ def _validate_source_signal_accounting(
     obligation_set: PreparedObligationSet,
     projection: Mapping[str, Any],
     expected_obligations: set[str],
-) -> None:
+    semantic_obligations: Mapping[str, Mapping[str, Any]],
+) -> dict[str, tuple[Mapping[str, Any], ...]]:
     registry = _semantic_source_signal_registry(manifest)
     materialized_gap_ids = _coverage_gap_artifact_ids(
         repo_root=repo_root,
@@ -603,6 +644,7 @@ def _validate_source_signal_accounting(
         ),
     }
     findings: list[str] = []
+    format_calibration_signals: dict[str, list[Mapping[str, Any]]] = {}
     for signal_kind, signals in registry.items():
         for signal in signals:
             signal_id = str(signal.get("signal_id", ""))
@@ -624,6 +666,17 @@ def _validate_source_signal_accounting(
                 materialized_gap_ids=materialized_gap_ids,
             ):
                 continue
+            format_obligation_id = _matching_format_obligation_id(
+                signal=signal,
+                manifest=manifest,
+                semantic_obligations=semantic_obligations,
+            )
+            if format_obligation_id is not None:
+                format_calibration_signals.setdefault(
+                    format_obligation_id,
+                    [],
+                ).append(signal)
+                continue
             signal_description = str(signal.get("restriction_type", signal_kind))
             negative_class = str(signal.get("negative_class", "")).strip()
             representative = str(
@@ -644,6 +697,10 @@ def _validate_source_signal_accounting(
             "schema-v2 source semantics lost before writer: "
             + "; ".join(findings),
         )
+    return {
+        obligation_id: tuple(signals)
+        for obligation_id, signals in format_calibration_signals.items()
+    }
 
 
 def compile_property_derivations(
@@ -744,12 +801,13 @@ def compile_property_derivations(
             "obligation-set-mismatch",
             "semantic obligation set must equal accepted testable assertions",
         )
-    _validate_source_signal_accounting(
+    format_calibration_signals = _validate_source_signal_accounting(
         repo_root=repo_root,
         manifest=source_manifest,
         obligation_set=obligation_set,
         projection=semantic_projection,
         expected_obligations=expected_obligations,
+        semantic_obligations=raw_by_obligation,
     )
     missing_prepared = expected_obligations - set(prepared_by_id)
     if missing_prepared:
@@ -914,6 +972,18 @@ def compile_property_derivations(
                     f"{obligation_id} oracle differs from accepted source clauses",
                 )
             fixtures = _fixture_values(semantic, prepared)
+            derived_signals = format_calibration_signals.get(obligation_id, ())
+            if derived_signals:
+                derived_values = tuple(
+                    dict.fromkeys(
+                        str(signal.get("representative_invalid_value", "")).strip()
+                        for signal in derived_signals
+                        if str(
+                            signal.get("representative_invalid_value", "")
+                        ).strip()
+                    )
+                )
+                fixtures = tuple(dict.fromkeys((*fixtures, *derived_values)))
             variant = _typed(
                 semantic.get("coverage_class"),
                 f"{obligation_id}.coverage_class",
@@ -930,6 +1000,29 @@ def compile_property_derivations(
             )
             if obligation_id in oracle_ids:
                 source_oracles[obligation_id] = oracle_ids[obligation_id]
+            if derived_signals:
+                signal_ids = tuple(
+                    str(signal.get("signal_id", ""))
+                    for signal in derived_signals
+                )
+                source_oracles[obligation_id] = (
+                    "SO-CAL-SIGNAL-"
+                    + hashlib.sha256(
+                        "\u001f".join((obligation_id, *signal_ids)).encode("utf-8")
+                    ).hexdigest()[:12].upper()
+                )
+                negative_classes = ", ".join(
+                    str(signal.get("negative_class", "")).strip()
+                    or str(signal.get("restriction_type", "")).strip()
+                    for signal in derived_signals
+                )
+                invalid_values = ", ".join(f"«{value}»" for value in derived_values)
+                questions[obligation_id] = (
+                    "Какой точный UI-отклик подтверждает, что для "
+                    f"«{subject_label.strip('«»')}» недопустимые классы "
+                    f"{negative_classes} со значениями {invalid_values} "
+                    "не принимаются по правилу ФТ?"
+                )
             if prepared.calibration_status == "ui-calibration-required":
                 if obligation_id not in source_oracles:
                     if (

@@ -53,13 +53,14 @@ class RestrictedSymbolClassTaxonomyTests(unittest.TestCase):
         self.assertEqual(
             [
                 "digits",
+                "spaces",
                 "special-characters-other-than-hyphen",
             ],
             [item.negative_class for item in rules],
         )
         self.assertTrue(all(item.restriction_type == "format" for item in rules))
         self.assertEqual(
-            ["Иванов1", "Иванов@"],
+            ["Иванов1", "Иван Петров", "Иванов@"],
             [item.representative_invalid_value for item in rules],
         )
 

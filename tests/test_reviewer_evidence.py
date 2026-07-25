@@ -361,6 +361,7 @@ class ReviewerEvidenceTests(unittest.TestCase):
         self.assertEqual(
             [
                 "digits",
+                "spaces",
                 "special-characters-other-than-hyphen",
             ],
             [

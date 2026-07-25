@@ -400,6 +400,37 @@ class TestDesignTests(unittest.TestCase):
             plan.deterministic_cases[0].steps[0],
         )
 
+    def test_source_format_with_invalid_fixtures_materializes_each_invalid_step(self) -> None:
+        graph = _graph(
+            kind="source-format",
+            fixtures=("Иван-Петров", "Иванов1", "Иван Петров", "Иванов@"),
+            status="candidate-ui-calibration",
+            trigger="Ввести значение в поле «Имя».",
+            question=(
+                "Какой точный UI-отклик подтверждает, что недопустимые значения "
+                "не принимаются?"
+            ),
+        )
+        graph = replace(
+            graph,
+            properties=(replace(graph.properties[0], polarity="negative"), *graph.properties[1:]),
+        )
+
+        case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
+
+        joined_data = "\n".join(case.test_data)
+        joined_steps = "\n".join(case.steps)
+        self.assertIn("Допустимое значение: `Иван-Петров`.", joined_data)
+        self.assertNotIn("Ввести `Иван-Петров`", joined_steps)
+        for value in ("Иванов1", "Иван Петров", "Иванов@"):
+            self.assertIn(f"Недопустимое значение: `{value}`.", joined_data)
+            self.assertIn(f"Ввести `{value}`", joined_steps)
+            self.assertIn(f"для значения `{value}`", joined_steps)
+        self.assertIn("точное ожидаемое поведение требует UI-калибровки", case.expected_result)
+        text = render_test_cases((case,), scope_title="Данные клиента")
+        report = validate_production_tc_content(text, checked_path="shadow.md")
+        self.assertTrue(report.passed, report.as_dict())
+
     def test_subject_label_can_bind_to_sibling_from_same_source_row(self) -> None:
         graph = _graph(
             kind="source-date-boundary",

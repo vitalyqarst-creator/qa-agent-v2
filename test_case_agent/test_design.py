@@ -1321,6 +1321,35 @@ def _materialize(
                 value=future_value,
             )
         )
+    elif kind == "source-format" and len(fixtures) >= 2:
+        valid_fixture = fixtures[0]
+        invalid_fixtures = fixtures[1:]
+        title = f"Ограничение формата ввода: {_display_subject(label)}"
+        case_type = "негативный"
+        test_data = [
+            f"Допустимое значение: `{valid_fixture}`.",
+            *(
+                f"Недопустимое значение: `{item}`."
+                for item in invalid_fixtures
+            ),
+        ]
+        steps: list[str] = []
+        for item in invalid_fixtures:
+            steps.extend(
+                (
+                    f"Ввести `{item}` в {label}.",
+                    (
+                        "Зафиксировать фактический UI-отклик для значения "
+                        f"`{item}` без подмены его ожидаемым сообщением."
+                    ),
+                    f"Очистить {label} после проверки `{item}`.",
+                )
+            )
+        steps = _unique_steps(*steps)
+        expected_result = (
+            "Для каждого недопустимого значения зафиксирован фактический "
+            "UI-отклик; точное ожидаемое поведение требует UI-калибровки."
+        )
     elif kind.startswith("source-"):
         if not obligation.validation_trigger.strip():
             return _blocked_card(

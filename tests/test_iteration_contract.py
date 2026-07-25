@@ -554,6 +554,14 @@ class IterationContractTests(unittest.TestCase):
         )
         test_design_contract = request["route_contract"]["test_design_contract"]
         self.assertIn(
+            "every exact backticked invalid value",
+            test_design_contract["prepared_invalid_value_execution"],
+        )
+        self.assertIn(
+            "поочередно вводить каждое недопустимое значение",
+            test_design_contract["prepared_invalid_value_execution"],
+        )
+        self.assertIn(
             "Do not combine acceptance of a valid value and rejection",
             test_design_contract["one_dominant_oracle_polarity_per_case"],
         )
@@ -566,6 +574,10 @@ class IterationContractTests(unittest.TestCase):
             test_design_contract["input_restriction_classes"],
         )
         self.assertIn(
+            "when the source explicitly constrains script/alphabet",
+            test_design_contract["input_restriction_classes"],
+        )
+        self.assertIn(
             "Implementation observations",
             test_design_contract["unsupported_observation_policy"],
         )
@@ -574,6 +586,9 @@ class IterationContractTests(unittest.TestCase):
             test_design_contract["priority_policy"],
         )
         self.assertFalse(request["constraints"]["old_test_cases_available"])
+        self.assertTrue(
+            request["constraints"]["preserve_prepared_invalid_values_in_steps"]
+        )
         self.assertEqual(
             "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
             request["mockup_label_aliases"][0]["label_from_mockup"],
@@ -670,6 +685,75 @@ class IterationContractTests(unittest.TestCase):
             tuple(seed.case_key for seed in plan.deterministic_cases),
             tuple(design.case_key for design in designs),
         )
+
+    def test_runtime_writer_must_execute_seed_invalid_values(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(
+            plan.deterministic_cases[0],
+            status="candidate-ui-calibration",
+            case_type="негативный",
+            test_data=(
+                "Допустимое значение: `Иван-Петров`.",
+                "Недопустимое значение: `Иванов1`.",
+                "Недопустимое значение: `Иван Петров`.",
+                "Недопустимое значение: `Иванов@`.",
+            ),
+            steps=(
+                "Ввести `Иванов1` в поле «Фамилия».",
+                "Зафиксировать фактический UI-отклик для значения `Иванов1`.",
+                "Очистить поле «Фамилия».",
+                "Ввести `Иван Петров` в поле «Фамилия».",
+                "Зафиксировать фактический UI-отклик для значения `Иван Петров`.",
+                "Очистить поле «Фамилия».",
+                "Ввести `Иванов@` в поле «Фамилия».",
+                "Зафиксировать фактический UI-отклик для значения `Иванов@`.",
+            ),
+            expected_result=(
+                "Фактический UI-отклик для недопустимых значений зафиксирован "
+                "без подмены ожидаемым сообщением."
+            ),
+            calibration_question=(
+                "Какой точный UI-отклик подтверждает, что недопустимые значения "
+                "не принимаются?"
+            ),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
+        valid_payload = _runtime_writer_payload(graph, [_runtime_writer_case(seed)])
+
+        designs, unresolved = validate_runtime_writer_response(
+            valid_payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(seed.steps, designs[0].steps)
+
+        invalid_payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    steps=[
+                        "Ввести `Иванов1` в поле «Фамилия».",
+                        "Зафиксировать фактический UI-отклик для значения `Иванов1`.",
+                    ],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "left seed invalid values unexecuted.*Иван Петров.*Иванов@",
+        ):
+            validate_runtime_writer_response(
+                invalid_payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
 
     def test_runtime_writer_returns_model_prose_but_runner_preserves_identity_and_traceability(self) -> None:
         graph = _graph()

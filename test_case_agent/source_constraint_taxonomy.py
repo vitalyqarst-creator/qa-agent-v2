@@ -81,6 +81,7 @@ def restricted_symbol_classes(source_text: str) -> tuple[RestrictedSymbolClass, 
     for match in _TEXT_WITH_HYPHEN_RESTRICTION.finditer(source_text):
         for negative_class, representative in (
             ("digits", "Иванов1"),
+            ("spaces", "Иван Петров"),
             ("special-characters-other-than-hyphen", "Иванов@"),
         ):
             result.append(

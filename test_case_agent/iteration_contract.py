@@ -98,6 +98,7 @@ _INTERNAL_RUNTIME_TOKEN_RE = re.compile(
     r"\bBSR\s+\d+\b)",
     re.IGNORECASE,
 )
+_BACKTICK_VALUE_RE = re.compile(r"`([^`]+)`")
 _RUNTIME_NO_SETUP_RE = re.compile(r"^не\s+требуются$", re.IGNORECASE)
 _RUNTIME_REJECTION_ORACLE_RE = re.compile(
     r"(?:ошибк\w*|валидаци\w*|недопустим\w*|невалидн\w*|"
@@ -1080,6 +1081,14 @@ def build_runtime_writer_request(
                 ),
             },
             "test_design_contract": {
+                "prepared_invalid_value_execution": (
+                    "When `seed_runtime.test_data` contains lines like "
+                    "`Недопустимое значение: `...```, every exact backticked "
+                    "invalid value from those lines must appear in `steps` as a "
+                    "concrete input/check action. Do not replace concrete prepared "
+                    "values with aggregate wording such as `поочередно вводить "
+                    "каждое недопустимое значение`."
+                ),
                 "one_dominant_oracle_polarity_per_case": (
                     "Do not combine acceptance of a valid value and rejection of an "
                     "invalid value in one TC. Keep recovery flows out unless the "
@@ -1094,7 +1103,8 @@ def build_runtime_writer_request(
                     "If source says only a symbol class is allowed, do not cover it "
                     "with one mixed invalid value. The design must have separate "
                     "source-derived classes such as valid value, whitespace, "
-                    "alphabet/script class and disallowed symbols, or a narrow "
+                    "alphabet/script class when the source explicitly constrains "
+                    "script/alphabet, and disallowed symbols, or a narrow "
                     "calibration/gap for the missing class."
                 ),
                 "unsupported_observation_policy": (
@@ -1131,6 +1141,7 @@ def build_runtime_writer_request(
             "old_test_cases_available": False,
             "mockups_refine_steps_only": True,
             "use_label_from_mockup_for_runtime_text": True,
+            "preserve_prepared_invalid_values_in_steps": True,
         },
     }
 
@@ -1407,6 +1418,33 @@ def _validate_runtime_writer_prose(
         )
 
 
+def _seed_invalid_values(seed: TestCaseDesign) -> tuple[str, ...]:
+    values: list[str] = []
+    for item in seed.test_data:
+        if "Недопустимое значение" not in item:
+            continue
+        values.extend(value.strip() for value in _BACKTICK_VALUE_RE.findall(item))
+    return tuple(dict.fromkeys(value for value in values if value))
+
+
+def _validate_runtime_writer_executes_seed_invalid_values(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    steps: Sequence[str],
+) -> None:
+    invalid_values = _seed_invalid_values(seed)
+    if not invalid_values:
+        return
+    steps_text = "\n".join(steps)
+    missing = tuple(value for value in invalid_values if value not in steps_text)
+    if missing:
+        raise IterationContractError(
+            "runtime writer left seed invalid values unexecuted for "
+            f"{case_key}: " + ", ".join(repr(value) for value in missing)
+        )
+
+
 def validate_runtime_writer_response(
     response: Mapping[str, Any],
     *,
@@ -1529,6 +1567,11 @@ def validate_runtime_writer_response(
             expected_result=expected_result,
             postconditions=postconditions,
             calibration_question=calibration_question,
+        )
+        _validate_runtime_writer_executes_seed_invalid_values(
+            case_key=case_key,
+            seed=seed,
+            steps=steps,
         )
         runtime_text = "\n".join(
             [

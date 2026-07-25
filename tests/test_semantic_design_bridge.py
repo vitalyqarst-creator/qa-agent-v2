@@ -5551,6 +5551,7 @@ class SemanticDesignBridgeTests(unittest.TestCase):
         self.assertEqual(
             [
                 "digits",
+                "spaces",
                 "special-characters-other-than-hyphen",
             ],
             [item["negative_class"] for item in registry["negative"]],
