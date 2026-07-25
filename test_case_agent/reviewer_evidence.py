@@ -2290,7 +2290,8 @@ def build_design_support_mapping(
                 if token in obligations and token != primary_obligation_id
             }
         )
-        for obligation_id in traced_siblings:
+        support_obligation_ids = (primary_obligation_id, *traced_siblings)
+        for obligation_id in support_obligation_ids:
             obligation = obligations[obligation_id]
             prop = properties.get(obligation.property_id)
             if prop is None:  # pragma: no cover - coverage graph validation owns this
@@ -2310,6 +2311,11 @@ def build_design_support_mapping(
             )
             materialized = False
             for support_role, field_name in sections:
+                if (
+                    obligation_id == primary_obligation_id
+                    and support_role == "action"
+                ):
+                    continue
                 field_items = getattr(design, field_name)
                 for item_index, materialized_text in enumerate(field_items):
                     source_fragment, _match_type = _matched_source_action_fragment(
@@ -2339,7 +2345,7 @@ def build_design_support_mapping(
                             "tc_id": design.tc_id,
                         }
                     )
-            if not materialized:
+            if obligation_id != primary_obligation_id and not materialized:
                 _fail(
                     "design-support-traceability-not-materialized",
                     f"{design.tc_id} traces sibling {obligation_id} without a "

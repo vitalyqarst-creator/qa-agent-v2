@@ -1686,12 +1686,28 @@ class ReviewerEvidenceTests(unittest.TestCase):
             add_cleanup[0],
         )
         self.assertEqual(
-            [("setup", "OBL-ADD"), ("setup", "OBL-ADD")],
+            [
+                ("cleanup", "OBL-DELETE"),
+                ("setup", "OBL-ADD"),
+                ("setup", "OBL-ADD"),
+            ],
             [
                 (item["support_role"], item["obligation_id"])
                 for item in mapping
                 if item["case_key"] == delete_case
             ],
+        )
+        delete_cleanup = [
+            item["materialized_text"]
+            for item in mapping
+            if item["case_key"] == delete_case
+            and item["support_role"] == "cleanup"
+            and item["obligation_id"] == "OBL-DELETE"
+        ]
+        self.assertEqual(1, len(delete_cleanup))
+        self.assertIn(
+            "Проверить, что оставшаяся вторая тестовая строка удалена.",
+            delete_cleanup[0],
         )
         self.assertEqual(
             {("action", "OBL-ADD"), ("cleanup", "OBL-DELETE")},
@@ -1738,6 +1754,53 @@ class ReviewerEvidenceTests(unittest.TestCase):
         self.assertEqual(
             "Удалить добавленную строку кнопкой `Корзина` в этой строке.",
             delete_support[0]["materialized_text"],
+        )
+
+    def test_repeater_delete_model_prose_cleanup_and_setup_materialize(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        cases = list(build_test_design_plan(graph, context=context).deterministic_cases)
+        delete_index = next(
+            index
+            for index, item in enumerate(cases)
+            if item.tc_id == "TC-CUST-DEL0000001"
+        )
+        cases[delete_index] = replace(
+            cases[delete_index],
+            preconditions=(
+                "Открыть карточку `Заявка`.",
+                "Перейти к блоку `Контактные лица`.",
+                "Нажать кнопку `Добавить контактное лицо` два раза.",
+            ),
+            postconditions=(
+                "Нажать кнопку `Корзина` в оставшейся второй тестовой строке. "
+                "Проверить, что оставшаяся вторая тестовая строка удалена.",
+            ),
+        )
+
+        mapping = build_design_support_mapping(graph, cases)
+
+        delete_case = "customer|delete-control|source-delete-row|repeater-delete|always"
+        delete_support = [
+            item
+            for item in mapping
+            if item["case_key"] == delete_case
+        ]
+        self.assertEqual(
+            [("cleanup", "OBL-DELETE"), ("setup", "OBL-ADD")],
+            [
+                (item["support_role"], item["obligation_id"])
+                for item in delete_support
+            ],
+        )
+        self.assertEqual(
+            "postconditions",
+            delete_support[0]["test_case_field"],
+        )
+        self.assertEqual(
+            "preconditions",
+            delete_support[1]["test_case_field"],
         )
 
     def test_repeater_delete_sibling_without_explicit_action_fails_closed(self) -> None:
