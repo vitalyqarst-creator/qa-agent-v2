@@ -149,6 +149,7 @@ source/TC-backed design defect, доказанный самими артефак
 - TC priority is a flat default or contradicts source-bound risk, especially for requiredness, validation, closed dictionaries, create/delete, integration, persistence, legal/financial fields or blocking transitions.
 - Implementation observation or exploratory UI discovery is promoted to FT-first baseline behavior without approved source/support/UI evidence.
 - Positive allowed-value or boundary TC uses negated rejection/blocking wording (`не отклоняется`, `не блокируется`) instead of a concrete observable positive artifact such as exact value displayed in the field.
+- For field-level inputability, editability, allowed-symbol representatives and valid-boundary coverage, immediate field display after entering/selecting the exact value is a sufficient current-value oracle when the TC does not claim persistence, save, final validation, or absence of an error. Reviewer must not require a separate commit/validation trigger for that narrow coverage; unresolved trigger/oracle blocks rejection, requiredness, negative validation, save/persistence or no-error semantics instead.
 
 ## Обязательный defect-class checklist
 

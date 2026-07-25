@@ -278,7 +278,14 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "oracles such as `не отклоняется` or `не блокируется`; "
     "the TC must state a concrete observable positive artifact such as exact value "
     "displayed in the field, or remain an honest calibration candidate if no "
-    "positive artifact is source-bound. "
+    "positive artifact is source-bound. Immediate field display after entering "
+    "or selecting the exact value is a supported positive oracle for field-level "
+    "inputability, editability, allowed-symbol representative and valid-boundary "
+    "coverage when the TC does not assert persistence, save, final validation, "
+    "or absence of an error. Do not require a separate commit/validation trigger "
+    "for that narrow current-value coverage; require calibration for rejection, "
+    "requiredness, negative validation, persistence, no-error, or save semantics "
+    "when the source does not bind a trigger and observable. "
     "Unsupported integration "
     "or implementation observations must become narrow gaps or calibration notes, "
     "not FT-first baseline coverage. Check that priority follows source-bound "
@@ -363,6 +370,9 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "draft_markdown_bound_by_sha256_not_model_context": True,
                 "one_oracle_polarity_per_case": True,
                 "positive_tc_must_not_expect_rejection": True,
+                "positive_field_current_value_oracle_is_supported": True,
+                "commit_not_required_for_current_visible_value_only": True,
+                "positive_field_display_must_not_claim_save_or_validation": True,
                 "input_restrictions_require_equivalence_classes": True,
                 "scope_entrypoint_setup_must_be_complete_and_consistent": True,
                 "unsupported_alphabet_or_integration_observation_requires_gap": True,

@@ -1983,6 +1983,15 @@ class IterationContractTests(unittest.TestCase):
         )
         self.assertTrue(acceptance["one_oracle_polarity_per_case"])
         self.assertTrue(acceptance["positive_tc_must_not_expect_rejection"])
+        self.assertTrue(
+            acceptance["positive_field_current_value_oracle_is_supported"]
+        )
+        self.assertTrue(
+            acceptance["commit_not_required_for_current_visible_value_only"]
+        )
+        self.assertTrue(
+            acceptance["positive_field_display_must_not_claim_save_or_validation"]
+        )
         self.assertTrue(acceptance["input_restrictions_require_equivalence_classes"])
         self.assertTrue(
             acceptance[
@@ -2005,6 +2014,9 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("current date + 1 day", reviewer_prompt_instruction(2))
         self.assertIn("Latin letters are a supported positive representative", reviewer_prompt_instruction(2))
         self.assertIn("priority follows source-bound risk", reviewer_prompt_instruction(2))
+        self.assertIn("Immediate field display after entering", reviewer_prompt_instruction(2))
+        self.assertIn("Do not require a separate commit/validation trigger", reviewer_prompt_instruction(2))
+        self.assertIn("current-value coverage", reviewer_prompt_instruction(2))
         self.assertIn("changes-required requires", reviewer_prompt_instruction(2))
         self.assertIn("draft_markdown is intentionally omitted", reviewer_prompt_instruction(2))
         self.assertIn("test_cases.designs", reviewer_prompt_instruction(2))
