@@ -66,6 +66,57 @@ class ProductionTcGateTests(unittest.TestCase):
             result.as_dict()["validator"],
         )
 
+    def test_suite_rejects_block_entrypoint_without_card_when_peer_uses_card(
+        self,
+    ) -> None:
+        complete = self._case(
+            tc_id="TC-AMS-001",
+            preconditions=(
+                "1. Открыть карточку `Заявка`.\n"
+                "2. Перейти к блоку `Контактные лица`."
+            ),
+        )
+        incomplete = self._case(
+            tc_id="TC-AMS-002",
+            preconditions="1. Перейти к блоку `Контактные лица`.",
+        )
+
+        result = validate_production_tc_content(complete + "\n" + incomplete)
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "production-incomplete-entrypoint-precondition",
+            {finding["id"] for finding in result.findings},
+        )
+        self.assertIn(
+            "TC-AMS-002",
+            {
+                finding["tc_id"]
+                for finding in result.findings
+                if finding["id"] == "production-incomplete-entrypoint-precondition"
+            },
+        )
+
+    def test_suite_accepts_consistent_card_block_entrypoint_preconditions(self) -> None:
+        first = self._case(
+            tc_id="TC-AMS-001",
+            preconditions=(
+                "1. Открыть карточку `Заявка`.\n"
+                "2. Перейти к блоку `Контактные лица`."
+            ),
+        )
+        second = self._case(
+            tc_id="TC-AMS-002",
+            preconditions=(
+                "1. Открыть карточку `Заявка`.\n"
+                "2. Перейти к блоку `Контактные лица`."
+            ),
+        )
+
+        result = validate_production_tc_content(first + "\n" + second)
+
+        self.assertTrue(result.passed, result.findings)
+
     def test_persistence_oracle_requires_commit_like_action(self) -> None:
         unsafe = self._case(
             steps="1. Выбрать «отец/мать» в поле «Отношение к заявителю».",

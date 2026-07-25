@@ -368,6 +368,16 @@ NUMBERED_LINE_RE = re.compile(r"(?m)^[^\S\r\n]*\d+[.)][^\S\r\n]+(.+)$")
 NUMBERED_PRECONDITION_RE = re.compile(
     r"^[^\S\r\n]*\d+[.)][^\S\r\n]+(.+?)[^\S\r\n]*$"
 )
+ENTRYPOINT_CARD_RE = re.compile(
+    r"\bоткрыть\s+карточк\w*\s+"
+    r"(?:`([^`\r\n]+)`|«([^»\r\n]+)»|([^.;\r\n]+?))[^\S\r\n]*[.]?$",
+    re.IGNORECASE,
+)
+ENTRYPOINT_BLOCK_RE = re.compile(
+    r"\bперейти\s+(?:к|в)\s+блок\w*\s+"
+    r"(?:`([^`\r\n]+)`|«([^»\r\n]+)»|([^.;\r\n]+?))[^\S\r\n]*[.]?$",
+    re.IGNORECASE,
+)
 ACTION_STEP_RE = re.compile(
     r"(?:авторизоваться|войти|открыть|перейти|ввести|"
     r"заполнить|выбрать|установить|нажать|очистить|"
@@ -797,6 +807,51 @@ def _finding(
     }
 
 
+@dataclass(frozen=True)
+class _EntrypointPreconditions:
+    tc_id: str
+    preconditions: str
+    card: str
+    card_index: int
+    block: str
+    block_index: int
+
+
+def _entrypoint_label(match: re.Match[str]) -> str:
+    return " ".join(
+        (match.group(1) or match.group(2) or match.group(3) or "").split()
+    )
+
+
+def _entrypoint_preconditions(
+    *,
+    tc_id: str,
+    preconditions: str,
+) -> _EntrypointPreconditions:
+    card = ""
+    card_index = 0
+    block = ""
+    block_index = 0
+    for index, match in enumerate(NUMBERED_LINE_RE.finditer(preconditions), start=1):
+        item = match.group(1).strip()
+        card_match = ENTRYPOINT_CARD_RE.search(item)
+        if not card and card_match is not None:
+            card = _entrypoint_label(card_match)
+            card_index = index
+        block_match = ENTRYPOINT_BLOCK_RE.search(item)
+        if not block and block_match is not None:
+            block = _entrypoint_label(block_match)
+            block_index = index
+    return _EntrypointPreconditions(
+        tc_id=tc_id,
+        preconditions=preconditions,
+        card=card,
+        card_index=card_index,
+        block=block,
+        block_index=block_index,
+    )
+
+
 def validate_production_tc_content(
     content: str,
     *,
@@ -806,6 +861,7 @@ def validate_production_tc_content(
     blocks = test_case_sections(content)
     findings: list[dict[str, Any]] = []
     execution_paths: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
+    entrypoint_preconditions: list[_EntrypointPreconditions] = []
     runtime_aliases = tuple((approved_runtime_aliases or {}).items())
     if not blocks:
         findings.append(
@@ -840,6 +896,9 @@ def validate_production_tc_content(
         steps = _visible_text(raw_steps)
         expected_result = _visible_text(raw_expected_result)
         postconditions = _visible_text(raw_postconditions)
+        entrypoint_preconditions.append(
+            _entrypoint_preconditions(tc_id=tc_id, preconditions=preconditions)
+        )
         execution_path_key = (
             " ".join(steps.casefold().split()),
             " ".join(expected_result.casefold().split()),
@@ -1395,6 +1454,47 @@ def validate_production_tc_content(
                         "save, confirmation, transition, submit or blur action. "
                         "Immediate selection/input alone proves only the visible "
                         "current value."
+                    ),
+                )
+            )
+
+    card_by_block: dict[str, str] = {}
+    for entrypoint in entrypoint_preconditions:
+        if not entrypoint.card or not entrypoint.block:
+            continue
+        block_key = entrypoint.block.casefold()
+        card_by_block.setdefault(block_key, entrypoint.card)
+    for entrypoint in entrypoint_preconditions:
+        if not entrypoint.block:
+            continue
+        expected_card = card_by_block.get(entrypoint.block.casefold())
+        if not expected_card:
+            continue
+        if not entrypoint.card:
+            findings.append(
+                _finding(
+                    finding_id="production-incomplete-entrypoint-precondition",
+                    tc_id=entrypoint.tc_id,
+                    section="preconditions",
+                    evidence=entrypoint.preconditions,
+                    message=(
+                        "A TC for this block must keep the suite-level entry path: "
+                        f"open card `{expected_card}` before entering block "
+                        f"`{entrypoint.block}`."
+                    ),
+                )
+            )
+            continue
+        if entrypoint.block_index < entrypoint.card_index:
+            findings.append(
+                _finding(
+                    finding_id="production-incomplete-entrypoint-precondition",
+                    tc_id=entrypoint.tc_id,
+                    section="preconditions",
+                    evidence=entrypoint.preconditions,
+                    message=(
+                        "A TC for this block must open the card before entering "
+                        "the block in preconditions."
                     ),
                 )
             )
