@@ -6,6 +6,7 @@ from pathlib import Path
 
 from docx import Document
 
+from scripts.compare_docx_json_to_xhtml_baseline import _match_candidate
 from test_case_agent.source_json_projection import build_docx_source_json
 
 
@@ -43,6 +44,24 @@ class SourceJsonProjectionTests(unittest.TestCase):
             ["4.3 Карточка заявки"],
             first["blocks"][3]["section_path"],
         )
+
+    def test_xhtml_flat_row_matches_docx_json_table_delimited_row(self) -> None:
+        match = _match_candidate(
+            "Текст (string) Допустимое количество символов: 2000",
+            [
+                {
+                    "block_id": "DOCX-BLOCK-000001",
+                    "block_index": 1,
+                    "kind": "table-row",
+                    "locator": "/blocks/1",
+                    "section_path": ["5. Ограничения"],
+                    "text": "Текст (string) | Допустимое количество символов: 2000",
+                }
+            ],
+        )
+
+        self.assertEqual("normalized-exact", match["match_type"])
+        self.assertEqual("DOCX-BLOCK-000001", match["matches"][0]["block_id"])
 
 
 if __name__ == "__main__":

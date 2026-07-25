@@ -19,6 +19,7 @@ from test_case_agent.source_json_projection import load_docx_source_json
 
 
 REQUIREMENT_CODE_RE = re.compile(r"\bBSR\s+\d+\b")
+DOCX_JSON_TABLE_DELIMITER_RE = re.compile(r"\s*\|\s*")
 
 
 def _repo_relative(path: Path, repo_root: Path) -> str:
@@ -29,6 +30,20 @@ def _repo_relative(path: Path, repo_root: Path) -> str:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _comparison_text(value: str) -> str:
+    """Normalize source text for cross-transport comparison.
+
+    XHTML row text is flattened by the source-row baseline extractor, while the
+    DOCX JSON projection intentionally preserves table cell boundaries with
+    ``|`` delimiters.  For parity diagnostics those delimiters are transport
+    syntax, not requirement text, so compare with them collapsed to spaces.
+    """
+
+    return normalize_bounded_source_text(
+        DOCX_JSON_TABLE_DELIMITER_RE.sub(" ", value)
+    ).casefold()
 
 
 def _load_spec(
@@ -51,33 +66,55 @@ def _load_spec(
 
 def _match_candidate(candidate_text: str, blocks: list[dict[str, Any]]) -> dict[str, Any]:
     target = normalize_bounded_source_text(candidate_text).casefold()
+    target_for_comparison = _comparison_text(candidate_text)
     target_codes = tuple(REQUIREMENT_CODE_RE.findall(candidate_text))
     exact: list[dict[str, Any]] = []
     contains: list[dict[str, Any]] = []
+    normalized_exact: list[dict[str, Any]] = []
+    normalized_contains: list[dict[str, Any]] = []
     code_exact: list[dict[str, Any]] = []
     code_contains: list[dict[str, Any]] = []
     for block in blocks:
         raw_text = str(block.get("text", ""))
         text = normalize_bounded_source_text(raw_text).casefold()
+        text_for_comparison = _comparison_text(raw_text)
         if not text:
             continue
         if text == target:
             exact.append(block)
         elif target in text or text in target:
             contains.append(block)
+        elif text_for_comparison == target_for_comparison:
+            normalized_exact.append(block)
+        elif (
+            target_for_comparison in text_for_comparison
+            or text_for_comparison in target_for_comparison
+        ):
+            normalized_contains.append(block)
         if target_codes:
             block_codes = tuple(REQUIREMENT_CODE_RE.findall(raw_text))
             if set(block_codes) == set(target_codes):
                 code_exact.append(block)
             elif set(target_codes).issubset(set(block_codes)):
                 code_contains.append(block)
-    matches = exact or contains or code_exact or code_contains
+    matches = (
+        exact
+        or contains
+        or normalized_exact
+        or normalized_contains
+        or code_exact
+        or code_contains
+    )
     if not matches:
         return {"match_type": "missing", "matches": []}
     if exact:
         match_type = "exact"
     elif contains:
         match_type = "contains"
+    elif normalized_exact:
+        match_type = "normalized-exact"
+    elif normalized_contains:
+        match_type = "normalized-contains"
     elif code_exact:
         match_type = "requirement-code-exact"
     else:

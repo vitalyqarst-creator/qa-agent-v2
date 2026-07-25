@@ -29,6 +29,12 @@ python scripts/compare_docx_json_to_xhtml_baseline.py `
   --output <scope>.json-compare.json
 ```
 
+Comparison treats DOCX JSON table-cell delimiters (`|`) as transport syntax.
+They are collapsed to whitespace before XHTML parity matching, because XHTML
+bounded row text is already flattened. This normalization is diagnostic only; it
+does not prove source replacement when requirement codes are missing, row order
+is unstable, or table content is merged/reordered.
+
 Production switch criteria:
 
 - `missing_candidate_count = 0` for at least three materially different real
