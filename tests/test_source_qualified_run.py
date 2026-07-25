@@ -7,6 +7,7 @@ import json
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -26,6 +27,7 @@ from test_case_agent.immutable_iteration import (
     run_immutable_iteration as immutable_runner,
 )
 from test_case_agent.review_cycle.prepared_package import (
+    PreparedGap,
     PreparedObligation,
     PreparedObligationSet,
 )
@@ -497,7 +499,59 @@ class SourceQualifiedRunTests(unittest.TestCase):
             )
         return exit_code, stdout.getvalue(), stderr.getvalue()
 
-    def _enable_v2_generated_derivations(self) -> Path:
+    def _enable_v2_generated_derivations(
+        self,
+        *,
+        account_for_source_signals: bool = True,
+    ) -> Path:
+        if account_for_source_signals:
+            signal_gap_ids = (
+                "GAP-SRC-002-EXCLUSIVE-LOCATION",
+                "GAP-SRC-002-TEXT-SYMBOLS",
+            )
+            prepared_obligations = tuple(
+                replace(item, constraint_gap_ids=signal_gap_ids)
+                if item.obligation_id == "OBL-001"
+                else item
+                for item in self.prepared_obligations.obligations
+            )
+            obligations = PreparedObligationSet.create(
+                package_id="WP-01",
+                obligations=prepared_obligations,
+                coverage_gaps=(
+                    PreparedGap(
+                        gap_id="GAP-SRC-002-EXCLUSIVE-LOCATION",
+                        source_refs=("SRC-002", "BSR 1"),
+                        problem=(
+                            "Source row contains exclusive location visibility "
+                            "semantics; this synthetic fixture does not model the "
+                            "outside-block branch."
+                        ),
+                        handling=(
+                            "Keep the visibility-only case testable and route the "
+                            "exclusive outside-block branch to a source-bound gap."
+                        ),
+                        blocking=False,
+                    ),
+                    PreparedGap(
+                        gap_id="GAP-SRC-002-TEXT-SYMBOLS",
+                        source_refs=("SRC-002", "BSR 1"),
+                        problem=(
+                            "Source row contains only text symbols / hyphen input "
+                            "restriction; this synthetic fixture does not model "
+                            "negative digit or invalid special-symbol classes."
+                        ),
+                        handling=(
+                            "Do not let writer silently drop the text-symbol "
+                            "restriction; route it to this source-bound gap."
+                        ),
+                        blocking=False,
+                    ),
+                ),
+                evidence_text=self.source_evidence.read_text(encoding="utf-8"),
+            )
+            self.prepared_obligations = obligations
+            write_json_atomic(self.obligations, obligations.to_dict())
         assertion = self.testable_assertion
         semantic_obligation = {
             "obligation_id": "OBL-001",
@@ -833,6 +887,27 @@ class SourceQualifiedRunTests(unittest.TestCase):
             self._relative(semantic_path),
             terminal["protected_semantic_artifact_paths"],
         )
+
+    def test_v2_rejects_unaccounted_source_row_semantic_signals(self) -> None:
+        self._enable_v2_generated_derivations(account_for_source_signals=False)
+        output = self.ft / "work" / "source-qualified-runs" / "run-v2-signal-loss"
+
+        exit_code, _, stderr = self._run(output)
+
+        self.assertEqual(2, exit_code)
+        self.assertIn("contract-error", stderr)
+        terminal = json.loads(
+            (output / "terminal-summary.json").read_text(encoding="utf-8")
+        )
+        diagnostic = json.loads(
+            (output / "diagnostic.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("blocked-contract", terminal["status"])
+        self.assertEqual("source-contract-binding", terminal["failed_stage"])
+        self.assertIn("source-semantic-signal-uncovered", diagnostic["message"])
+        self.assertIn("exclusive text/symbol input restriction", diagnostic["message"])
+        self.assertIn("exclusive location visibility", diagnostic["message"])
+        self.assertFalse((output / "iteration").exists())
 
     def test_calibration_pending_terminal_is_success_and_remains_non_promotable(
         self,

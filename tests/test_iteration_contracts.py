@@ -13,20 +13,20 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("`revision_from_findings`", writer)
         self.assertIn("structured findings artifact", writer)
         self.assertIn("traceability matrix artifact", writer)
-        self.assertIn("Обрабатывай findings с учетом `review_mode`", writer)
+        self.assertIn("process findings according to `review_mode`", writer)
 
     def test_writer_revision_mode_describes_mode_specific_handoff(self) -> None:
         writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("`traceability` — закрывай gaps покрытия", writer)
-        self.assertIn("`structure` — выравнивай шаблон, порядок, группировку и сквозную нумерацию", writer)
-        self.assertIn("`test-design` — добавляй или корректируй", writer)
+        self.assertIn("`traceability` closes coverage gaps", writer)
+        self.assertIn("`structure` aligns template, order, grouping, and continuous numbering", writer)
+        self.assertIn("`test-design` adds or corrects checks and expected results", writer)
 
     def test_writer_and_iteration_describe_pdf_structure_cross_check(self) -> None:
         writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
         iteration = (ROOT_DIR / "skills" / "ft-test-case-iteration" / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("PDF-версия основного ФТ для сверки структуры", writer)
-        self.assertIn("сверяй по ней структуру разделов", writer)
-        self.assertIn("DOCX как source of truth", iteration)
+        self.assertIn("PDF version of the main FT for structural cross-check", writer)
+        self.assertIn("use it to verify section structure", writer)
+        self.assertIn("DOCX as source of truth", iteration)
         self.assertIn("DOCX/XHTML/PDF", iteration)
 
     def test_iteration_uses_single_production_reviewer_sequence(self) -> None:
@@ -34,7 +34,7 @@ class IterationContractTests(unittest.TestCase):
         lifecycle = (ROOT_DIR / "references" / "agent" / "session-based-review-cycle-format.md").read_text(encoding="utf-8")
 
         self.assertIn("ft-agent run", iteration)
-        self.assertIn("ровно одному независимому reviewer", iteration)
+        self.assertIn("exactly one independent reviewer", iteration)
         self.assertNotIn("review_cycle_backend_dispatcher.py", iteration)
         self.assertIn("structure_preflight", lifecycle)
         self.assertIn("semantic_traceability_test_design", lifecycle)
@@ -48,7 +48,7 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("accepted-shadow", iteration)
         self.assertIn("accepted-with-calibration-pending", iteration)
         self.assertIn("promotion_eligible=false", iteration)
-        self.assertIn("не делай внутренний retry", iteration)
+        self.assertIn("do not perform internal retry", iteration)
         self.assertIn("no findings with `severity = error` or `severity = warning` remain", lifecycle)
 
     def test_iteration_preserves_writer_domain_rules_by_reference(self) -> None:
@@ -67,7 +67,7 @@ class IterationContractTests(unittest.TestCase):
         writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
         reviewer_output = (ROOT_DIR / "references" / "agent" / "reviewer-output-format.md").read_text(encoding="utf-8")
 
-        self.assertIn("`.xlsx`-дубль traceability matrix", writer)
+        self.assertIn("`.xlsx` duplicate of the traceability matrix", writer)
         self.assertIn("round-N-traceability-matrix.xlsx", reviewer_output)
         self.assertIn("work/review-cycles/<scope-slug>/outputs/", reviewer_output)
         self.assertIn("те же строки, колонки и значения", reviewer_output)
@@ -84,7 +84,7 @@ class IterationContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("benchmarks", iteration)
-        self.assertIn("не входят в этот production profile", iteration)
+        self.assertIn("are outside this production profile", iteration)
         self.assertIn("ft-agent run", iteration)
         self.assertNotIn("start_full_process_observation.py", iteration)
         self.assertIn("Config schema v1 остаётся start-only", observation)
