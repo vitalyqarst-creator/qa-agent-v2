@@ -42,6 +42,7 @@ from test_case_agent.review_cycle.source_assertions import (
     ScopeBoundaryManifestContext,
     ScopeBoundaryReview,
     SourceAssertion,
+    SourceAssertionManifest,
     SourceAssertionReview,
     SourceAssertionReviewReceipt,
     SourceInventoryReview,
@@ -127,9 +128,13 @@ class SourceQualifiedRunTests(unittest.TestCase):
             scope_id="sample-scope",
             repo_root=self.repo,
         )
+        self.compiled_extraction_spec_digest = compiled.extraction_spec.digest
+        self.compiled_baseline_digest = compiled.baseline.digest
+        self.compiled_candidate_count = compiled.baseline.candidate_count
         candidates = compiled.baseline.candidates
         self.assertEqual(3, len(candidates))
         xhtml_relative = self._relative(self.xhtml)
+        self.xhtml_relative = xhtml_relative
         rows = tuple(
             SourceRow(
                 source_row_id=f"SRC-{index:03d}",
@@ -143,6 +148,7 @@ class SourceQualifiedRunTests(unittest.TestCase):
             )
             for index, candidate in enumerate(candidates, 1)
         )
+        self.source_rows = rows
         testable = rows[1]
         testable_assertion = SourceAssertion(
             assertion_id="ASSERT-001",
@@ -216,15 +222,17 @@ class SourceQualifiedRunTests(unittest.TestCase):
             for index, row in enumerate((rows[0], rows[2]), 1)
         )
         assertions = (context_assertions[0], testable_assertion, context_assertions[1])
+        self.context_assertions = context_assertions
+        self.accepted_assertions = assertions
         manifest = build_source_assertion_manifest(
             self.repo,
             scope_slug="sample-scope",
             coverage_gaps_path=self._relative(self.coverage_gaps),
             source_paths=(xhtml_relative,),
             assertions=assertions,
-            source_row_extraction_spec_digest=compiled.extraction_spec.digest,
-            source_row_baseline_digest=compiled.baseline.digest,
-            source_row_candidate_count=compiled.baseline.candidate_count,
+            source_row_extraction_spec_digest=self.compiled_extraction_spec_digest,
+            source_row_baseline_digest=self.compiled_baseline_digest,
+            source_row_candidate_count=self.compiled_candidate_count,
             source_rows=rows,
             evidence_sources=(
                 (self._relative(self.docx), "semantic-source-of-truth"),
@@ -476,6 +484,109 @@ class SourceQualifiedRunTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def _source_review_receipt(
+        self,
+        manifest: SourceAssertionManifest,
+    ) -> SourceAssertionReviewReceipt:
+        return SourceAssertionReviewReceipt(
+            version=REVIEW_RECEIPT_VERSION,
+            manifest_digest=manifest.digest,
+            decision="accepted",
+            source_inventory_review=SourceInventoryReview(
+                extraction_spec_digest=manifest.source_row_extraction_spec_digest,
+                baseline_digest=manifest.source_row_baseline_digest,
+                candidate_count=manifest.source_row_candidate_count,
+                mapped_source_row_count=len(self.source_rows),
+                verdict="verified",
+                required_change=NO_REQUIRED_CHANGE,
+                note="The complete compiled source inventory was reviewed.",
+            ),
+            assertion_reviews=tuple(
+                SourceAssertionReview(
+                    assertion_id=item.assertion_id,
+                    approved_polarity=item.polarity,
+                    approved_semantic_disposition=item.semantic_disposition,
+                    approved_execution_readiness=item.execution_readiness,
+                    approved_risk=item.risk,
+                    dimension_verdicts={
+                        dimension: "verified"
+                        for dimension in SOURCE_REVIEW_DIMENSIONS
+                    },
+                    verdict="verified",
+                    required_change=NO_REQUIRED_CHANGE,
+                    note="Verified against the exact compiled source row.",
+                )
+                for item in manifest.assertions
+            ),
+            scope_boundary_review=ScopeBoundaryReview(
+                verdict="verified",
+                checked_context_classes=(
+                    "document-global-constraints",
+                    "ancestor-and-section-preamble",
+                    "cross-referenced-constraints",
+                ),
+                reviewed_manifest_contexts=(
+                    ScopeBoundaryManifestContext(
+                        context_class=self.source_rows[0].source_context_class,
+                        source_row_id=self.source_rows[0].source_row_id,
+                    ),
+                    ScopeBoundaryManifestContext(
+                        context_class=self.source_rows[2].source_context_class,
+                        source_row_id=self.source_rows[2].source_row_id,
+                    ),
+                ),
+                excluded_contexts=(
+                    ScopeBoundaryExclusion(
+                        context_class="document-global-constraints",
+                        source_path=self.xhtml_relative,
+                        source_sha256=hashlib.sha256(
+                            self.xhtml.read_bytes()
+                        ).hexdigest(),
+                        source_locator=scope_boundary_source_locator(
+                            self.xhtml_relative,
+                            "Global constraints reviewed outside the selected rows.",
+                        ),
+                        exact_source_text=(
+                            "Global constraints reviewed outside the selected rows."
+                        ),
+                        reason="Reviewed global context is outside the selected rows.",
+                    ),
+                ),
+                required_change=NO_REQUIRED_CHANGE,
+                note="All mandatory boundary context classes were reviewed.",
+            ),
+        )
+
+    def _write_accepted_source_contract(
+        self,
+        assertions: tuple[SourceAssertion, ...],
+    ) -> None:
+        manifest = build_source_assertion_manifest(
+            self.repo,
+            scope_slug="sample-scope",
+            coverage_gaps_path=self._relative(self.coverage_gaps),
+            source_paths=(self.xhtml_relative,),
+            assertions=assertions,
+            source_row_extraction_spec_digest=self.compiled_extraction_spec_digest,
+            source_row_baseline_digest=self.compiled_baseline_digest,
+            source_row_candidate_count=self.compiled_candidate_count,
+            source_rows=self.source_rows,
+            evidence_sources=(
+                (self._relative(self.docx), "semantic-source-of-truth"),
+                (self._relative(self.support), "supporting-material"),
+            ),
+            expected_source_rows=self.source_rows,
+        )
+        receipt = self._source_review_receipt(manifest)
+        self.accepted_manifest = manifest
+        self.accepted_assertions = assertions
+        self.source_evidence.write_text(
+            "# Accepted source evidence\n\n"
+            + render_embedded_source_assertion_contract(manifest, receipt)
+            + "\n",
+            encoding="utf-8",
+        )
+
     def _run(self, output: Path) -> tuple[int, str, str]:
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -503,12 +614,72 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self,
         *,
         account_for_source_signals: bool = True,
+        materialize_gap_artifact: bool = True,
     ) -> Path:
-        if account_for_source_signals:
-            signal_gap_ids = (
-                "GAP-SRC-002-EXCLUSIVE-LOCATION",
-                "GAP-SRC-002-TEXT-SYMBOLS",
+        signal_gap_ids = (
+            "GAP-SRC-002-EXCLUSIVE-LOCATION",
+            "GAP-SRC-002-TEXT-SYMBOLS",
+        )
+        if account_for_source_signals and materialize_gap_artifact:
+            registry_payload = self._registry_payload()
+            registry_payload["scopes"][0]["gap_ids"] = list(signal_gap_ids)
+            self._write_json(self.registry, registry_payload)
+            self.coverage_gaps.write_text(
+                "# Coverage Gaps\n\n"
+                "## GAP-SRC-002-EXCLUSIVE-LOCATION\n\n"
+                "**gap_id:** GAP-SRC-002-EXCLUSIVE-LOCATION\n"
+                "**requirement_codes:** BSR 1\n"
+                "**status:** open\n"
+                "**impact:** non-blocking\n"
+                "**blocks_ready_for_review:** no\n"
+                "**affected_assertion_id:** ASSERT-001\n"
+                "**affected_atom_id:** ATOM-001\n\n"
+                "- Source refs: SRC-002; BSR 1\n"
+                "- Problem: source row contains exclusive location visibility semantics; "
+                "this synthetic fixture does not model the outside-block branch.\n"
+                "- Handling: keep the visibility-only case testable and route the "
+                "exclusive outside-block branch to a source-bound gap.\n\n"
+                "## GAP-SRC-002-TEXT-SYMBOLS\n\n"
+                "**gap_id:** GAP-SRC-002-TEXT-SYMBOLS\n"
+                "**requirement_codes:** BSR 1\n"
+                "**status:** open\n"
+                "**impact:** non-blocking\n"
+                "**blocks_ready_for_review:** no\n"
+                "**affected_assertion_id:** ASSERT-001\n"
+                "**affected_atom_id:** ATOM-001\n\n"
+                "- Source refs: SRC-002; BSR 1\n"
+                "- Problem: source row contains only text symbols / hyphen input "
+                "restriction; this synthetic fixture does not model negative digit "
+                "or invalid special-symbol classes.\n"
+                "- Handling: do not let writer silently drop the text-symbol "
+                "restriction; route it to this source-bound gap.\n",
+                encoding="utf-8",
             )
+        else:
+            registry_payload = self._registry_payload()
+            registry_payload["scopes"][0]["gap_ids"] = []
+            self._write_json(self.registry, registry_payload)
+            self.coverage_gaps.write_text(
+                "# Coverage Gaps\n\nNo gaps.\n",
+                encoding="utf-8",
+            )
+
+        source_faithful_assertion = replace(
+            self.testable_assertion,
+            condition_clauses=("Open the client card.",),
+            action_clauses=("Open the client data block.",),
+            execution_dependency_gap_ids=(),
+        )
+        self.testable_assertion = source_faithful_assertion
+        self._write_accepted_source_contract(
+            (
+                self.context_assertions[0],
+                source_faithful_assertion,
+                self.context_assertions[1],
+            )
+        )
+
+        if account_for_source_signals:
             prepared_obligations = tuple(
                 replace(item, constraint_gap_ids=signal_gap_ids)
                 if item.obligation_id == "OBL-001"
@@ -548,6 +719,15 @@ class SourceQualifiedRunTests(unittest.TestCase):
                         blocking=False,
                     ),
                 ),
+                evidence_text=self.source_evidence.read_text(encoding="utf-8"),
+            )
+            self.prepared_obligations = obligations
+            write_json_atomic(self.obligations, obligations.to_dict())
+        else:
+            obligations = PreparedObligationSet.create(
+                package_id="WP-01",
+                obligations=self.prepared_obligations.obligations,
+                coverage_gaps=(),
                 evidence_text=self.source_evidence.read_text(encoding="utf-8"),
             )
             self.prepared_obligations = obligations
@@ -642,6 +822,19 @@ class SourceQualifiedRunTests(unittest.TestCase):
             + "\n```\n",
             encoding="utf-8",
         )
+        self._write_json(
+            self.config,
+            {
+                "schema_version": 2,
+                "registry": self._relative(self.registry),
+                "ft_root": self._relative(self.ft),
+                "scope": "sample-scope",
+                "source_evidence": self._relative(self.source_evidence),
+                "obligations": self._relative(self.obligations),
+            },
+        )
+        if not (account_for_source_signals and materialize_gap_artifact):
+            return semantic_path
         compiled = compile_property_derivations(
             repo_root=self.repo,
             ft_slug="sample",
@@ -905,8 +1098,42 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertEqual("blocked-contract", terminal["status"])
         self.assertEqual("source-contract-binding", terminal["failed_stage"])
         self.assertIn("source-semantic-signal-uncovered", diagnostic["message"])
-        self.assertIn("exclusive text/symbol input restriction", diagnostic["message"])
-        self.assertIn("exclusive location visibility", diagnostic["message"])
+        self.assertIn("exclusive-location-visibility", diagnostic["message"])
+        self.assertIn("format/digits", diagnostic["message"])
+        self.assertIn(
+            "format/special-characters-other-than-hyphen",
+            diagnostic["message"],
+        )
+        self.assertFalse((output / "iteration").exists())
+
+    def test_v2_rejects_prepared_gap_not_registered_in_coverage_artifact(
+        self,
+    ) -> None:
+        self._enable_v2_generated_derivations(
+            account_for_source_signals=True,
+            materialize_gap_artifact=False,
+        )
+        output = (
+            self.ft
+            / "work"
+            / "source-qualified-runs"
+            / "run-v2-unregistered-gap"
+        )
+
+        exit_code, _, stderr = self._run(output)
+
+        self.assertEqual(2, exit_code)
+        self.assertIn("contract-error", stderr)
+        terminal = json.loads(
+            (output / "terminal-summary.json").read_text(encoding="utf-8")
+        )
+        diagnostic = json.loads(
+            (output / "diagnostic.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual("blocked-contract", terminal["status"])
+        self.assertEqual("source-contract-binding", terminal["failed_stage"])
+        self.assertIn("source-semantic-signal-uncovered", diagnostic["message"])
+        self.assertIn("registered source-bound GAP", diagnostic["message"])
         self.assertFalse((output / "iteration").exists())
 
     def test_calibration_pending_terminal_is_success_and_remains_non_promotable(

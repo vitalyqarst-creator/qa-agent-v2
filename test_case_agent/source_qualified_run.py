@@ -124,17 +124,6 @@ _ITERATION_STATUS_CATEGORIES = {
 _SUCCESSFUL_ITERATION_STATUSES = frozenset(
     {"accepted-shadow", "accepted-with-calibration-pending"}
 )
-_TEXT_ONLY_SYMBOL_SIGNAL = re.compile(
-    r"(?:только\s+текстов\w*\s+символ|"
-    r"ввод\s+только\s+текстов\w*|"
-    r"only\s+text\s+(?:characters|symbols))",
-    re.IGNORECASE,
-)
-_EXCLUSIVE_LOCATION_SIGNAL = re.compile(
-    r"(?:только\s+в\s+(?:блоке|разделе|секции|форме|поле)|"
-    r"only\s+in\s+(?:the\s+)?(?:block|section|form|field))",
-    re.IGNORECASE,
-)
 
 
 class SourceQualifiedRunError(ValueError):
@@ -594,148 +583,6 @@ def _verify_input_bindings(
             )
 
 
-def _prepared_coverage_text_for_source_row(
-    *,
-    obligations: Any,
-    source_row_id: str,
-    requirement_codes: Sequence[str],
-) -> str:
-    references = {source_row_id, *requirement_codes}
-    parts: list[str] = []
-    for item in obligations.obligations:
-        if references.intersection(item.source_refs):
-            parts.extend(
-                (
-                    item.obligation_id,
-                    item.traceability_atom_id,
-                    " ".join(item.source_refs),
-                    item.atomic_statement,
-                    item.observable_oracle,
-                    item.test_intent,
-                    item.notes,
-                    " ".join(item.constraint_gap_ids),
-                    item.gap_id,
-                    item.calibration_status,
-                )
-            )
-    for gap in obligations.coverage_gaps:
-        if references.intersection(gap.source_refs):
-            parts.extend(
-                (
-                    gap.gap_id,
-                    " ".join(gap.source_refs),
-                    gap.problem,
-                    gap.handling,
-                    "blocking-gap" if gap.blocking else "non-blocking-gap",
-                )
-            )
-    return "\n".join(part for part in parts if part)
-
-
-def _covers_text_only_symbol_signal(text: str) -> bool:
-    normalized = text.casefold()
-    names_allowed_class = (
-        "текст" in normalized
-        or "text" in normalized
-    ) and (
-        "символ" in normalized
-        or "character" in normalized
-        or "symbol" in normalized
-        or "дефис" in normalized
-        or "hyphen" in normalized
-    )
-    names_restriction = any(
-        token in normalized
-        for token in (
-            "только",
-            "only",
-            "недопуст",
-            "invalid",
-            "reject",
-            "не принима",
-            "не допуска",
-            "запрещ",
-            "цифр",
-            "digit",
-            "спец",
-            "special",
-            "gap-",
-        )
-    )
-    return names_allowed_class and names_restriction
-
-
-def _covers_exclusive_location_signal(text: str) -> bool:
-    normalized = text.casefold()
-    names_visibility = any(
-        token in normalized
-        for token in ("видим", "отображ", "visible", "display")
-    )
-    names_exclusivity = any(
-        token in normalized
-        for token in (
-            "только в",
-            "only in",
-            "вне",
-            "outside",
-            "не отображ",
-            "not visible",
-            "exclusive",
-            "gap-",
-        )
-    )
-    return names_visibility and names_exclusivity
-
-
-def _validate_v2_source_semantic_signal_accounting(
-    *,
-    manifest: SourceAssertionManifest,
-    obligations: Any,
-) -> None:
-    """Fail closed when schema-v2 prepared inputs silently drop high-risk row signals.
-
-    The accepted source contract and prepared obligations are trusted inputs for the
-    model writer.  If an exact XHTML row contains a compact but independently
-    testable signal such as "only text symbols" or "visible only in block", the
-    prepared package must either expose an obligation for that signal or explicitly
-    route it to a source-bound gap.  A reviewer can catch this later, but allowing
-    the writer to run first wastes time and can produce plausible-but-incomplete
-    test cases.
-    """
-
-    findings: list[str] = []
-    for row in manifest.source_rows:
-        source_text = row.bounded_source_text
-        if not source_text:
-            continue
-        coverage_text = _prepared_coverage_text_for_source_row(
-            obligations=obligations,
-            source_row_id=row.source_row_id,
-            requirement_codes=row.requirement_codes,
-        )
-        if _TEXT_ONLY_SYMBOL_SIGNAL.search(source_text) and not (
-            _covers_text_only_symbol_signal(coverage_text)
-        ):
-            findings.append(
-                f"{row.source_row_id}: exclusive text/symbol input restriction is "
-                "not represented by a prepared obligation or source-bound gap"
-            )
-        if _EXCLUSIVE_LOCATION_SIGNAL.search(source_text) and not (
-            _covers_exclusive_location_signal(coverage_text)
-        ):
-            findings.append(
-                f"{row.source_row_id}: exclusive location visibility is not "
-                "represented by a prepared obligation or source-bound gap"
-            )
-    if findings:
-        _fail(
-            "source-semantic-signal-uncovered",
-            "schema-v2 source semantics lost before writer: "
-            + "; ".join(findings),
-            stage="source-contract-binding",
-        )
-
-
 def _write_terminal_failure(
     *,
     repo_root: Path,
@@ -1015,10 +862,6 @@ def _run_source_qualified_scope(
                 semantic_projection=extract_semantic_compiler_projection(
                     evidence_text
                 ),
-            )
-            _validate_v2_source_semantic_signal_accounting(
-                manifest=contract.manifest,
-                obligations=obligations,
             )
             generated_derivation_path = (
                 bindings_dir / "generated-property-derivations.json"

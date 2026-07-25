@@ -22,6 +22,9 @@ from test_case_agent.review_cycle.source_assertions import (
     SourceAssertion,
     SourceAssertionManifest,
 )
+from test_case_agent.semantic_design_bridge import (
+    semantic_source_signal_registry_from_rows,
+)
 
 
 SEMANTIC_PROJECTION_CONTRACT = "semantic-design-compiler-projection-v1"
@@ -42,6 +45,7 @@ _PROJECTION_FIELDS = {
     "requiredness_oracles",
     "oracle_inventories",
 }
+_GAP_ID = re.compile(r"\bGAP-[A-Za-z0-9._-]+\b")
 
 
 class DerivationCompilationError(ValueError):
@@ -489,6 +493,159 @@ def _oracle_bindings(
     return oracle_ids, questions
 
 
+def _semantic_source_signal_registry(
+    manifest: SourceAssertionManifest,
+) -> dict[str, list[dict[str, Any]]]:
+    rows: list[dict[str, Any]] = []
+    code_registry: dict[str, list[str]] = {}
+    for row in manifest.source_rows:
+        codes = list(row.requirement_codes)
+        rows.append(
+            {
+                "source_row_id": row.source_row_id,
+                "source_ref": "; ".join(codes) if codes else row.source_row_id,
+                "field_or_action": row.source_row_id,
+                "bounded_source_text": row.bounded_source_text,
+            }
+        )
+        code_registry[row.source_row_id] = codes
+    return semantic_source_signal_registry_from_rows(rows, code_registry)
+
+
+def _coverage_gap_artifact_ids(
+    *,
+    repo_root: Path,
+    manifest: SourceAssertionManifest,
+) -> set[str]:
+    artifact = manifest.coverage_gaps_artifact
+    path_text = artifact.path
+    posix = PurePosixPath(path_text)
+    if (
+        posix.is_absolute()
+        or "\\" in path_text
+        or any(part in {"", ".", ".."} for part in posix.parts)
+        or posix.as_posix() != path_text
+    ):
+        _fail("unsafe-coverage-gap-path", "coverage gap artifact path is unsafe")
+    path = (repo_root / Path(*posix.parts)).resolve()
+    try:
+        path.relative_to(repo_root)
+    except ValueError:
+        _fail("unsafe-coverage-gap-path", "coverage gap artifact escapes repository")
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        _fail("coverage-gap-artifact-read-error", str(exc))
+    if hashlib.sha256(raw).hexdigest() != artifact.sha256:
+        _fail("coverage-gap-artifact-drift", "coverage gap artifact hash mismatch")
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeError as exc:
+        _fail("coverage-gap-artifact-utf8", str(exc))
+    return set(_GAP_ID.findall(text))
+
+
+def _signal_refs(signal: Mapping[str, Any]) -> set[str]:
+    refs = {str(signal.get("source_row_id", ""))}
+    refs.update(map(str, signal.get("requirement_codes", []) or []))
+    refs.discard("")
+    return refs
+
+
+def _signal_has_registered_gap(
+    *,
+    signal: Mapping[str, Any],
+    obligation_set: PreparedObligationSet,
+    materialized_gap_ids: set[str],
+) -> bool:
+    refs = _signal_refs(signal)
+    for gap in obligation_set.coverage_gaps:
+        if (
+            gap.gap_id in materialized_gap_ids
+            and refs.intersection(gap.source_refs)
+        ):
+            return True
+    return False
+
+
+def _projection_oracles_by_signal(
+    projection: Mapping[str, Any],
+    collection: str,
+) -> dict[str, Mapping[str, Any]]:
+    result: dict[str, Mapping[str, Any]] = {}
+    for index, raw in enumerate(_array(projection.get(collection), collection)):
+        item = _object(raw, f"{collection}[{index}]")
+        signal_id = _typed(item.get("signal_id"), f"{collection}[{index}].signal_id")
+        if signal_id in result:
+            _fail("duplicate-source-signal-oracle", signal_id)
+        result[signal_id] = item
+    return result
+
+
+def _validate_source_signal_accounting(
+    *,
+    repo_root: Path,
+    manifest: SourceAssertionManifest,
+    obligation_set: PreparedObligationSet,
+    projection: Mapping[str, Any],
+    expected_obligations: set[str],
+) -> None:
+    registry = _semantic_source_signal_registry(manifest)
+    materialized_gap_ids = _coverage_gap_artifact_ids(
+        repo_root=repo_root,
+        manifest=manifest,
+    )
+    projection_oracles = {
+        "negative": _projection_oracles_by_signal(projection, "negative_oracles"),
+        "requiredness": _projection_oracles_by_signal(
+            projection,
+            "requiredness_oracles",
+        ),
+    }
+    findings: list[str] = []
+    for signal_kind, signals in registry.items():
+        for signal in signals:
+            signal_id = str(signal.get("signal_id", ""))
+            oracle = projection_oracles[signal_kind].get(signal_id)
+            if oracle is not None:
+                linked_obligation = _typed(
+                    oracle.get("linked_obligation_id"),
+                    f"{signal_id}.linked_obligation_id",
+                )
+                if linked_obligation not in expected_obligations:
+                    findings.append(
+                        f"{signal_id}: linked obligation {linked_obligation} is "
+                        "not in the accepted testable source assertion set"
+                    )
+                continue
+            if _signal_has_registered_gap(
+                signal=signal,
+                obligation_set=obligation_set,
+                materialized_gap_ids=materialized_gap_ids,
+            ):
+                continue
+            signal_description = str(signal.get("restriction_type", signal_kind))
+            negative_class = str(signal.get("negative_class", "")).strip()
+            representative = str(
+                signal.get("representative_invalid_value", "")
+            ).strip()
+            if negative_class:
+                signal_description += f"/{negative_class}"
+            if representative:
+                signal_description += f" example={representative!r}"
+            findings.append(
+                f"{signal_id}: {signal_description} from "
+                f"{signal.get('source_row_id', '')} is not represented by a "
+                "semantic oracle or registered source-bound GAP"
+            )
+    if findings:
+        _fail(
+            "source-semantic-signal-uncovered",
+            "schema-v2 source semantics lost before writer: "
+            + "; ".join(findings),
+        )
+
+
 def compile_property_derivations(
     *,
     repo_root: Path,
@@ -587,6 +744,13 @@ def compile_property_derivations(
             "obligation-set-mismatch",
             "semantic obligation set must equal accepted testable assertions",
         )
+    _validate_source_signal_accounting(
+        repo_root=repo_root,
+        manifest=source_manifest,
+        obligation_set=obligation_set,
+        projection=semantic_projection,
+        expected_obligations=expected_obligations,
+    )
     missing_prepared = expected_obligations - set(prepared_by_id)
     if missing_prepared:
         _fail(

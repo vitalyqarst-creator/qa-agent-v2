@@ -15536,6 +15536,13 @@ _BINARY_LOGICAL_DEFAULT_PATTERN = re.compile(
     r"значение\s+по\s+умолчанию\s+«(?P<value>Да|Нет)»",
     re.IGNORECASE,
 )
+_EXCLUSIVE_LOCATION_VISIBILITY_PATTERN = re.compile(
+    r"(?:видим\w*|отображ\w*|visible|displayed)"
+    r"[^.;]{0,120}?"
+    r"(?:только\s+в|only\s+in)"
+    r"[^.;]{0,120}",
+    re.IGNORECASE,
+)
 
 
 def _binary_logical_default(
@@ -15699,6 +15706,18 @@ def _source_signal_registry(
                         "",
                     )
                 )
+        for match in _EXCLUSIVE_LOCATION_VISIBILITY_PATTERN.finditer(text):
+            matches.append(
+                (
+                    match.start(),
+                    match.end(),
+                    len(classified),
+                    "exclusive-location-visibility",
+                    match.group(0),
+                    "outside-declared-location",
+                    "outside the declared location",
+                )
+            )
         matches.sort(key=lambda item: (item[0], item[1], item[2], item[3]))
         for (
             _start,
@@ -15721,11 +15740,16 @@ def _source_signal_registry(
                     "literal_anchor": anchor,
                 }
             if negative_class:
+                source_binding = (
+                    "exclusive-location-visibility-restriction"
+                    if restriction_type == "exclusive-location-visibility"
+                    else "exclusive-symbol-class-restriction"
+                )
                 signal.update(
                     {
                         "negative_class": negative_class,
                         "representative_invalid_value": representative_invalid_value,
-                        "source_binding": "exclusive-symbol-class-restriction",
+                        "source_binding": source_binding,
                     }
                 )
             negative.append(signal)
@@ -15876,6 +15900,15 @@ def semantic_source_signal_registry(
         for item in boundary["source_decisions"]
     }
     return _source_signal_registry(eligible_rows, code_registry)
+
+
+def semantic_source_signal_registry_from_rows(
+    rows: Sequence[Mapping[str, Any]],
+    code_registry: Mapping[str, Sequence[str]],
+) -> dict[str, list[dict[str, Any]]]:
+    """Return the same source-signal registry for already authenticated rows."""
+
+    return _source_signal_registry(rows, code_registry)
 
 
 def _eligible_semantic_rows(
@@ -18082,6 +18115,7 @@ __all__ = [
     "semantic_design_transport_diagnostics",
     "semantic_design_output_schema",
     "semantic_design_prompt",
+    "semantic_source_signal_registry_from_rows",
     "validate_bridge_boundary",
     "validate_semantic_input_preflight",
     "validate_semantic_design_binding",

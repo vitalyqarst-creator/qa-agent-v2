@@ -5563,6 +5563,35 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             )
         )
 
+    def test_signal_registry_marks_exclusive_location_visibility(self) -> None:
+        registry = _source_signal_registry(
+            [
+                {
+                    "source_row_id": "SRC-001",
+                    "source_ref": "BSR 1",
+                    "field_or_action": "Имя клиента",
+                    "bounded_source_text": (
+                        "BSR 1. Поле имени клиента visible только в блоке "
+                        "данных клиента."
+                    ),
+                }
+            ],
+            {"SRC-001": ["BSR 1"]},
+        )
+
+        self.assertEqual(
+            ["exclusive-location-visibility"],
+            [item["restriction_type"] for item in registry["negative"]],
+        )
+        self.assertEqual(
+            ["outside-declared-location"],
+            [item["negative_class"] for item in registry["negative"]],
+        )
+        self.assertEqual(
+            ["exclusive-location-visibility-restriction"],
+            [item["source_binding"] for item in registry["negative"]],
+        )
+
     def test_transport_normalizer_binds_signal_identity_to_source_row(self) -> None:
         raw = {
             "source_designs": [],
