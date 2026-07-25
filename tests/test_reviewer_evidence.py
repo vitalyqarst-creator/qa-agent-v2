@@ -442,6 +442,18 @@ class ReviewerEvidenceTests(unittest.TestCase):
         self.assertEqual([], payload["coverage_gaps"]["registered_gap_ids"])
         self.assertIn("No gaps.", payload["coverage_gaps"]["content"])
 
+    def test_reviewer_pack_omits_duplicate_draft_markdown_but_keeps_digest_and_designs(self) -> None:
+        payload = self._pack().to_dict()
+        test_cases = payload["test_cases"]
+
+        self.assertNotIn("draft_markdown", test_cases)
+        self.assertFalse(test_cases["draft_markdown_included"])
+        self.assertEqual(
+            payload["identity"]["draft_sha256"],
+            test_cases["draft_sha256"],
+        )
+        self.assertGreater(len(test_cases["designs"]), 0)
+
     def test_source_review_attestation_exposes_digest_and_clarifications(self) -> None:
         from tests.test_source_assertions import (
             build_source_assertion_manifest as build_test_manifest,

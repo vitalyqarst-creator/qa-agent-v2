@@ -406,16 +406,20 @@ def _validate_reviewer_request(
         if not isinstance(test_cases, Mapping):
             raise _blocked("review-request-mismatch", "reviewer v2 test cases are invalid")
         draft_markdown = test_cases.get("draft_markdown")
+        draft_sha256 = test_cases.get("draft_sha256")
         designs = test_cases.get("designs")
-        if (
-            not isinstance(draft_markdown, str)
-            or hashlib.sha256(draft_markdown.encode("utf-8")).hexdigest()
-            != candidate_sha256
-            or not isinstance(designs, list)
-        ):
+        draft_bound = False
+        if isinstance(draft_markdown, str):
+            draft_bound = (
+                hashlib.sha256(draft_markdown.encode("utf-8")).hexdigest()
+                == candidate_sha256
+            )
+        elif isinstance(draft_sha256, str):
+            draft_bound = draft_sha256 == candidate_sha256
+        if not draft_bound or not isinstance(designs, list):
             raise _blocked(
                 "review-request-mismatch",
-                "reviewer v2 full draft is not bound to the candidate",
+                "reviewer v2 test-case evidence is not bound to the candidate",
             )
         expected_design_bindings = sorted(
             (case_key, tc_id, status)

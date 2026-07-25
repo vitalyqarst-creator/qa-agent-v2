@@ -178,9 +178,20 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "reviewer_evidence_pack.source_structure.source_review_attestation, "
     "the complete registered coverage-gap artifact, accepted clarification records "
     "and every supporting cross-row evidence edge as binding review evidence; "
+    "test_cases.draft_markdown is intentionally omitted from compact reviewer "
+    "context; the gate-passed markdown is bound by draft_sha256, and the complete "
+    "reviewable runtime content is in test_cases.designs. Review those structured "
+    "titles, preconditions, test_data, steps, expected_result, postconditions, "
+    "status, traceability, and calibration_question fields as the test-case text. "
     "enforce each gap's temporary handling and do-not-test rule. Keep each case's "
     "primary coverage chain atomic, and review every role-tagged design-support "
     "chain where a sibling obligation is materialized in setup, action, or cleanup. "
+    "A postcondition cleanup that deletes the test row created by this TC is "
+    "valid when it is bound to a source-backed same-row delete action; do not "
+    "require separate final-row lifecycle evidence for cleanup-state restoration, "
+    "and do not classify such cleanup as an unsupported product oracle unless the "
+    "cleanup contradicts literal source or asserts business behavior beyond row "
+    "removal. "
     "For every behavioral case, try to construct a defective implementation under "
     "source-consistent inputs and preconditions that violates the bound rule but "
     "still passes the TC, a behavior conforming to all supplied evidence that would "
@@ -294,6 +305,7 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "registered_coverage_gaps_are_binding": True,
                 "supporting_source_bindings_must_be_reviewed": True,
                 "design_support_chains_must_be_reviewed": True,
+                "source_bound_cleanup_restoration_is_allowed": True,
                 "test_case_findings_require_exact_binding_role": True,
                 "primary_coverage_mapping_is_one_per_case": True,
                 "adversarial_false_pass_check": True,
@@ -301,6 +313,7 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "failure_attribution_check": True,
                 "trigger_fidelity_check": True,
                 "probe_findings_require_concrete_witness": True,
+                "probe_findings_require_exact_probe_binding": True,
                 "probe_findings_require_same_chain_bound_finding": True,
                 "related_probe_findings_may_share_same_case_root_finding": True,
                 "per_probe_evidence_chain_binding_required": True,
@@ -310,6 +323,8 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "live_falsification_receipt_allows_not_recorded": False,
                 "benchmark_context_available": False,
                 "review_history_available": False,
+                "compact_reviewer_context_uses_structured_test_cases": True,
+                "draft_markdown_bound_by_sha256_not_model_context": True,
                 "one_oracle_polarity_per_case": True,
                 "positive_tc_must_not_expect_rejection": True,
                 "input_restrictions_require_equivalence_classes": True,

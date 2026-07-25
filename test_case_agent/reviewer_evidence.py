@@ -2549,7 +2549,13 @@ def build_reviewer_evidence_pack(
         "mockup_attachments": mockup_attachments,
         "normalized_projection": graph.to_dict(),
         "test_cases": {
-            "draft_markdown": draft_markdown,
+            "draft_sha256": draft_sha256,
+            "draft_markdown_included": False,
+            "draft_markdown_omitted_reason": (
+                "The gate-passed markdown is bound by identity.draft_sha256; "
+                "reviewer receives the same runtime TC fields in structured "
+                "designs to avoid duplicating large prompt text."
+            ),
             "designs": [item.to_dict() for item in case_designs],
         },
         "coverage_mapping": coverage_mapping,

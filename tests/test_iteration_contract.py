@@ -256,7 +256,12 @@ def _v2_pack(graph, cases, gate, markdown):  # type: ignore[no-untyped-def]
         "mockup_attachments": [],
         "normalized_projection": graph.to_dict(),
         "test_cases": {
-            "draft_markdown": markdown,
+            "draft_sha256": gate.draft_sha256,
+            "draft_markdown_included": False,
+            "draft_markdown_omitted_reason": (
+                "The gate-passed markdown is bound by identity.draft_sha256; "
+                "reviewer receives structured designs."
+            ),
             "designs": [item.to_dict() for item in cases],
         },
         "coverage_mapping": [
@@ -1514,6 +1519,10 @@ class IterationContractTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("old_test_cases", request)
+        test_cases = request["reviewer_evidence_pack"]["test_cases"]
+        self.assertNotIn("draft_markdown", test_cases)
+        self.assertEqual(gate.draft_sha256, test_cases["draft_sha256"])
+        self.assertFalse(test_cases["draft_markdown_included"])
         acceptance = request["reviewer_evidence_pack"]["acceptance"]
         self.assertEqual(2, acceptance["reviewer_policy_version"])
         self.assertFalse(acceptance["review_only_projected_behavior"])
@@ -1534,6 +1543,9 @@ class IterationContractTests(unittest.TestCase):
             acceptance["supporting_source_bindings_must_be_reviewed"]
         )
         self.assertTrue(acceptance["design_support_chains_must_be_reviewed"])
+        self.assertTrue(
+            acceptance["source_bound_cleanup_restoration_is_allowed"]
+        )
         self.assertTrue(
             acceptance["test_case_findings_require_exact_binding_role"]
         )
@@ -1575,6 +1587,12 @@ class IterationContractTests(unittest.TestCase):
             ]
         )
         self.assertTrue(acceptance["priority_must_follow_source_bound_risk"])
+        self.assertTrue(
+            acceptance["compact_reviewer_context_uses_structured_test_cases"]
+        )
+        self.assertTrue(
+            acceptance["draft_markdown_bound_by_sha256_not_model_context"]
+        )
         self.assertIn("never return only changed", reviewer_prompt_instruction(2))
         self.assertIn("one dominant oracle polarity", reviewer_prompt_instruction(2))
         self.assertIn("whitespace", reviewer_prompt_instruction(2))
@@ -1585,6 +1603,10 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("Latin letters are a supported positive representative", reviewer_prompt_instruction(2))
         self.assertIn("priority follows source-bound risk", reviewer_prompt_instruction(2))
         self.assertIn("changes-required requires", reviewer_prompt_instruction(2))
+        self.assertIn("draft_markdown is intentionally omitted", reviewer_prompt_instruction(2))
+        self.assertIn("test_cases.designs", reviewer_prompt_instruction(2))
+        self.assertIn("source-backed same-row delete action", reviewer_prompt_instruction(2))
+        self.assertIn("do not require separate final-row lifecycle evidence", reviewer_prompt_instruction(2))
         self.assertIn("source_projection_findings", schema["properties"])
         self.assertIn("test_case_findings", schema["properties"])
         self.assertEqual(1, schema["properties"]["case_results"]["minItems"])

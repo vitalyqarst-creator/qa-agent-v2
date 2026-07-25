@@ -561,6 +561,29 @@ class PromotionAdapterTests(unittest.TestCase):
             self.response["evidence_pack_sha256"],
         )
 
+    def test_v2_promotion_accepts_compact_pack_without_duplicate_draft_markdown(self) -> None:
+        pack, _mockup = self._upgrade_to_v2()
+        compact_pack = copy.deepcopy(pack)
+        test_cases = compact_pack["test_cases"]
+        test_cases.pop("draft_markdown", None)
+        test_cases["draft_sha256"] = sha256_path(self.candidate)
+        test_cases["draft_markdown_included"] = False
+        test_cases["draft_markdown_omitted_reason"] = (
+            "The gate-passed markdown is bound by identity.draft_sha256; "
+            "reviewer receives the same runtime TC fields in structured "
+            "designs to avoid duplicating large prompt text."
+        )
+        self.request["reviewer_evidence_pack"] = compact_pack
+        self.request["evidence_pack_sha256"] = _canonical_digest(compact_pack)
+        self.response["evidence_pack_sha256"] = self.request["evidence_pack_sha256"]
+        _write_json(self.cycle / "reviewer-evidence-pack.json", compact_pack)
+        self._rewrite_v2_contract()
+        self._rewrite_response()
+
+        result = self.prepare()
+
+        self.assertEqual("eligible-built", result.status)
+
     def test_v2_rejects_evidence_artifact_or_digest_drift(self) -> None:
         pack, _mockup = self._upgrade_to_v2()
         changed = dict(pack)
