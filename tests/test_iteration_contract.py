@@ -1661,6 +1661,67 @@ class IterationContractTests(unittest.TestCase):
         self.assertFalse(gate.passed)
         self.assertIn("display number missing or duplicated", " ".join(gate.findings))
 
+    def test_suite_gate_requires_scope_entrypoint_preconditions(self) -> None:
+        base_graph = _graph()
+        graph = replace(
+            base_graph,
+            properties=(
+                *base_graph.properties,
+                CoverageProperty(
+                    property_id="PROP-CARD-ENTRYPOINT",
+                    assertion_id="ASSERT-CARD-ENTRYPOINT",
+                    property_key="application-card:entrypoint",
+                    subject_key="application-card",
+                    property_kind="context",
+                    source_row_id="SRC-CARD-ENTRYPOINT",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[0]/*[2]",
+                    source_text_sha256="f" * 64,
+                    canonical_statement="Открыть карточку `Заявка`.",
+                    requirement_codes=(),
+                    disposition="not-applicable",
+                ),
+                CoverageProperty(
+                    property_id="PROP-BLOCK-ENTRYPOINT",
+                    assertion_id="ASSERT-BLOCK-ENTRYPOINT",
+                    property_key="contact-persons:block-entrypoint",
+                    subject_key="contact-persons",
+                    property_kind="context",
+                    source_row_id="SRC-BLOCK-ENTRYPOINT",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[0]/*[3]",
+                    source_text_sha256="f" * 64,
+                    canonical_statement="Перейти к блоку `Контактные лица`.",
+                    requirement_codes=(),
+                    disposition="not-applicable",
+                ),
+            ),
+        )
+        context = replace(
+            _context(),
+            base_preconditions=(
+                "Открыть карточку `Заявка`.",
+                "Перейти к блоку `Контактные лица`.",
+            ),
+        )
+        plan = build_test_design_plan(graph, context=context)
+        broken_case = replace(
+            plan.deterministic_cases[0],
+            preconditions=("Перейти к блоку `Контактные лица`.",),
+        )
+        markdown = render_test_cases((broken_case,), scope_title=context.scope_title)
+
+        gate = validate_suite(
+            graph=graph,
+            cases=(broken_case,),
+            markdown=markdown,
+            checked_path="shadow.md",
+            context=context,
+        )
+
+        self.assertFalse(gate.passed)
+        self.assertIn("scope entrypoint precondition missing", " ".join(gate.findings))
+
     def test_reviewer_request_is_compact_source_first_projection(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

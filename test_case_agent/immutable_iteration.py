@@ -313,6 +313,10 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
                 "use passive state-only preconditions such as `Открыта карточка "
                 "...`, `Поле доступно ...`, or `Блок отображается ...`. Each setup "
                 "action must name one exact source-backed UI control/action path. "
+                "Do not remove or reorder seed_runtime preconditions that open "
+                "the parent card/form and then navigate to the scope block; a "
+                "block-level navigation step is not a replacement for opening "
+                "the containing card/form when both are present in the seed. "
                 "Do not list alternative controls/actions joined by `или` or `/`, "
                 "for example `Дважды нажать виджет + или кнопку Добавить контактное "
                 "лицо`. If several controls are present in source/mockup context, "
@@ -1890,6 +1894,7 @@ def run_immutable_iteration(
                 cases=cases,
                 markdown=markdown,
                 checked_path=str(draft_path),
+                context=context,
                 case_status_overrides=(
                     {
                         item.case_key: item.status

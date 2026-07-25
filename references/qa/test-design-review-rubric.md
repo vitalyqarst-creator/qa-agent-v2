@@ -143,6 +143,7 @@ source/TC-backed design defect, доказанный самими артефак
 - Final TC uses generic test data placeholders instead of concrete values or a defined setup/fixture profile.
 - Numbered preconditions are passive states instead of action-oriented setup or a defined setup profile.
 - Production TC under `fts/**/test-cases/*.md` is not self-contained: setup profile reference, stand/environment wording, package-name leakage, missing reveal action for action-created fields, or embedded diagnostic/design sections.
+- Scope entry setup is inconsistent: if the source-backed design context contains parent card/form opening plus block navigation, every TC must keep both actions in the same order; block navigation alone is not a complete setup path.
 - Source-backed allowed-symbol/input restrictions omit independently derivable classes such as whitespace, alphabet/script class, special/disallowed symbols or length boundaries without a class-specific `GAP-*` / calibration candidate.
 - TC asserts Latin/Cyrillic/whitespace acceptance or rejection from an implementation observation or writer assumption rather than registered FT/support/UI evidence.
 - TC priority is a flat default or contradicts source-bound risk, especially for requiredness, validation, closed dictionaries, create/delete, integration, persistence, legal/financial fields or blocking transitions.
@@ -192,6 +193,7 @@ Reviewer обязан явно попытаться найти следующи�
 7ae. `unsupported-alphabet-assumption`: Latin/Cyrillic/whitespace behavior is asserted without registered FT/support/UI evidence.
 7af. `tc-priority-source-risk-mismatch`: priority is flat/defaulted or inconsistent with source-bound business risk.
 7ag. `implementation-observation-as-baseline`: exploratory implementation behavior is promoted to FT-first baseline without approved evidence.
+7ah. `scope-entrypoint-precondition-incomplete`: TC omits or reorders a source-backed parent card/form opening action before block navigation.
 8. `covered without TC`: atom/requirement имеет `coverage_status = covered`, но не связан ни с одним исполнимым `TC-*`.
 9. `package leakage`: `TC-*` смешивает независимые проверки из разных internal work packages.
 10. `set organization drift`: набор не сгруппирован по функциональности/блоку/элементу/операции или `TC-*` нумерация перезапускается внутри групп, содержит пропуски либо дубли.

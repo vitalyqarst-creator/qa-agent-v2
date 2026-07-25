@@ -257,7 +257,11 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "class and disallowed symbols when derivable from source. If the literal FT says "
     "`text symbols` / `текстовые символы` and does not restrict the script to "
     "Cyrillic/Russian, Latin letters are a supported positive representative; do "
-    "not reject them as an unsupported alphabet assumption. Unsupported integration "
+    "not reject them as an unsupported alphabet assumption. Enforce complete "
+    "scope-entry setup consistency: when the structured design context shows a "
+    "parent card/form opening action followed by block navigation, every TC must "
+    "keep both actions in that order; block navigation alone is not equivalent. "
+    "Unsupported integration "
     "or implementation observations must become narrow gaps or calibration notes, "
     "not FT-first baseline coverage. Check that priority follows source-bound "
     "risk instead of a flat default. Accepted requires every case's required status "
@@ -339,6 +343,7 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "one_oracle_polarity_per_case": True,
                 "positive_tc_must_not_expect_rejection": True,
                 "input_restrictions_require_equivalence_classes": True,
+                "scope_entrypoint_setup_must_be_complete_and_consistent": True,
                 "unsupported_alphabet_or_integration_observation_requires_gap": True,
                 "priority_must_follow_source_bound_risk": True,
             }
@@ -1976,12 +1981,34 @@ def validate_suite(
     cases: Sequence[TestCaseDesign],
     markdown: str,
     checked_path: str,
+    context: DesignContext | None = None,
     case_status_overrides: Mapping[str, str] | None = None,
 ) -> SuiteGateReport:
     expected = {item.case_key: item for item in graph.cases}
+    properties = {item.property_id: item for item in graph.properties}
+    obligations = {item.obligation_id: item for item in graph.obligations}
     allowed_status_overrides = dict(case_status_overrides or {})
     actual: dict[str, TestCaseDesign] = {}
     findings: list[str] = []
+    expected_entrypoints_by_case: dict[str, tuple[str, ...]] = {}
+    if context is not None:
+        try:
+            validate_design_context_for_graph(graph, context)
+            for graph_case in graph.cases:
+                primary_obligation = obligations[graph_case.obligation_ids[0]]
+                primary_property = properties[primary_obligation.property_id]
+                expected_runtime = runtime_preconditions_for_binding(
+                    prop=primary_property,
+                    obligation=primary_obligation,
+                    context=context,
+                )
+                expected_entrypoints_by_case[graph_case.case_key] = tuple(
+                    item.strip()
+                    for item in expected_runtime
+                    if _RUNTIME_ENTRYPOINT_PRECONDITION_RE.search(item.strip())
+                )
+        except (IndexError, KeyError, DesignError) as exc:
+            findings.append(f"suite context entrypoint derivation failed: {exc}")
     for item in cases:
         if item.case_key in actual:
             findings.append(f"duplicate case_key: {item.case_key}")
@@ -2000,6 +2027,36 @@ def validate_suite(
             findings.append(f"case status drift for {item.case_key}")
         if set(source.obligation_ids) - set(item.traceability):
             findings.append(f"missing obligation traceability for {item.case_key}")
+        required_entrypoints = expected_entrypoints_by_case.get(item.case_key, ())
+        if required_entrypoints:
+            rendered_items = tuple(
+                candidate.strip()
+                for candidate in item.preconditions
+                if candidate.strip()
+            )
+            missing = tuple(
+                entrypoint
+                for entrypoint in required_entrypoints
+                if entrypoint not in rendered_items
+            )
+            if missing:
+                findings.append(
+                    "scope entrypoint precondition missing for "
+                    f"{item.case_key}: " + ", ".join(repr(value) for value in missing)
+                )
+            else:
+                search_from = 0
+                for entrypoint in required_entrypoints:
+                    try:
+                        found_at = rendered_items.index(entrypoint, search_from)
+                    except ValueError:
+                        findings.append(
+                            "scope entrypoint precondition order mismatch for "
+                            f"{item.case_key}: expected "
+                            + ", ".join(repr(value) for value in required_entrypoints)
+                        )
+                        break
+                    search_from = found_at + 1
     for case_key in sorted(set(expected) - set(actual)):
         findings.append(f"missing case: {case_key}")
     production = validate_production_tc_content(markdown, checked_path=checked_path)
