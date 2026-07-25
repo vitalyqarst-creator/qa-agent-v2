@@ -20,6 +20,9 @@ from test_case_agent.source_json_projection import load_docx_source_json
 
 REQUIREMENT_CODE_RE = re.compile(r"\bBSR\s+\d+\b")
 DOCX_JSON_TABLE_DELIMITER_RE = re.compile(r"\s*\|\s*")
+SPACE_AFTER_OPEN_PAREN_RE = re.compile(r"\(\s+")
+SPACE_BEFORE_CLOSE_PAREN_RE = re.compile(r"\s+\)")
+SPACE_BEFORE_PUNCTUATION_RE = re.compile(r"\s+([;:,.])")
 
 
 def _repo_relative(path: Path, repo_root: Path) -> str:
@@ -41,9 +44,13 @@ def _comparison_text(value: str) -> str:
     syntax, not requirement text, so compare with them collapsed to spaces.
     """
 
-    return normalize_bounded_source_text(
+    text = normalize_bounded_source_text(
         DOCX_JSON_TABLE_DELIMITER_RE.sub(" ", value)
-    ).casefold()
+    )
+    text = SPACE_AFTER_OPEN_PAREN_RE.sub("(", text)
+    text = SPACE_BEFORE_CLOSE_PAREN_RE.sub(")", text)
+    text = SPACE_BEFORE_PUNCTUATION_RE.sub(r"\1", text)
+    return text.casefold()
 
 
 def _load_spec(

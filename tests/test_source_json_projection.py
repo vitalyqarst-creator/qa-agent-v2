@@ -63,6 +63,80 @@ class SourceJsonProjectionTests(unittest.TestCase):
         self.assertEqual("normalized-exact", match["match_type"])
         self.assertEqual("DOCX-BLOCK-000001", match["matches"][0]["block_id"])
 
+    def test_xhtml_spacing_noise_matches_docx_json_text(self) -> None:
+        match = _match_candidate(
+            "Длинный текст ( text ) Максимальный размер значения: ~2GB",
+            [
+                {
+                    "block_id": "DOCX-BLOCK-000001",
+                    "block_index": 1,
+                    "kind": "table-row",
+                    "locator": "/blocks/1",
+                    "section_path": ["5. Ограничения"],
+                    "text": "Длинный текст (text) | Максимальный размер значения: ~2GB",
+                }
+            ],
+        )
+
+        self.assertEqual("normalized-exact", match["match_type"])
+
+    def test_xhtml_punctuation_spacing_noise_matches_docx_json_text(self) -> None:
+        match = _match_candidate(
+            "Y / N ; Да / Нет ; True / False",
+            [
+                {
+                    "block_id": "DOCX-BLOCK-000001",
+                    "block_index": 1,
+                    "kind": "table-row",
+                    "locator": "/blocks/1",
+                    "section_path": ["5. Ограничения"],
+                    "text": "Y / N; Да / Нет ; True / False",
+                }
+            ],
+        )
+
+        self.assertEqual("normalized-exact", match["match_type"])
+
+    def test_docx_projection_carries_empty_numbered_cell_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            docx = root / "source" / "main.docx"
+            docx.parent.mkdir(parents=True)
+            document = Document()
+            table = document.add_table(rows=1, cols=1)
+            cell = table.cell(0, 0)
+            cell.text = ""
+            numbered = cell.paragraphs[0]
+            numbered.style = "List Number"
+            cell.add_paragraph("Текст требования после пустого номера.")
+            document.save(docx)
+
+            projection = build_docx_source_json(docx, repo_root=root)
+
+        self.assertEqual(1, projection["block_count"])
+        self.assertEqual(
+            "1. Текст требования после пустого номера.",
+            projection["blocks"][0]["cells"][0],
+        )
+
+    def test_docx_projection_does_not_duplicate_carried_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            docx = root / "source" / "main.docx"
+            docx.parent.mkdir(parents=True)
+            document = Document()
+            table = document.add_table(rows=1, cols=1)
+            cell = table.cell(0, 0)
+            cell.text = ""
+            numbered = cell.paragraphs[0]
+            numbered.style = "List Number"
+            cell.add_paragraph("1. Already materialized.")
+            document.save(docx)
+
+            projection = build_docx_source_json(docx, repo_root=root)
+
+        self.assertEqual("1. Already materialized.", projection["blocks"][0]["cells"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

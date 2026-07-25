@@ -31,9 +31,19 @@ python scripts/compare_docx_json_to_xhtml_baseline.py `
 
 Comparison treats DOCX JSON table-cell delimiters (`|`) as transport syntax.
 They are collapsed to whitespace before XHTML parity matching, because XHTML
-bounded row text is already flattened. This normalization is diagnostic only; it
-does not prove source replacement when requirement codes are missing, row order
-is unstable, or table content is merged/reordered.
+bounded row text is already flattened.  The same diagnostic matcher ignores
+typographic whitespace noise around parentheses and punctuation.
+
+The DOCX projection reconstructs paragraph numbering from direct paragraph
+numbering and paragraph-style numbering.  If a DOCX table cell contains an empty
+numbered paragraph followed by the visible requirement text, the numbering label
+is carried onto the following paragraph in that same cell.  This is required for
+BSR labels that Word renders visually but `python-docx` exposes as a separate
+empty paragraph.
+
+These normalizations are diagnostic only; they do not prove source replacement
+when row order is unstable, requirement codes are stale/shifted, or table content
+is merged/reordered.
 
 Production switch criteria:
 

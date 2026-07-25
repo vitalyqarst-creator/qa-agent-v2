@@ -70,13 +70,19 @@ class _NumberingResolver:
     @staticmethod
     def _paragraph_num_pr(paragraph: Paragraph) -> tuple[str, str] | None:
         p_pr = paragraph._p.pPr
-        if p_pr is None or p_pr.numPr is None:
+        num_pr = p_pr.numPr if p_pr is not None else None
+        if num_pr is None:
+            style = paragraph.style
+            style_element = style.element if style is not None else None
+            style_p_pr = style_element.pPr if style_element is not None else None
+            num_pr = style_p_pr.numPr if style_p_pr is not None else None
+        if num_pr is None:
             return None
-        num_id_node = p_pr.numPr.numId
+        num_id_node = num_pr.numId
         if num_id_node is None:
             return None
         num_id = num_id_node.val
-        ilvl_node = p_pr.numPr.ilvl
+        ilvl_node = num_pr.ilvl
         ilvl = ilvl_node.val if ilvl_node is not None else 0
         return str(num_id), str(ilvl)
 
@@ -157,11 +163,22 @@ def _cell_text_with_numbering(
     cell: _Cell,
     numbering: _NumberingResolver,
 ) -> str:
-    parts = [
-        text
-        for paragraph in cell.paragraphs
-        if (text := _paragraph_text_with_numbering(paragraph, numbering))
-    ]
+    parts: list[str] = []
+    pending_prefix = ""
+    for paragraph in cell.paragraphs:
+        prefix = numbering.prefix_for(paragraph)
+        text = normalize_text(paragraph.text)
+        if not text:
+            if prefix:
+                pending_prefix = prefix
+            continue
+        if pending_prefix:
+            if not text.startswith(pending_prefix):
+                text = normalize_text(f"{pending_prefix} {text}")
+            pending_prefix = ""
+        elif prefix and not text.startswith(prefix):
+            text = normalize_text(f"{prefix} {text}")
+        parts.append(text)
     return normalize_text(" ".join(parts))
 
 
