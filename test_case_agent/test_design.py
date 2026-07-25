@@ -845,22 +845,27 @@ def _sentence_start(value: str) -> str:
 def _source_editability_probe(
     *,
     label: str,
-    action: str,
+    value: str,
     subject_has_dictionary: bool = False,
-) -> tuple[str, str]:
+) -> tuple[tuple[str, ...], str]:
     target = _runtime_field_label(label)
-    text = _normalized_text(" ".join((label, action)))
-    if subject_has_dictionary or "список" in text:
-        value = label.strip().strip("`").strip("«»")
-        list_target = f"список `{value}`"
+    rendered_value = _display_fixture_for_label(label, value)
+    if subject_has_dictionary:
+        label_value = label.strip().strip("`").strip("«»")
+        list_target = f"список `{label_value}`"
         return (
-            f"Открыть {list_target}.",
-            f"{_sentence_start(list_target)} открывается и доступен для выбора.",
+            (
+                f"Открыть {list_target}.",
+                f"Выбрать значение `{rendered_value}`.",
+            ),
+            (
+                f"В поле `{label_value}` отображается выбранное значение "
+                f"`{rendered_value}`."
+            ),
         )
     return (
-        f"Установить фокус в {target}.",
-        f"{_sentence_start(target)} находится в редактируемом состоянии: "
-        "фокус устанавливается, ввод не заблокирован.",
+        (f"Ввести `{rendered_value}` в {target}.",),
+        f"{_sentence_start(target)} изменяет значение на `{rendered_value}`.",
     )
 
 
@@ -1523,15 +1528,31 @@ def _materialize(
                 obligation=obligation,
                 reason="source-editability requires an exact action contract",
             )
+        values = _editability_fixture_values(
+            prop=prop,
+            obligation=obligation,
+            subject_fixture_values=subject_fixture_values,
+        )
+        if not values:
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason=(
+                    "source-editability requires a concrete source-valid "
+                    "same-subject edit probe value"
+                ),
+            )
         title = obligation.atomic_statement.rstrip(". ")
         case_type = "негативный" if prop.polarity == "negative" else "позитивный"
-        test_data = ["Не требуются."]
-        editability_step, expected_result = _source_editability_probe(
+        value = _display_fixture_for_label(label, values[0])
+        test_data = [f"Значение для проверки редактируемости: `{value}`."]
+        editability_steps, expected_result = _source_editability_probe(
             label=label,
-            action=obligation.validation_trigger,
+            value=value,
             subject_has_dictionary=prop.subject_key in dictionary_subject_keys,
         )
-        steps = _unique_steps(editability_step)
+        steps = _unique_steps(*editability_steps)
     elif kind == "source-date-boundary" and obligation.coverage_variant == "not-future":
         if not obligation.validation_trigger.strip():
             return _blocked_card(

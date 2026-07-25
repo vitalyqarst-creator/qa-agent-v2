@@ -998,13 +998,13 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual(("Ввести `Иван` в поле «Имя».",), designs[0].steps)
 
     def test_runtime_writer_preserves_no_test_data_seed(self) -> None:
-        graph = _graph(
-            kind="source-editability",
-            fixtures=(),
-            trigger="Ввести или изменить значение поля «Имя».",
-        )
+        graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
-        seed = plan.deterministic_cases[0]
+        seed = replace(
+            plan.deterministic_cases[0],
+            test_data=("Не требуются.",),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
         self.assertEqual(("Не требуются.",), seed.test_data)
         payload = _runtime_writer_payload(
             graph,
@@ -1028,13 +1028,13 @@ class IterationContractTests(unittest.TestCase):
             )
 
     def test_runtime_writer_rejects_nonconcrete_value_for_no_data_seed(self) -> None:
-        graph = _graph(
-            kind="source-editability",
-            fixtures=(),
-            trigger="Ввести или изменить значение поля «Имя».",
-        )
+        graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
-        seed = plan.deterministic_cases[0]
+        seed = replace(
+            plan.deterministic_cases[0],
+            test_data=("Не требуются.",),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
         payload = _runtime_writer_payload(
             graph,
             [

@@ -316,10 +316,12 @@ class TestDesignTests(unittest.TestCase):
             plan.deterministic_cases[0].steps,
         )
 
-    def test_source_editability_does_not_mix_value_acceptance(self) -> None:
+    def test_source_editability_uses_concrete_edit_probe_without_broad_acceptance(
+        self,
+    ) -> None:
         graph = _graph(
             kind="source-editability",
-            fixtures=(),
+            fixtures=("Тест",),
             trigger="Ввести или изменить значение поля «Имя».",
         )
         graph = replace(
@@ -368,16 +370,17 @@ class TestDesignTests(unittest.TestCase):
 
         case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
 
-        self.assertEqual(("Не требуются.",), case.test_data)
-        self.assertEqual(("Установить фокус в поле «Имя».",), case.steps)
         self.assertEqual(
-            (
-                "Поле «Имя» находится в редактируемом состоянии: "
-                "фокус устанавливается, ввод не заблокирован."
-            ),
+            ("Значение для проверки редактируемости: `Иван`.",),
+            case.test_data,
+        )
+        self.assertEqual(("Ввести `Иван` в поле «Имя».",), case.steps)
+        self.assertEqual(
+            "Поле «Имя» изменяет значение на `Иван`.",
             case.expected_result,
         )
-        self.assertNotIn("`Иван`", "\n".join((*case.test_data, *case.steps)))
+        self.assertNotIn("принима", case.expected_result.casefold())
+        self.assertNotIn("`Тест`", "\n".join((*case.test_data, *case.steps)))
 
     def test_source_editability_uses_list_open_probe_for_dictionary_controls(
         self,
@@ -424,13 +427,21 @@ class TestDesignTests(unittest.TestCase):
 
         case = build_test_design_plan(graph, context=context).deterministic_cases[0]
 
-        self.assertEqual(("Не требуются.",), case.test_data)
-        self.assertEqual(("Открыть список `Отношение к заявителю`.",), case.steps)
         self.assertEqual(
-            "Список `Отношение к заявителю` открывается и доступен для выбора.",
+            ("Значение для проверки редактируемости: `Иное`.",),
+            case.test_data,
+        )
+        self.assertEqual(
+            (
+                "Открыть список `Отношение к заявителю`.",
+                "Выбрать значение `Иное`.",
+            ),
+            case.steps,
+        )
+        self.assertEqual(
+            "В поле `Отношение к заявителю` отображается выбранное значение `Иное`.",
             case.expected_result,
         )
-        self.assertNotIn("`Иное`", "\n".join((*case.test_data, *case.steps)))
 
     def test_input_action_without_target_gets_typed_subject_wrapper(self) -> None:
         graph = _graph(
