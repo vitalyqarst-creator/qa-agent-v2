@@ -2203,7 +2203,7 @@ def render_test_cases(
 ) -> str:
     lines = [f"# Тест-кейсы: {scope_title}", ""]
     tc_ids: set[str] = set()
-    for case in sorted(cases, key=lambda item: item.case_key):
+    for ordinal, case in enumerate(sorted(cases, key=lambda item: item.case_key), 1):
         if case.tc_id in tc_ids:
             raise DesignError(f"duplicate TC-ID during rendering: {case.tc_id}")
         tc_ids.add(case.tc_id)
@@ -2211,6 +2211,7 @@ def render_test_cases(
             [
                 f"## {case.tc_id}",
                 "",
+                f"**№:** {ordinal}",
                 f"**Название:** {case.title}",
                 f"**Тип:** {case.case_type}",
                 f"**Приоритет:** {case.priority}",

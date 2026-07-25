@@ -1487,6 +1487,21 @@ class TestDesignTests(unittest.TestCase):
         plan = build_test_design_plan(_graph(), context=_context())
         text = render_test_cases(plan.deterministic_cases, scope_title="Данные клиента")
 
+        self.assertIn("**№:** 1", text)
+        report = validate_production_tc_content(text, checked_path="shadow.md")
+        self.assertTrue(report.passed, report.as_dict())
+
+    def test_rendered_suite_has_sequential_display_numbers_without_rewriting_tc_ids(self) -> None:
+        graph, context = _repeater_graph_and_context()
+        plan = build_test_design_plan(graph, context=context)
+
+        text = render_test_cases(plan.deterministic_cases, scope_title="Данные клиента")
+
+        self.assertEqual(3, text.count("\n**№:** "))
+        self.assertLess(text.index("**№:** 1"), text.index("**№:** 2"))
+        self.assertLess(text.index("**№:** 2"), text.index("**№:** 3"))
+        self.assertIn("## TC-CUST-ADD0000001", text)
+        self.assertIn("## TC-CUST-DEL0000001", text)
         report = validate_production_tc_content(text, checked_path="shadow.md")
         self.assertTrue(report.passed, report.as_dict())
 
