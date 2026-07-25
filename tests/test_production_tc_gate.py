@@ -97,6 +97,20 @@ class ProductionTcGateTests(unittest.TestCase):
             },
         )
 
+    def test_case_rejects_block_entrypoint_without_open_container(self) -> None:
+        result = validate_production_tc_content(
+            self._case(
+                tc_id="TC-AMS-001",
+                preconditions="1. Перейти к блоку `Контактные лица`.",
+            )
+        )
+
+        self.assertFalse(result.passed)
+        self.assertIn(
+            "production-incomplete-entrypoint-precondition",
+            {finding["id"] for finding in result.findings},
+        )
+
     def test_suite_accepts_consistent_card_block_entrypoint_preconditions(self) -> None:
         first = self._case(
             tc_id="TC-AMS-001",

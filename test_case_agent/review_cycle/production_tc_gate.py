@@ -369,7 +369,7 @@ NUMBERED_PRECONDITION_RE = re.compile(
     r"^[^\S\r\n]*\d+[.)][^\S\r\n]+(.+?)[^\S\r\n]*$"
 )
 ENTRYPOINT_CARD_RE = re.compile(
-    r"\bоткрыть\s+карточк\w*\s+"
+    r"\bоткрыть\s+(?:карточк\w*|форм\w*|экран\w*|страниц\w*|раздел\w*)\s+"
     r"(?:`([^`\r\n]+)`|«([^»\r\n]+)»|([^.;\r\n]+?))[^\S\r\n]*[.]?$",
     re.IGNORECASE,
 )
@@ -1468,8 +1468,6 @@ def validate_production_tc_content(
         if not entrypoint.block:
             continue
         expected_card = card_by_block.get(entrypoint.block.casefold())
-        if not expected_card:
-            continue
         if not entrypoint.card:
             findings.append(
                 _finding(
@@ -1478,8 +1476,8 @@ def validate_production_tc_content(
                     section="preconditions",
                     evidence=entrypoint.preconditions,
                     message=(
-                        "A TC for this block must keep the suite-level entry path: "
-                        f"open card `{expected_card}` before entering block "
+                        "A TC that enters a block must first open the enclosing "
+                        "card, form, screen or section before entering block "
                         f"`{entrypoint.block}`."
                     ),
                 )
