@@ -153,7 +153,7 @@ class ReleaseBundleTests(unittest.TestCase):
         self.assertIn("ft-agent run", skill)
         self.assertIn('"schema_version": 2', skill)
         self.assertIn("accepted-shadow", skill)
-        self.assertIn("ровно одному независимому reviewer", skill)
+        self.assertIn("exactly one independent reviewer", skill)
         self.assertIn("model-runtime-prose", skill)
         self.assertIn("model-runtime-prose", contract)
         self.assertIn("runner-owned", contract)

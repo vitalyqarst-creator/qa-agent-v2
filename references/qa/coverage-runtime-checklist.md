@@ -1,10 +1,10 @@
 # Coverage Runtime Checklist
 
-Этот reference задает короткий runtime checklist покрытия. Полный `coverage-checklist.md` остается deep reference для специализированных dimensions и reviewer analysis.
+This reference defines the compact runtime coverage checklist. The full `coverage-checklist.md` remains the deep reference for specialized dimensions and reviewer analysis.
 
 ## Runtime Dimensions
 
-Перед написанием `TC-*` проверь, применимы ли к scope:
+Before writing `TC-*`, check whether the scope contains:
 
 - visibility / availability;
 - requiredness;
@@ -26,21 +26,21 @@
 
 ## Runtime Rules
 
-- Добавляй baseline case только если expected behavior следует из ФТ или разрешенных package materials.
-- Если dimension применим, но oracle не описан, фиксируй `GAP-*` / `unclear`.
-- Не закрывай internal/integration/API/async/persistence behavior UI-only test case без наблюдаемого artifact.
-- Для условной видимости проверяй positive branch и inverse branch, если inverse behavior следует из требования; иначе фиксируй gap.
-- Для closed list проверяй expected values and absence of extra values только если закрытость следует из source.
-- Для numeric/date/length/mask rules подгружай deep coverage reference по соответствующему scenario.
-- Для numeric-only, exact length, repeatable/action-created blocks, checkbox-list и generated documents используй `Coverage Obligation Table` и не ограничивайся одним generic TC.
-- Для allowed-symbol/input restrictions не заменяй класс покрытия одним смешанным негативным значением. Если source формулирует `только ...`, разложи на отдельные source-derivable classes: valid representative, whitespace, alphabet/script class, special/disallowed symbols and relevant boundaries. Unknown UI reaction for a class becomes a narrow `GAP-*` / `candidate-ui-calibration`, not silent coverage.
-- Для 3+ независимых факторов с несколькими значениями рассмотрение pairwise/combinatorial coverage обязательно; выбери `2-way | 3-way | t-way`, докажи coverage strength или фиксируй gap.
-- Для reusable baseline и negative transition используй concrete fixture или `fixture-catalog.md`.
-- Для applicable dimensions фиксируй coverage metrics; отсутствие метрики считается незакрытой design work.
+- Add a baseline case only when the expected behavior follows from the FT or allowed package materials.
+- If a dimension applies but the oracle is not described, record `GAP-*` / `unclear`.
+- Do not close internal/integration/API/async/persistence behavior with a UI-only test case unless there is an observable artifact.
+- For conditional visibility, check the positive branch and the inverse branch when inverse behavior follows from the requirement; otherwise record a gap.
+- For a closed list, check expected values and absence of extra values only when closed-set behavior follows from the source.
+- For numeric/date/length/mask rules, load the deep coverage reference for the relevant scenario.
+- For numeric-only, exact length, repeatable/action-created blocks, checkbox-list, and generated documents, use `Coverage Obligation Table`; do not stop at one generic TC.
+- For allowed-symbol/input restrictions, do not replace class coverage with one mixed invalid value. If the source says `only ...`, decompose it into source-derivable classes: valid representative, whitespace, alphabet/script class, special/disallowed symbols, and relevant boundaries. Unknown UI reaction for a class becomes a narrow `GAP-*` / `candidate-ui-calibration`, not silent coverage.
+- For 3+ independent factors with multiple values, pairwise/combinatorial coverage is mandatory; choose `2-way | 3-way | t-way`, prove coverage strength, or record a gap.
+- For reusable baseline and negative transition, use a concrete fixture or `fixture-catalog.md`.
+- Record coverage metrics for applicable dimensions; missing metrics mean unfinished design work.
 
 ## Deep Coverage Triggers
 
-Подгружай полный `coverage-checklist.md` или специализированный deep reference, если scope содержит:
+Load the full `coverage-checklist.md` or a specialized deep reference when the scope contains:
 
 - numeric, amount, mask, exact length or allowed-symbol constraints;
 - date/time windows, timezone, business date or boundary inclusivity;
@@ -53,4 +53,4 @@
 - repeatable blocks or action-created optional blocks;
 - checkbox-list / multi-select behavior;
 - performance/reliability/compatibility/usability/accessibility expectations;
-- reviewer/validator finding about missed coverage dimension.
+- reviewer/validator finding about a missed coverage dimension.

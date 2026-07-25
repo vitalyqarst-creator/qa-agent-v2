@@ -103,7 +103,7 @@ class AgentArchitectureTests(unittest.TestCase):
     def test_skills_index_and_agents_describe_full_reviewer_mode(self) -> None:
         skills_index = (SKILLS_DIR / "README.md").read_text(encoding="utf-8")
         agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("режиме `full`", skills_index)
+        self.assertIn("in `full` mode", skills_index)
         self.assertIn("`traceability` -> `structure` -> `test-design`", skills_index)
         self.assertIn("umbrella-reviewer", agents)
         self.assertIn("режиме `full`", agents)
@@ -182,7 +182,7 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("`semantic_regression`", reviewer)
         self.assertIn("`review_mode`", writer)
         self.assertIn("ft-agent run", iteration)
-        self.assertIn("ровно одному независимому reviewer", iteration)
+        self.assertIn("exactly one independent reviewer", iteration)
         self.assertIn("accepted-with-calibration-pending", iteration)
         self.assertNotIn("review_cycle_backend_dispatcher.py", iteration)
 
@@ -351,14 +351,15 @@ class AgentArchitectureTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn("## Обобщение и размещение", policy)
-        self.assertIn("## Контракты других компонентов", policy)
+        self.assertIn("## Generalization and Placement", policy)
+        self.assertIn("## Contracts of Other Components", policy)
+        self.assertIn("## Language Selection", policy)
         self.assertIn("`governed-by`", policy)
         self.assertIn("`validated-against`", policy)
         self.assertIn("`derived-from`", policy)
-        self.assertIn("## Ревью в контексте целевого агента", policy)
-        self.assertIn("замечание существенным", policy)
-        self.assertIn("повторявшимся runtime-дефектом", policy)
+        self.assertIn("## Review in the Target-Agent Context", policy)
+        self.assertIn("Treat a finding as material", policy)
+        self.assertIn("repeated runtime defects", policy)
         self.assertIn("instruction-authoring-policy.md", auditor)
         self.assertIn("instruction-authoring-policy.md", manifest)
         self.assertIn("Instruction authoring:", index)

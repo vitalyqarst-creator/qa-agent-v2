@@ -1,31 +1,29 @@
-﻿# Duplication Policy
+# Duplication Policy
 
-В проекте действует правило единственного источника истины.
+The project follows the single-source-of-truth rule.
 
-## Канонические зоны
+## Canonical Zones
 
-- `AGENTS.md` - global policy и routing.
+- `AGENTS.md` - global policy and routing.
 - `skills/*/SKILL.md` - phase-specific workflow.
-- `references/agent/` - правила архитектуры агентного слоя.
-- `references/qa/` - стабильные QA-правила, формат и трассировка.
-- `fts/<ft-slug>/work/test-design/<scope>/` - единственный источник table-heavy writer artifacts для конкретного scope.
-- `fts/<ft-slug>/test-cases/` - canonical `TC-*` набор, ссылки на split artifacts и краткое summary без полных копий таблиц.
-- `test_case_agent/` - техническое исполнение.
+- `references/agent/` - agent-layer architecture rules.
+- `references/qa/` - stable QA rules, format, and traceability.
+- `fts/<ft-slug>/work/test-design/<scope>/` - the only source for table-heavy writer artifacts for the concrete scope.
+- `fts/<ft-slug>/test-cases/` - canonical `TC-*` suite, links to split artifacts, and a short summary without full table copies.
+- `test_case_agent/` - technical implementation.
 
-## Допустимое повторение
+## Allowed Repetition
 
-Допустимы только:
+Only these are allowed:
 
-- короткие ссылки на канонический документ;
-- краткое напоминание без копирования полного правила;
-- UI metadata в `agents/openai.yaml`.
+- short links to a canonical document;
+- a short reminder without copying the full rule;
+- UI metadata in `agents/openai.yaml`.
 
-## Недопустимое повторение
+## Disallowed Repetition
 
-- одинаковые procedural steps в `AGENTS.md` и `SKILL.md`;
-- одинаковые QA rules в нескольких `SKILL.md`;
-- копии shared references внутри конкретного skill-а без веской причины;
-- доменные policy-тексты внутри кода или helper scripts.
-- полные копии `Source Table Normalization`, `Test Design Decision Table`, ledger, design plan, coverage gaps или gate одновременно в `work/test-design/<scope>/` и canonical test-case file.
-
-
+- same procedural steps in `AGENTS.md` and `SKILL.md`;
+- same QA rules in multiple `SKILL.md` files;
+- copies of shared references inside a concrete skill without a strong reason;
+- domain policy text inside code or helper scripts;
+- full copies of `Source Table Normalization`, `Test Design Decision Table`, ledger, design plan, coverage gaps, or gate in both `work/test-design/<scope>/` and the canonical test-case file.

@@ -5,25 +5,19 @@ description: Run one source-qualified test-case iteration for an already selecte
 
 # FT Test Case Iteration
 
-Используй этот skill только после выбора FT-пакета и подтверждения внешнего
-scope. Production-профиль имеет один публичный entrypoint: schema-v2 config →
-свежий immutable attempt → source-bound writer route → deterministic gates →
-ровно один независимый reviewer → `accepted-shadow`, честный
-`accepted-with-calibration-pending` либо явная terminal failure.
+Use this skill only after an FT package is selected and the external scope is confirmed. The production profile has one public entrypoint: schema-v2 config → fresh immutable attempt → source-bound writer route → deterministic gates → exactly one independent reviewer → `accepted-shadow`, honest `accepted-with-calibration-pending`, or explicit terminal failure.
 
 ## Входы
 
-До запуска должны существовать:
+Before launch, these inputs must exist:
 
-- package-local `scope-registry.json` с выбранным scope, стабильным `tc_prefix`,
-  структурной XHTML-границей и полным реестром DOCX/XHTML/PDF/support/mockups;
-- DOCX как source of truth и matching XHTML как обязательный extraction source;
-- source evidence с manifest v4, independent accepted review receipt на точный
-  digest и hash-bound semantic compiler projection;
+- package-local `scope-registry.json` with the selected scope, stable `tc_prefix`, structural XHTML boundary, and complete DOCX/XHTML/PDF/support/mockups registry;
+- DOCX as source of truth and matching XHTML as mandatory extraction source;
+- source evidence with manifest v4, an independent accepted review receipt for the exact digest, and a hash-bound semantic compiler projection;
 - compiler-v3 obligations;
-- package `AGENT-NOTES.md`, если он существует.
+- package `AGENT-NOTES.md`, when present.
 
-Новый `run-config.json` использует schema v2. Базовые обязательные поля:
+The new `run-config.json` uses schema v2. Base required fields:
 
 ```json
 {
@@ -36,25 +30,15 @@ scope. Production-профиль имеет один публичный entrypoi
 }
 ```
 
-Для новых production попыток добавляй `writer_mode: model-runtime-prose`.
-Допустимые route-поля: `writer_mode`, `mockup_label_aliases`,
-`revision_findings`. Если `writer_mode` отсутствует, runner использует
-compatibility default `deterministic-first`. Не добавляй `ft_slug`, design
-context, готовые derivations, `tc_prefix`, source/canonical allowlists, model
-responses, publication target или lifecycle status. Runner выводит slug и
-context из принятых контрактов, а derivations строит сам.
+For new production attempts, add `writer_mode: model-runtime-prose`. Allowed route fields: `writer_mode`, `mockup_label_aliases`, `revision_findings`. If `writer_mode` is absent, the runner uses compatibility default `deterministic-first`. Do not add `ft_slug`, design context, ready derivations, `tc_prefix`, source/canonical allowlists, model responses, publication target, or lifecycle status. The runner derives slug and context from accepted contracts and builds derivations itself.
 
-Если вход отсутствует, stale, неоднозначен или не hash-bound, не обходи
-проверку: верни задачу в `ft-source-locator` / `ft-scope-analyzer` либо заверши
-scope как `blocked-input`.
+If an input is missing, stale, ambiguous, or not hash-bound, do not bypass the check: route back to `ft-source-locator` / `ft-scope-analyzer` or close the scope as `blocked-input`.
 
 ## Workflow
 
-1. Прочитай package `AGENT-NOTES.md`, если он есть, и проверь, что выбранные
-   `ft_root` и `scope` совпадают с запросом пользователя.
-2. Выбери новый каталог attempt внутри `fts/<ft-slug>/work/`. Каталог не должен
-   существовать. Не используй результаты прошлой попытки как model input.
-3. Запусти единственную публичную команду:
+1. Read package `AGENT-NOTES.md`, if present, and verify that selected `ft_root` and `scope` match the user request.
+2. Choose a new attempt directory under `fts/<ft-slug>/work/`. The directory must not exist. Do not use previous-attempt results as model input.
+3. Run the only public command:
 
 ```powershell
 ft-agent run `
@@ -62,52 +46,25 @@ ft-agent run `
   --output-dir fts/<ft-slug>/work/iterations/<new-attempt-id>
 ```
 
-4. Не выполняй параллельно ручное написание или review. Runner сам компилирует
-   source set, строит graph/context/seed cases, в `model-runtime-prose` один раз
-   вызывает writer только для runtime prose, затем выполняет gates, собирает
-   `ReviewerEvidencePack` v2, передаёт draft ровно одному независимому reviewer
-   и повторно проверяет run/source/canonical hashes.
-5. Считай успехом `accepted-shadow` либо
-   `accepted-with-calibration-pending` с реальным reviewer receipt и закрытыми
-   gates. Во втором случае calibration-кандидаты имеют reviewer status
-   `calibration-pending`, а весь набор явно не допускается к promotion. Это не
-   publication: canonical и workflow state не меняются.
-6. При terminal failure сохрани diagnostic как результат attempt. Исправление
-   выполняй отдельно; повтор запускай только в новом каталоге.
+4. Do not run manual writing or review in parallel. The runner compiles the source set, builds graph/context/seed cases, calls the writer exactly once in `model-runtime-prose` only for runtime prose, then runs gates, builds `ReviewerEvidencePack` v2, sends the draft to exactly one independent reviewer, and rechecks run/source/canonical hashes.
+5. Treat `accepted-shadow` or `accepted-with-calibration-pending` with a real reviewer receipt and closed gates as success. In the second case, calibration candidates have reviewer status `calibration-pending`, and the full suite is explicitly ineligible for promotion. This is not publication: canonical and workflow state are not changed.
+6. On terminal failure, preserve diagnostic output as the attempt result. Repair is done separately; rerun only in a new directory.
 
 ## Выходы
 
-Один immutable attempt содержит scope/contract bindings, generated derivations,
-coverage graph, bound context, shadow Markdown, production gate, full
-`reviewer-evidence-basis.json`, hash-bound `reviewer-evidence-pack.json`,
-writer/reviewer receipts по фактически использованному route и terminal summary
-с phase time, attempts, artifact sizes и token metrics.
+One immutable attempt contains scope/contract bindings, generated derivations, coverage graph, bound context, shadow Markdown, production gate, full `reviewer-evidence-basis.json`, hash-bound `reviewer-evidence-pack.json`, writer/reviewer receipts for the actually used route, and terminal summary with phase time, attempts, artifact sizes, and token metrics.
 
-Допустимые успешные статусы — `accepted-shadow` и
-`accepted-with-calibration-pending`; последний всегда содержит
-`promotion_eligible=false` и `non_promotable_reason=calibration-pending`.
-Blocking contract/input/design, review findings и infrastructure failure
-остаются честными terminal outcomes.
+Allowed successful statuses are `accepted-shadow` and `accepted-with-calibration-pending`; the latter always contains `promotion_eligible=false` and `non_promotable_reason=calibration-pending`. Blocking contract/input/design, review findings, and infrastructure failure remain honest terminal outcomes.
 
-Если terminal findings передаются в отдельный remediation cycle, handoff
-сохраняет `affected_traceability_refs`; закрытие traceability gaps проверяется по `traceability_ref` / `atom_id`.
-Такой handoff сохраняется в `stage-handoffs/`, а его единственным process-status
-остается `workflow-state.yaml`; не изменяй его внутри текущего immutable
-production attempt.
+If terminal findings are passed to a separate remediation cycle, the handoff preserves `affected_traceability_refs`; traceability-gap closure is checked by `traceability_ref` / `atom_id`. That handoff is stored in `stage-handoffs/`, and its only process status remains `workflow-state.yaml`; do not change it inside the current immutable production attempt.
 
-После отдельного signed-off handoff дальнейшая проверка в реальном UI — это
-post-iteration вход в `ft-ui-automation-prep` с выпуском отдельной
-automation-ready версии; не запускай этот skill внутри текущего immutable
-production attempt.
+After a separate signed-off handoff, real UI verification is a post-iteration entry into `ft-ui-automation-prep` with a separate automation-ready release; do not run that skill inside the current immutable production attempt.
 
-## Out-of-profile
+## Out of Profile
 
-Incremental FT-version updates, benchmarks, UI automation и историческая
-session/cycle orchestration не входят в этот production profile. Для них нужна
-отдельная qualification/development среда; не подмешивай их процедуры,
-артефакты или fallback-маршруты в текущий attempt.
+Incremental FT-version updates, benchmarks, UI automation, and historical session/cycle orchestration are outside this production profile. They require a separate qualification/development environment; do not mix their procedures, artifacts, or fallback routes into the current attempt.
 
-## Канонические references
+## Canonical References
 
 - Production instruction context: [../../references/agent/production-instruction-loading.md](../../references/agent/production-instruction-loading.md)
 - Production global rules: [../../references/agent/production-global-rules.md](../../references/agent/production-global-rules.md)
@@ -116,9 +73,8 @@ session/cycle orchestration не входят в этот production profile. Д
 
 ## Ограничения
 
-- Не выполняй discovery FT-пакета или первичный выбор scope внутри этого skill.
-- Не передавай reviewer старые test cases, benchmark/history или произвольные
-  незарегистрированные файлы.
-- Не задавай hard model timeout и не делай внутренний retry.
-- Не редактируй canonical, source files или workflow state.
-- Не выдавай offline/precomputed acceptance за реальный reviewer result.
+- Do not discover the FT package or choose the primary scope inside this skill.
+- Do not pass old test cases, benchmark/history, or arbitrary unregistered files to the reviewer.
+- Do not set a hard model timeout and do not perform internal retry.
+- Do not edit canonical, source files, or workflow state.
+- Do not present offline/precomputed acceptance as a real reviewer result.

@@ -1,75 +1,73 @@
-﻿# Content Placement
+# Content Placement
 
-Этот документ задает каноническое размещение знаний в проекте.
+This document defines canonical knowledge placement in the project.
 
-## Что хранить в `AGENTS.md`
+## What Belongs in `AGENTS.md`
 
-- роль агента;
-- глобальные запреты;
-- общие критерии качества результата;
-- маршрутизацию между skill-ами;
-- правило единственного источника истины.
+- agent role;
+- global prohibitions;
+- general result-quality criteria;
+- routing between skills;
+- single-source-of-truth rule.
 
-## Что хранить в `skills/*/SKILL.md`
+## What Belongs in `skills/*/SKILL.md`
 
 - phase-specific workflow;
-- входы и выходы skill-а;
-- триггеры использования;
-- ограничения skill-а;
-- ссылки на канонические references.
+- skill inputs and outputs;
+- usage triggers;
+- skill constraints;
+- links to canonical references.
 
-## Что хранить в `references/`
+## What Belongs in `references/`
 
-- стабильные, переиспользуемые документы;
-- канонические правила написания и проверки agent instructions;
-- шаблоны и форматы;
-- правила трассировки;
-- границы ответственности;
-- чек-листы архитектурного аудита.
-- manifest-ы выбора instruction context, если они описывают только какие инструкции читать для сценария, а не сами QA/workflow правила.
+- stable reusable documents;
+- canonical rules for writing and reviewing agent instructions;
+- templates and formats;
+- traceability rules;
+- responsibility boundaries;
+- architecture-audit checklists;
+- instruction-context selection manifests, if they describe only which instructions to read for a scenario and not the QA/workflow rules themselves.
 
-## Что хранить в `fts/<ft-slug>/AGENT-NOTES.md`
+## What Belongs in `fts/<ft-slug>/AGENT-NOTES.md`
 
-- package-specific заметки для конкретного FT-пакета;
-- локальные сокращения и термины;
-- package-specific cautions и нюансы чтения требований;
-- ссылки на helper artifacts этого пакета;
-- указания, которые должны учитываться во всех новых сессиях по данному FT, но не являются глобальными правилами проекта.
+- package-specific notes for one FT package;
+- local abbreviations and terms;
+- package-specific cautions and requirement-reading nuances;
+- links to helper artifacts for that package;
+- instructions that must apply in every new session for that FT, but are not global project rules.
 
-## Что хранить в `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`
+## What Belongs in `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`
 
-- package-level operational notes именно для фазы `ft-ui-automation-prep`;
-- runtime URL и entrypoints для UI-прогонов;
-- test credentials и правила авторизации, если их допустимо хранить в репозитории;
-- устойчивые сценарии создания тестовых данных и стартовых сущностей;
-- package-specific UI pitfalls и воспроизводимые setup-правила, которые должны переживать отдельные UI-сессии.
+- package-level operational notes only for `ft-ui-automation-prep`;
+- runtime URL and entrypoints for UI runs;
+- test credentials and authentication rules, if they may be stored in the repository;
+- stable flows for creating test data and starting entities;
+- package-specific UI pitfalls and reproducible setup rules that must survive separate UI sessions.
 
-## Что хранить в `fts/<ft-slug>/work/test-design/<scope>/`
+## What Belongs in `fts/<ft-slug>/work/test-design/<scope>/`
 
-- table-heavy writer artifacts: `Source Row Inventory`, `Source Table Normalization`, `Test Design Decision Table`, `Atomic Requirements Ledger`, `Package Test Design Plan`, `Test Design Review`, `Coverage Gaps`, `Writer Quality Gate` и связанные matrices;
-- один canonical artifact на каждый тип таблицы для конкретного scope;
-- данные, на которые reviewer/validator должны ссылаться как на источник истины перед чтением `TC-*`.
+- table-heavy writer artifacts: `Source Row Inventory`, `Source Table Normalization`, `Test Design Decision Table`, `Atomic Requirements Ledger`, `Package Test Design Plan`, `Test Design Review`, `Coverage Gaps`, `Writer Quality Gate`, and related matrices;
+- one canonical artifact per table type for the concrete scope;
+- data that the reviewer/validator must treat as the source of truth before reading `TC-*`.
 
-Canonical test-case file в `test-cases/` хранит ссылки, краткое summary и сами `TC-*`, но не полные копии этих таблиц.
+The canonical test-case file in `test-cases/` stores links, a short summary, and the `TC-*` cases themselves, but not full copies of those tables.
 
-## Что хранить в source-first handoff
+## What Belongs in Source-First Handoff
 
-- `source-assertions.json` рядом с подтвержденными scope/source-row artifacts;
-- отдельный `source-assertion-review.json`, созданный независимым reviewer-ом и связанный с точным digest manifest-а;
-- только source-model semantics до writer-а; draft TC, promotion receipt и runtime diagnostics остаются в review-cycle outputs.
+- `source-assertions.json` next to confirmed scope/source-row artifacts;
+- a separate `source-assertion-review.json` created by an independent reviewer and bound to the exact manifest digest;
+- source-model semantics only before the writer. Draft TC, promotion receipt, and runtime diagnostics remain in review-cycle outputs.
 
-## Что хранить в коде
+## What Belongs in Code
 
-- техническое исполнение;
-- API, модели и скрипты;
-- автоматические проверки.
+- technical implementation;
+- APIs, models, and scripts;
+- automated checks.
 
-## Что не делать
+## What Not to Do
 
-- не копировать один и тот же procedural workflow в `AGENTS.md` и в skill;
-- не хранить доменные policy-тексты в коде;
-- не использовать skill как еще одно место для глобальных правил, если они уже есть в `AGENTS.md`.
-- не складывать package-specific нюансы конкретного FT в глобальный `AGENTS.md`, если для них подходит `fts/<ft-slug>/AGENT-NOTES.md`.
-- не смешивать package-wide FT notes из `fts/<ft-slug>/AGENT-NOTES.md` с phase-specific UI operational notes, если для них подходит `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`.
-
-
+- do not copy the same procedural workflow into both `AGENTS.md` and a skill;
+- do not store domain policy text in code;
+- do not use a skill as another place for global rules that already belong in `AGENTS.md`;
+- do not put package-specific nuances of a concrete FT into global `AGENTS.md` when `fts/<ft-slug>/AGENT-NOTES.md` is the right place;
+- do not mix package-wide FT notes from `fts/<ft-slug>/AGENT-NOTES.md` with phase-specific UI operational notes when `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md` is the right place.

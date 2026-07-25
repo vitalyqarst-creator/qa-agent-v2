@@ -1,64 +1,50 @@
 # Skills Map
 
-Канонический список активных skill-ов:
+Canonical list of active skills:
 
-- `ft-source-locator` - найти нужный FT-пакет и связанные материалы.
-- `ft-scope-analyzer` - предложить внешние scope-ы по разделам/подразделам ФТ, подтвердить границы выбранного scope и зафиксировать `coverage gaps`.
-- `ft-test-case-iteration` - по принятому source package собрать source-bound
-  shadow-набор и выполнить writer/gate/reviewer route через `ft-agent run`.
-- `ft-test-case-writer` - написать новые тест-кейсы по уже выбранному scope.
-- `ft-test-case-reviewer` - review существующих тест-кейсов.
-- `ft-ui-automation-prep` - post-iteration проверка signed-off кейсов в реальном UI и подготовка automation-ready версии.
-- `agent-architecture-auditor` - аудит структуры `AGENTS.md`, `skills/`, `references/` и scripts.
+- `ft-source-locator` - locate the target FT package and related materials.
+- `ft-scope-analyzer` - propose external scopes by FT sections/subsections, confirm selected-scope boundaries, and record `coverage gaps`.
+- `ft-test-case-iteration` - build a source-bound shadow suite from an accepted source package and run the writer/gate/reviewer route through `ft-agent run`.
+- `ft-test-case-writer` - write new test cases for an already selected scope.
+- `ft-test-case-reviewer` - review existing test cases.
+- `ft-ui-automation-prep` - post-iteration verification of signed-off cases in the real UI and preparation of an automation-ready version.
+- `agent-architecture-auditor` - audit `AGENTS.md`, `skills/`, `references/`, and scripts.
 
-## Когда какой skill использовать
+## Which Skill to Use
 
-- Если сначала нужно понять, с каким ФТ работать: `ft-source-locator`.
-- Если FT-пакет уже выбран, но еще не определен точный фрагмент требований или нужно разбить большое ФТ на scope-ы: `ft-scope-analyzer`.
-- Если scope уже зафиксирован и нужно написать новые кейсы одним writer-pass без review-cycle: `ft-test-case-writer`.
-- Если scope уже независимо квалифицирован и нужно получить production shadow:
-  `ft-test-case-iteration` через `ft-agent run`.
-- Если scope имеет compiler-v3 obligations и независимо принятый v4 source
-  contract: source-qualified режим `ft-test-case-iteration` `lean_v2`
-  через один публичный `ft-agent run`; для новых production попыток явно
-  указывай `writer_mode: model-runtime-prose`.
-- Если новая версия ФТ должна актуализировать signed-off набор: условный режим
-  `ft-test-case-iteration` `incremental-update` через
-  `scripts/run_incremental_update_iteration.py`; обычный full-loop его инструкции не загружает.
-- Если явно передан checked-in full-process config с `schema_version = 2`:
-  напрямую `ft-test-case-iteration` через `scripts/start_full_process_observation.py --execute`;
-  generic цепочки discovery/scope остаются для запусков без такого config.
-- Старый session-based writer/reviewer cycle остаётся qualification/development
-  инструментом совместимости и не является production route.
-- Если кейсы уже существуют и нужен review: `ft-test-case-reviewer`.
-  По умолчанию он работает в режиме `full` и последовательно выполняет `traceability` -> `structure` -> `test-design`.
-- Если набор уже получил `signed-off` и нужно сверить его с реальным UI перед подготовкой к автотестам: `ft-ui-automation-prep`.
-- Если запрос про архитектуру агента, дублирование, хранение знаний и границы skill-ов: `agent-architecture-auditor`.
+- If the first task is to identify which FT to use: `ft-source-locator`.
+- If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
+- If the scope is fixed and new cases must be written in one writer pass without a review cycle: `ft-test-case-writer`.
+- If the scope is independently qualified and a production shadow is needed: `ft-test-case-iteration` through `ft-agent run`.
+- If the scope has compiler-v3 obligations and an independently accepted v4 source contract: source-qualified `ft-test-case-iteration` `lean_v2` through one public `ft-agent run`; for new production attempts, explicitly set `writer_mode: model-runtime-prose`.
+- If a new FT version must update a signed-off suite: conditional `ft-test-case-iteration` mode `incremental-update` through `scripts/run_incremental_update_iteration.py`; normal full-loop runs do not load its instructions.
+- If a checked-in full-process config with `schema_version = 2` is explicitly provided: route directly to `ft-test-case-iteration` through `scripts/start_full_process_observation.py --execute`; generic discovery/scope chains remain for runs without that config.
+- The old session-based writer/reviewer cycle remains a qualification/development compatibility tool and is not the production route.
+- If cases already exist and review is needed: `ft-test-case-reviewer`. By default, it runs in `full` mode and performs `traceability` -> `structure` -> `test-design`.
+- If the suite already has `signed-off` and must be checked against the real UI before automation: `ft-ui-automation-prep`.
+- If the request is about agent architecture, duplication, knowledge placement, and skill boundaries: `agent-architecture-auditor`.
 
-## Типовые цепочки
+## Typical Chains
 
-- Новый набор тест-кейсов: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer`
-- Рекомендуемый production shadow после qualification: `ft-test-case-iteration`
-  через `ft-agent run` с schema-v2 config.
-- Полный новый scope в development-среде: `ft-source-locator` ->
-  `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
-- Актуализация новой версии ФТ: `ft-test-case-iteration` в режиме
-  `incremental-update` после явного выбора обеих версий и target scope.
-- Подготовка automation-ready версии после sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` -> `ft-ui-automation-prep`
-- Review существующих кейсов: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
-- Аудит agent-layer: `agent-architecture-auditor` со script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
+- New test-case suite: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer`
+- Recommended production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
+- Full new scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
+- New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.
+- Automation-ready preparation after sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` -> `ft-ui-automation-prep`
+- Existing-suite review: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
+- Agent-layer audit: `agent-architecture-auditor` with script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
 
-## Instruction context
+## Instruction Context
 
-Для задач, где важно контролировать объем подгружаемых инструкций, используй resolver:
+For tasks where instruction volume matters, use the resolver:
 
 ```powershell
 python scripts/resolve_instruction_context.py --phase writer --mode initial_draft --scope-profile table --budget-report
 ```
 
-Канонический manifest загрузки хранится в `references/agent/instruction-loading-manifest.md`. Он определяет только набор instruction files для сценария; workflow и QA-правила остаются в `SKILL.md` и `references/`.
+The canonical loading manifest lives in `references/agent/instruction-loading-manifest.md`. It defines only the set of instruction files for a scenario; workflow and QA rules remain in `SKILL.md` and `references/`.
 
-## Канонические references
+## Canonical References
 
 - Agent governance: [../references/agent](../references/agent)
 - QA rules and formats: [../references/qa](../references/qa)

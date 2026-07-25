@@ -1,109 +1,109 @@
 ---
 name: ft-test-case-writer
-description: Пишет новые ручные тест-кейсы по уже выбранному и ограниченному фрагменту требований или корректирует существующий набор по structured findings. В revision mode обязан учитывать `review_mode` reviewer-а и при необходимости использовать traceability matrix.
+description: Writes new manual test cases for an already selected and bounded requirement fragment, or revises an existing suite by structured findings. In revision mode it must account for the reviewer's `review_mode` and use the traceability matrix when available.
 ---
 
 # FT Test Case Writer
 
-Используй этот skill только когда уже определены:
+Use this skill only when these are already defined:
 
-- нужный FT-пакет;
-- границы scope;
-- основной источник ФТ и связанные материалы;
-- режим работы: `initial_draft`, `revision_from_findings` или remediation.
+- target FT package;
+- scope boundaries;
+- main FT source and related materials;
+- work mode: `initial_draft`, `revision_from_findings`, or remediation.
 
-Если пакет, источник или scope еще не выбраны, сначала используй `ft-source-locator` и `ft-scope-analyzer`.
+If the package, source, or scope is not selected yet, use `ft-source-locator` and `ft-scope-analyzer` first.
 
 ## Входы
 
-- путь к FT-пакету `fts/<ft-slug>/...`;
-- основной документ ФТ;
-- `source-selection.md` с `xhtml_available: yes` и main FT XHTML;
-- PDF-версия основного ФТ для сверки структуры, если она есть;
-- `source-parity-check.md`, если основной ФТ доступен в DOCX и PDF;
-- `source-row-inventory.md`, если handoff требует row-level/table parity;
-- `dictionary-inventory.md`, если source/support уже ссылается на справочник или фиксированный перечень значений;
-- `mockup-visual-inventory.md`, если подтвержденный UI scope содержит mockup / screen image / `mockups/`;
-- выбранный раздел, подраздел или узкий фрагмент требований;
-- package-specific `AGENT-NOTES.md`, если он есть;
-- mode: `initial_draft`, `revision_from_findings` или remediation;
-- при `revision_from_findings`: существующий набор тест-кейсов, structured findings artifact, номер review round, `review_mode` и traceability matrix при наличии.
+- FT package path `fts/<ft-slug>/...`;
+- main FT document;
+- `source-selection.md` with `xhtml_available: yes` and main FT XHTML;
+- PDF version of the main FT for structural cross-check, when present;
+- `source-parity-check.md`, when the main FT is available as DOCX and PDF;
+- `source-row-inventory.md`, when the handoff requires row-level/table parity;
+- `dictionary-inventory.md`, when source/support already references a dictionary or fixed value list;
+- `mockup-visual-inventory.md`, when the confirmed UI scope contains a mockup / screen image / `mockups/`;
+- selected section, subsection, or narrow requirement fragment;
+- package-specific `AGENT-NOTES.md`, when present;
+- mode: `initial_draft`, `revision_from_findings`, or remediation;
+- for `revision_from_findings`: existing test-case suite, structured findings artifact, review round number, `review_mode`, and traceability matrix when available.
 
-Если передан проверенный `stage-package.json`, используй prepared fast path: читай только четыре package-файла, не повторяй source discovery/extraction и обращайся к полному источнику только адресно по fallback-контракту из [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
+If a verified `stage-package.json` is provided, use the prepared fast path: read only the four package files, do not repeat source discovery/extraction, and access the full source only through the targeted fallback contract from [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
 
 For source-first packages, follow the accepted exact-digest contract; conflicts return `blocked-input`.
 
 ## Выходы
 
 - canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
-- при `initial_draft`: split test-design artifacts в `fts/<ft-slug>/work/test-design/<section-id>-<scope-slug>/`;
-- при наличии `dictionary-source` / reference-list rows: `dictionary-inventory.md` рядом со split test-design artifacts до TDDT/plan/TC;
-- при revision в session-based cycle: `fts/<ft-slug>/work/review-cycles/<scope-slug>/outputs/writer-rN-response.md`;
-- traceability matrix и обязательный `.xlsx`-дубль, если writer создает или обновляет matrix;
-- `coverage-obligation-table.md`, `coverage-metrics.md`, `fixture-catalog.md` при применимости, `coverage gaps`, открытые вопросы, `test-design-review.md`, Writer Quality Gate и writer self-check в соответствующих split artifacts;
-- `writer-session-log.md` и `agent-decision-log.md`, когда это требуется stage workflow;
-- `workflow-state.yaml` со статусом `ready-for-review` только после успешных gates;
-- `prompt.writer-to-reviewer.round-N.md` в текущей handoff-папке.
+- for `initial_draft`: split test-design artifacts in `fts/<ft-slug>/work/test-design/<section-id>-<scope-slug>/`;
+- when `dictionary-source` / reference-list rows exist: `dictionary-inventory.md` next to split test-design artifacts before TDDT/plan/TC;
+- for revision in a session-based cycle: `fts/<ft-slug>/work/review-cycles/<scope-slug>/outputs/writer-rN-response.md`;
+- traceability matrix and mandatory `.xlsx` duplicate when writer creates or updates the matrix;
+- `coverage-obligation-table.md`, `coverage-metrics.md`, `fixture-catalog.md` when applicable, coverage gaps, open questions, `test-design-review.md`, Writer Quality Gate, and writer self-check in the appropriate split artifacts;
+- `writer-session-log.md` and `agent-decision-log.md` when required by the stage workflow;
+- `workflow-state.yaml` with `ready-for-review` only after successful gates;
+- `prompt.writer-to-reviewer.round-N.md` in the current handoff folder.
 
 ## Runtime Contract Anchors
 
-- Если доступна PDF-версия основного ФТ для сверки структуры, сверяй по ней структуру разделов, коды требований и порядок источника; не используй PDF как замену тексту основного ФТ.
-- Перед `initial_draft` проверь `source-selection.md`: без `xhtml_available: yes` верни `blocked-input`; tables/lists бери из XHTML, DOCX - source of truth, PDF/mockups не заменяют main FT.
-- Если источники не задают поведение, не придумывай поведение, а выноси это в `coverage gaps` или UI calibration candidates по runtime contract.
-- В `revision_from_findings` используй structured findings artifact и traceability matrix artifact; Обрабатывай findings с учетом `review_mode`.
-- Для traceability findings и writer response сохраняй связь `traceability_ref = ATOM-*`.
-- Handoff по review mode: `traceability` — закрывай gaps покрытия; `structure` — выравнивай шаблон, порядок, группировку и сквозную нумерацию; `test-design` — добавляй или корректируй проверки и expected results.
-- В `initial_draft` writer строит atomic requirements ledger, затем тест-кейсы с canonical fields и writer self-check.
-- Если writer создает или обновляет matrix, обязателен `.xlsx`-дубль traceability matrix.
-- Проверяй smell markers из canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-unsupported-numeric-validation-feedback-smell, test-case-mechanical-field-step-smell.
+- If a PDF version of the main FT is available for structural cross-check, use it to verify section structure, requirement codes, and source order; do not use PDF as a replacement for the main FT text.
+- Before `initial_draft`, check `source-selection.md`: without `xhtml_available: yes`, return `blocked-input`; take tables/lists from XHTML, treat DOCX as source of truth, and do not let PDF/mockups replace the main FT.
+- If sources do not define behavior, do not invent behavior; record it in `coverage gaps` or UI calibration candidates by the runtime contract.
+- In `revision_from_findings`, use the structured findings artifact and traceability matrix artifact; process findings according to `review_mode`.
+- For traceability findings and writer response, preserve `traceability_ref = ATOM-*`.
+- Handoff by review mode: `traceability` closes coverage gaps; `structure` aligns template, order, grouping, and continuous numbering; `test-design` adds or corrects checks and expected results.
+- In `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
+- If writer creates or updates a matrix, a `.xlsx` duplicate of the traceability matrix is mandatory.
+- Check smell markers from canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-unsupported-numeric-validation-feedback-smell, test-case-mechanical-field-step-smell.
 
 ## Workflow
 
-Следуй runtime workflow: [../../references/agent/writer-runtime-workflow.md](../../references/agent/writer-runtime-workflow.md).
+Follow the runtime workflow: [../../references/agent/writer-runtime-workflow.md](../../references/agent/writer-runtime-workflow.md).
 
-Подключай deep workflow только по фактическому сценарию:
+Load deep workflow only for the actual scenario:
 
 - process artifacts, logs, artifact-write strategy: [../../references/agent/writer-process-workflow.md](../../references/agent/writer-process-workflow.md);
 - table-heavy / row-level parity writing: [../../references/agent/writer-table-workflow.md](../../references/agent/writer-table-workflow.md);
 - revision by findings: [../../references/agent/writer-revision-workflow.md](../../references/agent/writer-revision-workflow.md);
-- validator, Writer Quality Gate or style remediation: [../../references/agent/writer-remediation-workflow.md](../../references/agent/writer-remediation-workflow.md).
+- validator, Writer Quality Gate, or style remediation: [../../references/agent/writer-remediation-workflow.md](../../references/agent/writer-remediation-workflow.md).
 
 Minimum runtime rules:
 
-1. Не расширяй scope во время writing.
-2. Не выдумывай системное поведение, поля, статусы, кнопки, интеграции или expected results.
-3. Один `TC-*` покрывает одну проверку и один основной expected result.
-4. Requirement codes, например `GSR 22`, сохраняй буквально.
-5. Не превращай gaps или unclear notes в `TC-*`.
-6. Если source/support задает справочник, создай/обнови `dictionary-inventory.md` и ссылайся на `DICT-*`; branch examples из ФТ не заменяют полный справочник.
+1. Do not expand scope while writing.
+2. Do not invent system behavior, fields, statuses, buttons, integrations, or expected results.
+3. One `TC-*` covers one check and one main expected result.
+4. Preserve requirement codes literally, for example `GSR 22`.
+5. Do not turn gaps or unclear notes into `TC-*`.
+6. If source/support defines a dictionary, create/update `dictionary-inventory.md` and link `DICT-*`; branch examples from the FT do not replace the full dictionary.
 6a. Production files under `fts/**/test-cases/*.md` must be self-contained runtime TC artifacts: no setup profile references in `Предусловия`, no stand/environment wording, no package-name leakage such as `AutoFin`, and no embedded diagnostic/design sections. Use split/work artifacts for diagnostics.
-7. Не ставь `stage_status: ready-for-review`, пока source/parity/mockup/table/dictionary inputs, Writer Quality Gate и validator blockers не закрыты.
-8. Перед `ready-for-review` проверь canonical TC на unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. Такие формулировки допустимы только если рядом есть конкретный воспроизводимый baseline, literal/параметр или linked fixture artifact; иначе исправь TC или оформи `GAP-*` / `unclear`.
-8a. `Предусловия`: воспроизводимые setup steps = numbered action setup или fixture/API/profile; passive state только после action, который его создает.
-9. Перед `ready-for-review`, `semantic-review-ready` и финальным handoff проверь каждый `TC-*` по [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` обязательна, optional source fields допустимы только если добавляют недублирующую навигацию или реальную source evidence. Если `TC-*` использует `DICT-*`, тот же id должен быть в `Трассировка`; synthetic quote нельзя выдавать за цитату ФТ.
-10. Не смешивай схемы TC: metadata table не заменяет parser-supported bold metadata fields из `test-case-format.md` (`**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`); table-only metadata `| Поле | Значение |` / `| package_id | WP-01 |` invalid. Не дублируй runtime headings inline/bold полями.
-11. После любого изменения `TC-*`, `ATOM-*`, `GAP-*`, `DICT-*` или `package_id` синхронизируй canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan, coverage artifacts и writer response. Статус `fixed` допустим только после проверки всех affected artifacts, а не только canonical file.
-12. Writer-ready handoff (`ready-for-review`, `writer-draft-ready`, `semantic-review-ready`) допустим только если current-scope validator warning/error из canonical TC, active test-design dir и cycle outputs либо исправлен, либо оформлен как валидный `false-positive`/waiver с id, path, evidence и rationale, либо не относится к текущему scope. Writer self-check и Writer Quality Gate должны ссылаться на scoped validator evidence или runner validator gate evidence; не рассчитывай, что reviewer разберет очевидный current-scope validator blocker после передачи.
-12a. Для source-backed negative/requiredness restrictions с неизвестной UI-реакцией remediation не может быть простой заменой одного неподтвержденного UI-механизма другим: сохрани obligation и создай candidate TC по `negative-ui-calibration-policy.md` либо узкий `GAP-*` / `unclear`, если candidate невозможен.
-13. Если applicable dimension требует обязательные coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), разложи их в `Coverage Obligation Table`, `Package Test Design Plan` и `coverage-metrics.md` до `TC-*`.
-14. Если writer не может подготовить проверяемый результат без новых решений по scope или source, используй `blocked-input`.
-15. Перед writer-ready handoff выполни `artifact-shape-preflight` из `writer-output-format.md` и `writer-quality-gate-format.md`: split artifacts должны использовать точные canonical headings/table columns без alias columns и без соседних дублей вида `# X` + `## X`, `writer-quality-gate.md` должен иметь `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`, а canonical TC file must not duplicate split artifact tables. При любом таком дефекте ставь `blocked-input` или исправляй артефакты до передачи на review.
-16. Не используй неканонические status aliases в writer-side artifacts: `Writer Quality Gate` и `Test Design Review` принимают только `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` принимает только `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed` и локальные варианты являются validator defects.
-17. `writer-self-check.md` не должен содержать пустые секции. Каждая heading-секция, включая `Artifact Write Evidence`, должна иметь evidence, таблицу/список, ссылку на session log / split artifact или явное `not-applicable` с причиной.
-18. `placeholder-sentinel-normalization`: в traceability-bearing таблицах split artifacts и reviewer matrices не используй placeholder `-` / `N/A` в колонках связей и трассировки. Пиши явный sentinel: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>` или `none_required:<reason>`.
+7. Do not set `stage_status: ready-for-review` until source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and validator blockers are closed.
+8. Before `ready-for-review`, check canonical TC for unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. These formulations are allowed only when a concrete reproducible baseline, literal/parameter, or linked fixture artifact is adjacent; otherwise fix the TC or record `GAP-*` / `unclear`.
+8a. `Предусловия`: reproducible setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
+9. Before `ready-for-review`, `semantic-review-ready`, and final handoff, check each `TC-*` by [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` is mandatory, optional source fields are allowed only when they add non-duplicating navigation or real source evidence. If `TC-*` uses `DICT-*`, the same id must appear in `Трассировка`; a synthetic quote cannot be presented as an FT quote.
+10. Do not mix TC schemas: a metadata table does not replace parser-supported bold metadata fields from `test-case-format.md` (`**Название:**`, `**Тип:**`, `**Приоритет:**`, `**package_id:**`, `**Трассировка:**`); table-only metadata such as `| Поле | Значение |` / `| package_id | WP-01 |` is invalid. Do not duplicate runtime headings with inline/bold fields.
+11. After any change to `TC-*`, `ATOM-*`, `GAP-*`, `DICT-*`, or `package_id`, synchronize canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan, coverage artifacts, and writer response. Status `fixed` is allowed only after all affected artifacts are checked, not only the canonical file.
+12. Writer-ready handoff (`ready-for-review`, `writer-draft-ready`, `semantic-review-ready`) is allowed only when current-scope validator warning/error from canonical TC, active test-design dir, and cycle outputs is either fixed, recorded as a valid `false-positive`/waiver with id/path/evidence/rationale, or unrelated to the current scope. Writer self-check and Writer Quality Gate must link to scoped validator evidence or runner validator gate evidence; do not expect reviewer to handle an obvious current-scope validator blocker after handoff.
+12a. For source-backed negative/requiredness restrictions with unknown UI reaction, remediation cannot simply replace one unsupported UI mechanism with another: preserve the obligation and create a candidate TC by `negative-ui-calibration-policy.md`, or a narrow `GAP-*` / `unclear` if a candidate is impossible.
+13. If an applicable dimension requires mandatory coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), decompose them in `Coverage Obligation Table`, `Package Test Design Plan`, and `coverage-metrics.md` before `TC-*`.
+14. If writer cannot prepare a verifiable result without new scope/source decisions, use `blocked-input`.
+15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables. On any such defect, set `blocked-input` or fix artifacts before review handoff.
+16. Do not use non-canonical status aliases in writer-side artifacts: `Writer Quality Gate` and `Test Design Review` accept only `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` accepts only `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed`, and local variants are validator defects.
+17. `writer-self-check.md` must not contain empty sections. Every heading section, including `Artifact Write Evidence`, must have evidence, a table/list, a link to session log / split artifact, or explicit `not-applicable` with reason.
+18. `placeholder-sentinel-normalization`: in traceability-bearing split-artifact tables and reviewer matrices, do not use placeholder `-` / `N/A` in link or traceability columns. Write an explicit sentinel: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>`, or `none_required:<reason>`.
 
 ## Test-design Applicability Matrix Rule
 
-В `initial_draft` построй `Test-design applicability matrix` после atomic requirements ledger и до финализации тест-кейсов. Короткие runtime-правила смотри в [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md); deep remediation использует [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md).
+In `initial_draft`, build `Test-design applicability matrix` after the atomic requirements ledger and before finalizing test cases. See short runtime rules in [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md); deep remediation uses [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md).
 
-Правила:
+Rules:
 
-- каждая applicable coverage dimension должна иметь linked `ATOM-*` и linked `TC-*` или `GAP-*`;
-- `applicable = unclear` всегда требует linked `GAP-*`;
-- `applicable = no` требует source-based reason;
-- linked `TC-*` должен реально покрывать dimension, а не просто выглядеть похожим.
+- every applicable coverage dimension must have linked `ATOM-*` and linked `TC-*` or `GAP-*`;
+- `applicable = unclear` always requires linked `GAP-*`;
+- `applicable = no` requires a source-based reason;
+- linked `TC-*` must actually cover the dimension, not merely look similar.
 
-## Канонические references
+## Canonical References
 
 - Skill map: [../README.md](../README.md)
 - Instruction contract index: [../../references/agent/instruction-contract-index.md](../../references/agent/instruction-contract-index.md)
@@ -143,9 +143,9 @@ Minimum runtime rules:
 
 ## Ограничения
 
-- Не выбирай новый FT-пакет и не отвечай на вопрос «что брать» вместо `ft-source-locator`.
-- Не определяй scope с нуля вместо `ft-scope-analyzer`.
-- Не делай review существующего набора вместо `ft-test-case-reviewer`.
-- Не запускай writer-reviewer orchestration вместо `ft-test-case-iteration`.
-- Не проводи аудит agent-layer вместо `agent-architecture-auditor`.
-- Не дублируй общие QA-правила в этом skill-е: добавляй или меняй canonical references.
+- Do not select a new FT package or answer “what should we take” instead of `ft-source-locator`.
+- Do not define scope from scratch instead of `ft-scope-analyzer`.
+- Do not review an existing suite instead of `ft-test-case-reviewer`.
+- Do not run writer-reviewer orchestration instead of `ft-test-case-iteration`.
+- Do not audit the agent layer instead of `agent-architecture-auditor`.
+- Do not duplicate shared QA rules in this skill; add or change canonical references.

@@ -1,13 +1,8 @@
 # Production Instruction Loading
 
-Этот manifest задаёт единственный instruction context downstream production
-bundle. Bundle принимает уже независимо квалифицированный и hash-bound пакет
-scope; discovery и source qualification, benchmark, incremental, UI automation
-и историческая session/cycle orchestration намеренно отсутствуют.
+This manifest defines the only instruction context for the downstream production bundle. The bundle receives an independently qualified, hash-bound scope package. Discovery, source qualification, benchmark, incremental update, UI automation, and historical session/cycle orchestration are intentionally absent.
 
-Глобальные правила профиля находятся в
-[production-global-rules.md](production-global-rules.md); development-only
-корневой `AGENTS.md` не является instruction dependency этого bundle.
+Global profile rules live in [production-global-rules.md](production-global-rules.md). The development root `AGENTS.md` is not an instruction dependency of this bundle.
 
 <!-- instruction-loading-manifest:v1 -->
 ```json
@@ -51,7 +46,7 @@ scope; discovery и source qualification, benchmark, incremental, UI automation
 }
 ```
 
-Запуск resolver внутри production bundle всегда использует этот файл явно:
+Resolver runs inside the production bundle must always use this file explicitly:
 
 ```powershell
 python scripts/resolve_instruction_context.py `
