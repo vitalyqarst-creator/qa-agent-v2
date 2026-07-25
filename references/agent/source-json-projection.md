@@ -1,0 +1,43 @@
+# DOCX JSON Source Projection
+
+`docx-json-projection` is an experimental machine-readable projection built
+directly from the authoritative DOCX.
+
+It must not replace the mandatory XHTML extraction source in production until a
+multi-scope parity check proves that it preserves:
+
+- source row identity;
+- requirement codes;
+- table row order;
+- physical cell boundaries;
+- section context;
+- dictionary/list text.
+
+Use JSON projection for comparison, diagnostics and future extraction work:
+
+```powershell
+python scripts/build_docx_source_json.py `
+  --repo-root <repo-root> `
+  --docx <repo-root>\fts\<ft>\source\<main>.docx `
+  --output <repo-root>\fts\<ft>\work\source-json-evaluation\<main>.source.json
+
+python scripts/compare_docx_json_to_xhtml_baseline.py `
+  --repo-root <repo-root> `
+  --spec <source-row-extraction-spec.json> `
+  --docx-json <main>.source.json `
+  --selected-xhtml <repo-root>\fts\<ft>\source\<main>.xhtml `
+  --output <scope>.json-compare.json
+```
+
+Production switch criteria:
+
+- `missing_candidate_count = 0` for at least three materially different real
+  scopes;
+- `order_preserved = true` for table-heavy scopes;
+- no stale or shifted requirement codes;
+- no duplicated merged-cell text in bounded source rows;
+- source assertion review and production iteration still pass without weakening
+  reviewer checks.
+
+If these criteria fail, JSON may augment reviewer diagnostics but must not become
+the primary machine-readable source.
