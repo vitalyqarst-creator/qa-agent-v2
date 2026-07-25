@@ -1159,6 +1159,36 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_accepts_positive_optionalness_no_error_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        optionalness_oracle = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    expected_result=(
+                        "Ошибка обязательности для пустого поля «Отчество» "
+                        "не отображается."
+                    ),
+                )
+            ],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            optionalness_oracle,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(
+            "Ошибка обязательности для пустого поля «Отчество» не отображается.",
+            designs[0].expected_result,
+        )
+
     def test_runtime_writer_rejects_mixed_valid_and_invalid_input_actions(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

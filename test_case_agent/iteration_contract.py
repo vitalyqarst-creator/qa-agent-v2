@@ -109,6 +109,13 @@ _RUNTIME_REJECTION_ORACLE_RE = re.compile(
     r"невозможн\w*[^.\n;]{0,80}(?:сохран|перейти|продолж))",
     re.IGNORECASE,
 )
+_RUNTIME_NON_REJECTION_ERROR_ORACLE_RE = re.compile(
+    r"(?:не\s+(?:отображ\w*|появля\w*|возника\w*|распозна\w*|"
+    r"фиксиру\w*)[^.\n;]{0,100}(?:ошибк\w*|валидаци\w*)|"
+    r"(?:ошибк\w*|валидаци\w*)[^.\n;]{0,100}не\s+"
+    r"(?:отображ\w*|появля\w*|возника\w*|распозна\w*|фиксиру\w*))",
+    re.IGNORECASE,
+)
 _RUNTIME_INVALID_CLASS_ACTION_RE = re.compile(
     r"(?:ввести|заполнить|указать|выбрать|enter|fill|select|set)"
     r"[^.\n;]{0,120}(?:недопустим\w*|невалидн\w*|invalid)",
@@ -1417,11 +1424,13 @@ def _runtime_has_executable_step(steps: Sequence[str]) -> bool:
     )
 
 
+def _runtime_has_rejection_oracle(expected_result: str) -> bool:
+    inspected = _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE.sub("", expected_result)
+    return _RUNTIME_REJECTION_ORACLE_RE.search(inspected) is not None
+
+
 def _runtime_case_type_problem(*, case_type: str, expected_result: str) -> str | None:
-    if (
-        case_type == "позитивный"
-        and _RUNTIME_REJECTION_ORACLE_RE.search(expected_result) is not None
-    ):
+    if case_type == "позитивный" and _runtime_has_rejection_oracle(expected_result):
         return (
             "positive case_type conflicts with a rejection/error/no-save "
             "expected result"
@@ -1443,10 +1452,9 @@ def _runtime_mixed_polarity_problem(
             "one TC contains both invalid-class and valid-class input actions; "
             "split positive and negative checks"
         )
-    if (
-        _RUNTIME_REJECTION_ORACLE_RE.search(expected_result) is not None
-        and _RUNTIME_VALID_ACCEPTANCE_RE.search(expected_result) is not None
-    ):
+    if _runtime_has_rejection_oracle(
+        expected_result
+    ) and _RUNTIME_VALID_ACCEPTANCE_RE.search(expected_result) is not None:
         return (
             "one expected result asserts both rejection and valid-value acceptance; "
             "split the checks or use an explicit source-backed recovery scenario"
