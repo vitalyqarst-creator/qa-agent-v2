@@ -1938,6 +1938,13 @@ class IterationContractTests(unittest.TestCase):
         self.assertFalse(
             acceptance["live_falsification_receipt_allows_not_recorded"]
         )
+        self.assertTrue(acceptance["passed_falsification_requires_no_finding"])
+        self.assertTrue(
+            acceptance["finding_falsification_requires_real_bound_defect"]
+        )
+        self.assertTrue(
+            acceptance["reviewer_must_not_block_when_no_defects_are_found"]
+        )
         self.assertTrue(acceptance["one_oracle_polarity_per_case"])
         self.assertTrue(acceptance["positive_tc_must_not_expect_rejection"])
         self.assertTrue(acceptance["input_restrictions_require_equivalence_classes"])
@@ -2415,6 +2422,9 @@ class IterationContractTests(unittest.TestCase):
             "outcome=not-recorded",
             "Direct source, TC-design, digest, and binding defects",
             "do not manufacture a finding",
+            "no test_case_finding is required for passed",
+            "Never use outcome=finding to express contract uncertainty",
+            "Do not return decision=blocked merely because a no-defect probe",
         ):
             self.assertIn(token, prompt)
 

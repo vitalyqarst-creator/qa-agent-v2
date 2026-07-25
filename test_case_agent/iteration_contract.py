@@ -224,7 +224,12 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "is the exact full bound item. A source-only validation trigger "
     "or observable oracle may support outcome=finding, never outcome=passed. Use "
     "outcome=passed with this concrete basis, or outcome=finding with a concrete "
-    "witness and one or more bound test_case_findings. A finding should name the "
+    "witness and one or more bound test_case_findings. When a probe finds no "
+    "defect, set outcome=passed; no test_case_finding is required for passed. "
+    "Never use outcome=finding to express contract uncertainty, missing defects, "
+    "or the absence of a test_case_finding; finding is only for a real source or "
+    "test-case defect. Do not return decision=blocked merely because a no-defect "
+    "probe has no finding to bind. A finding should name the "
     "exact falsification_probe when it is specific to one probe; if the same root "
     "defect affects multiple probes on the same case/evidence chain, one finding "
     "may name the most specific affected probe and the case_results.falsification "
@@ -345,6 +350,9 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "artifact_proven_findings_do_not_require_hypothetical_witness": True,
                 "per_case_falsification_receipt_required": True,
                 "live_falsification_receipt_allows_not_recorded": False,
+                "passed_falsification_requires_no_finding": True,
+                "finding_falsification_requires_real_bound_defect": True,
+                "reviewer_must_not_block_when_no_defects_are_found": True,
                 "benchmark_context_available": False,
                 "review_history_available": False,
                 "compact_reviewer_context_uses_structured_test_cases": True,
