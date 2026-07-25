@@ -1619,13 +1619,25 @@ def _validate_runtime_writer_preserves_seed_entrypoint_preconditions(
     required = _seed_entrypoint_preconditions(seed)
     if not required:
         return
-    rendered = {item.strip() for item in preconditions}
+    rendered_items = tuple(item.strip() for item in preconditions)
+    rendered = set(rendered_items)
     missing = tuple(item for item in required if item not in rendered)
     if missing:
         raise IterationContractError(
             "runtime writer removed seed entrypoint precondition for "
             f"{case_key}: " + ", ".join(repr(value) for value in missing)
         )
+    search_from = 0
+    for required_item in required:
+        try:
+            found_at = rendered_items.index(required_item, search_from)
+        except ValueError as exc:
+            raise IterationContractError(
+                "runtime writer reordered seed entrypoint preconditions for "
+                f"{case_key}: expected order "
+                + ", ".join(repr(value) for value in required)
+            ) from exc
+        search_from = found_at + 1
 
 
 def _seed_cleanup_oracles(seed: TestCaseDesign) -> tuple[str, ...]:

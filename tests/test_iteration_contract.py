@@ -5,7 +5,7 @@ import hashlib
 import unittest
 from dataclasses import replace
 
-from test_case_agent.coverage_graph import CoverageCase
+from test_case_agent.coverage_graph import CoverageCase, CoverageProperty
 from test_case_agent.iteration_contract import (
     IterationContractError,
     REVIEWER_FALSIFICATION_PROBES,
@@ -1352,6 +1352,79 @@ class IterationContractTests(unittest.TestCase):
                 graph=graph,
                 plan=plan,
                 context=_context(),
+            )
+
+    def test_runtime_writer_rejects_reordered_entrypoint_preconditions(self) -> None:
+        graph = _graph()
+        graph = replace(
+            graph,
+            properties=(
+                *graph.properties,
+                CoverageProperty(
+                    property_id="PROP-CARD-ENTRYPOINT",
+                    assertion_id="ASSERT-CARD-ENTRYPOINT",
+                    property_key="customer-card:entrypoint",
+                    subject_key="customer-card",
+                    property_kind="context",
+                    source_row_id="SRC-CARD-ENTRYPOINT",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[0]/*[2]",
+                    source_text_sha256="f" * 64,
+                    canonical_statement="Открыть карточку `Заявка`.",
+                    requirement_codes=(),
+                    disposition="not-applicable",
+                ),
+                CoverageProperty(
+                    property_id="PROP-BLOCK-ENTRYPOINT",
+                    assertion_id="ASSERT-BLOCK-ENTRYPOINT",
+                    property_key="contact-persons:block-entrypoint",
+                    subject_key="contact-persons",
+                    property_kind="context",
+                    source_row_id="SRC-BLOCK-ENTRYPOINT",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[0]/*[3]",
+                    source_text_sha256="f" * 64,
+                    canonical_statement="Перейти к блоку `Контактные лица`.",
+                    requirement_codes=(),
+                    disposition="not-applicable",
+                ),
+            ),
+        )
+        context = replace(
+            _context(),
+            base_preconditions=(
+                "Открыть карточку `Заявка`.",
+                "Перейти к блоку `Контактные лица`.",
+            ),
+        )
+        plan = build_test_design_plan(graph, context=context)
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=[
+                        "Перейти к блоку `Контактные лица`.",
+                        "Открыть карточку `Заявка`.",
+                    ],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "reordered seed entrypoint preconditions",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=context,
             )
 
     def test_runtime_writer_rejects_steps_without_user_action_or_check(self) -> None:
