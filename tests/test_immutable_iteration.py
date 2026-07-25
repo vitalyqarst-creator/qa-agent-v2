@@ -662,8 +662,13 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertIn("Допустимое", prompt)
         self.assertIn("Недопустимое", prompt)
         self.assertIn("поочередно вводить каждое значение", prompt)
+        self.assertIn("cleanup oracle", prompt)
+        self.assertIn("Проверить, что ... удалена", prompt)
+        self.assertIn("Immediate input or selection proves only current visible value", prompt)
         self.assertIn("preconditions_contract", serialized_request)
         self.assertIn("prepared_value_execution", serialized_request)
+        self.assertIn("cleanup_oracle_preservation", serialized_request)
+        self.assertIn("no_persistence_without_commit", serialized_request)
         self.assertIn(
             "preserve_prepared_values_in_steps",
             serialized_request,

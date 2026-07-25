@@ -413,7 +413,17 @@ class TestDesignTests(unittest.TestCase):
         )
         graph = replace(
             graph,
-            properties=(replace(graph.properties[0], polarity="negative"), *graph.properties[1:]),
+            properties=(
+                replace(
+                    graph.properties[0],
+                    polarity="negative",
+                    canonical_statement=(
+                        "В поле `Имя` возможен ввод только текстовых символов "
+                        "и специального символа `-`."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
             cases=(
                 CoverageCase(
                     case_key=(
@@ -434,6 +444,19 @@ class TestDesignTests(unittest.TestCase):
                     status="candidate-ui-calibration",
                 ),
             ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    atomic_statement=(
+                        "В поле `Имя` возможен ввод только текстовых символов "
+                        "и специального символа `-`."
+                    ),
+                    observable_oracle=(
+                        "В поле `Имя` возможен ввод только текстовых символов "
+                        "и специального символа `-`."
+                    ),
+                ),
+            ),
         )
 
         cases = build_test_design_plan(graph, context=_context()).deterministic_cases
@@ -448,8 +471,11 @@ class TestDesignTests(unittest.TestCase):
         joined_data = "\n".join(valid_case.test_data)
         joined_steps = "\n".join(valid_case.steps)
         self.assertIn("Допустимое значение: `Иван-Петров`.", joined_data)
+        self.assertIn("Допустимое значение: `Ivan-Petrov`.", joined_data)
         self.assertIn("Ввести `Иван-Петров`", joined_steps)
+        self.assertIn("Ввести `Ivan-Petrov`", joined_steps)
         self.assertIn("`Иван-Петров` не отклоняется", joined_steps)
+        self.assertIn("`Ivan-Petrov` не отклоняется", joined_steps)
         self.assertEqual("негативный", invalid_case.case_type)
         joined_data = "\n".join(invalid_case.test_data)
         joined_steps = "\n".join(invalid_case.steps)
@@ -853,19 +879,26 @@ class TestDesignTests(unittest.TestCase):
 
         self.assertEqual(("Нажать «Добавить».",), add_case.steps)
         self.assertTrue(all("Корзина" in item for item in add_case.postconditions))
+        self.assertIn(
+            "Проверить, что добавленная тестовая строка удалена.",
+            add_case.postconditions[0],
+        )
         self.assertIn("первая по порядку", delete_case.test_data[0])
         self.assertIn("вторая по порядку", delete_case.test_data[1])
         self.assertEqual(2, delete_case.preconditions.count("Нажать «Добавить»."))
         self.assertIn("Для первой тестовой строки", delete_case.steps[0])
         self.assertIn("Корзина", delete_case.postconditions[0])
+        self.assertIn(
+            "Проверить, что оставшаяся вторая тестовая строка удалена.",
+            delete_case.postconditions[0],
+        )
         self.assertNotIn("Не требуются.", add_case.postconditions)
         self.assertNotIn("Не требуются.", delete_case.postconditions)
 
     def test_contact_person_passive_conditions_become_executable_setup(self) -> None:
         graph, context = _repeater_graph_and_context()
         add_condition = (
-            "Кнопка/виджет добавления контактного лица доступна в блоке "
-            "`Контактные лица`."
+            "Карточка `Заявка`, блок `Контактные лица`."
         )
         delete_condition = (
             "В блоке `Контактные лица` отображается строка контактного "
@@ -993,10 +1026,24 @@ class TestDesignTests(unittest.TestCase):
             item for item in plan.deterministic_cases if item.tc_id == "TC-CUST-FAMILY001"
         )
         self.assertIn(
+            "Открыть карточку `Заявка`.",
+            family_case.preconditions,
+        )
+        self.assertIn(
             "Перейти к блоку `Контактные лица`.",
             family_case.preconditions,
         )
+        self.assertLess(
+            family_case.preconditions.index("Открыть карточку `Заявка`."),
+            family_case.preconditions.index("Перейти к блоку `Контактные лица`."),
+        )
         self.assertIn("Нажать «Добавить».", family_case.preconditions)
+        self.assertNotEqual(("Не требуются.",), family_case.postconditions)
+        self.assertIn("Нажать «Корзина»", family_case.postconditions[0])
+        self.assertIn(
+            "Проверить, что добавленная тестовая строка удалена.",
+            family_case.postconditions[0],
+        )
 
     def test_exact_condition_is_kept_in_reviewer_projection_not_runtime_setup(self) -> None:
         graph = _graph(trigger="Ввести значение в поле «Имя».")

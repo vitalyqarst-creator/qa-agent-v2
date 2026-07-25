@@ -33,6 +33,8 @@ from test_case_agent.review_cycle.prepared_package import (
     prepared_dictionary_value_set_sha256,
 )
 from test_case_agent.review_cycle.source_assertions import (
+    ApprovedClarification,
+    ClarificationClauseBinding,
     RegisteredEvidenceSource,
     SupportingSourceBinding,
     build_source_assertion_manifest,
@@ -439,6 +441,141 @@ class ReviewerEvidenceTests(unittest.TestCase):
         )
         self.assertEqual([], payload["coverage_gaps"]["registered_gap_ids"])
         self.assertIn("No gaps.", payload["coverage_gaps"]["content"])
+
+    def test_source_review_attestation_exposes_digest_and_clarifications(self) -> None:
+        from tests.test_source_assertions import (
+            build_source_assertion_manifest as build_test_manifest,
+        )
+
+        answer = "Уточнённый source-backed oracle."
+        answer_sha256 = hashlib.sha256(answer.encode("utf-8")).hexdigest()
+        clarification_path = (
+            self.fixture.ft
+            / "work"
+            / "stage-handoffs"
+            / "01-sample"
+            / "scope-clarification-requests.md"
+        )
+        clarification_path.parent.mkdir(parents=True, exist_ok=True)
+        clarification_path.write_text(
+            "\n".join(
+                (
+                    "# Scope clarifications",
+                    "",
+                    (
+                        "| clarification_id | gap_id | scope_slug | "
+                        "requirement_codes | authority | user_response | "
+                        "response_status | response_type | updated_at |"
+                    ),
+                    "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                    (
+                        "| CLR-001 | GAP-001 | sample-scope | BSR 1 | user | "
+                        f"{answer} | answered | user-confirmed | 2026-07-25 |"
+                    ),
+                    "",
+                )
+            ),
+            encoding="utf-8",
+        )
+        clarification_relative = self.fixture._relative(clarification_path)
+        clarification = ApprovedClarification(
+            clarification_id="CLR-001",
+            gap_id="GAP-001",
+            scope_slug="sample-scope",
+            requirement_codes=("BSR 1",),
+            authority="user",
+            response_status="answered",
+            response_type="user-confirmed",
+            answered_at="2026-07-25",
+            exact_answer=answer,
+            exact_answer_sha256=answer_sha256,
+            evidence_source_path=clarification_relative,
+            evidence_source_sha256=hashlib.sha256(
+                clarification_path.read_bytes()
+            ).hexdigest(),
+        )
+        assertions = tuple(
+            replace(
+                item,
+                clarification_clause_bindings=(
+                    *item.clarification_clause_bindings,
+                    ClarificationClauseBinding(
+                        clarification_id="CLR-001",
+                        clause_kind="oracle",
+                        clause_index=0,
+                        requirement_codes=("BSR 1",),
+                        exact_answer_sha256=answer_sha256,
+                    ),
+                ),
+            )
+            if item.assertion_id == "ASSERT-001"
+            else item
+            for item in self.contract.manifest.assertions
+        )
+        manifest = build_test_manifest(
+            self.fixture.repo,
+            scope_slug=self.contract.manifest.scope_slug,
+            source_paths=tuple(item.path for item in self.contract.manifest.sources),
+            assertions=assertions,
+            source_row_extraction_spec_digest=(
+                self.contract.manifest.source_row_extraction_spec_digest
+            ),
+            source_row_baseline_digest=(
+                self.contract.manifest.source_row_baseline_digest
+            ),
+            source_row_candidate_count=(
+                self.contract.manifest.source_row_candidate_count
+            ),
+            source_rows=self.contract.manifest.source_rows,
+            evidence_sources=(
+                *(
+                    (item.path, item.role)
+                    for item in self.contract.manifest.evidence_sources
+                ),
+                (clarification_relative, "approved-clarification"),
+            ),
+            clarifications=(clarification,),
+            mockups=tuple(
+                (item.path, item.screen_name, item.locators)
+                for item in self.contract.manifest.mockups
+            ),
+            expected_source_rows=self.contract.manifest.source_rows,
+        )
+        receipt = replace(
+            self.contract.review_receipt,
+            manifest_digest=manifest.digest,
+        )
+        compiled = replace(
+            self.compiled,
+            definition=replace(self.compiled.definition, gap_ids=("GAP-001",)),
+        )
+        basis = prepare_reviewer_evidence_basis(
+            self.fixture.repo,
+            compiled,
+            manifest,
+            receipt,
+            self.fixture.prepared_obligations,
+        )
+        graph = replace(self.graph, source_manifest_digest=manifest.digest)
+
+        payload = self._pack(basis=basis, graph=graph).to_dict()
+
+        self.assertNotIn("source_review_attestation", payload)
+        attestation = payload["source_structure"]["source_review_attestation"]
+        self.assertEqual("accepted-source-review", attestation["status"])
+        self.assertEqual(manifest.digest, attestation["source_manifest_digest"])
+        self.assertEqual(manifest.digest, attestation["reviewed_manifest_digest"])
+        self.assertEqual(
+            self.contract.review_receipt.decision,
+            attestation["review_decision"],
+        )
+        self.assertEqual(1, len(attestation["approved_clarifications"]))
+        clarification_item = attestation["approved_clarifications"][0]
+        self.assertEqual("CLR-001", clarification_item["clarification_id"])
+        self.assertEqual("GAP-001", clarification_item["gap_id"])
+        self.assertEqual(["BSR 1"], clarification_item["requirement_codes"])
+        self.assertEqual(answer_sha256, clarification_item["exact_answer_sha256"])
+        self.assertEqual(["ASSERT-001"], clarification_item["bound_assertion_ids"])
 
     def test_projection_cannot_drop_any_assertion_including_siblings(self) -> None:
         incomplete = replace(
@@ -1523,6 +1660,18 @@ class ReviewerEvidenceTests(unittest.TestCase):
                 for item in mapping
                 if item["case_key"] == add_case
             ],
+        )
+        add_cleanup = [
+            item["materialized_text"]
+            for item in mapping
+            if item["case_key"] == add_case
+            and item["support_role"] == "cleanup"
+            and item["obligation_id"] == "OBL-DELETE"
+        ]
+        self.assertEqual(1, len(add_cleanup))
+        self.assertIn(
+            "Проверить, что добавленная тестовая строка удалена.",
+            add_cleanup[0],
         )
         self.assertEqual(
             [("setup", "OBL-ADD"), ("setup", "OBL-ADD")],

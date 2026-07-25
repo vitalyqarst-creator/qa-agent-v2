@@ -2476,6 +2476,43 @@ def build_reviewer_evidence_pack(
         if item.role not in {"scope-mockup", "scope-coverage-gaps"}
     ]
     receipt = basis.source_review_receipt
+    clarification_bindings: dict[str, list[str]] = {
+        item.clarification_id: [] for item in basis.manifest.clarifications
+    }
+    for assertion in basis.manifest.assertions:
+        for binding in assertion.clarification_clause_bindings:
+            clarification_bindings.setdefault(binding.clarification_id, []).append(
+                assertion.assertion_id
+            )
+    source_review_attestation = {
+        "status": "accepted-source-review",
+        "review_version": receipt.version,
+        "review_decision": receipt.decision,
+        "source_manifest_digest": basis.manifest.digest,
+        "reviewed_manifest_digest": receipt.manifest_digest,
+        "source_inventory_verdict": receipt.source_inventory_review.verdict,
+        "scope_boundary_verdict": receipt.scope_boundary_review.verdict,
+        "assertion_review_count": len(receipt.assertion_reviews),
+        "receipt_sha256": basis.review_receipt_sha256,
+        "approved_clarifications": [
+            {
+                "clarification_id": item.clarification_id,
+                "gap_id": item.gap_id,
+                "requirement_codes": list(item.requirement_codes),
+                "binding_scope": item.binding_scope,
+                "source_row_ids": list(item.source_row_ids),
+                "response_status": item.response_status,
+                "response_type": item.response_type,
+                "exact_answer_sha256": item.exact_answer_sha256,
+                "evidence_source_path": item.evidence_source_path,
+                "evidence_source_sha256": item.evidence_source_sha256,
+                "bound_assertion_ids": sorted(
+                    set(clarification_bindings.get(item.clarification_id, ()))
+                ),
+            }
+            for item in basis.manifest.clarifications
+        ],
+    }
     payload = {
         "schema_version": 2,
         "identity": {
@@ -2504,13 +2541,7 @@ def build_reviewer_evidence_pack(
             "candidate_count": basis.compiled_scope.baseline.candidate_count,
             "source_files": source_files,
             "docx_xhtml_pdf_parity": source_parity,
-            "source_review_attestation": {
-                "status": "accepted-source-review",
-                "review_decision": receipt.decision,
-                "source_inventory_verdict": receipt.source_inventory_review.verdict,
-                "scope_boundary_verdict": receipt.scope_boundary_review.verdict,
-                "receipt_sha256": basis.review_receipt_sha256,
-            },
+            "source_review_attestation": source_review_attestation,
             "section_path_status": "materialized-for-all-xhtml-literal-rows",
         },
         "dictionaries": dictionaries,

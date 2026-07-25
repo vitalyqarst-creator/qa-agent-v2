@@ -122,6 +122,27 @@ _RUNTIME_VALID_ACCEPTANCE_RE = re.compile(
     r"(?:принима\w*|сохраня\w*|отобража\w*|accepted|saved|displayed)",
     re.IGNORECASE,
 )
+_RUNTIME_PERSISTENCE_ORACLE_RE = re.compile(
+    r"(?:сохраня\w*|сохран[её]н\w*|persist\w*|saved)",
+    re.IGNORECASE,
+)
+_RUNTIME_COMMIT_ACTION_RE = re.compile(
+    r"(?:сохран\w*|подтверд\w*|примен\w*|отправ\w*|submit|save|confirm|"
+    r"нажать\s+`?(?:далее|готово|ok|ок)`?|снять\s+фокус|blur)",
+    re.IGNORECASE,
+)
+_RUNTIME_TEMPLATE_ORACLE_RE = re.compile(
+    r"(?:маск\w*|шаблон\w*|template)",
+    re.IGNORECASE,
+)
+_RUNTIME_ENTRYPOINT_PRECONDITION_RE = re.compile(
+    r"^(?:Открыть\s+карточк\w*|Перейти\s+к\s+блок\w*)\b",
+    re.IGNORECASE,
+)
+_CLEANUP_ORACLE_RE = re.compile(
+    r"Проверить,\s+что\s+[^.\n;]*удален[ао]?",
+    re.IGNORECASE,
+)
 
 REVIEWER_POLICY_VERSION_V2 = 2
 
@@ -153,7 +174,9 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "reactions may remain honest calibration candidates, but the negative class "
     "must not disappear. Repeater lifecycle expectations remain source-bound: do "
     "not invent post-delete or re-add defaults absent from literal source or an "
-    "accepted clarification. Treat the complete registered coverage-gap artifact "
+    "accepted clarification. Treat "
+    "reviewer_evidence_pack.source_structure.source_review_attestation, "
+    "the complete registered coverage-gap artifact, accepted clarification records "
     "and every supporting cross-row evidence edge as binding review evidence; "
     "enforce each gap's temporary handling and do-not-test rule. Keep each case's "
     "primary coverage chain atomic, and review every role-tagged design-support "
@@ -169,7 +192,10 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "bind trigger_or_step to an actual "
     "TC step for primary/action, the exact bound TC field item for setup/cleanup "
     "(failure_attribution may instead bind a TC precondition or test-data item), "
-    "and oracle to the TC expected_result. A source-only validation trigger "
+    "and oracle to the TC expected_result. Copy trigger_or_step and oracle exactly "
+    "from the reviewed TC/design-support item; do not summarize, paraphrase, or "
+    "use generic phrases such as `Зафиксировать фактический UI-отклик` unless that "
+    "is the exact full bound item. A source-only validation trigger "
     "or observable oracle may support outcome=finding, never outcome=passed. Use "
     "outcome=passed with this concrete basis, or outcome=finding with a concrete "
     "witness and one or more bound test_case_findings. A finding should name the "
@@ -198,13 +224,24 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "case: a positive TC must not expect rejection/error/no-save behavior, and a "
     "negative/input-restriction TC must not also prove acceptance of a valid value "
     "unless it is an explicitly source-backed recovery scenario. Review source-backed "
+    "boundary restrictions as boundary sets, not as one sample: date, numeric, "
+    "length, min/max, before/after, and not-greater/not-less constraints require "
+    "on-boundary valid coverage plus the nearest invalid value when derivable from "
+    "source; for a not-future date, expect `current date - 1 day`, `current date`, "
+    "and `current date + 1 day` coverage unless a bound gap explains why not. "
+    "Review source-backed "
     "input restrictions as equivalence classes: allowed-symbol wording requires "
     "separate representative classes such as valid value, whitespace, alphabet/script "
-    "class and disallowed symbols when derivable from source; unsupported alphabet, "
-    "integration or implementation observations must become narrow gaps or calibration "
-    "notes, not FT-first baseline coverage. Check that priority follows source-bound "
+    "class and disallowed symbols when derivable from source. If the literal FT says "
+    "`text symbols` / `текстовые символы` and does not restrict the script to "
+    "Cyrillic/Russian, Latin letters are a supported positive representative; do "
+    "not reject them as an unsupported alphabet assumption. Unsupported integration "
+    "or implementation observations must become narrow gaps or calibration notes, "
+    "not FT-first baseline coverage. Check that priority follows source-bound "
     "risk instead of a flat default. Accepted requires every case's required status "
-    "and zero errors or warnings in both finding arrays."
+    "and zero errors or warnings in both finding arrays. changes-required requires "
+    "at least one bound source_projection_finding or test_case_finding; never put "
+    "the only blocking reason in summary."
 )
 
 
@@ -1011,6 +1048,12 @@ def build_runtime_writer_request(
                     "postconditions": list(design.postconditions),
                     "calibration_question": design.calibration_question,
                 },
+                "protected_runtime_fragments": {
+                    "entrypoint_preconditions": list(
+                        _seed_entrypoint_preconditions(design)
+                    ),
+                    "cleanup_oracles": list(_seed_cleanup_oracles(design)),
+                },
             }
         )
     return {
@@ -1089,6 +1132,38 @@ def build_runtime_writer_request(
                     "replace concrete prepared values with aggregate wording such "
                     "as `поочередно вводить каждое значение`."
                 ),
+                "cleanup_oracle_preservation": (
+                    "When `seed_runtime.postconditions` contains a cleanup oracle "
+                    "like `Проверить, что ... удалена`, preserve that exact "
+                    "observable cleanup check in `postconditions`. The same exact "
+                    "text is also listed in "
+                    "`protected_runtime_fragments.cleanup_oracles`; every item in "
+                    "that list is mandatory exact-copy runtime evidence. A cleanup "
+                    "that only clicks a delete/basket control is not sufficient."
+                ),
+                "entrypoint_precondition_preservation": (
+                    "Every item in "
+                    "`protected_runtime_fragments.entrypoint_preconditions` is a "
+                    "mandatory exact-copy setup step. Do not omit or rephrase "
+                    "`Открыть карточку ...` or `Перейти к блоку ...` entrypoint "
+                    "preconditions even when other setup actions are rewritten."
+                ),
+                "no_persistence_without_commit": (
+                    "Do not add `сохраняет`, `сохранено`, `saved`, or other "
+                    "persistence/save wording to `expected_result` unless the "
+                    "runtime steps include an explicit source-backed save, submit, "
+                    "confirmation, explicit transition button, or blur action. "
+                    "Immediate input or selection proves only current visible "
+                    "value/editability."
+                ),
+                "no_sibling_template_or_mask_oracle": (
+                    "Do not add mask/template/default-template wording such as "
+                    "`маска`, `шаблон`, or `template` to a case's expected_result "
+                    "unless that exact runtime seed already contains mask/template "
+                    "semantics. Template/default-mask behavior must remain in its "
+                    "own source-bound case or an explicitly registered "
+                    "design-support chain."
+                ),
                 "one_dominant_oracle_polarity_per_case": (
                     "Do not combine acceptance of a valid value and rejection of an "
                     "invalid value in one TC. Keep recovery flows out unless the "
@@ -1105,7 +1180,19 @@ def build_runtime_writer_request(
                     "source-derived classes such as valid value, whitespace, "
                     "alphabet/script class when the source explicitly constrains "
                     "script/alphabet, and disallowed symbols, or a narrow "
-                    "calibration/gap for the missing class."
+                    "calibration/gap for the missing class. If source says text "
+                    "symbols / `текстовые символы` without a Cyrillic/Russian-only "
+                    "restriction, Latin letters are valid text-symbol "
+                    "representatives."
+                ),
+                "boundary_value_classes": (
+                    "If source defines a boundary or inequality such as min/max, "
+                    "not greater than, not less than, before/after date, exact "
+                    "length, or numeric/date limit, preserve the seed's boundary "
+                    "representatives. Do not collapse them into one invalid sample. "
+                    "A not-future date requires current date - 1 day and current "
+                    "date as valid boundary coverage, plus current date + 1 day as "
+                    "the nearest invalid value when derivable from source."
                 ),
                 "unsupported_observation_policy": (
                     "Implementation observations, including discovered integrations, "
@@ -1342,6 +1429,23 @@ def _runtime_mixed_polarity_problem(
     return None
 
 
+def _runtime_persistence_without_commit_problem(
+    *,
+    preconditions: Sequence[str],
+    steps: Sequence[str],
+    expected_result: str,
+) -> str | None:
+    if _RUNTIME_PERSISTENCE_ORACLE_RE.search(expected_result) is None:
+        return None
+    action_text = "\n".join((*preconditions, *steps))
+    if _RUNTIME_COMMIT_ACTION_RE.search(action_text) is not None:
+        return None
+    return (
+        "persistence/save expected result requires an explicit source-backed "
+        "commit, save, submit, transition or blur action"
+    )
+
+
 def _runtime_internal_token(
     *,
     case_key: str,
@@ -1416,6 +1520,16 @@ def _validate_runtime_writer_prose(
             f"runtime writer returned mixed positive/negative runtime prose for "
             f"{case_key}: {mixed_polarity_problem}"
         )
+    persistence_problem = _runtime_persistence_without_commit_problem(
+        preconditions=preconditions,
+        steps=steps,
+        expected_result=expected_result,
+    )
+    if persistence_problem is not None:
+        raise IterationContractError(
+            f"runtime writer returned unsupported persistence oracle for "
+            f"{case_key}: {persistence_problem}"
+        )
 
 
 def _seed_values_from_labeled_lines(
@@ -1469,6 +1583,89 @@ def _validate_runtime_writer_executes_seed_prepared_values(
             "runtime writer left seed prepared values unexecuted for "
             f"{case_key}: " + ", ".join(repr(value) for value in missing)
         )
+
+
+def _seed_entrypoint_preconditions(seed: TestCaseDesign) -> tuple[str, ...]:
+    return tuple(
+        dict.fromkeys(
+            item.strip()
+            for item in seed.preconditions
+            if _RUNTIME_ENTRYPOINT_PRECONDITION_RE.search(item.strip())
+        )
+    )
+
+
+def _validate_runtime_writer_preserves_seed_entrypoint_preconditions(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    preconditions: Sequence[str],
+) -> None:
+    required = _seed_entrypoint_preconditions(seed)
+    if not required:
+        return
+    rendered = {item.strip() for item in preconditions}
+    missing = tuple(item for item in required if item not in rendered)
+    if missing:
+        raise IterationContractError(
+            "runtime writer removed seed entrypoint precondition for "
+            f"{case_key}: " + ", ".join(repr(value) for value in missing)
+        )
+
+
+def _seed_cleanup_oracles(seed: TestCaseDesign) -> tuple[str, ...]:
+    oracles: list[str] = []
+    for item in seed.postconditions:
+        oracles.extend(
+            match.group(0).strip().rstrip(". ")
+            for match in _CLEANUP_ORACLE_RE.finditer(item)
+        )
+    return tuple(dict.fromkeys(value for value in oracles if value))
+
+
+def _validate_runtime_writer_preserves_seed_cleanup_oracles(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    postconditions: Sequence[str],
+) -> None:
+    required = _seed_cleanup_oracles(seed)
+    if not required:
+        return
+    postconditions_text = "\n".join(item.rstrip(". ") for item in postconditions)
+    missing = tuple(item for item in required if item not in postconditions_text)
+    if missing:
+        raise IterationContractError(
+            "runtime writer removed seed cleanup oracle for "
+            f"{case_key}: " + ", ".join(repr(value) for value in missing)
+        )
+
+
+def _validate_runtime_writer_does_not_add_unseeded_template_oracle(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    expected_result: str,
+) -> None:
+    if _RUNTIME_TEMPLATE_ORACLE_RE.search(expected_result) is None:
+        return
+    seed_text = "\n".join(
+        (
+            seed.title,
+            "\n".join(seed.preconditions),
+            "\n".join(seed.test_data),
+            "\n".join(seed.steps),
+            seed.expected_result,
+            "\n".join(seed.postconditions),
+        )
+    )
+    if _RUNTIME_TEMPLATE_ORACLE_RE.search(seed_text) is not None:
+        return
+    raise IterationContractError(
+        "runtime writer added unsupported mask/template oracle for "
+        f"{case_key}; keep sibling template/default-mask behavior in its own "
+        "source-bound case or registered design-support chain"
+    )
 
 
 def validate_runtime_writer_response(
@@ -1598,6 +1795,21 @@ def validate_runtime_writer_response(
             case_key=case_key,
             seed=seed,
             steps=steps,
+        )
+        _validate_runtime_writer_preserves_seed_entrypoint_preconditions(
+            case_key=case_key,
+            seed=seed,
+            preconditions=preconditions,
+        )
+        _validate_runtime_writer_preserves_seed_cleanup_oracles(
+            case_key=case_key,
+            seed=seed,
+            postconditions=postconditions,
+        )
+        _validate_runtime_writer_does_not_add_unseeded_template_oracle(
+            case_key=case_key,
+            seed=seed,
+            expected_result=expected_result,
         )
         runtime_text = "\n".join(
             [

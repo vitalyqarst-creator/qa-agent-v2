@@ -565,6 +565,50 @@ class IterationContractTests(unittest.TestCase):
             test_design_contract["prepared_value_execution"],
         )
         self.assertIn(
+            "cleanup oracle",
+            test_design_contract["cleanup_oracle_preservation"],
+        )
+        self.assertIn(
+            "Проверить, что ... удалена",
+            test_design_contract["cleanup_oracle_preservation"],
+        )
+        self.assertIn(
+            "protected_runtime_fragments.cleanup_oracles",
+            test_design_contract["cleanup_oracle_preservation"],
+        )
+        self.assertIn(
+            "entrypoint_preconditions",
+            test_design_contract["entrypoint_precondition_preservation"],
+        )
+        self.assertIn(
+            "Do not omit or rephrase",
+            test_design_contract["entrypoint_precondition_preservation"],
+        )
+        entrypoint_fragments = [
+            fragment
+            for case in request["cases"]
+            for fragment in case["protected_runtime_fragments"][
+                "entrypoint_preconditions"
+            ]
+        ]
+        self.assertEqual(["Открыть карточку клиента."], entrypoint_fragments)
+        cleanup_fragments = [
+            fragment
+            for case in request["cases"]
+            for fragment in case["protected_runtime_fragments"][
+                "cleanup_oracles"
+            ]
+        ]
+        self.assertEqual([], cleanup_fragments)
+        self.assertIn(
+            "Immediate input or selection proves only current visible value",
+            test_design_contract["no_persistence_without_commit"],
+        )
+        self.assertIn(
+            "mask/template",
+            test_design_contract["no_sibling_template_or_mask_oracle"],
+        )
+        self.assertIn(
             "Do not combine acceptance of a valid value and rejection",
             test_design_contract["one_dominant_oracle_polarity_per_case"],
         )
@@ -581,6 +625,18 @@ class IterationContractTests(unittest.TestCase):
             test_design_contract["input_restriction_classes"],
         )
         self.assertIn(
+            "Latin letters are valid",
+            test_design_contract["input_restriction_classes"],
+        )
+        self.assertIn(
+            "not greater than",
+            test_design_contract["boundary_value_classes"],
+        )
+        self.assertIn(
+            "current date + 1 day",
+            test_design_contract["boundary_value_classes"],
+        )
+        self.assertIn(
             "Implementation observations",
             test_design_contract["unsupported_observation_policy"],
         )
@@ -595,6 +651,26 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual(
             "+ ДОБАВИТЬ КОНТАКТНОЕ ЛИЦО",
             request["mockup_label_aliases"][0]["label_from_mockup"],
+        )
+
+    def test_runtime_writer_request_exposes_protected_cleanup_oracles(self) -> None:
+        from tests.test_test_design import _repeater_graph_and_context
+
+        graph, context = _repeater_graph_and_context()
+        plan = build_test_design_plan(graph, context=context)
+
+        request = build_runtime_writer_request(graph, plan)
+
+        cleanup_fragments = {
+            case["case_key"]: case["protected_runtime_fragments"][
+                "cleanup_oracles"
+            ]
+            for case in request["cases"]
+        }
+        add_key = "customer|customer-name|source-add-row|repeater-add|always"
+        self.assertIn(
+            "Проверить, что добавленная тестовая строка удалена",
+            cleanup_fragments[add_key],
         )
 
     def test_runtime_writer_schema_accepts_exact_structured_prose_payload(self) -> None:
@@ -788,6 +864,100 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_must_preserve_seed_cleanup_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(
+            plan.deterministic_cases[0],
+            postconditions=(
+                "Для добавленной тестовой строки выполнить действие: "
+                "Нажать кнопку `Корзина`. "
+                "Проверить, что добавленная тестовая строка удалена.",
+            ),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    postconditions=["Нажать кнопку `Корзина` в добавленной строке."],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "removed seed cleanup oracle.*добавленная тестовая строка удалена",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_persistence_oracle_without_commit_action(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=["Перейти к блоку `Контактные лица`."],
+                    steps=[
+                        "Ввести `Иван` в поле «Фамилия».",
+                        "Проверить, что в поле установлено значение `Иван`.",
+                    ],
+                    expected_result=(
+                        "Поле «Фамилия» доступно для редактирования и "
+                        "сохраняет введённое значение `Иван`."
+                    ),
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "unsupported persistence oracle.*commit, save, submit",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_unseeded_mask_template_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    expected_result=(
+                        seed.expected_result.rstrip(".")
+                        + " с учетом маски поля."
+                    ),
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "unsupported mask/template oracle",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_returns_model_prose_but_runner_preserves_identity_and_traceability(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
@@ -832,6 +1002,7 @@ class IterationContractTests(unittest.TestCase):
                 _runtime_writer_case(
                     seed,
                     preconditions=[
+                        "Открыть карточку клиента.",
                         "Открыть карточку `Заявка`.",
                         "Перейти в блок `Контактные лица`.",
                     ],
@@ -849,11 +1020,37 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual((), unresolved)
         self.assertEqual(
             (
+                "Открыть карточку клиента.",
                 "Открыть карточку `Заявка`.",
                 "Перейти в блок `Контактные лица`.",
             ),
             designs[0].preconditions,
         )
+
+    def test_runtime_writer_must_preserve_seed_entrypoint_preconditions(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=["Нажать кнопку `Добавить контактное лицо`."],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "removed seed entrypoint precondition",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
 
     def test_runtime_writer_rejects_case_type_drift_and_rejection_oracle_mismatch(
         self,
@@ -961,6 +1158,7 @@ class IterationContractTests(unittest.TestCase):
                 _runtime_writer_case(
                     seed,
                     preconditions=[
+                        "Открыть карточку клиента.",
                         "Перейти в блок `Контактные лица`.",
                         "Нажать кнопку «Добавить контактное лицо» два раза.",
                     ],
@@ -978,6 +1176,7 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual((), unresolved)
         self.assertEqual(
             (
+                "Открыть карточку клиента.",
                 "Перейти в блок `Контактные лица`.",
                 "Нажать кнопку «Добавить контактное лицо» два раза.",
             ),
@@ -1380,7 +1579,12 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn("one dominant oracle polarity", reviewer_prompt_instruction(2))
         self.assertIn("whitespace", reviewer_prompt_instruction(2))
         self.assertIn("alphabet/script", reviewer_prompt_instruction(2))
+        self.assertIn("source_review_attestation", reviewer_prompt_instruction(2))
+        self.assertIn("accepted clarification records", reviewer_prompt_instruction(2))
+        self.assertIn("current date + 1 day", reviewer_prompt_instruction(2))
+        self.assertIn("Latin letters are a supported positive representative", reviewer_prompt_instruction(2))
         self.assertIn("priority follows source-bound risk", reviewer_prompt_instruction(2))
+        self.assertIn("changes-required requires", reviewer_prompt_instruction(2))
         self.assertIn("source_projection_findings", schema["properties"])
         self.assertIn("test_case_findings", schema["properties"])
         self.assertEqual(1, schema["properties"]["case_results"]["minItems"])
@@ -1822,6 +2026,7 @@ class IterationContractTests(unittest.TestCase):
             "exact binding_role, obligation_id",
             "binding_item_index (-1 for primary)",
             "bind trigger_or_step to an actual TC step",
+            "Copy trigger_or_step and oracle exactly",
             "additional findings for the same probe",
             "same root defect affects multiple probes",
             "source-only validation trigger",

@@ -57,7 +57,7 @@ from test_case_agent.test_design import (
 
 MAX_WRITER_PROMPT_BYTES = 192 * 1024
 MAX_REVISION_WRITER_PROMPT_TARGET_BYTES = 110 * 1024
-MAX_REVIEWER_PROMPT_BYTES = 384 * 1024
+MAX_REVIEWER_PROMPT_BYTES = 512 * 1024
 
 
 class ImmutableIterationError(ValueError):

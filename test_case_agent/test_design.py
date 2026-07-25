@@ -696,14 +696,7 @@ def _runtime_labels_with_context(value: str) -> tuple[tuple[str, str], ...]:
     return tuple(labels)
 
 
-def _navigation_setup_from_source(value: str) -> tuple[str, ...]:
-    """Infer only card/block navigation from exact source labels.
-
-    This does not turn a passive source condition into a runtime assertion.  It
-    uses already accepted UI container labels to build the minimum executable
-    path required before a TC can interact with controls inside that container.
-    """
-
+def _source_container_labels(value: str) -> tuple[str, str]:
     card = ""
     block = ""
     for label, prefix in _runtime_labels_with_context(value):
@@ -713,13 +706,57 @@ def _navigation_setup_from_source(value: str) -> tuple[str, ...]:
             card = label
         if not block and _BLOCK_CONTEXT.search(prefix):
             block = label
+    return card, block
+
+
+def _navigation_setup_from_source(value: str) -> tuple[str, ...]:
+    """Infer only card/block navigation from exact source labels.
+
+    This does not turn a passive source condition into a runtime assertion.  It
+    uses already accepted UI container labels to build the minimum executable
+    path required before a TC can interact with controls inside that container.
+    """
+
+    card, block = _source_container_labels(value)
     if card and block:
-        return (f"Открыть карточку `{card}` и перейти к блоку `{block}`.",)
+        return (f"Открыть карточку `{card}`.", f"Перейти к блоку `{block}`.")
     if block:
         return (f"Перейти к блоку `{block}`.",)
     if card:
         return (f"Открыть карточку `{card}`.",)
     return ()
+
+
+def _scope_navigation_from_context(context: DesignContext) -> tuple[str, ...]:
+    """Derive the stable scope entry path from accepted context statements."""
+
+    card = ""
+    block = ""
+    for item in (*context.base_preconditions, *context.condition_preconditions.values()):
+        item_card, item_block = _source_container_labels(item)
+        if not card and item_card:
+            card = item_card
+        if not block and item_block:
+            block = item_block
+        if card and block:
+            break
+    if card and block:
+        return (f"Открыть карточку `{card}`.", f"Перейти к блоку `{block}`.")
+    if card:
+        return (f"Открыть карточку `{card}`.",)
+    if block:
+        return (f"Перейти к блоку `{block}`.",)
+    return ()
+
+
+def _with_scope_navigation_prefix(
+    actions: Sequence[str],
+    context: DesignContext,
+) -> tuple[str, ...]:
+    scope_navigation = _scope_navigation_from_context(context)
+    if not scope_navigation:
+        return tuple(_unique_steps(*actions))
+    return tuple(_unique_steps(*scope_navigation, *actions))
 
 
 def _selection_setup_from_condition(value: str) -> str:
@@ -972,7 +1009,7 @@ def runtime_preconditions_for_binding(
         ):
             actions.append(repeater_add_action.strip())
 
-    unique = tuple(_unique_steps(*actions))
+    unique = _with_scope_navigation_prefix(actions, context)
     if unique:
         return unique
     if condition:
@@ -1047,6 +1084,81 @@ def _source_row_action(*, row: str, action: str) -> str:
     """Bind an exact accepted action to a deterministic test-row identity."""
 
     return f"Для {row} выполнить действие: {action.strip()}"
+
+
+def _source_row_cleanup_action(
+    *,
+    row: str,
+    action: str,
+    oracle_subject: str,
+) -> str:
+    """Make source-backed cleanup observable, not just a blind UI click."""
+
+    return (
+        f"Для {row} выполнить действие: {action.strip()} "
+        f"Проверить, что {oracle_subject} удалена."
+    )
+
+
+def _postconditions_with_repeater_setup_cleanup(
+    *,
+    postconditions: Sequence[str],
+    preconditions: Sequence[str],
+    repeater_support: _RepeaterMutationSupport | None,
+) -> tuple[str, ...]:
+    """Ensure setup-created repeater rows have observable cleanup.
+
+    Many field-level checks inside a repeatable block need a temporary row
+    before the primary action can be executed.  If the case materializes the
+    sibling add action as setup, the design must also materialize the sibling
+    delete action as cleanup; otherwise the generated case is executable once
+    but leaves state behind for the next manual run.
+    """
+
+    current = tuple(item for item in postconditions if item.strip())
+    if repeater_support is None:
+        return current
+    add_action = repeater_support.add_obligation.validation_trigger.strip()
+    delete_action = repeater_support.delete_obligation.validation_trigger.strip()
+    if not add_action or not delete_action:
+        return current
+    if add_action not in {item.strip() for item in preconditions}:
+        return current
+    if any(delete_action in item and "удален" in _normalized_text(item) for item in current):
+        return current
+    cleanup = _source_row_cleanup_action(
+        row="добавленной тестовой строки",
+        action=delete_action,
+        oracle_subject="добавленная тестовая строка",
+    )
+    if not current or current == ("Не требуются.",):
+        return (cleanup,)
+    return (*current, cleanup)
+
+
+def _text_hyphen_valid_representatives(
+    *,
+    primary_fixture: str,
+    prop: CoverageProperty,
+    obligation: CoverageObligation,
+) -> tuple[str, ...]:
+    text = " ".join(
+        (
+            prop.canonical_statement,
+            obligation.atomic_statement,
+            obligation.observable_oracle,
+        )
+    ).casefold()
+    values = [primary_fixture]
+    if (
+        "текстов" in text
+        and "-" in text
+        and "кирил" not in text
+        and "русск" not in text
+        and all(not re.search(r"[A-Za-z]", item) for item in values)
+    ):
+        values.append("Ivan-Petrov")
+    return tuple(dict.fromkeys(item for item in values if item))
 
 
 def _select_repeater_mutation_support(
@@ -1319,9 +1431,10 @@ def _materialize(
         if (kind, obligation.coverage_variant) in _REPEATER_ADD_CONTRACTS:
             steps = [obligation.validation_trigger]
             postconditions_override = (
-                _source_row_action(
+                _source_row_cleanup_action(
                     row="добавленной тестовой строки",
                     action=delete_action,
+                    oracle_subject="добавленная тестовая строка",
                 ),
             )
         else:
@@ -1337,9 +1450,10 @@ def _materialize(
                 )
             ]
             postconditions_override = (
-                _source_row_action(
+                _source_row_cleanup_action(
                     row="оставшейся второй тестовой строки",
                     action=delete_action,
+                    oracle_subject="оставшаяся вторая тестовая строка",
                 ),
             )
     elif kind in {"source-requiredness", "source-optionalness"}:
@@ -1456,19 +1570,33 @@ def _materialize(
         valid_fixture = fixtures[0]
         invalid_fixtures = fixtures[1:]
         if case_variant == "allowed-class-valid":
+            valid_fixtures = _text_hyphen_valid_representatives(
+                primary_fixture=valid_fixture,
+                prop=prop,
+                obligation=obligation,
+            )
             title = f"Допустимое значение формата: {_display_subject(label)}"
             case_type = "позитивный"
-            test_data = [f"Допустимое значение: `{valid_fixture}`."]
-            steps = _unique_steps(
-                f"Ввести `{valid_fixture}` в {label}.",
-                (
-                    f"Проверить, что значение `{valid_fixture}` не отклоняется "
-                    "по правилу формата."
-                ),
-                f"Очистить {label} после проверки `{valid_fixture}`.",
-            )
+            test_data = [
+                f"Допустимое значение: `{item}`." for item in valid_fixtures
+            ]
+            steps = []
+            for item in valid_fixtures:
+                steps.extend(
+                    (
+                        f"Ввести `{item}` в {label}.",
+                        (
+                            f"Проверить, что значение `{item}` не отклоняется "
+                            "по правилу формата."
+                        ),
+                        f"Очистить {label} после проверки `{item}`.",
+                    )
+                )
+            steps = _unique_steps(*steps)
             expected_result = (
-                f"Значение `{valid_fixture}` не отклоняется по правилу формата."
+                "Каждое допустимое значение не отклоняется по правилу формата: "
+                + ", ".join(f"`{item}`" for item in valid_fixtures)
+                + "."
             )
         else:
             title = f"Недопустимые классы формата: {_display_subject(label)}"
@@ -1604,9 +1732,10 @@ def _materialize(
                 after_observation,
             )
             postconditions_override = (
-                _source_row_action(
+                _source_row_cleanup_action(
                     row="добавленной тестовой строки",
                     action=transition_cleanup,
+                    oracle_subject="добавленная тестовая строка",
                 ),
             )
         else:
@@ -1842,6 +1971,11 @@ def _materialize(
         (obligation.cleanup_strategy,)
         if obligation.cleanup_strategy.strip()
         else ("Не требуются.",)
+    )
+    postconditions = _postconditions_with_repeater_setup_cleanup(
+        postconditions=postconditions,
+        preconditions=preconditions,
+        repeater_support=repeater_support,
     )
     calibration_question = ""
     if case.status == "candidate-ui-calibration":
