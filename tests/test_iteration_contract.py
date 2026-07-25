@@ -997,6 +997,69 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual("Модельно написанный кейс", designs[0].title)
         self.assertEqual(("Ввести `Иван` в поле «Имя».",), designs[0].steps)
 
+    def test_runtime_writer_preserves_no_test_data_seed(self) -> None:
+        graph = _graph(
+            kind="source-editability",
+            fixtures=(),
+            trigger="Ввести или изменить значение поля «Имя».",
+        )
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        self.assertEqual(("Не требуются.",), seed.test_data)
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    test_data=["Значение для проверки: `Иван`."],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "changed no-test-data seed",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_nonconcrete_value_for_no_data_seed(self) -> None:
+        graph = _graph(
+            kind="source-editability",
+            fixtures=(),
+            trigger="Ввести или изменить значение поля «Имя».",
+        )
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    steps=[
+                        "Нажать поле «Имя».",
+                        "Выбрать любое доступное значение.",
+                    ],
+                    expected_result="Поле «Имя» отображает выбранное значение.",
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "non-concrete runtime value",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_accepts_action_oriented_preconditions(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

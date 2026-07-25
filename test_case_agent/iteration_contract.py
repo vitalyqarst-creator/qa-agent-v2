@@ -9,6 +9,8 @@ from typing import Any, Mapping, Sequence
 from test_case_agent.coverage_graph import CoverageGraph
 from test_case_agent.review_cycle.production_tc_gate import (
     ACTION_STEP_RE,
+    NONCONCRETE_RUNTIME_VALUE_RE,
+    PROHIBITED_RUNTIME_LOOKUP_RE,
     RUSSIAN_INFINITIVE_STEP_RE,
     production_precondition_problem,
     validate_production_tc_content,
@@ -1147,6 +1149,14 @@ def build_runtime_writer_request(
                     "replace concrete prepared values with aggregate wording such "
                     "as `поочередно вводить каждое значение`."
                 ),
+                "no_test_data_preservation": (
+                    "When `seed_runtime.test_data` is exactly `Не требуются.`, "
+                    "keep `test_data` exactly `Не требуются.` and do not invent "
+                    "runtime placeholders such as `любое доступное значение`, "
+                    "`значение из списка`, or a value chosen during execution. "
+                    "If the seed probes editability by focus/opening a control, "
+                    "do not add value selection or value-acceptance checks."
+                ),
                 "cleanup_oracle_preservation": (
                     "When `seed_runtime.postconditions` contains a cleanup oracle "
                     "like `Проверить, что ... удалена`, preserve that exact "
@@ -1600,6 +1610,44 @@ def _validate_runtime_writer_executes_seed_prepared_values(
         )
 
 
+def _runtime_nonconcrete_value_problem(
+    *,
+    test_data: Sequence[str],
+    steps: Sequence[str],
+) -> str | None:
+    inspected_text = PROHIBITED_RUNTIME_LOOKUP_RE.sub(
+        "",
+        "\n".join((*test_data, *steps)),
+    )
+    match = NONCONCRETE_RUNTIME_VALUE_RE.search(inspected_text)
+    return match.group(0) if match is not None else None
+
+
+def _validate_runtime_writer_preserves_seed_no_test_data(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    test_data: Sequence[str],
+    steps: Sequence[str],
+) -> None:
+    if tuple(seed.test_data) != ("Не требуются.",):
+        return
+    if tuple(test_data) != ("Не требуются.",):
+        raise IterationContractError(
+            "runtime writer changed no-test-data seed for "
+            f"{case_key}: expected exact `Не требуются.`"
+        )
+    nonconcrete = _runtime_nonconcrete_value_problem(
+        test_data=test_data,
+        steps=steps,
+    )
+    if nonconcrete is not None:
+        raise IterationContractError(
+            "runtime writer invented a non-concrete runtime value for "
+            f"{case_key}: {nonconcrete}"
+        )
+
+
 def _seed_entrypoint_preconditions(seed: TestCaseDesign) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(
@@ -1821,6 +1869,12 @@ def validate_runtime_writer_response(
         _validate_runtime_writer_executes_seed_prepared_values(
             case_key=case_key,
             seed=seed,
+            steps=steps,
+        )
+        _validate_runtime_writer_preserves_seed_no_test_data(
+            case_key=case_key,
+            seed=seed,
+            test_data=test_data,
             steps=steps,
         )
         _validate_runtime_writer_preserves_seed_entrypoint_preconditions(
