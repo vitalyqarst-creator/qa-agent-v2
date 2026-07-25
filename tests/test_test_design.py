@@ -316,10 +316,10 @@ class TestDesignTests(unittest.TestCase):
             plan.deterministic_cases[0].steps,
         )
 
-    def test_source_editability_reuses_valid_same_subject_fixture(self) -> None:
+    def test_source_editability_does_not_mix_value_acceptance(self) -> None:
         graph = _graph(
             kind="source-editability",
-            fixtures=("Тест",),
+            fixtures=(),
             trigger="Ввести или изменить значение поля «Имя».",
         )
         graph = replace(
@@ -368,9 +368,69 @@ class TestDesignTests(unittest.TestCase):
 
         case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
 
-        self.assertIn("`Иван`", case.test_data[0])
-        self.assertNotIn("`Тест`", case.test_data[0])
-        self.assertIn("`Иван`", case.steps[0])
+        self.assertEqual(("Не требуются.",), case.test_data)
+        self.assertEqual(("Установить фокус в поле «Имя».",), case.steps)
+        self.assertEqual(
+            (
+                "Поле «Имя» находится в редактируемом состоянии: "
+                "фокус устанавливается, ввод не заблокирован."
+            ),
+            case.expected_result,
+        )
+        self.assertNotIn("`Иван`", "\n".join((*case.test_data, *case.steps)))
+
+    def test_source_editability_uses_list_open_probe_for_dictionary_controls(
+        self,
+    ) -> None:
+        graph = _graph(
+            kind="source-editability",
+            fixtures=("Иное",),
+            trigger="Ввести или изменить значение поля «Отношение к заявителю».",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement="Список «Отношение к заявителю» редактируем.",
+                ),
+                CoverageProperty(
+                    property_id="PROP-REL-DICT",
+                    assertion_id="ASSERT-REL-DICT",
+                    property_key="relation:dictionary",
+                    subject_key="customer-name",
+                    property_kind="dictionary",
+                    source_row_id="SRC-DICT",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[3]",
+                    source_text_sha256="7" * 64,
+                    canonical_statement=(
+                        "Список «Отношение к заявителю» содержит значение `Иное`."
+                    ),
+                    requirement_codes=("BSR 3",),
+                    disposition="tc",
+                    polarity="positive",
+                ),
+                *graph.properties[1:],
+            ),
+        )
+        context = replace(
+            _context(),
+            subject_labels={
+                **_context().subject_labels,
+                "customer-name": "Отношение к заявителю",
+            },
+        )
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        self.assertEqual(("Не требуются.",), case.test_data)
+        self.assertEqual(("Открыть список `Отношение к заявителю`.",), case.steps)
+        self.assertEqual(
+            "Список `Отношение к заявителю` открывается и доступен для выбора.",
+            case.expected_result,
+        )
+        self.assertNotIn("`Иное`", "\n".join((*case.test_data, *case.steps)))
 
     def test_input_action_without_target_gets_typed_subject_wrapper(self) -> None:
         graph = _graph(

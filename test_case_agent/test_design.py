@@ -829,6 +829,41 @@ def _source_input_action_with_value(
     return f"{bound_action.rstrip('. ')}; использовать значение `{value}`."
 
 
+def _runtime_field_label(label: str) -> str:
+    value = label.strip().strip("`").strip("«»")
+    if _QUALIFIED_SUBJECT.match(label.strip()):
+        return label.strip()
+    return f"поле `{value}`"
+
+
+def _sentence_start(value: str) -> str:
+    if not value:
+        return value
+    return value[0].upper() + value[1:]
+
+
+def _source_editability_probe(
+    *,
+    label: str,
+    action: str,
+    subject_has_dictionary: bool = False,
+) -> tuple[str, str]:
+    target = _runtime_field_label(label)
+    text = _normalized_text(" ".join((label, action)))
+    if subject_has_dictionary or "список" in text:
+        value = label.strip().strip("`").strip("«»")
+        list_target = f"список `{value}`"
+        return (
+            f"Открыть {list_target}.",
+            f"{_sentence_start(list_target)} открывается и доступен для выбора.",
+        )
+    return (
+        f"Установить фокус в {target}.",
+        f"{_sentence_start(target)} находится в редактируемом состоянии: "
+        "фокус устанавливается, ввод не заблокирован.",
+    )
+
+
 def _validation_commit_step(
     *,
     label: str,
@@ -1283,6 +1318,7 @@ def _materialize(
     obligation: CoverageObligation,
     context: DesignContext,
     subject_fixture_values: Mapping[str, tuple[str, ...]],
+    dictionary_subject_keys: set[str] | frozenset[str] = frozenset(),
     invariant_transition: _InvariantTransition | None = None,
     repeater_support: _RepeaterMutationSupport | None = None,
 ) -> TestCaseDesign | WriterCard | BlockedCard:
@@ -1487,30 +1523,15 @@ def _materialize(
                 obligation=obligation,
                 reason="source-editability requires an exact action contract",
             )
-        values = _editability_fixture_values(
-            prop=prop,
-            obligation=obligation,
-            subject_fixture_values=subject_fixture_values,
-        )
-        if not values:
-            return _blocked_card(
-                case=case,
-                prop=prop,
-                obligation=obligation,
-                reason="source-editability requires a valid same-subject fixture value",
-            )
         title = obligation.atomic_statement.rstrip(". ")
         case_type = "негативный" if prop.polarity == "negative" else "позитивный"
-        value = _display_fixture_for_label(label, values[0])
-        test_data = [f"Тестовое значение: `{value}`."]
-        steps = _unique_steps(
-            _source_input_action_with_value(
-                kind=kind,
-                action=obligation.validation_trigger,
-                label=label,
-                value=value,
-            )
+        test_data = ["Не требуются."]
+        editability_step, expected_result = _source_editability_probe(
+            label=label,
+            action=obligation.validation_trigger,
+            subject_has_dictionary=prop.subject_key in dictionary_subject_keys,
         )
+        steps = _unique_steps(editability_step)
     elif kind == "source-date-boundary" and obligation.coverage_variant == "not-future":
         if not obligation.validation_trigger.strip():
             return _blocked_card(
@@ -2059,6 +2080,9 @@ def build_test_design_plan(
         executable_obligations=executable_obligations,
     )
     fixture_values_by_subject = _subject_fixture_values(graph, properties)
+    dictionary_subject_keys = {
+        item.subject_key for item in graph.properties if item.property_kind == "dictionary"
+    }
     default_repeater_support = (
         sorted(
             {
@@ -2113,6 +2137,7 @@ def build_test_design_plan(
             obligation=obligation,
             context=context,
             subject_fixture_values=fixture_values_by_subject,
+            dictionary_subject_keys=dictionary_subject_keys,
             invariant_transition=(
                 invariant_transitions.get(prop.subject_key, [None])[0]
                 if obligation.coverage_variant == "always-visible"
