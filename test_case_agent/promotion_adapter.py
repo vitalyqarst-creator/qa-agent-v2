@@ -11,7 +11,7 @@ from test_case_agent.iteration_contract import (
     REVIEWER_FALSIFICATION_PROBES,
     has_complete_all_row_parity,
     reviewer_acceptance_contract,
-    reviewer_prompt_instruction,
+    reviewer_prompt_instruction_for_request,
     reviewer_response_schema,
 )
 from test_case_agent.reviewer_evidence import (
@@ -700,7 +700,7 @@ def _validate_reviewer_request(
                 or raw.get("source_row_id") not in set(source_row_ids)
                 or primary is None
                 or primary[0] != tc_id
-                or primary[1] == obligation_id
+                or (primary[1] == obligation_id and support_role == "action")
                 or not isinstance(design, Mapping)
                 or obligation_id not in design.get("traceability", [])
                 or not isinstance(field_items, list)
@@ -1479,12 +1479,48 @@ def prepare_immutable_iteration_promotion(
         repo_root=repo_root,
         snapshots=snapshots,
     )
-    expected_prompt = (
-        f"{reviewer_prompt_instruction(reviewer_schema_version)}\nREQUEST JSON:\n"
+    expected_full_prompt = (
+        f"{reviewer_prompt_instruction_for_request(request)}\nREQUEST JSON:\n"
         f"{_canonical_bytes(request).decode('utf-8')}\n"
     ).encode("utf-8")
-    if prompt_snapshot.raw != expected_prompt:
-        raise _blocked("review-prompt-mismatch", "reviewer prompt is not the exact request projection")
+    if prompt_snapshot.raw != expected_full_prompt:
+        model_request_path = cycle_dir / "model-stages" / "reviewer-model-request.json"
+        if not model_request_path.is_file():
+            raise _blocked(
+                "review-prompt-mismatch",
+                "reviewer prompt is not the exact request projection",
+            )
+        model_request_snapshot = _snapshot(
+            model_request_path,
+            "reviewer model request",
+        )
+        snapshots.append(model_request_snapshot)
+        model_request = _json(model_request_snapshot, "reviewer model request")
+        model_context = model_request.get("model_context")
+        if (
+            not isinstance(model_context, Mapping)
+            or model_context.get("context_contract")
+            != "reviewer-model-request-compact-v1"
+            or model_context.get("full_request_sha256")
+            != _canonical_digest(request)
+            or model_context.get("full_request_bytes")
+            != len(_canonical_bytes(request))
+            or model_context.get("model_request_bytes")
+            != len(_canonical_bytes(model_request))
+        ):
+            raise _blocked(
+                "review-prompt-mismatch",
+                "reviewer compact model request is not bound to the full request",
+            )
+        expected_compact_prompt = (
+            f"{reviewer_prompt_instruction_for_request(model_request)}\nREQUEST JSON:\n"
+            f"{_canonical_bytes(model_request).decode('utf-8')}\n"
+        ).encode("utf-8")
+        if prompt_snapshot.raw != expected_compact_prompt:
+            raise _blocked(
+                "review-prompt-mismatch",
+                "reviewer prompt is not the exact compact request projection",
+            )
     expected_schema = reviewer_response_schema(
         case_bindings,
         graph_digest=graph_digest,

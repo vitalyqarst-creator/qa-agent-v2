@@ -295,6 +295,16 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "the only blocking reason in summary."
 )
 
+REVIEWER_COMPACT_MODEL_CONTEXT_INSTRUCTION = (
+    " The REQUEST JSON is a digest-bound compact model view of the full "
+    "reviewer-request.json. Do not report omitted deterministic "
+    "hash/path/locator proof fields as defects when the corresponding source "
+    "row IDs, exact source text/fragments, test-case designs, coverage "
+    "mappings, design-support mappings, and full-request digest are present. "
+    "Your response is still validated by the runner against the full request "
+    "contract."
+)
+
 
 def reviewer_prompt_instruction(schema_version: int) -> str:
     if schema_version == 2:
@@ -304,6 +314,21 @@ def reviewer_prompt_instruction(schema_version: int) -> str:
     raise IterationContractError(
         f"unsupported reviewer request schema_version: {schema_version}"
     )
+
+
+def reviewer_prompt_instruction_for_request(request: Mapping[str, Any]) -> str:
+    raw_version = request.get("schema_version")
+    if type(raw_version) is not int:
+        raise IterationContractError("reviewer request schema_version must be an integer")
+    instruction = reviewer_prompt_instruction(raw_version)
+    model_context = request.get("model_context")
+    if (
+        isinstance(model_context, Mapping)
+        and model_context.get("context_contract")
+        == "reviewer-model-request-compact-v1"
+    ):
+        instruction += REVIEWER_COMPACT_MODEL_CONTEXT_INSTRUCTION
+    return instruction
 
 
 def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:

@@ -16,6 +16,7 @@ from test_case_agent.immutable_iteration import (
     MAX_REVIEWER_PROMPT_BYTES,
     MAX_REVISION_WRITER_PROMPT_TARGET_BYTES,
     MAX_WRITER_PROMPT_BYTES,
+    _compact_reviewer_request_for_model,
     _run_stage,
     _stage_prompt,
     run_immutable_iteration,
@@ -1590,6 +1591,190 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertEqual(1, model_calls)
         self.assertEqual(["reviewer"], backend.calls)
         self.assertEqual(prompt_size, receipt["input_artifacts"]["prompt_bytes"])
+
+    def test_reviewer_model_request_compacts_redundant_proof_fields(self) -> None:
+        request = {
+            "schema_version": 2,
+            "graph_digest": "graph-digest",
+            "draft_sha256": "draft-digest",
+            "evidence_pack_sha256": "pack-digest",
+            "reviewer_evidence_pack": {
+                "source_structure": {
+                    "docx_xhtml_pdf_parity": {
+                        "status": "complete",
+                        "large_row_proof": "x" * 2000,
+                    }
+                },
+                "literal_source_evidence": [
+                    {
+                        "source_row_id": "SRC-001",
+                        "source_path": "source.xhtml",
+                        "source_locator": "/html/body/table/tr[1]",
+                        "source_text_sha256": "source-text-sha",
+                        "bounded_source_text": "Exact source text remains.",
+                    }
+                ],
+                "supporting_evidence_mapping": [
+                    {
+                        "source_path": "source.xhtml",
+                        "source_locator": "/html/body/table/tr[1]",
+                        "exact_source_fragment_sha256": "fragment-sha",
+                        "exact_source_fragment": "Exact source fragment remains.",
+                        "source_row_id": "SRC-001",
+                    }
+                ],
+                "design_support_mapping": [
+                    {
+                        "materialized_text": "Open the card.",
+                        "materialized_text_sha256": "materialized-sha",
+                        "case_key": "case-001",
+                    }
+                ],
+                "normalized_projection": {
+                    "properties": [
+                        {
+                            "source_path": "source.xhtml",
+                            "source_locator": "/html/body/table/tr[1]",
+                            "source_text_sha256": "source-text-sha",
+                            "source_row_id": "SRC-001",
+                            "canonical_statement": "Exact source text remains.",
+                        }
+                    ],
+                    "cases": [{"case_key": "case-001", "tc_id": "TC-001"}],
+                },
+            },
+            "acceptance": {},
+        }
+
+        compact = _compact_reviewer_request_for_model(request)
+
+        full_bytes = len(
+            json.dumps(
+                request,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        compact_bytes = len(
+            json.dumps(
+                compact,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        self.assertLess(compact_bytes, full_bytes)
+        self.assertEqual(
+            "reviewer-model-request-compact-v1",
+            compact["model_context"]["context_contract"],
+        )
+        self.assertEqual(full_bytes, compact["model_context"]["full_request_bytes"])
+        self.assertEqual(
+            compact_bytes, compact["model_context"]["model_request_bytes"]
+        )
+        compact_pack = compact["reviewer_evidence_pack"]
+        self.assertEqual(
+            "Exact source text remains.",
+            compact_pack["literal_source_evidence"][0]["bounded_source_text"],
+        )
+        self.assertEqual(
+            "Exact source fragment remains.",
+            compact_pack["supporting_evidence_mapping"][0][
+                "exact_source_fragment"
+            ],
+        )
+        self.assertNotIn(
+            "source_path", compact_pack["supporting_evidence_mapping"][0]
+        )
+        self.assertNotIn(
+            "materialized_text_sha256", compact_pack["design_support_mapping"][0]
+        )
+        self.assertNotIn(
+            "source_text_sha256",
+            compact_pack["normalized_projection"]["properties"][0],
+        )
+        self.assertIn(
+            "full_payload_sha256",
+            compact_pack["source_structure"]["docx_xhtml_pdf_parity"],
+        )
+        self.assertNotIn("model_context", request)
+        self.assertIn(
+            "large_row_proof",
+            request["reviewer_evidence_pack"]["source_structure"][
+                "docx_xhtml_pdf_parity"
+            ],
+        )
+
+    def test_run_stage_uses_compact_reviewer_model_request(self) -> None:
+        request = {
+            "schema_version": 2,
+            "graph_digest": "graph-digest",
+            "draft_sha256": "draft-digest",
+            "evidence_pack_sha256": "pack-digest",
+            "reviewer_evidence_pack": {
+                "source_structure": {
+                    "docx_xhtml_pdf_parity": {
+                        "status": "complete",
+                        "large_row_proof": "x" * 3000,
+                    }
+                },
+                "literal_source_evidence": [],
+                "supporting_evidence_mapping": [],
+                "design_support_mapping": [],
+                "normalized_projection": {"properties": [], "cases": []},
+            },
+            "acceptance": {},
+        }
+        schema = {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"ok": {"type": "boolean"}},
+            "required": ["ok"],
+        }
+        model_calls = 0
+
+        def record_model_call() -> None:
+            nonlocal model_calls
+            model_calls += 1
+
+        output_dir = self.root / "compact-reviewer-model-request"
+        payload, receipt, called_model = _run_stage(
+            stage="reviewer",
+            request=request,
+            schema=schema,
+            output_dir=output_dir,
+            repo_root=self.root,
+            backend=TinyBackend(),
+            precomputed=None,
+            on_model_call=record_model_call,
+        )
+
+        self.assertEqual({"ok": True}, payload)
+        self.assertTrue(called_model)
+        self.assertEqual(1, model_calls)
+        prompt = (
+            output_dir / "model-stages" / "reviewer-prompt.txt"
+        ).read_text(encoding="utf-8")
+        model_request = json.loads(
+            (
+                output_dir / "model-stages" / "reviewer-model-request.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertIn("reviewer-model-request-compact-v1", prompt)
+        self.assertNotIn("x" * 1000, prompt)
+        self.assertIn("full_payload_sha256", prompt)
+        self.assertEqual(
+            model_request["model_context"]["model_request_bytes"],
+            receipt["input_artifacts"]["model_request_bytes"],
+        )
+        self.assertGreater(
+            receipt["input_artifacts"]["request_bytes"],
+            receipt["input_artifacts"]["model_request_bytes"],
+        )
+        self.assertNotEqual(
+            receipt["request_sha256"], receipt["model_request_sha256"]
+        )
 
     def test_v2_registered_mockup_is_forwarded_once_and_receipted(self) -> None:
         graph = _graph()

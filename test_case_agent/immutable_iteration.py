@@ -23,7 +23,7 @@ from test_case_agent.iteration_contract import (
     request_sha256,
     reviewer_deferred_test_case_findings,
     reviewer_acceptance_contract,
-    reviewer_prompt_instruction,
+    reviewer_prompt_instruction_for_request,
     reviewer_response_schema,
     runtime_writer_response_schema,
     validate_runtime_writer_response,
@@ -182,6 +182,107 @@ def _write_text(path: Path, value: str) -> None:
 
 def _json_size(value: Any) -> int:
     return len(_json_bytes(value))
+
+
+def _compact_reviewer_request_for_model(
+    request: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build a live-reviewer view without dropping audited request evidence.
+
+    ``reviewer-request.json`` remains the full contract payload used for
+    validation, promotion, and receipt binding.  The model prompt does not need
+    repeated deterministic hashes/locators when the same objects remain bound by
+    stable IDs and a full-request digest.  This compact view is therefore used
+    only for model transport.
+    """
+
+    if request.get("schema_version") != 2:
+        return dict(request)
+    pack = request.get("reviewer_evidence_pack")
+    if not isinstance(pack, Mapping):
+        return dict(request)
+    source_structure = pack.get("source_structure")
+    if not isinstance(source_structure, Mapping):
+        return dict(request)
+
+    compact_request = copy.deepcopy(dict(request))
+    compact_pack = compact_request.get("reviewer_evidence_pack")
+    if not isinstance(compact_pack, dict):  # pragma: no cover - guarded above
+        return compact_request
+    compact_source_structure = compact_pack.get("source_structure")
+    if not isinstance(compact_source_structure, dict):  # pragma: no cover
+        return compact_request
+
+    omitted_fields: list[str] = []
+
+    parity = compact_source_structure.get("docx_xhtml_pdf_parity")
+    if isinstance(parity, Mapping):
+        compact_source_structure["docx_xhtml_pdf_parity"] = {
+            "compact_omitted_from_model_prompt": True,
+            "full_payload_sha256": hashlib.sha256(_json_bytes(parity)).hexdigest(),
+            "full_payload_bytes": _json_size(parity),
+            "status": parity.get("status", "unavailable"),
+            "top_level_keys": sorted(str(key) for key in parity),
+            "rationale": (
+                "Detailed parity proof is preserved in reviewer-request.json; "
+                "the live prompt uses this digest-bound summary because the "
+                "accepted source review and literal row evidence remain present."
+            ),
+        }
+        omitted_fields.append(
+            "reviewer_evidence_pack.source_structure.docx_xhtml_pdf_parity"
+        )
+
+    for item in compact_pack.get("supporting_evidence_mapping", []):
+        if isinstance(item, dict):
+            for field in (
+                "source_path",
+                "source_locator",
+                "exact_source_fragment_sha256",
+            ):
+                if field in item:
+                    item.pop(field)
+                    omitted_fields.append(
+                        f"reviewer_evidence_pack.supporting_evidence_mapping[].{field}"
+                    )
+
+    for item in compact_pack.get("design_support_mapping", []):
+        if isinstance(item, dict) and "materialized_text_sha256" in item:
+            item.pop("materialized_text_sha256")
+            omitted_fields.append(
+                "reviewer_evidence_pack.design_support_mapping[].materialized_text_sha256"
+            )
+
+    normalized_projection = compact_pack.get("normalized_projection")
+    if isinstance(normalized_projection, dict):
+        for item in normalized_projection.get("properties", []):
+            if isinstance(item, dict):
+                for field in ("source_path", "source_locator", "source_text_sha256"):
+                    if field in item:
+                        item.pop(field)
+                        omitted_fields.append(
+                            f"reviewer_evidence_pack.normalized_projection.properties[].{field}"
+                        )
+
+    compact_request["model_context"] = {
+        "context_contract": "reviewer-model-request-compact-v1",
+        "full_request_sha256": request_sha256(request),
+        "full_request_bytes": _json_size(request),
+        "model_request_bytes": 0,
+        "omitted_field_kinds": sorted(set(omitted_fields)),
+        "review_contract": (
+            "Validate the draft semantically against this compact view; the "
+            "runner validates the response against the full reviewer-request.json."
+        ),
+    }
+    previous_size = -1
+    while True:
+        current_size = _json_size(compact_request)
+        if current_size == previous_size:
+            break
+        compact_request["model_context"]["model_request_bytes"] = current_size
+        previous_size = current_size
+    return compact_request
 
 
 def _resolve_inside_repo(path: Path, repo_root: Path, label: str) -> Path:
@@ -368,12 +469,10 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
                 "author case prose or add identifiers that are absent from the card."
             )
     elif stage == "reviewer":
-        raw_version = request.get("schema_version")
-        if type(raw_version) is not int:
-            raise ImmutableIterationError(
-                "reviewer request schema_version must be an integer"
-            )
-        instruction = reviewer_prompt_instruction(raw_version)
+        try:
+            instruction = reviewer_prompt_instruction_for_request(request)
+        except IterationContractError as exc:
+            raise ImmutableIterationError(str(exc)) from exc
         if "revision_review_scope" in request:
             instruction += (
                 " This is a bounded revision review. Full-review only the "
@@ -625,6 +724,7 @@ def _normalize_stage_receipt(
     schema_path: Path,
     response_path: Path,
     request: Mapping[str, Any],
+    model_request: Mapping[str, Any],
     images: tuple[RegisteredImageInput, ...],
 ) -> dict[str, Any]:
     if not isinstance(raw, Mapping):
@@ -720,6 +820,7 @@ def _normalize_stage_receipt(
         "tool_event_count": tool_event_count,
         "timeout_seconds": None,
         "request_sha256": request_sha256(request),
+        "model_request_sha256": request_sha256(model_request),
         "prompt_sha256": sha256_path(prompt_path),
         "schema_sha256": sha256_path(schema_path),
         "response_sha256": sha256_path(response_path),
@@ -733,6 +834,7 @@ def _normalize_stage_receipt(
             "prompt_bytes": prompt_path.stat().st_size,
             "schema_bytes": schema_path.stat().st_size,
             "request_bytes": len(_json_bytes(request)),
+            "model_request_bytes": len(_json_bytes(model_request)),
         },
         "image_attachments": {
             "count": expected_image_count,
@@ -830,7 +932,12 @@ def _run_stage(
         validate_openai_strict_output_schema(schema)
     except ValueError as exc:
         raise ImmutableIterationError(f"{stage} schema is invalid: {exc}") from exc
-    prompt = _stage_prompt(stage, request)
+    model_request: Mapping[str, Any]
+    if stage == "reviewer":
+        model_request = _compact_reviewer_request_for_model(request)
+    else:
+        model_request = request
+    prompt = _stage_prompt(stage, model_request)
     limit = MAX_WRITER_PROMPT_BYTES if stage == "writer" else MAX_REVIEWER_PROMPT_BYTES
     prompt_size = len(prompt.encode("utf-8"))
     if prompt_size > limit:
@@ -848,9 +955,12 @@ def _run_stage(
         raise ImmutableIterationError(message)
     model_dir = output_dir / "model-stages"
     prompt_path = model_dir / f"{stage}-prompt.txt"
+    model_request_path = model_dir / f"{stage}-model-request.json"
     schema_path = model_dir / f"{stage}-output-schema.json"
     response_path = model_dir / f"{stage}-response.json"
     _write_text(prompt_path, prompt)
+    if model_request != request:
+        _write_json(model_request_path, dict(model_request))
     _write_json(schema_path, dict(schema))
     started_ns = time.perf_counter_ns()
     precomputed_schema_upgrade = False
@@ -953,6 +1063,7 @@ def _run_stage(
         schema_path=schema_path,
         response_path=response_path,
         request=request,
+        model_request=model_request,
         images=transported_images,
     )
     return payload, receipt, called_model
