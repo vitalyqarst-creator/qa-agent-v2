@@ -1565,6 +1565,7 @@ def _materialize(
         if case_variant == "not-future-valid-boundary":
             title = f"Допустимые граничные даты: {_display_subject(label)}"
             case_type = "позитивный"
+            target = _runtime_field_label(label)
             test_data = [
                 f"Допустимое граничное значение: `{previous_day}`.",
                 f"Допустимое граничное значение: `{current_day}`.",
@@ -1573,20 +1574,20 @@ def _materialize(
                 "Рассчитать граничные даты относительно даты выполнения проверки.",
                 f"Ввести `{previous_day}` в {label}.",
                 (
-                    f"Проверить, что значение `{previous_day}` не отклоняется "
-                    "по правилу запрета будущей даты."
+                    f"Проверить, что {target} отображает рассчитанное значение "
+                    f"`{previous_day}`."
                 ),
                 f"Очистить {label} после проверки `{previous_day}`.",
                 f"Ввести `{current_day}` в {label}.",
                 (
-                    f"Проверить, что значение `{current_day}` не отклоняется "
-                    "по правилу запрета будущей даты."
+                    f"Проверить, что {target} отображает рассчитанное значение "
+                    f"`{current_day}`."
                 ),
                 f"Очистить {label} после проверки `{current_day}`.",
             )
             expected_result = (
-                "Значения `текущая дата - 1 день` и `текущая дата` "
-                "не отклоняются по правилу запрета будущей даты."
+                f"{_sentence_start(target)} отображает рассчитанные значения "
+                "`текущая дата - 1 день` и `текущая дата` после ввода."
             )
         else:
             title = obligation.atomic_statement.rstrip(". ")
@@ -1619,6 +1620,7 @@ def _materialize(
             )
             title = f"Допустимое значение формата: {_display_subject(label)}"
             case_type = "позитивный"
+            target = _runtime_field_label(label)
             test_data = [
                 f"Допустимое значение: `{item}`." for item in valid_fixtures
             ]
@@ -1627,16 +1629,14 @@ def _materialize(
                 steps.extend(
                     (
                         f"Ввести `{item}` в {label}.",
-                        (
-                            f"Проверить, что значение `{item}` не отклоняется "
-                            "по правилу формата."
-                        ),
+                        f"Проверить, что {target} отображает значение `{item}`.",
                         f"Очистить {label} после проверки `{item}`.",
                     )
                 )
             steps = _unique_steps(*steps)
             expected_result = (
-                "Каждое допустимое значение не отклоняется по правилу формата: "
+                f"{_sentence_start(target)} отображает каждое введённое "
+                "допустимое значение: "
                 + ", ".join(f"`{item}`" for item in valid_fixtures)
                 + "."
             )
@@ -1680,14 +1680,13 @@ def _materialize(
         else:
             title = f"Допустимое значение формата: {_display_subject(label)}"
             case_type = "позитивный"
+            target = _runtime_field_label(label)
             test_data = [f"Допустимое значение: `{fixture}`."]
             steps = _unique_steps(
                 f"Ввести `{fixture}` в {label}.",
-                (
-                    f"Проверить, что значение `{fixture}` не отклоняется "
-                    "по правилу формата."
-                ),
+                f"Проверить, что {target} отображает значение `{fixture}`.",
             )
+            expected_result = f"{_sentence_start(target)} отображает значение `{fixture}`."
     elif kind == "source-format":
         return _blocked_card(
             case=case,

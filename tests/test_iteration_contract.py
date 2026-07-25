@@ -779,9 +779,9 @@ class IterationContractTests(unittest.TestCase):
             test_data=("Допустимое значение: `Иван-Петров`.",),
             steps=(
                 "Ввести `Иван-Петров` в поле «Фамилия».",
-                "Проверить, что значение `Иван-Петров` не отклоняется по правилу формата.",
+                "Проверить, что поле «Фамилия» отображает значение `Иван-Петров`.",
             ),
-            expected_result="Значение `Иван-Петров` не отклоняется по правилу формата.",
+            expected_result="Поле «Фамилия» отображает значение `Иван-Петров`.",
         )
         valid_plan = replace(plan, deterministic_cases=(valid_seed,))
         missing_valid_payload = _runtime_writer_payload(
@@ -799,6 +799,45 @@ class IterationContractTests(unittest.TestCase):
         ):
             validate_runtime_writer_response(
                 missing_valid_payload,
+                graph=graph,
+                plan=valid_plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_negated_rejection_positive_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(
+            plan.deterministic_cases[0],
+            case_type="позитивный",
+            test_data=("Допустимое значение: `Иван-Петров`.",),
+            steps=(
+                "Ввести `Иван-Петров` в поле «Фамилия».",
+                "Проверить, что поле «Фамилия» отображает значение `Иван-Петров`.",
+            ),
+            expected_result="Поле «Фамилия» отображает значение `Иван-Петров`.",
+        )
+        valid_plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    steps=[
+                        "Ввести `Иван-Петров` в поле «Фамилия».",
+                        "Проверить, что значение `Иван-Петров` не отклоняется по правилу формата.",
+                    ],
+                    expected_result="Значение `Иван-Петров` не отклоняется по правилу формата.",
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "unsupported positive acceptance oracle",
+        ):
+            validate_runtime_writer_response(
+                payload,
                 graph=graph,
                 plan=valid_plan,
                 context=_context(),
@@ -1721,6 +1760,30 @@ class IterationContractTests(unittest.TestCase):
 
         self.assertFalse(gate.passed)
         self.assertIn("scope entrypoint precondition missing", " ".join(gate.findings))
+
+    def test_suite_gate_rejects_negated_rejection_positive_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        case = replace(
+            plan.deterministic_cases[0],
+            case_type="позитивный",
+            steps=(
+                "Ввести `Иван-Петров` в поле «Имя».",
+                "Проверить, что значение `Иван-Петров` не отклоняется по правилу формата.",
+            ),
+            expected_result="Значение `Иван-Петров` не отклоняется по правилу формата.",
+        )
+        markdown = render_test_cases((case,), scope_title="Данные клиента")
+
+        gate = validate_suite(
+            graph=graph,
+            cases=(case,),
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+
+        self.assertFalse(gate.passed)
+        self.assertIn("unsupported positive acceptance oracle", " ".join(gate.findings))
 
     def test_reviewer_request_is_compact_source_first_projection(self) -> None:
         graph = _graph()

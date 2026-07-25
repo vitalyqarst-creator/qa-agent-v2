@@ -148,6 +148,7 @@ source/TC-backed design defect, доказанный самими артефак
 - TC asserts Latin/Cyrillic/whitespace acceptance or rejection from an implementation observation or writer assumption rather than registered FT/support/UI evidence.
 - TC priority is a flat default or contradicts source-bound risk, especially for requiredness, validation, closed dictionaries, create/delete, integration, persistence, legal/financial fields or blocking transitions.
 - Implementation observation or exploratory UI discovery is promoted to FT-first baseline behavior without approved source/support/UI evidence.
+- Positive allowed-value or boundary TC uses negated rejection/blocking wording (`не отклоняется`, `не блокируется`) instead of a concrete observable positive artifact such as exact value displayed in the field.
 
 ## Обязательный defect-class checklist
 
@@ -194,6 +195,7 @@ Reviewer обязан явно попытаться найти следующи�
 7af. `tc-priority-source-risk-mismatch`: priority is flat/defaulted or inconsistent with source-bound business risk.
 7ag. `implementation-observation-as-baseline`: exploratory implementation behavior is promoted to FT-first baseline without approved evidence.
 7ah. `scope-entrypoint-precondition-incomplete`: TC omits or reorders a source-backed parent card/form opening action before block navigation.
+7ai. `negated-rejection-positive-oracle`: positive TC proves acceptance only by saying that rejection/blocking does not happen, without a concrete observable positive artifact.
 8. `covered without TC`: atom/requirement имеет `coverage_status = covered`, но не связан ни с одним исполнимым `TC-*`.
 9. `package leakage`: `TC-*` смешивает независимые проверки из разных internal work packages.
 10. `set organization drift`: набор не сгруппирован по функциональности/блоку/элементу/операции или `TC-*` нумерация перезапускается внутри групп, содержит пропуски либо дубли.

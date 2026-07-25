@@ -118,6 +118,10 @@ _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE = re.compile(
     r"(?:отображ\w*|появля\w*|возника\w*|распозна\w*|фиксиру\w*))",
     re.IGNORECASE,
 )
+_RUNTIME_NEGATED_REJECTION_ACCEPTANCE_RE = re.compile(
+    r"(?:не\s+отклон\w*|не\s+блокир\w*)",
+    re.IGNORECASE,
+)
 _RUNTIME_INVALID_CLASS_ACTION_RE = re.compile(
     r"(?:ввести|заполнить|указать|выбрать|enter|fill|select|set)"
     r"[^.\n;]{0,120}(?:недопустим\w*|невалидн\w*|invalid)",
@@ -261,6 +265,11 @@ REVIEWER_PROMPT_INSTRUCTION_V2 = (
     "scope-entry setup consistency: when the structured design context shows a "
     "parent card/form opening action followed by block navigation, every TC must "
     "keep both actions in that order; block navigation alone is not equivalent. "
+    "For positive allowed-value or boundary TCs, reject negated rejection/blocking "
+    "oracles such as `не отклоняется` or `не блокируется`; "
+    "the TC must state a concrete observable positive artifact such as exact value "
+    "displayed in the field, or remain an honest calibration candidate if no "
+    "positive artifact is source-bound. "
     "Unsupported integration "
     "or implementation observations must become narrow gaps or calibration notes, "
     "not FT-first baseline coverage. Check that priority follows source-bound "
@@ -1445,6 +1454,24 @@ def _runtime_case_type_problem(*, case_type: str, expected_result: str) -> str |
     return None
 
 
+def _runtime_negated_rejection_acceptance_problem(
+    *,
+    case_type: str,
+    steps: Sequence[str],
+    expected_result: str,
+) -> str | None:
+    if case_type != "позитивный":
+        return None
+    inspected = "\n".join((*steps, expected_result))
+    match = _RUNTIME_NEGATED_REJECTION_ACCEPTANCE_RE.search(inspected)
+    if match is None:
+        return None
+    return (
+        "positive case uses negated rejection/no-error wording instead of a "
+        f"concrete observable acceptance artifact: {match.group(0)!r}"
+    )
+
+
 def _runtime_mixed_polarity_problem(
     *,
     steps: Sequence[str],
@@ -1559,6 +1586,16 @@ def _validate_runtime_writer_prose(
         raise IterationContractError(
             f"runtime writer returned mixed positive/negative runtime prose for "
             f"{case_key}: {mixed_polarity_problem}"
+        )
+    negated_acceptance_problem = _runtime_negated_rejection_acceptance_problem(
+        case_type=case_type,
+        steps=steps,
+        expected_result=expected_result,
+    )
+    if negated_acceptance_problem is not None:
+        raise IterationContractError(
+            "runtime writer returned unsupported positive acceptance oracle for "
+            f"{case_key}: {negated_acceptance_problem}"
         )
     persistence_problem = _runtime_persistence_without_commit_problem(
         preconditions=preconditions,
@@ -2027,6 +2064,16 @@ def validate_suite(
             findings.append(f"case status drift for {item.case_key}")
         if set(source.obligation_ids) - set(item.traceability):
             findings.append(f"missing obligation traceability for {item.case_key}")
+        negated_acceptance_problem = _runtime_negated_rejection_acceptance_problem(
+            case_type=item.case_type,
+            steps=item.steps,
+            expected_result=item.expected_result,
+        )
+        if negated_acceptance_problem is not None:
+            findings.append(
+                "unsupported positive acceptance oracle for "
+                f"{item.case_key}: {negated_acceptance_problem}"
+            )
         required_entrypoints = expected_entrypoints_by_case.get(item.case_key, ())
         if required_entrypoints:
             rendered_items = tuple(

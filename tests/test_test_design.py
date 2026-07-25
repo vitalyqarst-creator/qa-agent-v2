@@ -462,7 +462,7 @@ class TestDesignTests(unittest.TestCase):
         self.assertEqual(
             (
                 "Ввести `9123456789` в поле «Имя».",
-                "Проверить, что значение `9123456789` не отклоняется по правилу формата.",
+                "Проверить, что поле «Имя» отображает значение `9123456789`.",
             ),
             plan.deterministic_cases[0].steps,
         )
@@ -545,8 +545,9 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("Допустимое значение: `Ivan-Petrov`.", joined_data)
         self.assertIn("Ввести `Иван-Петров`", joined_steps)
         self.assertIn("Ввести `Ivan-Petrov`", joined_steps)
-        self.assertIn("`Иван-Петров` не отклоняется", joined_steps)
-        self.assertIn("`Ivan-Petrov` не отклоняется", joined_steps)
+        self.assertIn("отображает значение `Иван-Петров`", joined_steps)
+        self.assertIn("отображает значение `Ivan-Petrov`", joined_steps)
+        self.assertIn("отображает каждое введённое допустимое значение", valid_case.expected_result)
         self.assertEqual("негативный", invalid_case.case_type)
         joined_data = "\n".join(invalid_case.test_data)
         joined_steps = "\n".join(invalid_case.steps)
