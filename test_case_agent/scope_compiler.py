@@ -332,11 +332,29 @@ def validate_manifest_scope_binding(
             f"manifest scope mismatch: {manifest.scope_slug} != {compiled.scope_id}"
         )
     if manifest.source_row_extraction_spec_digest != compiled.extraction_spec.digest:
-        raise ScopeCompilationError("manifest uses a different source extraction spec")
+        raise ScopeCompilationError(
+            "stale source manifest: source extraction spec digest mismatch; "
+            f"expected={compiled.extraction_spec.digest}, "
+            f"manifest={manifest.source_row_extraction_spec_digest}; "
+            "rerun scope materialization and source assertion review before "
+            "starting a new iteration"
+        )
     if manifest.source_row_baseline_digest != compiled.baseline.digest:
-        raise ScopeCompilationError("manifest uses a different source row baseline")
+        raise ScopeCompilationError(
+            "stale source manifest: source row baseline digest mismatch; "
+            f"expected={compiled.baseline.digest}, "
+            f"manifest={manifest.source_row_baseline_digest}; "
+            "rerun scope materialization and source assertion review before "
+            "starting a new iteration"
+        )
     if manifest.source_row_candidate_count != compiled.baseline.candidate_count:
-        raise ScopeCompilationError("manifest source candidate count is stale")
+        raise ScopeCompilationError(
+            "stale source manifest: source candidate count mismatch; "
+            f"expected={compiled.baseline.candidate_count}, "
+            f"manifest={manifest.source_row_candidate_count}; "
+            "rerun scope materialization and source assertion review before "
+            "starting a new iteration"
+        )
 
     current_xhtml_sha256 = _sha256_file(
         _resolved_registered_file(

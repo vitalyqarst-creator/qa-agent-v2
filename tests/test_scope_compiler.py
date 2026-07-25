@@ -228,6 +228,26 @@ class ScopeCompilerTests(unittest.TestCase):
             package_root=self.package_root,
         )
 
+    def test_stale_manifest_diagnostics_tell_how_to_recover(self) -> None:
+        compiled, manifest = self._manifest()
+        stale_cases = (
+            replace(manifest, source_row_extraction_spec_digest="0" * 64),
+            replace(manifest, source_row_baseline_digest="0" * 64),
+            replace(manifest, source_row_candidate_count=manifest.source_row_candidate_count + 1),
+        )
+
+        for stale_manifest in stale_cases:
+            with self.subTest(stale_manifest=stale_manifest), self.assertRaisesRegex(
+                ScopeCompilationError,
+                "stale source manifest.*rerun scope materialization",
+            ):
+                validate_manifest_scope_binding(
+                    stale_manifest,  # type: ignore[arg-type]
+                    compiled=compiled,
+                    repo_root=self.repo_root,
+                    package_root=self.package_root,
+                )
+
     def test_manifest_with_foreign_requirement_code_is_rejected(self) -> None:
         compiled, manifest = self._manifest()
         manifest = replace(
