@@ -1427,6 +1427,59 @@ class IterationContractTests(unittest.TestCase):
                 context=context,
             )
 
+    def test_runtime_writer_protects_in_block_entrypoint_precondition(self) -> None:
+        graph = _graph()
+        graph = replace(
+            graph,
+            properties=(
+                *graph.properties,
+                CoverageProperty(
+                    property_id="PROP-IN-BLOCK-ENTRYPOINT",
+                    assertion_id="ASSERT-IN-BLOCK-ENTRYPOINT",
+                    property_key="contacts:block-entrypoint",
+                    subject_key="contacts",
+                    property_kind="context",
+                    source_row_id="SRC-IN-BLOCK-ENTRYPOINT",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[0]/*[2]",
+                    source_text_sha256="f" * 64,
+                    canonical_statement="Перейти в блок `Контактные лица`.",
+                    requirement_codes=(),
+                    disposition="not-applicable",
+                ),
+            ),
+        )
+        context = replace(
+            _context(),
+            base_preconditions=("Перейти в блок `Контактные лица`.",),
+        )
+        plan = build_test_design_plan(graph, context=context)
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=["Открыть раздел контактных лиц."],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "removed seed entrypoint precondition",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=context,
+            )
+
     def test_runtime_writer_rejects_steps_without_user_action_or_check(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

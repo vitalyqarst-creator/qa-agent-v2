@@ -136,7 +136,7 @@ _RUNTIME_TEMPLATE_ORACLE_RE = re.compile(
     re.IGNORECASE,
 )
 _RUNTIME_ENTRYPOINT_PRECONDITION_RE = re.compile(
-    r"^(?:Открыть\s+карточк\w*|Перейти\s+к\s+блок\w*)\b",
+    r"^(?:Открыть\s+карточк\w*|Перейти\s+(?:к|в)\s+блок\w*)\b",
     re.IGNORECASE,
 )
 _CLEANUP_ORACLE_RE = re.compile(
