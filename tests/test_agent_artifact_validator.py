@@ -7706,6 +7706,55 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("test-case-boundary-rejection-without-on-boundary-acceptance", finding_ids)
 
+    def test_internal_runtime_id_leak_warns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "fts" / "sample-ft" / "test-cases" / "sample.md"
+            test_case_path.parent.mkdir(parents=True, exist_ok=True)
+            test_case_path.write_text(
+                "\n".join(
+                    [
+                        "# Sample",
+                        "",
+                        "## Atomic Requirements Ledger",
+                        "",
+                        "| atom_id | req_id | atomic_statement | condition | expected_behavior | coverage_status | covered_by_tc | gap_note |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | GSR 1 | Form opens | - | Form is visible | covered | TC-SAMPLE-001 | - |",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**Title:** subject:abcdef123456 opens the form",
+                        "**Priority:** Medium",
+                        "**Type:** Positive",
+                        "**Goal:** Verify form opening.",
+                        "**Preconditions:**",
+                        "- User is authorized.",
+                        "**Test Data:**",
+                        "- Not required.",
+                        "**Steps:**",
+                        "1. Открыть `SRC-001`.",
+                        "**Expected Result:** The form is visible.",
+                        "**Postconditions:**",
+                        "- Close the form.",
+                        "**Traceability:** ATOM-001; GSR 1; SRC-001",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator(
+                "--root",
+                str(test_case_path),
+                "--json",
+                "--fail-on",
+                "warning",
+            )
+
+        self.assertEqual(result.returncode, 1)
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertIn("test-case-internal-runtime-id-leak", finding_ids)
+
     def test_negative_type_without_negative_oracle_warns(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)

@@ -164,7 +164,9 @@ def compare_docx_json_to_xhtml_baseline(
 
     candidate_results = []
     last_block_index = 0
+    last_matched_candidate: dict[str, Any] | None = None
     order_violations = 0
+    order_violation_details: list[dict[str, Any]] = []
     for candidate in baseline.candidates:
         match = _match_candidate(candidate.bounded_source_text, blocks)
         first_match_index = (
@@ -176,6 +178,24 @@ def compare_docx_json_to_xhtml_baseline(
         if first_match_index is not None:
             if first_match_index < last_block_index:
                 order_violations += 1
+                order_violation_details.append(
+                    {
+                        "candidate_id": candidate.candidate_id,
+                        "candidate_block_index": first_match_index,
+                        "previous_candidate_id": (
+                            last_matched_candidate["candidate_id"]
+                            if last_matched_candidate is not None
+                            else None
+                        ),
+                        "previous_block_index": last_block_index,
+                        "bounded_source_text": candidate.bounded_source_text,
+                    }
+                )
+            elif first_match_index > last_block_index:
+                last_matched_candidate = {
+                    "candidate_id": candidate.candidate_id,
+                    "block_index": first_match_index,
+                }
             last_block_index = max(last_block_index, first_match_index)
         candidate_results.append(
             {
@@ -199,6 +219,33 @@ def compare_docx_json_to_xhtml_baseline(
         for kind, count in counts.items()
         if kind.startswith("requirement-code") or kind.startswith("ambiguous-")
     )
+    missing_candidates = [
+        {
+            "candidate_id": item["candidate_id"],
+            "region_id": item["region_id"],
+            "xhtml_locator": item["xhtml_locator"],
+            "bounded_source_text": item["bounded_source_text"],
+        }
+        for item in candidate_results
+        if item["match_type"] == "missing"
+    ]
+    weak_matches = [
+        {
+            "candidate_id": item["candidate_id"],
+            "match_type": item["match_type"],
+            "xhtml_locator": item["xhtml_locator"],
+            "requirement_codes": item.get("requirement_codes", []),
+            "matched_block_ids": [
+                str(match.get("block_id", ""))
+                for match in item.get("matches", [])
+                if isinstance(match, dict)
+            ],
+            "bounded_source_text": item["bounded_source_text"],
+        }
+        for item in candidate_results
+        if str(item["match_type"]).startswith("requirement-code")
+        or str(item["match_type"]).startswith("ambiguous-")
+    ]
     selected_xhtml_path = repo_root / PurePosixPath(spec.selected_xhtml.relative_path)
     return {
         "schema_version": 1,
@@ -208,10 +255,16 @@ def compare_docx_json_to_xhtml_baseline(
         "docx_json_block_count": projection["block_count"],
         "match_counts": counts,
         "matched_candidate_count": matched,
+        "strong_match_count": matched - weak_match_count,
         "missing_candidate_count": counts.get("missing", 0),
         "weak_match_count": weak_match_count,
         "order_violations": order_violations,
         "order_preserved": order_violations == 0,
+        "diagnostics": {
+            "missing_candidates": missing_candidates,
+            "weak_matches": weak_matches,
+            "order_violations": order_violation_details,
+        },
         "selected_xhtml": spec.selected_xhtml.to_dict(),
         "source_size_bytes": {
             "selected_xhtml": selected_xhtml_path.stat().st_size

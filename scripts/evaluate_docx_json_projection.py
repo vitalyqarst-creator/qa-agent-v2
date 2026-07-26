@@ -123,9 +123,9 @@ def _write_markdown(report: dict[str, Any], path: Path) -> None:
         lines.append("- none")
     lines.extend(["", "## Scope Results", ""])
     lines.append(
-        "| Scope | Status | Candidates | Missing | Weak | Order preserved | Match counts |"
+        "| Scope | Status | Candidates | Missing | Weak | Order preserved | Diagnostics | Match counts |"
     )
-    lines.append("| --- | --- | ---: | ---: | ---: | --- | --- |")
+    lines.append("| --- | --- | ---: | ---: | ---: | --- | --- | --- |")
     for item in report["scope_results"]:
         if item.get("status") == "error":
             lines.append(
@@ -134,6 +134,7 @@ def _write_markdown(report: dict[str, Any], path: Path) -> None:
                     [
                         f"`{item['scope_slug']}`",
                         "`error`",
+                        "-",
                         "-",
                         "-",
                         "-",
@@ -147,6 +148,12 @@ def _write_markdown(report: dict[str, Any], path: Path) -> None:
         match_counts = ", ".join(
             f"{key}={value}" for key, value in sorted(item["match_counts"].items())
         )
+        diagnostics = item.get("diagnostics", {})
+        diagnostic_counts = (
+            f"missing={len(diagnostics.get('missing_candidates', []))}, "
+            f"weak={len(diagnostics.get('weak_matches', []))}, "
+            f"order={len(diagnostics.get('order_violations', []))}"
+        )
         lines.append(
             "| "
             + " | ".join(
@@ -157,11 +164,35 @@ def _write_markdown(report: dict[str, Any], path: Path) -> None:
                     str(item["missing_candidate_count"]),
                     str(item["weak_match_count"]),
                     f"`{str(item['order_preserved']).lower()}`",
+                    f"`{diagnostic_counts}`",
                     f"`{match_counts}`",
                 ]
             )
             + " |"
         )
+    lines.extend(["", "## Diagnostic Notes", ""])
+    notes: list[str] = []
+    for item in report["scope_results"]:
+        if item.get("status") != "evaluated":
+            continue
+        diagnostics = item.get("diagnostics", {})
+        for key, label in (
+            ("missing_candidates", "missing"),
+            ("weak_matches", "weak"),
+            ("order_violations", "order"),
+        ):
+            values = diagnostics.get(key, [])
+            if values:
+                first = values[0]
+                matched_ids = first.get("matched_block_ids", [])
+                note_id = first.get("candidate_id") or (
+                    matched_ids[0] if matched_ids else "unknown"
+                )
+                notes.append(
+                    f"- `{item['scope_slug']}` {label}: "
+                    f"`{note_id}`"
+                )
+    lines.extend(notes[:20] if notes else ["- none"])
     lines.extend(
         [
             "",

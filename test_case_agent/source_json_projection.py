@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path, PurePosixPath
 from typing import Any, Mapping, Sequence
 
@@ -17,7 +18,12 @@ from test_case_agent.document_loader import (
 )
 
 
-SOURCE_JSON_PROJECTION_VERSION = 1
+SOURCE_JSON_PROJECTION_VERSION = 2
+SUPPORTED_SOURCE_JSON_PROJECTION_VERSIONS = {1, SOURCE_JSON_PROJECTION_VERSION}
+REQUIREMENT_CODE_RE = re.compile(
+    r"\b(?:BSR|GSR|REQ|DIT)\s*[-]?\s*\d+(?:[A-Za-z0-9._/-]+)?\b",
+    flags=re.IGNORECASE,
+)
 
 
 class SourceJsonProjectionError(ValueError):
@@ -146,24 +152,57 @@ def _block_hash(block: Mapping[str, Any]) -> str:
     return hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
 
 
-def _paragraph_text_with_numbering(
+def _requirement_codes(text: str) -> list[str]:
+    return list(
+        dict.fromkeys(
+            normalize_text(match.group(0)).upper()
+            for match in REQUIREMENT_CODE_RE.finditer(text)
+        )
+    )
+
+
+def _structural_hash(block: Mapping[str, Any]) -> str:
+    payload = {
+        "kind": block.get("kind"),
+        "docx_locator": block.get("docx_locator"),
+        "section_path": block.get("section_path"),
+        "table_index": block.get("table_index"),
+        "row_index": block.get("row_index"),
+        "cell_indices": block.get("cell_indices"),
+        "cell_merge_metadata": block.get("cell_merge_metadata"),
+        "numbering_labels": block.get("numbering_labels"),
+    }
+    return hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
+
+
+def _semantic_hash(block: Mapping[str, Any]) -> str:
+    payload = {
+        "section_path": block.get("section_path"),
+        "text": block.get("text"),
+        "requirement_codes": block.get("requirement_codes"),
+    }
+    return hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
+
+
+def _paragraph_text_and_numbering(
     paragraph: Paragraph,
     numbering: _NumberingResolver,
-) -> str:
+) -> tuple[str, str]:
     prefix = numbering.prefix_for(paragraph)
     text = normalize_text(paragraph.text)
     if not text:
-        return ""
+        return "", prefix
     if prefix and not text.startswith(prefix):
-        return normalize_text(f"{prefix} {text}")
-    return text
+        return normalize_text(f"{prefix} {text}"), prefix
+    return text, prefix
 
 
 def _cell_text_with_numbering(
     cell: _Cell,
     numbering: _NumberingResolver,
-) -> str:
+) -> tuple[str, list[str]]:
     parts: list[str] = []
+    labels: list[str] = []
     pending_prefix = ""
     for paragraph in cell.paragraphs:
         prefix = numbering.prefix_for(paragraph)
@@ -175,19 +214,67 @@ def _cell_text_with_numbering(
         if pending_prefix:
             if not text.startswith(pending_prefix):
                 text = normalize_text(f"{pending_prefix} {text}")
+            labels.append(pending_prefix)
             pending_prefix = ""
         elif prefix and not text.startswith(prefix):
             text = normalize_text(f"{prefix} {text}")
+            labels.append(prefix)
+        elif prefix:
+            labels.append(prefix)
         parts.append(text)
-    return normalize_text(" ".join(parts))
+    return normalize_text(" ".join(parts)), labels
 
 
-def _table_row_cells(table: Table, row_index: int, numbering: _NumberingResolver) -> list[str]:
+def _cell_merge_metadata(tc: Any, *, cell_index: int) -> dict[str, Any]:
+    tc_pr = tc.tcPr
+    grid_span = 1
+    vertical_merge = "none"
+    if tc_pr is not None:
+        grid_span_node = tc_pr.find(qn("w:gridSpan"))
+        if grid_span_node is not None:
+            try:
+                grid_span = int(grid_span_node.get(qn("w:val")) or "1")
+            except ValueError:
+                grid_span = 1
+        vertical_merge_node = tc_pr.find(qn("w:vMerge"))
+        if vertical_merge_node is not None:
+            vertical_merge = vertical_merge_node.get(qn("w:val")) or "continue"
+    return {
+        "cell_index": cell_index,
+        "grid_span": grid_span,
+        "vertical_merge": vertical_merge,
+    }
+
+
+def _table_row_cells(
+    table: Table,
+    row_index: int,
+    numbering: _NumberingResolver,
+    *,
+    row_locator: str,
+) -> tuple[list[str], list[dict[str, Any]], list[str]]:
     row = table.rows[row_index]
-    return [
-        _cell_text_with_numbering(_Cell(tc, table), numbering)
-        for tc in row._tr.tc_lst
-    ]
+    cells: list[str] = []
+    cell_blocks: list[dict[str, Any]] = []
+    row_numbering_labels: list[str] = []
+    for cell_index, tc in enumerate(row._tr.tc_lst, start=1):
+        text, labels = _cell_text_with_numbering(_Cell(tc, table), numbering)
+        cells.append(text)
+        row_numbering_labels.extend(labels)
+        merge_metadata = _cell_merge_metadata(tc, cell_index=cell_index)
+        cell_blocks.append(
+            {
+                "kind": "cell",
+                "cell_index": cell_index,
+                "docx_locator": f"{row_locator}/w:tc[{cell_index}]",
+                "text": text,
+                "exact_text": text,
+                "requirement_codes": _requirement_codes(text),
+                "numbering_labels": labels,
+                "merge_metadata": merge_metadata,
+            }
+        )
+    return cells, cell_blocks, row_numbering_labels
 
 
 def _append_block(
@@ -202,16 +289,31 @@ def _append_block(
     if not normalized:
         return
     index = len(blocks) + 1
+    docx_locator = (
+        str(extra.get("docx_locator"))
+        if extra is not None and extra.get("docx_locator")
+        else f"/blocks/{index}"
+    )
     block: dict[str, Any] = {
         "block_id": f"DOCX-BLOCK-{index:06d}",
         "block_index": index,
         "kind": kind,
-        "locator": f"/blocks/{index}",
+        "locator": docx_locator,
+        "docx_locator": docx_locator,
         "section_path": list(section_path),
         "text": normalized,
+        "exact_text": normalized,
+        "requirement_codes": _requirement_codes(normalized),
+        "numbering_labels": [],
     }
     if extra:
         block.update(extra)
+    block.setdefault("docx_locator", block["locator"])
+    block.setdefault("exact_text", normalized)
+    block.setdefault("requirement_codes", _requirement_codes(normalized))
+    block.setdefault("numbering_labels", [])
+    block["structural_hash"] = _structural_hash(block)
+    block["semantic_hash"] = _semantic_hash(block)
     block["block_hash"] = _block_hash(block)
     blocks.append(block)
 
@@ -243,9 +345,10 @@ def build_docx_source_json(
     heading_stack: list[tuple[int, str]] = []
     table_index = 0
 
-    for block in iter_block_items(document):
+    source_sha256 = _sha256_file(path)
+    for source_block_index, block in enumerate(iter_block_items(document), start=1):
         if isinstance(block, Paragraph):
-            text = _paragraph_text_with_numbering(block, numbering)
+            text, numbering_label = _paragraph_text_and_numbering(block, numbering)
             if not text:
                 continue
             level = paragraph_style_level(block)
@@ -260,25 +363,48 @@ def build_docx_source_json(
                     text=text,
                     section_path=[item[1] for item in heading_stack],
                     extra={
+                        "docx_locator": (
+                            f"/word/document.xml/body/block[{source_block_index}]/w:p"
+                        ),
                         "heading_level": level,
                         "section_id": detect_section_id(text),
                         "style_name": style_name,
+                        "numbering_labels": [numbering_label]
+                        if numbering_label
+                        else [],
                     },
                 )
                 continue
             _append_block(
                 blocks,
-                kind="paragraph",
+                kind="list-item" if numbering_label else "paragraph",
                 text=text,
                 section_path=[item[1] for item in heading_stack],
-                extra={"style_name": style_name},
+                extra={
+                    "docx_locator": (
+                        f"/word/document.xml/body/block[{source_block_index}]/w:p"
+                    ),
+                    "style_name": style_name,
+                    "numbering_labels": [numbering_label]
+                    if numbering_label
+                    else [],
+                },
             )
             continue
 
         if isinstance(block, Table):
             table_index += 1
             for row_index in range(len(block.rows)):
-                cells = _table_row_cells(block, row_index, numbering)
+                row_locator = (
+                    f"/word/document.xml/body/block[{source_block_index}]"
+                    f"/w:tbl[{table_index}]/w:tr[{row_index + 1}]"
+                )
+                cells, cell_blocks, numbering_labels = _table_row_cells(
+                    block,
+                    row_index,
+                    numbering,
+                    row_locator=row_locator,
+                )
                 if not any(cells):
                     continue
                 _append_block(
@@ -287,17 +413,34 @@ def build_docx_source_json(
                     text=" | ".join(cell or "-" for cell in cells),
                     section_path=[item[1] for item in heading_stack],
                     extra={
+                        "docx_locator": row_locator,
                         "table_index": table_index,
                         "row_index": row_index + 1,
+                        "cell_indices": list(range(1, len(cells) + 1)),
                         "cells": cells,
+                        "cell_blocks": cell_blocks,
+                        "cell_merge_metadata": [
+                            item["merge_metadata"] for item in cell_blocks
+                        ],
+                        "numbering_labels": numbering_labels,
                     },
                 )
 
     projection = {
         "version": SOURCE_JSON_PROJECTION_VERSION,
+        "schema": "source-json-v2",
         "source_type": "docx-json-projection",
+        "projection_kind": "source.compact",
+        "document_id": f"DOCX-{source_sha256[:16]}",
         "source_path": _repository_relative_path(path, repo_root),
-        "source_sha256": _sha256_file(path),
+        "source_sha256": source_sha256,
+        "source_hash": source_sha256,
+        "excluded_metadata_classes": [
+            "author-metadata",
+            "decorative-formatting",
+            "spellcheck",
+            "theme",
+        ],
         "block_count": len(blocks),
         "blocks": blocks,
     }
@@ -331,7 +474,7 @@ def load_docx_source_json(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8-sig"))
     if not isinstance(payload, dict):
         raise SourceJsonProjectionError("source JSON projection must be an object")
-    if payload.get("version") != SOURCE_JSON_PROJECTION_VERSION:
+    if payload.get("version") not in SUPPORTED_SOURCE_JSON_PROJECTION_VERSIONS:
         raise SourceJsonProjectionError("unsupported source JSON projection version")
     if payload.get("source_type") != "docx-json-projection":
         raise SourceJsonProjectionError("unsupported source JSON projection type")

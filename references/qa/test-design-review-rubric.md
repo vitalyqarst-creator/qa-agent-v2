@@ -127,6 +127,9 @@ source/TC-backed design defect, доказанный самими артефак
 - Test-design-derived check (`v2 obligation`, exploratory, risk-derived, regression-derived) is presented as a direct FT/source atom without source/rule derivation.
 - Setup/recovery behavior вроде снятия всех чекбоксов или очистки списка представлено как source-backed baseline TC без source evidence; такое поведение должно быть помечено как derived setup/recovery или вынесено в `GAP-*`.
 - `Название` содержит process marker вместо бизнес-проверки: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
+- `Название` или пользовательские шаги содержат `subject:<hash>`, `OBL-*`,
+  `ATOM-*`, `ASSERT-*` или `SRC-*` как проверяемый объект/действие вместо
+  видимого поля, блока или UI-команды.
 - Candidate status leaked into title instead of body fields.
 - Candidate negative TC has no concrete representative invalid value.
 - Candidate negative TC invents a concrete rejection mechanism, message, highlight, filtering, clearing, transition block or save/no-save behavior.

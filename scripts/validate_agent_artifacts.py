@@ -6185,6 +6185,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-package-design-plan-many-rows-one-tc-smell",
     "scenario-plan-replaces-atomic-coverage-smell",
     "test-case-generic-title-smell",
+    "test-case-internal-runtime-id-leak",
     "test-case-generic-executable-smell",
     "test-case-value-type-list-selection-smell",
     "test-case-dependency-placeholder-setup-smell",
@@ -6390,6 +6391,18 @@ ENTER_CONCRETE_VALUE_RE = re.compile(
 TEST_CASE_TITLE_PROCESS_MARKER_RE = re.compile(
     r"\bUI\s+calibration\b|\bcandidate\b|\boracle\b|\brequires\s+confirmation\b|"
     r"требу(?:ет|ется)\s+подтверждени[ея]",
+    flags=re.IGNORECASE,
+)
+INTERNAL_RUNTIME_TITLE_ID_RE = re.compile(
+    r"\bsubject:[0-9a-f]{6,}\b|`?\b(?:OBL|ATOM|ASSERT)-[A-Za-z0-9_.-]+\b`?",
+    flags=re.IGNORECASE,
+)
+INTERNAL_RUNTIME_ACTION_ID_RE = re.compile(
+    r"(?im)^\s*(?:\d+[.)]\s*)?"
+    r"(?:open|click|select|enter|type|verify|check|press|"
+    r"открыть|перейти|нажать|выбрать|ввести|заполнить|проверить|"
+    r"убедиться|дождаться)\b[^\n]{0,140}"
+    r"(?:\b(?:OBL|ATOM|ASSERT|SRC)-[A-Za-z0-9_.-]+\b|subject:[0-9a-f]{6,})",
     flags=re.IGNORECASE,
 )
 
@@ -12603,6 +12616,7 @@ def validate_test_case_quality_smells(
     mockup_generic_ui_steps: list[str] = []
     mockup_visible_label_drift: list[str] = []
     generic_titles: list[str] = []
+    internal_runtime_id_leaks: list[str] = []
     process_marker_titles: list[str] = []
     positive_type_negative_oracle: list[str] = []
     negative_type_without_negative_oracle: list[str] = []
@@ -13116,6 +13130,10 @@ def validate_test_case_quality_smells(
             boundary_group["min_acceptance"] = True
         if title and any(pattern.search(title) for pattern in GENERIC_TC_TITLE_PATTERNS):
             generic_titles.append(f"{test_case_id}:{title[:140]}")
+        if title and INTERNAL_RUNTIME_TITLE_ID_RE.search(title):
+            internal_runtime_id_leaks.append(f"{test_case_id}:title={title[:160]}")
+        if steps and INTERNAL_RUNTIME_ACTION_ID_RE.search(steps):
+            internal_runtime_id_leaks.append(f"{test_case_id}:steps={steps[:180]}")
         if title and TEST_CASE_TITLE_PROCESS_MARKER_RE.search(title):
             process_marker_titles.append(f"{test_case_id}:{title[:160]}")
         if is_positive_test_case_type(test_case_type) and expected_result and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result):
@@ -13735,6 +13753,27 @@ def validate_test_case_quality_smells(
                 recommended_action=(
                     "Remove process markers from `Название` and keep candidate status in `Статус oracle`, "
                     "`Статус тест-кейса` and `Требуется подтверждение` fields."
+                ),
+            )
+        )
+
+    if internal_runtime_id_leaks:
+        findings.append(
+            Finding(
+                id="test-case-internal-runtime-id-leak",
+                severity="warning",
+                category="test-case-format",
+                title="Test-case runtime prose exposes internal semantic IDs",
+                details=(
+                    "Manual TC titles and user-action steps must describe product behavior and visible UI actions. "
+                    "`subject:<hash>` and OBL/ATOM/ASSERT/SRC identifiers belong in traceability or design artifacts, "
+                    "not in tester-facing runtime prose."
+                ),
+                path=display_path,
+                evidence=internal_runtime_id_leaks[:20],
+                recommended_action=(
+                    "Rewrite the title or step with the visible field/action and keep the internal identifier only "
+                    "in `Трассировка` or source/design artifacts."
                 ),
             )
         )
@@ -15047,6 +15086,7 @@ def validate_test_case_quality_smells(
         or combined_atoms
         or table_residue_atoms
         or generic_titles
+        or internal_runtime_id_leaks
         or process_marker_titles
         or generic_test_cases
         or value_type_list_selection_smells

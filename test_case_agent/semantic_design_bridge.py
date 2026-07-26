@@ -9401,6 +9401,148 @@ def _materialize_missing_definition_gap_assertions(
     return repairs
 
 
+def _normalize_ambiguous_assertion_readiness_from_boundary_gap(
+    payload: dict[str, Any],
+    boundary: Mapping[str, Any],
+) -> list[dict[str, Any]]:
+    """Bind non-executable ambiguous assertions to authoritative row gaps.
+
+    This is intentionally narrower than the validator: it repairs only transport
+    inconsistency for an assertion that is already declared ambiguous and owns no
+    executable clauses or obligations.  If the model invented executable
+    semantics or the row has multiple plausible gaps, strict validation still
+    fails closed.
+    """
+
+    gaps_by_row: dict[str, list[Mapping[str, Any]]] = defaultdict(list)
+    for gap in boundary.get("gaps", []):
+        if (
+            not isinstance(gap, Mapping)
+            or gap.get("blocking") is not False
+            or gap.get("downstream_handling") != "carry-to-source-model"
+            or gap.get("gap_type") not in {"ambiguity", "missing-source-definition"}
+        ):
+            continue
+        gap_id = str(gap.get("gap_id", "")).strip()
+        if not gap_id or gap_id == "none_required":
+            continue
+        for row_id in map(str, gap.get("source_row_ids", [])):
+            if row_id:
+                gaps_by_row[row_id].append(gap)
+    if not gaps_by_row:
+        return []
+
+    repairs: list[dict[str, Any]] = []
+    for source_index, source_design in enumerate(payload.get("source_designs", [])):
+        if not isinstance(source_design, dict):
+            continue
+        row_id = str(source_design.get("source_row_id", ""))
+        row_gaps = gaps_by_row.get(row_id, [])
+        if not row_gaps:
+            continue
+        assertions = source_design.get("assertions", [])
+        if not isinstance(assertions, list):
+            continue
+        for assertion_index, assertion in enumerate(assertions):
+            if (
+                not isinstance(assertion, dict)
+                or assertion.get("semantic_disposition") != "ambiguous"
+                or assertion.get("condition_clauses") != []
+                or assertion.get("action_clauses") != []
+                or assertion.get("oracle_clauses") != []
+                or assertion.get("obligation_ids") != []
+            ):
+                continue
+            assertion_codes = set(map(str, assertion.get("requirement_codes", [])))
+            candidate_gaps = []
+            if assertion_codes:
+                for gap in row_gaps:
+                    gap_text = " ".join(
+                        [
+                            *map(str, gap.get("exact_source_fragments", [])),
+                            *map(str, gap.get("source_refs", [])),
+                        ]
+                    )
+                    gap_codes = {
+                        match.group(0).upper()
+                        for match in re.finditer(
+                            r"\b(?:BSR|GSR|REQ|DIT)\s*[-]?\s*\d+\b",
+                            gap_text,
+                            flags=re.IGNORECASE,
+                        )
+                    }
+                    if gap_codes and assertion_codes.intersection(gap_codes):
+                        candidate_gaps.append(gap)
+            if not candidate_gaps and len(row_gaps) == 1:
+                candidate_gaps = row_gaps
+            if len(candidate_gaps) != 1:
+                continue
+
+            gap = candidate_gaps[0]
+            gap_id = str(gap.get("gap_id", ""))
+            current_rationale = assertion.get("execution_readiness_rationale")
+            current_disposition_rationale = assertion.get("disposition_rationale")
+            already_valid = (
+                assertion.get("execution_readiness") == "dependency-blocked"
+                and isinstance(current_rationale, str)
+                and len(current_rationale.strip()) >= 12
+                and current_rationale != "none_required"
+                and isinstance(current_disposition_rationale, str)
+                and len(current_disposition_rationale.strip()) >= 12
+            )
+            if already_valid:
+                continue
+
+            previous_sha256 = canonical_payload_sha256(
+                {
+                    "execution_readiness": assertion.get("execution_readiness"),
+                    "execution_readiness_rationale": current_rationale,
+                    "disposition_rationale": current_disposition_rationale,
+                }
+            )
+            question = str(
+                gap.get("clarification_question")
+                or gap.get("analyst_question")
+                or ""
+            ).strip()
+            if question and question != "none_required":
+                rationale = (
+                    f"{gap_id} фиксирует неоднозначность source assertion: "
+                    f"{question}"
+                )
+            else:
+                rationale = (
+                    f"{gap_id} фиксирует неоднозначность source assertion; "
+                    "до уточнения нельзя создать исполнимый TC."
+                )
+            assertion["execution_readiness"] = "dependency-blocked"
+            assertion["execution_readiness_rationale"] = rationale
+            if (
+                not isinstance(current_disposition_rationale, str)
+                or len(current_disposition_rationale.strip()) < 12
+                or current_disposition_rationale == "none_required"
+            ):
+                assertion["disposition_rationale"] = (
+                    "Утверждение сохранено как неисполняемое, потому что "
+                    "authoritative boundary связывает исходную строку с "
+                    f"{gap_id}."
+                )
+            repairs.append(
+                {
+                    "rule": "bind-ambiguous-assertion-readiness-to-boundary-gap",
+                    "path": (
+                        f"$.source_designs[{source_index}].assertions"
+                        f"[{assertion_index}]"
+                    ),
+                    "source_row_id": row_id,
+                    "assertion_id": str(assertion.get("assertion_id", "")),
+                    "gap_id": gap_id,
+                    "previous_value_sha256": previous_sha256,
+                }
+            )
+    return repairs
+
+
 def _materialize_range_ambiguity_gap_assertions(
     payload: dict[str, Any],
     boundary: Mapping[str, Any],
@@ -11330,6 +11472,13 @@ def normalize_semantic_design_transport(
         )
         repairs.extend(
             _materialize_missing_definition_gap_assertions(
+                normalized,
+                boundary,
+            )
+        )
+    if boundary is not None:
+        repairs.extend(
+            _normalize_ambiguous_assertion_readiness_from_boundary_gap(
                 normalized,
                 boundary,
             )

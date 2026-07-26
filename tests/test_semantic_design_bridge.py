@@ -4041,6 +4041,111 @@ class SemanticDesignBridgeTests(unittest.TestCase):
             [item["rule"] for item in receipt["repairs"]],
         )
 
+    def test_transport_normalizer_binds_ambiguous_assertion_to_boundary_gap(
+        self,
+    ) -> None:
+        raw = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-034",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-SRC-034-AMB",
+                            "semantic_disposition": "ambiguous",
+                            "execution_readiness": "ready",
+                            "execution_readiness_rationale": "none_required",
+                            "condition_clauses": [],
+                            "action_clauses": [],
+                            "oracle_clauses": [],
+                            "requirement_codes": ["BSR 34"],
+                            "obligation_ids": [],
+                            "disposition_rationale": "none_required",
+                        }
+                    ],
+                }
+            ],
+            "obligations": [],
+        }
+        boundary = {
+            "gaps": [
+                {
+                    "gap_id": "GAP-SRC-034-AMB",
+                    "gap_type": "ambiguity",
+                    "source_row_ids": ["SRC-034"],
+                    "source_refs": ["BSR 34"],
+                    "exact_source_fragments": ["BSR 34. Уточнить правило."],
+                    "blocking": False,
+                    "downstream_handling": "carry-to-source-model",
+                    "clarification_question": (
+                        "Какое наблюдаемое поведение должно быть проверено?"
+                    ),
+                }
+            ]
+        }
+
+        normalized, receipt = normalize_semantic_design_transport(
+            raw,
+            boundary=boundary,
+        )
+
+        assertion = normalized["source_designs"][0]["assertions"][0]
+        self.assertEqual("dependency-blocked", assertion["execution_readiness"])
+        self.assertIn(
+            "GAP-SRC-034-AMB",
+            assertion["execution_readiness_rationale"],
+        )
+        self.assertNotEqual("none_required", assertion["disposition_rationale"])
+        self.assertIn(
+            "bind-ambiguous-assertion-readiness-to-boundary-gap",
+            [item["rule"] for item in receipt["repairs"]],
+        )
+
+    def test_transport_normalizer_does_not_repair_executable_ambiguous_assertion(
+        self,
+    ) -> None:
+        raw = {
+            "source_designs": [
+                {
+                    "source_row_id": "SRC-034",
+                    "assertions": [
+                        {
+                            "assertion_id": "ASSERT-SRC-034-AMB",
+                            "semantic_disposition": "ambiguous",
+                            "execution_readiness": "ready",
+                            "execution_readiness_rationale": "none_required",
+                            "condition_clauses": [],
+                            "action_clauses": ["Нажать кнопку."],
+                            "oracle_clauses": [],
+                            "requirement_codes": ["BSR 34"],
+                            "obligation_ids": [],
+                        }
+                    ],
+                }
+            ],
+            "obligations": [],
+        }
+        boundary = {
+            "gaps": [
+                {
+                    "gap_id": "GAP-SRC-034-AMB",
+                    "gap_type": "ambiguity",
+                    "source_row_ids": ["SRC-034"],
+                    "exact_source_fragments": ["BSR 34. Уточнить правило."],
+                    "blocking": False,
+                    "downstream_handling": "carry-to-source-model",
+                }
+            ]
+        }
+
+        normalized, receipt = normalize_semantic_design_transport(
+            raw,
+            boundary=boundary,
+        )
+
+        assertion = normalized["source_designs"][0]["assertions"][0]
+        self.assertEqual("ready", assertion["execution_readiness"])
+        self.assertEqual(0, receipt["repair_count"])
+
     def test_transport_normalizer_expands_one_omitted_requirement_branch(self) -> None:
         source_text = (
             "BSR 100. Проверка срока: - До 14 лет — отказ. "

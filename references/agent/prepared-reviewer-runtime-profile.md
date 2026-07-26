@@ -47,7 +47,7 @@ Return a blocking finding when a digest is stale, a draft trace id is unknown, a
 6. For every non-blocking constraint gap, verify that the linked TC preserves the `GAP-*` and does not choose an unspecified mechanism.
 7. Apply the embedded context rule card: boundary points remain independent; invalid classes remain independent; branch preconditions and integration triggers remain explicit.
 8. Reject invented UI, literals, messages, API/DB effects or internal state; validate UI locators against the supplied mockup inventory and dictionary claims against projected `active_values`.
-9. Reject non-atomic cases, generic fixtures, placeholder steps, source-rule-only expected results, duplicate titles and nominal traceability.
+9. Reject non-atomic cases, generic fixtures, placeholder steps, source-rule-only expected results, duplicate titles, nominal traceability and tester-facing runtime prose that tells the executor to operate on `OBL-*`, `ATOM-*`, `ASSERT-*`, `SRC-*` or `subject:<hash>` instead of visible UI.
 10. Classify every semantic-overlap group. Accept a shared body only when the package explicitly groups one observable multi-obligation check.
 11. Review every declared routed cross-cutting dimension exactly once. Repeat
     the complete canonical sorted source-ref array listed for that same

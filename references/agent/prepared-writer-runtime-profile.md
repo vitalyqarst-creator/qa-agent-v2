@@ -32,6 +32,9 @@ Return `blocked-input` when these conditions do not hold. Do not open project in
 8. For every entry in `runner_owned_reference_fixtures`, preserve the exact runner-generated fixture projection from the draft seed. Do not replace its group/value/path contract with phrases such as “ordinary values” or “values from the list”. The runner canonicalizes this bounded projection before the obligation gate; the writer may use the projected values in executable steps but must not invent alternatives.
 9. Do not invent screens, fields, dictionaries, values, messages, validation mechanisms, setup, API/DB effects, state transitions or persistence.
 10. Keep one primary check and one main observable result per TC. Use unique titles that name the field/action and exact positive, boundary or invalid class.
+10a. Do not expose runner-owned semantic identifiers as tester actions or
+business titles. `OBL-*`, `ATOM-*`, `ASSERT-*`, `SRC-*` and `subject:<hash>`
+belong in traceability/provenance fields, not in `Название` or `Шаги`.
 11. A concrete FT-first fixture may be a synthetic value, relative date or runtime-selected integration response with source-defined observable properties. A stand record ID, locator, token, session or prerecorded provider response is not required until UI-prep.
 12. Return `blocked-input` with empty `draft_markdown` and precise reasons only when inline evidence cannot define the test intent or observable oracle without invention.
 13. For `FX-DADATA-*`, copy only the tester-facing runner projection into test data: the fixture ID, exact `Запрос`, exact suggestion or empty response, and required response components. Never copy response hashes, snapshot paths, verification/status fields, runtime flags, or instruct the tester to inject a stored provider response. The executable product steps enter the exact query and select the exact projected suggestion when one exists.

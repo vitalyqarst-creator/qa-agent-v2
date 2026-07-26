@@ -9,8 +9,15 @@ from pathlib import Path
 
 from docx import Document
 
-from scripts.compare_docx_json_to_xhtml_baseline import _match_candidate
-from test_case_agent.source_json_projection import build_docx_source_json
+from scripts.compare_docx_json_to_xhtml_baseline import (
+    _match_candidate,
+    compare_docx_json_to_xhtml_baseline,
+)
+from test_case_agent.source_json_projection import (
+    SOURCE_JSON_PROJECTION_VERSION,
+    build_docx_source_json,
+    write_docx_source_json,
+)
 
 
 class SourceJsonProjectionTests(unittest.TestCase):
@@ -74,12 +81,25 @@ class SourceJsonProjectionTests(unittest.TestCase):
             second = build_docx_source_json(docx, repo_root=root)
 
         self.assertEqual(first["projection_sha256"], second["projection_sha256"])
+        self.assertEqual(SOURCE_JSON_PROJECTION_VERSION, first["version"])
+        self.assertEqual("source-json-v2", first["schema"])
+        self.assertEqual("source.compact", first["projection_kind"])
+        self.assertTrue(first["document_id"].startswith("DOCX-"))
         self.assertEqual("source/main.docx", first["source_path"])
         self.assertEqual(4, first["block_count"])
         self.assertEqual(
             ["heading-1", "paragraph", "table-row", "table-row"],
             [item["kind"] for item in first["blocks"]],
         )
+        self.assertIn("docx_locator", first["blocks"][3])
+        self.assertIn("structural_hash", first["blocks"][3])
+        self.assertIn("semantic_hash", first["blocks"][3])
+        self.assertEqual([], first["blocks"][3]["requirement_codes"])
+        self.assertEqual(
+            [1, 2],
+            first["blocks"][3]["cell_indices"],
+        )
+        self.assertEqual("cell", first["blocks"][3]["cell_blocks"][0]["kind"])
         self.assertEqual(
             ["Фамилия", "Текстовые символы и дефис"],
             first["blocks"][3]["cells"],
@@ -123,6 +143,24 @@ class SourceJsonProjectionTests(unittest.TestCase):
         )
 
         self.assertEqual("normalized-exact", match["match_type"])
+
+    def test_requirement_code_only_match_is_classified_as_weak(self) -> None:
+        match = _match_candidate(
+            "BSR 7 Expected XHTML behavior",
+            [
+                {
+                    "block_id": "DOCX-BLOCK-000001",
+                    "block_index": 1,
+                    "kind": "table-row",
+                    "locator": "/blocks/1",
+                    "section_path": ["5. Ограничения"],
+                    "text": "BSR 7 Different DOCX behavior",
+                }
+            ],
+        )
+
+        self.assertEqual("requirement-code-exact", match["match_type"])
+        self.assertEqual(["BSR 7"], match["requirement_codes"])
 
     def test_xhtml_punctuation_spacing_noise_matches_docx_json_text(self) -> None:
         match = _match_candidate(
@@ -324,6 +362,96 @@ class SourceJsonProjectionTests(unittest.TestCase):
         )
         self.assertIn("less-than-three-real-scopes", report["summary"]["blockers"])
         self.assertIn("missing-xhtml-candidates", report["summary"]["blockers"])
+        self.assertEqual(
+            1,
+            len(report["scope_results"][0]["diagnostics"]["missing_candidates"]),
+        )
+
+    def test_compare_reports_order_violation_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir(parents=True)
+            docx = source / "main.docx"
+            xhtml = source / "main.xhtml"
+            document = Document()
+            document.add_heading("4.1 scope-a", level=2)
+            table = document.add_table(rows=2, cols=2)
+            table.cell(0, 0).text = "BSR 2"
+            table.cell(0, 1).text = "Second behavior"
+            table.cell(1, 0).text = "BSR 1"
+            table.cell(1, 1).text = "First behavior"
+            document.save(docx)
+            xhtml.write_text(
+                '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                "<section><h2>4.1 scope-a</h2><table>"
+                "<tr><td>BSR 1</td><td>First behavior</td></tr>"
+                "<tr><td>BSR 2</td><td>Second behavior</td></tr>"
+                "</table></section></body></html>",
+                encoding="utf-8",
+            )
+            spec = self._write_scope_spec(
+                repo_root=root,
+                xhtml=xhtml,
+                scope_slug="scope-a",
+                section_index=1,
+            )
+            docx_json = root / "work" / "source.json"
+            write_docx_source_json(docx, repo_root=root, output_path=docx_json)
+
+            report = compare_docx_json_to_xhtml_baseline(
+                repo_root=root,
+                spec_path=spec,
+                docx_json_path=docx_json,
+                selected_xhtml=xhtml,
+            )
+
+        self.assertEqual(1, report["order_violations"])
+        self.assertFalse(report["order_preserved"])
+        self.assertEqual(1, len(report["diagnostics"]["order_violations"]))
+
+    def test_compare_reports_requirement_code_only_diagnostics(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "source"
+            source.mkdir(parents=True)
+            docx = source / "main.docx"
+            xhtml = source / "main.xhtml"
+            document = Document()
+            document.add_heading("4.1 scope-a", level=2)
+            table = document.add_table(rows=1, cols=2)
+            table.cell(0, 0).text = "BSR 9"
+            table.cell(0, 1).text = "Different DOCX behavior"
+            document.save(docx)
+            xhtml.write_text(
+                '<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+                "<section><h2>4.1 scope-a</h2>"
+                "<table><tr><td>BSR 9</td><td>Expected XHTML behavior</td></tr></table>"
+                "</section></body></html>",
+                encoding="utf-8",
+            )
+            spec = self._write_scope_spec(
+                repo_root=root,
+                xhtml=xhtml,
+                scope_slug="scope-a",
+                section_index=1,
+            )
+            docx_json = root / "work" / "source.json"
+            write_docx_source_json(docx, repo_root=root, output_path=docx_json)
+
+            report = compare_docx_json_to_xhtml_baseline(
+                repo_root=root,
+                spec_path=spec,
+                docx_json_path=docx_json,
+                selected_xhtml=xhtml,
+            )
+
+        self.assertEqual(1, report["weak_match_count"])
+        self.assertEqual(1, len(report["diagnostics"]["weak_matches"]))
+        self.assertEqual(
+            "requirement-code-exact",
+            report["diagnostics"]["weak_matches"][0]["match_type"],
+        )
 
 
 if __name__ == "__main__":
