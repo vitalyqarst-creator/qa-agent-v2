@@ -6479,7 +6479,6 @@ def should_require_writer_quality_gate(content: str) -> bool:
             "Package Test Design Plan",
             "Internal Work Package Coverage",
             "Source Table Normalization",
-            "package_id",
         )
     )
 
@@ -9315,7 +9314,6 @@ def source_row_inventory_required(content: str) -> bool:
         "Source Table Normalization" in content
         or "Package Test Design Plan" in content
         or "Internal Work Package Coverage" in content
-        or re.search(r"\bpackage_id\b", content, flags=re.IGNORECASE) is not None
     )
 
 
@@ -11058,6 +11056,17 @@ POSITIVE_ACCEPTANCE_EXPECTED_RE = re.compile(
 NUMERIC_ONLY_CONTEXT_RE = re.compile(
     r"numeric|number|digits?|\u0447\u0438\u0441\u043b\u043e\u0432|\u0446\u0438\u0444\u0440|"
     r"\u0442\u043e\u043b\u044c\u043a\u043e\s+(?:\u0447\u0438\u0441\u043b|\u0446\u0438\u0444\u0440)",
+    flags=re.IGNORECASE,
+)
+STRICT_NUMERIC_ONLY_RULE_RE = re.compile(
+    r"\bnumeric[-_\s]?only\b|\bdigits?\s+only\b|"
+    r"\bonly\s+(?:\d+\s+)?digits?\b|"
+    r"\b(?:exact|exactly)\s+\d+\s+digits?\b|"
+    r"\u0442\u043e\u043b\u044c\u043a\u043e\s+(?:\d+\s+)?"
+    r"(?:\u0446\u0438\u0444\u0440|\u0447\u0438\u0441\u043b\u043e\u0432)|"
+    r"(?:\u0440\u043e\u0432\u043d\u043e|\u0442\u043e\u0447\u043d\w*)\s+"
+    r"\d+\s+\u0446\u0438\u0444\u0440|"
+    r"\d+\s+\u0446\u0438\u0444\u0440",
     flags=re.IGNORECASE,
 )
 INPUT_FILTERING_ORACLE_RE = re.compile(
@@ -13215,7 +13224,7 @@ def validate_test_case_quality_smells(
                 ],
             )
         )
-        if test_data and NUMERIC_ONLY_CONTEXT_RE.search(boundary_context):
+        if test_data and STRICT_NUMERIC_ONLY_RULE_RE.search(boundary_context):
             invalid_valid_values = numeric_only_valid_values_that_look_invalid(test_data)
             if invalid_valid_values:
                 numeric_only_valid_data_invalid.append(

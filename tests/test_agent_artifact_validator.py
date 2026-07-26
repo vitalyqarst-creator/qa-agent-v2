@@ -6629,6 +6629,50 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         finding_ids = {finding["id"] for finding in payload["findings"]}
         self.assertIn("source-row-inventory-missing", finding_ids)
 
+    def test_production_runtime_package_id_does_not_require_writer_scaffolding(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_path = fixture_root / "fts" / "sample-ft" / "test-cases" / "runtime.md"
+            test_case_path.parent.mkdir(parents=True, exist_ok=True)
+            test_case_path.write_text(
+                "\n".join(
+                    [
+                        "# Runtime test cases",
+                        "",
+                        "## Atomic Requirements Ledger",
+                        "",
+                        "| atom_id | package_id | req_id | atomic_statement | condition | expected_behavior | coverage_status | covered_by_tc | gap_note |",
+                        "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+                        "| ATOM-001 | WP-01 | GSR 1 | Amount accepts valid value | - | Amount displays the entered value | covered | TC-SAMPLE-001 | - |",
+                        "",
+                        "## TC-SAMPLE-001",
+                        "**package_id:** `WP-01`",
+                        "**Title:** Amount displays entered value",
+                        "**Priority:** High",
+                        "**Type:** Positive",
+                        "**Goal:** Verify amount value entry.",
+                        "**Preconditions:**",
+                        "- Open the amount form.",
+                        "**Test Data:**",
+                        "- Value: `1000`.",
+                        "**Steps:**",
+                        "1. Enter `1000` into `Amount`.",
+                        "**Expected Result:** `Amount` displays `1000`.",
+                        "**Postconditions:**",
+                        "- Clear `Amount`.",
+                        "**Traceability:** ATOM-001; GSR 1",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_path), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("source-row-inventory-missing", finding_ids)
+        self.assertNotIn("writer-quality-gate-missing", finding_ids)
+
     def test_source_row_inventory_requires_mapping_and_known_atoms(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
@@ -13647,6 +13691,46 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "**Требуется подтверждение:** Как UI отклоняет цифру в поле `Фамилия`?",
                         "**Постусловия:** Не требуются.",
                         "**Трассировка:** ATOM-001; BSR 174; SRC-CANARY-174.P01",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            result = self.run_validator("--root", str(test_case_file), "--json")
+
+        payload = json.loads(result.stdout)
+        finding_ids = {finding["id"] for finding in payload["findings"]}
+        self.assertNotIn("test-case-numeric-only-valid-data-invalid-smell", finding_ids)
+
+    def test_text_symbol_mixed_candidate_valid_text_is_not_numeric_valid_data(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            fixture_root = Path(tmp_dir)
+            test_case_file = fixture_root / "fts" / "sample-ft" / "test-cases" / "text-symbol-mixed-candidate.md"
+            test_case_file.parent.mkdir(parents=True, exist_ok=True)
+            test_case_file.write_text(
+                "\n".join(
+                    [
+                        "# Text Symbol Mixed Candidate",
+                        "",
+                        "## TC-TEXT-001",
+                        "**Title:** Last name accepts text-hyphen and rejects digit",
+                        "**Priority:** Medium",
+                        "**Type:** Negative",
+                        "**Oracle Status:** ui-calibration-required",
+                        "**Test Case Status:** candidate-ui-calibration",
+                        "**Goal:** Verify the text and hyphen rule for `ATOM-001`; a digit is an invalid class.",
+                        "**Preconditions:**",
+                        "- Open the form.",
+                        "**Test Data:**",
+                        "- Allowed value: `Ivan-Petrov`.",
+                        "- Invalid value with digit: `Ivan-Petrov1`.",
+                        "**Steps:**",
+                        "1. Enter `Ivan-Petrov` into `Last name`.",
+                        "2. Enter `Ivan-Petrov1` into `Last name`.",
+                        "**Expected Result:** The field accepts the allowed value and the exact rejection mechanism for the digit class requires UI calibration.",
+                        "**Postconditions:**",
+                        "- Clear `Last name`.",
+                        "**Traceability:** ATOM-001; BSR 174; SRC-CANARY-174.P01",
                     ]
                 ),
                 encoding="utf-8",
