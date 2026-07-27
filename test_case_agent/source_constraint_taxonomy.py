@@ -103,3 +103,18 @@ def restricted_symbol_classes(source_text: str) -> tuple[RestrictedSymbolClass, 
             ),
         )
     )
+
+
+def exact_numeric_length_representatives(source_text: str) -> tuple[str, ...]:
+    """Return N, N-1 and N+1 representatives for exact numeric length rules."""
+
+    if not isinstance(source_text, str):
+        raise TypeError("source_text must be a string")
+    values: list[str] = []
+    for match in _EXACT_NUMERIC_SYMBOL_RESTRICTION.finditer(source_text):
+        length = int(match.group("length"))
+        values.append(_digit_value(length))
+        if length > 1:
+            values.append(_digit_value(length - 1))
+        values.append(_digit_value(length + 1))
+    return tuple(dict.fromkeys(values))

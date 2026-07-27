@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import unittest
 
-from test_case_agent.source_constraint_taxonomy import restricted_symbol_classes
+from test_case_agent.source_constraint_taxonomy import (
+    exact_numeric_length_representatives,
+    restricted_symbol_classes,
+)
 
 
 class RestrictedSymbolClassTaxonomyTests(unittest.TestCase):
@@ -34,6 +37,13 @@ class RestrictedSymbolClassTaxonomyTests(unittest.TestCase):
                 for item in rules[:2]
             )
         )
+
+    def test_exact_numeric_representatives_include_n_minus_and_n_plus(self) -> None:
+        values = exact_numeric_length_representatives(
+            "BSR 85. Ограничение на формат: только 4 числовых символа."
+        )
+
+        self.assertEqual(("1234", "123", "12345"), values)
 
     def test_one_digit_rule_does_not_infer_empty_value_invalidity(self) -> None:
         rules = restricted_symbol_classes("Ровно 1 цифра.")

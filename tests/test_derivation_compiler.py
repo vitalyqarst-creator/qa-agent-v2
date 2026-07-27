@@ -821,6 +821,62 @@ class DerivationCompilerTests(unittest.TestCase):
             by_id["ASSERT-PASS-CUR-021"].fixture_values["OBL-PASS-CUR-021"],  # type: ignore[index]
         )
 
+    def test_source_first_exact_length_uses_exact_source_boundaries(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PASS-CUR-003",
+            atom_id="ATOM-003",
+            obligation_ids=("OBL-PASS-CUR-003",),
+            exact_source_text=(
+                "Серия Да Да Поле ввода Текст Строка BSR 85. "
+                "Ограничение на формат: только 4 числовых символа."
+            ),
+            canonical_statement=(
+                "Поле «Серия» не принимает более 4 числовых символов."
+            ),
+            polarity="negative",
+            action_clauses=("Попытаться ввести значение `12345`.",),
+            oracle_clauses=(
+                "Пятый символ не вводится; в поле остается ограниченное "
+                "значение длиной не более 4 символов.",
+            ),
+            requirement_codes=("BSR 85",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-003",
+                    source_refs=("SRC-001", "BSR 85"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Попытаться ввести значение `12345`.; "
+                        "Test data: Попытаться ввести значение `12345`."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-003",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("4-3-current-passport-data", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivation = compiled.document.derivations[0]
+
+        self.assertEqual(
+            ("1234", "123", "12345"),
+            derivation.fixture_values["OBL-PASS-CUR-003"],  # type: ignore[index]
+        )
+
     def test_source_first_reverse_save_block_date_window_becomes_calibration(self) -> None:
         assertion = replace(
             self._assertion(),

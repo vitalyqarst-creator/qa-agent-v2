@@ -1263,6 +1263,48 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("123-456", case.steps[1])
         self.assertIn("123-456", case.expected_result)
 
+    def test_source_format_exact_length_keeps_n_minus_and_n_plus_boundaries(self) -> None:
+        graph = _graph(
+            kind="source-format",
+            fixtures=("1234", "123", "12345"),
+            trigger="Попытаться ввести значение `12345`.",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement=(
+                        "Поле «Серия» принимает только 4 числовых символа."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="length-limit",
+                    atomic_statement=(
+                        "Поле «Серия» принимает только 4 числовых символа."
+                    ),
+                    observable_oracle=(
+                        "Значение должно соответствовать точной длине 4 цифры."
+                    ),
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "Серия"})
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        joined_data = "\n".join(case.test_data)
+        joined_steps = "\n".join(case.steps)
+        self.assertEqual("негативный", case.case_type)
+        self.assertIn("123", joined_data)
+        self.assertIn("12345", joined_data)
+        self.assertIn("123", joined_steps)
+        self.assertIn("12345", joined_steps)
+
     def test_source_runtime_negative_behavior_sets_negative_case_type(self) -> None:
         graph = _graph(
             kind="source-date-boundary",
