@@ -68,7 +68,14 @@ def _digest(value: Any) -> str:
 
 def _case_coverage_variant(case_key: str) -> str:
     parts = case_key.split("|")
-    return parts[3] if len(parts) == 5 else ""
+    variant = parts[3] if len(parts) == 5 else ""
+    return variant.split(":obl:", 1)[0]
+
+
+def _case_key_variant(variant: str, disambiguator: str) -> str:
+    if not disambiguator:
+        return variant
+    return f"{variant}:obl:{disambiguator}"
 
 
 def _has_length_too_long_oracle(value: str) -> bool:
@@ -85,6 +92,7 @@ def _split_case_specs_for_obligation(
     fixture_values: Sequence[str],
     effective_calibration_status: str,
     has_executable_observable_oracle: bool = False,
+    case_disambiguator: str = "",
 ) -> tuple[tuple[str, str], ...]:
     if (
         property_kind == "source-format"
@@ -98,7 +106,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="allowed-class-valid",
+                    coverage_variant=_case_key_variant(
+                        "allowed-class-valid",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 "executable",
@@ -108,7 +119,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="allowed-class-invalid",
+                    coverage_variant=_case_key_variant(
+                        "allowed-class-invalid",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 "candidate-ui-calibration",
@@ -134,7 +148,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="length-limit-valid-boundary",
+                    coverage_variant=_case_key_variant(
+                        "length-limit-valid-boundary",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 "executable",
@@ -144,7 +161,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="length-limit-too-short-boundary",
+                    coverage_variant=_case_key_variant(
+                        "length-limit-too-short-boundary",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 "candidate-ui-calibration",
@@ -154,7 +174,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="length-limit-too-long-boundary",
+                    coverage_variant=_case_key_variant(
+                        "length-limit-too-long-boundary",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 too_long_status,
@@ -176,7 +199,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="not-future-valid-boundary",
+                    coverage_variant=_case_key_variant(
+                        "not-future-valid-boundary",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 "executable",
@@ -186,7 +212,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="not-future-invalid-future",
+                    coverage_variant=_case_key_variant(
+                        "not-future-invalid-future",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 invalid_status,
@@ -208,7 +237,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="date-window-valid-boundary",
+                    coverage_variant=_case_key_variant(
+                        "date-window-valid-boundary",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 valid_status,
@@ -218,7 +250,10 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="date-window-invalid-boundary",
+                    coverage_variant=_case_key_variant(
+                        "date-window-invalid-boundary",
+                        case_disambiguator,
+                    ),
                     condition_key=condition_key,
                 ),
                 "executable",
@@ -235,7 +270,7 @@ def _split_case_specs_for_obligation(
                 scope_slug=scope_slug,
                 subject_key=subject_key,
                 property_kind=property_kind,
-                coverage_variant=variant,
+                coverage_variant=_case_key_variant(variant, case_disambiguator),
                 condition_key=condition_key,
             ),
             status,
@@ -677,6 +712,9 @@ def build_coverage_graph(
                     property_kind=property_kind,
                     variant=variant,
                     condition_key=condition_key,
+                    case_disambiguator=(
+                        obligation_id if len(assertion.obligation_ids) > 1 else ""
+                    ),
                     fixture_values=fixture_values,
                     effective_calibration_status=effective_calibration_status,
                     has_executable_observable_oracle=(

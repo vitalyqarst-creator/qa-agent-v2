@@ -258,6 +258,49 @@ class CoverageGraphTests(unittest.TestCase):
         self.assertEqual({"requiredness", "editability"}, {item.property_kind for item in graph.properties})
         self.assertEqual(2, len(graph.cases))
 
+    def test_multi_obligation_assertion_case_keys_are_disambiguated(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (
+                FakeAssertion(
+                    "ASSERT-001",
+                    "SRC-001",
+                    (),
+                    ("OBL-STATUS", "OBL-VISIBILITY"),
+                ),
+            ),
+        )
+        prepared = obligation_set(
+            obligation("OBL-STATUS", "ATOM-001", "SRC-001"),
+            obligation("OBL-VISIBILITY", "ATOM-001", "SRC-001"),
+        )
+
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "partner.status",
+                    "visibility",
+                    {
+                        "OBL-STATUS": "visible",
+                        "OBL-VISIBILITY": "visible",
+                    },
+                ),
+            ),
+        )
+
+        self.assertEqual(2, len(graph.cases))
+        self.assertEqual(2, len({item.case_key for item in graph.cases}))
+        self.assertTrue(
+            all(":obl:" in item.case_key for item in graph.cases)
+        )
+
     def test_foreign_row_wide_requirement_code_is_rejected(self) -> None:
         manifest = FakeManifest(
             "sample-scope",
