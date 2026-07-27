@@ -1241,6 +1241,58 @@ class DerivationCompilerTests(unittest.TestCase):
             expected_package_id=obligations.package_id,
         )
 
+    def test_source_first_displayed_numeric_count_is_visibility_not_format(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-017A",
+            atom_id="ATOM-017A",
+            obligation_ids=("OBL-017A",),
+            exact_source_text=(
+                "AS.22 A heading is displayed at the top of the column. "
+                "A number with the count of matching entities is shown near it."
+            ),
+            canonical_statement=(
+                "The requisites column has a heading and a count displayed next "
+                "to the heading."
+            ),
+            condition_clauses=(),
+            action_clauses=("Inspect the top of the requisites column.",),
+            oracle_clauses=(
+                "The heading Requisites is displayed and a numeric count is shown near it.",
+            ),
+            requirement_codes=("AS.22",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-017A",
+                    source_refs=("SRC-001", "AS.22"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent="Inspect the top of the requisites column.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-017A",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("sample-scope", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivation = compiled.document.derivations[0]
+
+        self.assertEqual("visibility", derivation.property_kind)
+        self.assertEqual("visible", derivation.obligation_variants["OBL-017A"])
+        self.assertIsNone(derivation.fixture_values)
+
     def test_source_first_date_window_splits_positive_boundary_calibration(self) -> None:
         assertion = replace(
             self._assertion(),

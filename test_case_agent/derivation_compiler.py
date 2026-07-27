@@ -1377,6 +1377,25 @@ def _source_first_kind_and_variant(
     ):
         return "source-date-boundary", "date-window"
     if any(
+        token in text for token in ("видим", "отображ", "visible", "displayed", "shown")
+    ) and not any(
+        token
+        in text
+        for token in (
+            "ввести",
+            "ввод",
+            "не принимает",
+            "не допуска",
+            "reject",
+            "enter",
+            "input",
+            "format restriction",
+            "only numeric",
+            "only digit",
+        )
+    ):
+        return "visibility", "visible"
+    if any(
         token in text
         for token in (
             "нечислов",
