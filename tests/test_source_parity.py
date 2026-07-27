@@ -736,6 +736,109 @@ class SourceParityTests(unittest.TestCase):
             [item["page"] for item in data_match["page_matches"]],
         )
 
+    def test_verifies_requirement_fragment_continuing_to_next_pdf_page(self) -> None:
+        source = self.xhtml.read_text(encoding="utf-8")
+        self.xhtml.write_text(
+            source.replace(
+                "<tr><td>BSR 1. Field</td><td>Values: - first, - second</td>"
+                "<td>Yes</td></tr>",
+                "<tr><td>Field</td><td>Yes</td><td>BSR 1. Long condition: "
+                "Alpha Beta Gamma. BSR 2. Next condition</td></tr>",
+            ),
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Section - heading")
+        table = document.add_table(rows=0, cols=3)
+        header = table.add_row()
+        header.cells[0].merge(header.cells[2]).text = "Section"
+        row = table.add_row()
+        for cell, value in zip(
+            row.cells,
+            (
+                "Field",
+                "Yes",
+                "BSR 1. Long condition: Alpha Beta Gamma. BSR 2. Next condition",
+            ),
+            strict=True,
+        ):
+            cell.text = value
+        document.save(self.docx)
+
+        base = self._manifest(codes=("BSR 1", "BSR 2"))
+        data_row = replace(
+            base.source_rows[2],
+            bounded_source_text=(
+                "Field Yes BSR 1. Long condition: Alpha Beta Gamma. "
+                "BSR 2. Next condition"
+            ),
+            requirement_codes=("BSR 1", "BSR 2"),
+        )
+        manifest = replace(
+            base,
+            source_rows=(base.source_rows[0], base.source_rows[1], data_row),
+        )
+        literals = self._literal_candidates(manifest)
+        literal_data = next(
+            item for item in literals if item["source_row_id"] == "SRC-DATA-ROW"
+        )
+        literal_data["structured_cells"] = [
+            {
+                "physical_column_index": 1,
+                "bounded_source_text": "Field",
+                "bounded_source_text_sha256": hashlib.sha256(
+                    "Field".encode("utf-8")
+                ).hexdigest(),
+            },
+            {
+                "physical_column_index": 2,
+                "bounded_source_text": "Yes",
+                "bounded_source_text_sha256": hashlib.sha256(
+                    "Yes".encode("utf-8")
+                ).hexdigest(),
+            },
+            {
+                "physical_column_index": 3,
+                "bounded_source_text": (
+                    "BSR 1. Long condition: Alpha Beta Gamma. "
+                    "BSR 2. Next condition"
+                ),
+                "bounded_source_text_sha256": hashlib.sha256(
+                    (
+                        "BSR 1. Long condition: Alpha Beta Gamma. "
+                        "BSR 2. Next condition"
+                    ).encode("utf-8")
+                ).hexdigest(),
+            },
+        ]
+        _write_text_pdf(
+            self.pdf,
+            (
+                "Section - heading Section Field Yes BSR 1 Long condition: Alpha",
+                "Beta Gamma. BSR 2 Next condition",
+            ),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(include_pdf=True),
+            literals,
+            requirement_guard=self._guard(),
+        )
+
+        data_match = next(
+            item
+            for item in result["pdf_requirement_codes"]["semantic_literal_rows"][
+                "row_matches"
+            ]
+            if item["source_row_id"] == "SRC-DATA-ROW"
+        )
+        self.assertIn("adjacent-page-continuations", data_match["comparison_mode"])
+        self.assertEqual(
+            [1, 1, 1, 2, 2],
+            [item["page"] for item in data_match["structured_cell_matches"]],
+        )
+
     def test_pdf_structured_fallback_rejects_reordered_fragments(self) -> None:
         row = {
             "source_row_id": "SRC-ORDER",

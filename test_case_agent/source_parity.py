@@ -1764,6 +1764,8 @@ def _pdf_fragment_match_choices(
     fragment: _PdfExpectedFragment,
     semantic_pages: Sequence[_PdfSemanticPage],
     allowed_pages: Sequence[int],
+    *,
+    anchor_pages: Sequence[int] | None = None,
 ) -> tuple[tuple[_PdfSemanticMatch, ...], ...]:
     full_matches = _semantic_occurrences_on_pages(
         semantic_pages,
@@ -1771,15 +1773,27 @@ def _pdf_fragment_match_choices(
         allowed_pages,
     )
     allowed = sorted(set(allowed_pages))
+    allowed_set = set(allowed)
+    anchors = sorted(
+        set(anchor_pages if anchor_pages is not None else allowed) & allowed_set
+    )
     choices: list[tuple[_PdfSemanticMatch, ...]] = [
         (match,) for match in full_matches
     ]
     seen: set[tuple[int, int, int, int, int, int]] = set()
-    for first_page, second_page in zip(allowed, allowed[1:]):
-        if second_page != first_page + 1:
+    requirement_marker = (
+        _pdf_semantic_text(fragment.requirement_code)
+        if fragment.requirement_code is not None
+        else ""
+    )
+    for first_page in anchors:
+        second_page = first_page + 1
+        if second_page not in allowed_set:
             continue
         for split in fragment.split_boundaries:
             prefix = fragment.semantic_text[:split]
+            if requirement_marker and not prefix.startswith(requirement_marker):
+                continue
             suffix = fragment.semantic_text[split:]
             prefix_matches = _semantic_occurrences_on_pages(
                 semantic_pages,
@@ -1962,16 +1976,23 @@ def _verify_pdf_semantic_rows(
                             )
                         )
                     else:
-                        allowed_pages = tuple(
+                        code_pages = tuple(
                             page
                             for page in interval_pages
-                            if page
-                            in pages_by_code.get(fragment.requirement_code, set())
+                            if page in pages_by_code.get(
+                                fragment.requirement_code, set()
+                            )
                         )
+                        allowed_pages = interval_pages
                     choices = _pdf_fragment_match_choices(
                         fragment,
                         semantic_pages,
                         allowed_pages,
+                        anchor_pages=(
+                            code_pages
+                            if fragment.requirement_code is not None
+                            else None
+                        ),
                     )
                     raw_prefix_keys: set[tuple[int, int, int]] = set()
                     if fragment_index + 2 < len(fragments):
