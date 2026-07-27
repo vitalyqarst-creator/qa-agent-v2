@@ -105,6 +105,11 @@ def _split_case_specs_for_obligation(
         and variant == "length-limit"
         and len(tuple(fixture_values)) >= 3
     ):
+        invalid_status = (
+            "candidate-ui-calibration"
+            if effective_calibration_status == "ui-calibration-required"
+            else "executable"
+        )
         return (
             (
                 semantic_case_key(
@@ -124,7 +129,7 @@ def _split_case_specs_for_obligation(
                     coverage_variant="length-limit-invalid-boundary",
                     condition_key=condition_key,
                 ),
-                "candidate-ui-calibration",
+                invalid_status,
             ),
         )
     if (
@@ -237,7 +242,7 @@ def _duplicate_obligation_case_coverage_allowed(
             return (
                 statuses.get("length-limit-valid-boundary") == "executable"
                 and statuses.get("length-limit-invalid-boundary")
-                == "candidate-ui-calibration"
+                in {"candidate-ui-calibration", "executable"}
             )
         return False
     if property_kind == "source-date-boundary":

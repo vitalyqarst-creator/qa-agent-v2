@@ -85,6 +85,64 @@ class DerivationCompilerTests(unittest.TestCase):
             ),
         )
 
+    def test_source_first_default_fixture_uses_oracle_value_not_block_label(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PASS-CUR-028",
+            atom_id="ATOM-028",
+            obligation_ids=("OBL-PASS-CUR-028",),
+            exact_source_text=(
+                "Блок «Паспортные данные». BSR 104. "
+                "Переключатель «Клиент менял паспорт» по умолчанию имеет значение «Нет»."
+            ),
+            canonical_statement=(
+                "Переключатель «Клиент менял паспорт» по умолчанию имеет значение «Нет»."
+            ),
+            action_clauses=(
+                "Не взаимодействуя с переключателем «Клиент менял паспорт», проверить его первоначальное значение.",
+            ),
+            oracle_clauses=(
+                "Переключатель «Клиент менял паспорт» имеет значение «Нет».",
+            ),
+            requirement_codes=("BSR 104",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-028",
+                    source_refs=("SRC-001", "BSR 104"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Не взаимодействуя с переключателем "
+                        "«Клиент менял паспорт», проверить его первоначальное значение.; "
+                        "Test data: Блок «Паспортные данные»."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-028",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("4-3-current-passport-data", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivation = compiled.document.derivations[0]
+
+        self.assertEqual("default", derivation.property_kind)
+        self.assertEqual(
+            ("Нет",),
+            derivation.fixture_values["OBL-PASS-CUR-028"],  # type: ignore[index]
+        )
+
     def test_positive_and_negative_persistence_require_commit_trigger(self) -> None:
         for polarity, oracle in (
             ("positive", "Поле сохраняет текущую дату."),
@@ -212,6 +270,19 @@ class DerivationCompilerTests(unittest.TestCase):
                     "«Паспорт недействителен (просрочен)»."
                 ),
                 action="Инициировать проверку срока действия паспорта.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle=(
+                    "Просроченный паспорт блокирует сохранение с подсказкой "
+                    "«Паспорт недействителен (просрочен)»."
+                ),
+                action=(
+                    "Ввести дату выдачи паспорта; "
+                    "Инициировать проверку срока действия паспорта."
+                ),
             )
         )
         self.assertFalse(
@@ -884,8 +955,8 @@ class DerivationCompilerTests(unittest.TestCase):
             atom_id="ATOM-004",
             obligation_ids=("OBL-PASS-CUR-004",),
             exact_source_text=(
-                "РќРѕРјРµСЂ Р”Р° Р”Р° РџРѕР»Рµ РІРІРѕРґР° РўРµРєСЃС‚ РЎС‚СЂРѕРєР° BSR 88. "
-                "РћРіСЂР°РЅРёС‡РµРЅРёРµ РЅР° С„РѕСЂРјР°С‚: С‚РѕР»СЊРєРѕ 6 С‡РёСЃР»РѕРІС‹С… СЃРёРјРІРѕР»РѕРІ."
+                "Номер Да Да Поле ввода Текст Строка BSR 88. "
+                "Ограничение на формат: только 6 числовых символов."
             ),
             canonical_statement=(
                 "Field `Number` rejects a non-numeric symbol."
@@ -930,11 +1001,11 @@ class DerivationCompilerTests(unittest.TestCase):
             derivation.obligation_variants["OBL-PASS-CUR-004"],
         )
         self.assertEqual(
-            ("A",),
+            ("123A56", "123 56", "123@56", "123.56", "123-56"),
             derivation.fixture_values["OBL-PASS-CUR-004"],  # type: ignore[index]
         )
 
-    def test_source_first_reverse_save_block_date_window_becomes_calibration(self) -> None:
+    def test_source_first_date_window_with_explicit_validation_action_is_executable(self) -> None:
         assertion = replace(
             self._assertion(),
             assertion_id="ASSERT-PASS-CUR-023",
@@ -1008,14 +1079,8 @@ class DerivationCompilerTests(unittest.TestCase):
             ),
             derivation.fixture_values["OBL-PASS-CUR-023"],  # type: ignore[index]
         )
-        self.assertRegex(
-            derivation.source_oracle_ids["OBL-PASS-CUR-023"],  # type: ignore[index]
-            r"^SO-CAL-",
-        )
-        self.assertIn(
-            "Просроченный паспорт блокирует сохранение",
-            derivation.calibration_questions["OBL-PASS-CUR-023"],  # type: ignore[index]
-        )
+        self.assertIsNone(derivation.source_oracle_ids)
+        self.assertIsNone(derivation.calibration_questions)
 
         graph = build_coverage_graph(
             ft_slug="sample",
@@ -1024,13 +1089,13 @@ class DerivationCompilerTests(unittest.TestCase):
             obligation_set=obligations,
             derivations=compiled.document.derivations,
         )
-        self.assertEqual("candidate-ui-calibration", graph.cases[0].status)
         self.assertEqual(
-            "ui-calibration-required",
-            graph.obligations[0].calibration_status,
+            {"executable"},
+            {case.status for case in graph.cases},
         )
+        self.assertEqual("none", graph.obligations[0].calibration_status)
         self.assertEqual(
-            assertion.canonical_statement,
+            assertion.oracle_clauses[0],
             graph.obligations[0].observable_oracle,
         )
 

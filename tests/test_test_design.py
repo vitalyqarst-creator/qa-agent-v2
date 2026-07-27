@@ -1305,6 +1305,47 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("123", joined_steps)
         self.assertIn("12345", joined_steps)
 
+    def test_source_format_digits_only_renders_all_invalid_classes(self) -> None:
+        graph = _graph(
+            kind="source-format",
+            fixtures=("123A56", "123 56", "123@56", "123.56", "123-56"),
+            trigger="Попытаться ввести нечисловой символ.",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement=(
+                        "Поле «Номер» принимает только числовые символы."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="digits-only",
+                    atomic_statement=(
+                        "Поле «Номер» принимает только числовые символы."
+                    ),
+                    observable_oracle="Нечисловой символ не вводится.",
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "Номер"})
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+        joined_data = "\n".join(case.test_data)
+        joined_steps = "\n".join(case.steps)
+
+        self.assertEqual("негативный", case.case_type)
+        for value in ("123A56", "123 56", "123@56", "123.56", "123-56"):
+            self.assertIn(value, joined_data)
+            self.assertIn(value, joined_steps)
+        self.assertEqual("Нечисловой символ не вводится.", case.expected_result)
+        self.assertNotIn("UI-калибровки", case.expected_result)
+
     def test_source_format_exact_length_split_renders_valid_and_invalid_cases(self) -> None:
         graph = _graph(
             kind="source-format",

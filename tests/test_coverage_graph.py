@@ -562,6 +562,38 @@ class CoverageGraphTests(unittest.TestCase):
             by_variant["length-limit-invalid-boundary"],
         )
 
+    def test_exact_length_resolved_oracle_splits_to_executable_boundaries(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (FakeAssertion("ASSERT-001", "SRC-001", ("BSR 1",), ("OBL-001",)),),
+        )
+        prepared = obligation_set(obligation("OBL-001", "ATOM-001", "SRC-001"))
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "passport.series.length",
+                    "source-format",
+                    {"OBL-001": "length-limit"},
+                    validation_trigger="Попытаться ввести пятый символ.",
+                    fixture_values={"OBL-001": ("1234", "123", "12345")},
+                ),
+            ),
+        )
+
+        self.assertEqual((), validate_coverage_graph(graph))
+        by_variant = {
+            case.case_key.split("|")[3]: case.status for case in graph.cases
+        }
+        self.assertEqual("executable", by_variant["length-limit-valid-boundary"])
+        self.assertEqual("executable", by_variant["length-limit-invalid-boundary"])
+
     def test_date_boundary_calibration_splits_valid_boundary_and_future_case(self) -> None:
         manifest = FakeManifest(
             "sample-scope",

@@ -28,6 +28,7 @@ from test_case_agent.semantic_design_bridge import (
 )
 from test_case_agent.source_constraint_taxonomy import (
     exact_numeric_length_representatives,
+    restricted_symbol_classes,
 )
 
 
@@ -788,6 +789,12 @@ _SOURCE_FIRST_DEFAULT_SUBJECT = re.compile(
     r"(?:`([^`\r\n]{1,160})`|«([^»\r\n]{1,160})»|В«([^В»\r\n]{1,160})В»)",
     re.IGNORECASE,
 )
+_SOURCE_FIRST_DEFAULT_VALUE = re.compile(
+    r"(?:имеет\s+значение|имеют\s+значение|равно|equals|default\s+value\s*(?:is|=))"
+    r"[^`«\r\n]{0,80}"
+    r"(?:`([^`\r\n]{1,160})`|«([^»\r\n]{1,160})»|В«([^В»\r\n]{1,160})В»)",
+    re.IGNORECASE,
+)
 _SOURCE_FIRST_EN_FIELD = re.compile(
     r"\b(?:the\s+)?([A-Za-z][A-Za-z0-9 _/-]{1,100}\s+"
     r"(?:field|block|button|list|section|tab))\b",
@@ -869,6 +876,24 @@ def _source_first_default_subject_label(value: str) -> str:
     if match is None:
         return ""
     return next(group for group in match.groups() if group is not None).strip()
+
+
+def _source_first_default_fixture_values(*values: str) -> tuple[str, ...]:
+    evidence = " ".join(value for value in values if value)
+    labels: list[str] = []
+    for match in _SOURCE_FIRST_DEFAULT_VALUE.finditer(evidence):
+        label = next(group for group in match.groups() if group is not None).strip()
+        if label.casefold() not in _PLACEHOLDER_FIXTURES:
+            labels.append(label)
+    if labels:
+        return tuple(dict.fromkeys(labels))
+    for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
+        if (
+            _source_first_label_is_runtime_value(prefix)
+            and label.casefold() not in _PLACEHOLDER_FIXTURES
+        ):
+            return (label,)
+    return ()
 
 
 def _source_first_row_subject_label(value: str) -> str:
@@ -1145,6 +1170,33 @@ def _source_first_date_window_fixture_values(
     return ()
 
 
+def _source_first_digits_only_fixture_values(*values: str) -> tuple[str, ...]:
+    restricted = restricted_symbol_classes(_source_first_text(*values))
+    return tuple(
+        dict.fromkeys(
+            item.representative_invalid_value
+            for item in restricted
+            if item.restriction_type == "numeric"
+            and item.negative_class
+            not in {"length-n-minus-one", "length-n-plus-one"}
+        )
+    )
+
+
+def _source_first_has_explicit_validation_action(action: str) -> bool:
+    text = _source_first_text(action)
+    return any(
+        token in text
+        for token in (
+            "инициировать проверку",
+            "запустить проверку",
+            "проверку сохранения",
+            "проверить срок",
+            "проверить значение",
+        )
+    )
+
+
 def _source_first_kind_and_variant(
     *,
     assertion: SourceAssertion,
@@ -1382,13 +1434,25 @@ def compile_source_first_property_derivations(
                 )
                 if exact_length_values:
                     fixtures = exact_length_values
-                    if len(exact_length_values) >= 3:
+                    if len(exact_length_values) >= 3 and not expected_oracle:
                         source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                             obligation_id.encode("utf-8")
                         ).hexdigest()[:16].upper()
                         questions[obligation_id] = (
                             expected_oracle or prepared.atomic_statement
                         )
+            if property_kind == "source-format" and variant == "digits-only":
+                digit_class_values = _source_first_digits_only_fixture_values(
+                    assertion.exact_source_text,
+                    assertion.canonical_statement,
+                    *assertion.action_clauses,
+                    *assertion.oracle_clauses,
+                    prepared.atomic_statement,
+                    prepared.observable_oracle,
+                    prepared.test_intent,
+                )
+                if digit_class_values:
+                    fixtures = digit_class_values
             if property_kind == "source-date-boundary" and variant == "date-window":
                 date_window_text = _source_first_text(
                     assertion.exact_source_text,
@@ -1405,7 +1469,13 @@ def compile_source_first_property_derivations(
                 )
                 if date_window_values:
                     fixtures = date_window_values
-                if any(token in date_window_text for token in ("бессроч", "не применяется")):
+                if (
+                    not expected_oracle
+                    and any(
+                        token in date_window_text
+                        for token in ("бессроч", "не применяется")
+                    )
+                ):
                     source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                         obligation_id.encode("utf-8")
                     ).hexdigest()[:16].upper()
@@ -1414,6 +1484,15 @@ def compile_source_first_property_derivations(
                     )
             if property_kind == "source-date-boundary" and variant == "not-future":
                 fixtures = _date_boundary_fixture_values()
+            if property_kind == "default":
+                default_values = _source_first_default_fixture_values(
+                    expected_oracle,
+                    prepared.observable_oracle,
+                    assertion.canonical_statement,
+                    prepared.atomic_statement,
+                )
+                if default_values:
+                    fixtures = default_values
             variants[obligation_id] = variant
             if fixtures:
                 fixtures_by_obligation[obligation_id] = fixtures
@@ -1433,7 +1512,7 @@ def compile_source_first_property_derivations(
                 polarity=assertion.polarity,
                 oracle=expected_oracle,
                 action=action_contract,
-            ):
+            ) and not _source_first_has_explicit_validation_action(action_contract):
                 source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                     obligation_id.encode("utf-8")
                 ).hexdigest()[:16].upper()

@@ -1749,6 +1749,7 @@ def _materialize(
             selected_fixtures = (valid_fixture,)
             title = f"Допустимая возрастная граница срока действия: {_display_subject(label)}"
             case_type = "позитивный"
+            expected_result = obligation.atomic_statement.strip()
             test_data = [
                 f"Допустимое граничное условие: `{valid_fixture}`.",
             ]
@@ -1756,6 +1757,7 @@ def _materialize(
             selected_fixtures = invalid_fixtures
             title = f"Недопустимая возрастная граница срока действия: {_display_subject(label)}"
             case_type = "негативный"
+            expected_result = obligation.observable_oracle.strip()
             test_data = [
                 f"Недопустимое граничное условие: `{item}`."
                 for item in selected_fixtures
@@ -1774,14 +1776,21 @@ def _materialize(
         question_fixtures = selected_fixtures
         steps = []
         for item in selected_fixtures:
+            validation_action = obligation.validation_trigger.strip().rstrip(".")
+            bound_validation_action = (
+                f"{validation_action} для {label}."
+                if validation_action.casefold().startswith("инициировать")
+                else _bind_input_action(
+                    kind=kind,
+                    action=obligation.validation_trigger,
+                    label=label,
+                )
+            )
             steps.extend(
                 (
                     f"Подготовить условие `{item}`.",
-                    _bind_input_action(
-                        kind=kind,
-                        action=obligation.validation_trigger,
-                        label=label,
-                    ),
+                    f"Ввести дату выдачи из условия `{item}` в {label}.",
+                    bound_validation_action,
                 )
             )
             if case.status == "candidate-ui-calibration":
@@ -1805,7 +1814,6 @@ def _materialize(
             )
     elif kind == "source-format" and len(fixtures) >= 2:
         valid_fixture = fixtures[0]
-        invalid_fixtures = fixtures[1:]
         if case_variant in {"allowed-class-valid", "length-limit-valid-boundary"}:
             valid_fixtures = _text_hyphen_valid_representatives(
                 primary_fixture=valid_fixture,
@@ -1835,6 +1843,12 @@ def _materialize(
                 + "."
             )
         else:
+            invalid_fixtures = (
+                fixtures[1:]
+                if case_variant
+                in {"allowed-class-invalid", "length-limit-invalid-boundary"}
+                else fixtures
+            )
             title = f"Недопустимые классы формата: {_display_subject(label)}"
             case_type = "негативный"
             question_fixtures = invalid_fixtures
@@ -1844,21 +1858,34 @@ def _materialize(
             ]
             steps = []
             for item in invalid_fixtures:
-                steps.extend(
-                    (
-                        f"Ввести `{item}` в {label}.",
+                if case.status == "candidate-ui-calibration":
+                    steps.extend(
                         (
-                            "Зафиксировать фактический UI-отклик для значения "
-                            f"`{item}` без подмены его ожидаемым сообщением."
-                        ),
-                        f"Очистить {label} после проверки `{item}`.",
+                            f"Ввести `{item}` в {label}.",
+                            (
+                                "Зафиксировать фактический UI-отклик для значения "
+                                f"`{item}` без подмены его ожидаемым сообщением."
+                            ),
+                            f"Очистить {label} после проверки `{item}`.",
+                        )
                     )
-                )
+                else:
+                    steps.extend(
+                        (
+                            f"Ввести `{item}` в {label}.",
+                            _source_observation_step(
+                                prefix="Проверить результат ограничения",
+                                source_clause=expected_result,
+                            ),
+                            f"Очистить {label} после проверки `{item}`.",
+                        )
+                    )
             steps = _unique_steps(*steps)
-            expected_result = (
-                "Для каждого недопустимого значения зафиксирован фактический "
-                "UI-отклик; точное ожидаемое поведение требует UI-калибровки."
-            )
+            if case.status == "candidate-ui-calibration":
+                expected_result = (
+                    "Для каждого недопустимого значения зафиксирован фактический "
+                    "UI-отклик; точное ожидаемое поведение требует UI-калибровки."
+                )
     elif kind == "source-format" and len(fixtures) == 1:
         fixture = fixtures[0]
         if _source_format_single_fixture_is_negative(
