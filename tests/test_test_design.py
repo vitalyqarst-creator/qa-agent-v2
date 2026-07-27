@@ -891,7 +891,7 @@ class TestDesignTests(unittest.TestCase):
         )
         self.assertNotIn("Открыть отображаемую", case.steps[0])
 
-    def test_always_visible_without_source_transition_is_blocked_for_classification(self) -> None:
+    def test_always_visible_without_source_transition_uses_bounded_entry_observation(self) -> None:
         graph = _graph(
             kind="visibility",
             fixtures=(),
@@ -918,10 +918,14 @@ class TestDesignTests(unittest.TestCase):
 
         plan = build_test_design_plan(graph, context=_context())
 
-        self.assertEqual((), plan.deterministic_cases)
-        self.assertIn(
-            "classify as calibration/gap",
-            plan.blocked_cards[0].reason,
+        self.assertEqual((), plan.blocked_cards)
+        self.assertEqual(1, len(plan.deterministic_cases))
+        self.assertEqual(
+            (
+                "Открыть блок «Данные клиента».",
+                "Проверить наблюдаемое состояние: Поле «Имя» отображается.",
+            ),
+            plan.deterministic_cases[0].steps,
         )
 
     def test_always_visible_observes_before_and_after_same_subject_add(self) -> None:

@@ -1740,45 +1740,54 @@ def _materialize(
                 else ""
             )
             if transition_obligation is None:
-                return _blocked_card(
-                    case=case,
-                    prop=prop,
-                    obligation=obligation,
-                    reason=(
-                        "always-visible invariant has no executable source-backed "
-                        "same-subject preserving transition; classify as "
-                        "calibration/gap instead of testing one state"
+                trigger = obligation.validation_trigger.strip()
+                if not trigger and not condition:
+                    return _blocked_card(
+                        case=case,
+                        prop=prop,
+                        obligation=obligation,
+                        reason=(
+                            "always-visible invariant requires a source-backed "
+                            "entry state before bounded observation"
+                        ),
+                    )
+                steps = _unique_steps(
+                    trigger,
+                    _source_observation_step(
+                        prefix="Проверить наблюдаемое состояние",
+                        source_clause=expected_result,
                     ),
                 )
-            transition_action = transition_obligation.validation_trigger.strip()
-            if not transition_action:  # pragma: no cover - selector owns this
-                return _blocked_card(
-                    case=case,
-                    prop=prop,
-                    obligation=obligation,
-                    reason="always-visible invariant transition has no exact action",
+            else:
+                transition_action = transition_obligation.validation_trigger.strip()
+                if not transition_action:  # pragma: no cover - selector owns this
+                    return _blocked_card(
+                        case=case,
+                        prop=prop,
+                        obligation=obligation,
+                        reason="always-visible invariant transition has no exact action",
+                    )
+                initial_observation = _source_observation_step(
+                    prefix="Проверить исходное состояние",
+                    source_clause=expected_result,
                 )
-            initial_observation = _source_observation_step(
-                prefix="Проверить исходное состояние",
-                source_clause=expected_result,
-            )
-            after_observation = _source_observation_step(
-                prefix="Проверить состояние после перехода",
-                source_clause=expected_result,
-            )
-            steps = _unique_steps(
-                obligation.validation_trigger,
-                initial_observation,
-                transition_action,
-                after_observation,
-            )
-            postconditions_override = (
-                _source_row_cleanup_action(
-                    row="добавленной тестовой строки",
-                    action=transition_cleanup,
-                    oracle_subject="добавленная тестовая строка",
-                ),
-            )
+                after_observation = _source_observation_step(
+                    prefix="Проверить состояние после перехода",
+                    source_clause=expected_result,
+                )
+                steps = _unique_steps(
+                    obligation.validation_trigger,
+                    initial_observation,
+                    transition_action,
+                    after_observation,
+                )
+                postconditions_override = (
+                    _source_row_cleanup_action(
+                        row="добавленной тестовой строки",
+                        action=transition_cleanup,
+                        oracle_subject="добавленная тестовая строка",
+                    ),
+                )
         else:
             hidden_before = _hidden_before_source_clause(
                 prop=prop,
