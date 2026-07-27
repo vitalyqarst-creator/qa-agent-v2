@@ -817,7 +817,7 @@ class DerivationCompilerTests(unittest.TestCase):
             by_id["ASSERT-PASS-CUR-021"].obligation_variants["OBL-PASS-CUR-021"],
         )
         self.assertEqual(
-            ("дата 14-летия - 1 день",),
+            ("дата 14-летия", "дата 14-летия - 1 день"),
             by_id["ASSERT-PASS-CUR-021"].fixture_values["OBL-PASS-CUR-021"],  # type: ignore[index]
         )
 
@@ -1001,6 +1001,8 @@ class DerivationCompilerTests(unittest.TestCase):
         )
         self.assertEqual(
             (
+                "дата выдачи = дата 45-летия - 1 день; "
+                "текущая дата = дата 45-летия + 90 дней",
                 "дата выдачи = дата 45-летия - 1 день; "
                 "текущая дата = дата 45-летия + 91 день",
             ),

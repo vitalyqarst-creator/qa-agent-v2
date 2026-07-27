@@ -25,9 +25,21 @@ _PROPERTY_DISPOSITIONS = {"tc", "gap", "not-applicable"}
 _CASE_STATUSES = {"executable", "candidate-ui-calibration"}
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _SPLIT_CASE_VARIANTS_BY_KIND = {
-    "source-format": frozenset({"allowed-class-valid", "allowed-class-invalid"}),
+    "source-format": frozenset(
+        {
+            "allowed-class-valid",
+            "allowed-class-invalid",
+            "length-limit-valid-boundary",
+            "length-limit-invalid-boundary",
+        }
+    ),
     "source-date-boundary": frozenset(
-        {"not-future-valid-boundary", "not-future-invalid-future"}
+        {
+            "not-future-valid-boundary",
+            "not-future-invalid-future",
+            "date-window-valid-boundary",
+            "date-window-invalid-boundary",
+        }
     ),
 }
 
@@ -89,11 +101,42 @@ def _split_case_specs_for_obligation(
             ),
         )
     if (
+        property_kind == "source-format"
+        and variant == "length-limit"
+        and len(tuple(fixture_values)) >= 3
+    ):
+        return (
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="length-limit-valid-boundary",
+                    condition_key=condition_key,
+                ),
+                "executable",
+            ),
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="length-limit-invalid-boundary",
+                    condition_key=condition_key,
+                ),
+                "candidate-ui-calibration",
+            ),
+        )
+    if (
         property_kind == "source-date-boundary"
         and variant == "not-future"
         and len(tuple(fixture_values)) >= 3
-        and effective_calibration_status == "ui-calibration-required"
     ):
+        invalid_status = (
+            "candidate-ui-calibration"
+            if effective_calibration_status == "ui-calibration-required"
+            else "executable"
+        )
         return (
             (
                 semantic_case_key(
@@ -113,7 +156,39 @@ def _split_case_specs_for_obligation(
                     coverage_variant="not-future-invalid-future",
                     condition_key=condition_key,
                 ),
-                "candidate-ui-calibration",
+                invalid_status,
+            ),
+        )
+    if (
+        property_kind == "source-date-boundary"
+        and variant == "date-window"
+        and len(tuple(fixture_values)) >= 2
+    ):
+        boundary_status = (
+            "candidate-ui-calibration"
+            if effective_calibration_status == "ui-calibration-required"
+            else "executable"
+        )
+        return (
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="date-window-valid-boundary",
+                    condition_key=condition_key,
+                ),
+                boundary_status,
+            ),
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="date-window-invalid-boundary",
+                    condition_key=condition_key,
+                ),
+                boundary_status,
             ),
         )
     status = (
@@ -153,18 +228,33 @@ def _duplicate_obligation_case_coverage_allowed(
         return False
     statuses = {variant: case.status for variant, case in zip(variants, cases)}
     if property_kind == "source-format":
-        return (
-            obligation.coverage_variant == "allowed-class"
-            and statuses.get("allowed-class-valid") == "executable"
-            and statuses.get("allowed-class-invalid") == "candidate-ui-calibration"
-        )
+        if obligation.coverage_variant == "allowed-class":
+            return (
+                statuses.get("allowed-class-valid") == "executable"
+                and statuses.get("allowed-class-invalid") == "candidate-ui-calibration"
+            )
+        if obligation.coverage_variant == "length-limit":
+            return (
+                statuses.get("length-limit-valid-boundary") == "executable"
+                and statuses.get("length-limit-invalid-boundary")
+                == "candidate-ui-calibration"
+            )
+        return False
     if property_kind == "source-date-boundary":
-        return (
-            obligation.coverage_variant == "not-future"
-            and statuses.get("not-future-valid-boundary") == "executable"
-            and statuses.get("not-future-invalid-future")
-            == "candidate-ui-calibration"
-        )
+        if obligation.coverage_variant == "not-future":
+            return (
+                statuses.get("not-future-valid-boundary") == "executable"
+                and statuses.get("not-future-invalid-future")
+                in {"candidate-ui-calibration", "executable"}
+            )
+        if obligation.coverage_variant == "date-window":
+            return (
+                statuses.get("date-window-valid-boundary")
+                in {"candidate-ui-calibration", "executable"}
+                and statuses.get("date-window-invalid-boundary")
+                in {"candidate-ui-calibration", "executable"}
+            )
+        return False
     return False
 
 

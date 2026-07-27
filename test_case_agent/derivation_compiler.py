@@ -1126,6 +1126,25 @@ def _source_first_representative_fixture(
     return ""
 
 
+def _source_first_date_window_fixture_values(
+    *values: str,
+) -> tuple[str, ...]:
+    text = _source_first_text(*values)
+    if "14-лет" in text and any(token in text for token in ("раньше", "меньше")):
+        return ("дата 14-летия", "дата 14-летия - 1 день")
+    if "20-лет" in text and "20-летия + 90" in text:
+        return (
+            "дата выдачи = дата 20-летия; текущая дата = дата 20-летия + 90 дней",
+            "дата выдачи = дата 20-летия; текущая дата = дата 20-летия + 91 день",
+        )
+    if "45-лет" in text and "45-летия + 90" in text:
+        return (
+            "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 90 дней",
+            "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 91 день",
+        )
+    return ()
+
+
 def _source_first_kind_and_variant(
     *,
     assertion: SourceAssertion,
@@ -1363,13 +1382,46 @@ def compile_source_first_property_derivations(
                 )
                 if exact_length_values:
                     fixtures = exact_length_values
+                    if len(exact_length_values) >= 3:
+                        source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
+                            obligation_id.encode("utf-8")
+                        ).hexdigest()[:16].upper()
+                        questions[obligation_id] = (
+                            expected_oracle or prepared.atomic_statement
+                        )
+            if property_kind == "source-date-boundary" and variant == "date-window":
+                date_window_text = _source_first_text(
+                    assertion.exact_source_text,
+                    assertion.canonical_statement,
+                    *assertion.condition_clauses,
+                    *assertion.action_clauses,
+                    *assertion.oracle_clauses,
+                    prepared.atomic_statement,
+                    prepared.observable_oracle,
+                    prepared.test_intent,
+                )
+                date_window_values = _source_first_date_window_fixture_values(
+                    date_window_text,
+                )
+                if date_window_values:
+                    fixtures = date_window_values
+                if any(token in date_window_text for token in ("бессроч", "не применяется")):
+                    source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
+                        obligation_id.encode("utf-8")
+                    ).hexdigest()[:16].upper()
+                    questions[obligation_id] = (
+                        expected_oracle or prepared.atomic_statement
+                    )
             if property_kind == "source-date-boundary" and variant == "not-future":
                 fixtures = _date_boundary_fixture_values()
             variants[obligation_id] = variant
             if fixtures:
                 fixtures_by_obligation[obligation_id] = fixtures
             property_kinds.add(property_kind)
-            if prepared.calibration_status == "ui-calibration-required":
+            if (
+                prepared.calibration_status == "ui-calibration-required"
+                and obligation_id not in source_oracles
+            ):
                 source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                     obligation_id.encode("utf-8")
                 ).hexdigest()[:16].upper()

@@ -1558,6 +1558,7 @@ def _materialize(
     test_data: list[str] = []
     steps: list[str] = []
     postconditions_override: tuple[str, ...] = ()
+    question_fixtures: Sequence[str] = fixtures
 
     if (kind, obligation.coverage_variant) in _REPEATER_MUTATION_CONTRACTS:
         if repeater_support is None:
@@ -1709,15 +1710,103 @@ def _materialize(
                 ),
                 f"Очистить {label} после проверки `{next_day}`.",
             )
+            question_fixtures = (next_day,)
+            if case.status == "candidate-ui-calibration":
+                expected_result = (
+                    "Для значения `текущая дата + 1 день` зафиксирован "
+                    "фактический UI-отклик; точное ожидаемое поведение требует "
+                    "UI-калибровки."
+                )
+            else:
+                expected_result = obligation.observable_oracle.strip()
+                steps = _unique_steps(
+                    "Рассчитать дату, равную `текущая дата + 1 день`, относительно даты выполнения проверки.",
+                    f"Ввести `{next_day}` в {label}.",
+                    _source_observation_step(
+                        prefix="Проверить результат ограничения",
+                        source_clause=expected_result,
+                    ),
+                    f"Очистить {label} после проверки `{next_day}`.",
+                )
+    elif kind == "source-date-boundary" and obligation.coverage_variant == "date-window":
+        if not obligation.validation_trigger.strip():
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason="source-date-boundary date-window requires an exact action contract",
+            )
+        if not fixtures:
+            return _blocked_card(
+                case=case,
+                prop=prop,
+                obligation=obligation,
+                reason="source-date-boundary date-window requires concrete boundary fixtures",
+            )
+        valid_fixture = fixtures[0]
+        invalid_fixtures = fixtures[1:]
+        if case_variant == "date-window-valid-boundary":
+            selected_fixtures = (valid_fixture,)
+            title = f"Допустимая возрастная граница срока действия: {_display_subject(label)}"
+            case_type = "позитивный"
+            test_data = [
+                f"Допустимое граничное условие: `{valid_fixture}`.",
+            ]
+        elif case_variant == "date-window-invalid-boundary" and invalid_fixtures:
+            selected_fixtures = invalid_fixtures
+            title = f"Недопустимая возрастная граница срока действия: {_display_subject(label)}"
+            case_type = "негативный"
+            test_data = [
+                f"Недопустимое граничное условие: `{item}`."
+                for item in selected_fixtures
+            ]
+        else:
+            selected_fixtures = fixtures
+            title = obligation.atomic_statement.rstrip(". ")
+            case_type = (
+                "негативный"
+                if _source_behavior_is_negative(prop=prop, obligation=obligation)
+                else "позитивный"
+            )
+            test_data = [
+                f"Тестовое граничное условие: `{item}`." for item in selected_fixtures
+            ]
+        question_fixtures = selected_fixtures
+        steps = []
+        for item in selected_fixtures:
+            steps.extend(
+                (
+                    f"Подготовить условие `{item}`.",
+                    _bind_input_action(
+                        kind=kind,
+                        action=obligation.validation_trigger,
+                        label=label,
+                    ),
+                )
+            )
+            if case.status == "candidate-ui-calibration":
+                steps.append(
+                    "Зафиксировать фактический UI-отклик для условия "
+                    f"`{item}` без подмены его ожидаемым сообщением."
+                )
+            else:
+                steps.append(
+                    _source_observation_step(
+                        prefix="Проверить результат возрастного ограничения",
+                        source_clause=expected_result,
+                    )
+                )
+        steps = _unique_steps(*steps)
+        if case.status == "candidate-ui-calibration":
             expected_result = (
-                "Для значения `текущая дата + 1 день` зафиксирован "
+                "Для каждого проверяемого возрастного условия зафиксирован "
                 "фактический UI-отклик; точное ожидаемое поведение требует "
                 "UI-калибровки."
             )
     elif kind == "source-format" and len(fixtures) >= 2:
         valid_fixture = fixtures[0]
         invalid_fixtures = fixtures[1:]
-        if case_variant == "allowed-class-valid":
+        if case_variant in {"allowed-class-valid", "length-limit-valid-boundary"}:
             valid_fixtures = _text_hyphen_valid_representatives(
                 primary_fixture=valid_fixture,
                 prop=prop,
@@ -1748,6 +1837,7 @@ def _materialize(
         else:
             title = f"Недопустимые классы формата: {_display_subject(label)}"
             case_type = "негативный"
+            question_fixtures = invalid_fixtures
             test_data = [
                 f"Недопустимое значение: `{item}`."
                 for item in invalid_fixtures
@@ -2172,7 +2262,7 @@ def _materialize(
         calibration_question = _candidate_question(
             obligation.calibration_question,
             label=label,
-            fixtures=fixtures,
+            fixtures=question_fixtures,
         )
     rendered_preconditions = tuple(preconditions or ["Не требуются."])
     support_obligations = _materialized_support_obligations(

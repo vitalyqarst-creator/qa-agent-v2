@@ -306,7 +306,9 @@ class CoverageGraphTests(unittest.TestCase):
                 ),
             ),
         )
-        prepared = obligation_set(obligation("OBL-001", "ATOM-001", "SRC-001"))
+        prepared = obligation_set(
+            obligation("OBL-001", "ATOM-001", "SRC-001")
+        )
         graph = build_coverage_graph(
             ft_slug="Sample",
             tc_prefix="SMP",
@@ -523,6 +525,43 @@ class CoverageGraphTests(unittest.TestCase):
             {case.obligation_ids[0] for case in graph.cases},
         )
 
+    def test_exact_length_splits_valid_and_invalid_boundary_intents(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (FakeAssertion("ASSERT-001", "SRC-001", ("BSR 1",), ("OBL-001",)),),
+        )
+        prepared = obligation_set(obligation("OBL-001", "ATOM-001", "SRC-001"))
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "passport.series.length",
+                    "source-format",
+                    {"OBL-001": "length-limit"},
+                    validation_trigger="Ввести значение.",
+                    source_oracle_ids={"OBL-001": "SO-CAL-004"},
+                    fixture_values={"OBL-001": ("1234", "123", "12345")},
+                    calibration_questions={"OBL-001": "Как UI отклоняет длину?"},
+                ),
+            ),
+        )
+
+        self.assertEqual((), validate_coverage_graph(graph))
+        by_variant = {
+            case.case_key.split("|")[3]: case.status for case in graph.cases
+        }
+        self.assertEqual("executable", by_variant["length-limit-valid-boundary"])
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["length-limit-invalid-boundary"],
+        )
+
     def test_date_boundary_calibration_splits_valid_boundary_and_future_case(self) -> None:
         manifest = FakeManifest(
             "sample-scope",
@@ -566,6 +605,53 @@ class CoverageGraphTests(unittest.TestCase):
         self.assertEqual(
             "candidate-ui-calibration",
             by_variant["not-future-invalid-future"],
+        )
+
+    def test_date_window_calibration_splits_valid_and_invalid_boundaries(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (FakeAssertion("ASSERT-001", "SRC-001", ("BSR 2",), ("OBL-001",)),),
+        )
+        prepared = obligation_set(
+            obligation("OBL-001", "ATOM-001", "SRC-001", calibration=True)
+        )
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "passport.age-window",
+                    "source-date-boundary",
+                    {"OBL-001": "date-window"},
+                    validation_trigger="Инициировать проверку срока.",
+                    source_oracle_ids={"OBL-001": "SO-CAL-003"},
+                    fixture_values={
+                        "OBL-001": (
+                            "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 90 дней",
+                            "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 91 день",
+                        )
+                    },
+                    calibration_questions={"OBL-001": "Как UI отклоняет просрочку?"},
+                ),
+            ),
+        )
+
+        self.assertEqual((), validate_coverage_graph(graph))
+        by_variant = {
+            case.case_key.split("|")[3]: case.status for case in graph.cases
+        }
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["date-window-valid-boundary"],
+        )
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["date-window-invalid-boundary"],
         )
 
     def test_derivation_is_hash_bound_to_manifest_obligations_and_source_text(self) -> None:

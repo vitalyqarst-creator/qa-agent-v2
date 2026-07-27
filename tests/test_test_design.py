@@ -1305,6 +1305,123 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("123", joined_steps)
         self.assertIn("12345", joined_steps)
 
+    def test_source_format_exact_length_split_renders_valid_and_invalid_cases(self) -> None:
+        graph = _graph(
+            kind="source-format",
+            fixtures=("1234", "123", "12345"),
+            trigger="Ввести значение.",
+        )
+        graph = replace(
+            graph,
+            cases=(
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-format|"
+                        "length-limit-valid-boundary|always"
+                    ),
+                    tc_id="TC-CUST-LEN-VALID",
+                    obligation_ids=("OBL-001",),
+                    status="executable",
+                ),
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-format|"
+                        "length-limit-invalid-boundary|always"
+                    ),
+                    tc_id="TC-CUST-LEN-INVALID",
+                    obligation_ids=("OBL-001",),
+                    status="candidate-ui-calibration",
+                ),
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="length-limit",
+                    atomic_statement="Поле «Серия» принимает только 4 числовых символа.",
+                    observable_oracle="Пятый символ не вводится.",
+                ),
+            ),
+        )
+        context = replace(_context(), subject_labels={"customer-name": "Серия"})
+
+        cases = build_test_design_plan(graph, context=context).deterministic_cases
+        valid_case = next(
+            item for item in cases if "length-limit-valid-boundary" in item.case_key
+        )
+        invalid_case = next(
+            item for item in cases if "length-limit-invalid-boundary" in item.case_key
+        )
+
+        self.assertEqual("позитивный", valid_case.case_type)
+        self.assertIn("1234", "\n".join(valid_case.steps))
+        self.assertNotIn("12345", "\n".join(valid_case.steps))
+        self.assertEqual("негативный", invalid_case.case_type)
+        self.assertEqual("candidate-ui-calibration", invalid_case.status)
+        self.assertIn("123", "\n".join(invalid_case.steps))
+        self.assertIn("12345", "\n".join(invalid_case.steps))
+        self.assertIn("UI-калибровки", invalid_case.expected_result)
+
+    def test_source_date_window_split_renders_boundary_conditions(self) -> None:
+        graph = _graph(
+            kind="source-date-boundary",
+            fixtures=(
+                "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 90 дней",
+                "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 91 день",
+            ),
+            status="candidate-ui-calibration",
+            trigger="Инициировать проверку срока действия паспорта.",
+            question="Какой точный UI-отклик подтверждает возрастную границу?",
+        )
+        graph = replace(
+            graph,
+            cases=(
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-date-boundary|"
+                        "date-window-valid-boundary|always"
+                    ),
+                    tc_id="TC-CUST-DATE-VALID",
+                    obligation_ids=("OBL-001",),
+                    status="candidate-ui-calibration",
+                ),
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-date-boundary|"
+                        "date-window-invalid-boundary|always"
+                    ),
+                    tc_id="TC-CUST-DATE-INVALID",
+                    obligation_ids=("OBL-001",),
+                    status="candidate-ui-calibration",
+                ),
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="date-window",
+                    atomic_statement=(
+                        "Паспорт действителен до 45-летия + 90 календарных дней включительно."
+                    ),
+                    observable_oracle=(
+                        "Паспорт действителен до 45-летия + 90 календарных дней включительно."
+                    ),
+                ),
+            ),
+        )
+
+        cases = build_test_design_plan(graph, context=_context()).deterministic_cases
+        valid_case = next(
+            item for item in cases if "date-window-valid-boundary" in item.case_key
+        )
+        invalid_case = next(
+            item for item in cases if "date-window-invalid-boundary" in item.case_key
+        )
+
+        self.assertIn("+ 90 дней", "\n".join(valid_case.steps))
+        self.assertNotIn("+ 91 день", "\n".join(valid_case.steps))
+        self.assertIn("+ 91 день", "\n".join(invalid_case.steps))
+        self.assertIn("UI-калибровки", valid_case.expected_result)
+        self.assertIn("UI-калибровки", invalid_case.expected_result)
+
     def test_source_runtime_negative_behavior_sets_negative_case_type(self) -> None:
         graph = _graph(
             kind="source-date-boundary",
