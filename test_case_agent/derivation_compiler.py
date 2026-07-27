@@ -1197,6 +1197,21 @@ def _source_first_has_explicit_validation_action(action: str) -> bool:
     )
 
 
+def _source_first_positive_date_window_question(
+    *,
+    subject_label: str,
+    fixtures: Sequence[str],
+    fallback: str,
+) -> str:
+    fixture_text = ", ".join(f"`{value}`" for value in fixtures) or "граничного условия"
+    target = subject_label.strip("«»") or "проверяемого элемента"
+    return (
+        "Какой конкретный наблюдаемый UI-артефакт подтверждает допустимость "
+        f"{fixture_text} для элемента «{target}» без опоры на внутреннюю "
+        f"классификацию системы? {fallback}".strip()
+    )
+
+
 def _source_first_kind_and_variant(
     *,
     assertion: SourceAssertion,
@@ -1469,13 +1484,32 @@ def compile_source_first_property_derivations(
                 )
                 if date_window_values:
                     fixtures = date_window_values
-                if (
-                    not expected_oracle
-                    and any(
-                        token in date_window_text
-                        for token in ("бессроч", "не применяется")
+                    source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
+                        obligation_id.encode("utf-8")
+                    ).hexdigest()[:16].upper()
+                    questions[obligation_id] = (
+                        _source_first_positive_date_window_question(
+                            subject_label=subject_label,
+                            fixtures=date_window_values[:1],
+                            fallback=prepared.atomic_statement,
+                        )
                     )
+                if any(
+                    token in date_window_text
+                    for token in ("бессроч", "не применяется")
                 ):
+                    source_oracles.setdefault(
+                        obligation_id,
+                        "SO-CAL-" + hashlib.sha256(
+                            obligation_id.encode("utf-8")
+                        ).hexdigest()[:16].upper(),
+                    )
+                    questions[obligation_id] = _source_first_positive_date_window_question(
+                        subject_label=subject_label,
+                        fixtures=fixtures,
+                        fallback=prepared.atomic_statement,
+                    )
+                elif not expected_oracle:
                     source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                         obligation_id.encode("utf-8")
                     ).hexdigest()[:16].upper()

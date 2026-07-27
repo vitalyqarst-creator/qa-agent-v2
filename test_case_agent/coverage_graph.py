@@ -169,7 +169,7 @@ def _split_case_specs_for_obligation(
         and variant == "date-window"
         and len(tuple(fixture_values)) >= 2
     ):
-        boundary_status = (
+        valid_status = (
             "candidate-ui-calibration"
             if effective_calibration_status == "ui-calibration-required"
             else "executable"
@@ -183,7 +183,7 @@ def _split_case_specs_for_obligation(
                     coverage_variant="date-window-valid-boundary",
                     condition_key=condition_key,
                 ),
-                boundary_status,
+                valid_status,
             ),
             (
                 semantic_case_key(
@@ -193,7 +193,7 @@ def _split_case_specs_for_obligation(
                     coverage_variant="date-window-invalid-boundary",
                     condition_key=condition_key,
                 ),
-                boundary_status,
+                "executable",
             ),
         )
     status = (
@@ -582,11 +582,15 @@ def build_coverage_graph(
             # UI/persistence effect from a prepared oracle.  The atomic source
             # restriction is the safe product claim; the question owns the
             # still-unknown trigger and observable UI response.
-            observable_oracle = (
-                item.atomic_statement
-                if effective_calibration_status == "ui-calibration-required"
-                else item.observable_oracle
-            )
+            observable_oracle = item.observable_oracle
+            if (
+                effective_calibration_status == "ui-calibration-required"
+                and not (
+                    property_kind == "source-date-boundary"
+                    and variant == "date-window"
+                )
+            ):
+                observable_oracle = item.atomic_statement
             obligations.append(
                 CoverageObligation(
                     obligation_id=obligation_id,

@@ -1005,7 +1005,7 @@ class DerivationCompilerTests(unittest.TestCase):
             derivation.fixture_values["OBL-PASS-CUR-004"],  # type: ignore[index]
         )
 
-    def test_source_first_date_window_with_explicit_validation_action_is_executable(self) -> None:
+    def test_source_first_date_window_splits_positive_boundary_calibration(self) -> None:
         assertion = replace(
             self._assertion(),
             assertion_id="ASSERT-PASS-CUR-023",
@@ -1079,8 +1079,14 @@ class DerivationCompilerTests(unittest.TestCase):
             ),
             derivation.fixture_values["OBL-PASS-CUR-023"],  # type: ignore[index]
         )
-        self.assertIsNone(derivation.source_oracle_ids)
-        self.assertIsNone(derivation.calibration_questions)
+        self.assertRegex(
+            derivation.source_oracle_ids["OBL-PASS-CUR-023"],  # type: ignore[index]
+            r"^SO-CAL-",
+        )
+        self.assertIn(
+            "наблюдаемый UI-артефакт",
+            derivation.calibration_questions["OBL-PASS-CUR-023"],  # type: ignore[index]
+        )
 
         graph = build_coverage_graph(
             ft_slug="sample",
@@ -1089,11 +1095,14 @@ class DerivationCompilerTests(unittest.TestCase):
             obligation_set=obligations,
             derivations=compiled.document.derivations,
         )
+        by_variant = {
+            case.case_key.split("|")[3]: case.status for case in graph.cases
+        }
         self.assertEqual(
-            {"executable"},
-            {case.status for case in graph.cases},
+            "candidate-ui-calibration",
+            by_variant["date-window-valid-boundary"],
         )
-        self.assertEqual("none", graph.obligations[0].calibration_status)
+        self.assertEqual("executable", by_variant["date-window-invalid-boundary"])
         self.assertEqual(
             assertion.oracle_clauses[0],
             graph.obligations[0].observable_oracle,

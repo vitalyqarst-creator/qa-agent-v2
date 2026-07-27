@@ -492,6 +492,7 @@ def _traceability(
     prop: CoverageProperty,
     obligation: CoverageObligation,
     *,
+    include_source_oracle: bool = True,
     support_obligations: Sequence[
         tuple[CoverageProperty, CoverageObligation]
     ] = (),
@@ -510,7 +511,7 @@ def _traceability(
                 *source_obligation.requirement_codes,
             )
         )
-        if source_obligation.source_oracle_id:
+        if include_source_oracle and source_obligation.source_oracle_id:
             values.append(source_obligation.source_oracle_id)
 
     append_projection(prop, obligation)
@@ -2321,6 +2322,7 @@ def _materialize(
         traceability=_traceability(
             prop,
             obligation,
+            include_source_oracle=case.status == "candidate-ui-calibration",
             support_obligations=support_obligations,
         ),
         preconditions=rendered_preconditions,

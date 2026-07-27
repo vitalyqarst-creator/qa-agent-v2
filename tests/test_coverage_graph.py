@@ -681,10 +681,7 @@ class CoverageGraphTests(unittest.TestCase):
             "candidate-ui-calibration",
             by_variant["date-window-valid-boundary"],
         )
-        self.assertEqual(
-            "candidate-ui-calibration",
-            by_variant["date-window-invalid-boundary"],
-        )
+        self.assertEqual("executable", by_variant["date-window-invalid-boundary"])
 
     def test_derivation_is_hash_bound_to_manifest_obligations_and_source_text(self) -> None:
         manifest = FakeManifest(
