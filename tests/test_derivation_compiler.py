@@ -451,6 +451,223 @@ class DerivationCompilerTests(unittest.TestCase):
             (manifest.assertions[0].condition_clauses[0],),
         )
 
+    def test_source_first_case_identity_keeps_subject_and_branch_distinct(self) -> None:
+        base = self._assertion()
+        assertions = (
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-017",
+                source_row_id="SRC-PASS-CUR-006",
+                atom_id="ATOM-017",
+                obligation_ids=("OBL-PASS-CUR-017",),
+                exact_source_text=(
+                    "Ввести вручную подразделение Нет Да Переключатель "
+                    "Логическое Да/Нет BSR 96. Видимость-всегда."
+                ),
+                canonical_statement=(
+                    "Переключатель «Ввести вручную подразделение» отображается."
+                ),
+                condition_clauses=("Открыт блок «Паспортные данные».",),
+                action_clauses=("Открыть блок «Паспортные данные».",),
+                oracle_clauses=(
+                    "Переключатель «Ввести вручную подразделение» отображается.",
+                ),
+                requirement_codes=("BSR 96",),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-027",
+                source_row_id="SRC-PASS-CUR-010",
+                atom_id="ATOM-027",
+                obligation_ids=("OBL-PASS-CUR-027",),
+                exact_source_text=(
+                    "Клиент менял паспорт Да, если дата выдачи текущего паспорта "
+                    "менее 3х лет назад. BSR 103. Видимость-всегда."
+                ),
+                canonical_statement=(
+                    "Переключатель «Клиент менял паспорт» отображается."
+                ),
+                condition_clauses=("Открыт блок «Паспортные данные».",),
+                action_clauses=("Открыть блок «Паспортные данные».",),
+                oracle_clauses=(
+                    "Переключатель «Клиент менял паспорт» отображается.",
+                ),
+                requirement_codes=("BSR 103",),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-018",
+                source_row_id="SRC-PASS-CUR-006",
+                atom_id="ATOM-018",
+                obligation_ids=("OBL-PASS-CUR-018",),
+                exact_source_text=(
+                    "Ввести вручную подразделение Нет Да Переключатель "
+                    "Логическое Да/Нет BSR 97. Значение по умолчанию «Нет»."
+                ),
+                canonical_statement=(
+                    "Значение по умолчанию для «Ввести вручную подразделение» "
+                    "равно «Нет»."
+                ),
+                condition_clauses=(
+                    "Открыт блок «Паспортные данные» без изменения признака.",
+                ),
+                action_clauses=("Открыть блок «Паспортные данные».",),
+                oracle_clauses=("Переключатель имеет значение «Нет».",),
+                requirement_codes=("BSR 97",),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-028",
+                source_row_id="SRC-PASS-CUR-010",
+                atom_id="ATOM-028",
+                obligation_ids=("OBL-PASS-CUR-028",),
+                exact_source_text=(
+                    "Клиент менял паспорт Да Переключатель Логическое Да/Нет "
+                    "BSR 104. Значение по умолчанию «Нет»."
+                ),
+                canonical_statement=(
+                    "Значение по умолчанию для «Клиент менял паспорт» равно «Нет»."
+                ),
+                condition_clauses=(
+                    "Открыт блок «Паспортные данные» без изменения признака.",
+                ),
+                action_clauses=("Открыть блок «Паспортные данные».",),
+                oracle_clauses=("Переключатель имеет значение «Нет».",),
+                requirement_codes=("BSR 104",),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-032",
+                source_row_id="SRC-PASS-CUR-005",
+                atom_id="ATOM-032",
+                obligation_ids=("OBL-PASS-CUR-032",),
+                exact_source_text=(
+                    "Кем выдан Да, если признак «Ввести вручную подразделение» = "
+                    "«Нет». BSR 93. Видимость: да, если признак = «Нет»."
+                ),
+                canonical_statement=(
+                    "Поле «Кем выдан» обязательно при автозаполнении подразделения."
+                ),
+                condition_clauses=(
+                    "Открыт блок «Паспортные данные»; поле является обязательным.",
+                ),
+                action_clauses=(
+                    "Оставить поле «Кем выдан» пустым при "
+                    "«Ввести вручную подразделение» = «Нет» и инициировать проверку.",
+                ),
+                oracle_clauses=(
+                    "Поле подсвечено красным; под полем отображается текст "
+                    "«Выберите значение».",
+                ),
+                requirement_codes=(),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-033",
+                source_row_id="SRC-PASS-CUR-007",
+                atom_id="ATOM-033",
+                obligation_ids=("OBL-PASS-CUR-033",),
+                exact_source_text=(
+                    "Кем выдан Если активирован признак «Ввести вручную "
+                    "подразделение» = «Да». BSR 98. Видимость: Да, если признак = «Да»."
+                ),
+                canonical_statement=(
+                    "Ручное поле «Кем выдан» обязательно при ручном вводе подразделения."
+                ),
+                condition_clauses=(
+                    "Открыт блок «Паспортные данные»; поле является обязательным.",
+                ),
+                action_clauses=(
+                    "Оставить ручное поле «Кем выдан» пустым при "
+                    "«Ввести вручную подразделение» = «Да» и инициировать проверку.",
+                ),
+                oracle_clauses=(
+                    "Поле подсвечено красным; под полем отображается текст "
+                    "«Выберите значение».",
+                ),
+                requirement_codes=(),
+            ),
+        )
+        manifest = _Manifest("4-3-current-passport-data", assertions)
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=tuple(
+                PreparedObligation(
+                    obligation_id=assertion.obligation_ids[0],
+                    source_refs=(assertion.source_row_id, *assertion.requirement_codes),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        f"Action contract: {assertion.action_clauses[0]}; "
+                        "Test data: exact source-bound value"
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id=assertion.atom_id,
+                )
+                for assertion in assertions
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivations = {
+            item.assertion_id: item for item in compiled.document.derivations
+        }
+        self.assertNotEqual(
+            derivations["ASSERT-PASS-CUR-017"].subject_key,
+            derivations["ASSERT-PASS-CUR-027"].subject_key,
+        )
+        self.assertEqual(
+            "Ввести вручную подразделение",
+            compiled.subject_labels[derivations["ASSERT-PASS-CUR-018"].subject_key],
+        )
+        self.assertEqual(
+            "Клиент менял паспорт",
+            compiled.subject_labels[derivations["ASSERT-PASS-CUR-028"].subject_key],
+        )
+        self.assertNotEqual(
+            derivations["ASSERT-PASS-CUR-018"].subject_key,
+            derivations["ASSERT-PASS-CUR-028"].subject_key,
+        )
+        self.assertEqual(
+            "source-requiredness",
+            derivations["ASSERT-PASS-CUR-032"].property_kind,
+        )
+        self.assertEqual(
+            "source-requiredness",
+            derivations["ASSERT-PASS-CUR-033"].property_kind,
+        )
+        self.assertEqual(
+            "Кем выдан",
+            compiled.subject_labels[derivations["ASSERT-PASS-CUR-032"].subject_key],
+        )
+        self.assertEqual(
+            "Кем выдан",
+            compiled.subject_labels[derivations["ASSERT-PASS-CUR-033"].subject_key],
+        )
+        self.assertNotEqual(
+            derivations["ASSERT-PASS-CUR-032"].condition_key,
+            derivations["ASSERT-PASS-CUR-033"].condition_key,
+        )
+
+        graph = build_coverage_graph(
+            ft_slug="sample",
+            tc_prefix="PASSCUR",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+            derivations=compiled.document.derivations,
+        )
+        self.assertEqual(6, len(graph.cases))
+        self.assertEqual(6, len({item.case_key for item in graph.cases}))
+
     def test_compiles_and_round_trips_without_manual_derivation(self) -> None:
         manifest, obligations, projection, _ = self._fixture()
         compiled = compile_property_derivations(

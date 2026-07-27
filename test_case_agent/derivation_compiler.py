@@ -779,9 +779,19 @@ def _validate_source_signal_accounting(
 _SOURCE_FIRST_RUNTIME_LABEL = re.compile(
     r"`([^`\r\n]{1,160})`|«([^»\r\n]{1,160})»|В«([^В»\r\n]{1,160})В»"
 )
+_SOURCE_FIRST_DEFAULT_SUBJECT = re.compile(
+    r"(?:по умолчанию|default)[^`«\r\n]{0,80}(?:для|for)\s*"
+    r"(?:`([^`\r\n]{1,160})`|«([^»\r\n]{1,160})»|В«([^В»\r\n]{1,160})В»)",
+    re.IGNORECASE,
+)
 _SOURCE_FIRST_EN_FIELD = re.compile(
     r"\b(?:the\s+)?([A-Za-z][A-Za-z0-9 _/-]{1,100}\s+"
     r"(?:field|block|button|list|section|tab))\b",
+    re.IGNORECASE,
+)
+_SOURCE_FIRST_ROW_METADATA = re.compile(
+    r"\s+(?:Да|Нет)\b|\s+(?:BSR|GSR|DIT)\s+[A-Za-z0-9._/-]+\b|"
+    r"\s+(?:Поле|Переключатель|Выпадающий|Справочник|Текст|Дата)\b",
     re.IGNORECASE,
 )
 _SOURCE_FIRST_TEST_DATA = re.compile(
@@ -796,6 +806,8 @@ _SOURCE_FIRST_SUBJECT_PREFIXES = (
     "блока",
     "блоке",
     "кнопк",
+    "переключател",
+    "признак",
     "спис",
     "раздел",
     "вкладк",
@@ -805,6 +817,16 @@ _SOURCE_FIRST_SUBJECT_PREFIXES = (
     "list",
     "section",
     "tab",
+)
+_SOURCE_FIRST_VALUE_LABEL_PREFIXES = (
+    "сообщен",
+    "текст",
+    "подсказ",
+    "значени",
+    "например",
+    "example",
+    "message",
+    "value",
 )
 
 
@@ -824,27 +846,61 @@ def _source_first_runtime_labels_with_prefix(
     return tuple(labels)
 
 
+def _source_first_label_is_runtime_value(prefix: str) -> bool:
+    return any(marker in prefix for marker in _SOURCE_FIRST_VALUE_LABEL_PREFIXES)
+
+
+def _source_first_default_subject_label(value: str) -> str:
+    match = _SOURCE_FIRST_DEFAULT_SUBJECT.search(value)
+    if match is None:
+        return ""
+    return next(group for group in match.groups() if group is not None).strip()
+
+
+def _source_first_row_subject_label(value: str) -> str:
+    cleaned = " ".join(value.split())
+    match = _SOURCE_FIRST_ROW_METADATA.search(cleaned)
+    if match is None:
+        return ""
+    label = cleaned[: match.start()].strip(" .:-")
+    if 1 < len(label) <= 120:
+        return label
+    return ""
+
+
 def _source_first_subject_label(
     assertion: SourceAssertion,
     obligations: Sequence[PreparedObligation],
 ) -> str:
-    evidence = " ".join(
-        (
-            assertion.canonical_statement,
-            *assertion.condition_clauses,
-            *assertion.action_clauses,
-            *assertion.oracle_clauses,
-            *(item.atomic_statement for item in obligations),
-            *(item.observable_oracle for item in obligations),
-            *(item.test_intent for item in obligations),
-        )
+    default_subject = _source_first_default_subject_label(
+        assertion.canonical_statement
     )
-    for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
-        if any(marker in prefix for marker in _SOURCE_FIRST_SUBJECT_PREFIXES):
-            return label
+    if default_subject:
+        return default_subject
+    evidence_groups = (
+        (assertion.canonical_statement,),
+        assertion.action_clauses,
+        tuple(item.atomic_statement for item in obligations),
+        tuple(item.test_intent for item in obligations),
+        assertion.oracle_clauses,
+        tuple(item.observable_oracle for item in obligations),
+        (assertion.exact_source_text,),
+        assertion.condition_clauses,
+    )
+    for group in evidence_groups:
+        evidence = " ".join(group)
+        for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
+            if _source_first_label_is_runtime_value(prefix):
+                continue
+            if any(marker in prefix for marker in _SOURCE_FIRST_SUBJECT_PREFIXES):
+                return label
+    evidence = " ".join(" ".join(group) for group in evidence_groups)
     match = _SOURCE_FIRST_EN_FIELD.search(evidence)
     if match is not None:
         return match.group(1).strip()
+    row_subject = _source_first_row_subject_label(assertion.exact_source_text)
+    if row_subject:
+        return row_subject
     # Safe fallback: the accepted canonical statement is already source-bound
     # and passes design-context validation, even if it is less readable.
     return assertion.canonical_statement.strip()
@@ -916,10 +972,6 @@ def _source_first_kind_and_variant(
         return "dictionary", "dictionary"
     if any(token in text for token in ("по умолчанию", "default")):
         return "default", "default"
-    if any(token in text for token in ("видим", "отображ", "visible", "displayed")):
-        return "visibility", "visible"
-    if any(token in text for token in ("редакт", "editable", "editability")):
-        return "source-editability", "editable"
     if any(
         token in text
         for token in (
@@ -963,7 +1015,45 @@ def _source_first_kind_and_variant(
         if any(token in text for token in ("длин", "length")):
             return "source-format", "length-limit"
         return "source-format", "format"
+    if any(token in text for token in ("видим", "отображ", "visible", "displayed")):
+        return "visibility", "visible"
+    if any(token in text for token in ("редакт", "editable", "editability")):
+        return "source-editability", "editable"
     return "source-runtime", "runtime"
+
+
+_SOURCE_FIRST_ACTION_BOUND_CONDITION_KINDS = frozenset(
+    {
+        "source-requiredness",
+        "source-optionalness",
+        "source-format",
+        "source-date-boundary",
+    }
+)
+
+
+def _source_first_effective_condition_binding(
+    assertion: SourceAssertion,
+    *,
+    property_kind: str,
+    action_contract: str,
+    base_condition_key: str,
+    base_condition_precondition: str,
+) -> tuple[str, str]:
+    if (
+        property_kind in _SOURCE_FIRST_ACTION_BOUND_CONDITION_KINDS
+        and action_contract
+    ):
+        digest_basis: Any = {
+            "condition_clauses": list(assertion.condition_clauses),
+            "action_clauses": list(assertion.action_clauses),
+            "property_kind": property_kind,
+        }
+        return (
+            "condition:" + _canonical_sha256(digest_basis)[:16],
+            base_condition_precondition,
+        )
+    return base_condition_key, base_condition_precondition
 
 
 def compile_source_first_property_derivations(
@@ -1038,22 +1128,9 @@ def compile_source_first_property_derivations(
                 f"{assertion.assertion_id} collides with a different subject label",
             )
         subject_labels.setdefault(subject_key, subject_label)
-        condition_key, condition_precondition, complex_condition = (
+        base_condition_key, base_condition_precondition, complex_condition = (
             _condition_binding(assertion)
         )
-        if condition_key != "always":
-            existing_condition = condition_preconditions.get(condition_key)
-            if (
-                existing_condition is not None
-                and existing_condition != condition_precondition
-            ):
-                _fail(
-                    "condition-key-collision",
-                    f"{assertion.assertion_id} collides with a different condition",
-                )
-            condition_preconditions.setdefault(
-                condition_key, condition_precondition
-            )
 
         variants: dict[str, str] = {}
         source_oracles: dict[str, str] = {}
@@ -1110,6 +1187,28 @@ def compile_source_first_property_derivations(
                 f"{assertion.assertion_id} maps incompatible obligation kinds",
             )
         property_kind = next(iter(property_kinds))
+        condition_key, condition_precondition = (
+            _source_first_effective_condition_binding(
+                assertion,
+                property_kind=property_kind,
+                action_contract=action_contract,
+                base_condition_key=base_condition_key,
+                base_condition_precondition=base_condition_precondition,
+            )
+        )
+        if condition_key != "always":
+            existing_condition = condition_preconditions.get(condition_key)
+            if (
+                existing_condition is not None
+                and existing_condition != condition_precondition
+            ):
+                _fail(
+                    "condition-key-collision",
+                    f"{assertion.assertion_id} collides with a different condition",
+                )
+            condition_preconditions.setdefault(
+                condition_key, condition_precondition
+            )
         derivations.append(
             PropertyDerivation(
                 source_manifest_digest=source_manifest.digest,
