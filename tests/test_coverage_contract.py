@@ -439,6 +439,160 @@ class CoverageContractTests(unittest.TestCase):
                         expected_scope_slug="demo-scope",
                     )
 
+    def test_accepts_exact_split_oracle_projection_across_obligations(self) -> None:
+        contract, obligations = _fixture()
+        base_assertion = contract.manifest.assertions[0]
+        split_assertion = replace(
+            base_assertion,
+            assertion_id="ASSERT-SPLIT",
+            atom_id="ATOM-SPLIT",
+            canonical_statement="The widget displays primary and secondary values.",
+            action_clauses=("Open the widget.",),
+            oracle_clauses=("Primary value is displayed.", "Secondary value is displayed."),
+            clause_evidence_bindings=(
+                ClauseEvidenceBinding(
+                    "condition", 0, "SRC-1", "condition", "BSR 1. Source requirement."
+                ),
+                ClauseEvidenceBinding(
+                    "action", 0, "SRC-1", "action", "BSR 1. Source requirement."
+                ),
+                ClauseEvidenceBinding(
+                    "oracle", 0, "SRC-1", "oracle", "BSR 1. Source requirement."
+                ),
+                ClauseEvidenceBinding(
+                    "oracle", 1, "SRC-1", "oracle", "BSR 1. Source requirement."
+                ),
+            ),
+            obligation_ids=("OBL-PRIMARY", "OBL-SECONDARY"),
+        )
+        manifest = replace(contract.manifest, assertions=(split_assertion,))
+        review = replace(
+            contract.review_receipt.assertion_reviews[0],
+            assertion_id=split_assertion.assertion_id,
+        )
+        receipt = replace(
+            contract.review_receipt,
+            manifest_digest=manifest.digest,
+            assertion_reviews=(review,),
+        )
+        split_contract = EmbeddedSourceAssertionContract(manifest, receipt)
+        split_obligations = PreparedObligationSet.create(
+            package_id=obligations.package_id,
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PRIMARY",
+                    atom_id="ATOM-SPLIT",
+                    source_refs=("SRC-1", "BSR 1"),
+                    atomic_statement=split_assertion.canonical_statement,
+                    observable_oracle=split_assertion.oracle_clauses[0],
+                    test_intent="Open the widget.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-SECONDARY",
+                    atom_id="ATOM-SPLIT",
+                    source_refs=("SRC-1", "BSR 1"),
+                    atomic_statement=split_assertion.canonical_statement,
+                    observable_oracle=split_assertion.oracle_clauses[1],
+                    test_intent="Open the widget.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        binding = bind_accepted_source_contract(
+            contract=split_contract,
+            obligation_set=split_obligations,
+            expected_scope_slug="demo-scope",
+        )
+
+        self.assertEqual(("OBL-PRIMARY", "OBL-SECONDARY"), binding.obligation_ids)
+
+    def test_rejects_split_oracle_projection_when_clause_is_lost(self) -> None:
+        contract, obligations = _fixture()
+        base_assertion = contract.manifest.assertions[0]
+        split_assertion = replace(
+            base_assertion,
+            assertion_id="ASSERT-SPLIT",
+            atom_id="ATOM-SPLIT",
+            canonical_statement="The widget displays primary and secondary values.",
+            action_clauses=("Open the widget.",),
+            oracle_clauses=("Primary value is displayed.", "Secondary value is displayed."),
+            clause_evidence_bindings=(
+                ClauseEvidenceBinding(
+                    "condition", 0, "SRC-1", "condition", "BSR 1. Source requirement."
+                ),
+                ClauseEvidenceBinding(
+                    "action", 0, "SRC-1", "action", "BSR 1. Source requirement."
+                ),
+                ClauseEvidenceBinding(
+                    "oracle", 0, "SRC-1", "oracle", "BSR 1. Source requirement."
+                ),
+                ClauseEvidenceBinding(
+                    "oracle", 1, "SRC-1", "oracle", "BSR 1. Source requirement."
+                ),
+            ),
+            obligation_ids=("OBL-PRIMARY", "OBL-SECONDARY"),
+        )
+        manifest = replace(contract.manifest, assertions=(split_assertion,))
+        review = replace(
+            contract.review_receipt.assertion_reviews[0],
+            assertion_id=split_assertion.assertion_id,
+        )
+        receipt = replace(
+            contract.review_receipt,
+            manifest_digest=manifest.digest,
+            assertion_reviews=(review,),
+        )
+        split_contract = EmbeddedSourceAssertionContract(manifest, receipt)
+        split_obligations = PreparedObligationSet.create(
+            package_id=obligations.package_id,
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PRIMARY",
+                    atom_id="ATOM-SPLIT",
+                    source_refs=("SRC-1", "BSR 1"),
+                    atomic_statement=split_assertion.canonical_statement,
+                    observable_oracle=split_assertion.oracle_clauses[0],
+                    test_intent="Open the widget.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-SECONDARY",
+                    atom_id="ATOM-SPLIT",
+                    source_refs=("SRC-1", "BSR 1"),
+                    atomic_statement=split_assertion.canonical_statement,
+                    observable_oracle=split_assertion.oracle_clauses[0],
+                    test_intent="Open the widget.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        with self.assertRaisesRegex(
+            CoverageContractError,
+            "oracle_clauses are not covered",
+        ):
+            bind_accepted_source_contract(
+                contract=split_contract,
+                obligation_set=split_obligations,
+                expected_scope_slug="demo-scope",
+            )
+
     def test_rejects_forged_obligation_semantic_fields(self) -> None:
         contract, obligations = _fixture()
         first = obligations.obligations[0]

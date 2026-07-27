@@ -199,11 +199,30 @@ def _intent_contains_authenticated_clause(intent: str, clause: str) -> bool:
     return False
 
 
+def _accepted_oracle_clause_projection(
+    obligation_id: str,
+    obligation: PreparedObligation,
+    assertion: SourceAssertion,
+) -> tuple[str, ...]:
+    clauses = tuple(assertion.oracle_clauses)
+    expected_full_oracle = "; ".join(clauses)
+    normalized_observed = _normalized(obligation.observable_oracle)
+    if normalized_observed == _normalized(expected_full_oracle):
+        return clauses
+    for clause in clauses:
+        if normalized_observed == _normalized(clause):
+            return (clause,)
+    raise CoverageContractError(
+        f"prepared obligation {obligation_id} observable_oracle does not match "
+        f"accepted {assertion.assertion_id}.oracle_clauses"
+    )
+
+
 def _validate_obligation_fields(
     obligation_id: str,
     obligation: PreparedObligation,
     assertion: SourceAssertion,
-) -> None:
+) -> tuple[str, ...]:
     if _normalized(obligation.atomic_statement) != _normalized(
         assertion.canonical_statement
     ):
@@ -212,12 +231,11 @@ def _validate_obligation_fields(
             f"accepted {assertion.assertion_id}.canonical_statement"
         )
 
-    expected_oracle = "; ".join(assertion.oracle_clauses)
-    if _normalized(obligation.observable_oracle) != _normalized(expected_oracle):
-        raise CoverageContractError(
-            f"prepared obligation {obligation_id} observable_oracle does not match "
-            f"accepted {assertion.assertion_id}.oracle_clauses"
-        )
+    covered_oracle_clauses = _accepted_oracle_clause_projection(
+        obligation_id,
+        obligation,
+        assertion,
+    )
 
     missing_intent_clauses = tuple(
         clause
@@ -241,6 +259,7 @@ def _validate_obligation_fields(
             f"prepared obligation {obligation_id} source_refs omit accepted "
             f"references: {missing_refs}"
         )
+    return covered_oracle_clauses
 
 
 def _validate_obligation_exactness(
@@ -293,12 +312,28 @@ def _validate_obligation_exactness(
             "prepared obligations do not preserve their source ATOM owners: "
             + ", ".join(wrong_atoms)
         )
+    covered_oracles_by_assertion: dict[str, set[str]] = {}
+    assertions_by_id = {item.assertion_id: item for item in manifest.assertions}
     for obligation_id, assertion in source_owners.items():
-        _validate_obligation_fields(
-            obligation_id,
-            prepared[obligation_id],
-            assertion,
+        covered_oracles_by_assertion.setdefault(assertion.assertion_id, set()).update(
+            _validate_obligation_fields(
+                obligation_id,
+                prepared[obligation_id],
+                assertion,
+            )
         )
+    for assertion_id, covered_clauses in covered_oracles_by_assertion.items():
+        assertion = assertions_by_id[assertion_id]
+        missing_oracle_clauses = [
+            clause
+            for clause in assertion.oracle_clauses
+            if clause not in covered_clauses
+        ]
+        if missing_oracle_clauses:
+            raise CoverageContractError(
+                f"accepted {assertion_id}.oracle_clauses are not covered by "
+                "prepared obligations"
+            )
     return tuple(sorted(source_owners))
 
 
