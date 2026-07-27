@@ -1088,6 +1088,20 @@ def _property_and_obligation_for_design(
     return asdict(prop), asdict(obligation)
 
 
+def _seed_dadata_fixture_test_data(seed: TestCaseDesign) -> tuple[str, ...]:
+    """Return exact source-prepared DaData fixture lines that the writer must copy.
+
+    These lines are not ordinary prose.  They are hash-bound runtime evidence
+    prepared by the runner from source/support artifacts and are later checked
+    by the production gate.
+    """
+
+    seed_text = "\n".join(seed.test_data)
+    if "Fixture DaData" not in seed_text and "FX-DADATA-" not in seed_text:
+        return ()
+    return tuple(item.strip() for item in seed.test_data if item.strip())
+
+
 def build_runtime_writer_request(
     graph: CoverageGraph,
     plan: TestDesignPlan,
@@ -1138,6 +1152,9 @@ def build_runtime_writer_request(
                 "protected_runtime_fragments": {
                     "entrypoint_preconditions": list(
                         _seed_entrypoint_preconditions(design)
+                    ),
+                    "source_prepared_test_data": list(
+                        _seed_dadata_fixture_test_data(design)
                     ),
                     "cleanup_oracles": list(_seed_cleanup_oracles(design)),
                 },
@@ -1235,6 +1252,15 @@ def build_runtime_writer_request(
                     "`protected_runtime_fragments.cleanup_oracles`; every item in "
                     "that list is mandatory exact-copy runtime evidence. A cleanup "
                     "that only clicks a delete/basket control is not sufficient."
+                ),
+                "source_prepared_test_data_preservation": (
+                    "Every item in "
+                    "`protected_runtime_fragments.source_prepared_test_data` is "
+                    "mandatory exact-copy test data. Copy those lines into "
+                    "`test_data` unchanged, including fixture id, query literal, "
+                    "suggestion literal, punctuation and backticks. Do not "
+                    "summarize, translate, move to steps, or replace them with "
+                    "runtime lookup instructions."
                 ),
                 "entrypoint_precondition_preservation": (
                     "Every item in "
@@ -1761,23 +1787,16 @@ def _validate_runtime_writer_preserves_seed_dadata_fixture(
     seed: TestCaseDesign,
     test_data: Sequence[str],
 ) -> None:
-    seed_text = "\n".join(seed.test_data)
-    if "Fixture DaData" not in seed_text:
+    required_lines = _seed_dadata_fixture_test_data(seed)
+    if not required_lines:
         return
-    required_values = tuple(
-        dict.fromkeys(
-            value.strip()
-            for item in seed.test_data
-            for value in _BACKTICK_VALUE_RE.findall(item)
-            if value.strip()
-        )
-    )
-    actual_text = "\n".join(test_data)
-    missing = tuple(value for value in required_values if value not in actual_text)
+    actual_lines = tuple(item.strip() for item in test_data if item.strip())
+    actual_line_set = set(actual_lines)
+    missing = tuple(line for line in required_lines if line not in actual_line_set)
     if missing:
         raise IterationContractError(
-            "runtime writer removed seed DaData fixture literals for "
-            f"{case_key}: " + ", ".join(repr(value) for value in missing)
+            "runtime writer removed seed DaData fixture test-data lines for "
+            f"{case_key}: " + ", ".join(repr(line) for line in missing)
         )
 
 

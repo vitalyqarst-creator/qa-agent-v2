@@ -605,6 +605,22 @@ class IterationContractTests(unittest.TestCase):
             ]
         ]
         self.assertEqual([], cleanup_fragments)
+        source_prepared_fragments = [
+            fragment
+            for case in request["cases"]
+            for fragment in case["protected_runtime_fragments"][
+                "source_prepared_test_data"
+            ]
+        ]
+        self.assertEqual([], source_prepared_fragments)
+        self.assertIn(
+            "source_prepared_test_data",
+            test_design_contract["source_prepared_test_data_preservation"],
+        )
+        self.assertIn(
+            "mandatory exact-copy test data",
+            test_design_contract["source_prepared_test_data_preservation"],
+        )
         self.assertIn(
             "Immediate input or selection proves only current visible value",
             test_design_contract["no_persistence_without_commit"],
@@ -680,6 +696,32 @@ class IterationContractTests(unittest.TestCase):
         self.assertIn(
             "Проверить, что добавленная тестовая строка удалена",
             cleanup_fragments[add_key],
+        )
+
+    def test_runtime_writer_request_exposes_protected_dadata_test_data(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(
+            plan.deterministic_cases[0],
+            test_data=(
+                "Fixture DaData: `FX-DADATA-FMS-POS-001`.",
+                "Запрос: `772-053`.",
+                "Точное предложение: `ОВД ЗЮЗИНО Г. МОСКВЫ`.",
+            ),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
+
+        request = build_runtime_writer_request(graph, plan)
+
+        self.assertEqual(
+            [
+                "Fixture DaData: `FX-DADATA-FMS-POS-001`.",
+                "Запрос: `772-053`.",
+                "Точное предложение: `ОВД ЗЮЗИНО Г. МОСКВЫ`.",
+            ],
+            request["cases"][0]["protected_runtime_fragments"][
+                "source_prepared_test_data"
+            ],
         )
 
     def test_runtime_writer_schema_accepts_exact_structured_prose_payload(self) -> None:
@@ -1162,7 +1204,45 @@ class IterationContractTests(unittest.TestCase):
 
         with self.assertRaisesRegex(
             IterationContractError,
-            "removed seed DaData fixture literals",
+            "removed seed DaData fixture test-data lines",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_must_preserve_seed_dadata_fixture_lines_exactly(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(
+            plan.deterministic_cases[0],
+            test_data=(
+                "Fixture DaData: `FX-DADATA-FMS-POS-001`.",
+                "Запрос: `772-053`.",
+                "Точное предложение: `ОВД ЗЮЗИНО Г. МОСКВЫ`.",
+            ),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    test_data=[
+                        (
+                            "Fixture DaData `FX-DADATA-FMS-POS-001`: запрос "
+                            "`772-053`, предложение `ОВД ЗЮЗИНО Г. МОСКВЫ`."
+                        ),
+                    ],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "removed seed DaData fixture test-data lines",
         ):
             validate_runtime_writer_response(
                 payload,
