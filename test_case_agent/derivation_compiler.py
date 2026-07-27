@@ -976,6 +976,12 @@ def _source_first_representative_fixture(
             return "111"
     if "14-лет" in text and any(token in text for token in ("раньше", "меньше")):
         return "дата 14-летия - 1 день"
+    if "20-лет" in text and "20-летия + 90" in text:
+        return "дата выдачи = дата 20-летия; текущая дата = дата 20-летия + 91 день"
+    if "45-лет" in text and "45-летия + 90" in text:
+        return "дата выдачи = дата 45-летия - 1 день; текущая дата = дата 45-летия + 91 день"
+    if "45 лет или позже" in text or ("45-лет" in text and "бессроч" in text):
+        return "дата выдачи = дата 45-летия"
     if (
         "шесть циф" in text
         or "6 циф" in text

@@ -203,6 +203,28 @@ class DerivationCompilerTests(unittest.TestCase):
                 action="Ввести будущую дату; Сохранить карточку.",
             )
         )
+        self.assertTrue(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle=(
+                    "Просроченный паспорт блокирует сохранение с подсказкой "
+                    "«Паспорт недействителен (просрочен)»."
+                ),
+                action="Инициировать проверку срока действия паспорта.",
+            )
+        )
+        self.assertFalse(
+            derivation_compiler_module._needs_validation_trigger_calibration(
+                polarity="positive",
+                oracle=(
+                    "Просроченный паспорт блокирует сохранение с подсказкой "
+                    "«Паспорт недействителен (просрочен)»."
+                ),
+                action=(
+                    "Ввести дату выдачи паспорта; Попытаться сохранить карточку."
+                ),
+            )
+        )
         for action in (
             "Ввести будущую дату; Попытаться сохранить карточку.",
             "Ввести будущую дату; Выполнить подтверждение формы.",
@@ -796,6 +818,104 @@ class DerivationCompilerTests(unittest.TestCase):
         self.assertEqual(
             ("дата 14-летия - 1 день",),
             by_id["ASSERT-PASS-CUR-021"].fixture_values["OBL-PASS-CUR-021"],  # type: ignore[index]
+        )
+
+    def test_source_first_reverse_save_block_date_window_becomes_calibration(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PASS-CUR-023",
+            source_row_id="SRC-PASS-CUR-008",
+            atom_id="ATOM-023",
+            obligation_ids=("OBL-PASS-CUR-023",),
+            exact_source_text=(
+                "Дата выдачи Да Дата BSR 100. Паспорт, выданный после "
+                "20-летия и до 45-летия, действителен до 45-летия + 90 "
+                "календарных дней включительно."
+            ),
+            canonical_statement=(
+                "Паспорт, выданный после 20-летия и до 45-летия, "
+                "действителен до 45-летия + 90 календарных дней включительно."
+            ),
+            polarity="positive",
+            condition_clauses=(
+                "Дата выдачи паспорта после 20-летия и до 45-летия клиента; "
+                "текущая дата позже 45-летия + 90 календарных дней.",
+            ),
+            action_clauses=("Инициировать проверку срока действия паспорта.",),
+            oracle_clauses=(
+                "Просроченный паспорт блокирует сохранение с подсказкой "
+                "«Паспорт недействителен (просрочен)».",
+            ),
+            requirement_codes=("BSR 100",),
+        )
+        manifest = _Manifest("4-3-current-passport-data", (assertion,))
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-023",
+                    source_refs=("SRC-PASS-CUR-008", "BSR 100"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Инициировать проверку срока действия "
+                        "паспорта.; Test data: Инициировать проверку срока "
+                        "действия паспорта."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-023",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivation = compiled.document.derivations[0]
+
+        self.assertEqual("source-date-boundary", derivation.property_kind)
+        self.assertEqual(
+            {"OBL-PASS-CUR-023": "date-window"},
+            derivation.obligation_variants,
+        )
+        self.assertEqual(
+            (
+                "дата выдачи = дата 45-летия - 1 день; "
+                "текущая дата = дата 45-летия + 91 день",
+            ),
+            derivation.fixture_values["OBL-PASS-CUR-023"],  # type: ignore[index]
+        )
+        self.assertRegex(
+            derivation.source_oracle_ids["OBL-PASS-CUR-023"],  # type: ignore[index]
+            r"^SO-CAL-",
+        )
+        self.assertIn(
+            "Просроченный паспорт блокирует сохранение",
+            derivation.calibration_questions["OBL-PASS-CUR-023"],  # type: ignore[index]
+        )
+
+        graph = build_coverage_graph(
+            ft_slug="sample",
+            tc_prefix="PASSCUR",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+            derivations=compiled.document.derivations,
+        )
+        self.assertEqual("candidate-ui-calibration", graph.cases[0].status)
+        self.assertEqual(
+            "ui-calibration-required",
+            graph.obligations[0].calibration_status,
+        )
+        self.assertEqual(
+            assertion.canonical_statement,
+            graph.obligations[0].observable_oracle,
         )
 
     def test_compiles_and_round_trips_without_manual_derivation(self) -> None:
