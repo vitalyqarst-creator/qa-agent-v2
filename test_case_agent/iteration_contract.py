@@ -1755,6 +1755,32 @@ def _validate_runtime_writer_preserves_seed_no_test_data(
         )
 
 
+def _validate_runtime_writer_preserves_seed_dadata_fixture(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    test_data: Sequence[str],
+) -> None:
+    seed_text = "\n".join(seed.test_data)
+    if "Fixture DaData" not in seed_text:
+        return
+    required_values = tuple(
+        dict.fromkeys(
+            value.strip()
+            for item in seed.test_data
+            for value in _BACKTICK_VALUE_RE.findall(item)
+            if value.strip()
+        )
+    )
+    actual_text = "\n".join(test_data)
+    missing = tuple(value for value in required_values if value not in actual_text)
+    if missing:
+        raise IterationContractError(
+            "runtime writer removed seed DaData fixture literals for "
+            f"{case_key}: " + ", ".join(repr(value) for value in missing)
+        )
+
+
 def _seed_entrypoint_preconditions(seed: TestCaseDesign) -> tuple[str, ...]:
     return tuple(
         dict.fromkeys(
@@ -2047,6 +2073,11 @@ def validate_runtime_writer_response(
             seed=seed,
             test_data=test_data,
             steps=steps,
+        )
+        _validate_runtime_writer_preserves_seed_dadata_fixture(
+            case_key=case_key,
+            seed=seed,
+            test_data=test_data,
         )
         _validate_runtime_writer_preserves_seed_entrypoint_preconditions(
             case_key=case_key,

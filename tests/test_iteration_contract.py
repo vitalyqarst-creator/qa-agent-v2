@@ -1135,6 +1135,42 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_must_preserve_seed_dadata_fixture_literals(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(
+            plan.deterministic_cases[0],
+            test_data=(
+                "Fixture DaData: `FX-DADATA-FMS-POS-001`.",
+                "Запрос: `772-053`.",
+                "Точное предложение: `ОВД ЗЮЗИНО Г. МОСКВЫ`.",
+            ),
+        )
+        plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    test_data=[
+                        "Fixture DaData: `FX-DADATA-FMS-POS-001`.",
+                        "Запрос: `772-053`.",
+                    ],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "removed seed DaData fixture literals",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_accepts_action_oriented_preconditions(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

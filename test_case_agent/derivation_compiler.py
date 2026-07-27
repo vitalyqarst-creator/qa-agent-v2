@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import html
 import json
 import re
 from dataclasses import dataclass
@@ -802,6 +803,12 @@ _SOURCE_FIRST_ACTION_LIKE_TEST_DATA = re.compile(
     r"^(?:попытаться|ввести|выбрать|оставить|нажать|инициировать|проверить)\b",
     re.IGNORECASE,
 )
+_SOURCE_FIRST_DADATA_FIXTURE = re.compile(r"\bFX-DADATA-[A-Z0-9_-]+\b")
+_SOURCE_FIRST_SCOPE_PREFIX_MARKER = re.compile(
+    r"(?<![A-Za-zА-ЯЁа-яё])(?:блок\w*|раздел\w*|block|section)"
+    r"(?![A-Za-zА-ЯЁа-яё])",
+    re.IGNORECASE,
+)
 _SOURCE_FIRST_SUBJECT_PREFIXES = (
     "поле",
     "поля",
@@ -910,8 +917,42 @@ def _source_first_subject_label(
     return assertion.canonical_statement.strip()
 
 
-def _source_first_scope_title(source_manifest: SourceAssertionManifest) -> str:
-    preferred_markers = ("блок", "block", "section", "раздел")
+def _source_first_section_card_label(
+    repo_root: Path,
+    source_manifest: SourceAssertionManifest,
+) -> str:
+    section_match = re.match(r"^(\d+)-(\d+)(?:-|$)", source_manifest.scope_slug)
+    if section_match is None:
+        return ""
+    section = f"{section_match.group(1)}.{section_match.group(2)}"
+    source_paths = tuple(
+        dict.fromkeys(assertion.source_path for assertion in source_manifest.assertions)
+    )
+    for source_path in source_paths:
+        path = (repo_root / source_path).resolve()
+        try:
+            path.relative_to(repo_root)
+            raw = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError, ValueError):
+            continue
+        plain = html.unescape(re.sub(r"<[^>]+>", " ", raw))
+        text = " ".join(plain.split())
+        pattern = re.compile(
+            rf"\b{re.escape(section)}\.\s*(?:Карточка|Форма|Экран|Раздел)\s+"
+            r"[«\"]([^»\"\r\n]{1,120})[»\"]",
+            re.IGNORECASE,
+        )
+        match = pattern.search(text)
+        if match is not None:
+            return match.group(1).strip()
+    return ""
+
+
+def _source_first_scope_title(
+    repo_root: Path,
+    source_manifest: SourceAssertionManifest,
+) -> str:
+    block_title = ""
     for assertion in source_manifest.assertions:
         evidence = " ".join(
             (
@@ -919,15 +960,103 @@ def _source_first_scope_title(source_manifest: SourceAssertionManifest) -> str:
                 *assertion.condition_clauses,
                 *assertion.action_clauses,
                 *assertion.oracle_clauses,
+                assertion.exact_source_text,
             )
         )
         for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
-            if any(marker in prefix for marker in preferred_markers):
-                return label
+            if _SOURCE_FIRST_SCOPE_PREFIX_MARKER.search(prefix) is not None:
+                block_title = label
+                break
+        if block_title:
+            break
+    card_title = _source_first_section_card_label(repo_root, source_manifest)
+    if card_title and block_title:
+        return f"Карточка «{card_title}» / Блок «{block_title}»"
+    if block_title:
+        return block_title
+    if card_title:
+        return f"Карточка «{card_title}»"
     return source_manifest.scope_slug
 
 
-def _source_first_fixture_values(obligation: PreparedObligation) -> tuple[str, ...]:
+def _source_first_dadata_verification_path(
+    repo_root: Path,
+    fixture_id: str,
+) -> Path | None:
+    search_root = repo_root / "fts"
+    if not search_root.is_dir():
+        search_root = repo_root
+    matches = sorted(search_root.rglob(f"{fixture_id}.verification.json"))
+    return matches[0] if matches else None
+
+
+def _source_first_dadata_fixture_values(
+    repo_root: Path,
+    obligation: PreparedObligation,
+) -> tuple[str, ...]:
+    fixture_ids = tuple(
+        dict.fromkeys(_SOURCE_FIRST_DADATA_FIXTURE.findall(obligation.test_intent))
+    )
+    for fixture_id in fixture_ids:
+        path = _source_first_dadata_verification_path(repo_root, fixture_id)
+        if path is None:
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            continue
+        if (
+            not isinstance(payload, Mapping)
+            or payload.get("fixture_id") != fixture_id
+            or payload.get("status") != "verified"
+        ):
+            continue
+        request = payload.get("request")
+        expected = payload.get("expected_response")
+        if not isinstance(request, Mapping) or not isinstance(expected, Mapping):
+            continue
+        parameters = request.get("parameters")
+        if not isinstance(parameters, Mapping):
+            continue
+
+        values: list[str] = [fixture_id]
+        query = parameters.get("query")
+        if isinstance(query, (str, int, float)) and not isinstance(query, bool):
+            values.append(str(query))
+        suggestion = expected.get("exact_suggestion")
+        if isinstance(suggestion, (str, int, float)) and not isinstance(
+            suggestion, bool
+        ):
+            values.append(str(suggestion))
+        components = expected.get("exact_components")
+        if isinstance(components, Mapping):
+            for key in (
+                "code",
+                "name",
+                "region_code",
+                "type",
+                "postal_code",
+                "region",
+                "city",
+                "street",
+                "house",
+                "flat",
+            ):
+                value = components.get(key)
+                if isinstance(value, (str, int, float)) and not isinstance(
+                    value, bool
+                ):
+                    values.append(str(value))
+        if expected.get("suggestions") == []:
+            values.append("suggestions=[]")
+        return tuple(dict.fromkeys(value for value in values if value))
+    return ()
+
+
+def _source_first_fixture_values(
+    repo_root: Path,
+    obligation: PreparedObligation,
+) -> tuple[str, ...]:
     dictionary_values = _dictionary_fixtures(obligation)
     if obligation.dictionary_refs:
         if not dictionary_values:
@@ -936,6 +1065,9 @@ def _source_first_fixture_values(obligation: PreparedObligation) -> tuple[str, .
                 f"{obligation.obligation_id} has no compiled dictionary values",
             )
         return dictionary_values
+    dadata_values = _source_first_dadata_fixture_values(repo_root, obligation)
+    if dadata_values:
+        return dadata_values
     match = _SOURCE_FIRST_TEST_DATA.search(obligation.test_intent)
     if match is None:
         return ()
@@ -1207,7 +1339,7 @@ def compile_source_first_property_derivations(
                     "prepared-oracle-drift",
                     f"{obligation_id} oracle differs from accepted source clauses",
                 )
-            fixtures = _source_first_fixture_values(prepared)
+            fixtures = _source_first_fixture_values(repo_root, prepared)
             property_kind, variant = _source_first_kind_and_variant(
                 assertion=assertion,
                 obligation=prepared,
@@ -1305,7 +1437,7 @@ def compile_source_first_property_derivations(
         registered_artifacts=(),
         subject_labels=dict(sorted(subject_labels.items())),
         condition_preconditions=dict(sorted(condition_preconditions.items())),
-        scope_title=_source_first_scope_title(source_manifest),
+        scope_title=_source_first_scope_title(repo_root, source_manifest),
         base_preconditions=(),
         registered_artifact_snapshots=(),
     )

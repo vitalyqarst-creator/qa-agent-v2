@@ -30,6 +30,7 @@ from test_case_agent.review_cycle.source_assertions import (
     NO_REQUIRED_CHANGE,
     SourceAssertion,
 )
+from test_case_agent.test_design import DesignContext, build_test_design_plan
 
 
 def _canonical_sha(value: Any) -> str:
@@ -917,6 +918,155 @@ class DerivationCompilerTests(unittest.TestCase):
             assertion.canonical_statement,
             graph.obligations[0].observable_oracle,
         )
+
+    def test_source_first_projects_entrypoint_and_dadata_fixture_literals(self) -> None:
+        source_dir = self.root / "fts" / "sample" / "source"
+        source_dir.mkdir(parents=True)
+        (source_dir / "main.xhtml").write_text(
+            "<html><body><h1>4.3. Карточка «Заявка»</h1></body></html>\n",
+            encoding="utf-8",
+        )
+        fixture_dir = (
+            self.root
+            / "fts"
+            / "sample"
+            / "work"
+            / "vendor-references"
+            / "dadata-fixtures"
+            / "FX-DADATA-FMS-POS-001"
+        )
+        fixture_dir.mkdir(parents=True)
+        (fixture_dir / "FX-DADATA-FMS-POS-001.verification.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "fixture_id": "FX-DADATA-FMS-POS-001",
+                    "status": "verified",
+                    "request": {
+                        "parameters": {
+                            "query": "772-053",
+                        },
+                    },
+                    "expected_response": {
+                        "exact_suggestion": "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                        "exact_components": {
+                            "code": "772-053",
+                            "name": "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                            "region_code": "77",
+                            "type": "2",
+                        },
+                    },
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PASS-CUR-015",
+            source_path="fts/sample/source/main.xhtml",
+            source_row_id="SRC-PASS-CUR-005",
+            atom_id="ATOM-015",
+            obligation_ids=("OBL-PASS-CUR-015",),
+            exact_source_text=(
+                "Блок «Паспортные данные». Кем выдан BSR 94. "
+                "Предзаполняется по вводу кода подразделения."
+            ),
+            canonical_statement=(
+                "Поле «Кем выдан» предзаполняется по вводу кода подразделения."
+            ),
+            condition_clauses=(
+                "Открыт блок «Паспортные данные»; "
+                "Признак ручного ввода подразделения имеет значение «Нет»; "
+                "fixture `FX-DADATA-FMS-POS-001` подтверждает FMS response "
+                "for query `772-053`.",
+            ),
+            action_clauses=("Ввести код подразделения `772-053`.",),
+            oracle_clauses=(
+                "Поле «Кем выдан» получает значение из подсказок DaData; "
+                "exact dropdown order/count is not asserted.",
+            ),
+            requirement_codes=("BSR 94",),
+        )
+        manifest = _Manifest("4-3-current-passport-data", (assertion,))
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-015",
+                    source_refs=("SRC-PASS-CUR-005", "BSR 94"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "Condition contract: fixture `FX-DADATA-FMS-POS-001` "
+                        "подтверждает FMS response for query `772-053`.; "
+                        "Action contract: Ввести код подразделения `772-053`.; "
+                        "Test data: Ввести код подразделения `772-053`."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-015",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+
+        derivation = compiled.document.derivations[0]
+        self.assertEqual(
+            "Карточка «Заявка» / Блок «Паспортные данные»",
+            compiled.scope_title,
+        )
+        self.assertEqual(
+            (
+                "FX-DADATA-FMS-POS-001",
+                "772-053",
+                "ОВД ЗЮЗИНО Г. МОСКВЫ",
+                "77",
+                "2",
+            ),
+            derivation.fixture_values["OBL-PASS-CUR-015"],  # type: ignore[index]
+        )
+
+        graph = build_coverage_graph(
+            ft_slug="sample",
+            tc_prefix="PASSCUR",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+            derivations=compiled.document.derivations,
+        )
+        context = DesignContext(
+            package_id=obligations.package_id,
+            scope_title=compiled.scope_title,
+            base_preconditions=compiled.base_preconditions,
+            subject_labels=compiled.subject_labels,
+            condition_preconditions=compiled.condition_preconditions,
+        )
+        plan = build_test_design_plan(
+            graph,
+            context=context,
+            expected_package_id=obligations.package_id,
+        )
+        case = plan.deterministic_cases[0]
+        self.assertEqual(
+            (
+                "Открыть карточку `Заявка`.",
+                "Перейти к блоку `Паспортные данные`.",
+            ),
+            case.preconditions,
+        )
+        self.assertIn("Fixture DaData: `FX-DADATA-FMS-POS-001`.", case.test_data)
+        self.assertIn("Запрос: `772-053`.", case.test_data)
+        self.assertIn("Точное предложение: `ОВД ЗЮЗИНО Г. МОСКВЫ`.", case.test_data)
 
     def test_compiles_and_round_trips_without_manual_derivation(self) -> None:
         manifest, obligations, projection, _ = self._fixture()

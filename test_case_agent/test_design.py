@@ -262,9 +262,19 @@ def validate_design_context_for_graph(
             if text.strip()
         )
     )
-    if context.scope_title != graph.scope_slug and not any(
-        _contains_token_bounded_text(statement, context.scope_title)
-        for statement in context_statements
+    scope_title_labels = tuple(
+        label for label, _prefix in _runtime_labels_with_context(context.scope_title)
+    )
+    if context.scope_title != graph.scope_slug and not (
+        any(
+            _contains_token_bounded_text(statement, context.scope_title)
+            for statement in context_statements
+        )
+        or any(
+            _contains_token_bounded_text(statement, label)
+            for statement in context_statements
+            for label in scope_title_labels
+        )
     ):
         raise DesignError(
             "scope_title is not present in a source-backed context statement"
@@ -740,6 +750,12 @@ def _scope_navigation_from_context(context: DesignContext) -> tuple[str, ...]:
             block = item_block
         if card and block:
             break
+    if not card or not block:
+        title_card, title_block = _source_container_labels(context.scope_title)
+        if not card and title_card:
+            card = title_card
+        if not block and title_block:
+            block = title_block
     if card and block:
         return (f"Открыть карточку `{card}`.", f"Перейти к блоку `{block}`.")
     if card:
@@ -1265,6 +1281,29 @@ def _source_format_display_value(
         if len(digits) == 6:
             return f"{digits[:3]}-{digits[3:]}"
     return fixture
+
+
+def _dadata_fixture_test_data_lines(fixtures: Sequence[str]) -> tuple[str, ...]:
+    values = tuple(fixtures)
+    if not values or not values[0].startswith("FX-DADATA-"):
+        return ()
+    fixture_id = values[0]
+    if "-FMS-" in fixture_id and len(values) >= 7:
+        labels = (
+            "Fixture DaData",
+            "Запрос",
+            "Точное предложение",
+            "Код подразделения",
+            "Наименование подразделения",
+            "Код региона",
+            "Тип подразделения",
+        )
+        return tuple(f"{label}: `{value}`." for label, value in zip(labels, values))
+    labels = ("Fixture DaData", "Запрос", "Точное предложение")
+    lines = tuple(
+        f"{label}: `{value}`." for label, value in zip(labels, values)
+    )
+    return lines or (f"Fixture DaData: `{fixture_id}`.",)
 
 
 def _select_repeater_mutation_support(
@@ -1799,7 +1838,12 @@ def _materialize(
             if _source_behavior_is_negative(prop=prop, obligation=obligation)
             else "позитивный"
         )
-        test_data = [f"Тестовое значение: `{item}`." for item in fixtures]
+        fixture_lines = _dadata_fixture_test_data_lines(fixtures)
+        test_data = (
+            list(fixture_lines)
+            if fixture_lines
+            else [f"Тестовое значение: `{item}`." for item in fixtures]
+        )
         steps = _unique_steps(
             _bind_input_action(
                 kind=kind,
