@@ -75,6 +75,30 @@ class StageHandoffContractTests(unittest.TestCase):
         self.assertIn("`prompt.scope-gaps-to-reviewer.md`", scope)
         self.assertIn("не создавай handoff к writer", scope)
 
+    def test_scope_clarification_questions_require_concrete_decomposition(self) -> None:
+        clarification_format = (
+            ROOT_DIR / "references" / "agent" / "scope-clarification-requests-format.md"
+        ).read_text(encoding="utf-8")
+        scope = (ROOT_DIR / "skills" / "ft-scope-analyzer" / "SKILL.md").read_text(encoding="utf-8")
+
+        for expected in [
+            "Достаточность и детализация вопроса",
+            "не задавай один umbrella-вопрос",
+            "нумерованный checklist",
+            "requiredness, negative validation, dictionary/fixture",
+            "residual `GAP-*`",
+            "coverage map",
+        ]:
+            self.assertIn(expected, clarification_format)
+
+        for expected in [
+            "правило достаточности",
+            "нескольким obligations/полям/validation classes",
+            "отдельные `CLR-*`",
+            "остаток оставляй residual",
+        ]:
+            self.assertIn(expected, scope)
+
     def test_writer_reviewer_and_iteration_use_state_and_prompt_handoffs(self) -> None:
         writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
         reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(encoding="utf-8")

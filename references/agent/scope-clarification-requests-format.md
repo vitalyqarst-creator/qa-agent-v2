@@ -91,6 +91,26 @@ Production-ready semantics разрешено строить только из �
 `product-owner/product-confirmed`. `working-assumption`, `rejected`,
 `superseded`, `unanswered` и `not-provided` не являются утверждённым evidence.
 
+## Достаточность и детализация вопроса
+
+Вопрос к БА должен быть самодостаточным: человек должен понять его без чтения
+истории, gaps-файла или внутренних artifact-ов агента.
+
+- Если один `GAP-*` затрагивает несколько независимых source assertions,
+  requirement codes, полей, validation classes, triggers или expected oracles,
+  не задавай один umbrella-вопрос вида «какой UI-отклик?».
+- Делай отдельный `CLR-*` на каждый независимый вопрос. Если оставляешь одну
+  карточку, `question` и `**Вопрос:**` обязаны содержать нумерованный checklist.
+- Для каждого подпункта указывай source anchor, поле/условие и что неизвестно:
+  trigger, значение, видимый UI/API/DB artifact, сообщение, блокировка,
+  сохранение/несохранение или boundary.
+- Не смешивай requiredness, negative validation, dictionary/fixture,
+  integration, visibility/editability и cleanup semantics в один вопрос.
+- При intake закрывай только явно отвеченные подпункты. Остаток остаётся
+  residual `GAP-*` или получает новый `CLR-*`.
+- Если один ответ применяется к нескольким подпунктам, сохрани coverage map в
+  `scope-coverage-gaps.md` и `source-assertions.json`.
+
 ## Рекомендуемый шаблон
 
 ```md
@@ -105,6 +125,7 @@ Production-ready semantics разрешено строить только из �
 - `response_status`, `response_type` и `updated_at` заполняет агент после получения ответа.
 - Не удаляйте `clarification_id`, `gap_id`, scope, ссылки и вопрос.
 - Если ответ заменен более новым, агент установит старой карточке `response_status = superseded` и добавит новую карточку с тем же `gap_id`.
+- Если вопрос содержит нумерованные подпункты, ответьте по каждому подпункту отдельно; если по подпункту нет подтвержденной информации, напишите это явно.
 
 ## Clarification Requests
 
