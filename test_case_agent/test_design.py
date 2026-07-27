@@ -1201,6 +1201,72 @@ def _text_hyphen_valid_representatives(
     return tuple(dict.fromkeys(item for item in values if item))
 
 
+_SOURCE_FORMAT_NEGATIVE_VARIANTS = {
+    "digits-only",
+    "length-limit",
+    "repeated-digits",
+}
+
+
+def _source_behavior_is_negative(
+    *,
+    prop: CoverageProperty,
+    obligation: CoverageObligation,
+) -> bool:
+    text = _normalized_text(
+        " ".join(
+            (
+                prop.canonical_statement,
+                obligation.atomic_statement,
+                obligation.observable_oracle,
+                obligation.validation_trigger,
+            )
+        )
+    )
+    return (
+        prop.polarity == "negative"
+        or "не принимает" in text
+        or "не допускает" in text
+        or "не вводится" in text
+        or "недопуст" in text
+        or "блокируется" in text
+        or "запрещ" in text
+        or "не может" in text
+        or "не должна" in text
+        or "сверх лимит" in text
+    )
+
+
+def _source_format_single_fixture_is_negative(
+    *,
+    prop: CoverageProperty,
+    obligation: CoverageObligation,
+    case_variant: str,
+) -> bool:
+    return (
+        case_variant in _SOURCE_FORMAT_NEGATIVE_VARIANTS
+        or _source_behavior_is_negative(
+            prop=prop,
+            obligation=obligation,
+        )
+    )
+
+
+def _source_format_display_value(
+    *,
+    fixture: str,
+    obligation: CoverageObligation,
+) -> str:
+    text = _normalized_text(
+        " ".join((obligation.atomic_statement, obligation.observable_oracle))
+    )
+    if "xxx-xxx" in text:
+        digits = re.sub(r"\D+", "", fixture)
+        if len(digits) == 6:
+            return f"{digits[:3]}-{digits[3:]}"
+    return fixture
+
+
 def _select_repeater_mutation_support(
     *,
     graph: CoverageGraph,
@@ -1666,27 +1732,45 @@ def _materialize(
             )
     elif kind == "source-format" and len(fixtures) == 1:
         fixture = fixtures[0]
-        if prop.polarity == "negative":
+        if _source_format_single_fixture_is_negative(
+            prop=prop,
+            obligation=obligation,
+            case_variant=case_variant,
+        ):
             title = obligation.atomic_statement.rstrip(". ")
             case_type = "негативный"
             test_data = [f"Недопустимое значение: `{fixture}`."]
             steps = _unique_steps(
-                f"Ввести `{fixture}` в {label}.",
-                (
-                    "Зафиксировать фактический UI-отклик для значения "
-                    f"`{fixture}` без подмены его ожидаемым сообщением."
+                _bind_input_action(
+                    kind=kind,
+                    action=(
+                        obligation.validation_trigger
+                        or f"Попытаться ввести `{fixture}` в {label}."
+                    ),
+                    label=label,
+                ),
+                _source_observation_step(
+                    prefix="Проверить результат ограничения",
+                    source_clause=expected_result,
                 ),
             )
         else:
             title = f"Допустимое значение формата: {_display_subject(label)}"
             case_type = "позитивный"
             target = _runtime_field_label(label)
+            display_fixture = _source_format_display_value(
+                fixture=fixture,
+                obligation=obligation,
+            )
             test_data = [f"Допустимое значение: `{fixture}`."]
             steps = _unique_steps(
                 f"Ввести `{fixture}` в {label}.",
-                f"Проверить, что {target} отображает значение `{fixture}`.",
+                f"Проверить, что {target} отображает значение `{display_fixture}`.",
             )
-            expected_result = f"{_sentence_start(target)} отображает значение `{fixture}`."
+            expected_result = (
+                f"{_sentence_start(target)} отображает значение "
+                f"`{display_fixture}`."
+            )
     elif kind == "source-format":
         return _blocked_card(
             case=case,
@@ -1710,7 +1794,11 @@ def _materialize(
                 reason="source-bound generic design requires positive/negative polarity",
             )
         title = obligation.atomic_statement.rstrip(". ")
-        case_type = "негативный" if prop.polarity == "negative" else "позитивный"
+        case_type = (
+            "негативный"
+            if _source_behavior_is_negative(prop=prop, obligation=obligation)
+            else "позитивный"
+        )
         test_data = [f"Тестовое значение: `{item}`." for item in fixtures]
         steps = _unique_steps(
             _bind_input_action(

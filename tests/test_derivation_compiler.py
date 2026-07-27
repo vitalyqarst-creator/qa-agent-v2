@@ -668,6 +668,136 @@ class DerivationCompilerTests(unittest.TestCase):
         self.assertEqual(6, len(graph.cases))
         self.assertEqual(6, len({item.case_key for item in graph.cases}))
 
+    def test_source_first_format_representatives_do_not_use_action_phrases(self) -> None:
+        base = self._assertion()
+        assertions = (
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-005",
+                atom_id="ATOM-005",
+                obligation_ids=("OBL-PASS-CUR-005",),
+                canonical_statement=(
+                    "Поле «Серия» не допускает три одинаковые цифры подряд."
+                ),
+                action_clauses=("Ввести серию с тремя одинаковыми цифрами подряд.",),
+                oracle_clauses=(
+                    "Поле подсвечивается красным; отображается сообщение "
+                    "«Не должно быть трех одинаковых цифр подряд».",
+                ),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-013",
+                atom_id="ATOM-013",
+                obligation_ids=("OBL-PASS-CUR-013",),
+                canonical_statement=(
+                    "Поле «Код подразделения» отображает формат заполнения xxx-xxx."
+                ),
+                action_clauses=("Ввести шесть цифр кода подразделения.",),
+                oracle_clauses=("Значение отображается в форме `xxx-xxx`.",),
+            ),
+            replace(
+                base,
+                assertion_id="ASSERT-PASS-CUR-021",
+                atom_id="ATOM-021",
+                obligation_ids=("OBL-PASS-CUR-021",),
+                canonical_statement=(
+                    "Дата выдачи раньше 14-летия клиента недопустима."
+                ),
+                action_clauses=(
+                    "Ввести дату выдачи раньше 14-летия клиента и инициировать "
+                    "проверку сохранения.",
+                ),
+                oracle_clauses=(
+                    "Сохранение блокируется с подсказкой "
+                    "«Выдача паспорта предусмотрена с 14 лет».",
+                ),
+            ),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-005",
+                    source_refs=("SRC-001",),
+                    atomic_statement=assertions[0].canonical_statement,
+                    observable_oracle=assertions[0].oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Ввести серию с тремя одинаковыми цифрами "
+                        "подряд.; Test data: Ввести серию с тремя одинаковыми "
+                        "цифрами подряд."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-005",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-013",
+                    source_refs=("SRC-001",),
+                    atomic_statement=assertions[1].canonical_statement,
+                    observable_oracle=assertions[1].oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Ввести шесть цифр кода подразделения.; "
+                        "Test data: Ввести шесть цифр кода подразделения."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-013",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-021",
+                    source_refs=("SRC-001",),
+                    atomic_statement=assertions[2].canonical_statement,
+                    observable_oracle=assertions[2].oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Ввести дату выдачи раньше 14-летия "
+                        "клиента и инициировать проверку сохранения.; Test data: "
+                        "Ввести дату выдачи раньше 14-летия клиента и инициировать "
+                        "проверку сохранения."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-021",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("4-3-current-passport-data", assertions),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        by_id = {item.assertion_id: item for item in compiled.document.derivations}
+
+        self.assertEqual(
+            "repeated-digits",
+            by_id["ASSERT-PASS-CUR-005"].obligation_variants["OBL-PASS-CUR-005"],
+        )
+        self.assertEqual(
+            ("111",),
+            by_id["ASSERT-PASS-CUR-005"].fixture_values["OBL-PASS-CUR-005"],  # type: ignore[index]
+        )
+        self.assertEqual(
+            ("123456",),
+            by_id["ASSERT-PASS-CUR-013"].fixture_values["OBL-PASS-CUR-013"],  # type: ignore[index]
+        )
+        self.assertEqual(
+            "date-window",
+            by_id["ASSERT-PASS-CUR-021"].obligation_variants["OBL-PASS-CUR-021"],
+        )
+        self.assertEqual(
+            ("дата 14-летия - 1 день",),
+            by_id["ASSERT-PASS-CUR-021"].fixture_values["OBL-PASS-CUR-021"],  # type: ignore[index]
+        )
+
     def test_compiles_and_round_trips_without_manual_derivation(self) -> None:
         manifest, obligations, projection, _ = self._fixture()
         compiled = compile_property_derivations(

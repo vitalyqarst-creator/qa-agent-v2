@@ -1164,6 +1164,149 @@ class TestDesignTests(unittest.TestCase):
         self.assertEqual(plan.writer_cards, ())
         self.assertIn("concrete fixture", plan.blocked_cards[0].reason)
 
+    def test_source_format_single_invalid_fixture_is_negative(self) -> None:
+        for variant, fixture, atomic, oracle, trigger in (
+            (
+                "digits-only",
+                "A",
+                "Поле «Имя» не принимает нечисловые символы.",
+                "Нечисловой символ не вводится.",
+                "Попытаться ввести нечисловой символ, например `A`.",
+            ),
+            (
+                "length-limit",
+                "12345",
+                "Поле «Имя» не принимает более 4 числовых символов.",
+                "Пятый символ не вводится.",
+                "Попытаться ввести значение `12345`.",
+            ),
+            (
+                "repeated-digits",
+                "111",
+                "Поле «Имя» не допускает три одинаковые цифры подряд.",
+                "Поле подсвечивается красным.",
+                "Ввести серию с тремя одинаковыми цифрами подряд.",
+            ),
+        ):
+            with self.subTest(variant=variant):
+                graph = _graph(
+                    kind="source-format",
+                    fixtures=(fixture,),
+                    trigger=trigger,
+                )
+                graph = replace(
+                    graph,
+                    properties=(
+                        replace(
+                            graph.properties[0],
+                            polarity="positive",
+                            canonical_statement=atomic,
+                        ),
+                        *graph.properties[1:],
+                    ),
+                    obligations=(
+                        replace(
+                            graph.obligations[0],
+                            coverage_variant=variant,
+                            atomic_statement=atomic,
+                            observable_oracle=oracle,
+                        ),
+                    ),
+                )
+
+                case = build_test_design_plan(graph, context=_context()).deterministic_cases[0]
+
+                self.assertEqual("негативный", case.case_type)
+                self.assertIn("Недопустимое значение", case.test_data[0])
+                self.assertEqual(oracle, case.expected_result)
+                self.assertIn(trigger, case.steps[0])
+
+    def test_source_format_single_positive_fixture_stays_positive(self) -> None:
+        graph = _graph(
+            kind="source-format",
+            fixtures=("123456",),
+            trigger="Ввести шесть цифр кода подразделения.",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement=(
+                        "Поле «Код подразделения» отображает формат заполнения xxx-xxx."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="format",
+                    atomic_statement=(
+                        "Поле «Код подразделения» отображает формат заполнения xxx-xxx."
+                    ),
+                    observable_oracle="Значение отображается в форме `xxx-xxx`.",
+                ),
+            ),
+        )
+
+        context = replace(
+            _context(),
+            subject_labels={"customer-name": "Код подразделения"},
+        )
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        self.assertEqual("позитивный", case.case_type)
+        self.assertIn("Допустимое значение", case.test_data[0])
+        self.assertIn("123456", case.steps[0])
+        self.assertIn("123-456", case.steps[1])
+        self.assertIn("123-456", case.expected_result)
+
+    def test_source_runtime_negative_behavior_sets_negative_case_type(self) -> None:
+        graph = _graph(
+            kind="source-date-boundary",
+            fixtures=("дата 14-летия - 1 день",),
+            trigger=(
+                "Ввести дату выдачи раньше 14-летия клиента и инициировать "
+                "проверку сохранения."
+            ),
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    polarity="positive",
+                    canonical_statement=(
+                        "Дата выдачи раньше 14-летия клиента недопустима."
+                    ),
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="date-window",
+                    atomic_statement=(
+                        "Дата выдачи раньше 14-летия клиента недопустима."
+                    ),
+                    observable_oracle=(
+                        "Сохранение блокируется с подсказкой "
+                        "«Выдача паспорта предусмотрена с 14 лет»."
+                    ),
+                ),
+            ),
+        )
+
+        context = replace(_context(), subject_labels={"customer-name": "Дата выдачи"})
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+
+        self.assertEqual("негативный", case.case_type)
+        self.assertIn("дата 14-летия - 1 день", case.test_data[0])
+        self.assertIn("Сохранение блокируется", case.expected_result)
+
     def test_dictionary_owns_complete_fixture_set(self) -> None:
         plan = build_test_design_plan(
             _graph(kind="dictionary", fixtures=("Друг", "Коллега", "Родственник")),

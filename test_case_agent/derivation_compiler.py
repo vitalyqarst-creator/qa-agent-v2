@@ -798,6 +798,10 @@ _SOURCE_FIRST_TEST_DATA = re.compile(
     r"(?:^|;\s*)Test data:\s*(?P<value>.*?)(?=$|;\s*[A-Za-z][A-Za-z ]+ contract:)",
     re.IGNORECASE,
 )
+_SOURCE_FIRST_ACTION_LIKE_TEST_DATA = re.compile(
+    r"^(?:попытаться|ввести|выбрать|оставить|нажать|инициировать|проверить)\b",
+    re.IGNORECASE,
+)
 _SOURCE_FIRST_SUBJECT_PREFIXES = (
     "поле",
     "поля",
@@ -947,7 +951,38 @@ def _source_first_fixture_values(obligation: PreparedObligation) -> tuple[str, .
     )
     if labels:
         return labels
+    representative = _source_first_representative_fixture(raw, obligation)
+    if representative:
+        return (representative,)
+    if _SOURCE_FIRST_ACTION_LIKE_TEST_DATA.search(raw):
+        return ()
     return (raw,) if raw else ()
+
+
+def _source_first_representative_fixture(
+    raw: str,
+    obligation: PreparedObligation,
+) -> str:
+    text = _source_first_text(
+        raw,
+        obligation.atomic_statement,
+        obligation.observable_oracle,
+        obligation.test_intent,
+    )
+    if "одинаков" in text:
+        if any(token in text for token in ("шесть", "шести", "6")):
+            return "111111"
+        if any(token in text for token in ("три", "трех", "трёх", "3")):
+            return "111"
+    if "14-лет" in text and any(token in text for token in ("раньше", "меньше")):
+        return "дата 14-летия - 1 день"
+    if (
+        "шесть циф" in text
+        or "6 циф" in text
+        or "xxx-xxx" in text
+    ):
+        return "123456"
+    return ""
 
 
 def _source_first_kind_and_variant(
@@ -976,7 +1011,11 @@ def _source_first_kind_and_variant(
         token in text
         for token in (
             "обязател",
-            "пуст",
+            "пустым",
+            "пустое",
+            "пустой",
+            "пустого",
+            "пустую",
             "required",
             "empty",
             "выберите значение",
@@ -991,6 +1030,17 @@ def _source_first_kind_and_variant(
         for token in ("будущ", "больше текущ", "future date", "not-future")
     ):
         return "source-date-boundary", "not-future"
+    if any(
+        token in text
+        for token in (
+            "14-лет",
+            "20-лет",
+            "45-лет",
+            "срока действия",
+            "раньше даты",
+        )
+    ):
+        return "source-date-boundary", "date-window"
     if any(
         token in text
         for token in (
@@ -1010,7 +1060,7 @@ def _source_first_kind_and_variant(
             return "source-format", "allowed-class"
         if any(token in text for token in ("нечислов", "numeric", "digit")):
             return "source-format", "digits-only"
-        if "повтор" in text:
+        if any(token in text for token in ("повтор", "одинаков")):
             return "source-format", "repeated-digits"
         if any(token in text for token in ("длин", "length")):
             return "source-format", "length-limit"
