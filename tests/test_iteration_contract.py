@@ -1020,6 +1020,38 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_accepts_explicit_validation_check_after_mutation(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=list(seed.preconditions),
+                    steps=[
+                        "Ввести `Иван` в поле «Фамилия».",
+                        "Инициировать проверку значения поля.",
+                    ],
+                    expected_result=(
+                        "Сохранение блокируется; отображается подсказка "
+                        "«Паспорт недействителен (просрочен)»."
+                    ),
+                )
+            ],
+        )
+
+        cases, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual(1, len(cases))
+        self.assertEqual((), unresolved)
+
     def test_runtime_writer_rejects_unseeded_mask_template_oracle(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

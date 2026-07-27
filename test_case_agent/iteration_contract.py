@@ -143,6 +143,7 @@ _RUNTIME_PERSISTENCE_ORACLE_RE = re.compile(
 )
 _RUNTIME_COMMIT_ACTION_RE = re.compile(
     r"(?:сохран\w*|подтверд\w*|примен\w*|отправ\w*|submit|save|confirm|"
+    r"инициировать\s+проверку\s+(?:сохранени\w*|срок\w*|значени\w*|валид\w*)|"
     r"нажать\s+`?(?:далее|готово|ok|ок)`?|снять\s+фокус|blur)",
     re.IGNORECASE,
 )
