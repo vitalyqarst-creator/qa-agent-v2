@@ -6,10 +6,11 @@ Source-first агент для подготовки трассируемых т�
 ## Production runtime
 
 Публичный runtime намеренно решает одну задачу: получает уже независимо
-квалифицированный и hash-bound пакет выбранного scope, детерминированно строит
-shadow-набор тест-кейсов и отправляет его ровно одному независимому reviewer.
-Model-writer, внутренние retry, hard model timeout и запись в canonical здесь
-отсутствуют.
+квалифицированный и hash-bound пакет выбранного scope, строит source-bound seed
+cases, вызывает model writer в режиме `model-runtime-prose` только для runtime
+prose, затем прогоняет deterministic gates и отправляет результат ровно одному
+независимому reviewer. Bridge, benchmark, sharding, внутренние retry, hard model
+timeout и запись в canonical здесь отсутствуют.
 
 ```powershell
 ft-agent run `
@@ -17,11 +18,12 @@ ft-agent run `
   --output-dir fts/<ft-slug>/work/iterations/<new-attempt-id>
 ```
 
-Config schema v2 содержит только шесть полей: `schema_version`, `registry`,
-`ft_root`, `scope`, `source_evidence` и `obligations`. Output directory обязан
-быть новым. Runner повторно проверяет registry boundary, source hashes,
-accepted source receipt, obligations и текущий canonical baseline; source и
-canonical никогда не изменяются.
+Config schema v2 содержит базовые поля `schema_version`, `registry`, `ft_root`,
+`scope`, `source_evidence` и `obligations`. Для актуального production route
+добавляй `writer_mode: model-runtime-prose`. Output directory обязан быть новым.
+Runner повторно проверяет registry boundary, source hashes, accepted source
+receipt, obligations и текущий canonical baseline; source и canonical никогда не
+изменяются.
 
 Успешные terminal statuses:
 
@@ -59,9 +61,10 @@ python scripts/resolve_instruction_context.py `
   --fail-on-budget
 ```
 
-Production installation экспортирует только команду `ft-agent run`. Tests,
-benchmarks, реальные FT inputs, work/history, UI automation и qualification
-controllers в bundle не входят.
+Production installation экспортирует только команду `ft-agent run`. Актуальный
+маршрут для новых запусков — `model-runtime-prose`; legacy compatibility routes
+не являются production-default. Tests, benchmarks, реальные FT inputs,
+work/history, UI automation и qualification controllers в bundle не входят.
 
 Сборка профилей описана в [release/README.md](release/README.md).
 

@@ -17,11 +17,10 @@ benchmark configs, результаты прошлых попыток и про�
 - DOCX как source of truth, XHTML как обязательный машиночитаемый источник и
   PDF, если он объявлен;
 - source evidence со source-assertion manifest v4 и независимым accepted review
-  receipt на точный digest, а также immutable semantic-design compiler
-  projection со ссылками и хэшами исходных semantic artifacts;
+  receipt на точный digest;
 - compiler-v3 obligations;
-- accepted semantic projection, из которой runner сам строит маленький design
-  context.
+- source-first prepared package projection, из которой runner сам строит
+  маленький design context без обязательного bridge materialization.
 
 Если любого входа нет или он stale, заверши попытку как `blocked-input`. Повторная
 квалификация выполняется вне этого bundle в development/qualification среде;
@@ -61,7 +60,8 @@ target или готовый файл derivations. Slug и prefix выводят
 registry; защищаемые sources — из accepted manifest и registry; canonical
 baseline — из всех `test-cases/**/*.md` выбранного FT-пакета. Typed derivations
 и design context автоматически строятся из принятого manifest, obligations и
-hash-bound semantic projection и сохраняются внутри immutable attempt.
+hash-bound source-first prepared projection и сохраняются внутри immutable
+attempt.
 
 ## Последовательность
 
@@ -74,7 +74,7 @@ Runner в одном процессе и одном immutable attempt:
 4. требует точного равенства registry и manifest по path, bucket, role и
    актуальному SHA-256, включая DOCX/XHTML/PDF/support/mockups;
 5. проверяет accepted source-review receipt и obligations, затем автоматически
-   строит и hash-bind-ит typed derivations из semantic projection;
+   строит и hash-bind-ит typed derivations из source-first prepared projection;
 6. строит и полностью валидирует coverage graph;
 7. строит source-bound deterministic seed cases;
 8. в `model-runtime-prose` вызывает writer ровно один раз для runtime prose:
@@ -202,7 +202,7 @@ canonical publication не выполнялась. Это единственна
 отдельной promotion/finalization операции.
 
 Summary охватывает загрузку config, scope compilation, source binding, graph,
-design context, единственный reviewer stage и final reconciliation. Для reviewer
+design context, writer/reviewer stages и final reconciliation. Для model stages
 указывай wall time, attempts, input/output artifact count и bytes, а токены —
 только как неотрицательные целые либо `unavailable`. Токены root orchestration
 всегда `unavailable`, никогда не `0`.

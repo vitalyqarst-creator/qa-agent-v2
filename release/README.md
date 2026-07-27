@@ -29,10 +29,12 @@ python scripts/build_release_bundle.py `
 
 `production-manifest.json` — точный allowlist import closure для публичного
 `ft-agent run`. Это намеренно узкий downstream runtime: он принимает уже
-независимо принятый, hash-bound source package и выполняет только
-детерминированную schema-v2 iteration с одним reviewer. Discovery исходного ФТ,
-выбор scope, построение source evidence и independent source review в bundle не
-входят. Эти prerequisite-этапы пока остаются в qualification/development среде.
+независимо принятый, hash-bound source package, строит source-bound seed cases,
+вызывает model writer в режиме `model-runtime-prose` только для runtime prose,
+затем выполняет deterministic gates и один independent reviewer. Discovery
+исходного ФТ, выбор scope, построение source evidence и independent source
+review в bundle не входят. Эти prerequisite-этапы пока остаются в
+qualification/development среде.
 
 В bundle входит только `ft-test-case-iteration`, его компактные runtime
 references, environment probe и instruction resolver. Единственный instruction
@@ -73,10 +75,12 @@ adapter повторно загружает typed evidence basis, квалифи
 
 Профиль не содержит `evals/`, tests, FT inputs, work/history, benchmarks,
 overnight/incremental/standard controllers, dispatcher/cycle-state compatibility,
-UI automation, source qualification skills, legacy writer/reviewer skills и offline quality proof. Эти
-инструменты остаются только в qualification-профиле. Публичный production CLI
-содержит только `ft-agent run`; evidence pack является частью этого существующего
-маршрута и не добавляет promotion или новый entrypoint.
+UI automation, source qualification skills, legacy writer/reviewer skills и
+offline quality proof. Эти инструменты остаются только в qualification-профиле.
+Публичный production CLI содержит только `ft-agent run`; рекомендуемый route для
+новых production-конфигов — `writer_mode: model-runtime-prose`. Evidence pack
+является частью этого существующего маршрута и не добавляет promotion или новый
+entrypoint.
 
 ```powershell
 python scripts/build_release_bundle.py `

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "profile": "production",
-  "description": "Minimal downstream schema-v2 iteration runtime for an independently accepted prepared source package; source qualification, benchmark, UI and legacy orchestration are excluded.",
+  "description": "Minimal downstream schema-v2 production runtime for an independently accepted prepared source package; recommended route is model-runtime-prose writer plus deterministic gates and one independent reviewer; source qualification, benchmark, bridge, sharding, UI and legacy orchestration are excluded.",
   "include": [
     "README.md",
     "pyproject.toml",
