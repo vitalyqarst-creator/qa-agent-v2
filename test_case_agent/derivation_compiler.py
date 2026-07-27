@@ -849,6 +849,10 @@ _SOURCE_FIRST_SCOPE_PREFIX_MARKER = re.compile(
     r"(?![A-Za-zА-ЯЁа-яё])",
     re.IGNORECASE,
 )
+_SOURCE_FIRST_SCOPE_VALUE_AFTER_MARKER = re.compile(
+    r"(?:\u0441\u0442\u0430\u0442\u0443\u0441|status)",
+    re.IGNORECASE,
+)
 _SOURCE_FIRST_SUBJECT_PREFIXES = (
     "поле",
     "поля",
@@ -883,6 +887,46 @@ _SOURCE_FIRST_VALUE_LABEL_PREFIXES = (
 
 def _source_first_text(*values: str) -> str:
     return " ".join(value for value in values if value).casefold()
+
+
+def _source_first_contains_token_bounded(source: str, fragment: str) -> bool:
+    source_text = " ".join(source.split()).casefold()
+    fragment_text = " ".join(fragment.split()).casefold()
+    if not fragment_text:
+        return False
+    start = 0
+    while True:
+        index = source_text.find(fragment_text, start)
+        if index < 0:
+            return False
+        end = index + len(fragment_text)
+        left_cut = (
+            index > 0
+            and source_text[index - 1].isalnum()
+            and fragment_text[0].isalnum()
+        )
+        right_cut = (
+            end < len(source_text)
+            and source_text[end].isalnum()
+            and fragment_text[-1].isalnum()
+        )
+        if not left_cut and not right_cut:
+            return True
+        start = index + 1
+
+
+def _source_first_bound_label(label: str, values: Sequence[str]) -> bool:
+    return any(_source_first_contains_token_bounded(value, label) for value in values)
+
+
+def _source_first_scope_prefix_targets_label(prefix: str) -> bool:
+    matches = tuple(_SOURCE_FIRST_SCOPE_PREFIX_MARKER.finditer(prefix))
+    if not matches:
+        return False
+    tail = prefix[matches[-1].end() :]
+    if _SOURCE_FIRST_SCOPE_VALUE_AFTER_MARKER.search(tail) is not None:
+        return False
+    return not any(marker in tail for marker in ('`', '"', "В«", "В»"))
 
 
 def _source_first_runtime_labels_with_prefix(
@@ -941,6 +985,15 @@ def _source_first_subject_label(
     assertion: SourceAssertion,
     obligations: Sequence[PreparedObligation],
 ) -> str:
+    accepted_projection_values = (
+        assertion.canonical_statement,
+        *assertion.condition_clauses,
+        *assertion.action_clauses,
+        *assertion.oracle_clauses,
+        *(item.atomic_statement for item in obligations),
+        *(item.observable_oracle for item in obligations),
+        *(item.test_intent for item in obligations),
+    )
     default_subject = _source_first_default_subject_label(
         assertion.canonical_statement
     )
@@ -961,14 +1014,19 @@ def _source_first_subject_label(
         for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
             if _source_first_label_is_runtime_value(prefix):
                 continue
-            if any(marker in prefix for marker in _SOURCE_FIRST_SUBJECT_PREFIXES):
+            if any(marker in prefix for marker in _SOURCE_FIRST_SUBJECT_PREFIXES) and (
+                _source_first_bound_label(label, accepted_projection_values)
+            ):
                 return label
     evidence = " ".join(" ".join(group) for group in evidence_groups)
     match = _SOURCE_FIRST_EN_FIELD.search(evidence)
     if match is not None:
         return match.group(1).strip()
     row_subject = _source_first_row_subject_label(assertion.exact_source_text)
-    if row_subject:
+    if row_subject and _source_first_bound_label(
+        row_subject,
+        accepted_projection_values,
+    ):
         return row_subject
     # Safe fallback: the accepted canonical statement is already source-bound
     # and passes design-context validation, even if it is less readable.
@@ -1010,6 +1068,18 @@ def _source_first_scope_title(
     repo_root: Path,
     source_manifest: SourceAssertionManifest,
 ) -> str:
+    accepted_projection_values = tuple(
+        value
+        for assertion in source_manifest.assertions
+        if assertion.semantic_disposition == "testable"
+        for value in (
+            assertion.canonical_statement,
+            *assertion.condition_clauses,
+            *assertion.action_clauses,
+            *assertion.oracle_clauses,
+        )
+        if value
+    )
     block_title = ""
     for assertion in source_manifest.assertions:
         evidence = " ".join(
@@ -1022,12 +1092,20 @@ def _source_first_scope_title(
             )
         )
         for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
-            if _SOURCE_FIRST_SCOPE_PREFIX_MARKER.search(prefix) is not None:
+            if (
+                _source_first_scope_prefix_targets_label(prefix)
+                and _source_first_bound_label(label, accepted_projection_values)
+            ):
                 block_title = label
                 break
         if block_title:
             break
     card_title = _source_first_section_card_label(repo_root, source_manifest)
+    if card_title and not block_title and not _source_first_bound_label(
+        card_title,
+        accepted_projection_values,
+    ):
+        card_title = ""
     if card_title and block_title:
         return f"Карточка «{card_title}» / Блок «{block_title}»"
     if block_title:
@@ -1350,6 +1428,7 @@ def _source_first_effective_condition_binding(
     if (
         property_kind in _SOURCE_FIRST_ACTION_BOUND_CONDITION_KINDS
         and action_contract
+        and base_condition_precondition.strip()
     ):
         digest_basis: Any = {
             "condition_clauses": list(assertion.condition_clauses),

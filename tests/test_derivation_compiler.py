@@ -1115,6 +1115,132 @@ class DerivationCompilerTests(unittest.TestCase):
             derivation.fixture_values["OBL-PASS-CUR-004"],  # type: ignore[index]
         )
 
+    def test_source_first_action_bound_format_without_condition_stays_always(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PASS-CUR-004",
+            atom_id="ATOM-004",
+            obligation_ids=("OBL-PASS-CUR-004",),
+            exact_source_text=(
+                "Number Yes Yes Input Text Line BSR 88. "
+                "Format restriction: only six numeric symbols."
+            ),
+            canonical_statement="Field `Number` accepts only numeric symbols.",
+            polarity="negative",
+            condition_clauses=(),
+            action_clauses=("Try to enter non-numeric symbol `A`.",),
+            oracle_clauses=("Symbol `A` is not entered into the field.",),
+            requirement_codes=("BSR 88",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-004",
+                    source_refs=("SRC-001", "BSR 88"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Try to enter non-numeric symbol `A`.; "
+                        "Test data: Try to enter non-numeric symbol `A`."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-004",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("sample-scope", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivation = compiled.document.derivations[0]
+
+        self.assertEqual("source-format", derivation.property_kind)
+        self.assertEqual("always", derivation.condition_key)
+        self.assertEqual({}, compiled.condition_preconditions)
+        self.assertEqual(
+            "Try to enter non-numeric symbol `A`.",
+            derivation.validation_trigger,
+        )
+
+    def test_source_first_subject_label_ignores_unbound_broad_block_label(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-013A",
+            atom_id="ATOM-013A",
+            obligation_ids=("OBL-013A",),
+            exact_source_text=(
+                "AS.6 The system changes any entity in block `Partners` only "
+                "between statuses `Confirmed` and `Hidden`."
+            ),
+            canonical_statement=(
+                "Requisite status transitions are limited to Confirmed/Hidden."
+            ),
+            condition_clauses=("A requisite exists inside a partner.",),
+            action_clauses=("Change requisite status as an Administrator.",),
+            oracle_clauses=(
+                "Only Confirmed and Hidden statuses participate in the lifecycle.",
+            ),
+            requirement_codes=("AS.6",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-013A",
+                    source_refs=("SRC-001", "AS.6"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "A requisite exists inside a partner. "
+                        "Change requisite status as an Administrator."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-013A",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("sample-scope", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        graph = build_coverage_graph(
+            ft_slug="sample",
+            tc_prefix="SMP",
+            source_manifest=_Manifest("sample-scope", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+            derivations=compiled.document.derivations,
+        )
+        context = DesignContext(
+            package_id=obligations.package_id,
+            scope_title=compiled.scope_title,
+            base_preconditions=compiled.base_preconditions,
+            subject_labels=compiled.subject_labels,
+            condition_preconditions=compiled.condition_preconditions,
+        )
+
+        self.assertNotIn("Partners", set(compiled.subject_labels.values()))
+        self.assertEqual("sample-scope", compiled.scope_title)
+        build_test_design_plan(
+            graph,
+            context=context,
+            expected_package_id=obligations.package_id,
+        )
+
     def test_source_first_date_window_splits_positive_boundary_calibration(self) -> None:
         assertion = replace(
             self._assertion(),
