@@ -955,6 +955,73 @@ class SourceAssertionManifestTests(unittest.TestCase):
         self.assertEqual("user", clarification.authority)
         self.assertEqual("user-confirmed", clarification.response_type)
 
+    def test_reused_clarification_preserves_source_scope_provenance(self) -> None:
+        manifest, clarification, clarification_path = (
+            self._build_with_user_clarification()
+        )
+        clarification_path.write_text(
+            clarification_path.read_text(encoding="utf-8").replace(
+                "| CLR-AMS-001 | GAP-AMS-001 | applications-menu-search |",
+                "| CLR-AMS-001 | GAP-AMS-001 | legacy-applications-menu-search |",
+            ),
+            encoding="utf-8",
+        )
+        evidence_sha = sha256_file(clarification_path)
+        clarification = replace(
+            clarification,
+            evidence_source_sha256=evidence_sha,
+            source_scope_slug="legacy-applications-menu-search",
+            scope_slug_override_reason=(
+                "Approved clarification is reused for a narrower selected scope "
+                "without changing its source meaning."
+            ),
+        )
+        manifest = replace(
+            manifest,
+            clarifications=(clarification,),
+            evidence_sources=(
+                replace(manifest.evidence_sources[0], sha256=evidence_sha),
+            ),
+        )
+
+        manifest.validate(self.repo_root)
+        payload = manifest.to_dict()
+        restored = SourceAssertionManifest.from_dict(payload)
+        restored.validate(self.repo_root)
+        restored_clarification = restored.clarifications[0]
+        self.assertEqual(
+            "legacy-applications-menu-search",
+            restored_clarification.source_scope_slug,
+        )
+        self.assertEqual(
+            clarification.scope_slug_override_reason,
+            restored_clarification.scope_slug_override_reason,
+        )
+        self.assertEqual(
+            "legacy-applications-menu-search",
+            restored.to_compact_reviewer_basis()["clarifications"][0][
+                "source_scope_slug"
+            ],
+        )
+
+    def test_reused_clarification_scope_provenance_must_be_complete(self) -> None:
+        _, clarification, _ = self._build_with_user_clarification()
+        with_source_scope = clarification.to_dict()
+        with_source_scope["source_scope_slug"] = "legacy-applications-menu-search"
+        self.assert_contract_error(
+            "partial-clarification-scope-override",
+            lambda: ApprovedClarification.from_dict(with_source_scope),
+        )
+
+        with_reason = clarification.to_dict()
+        with_reason["scope_slug_override_reason"] = (
+            "Approved clarification is reused for a narrower selected scope."
+        )
+        self.assert_contract_error(
+            "partial-clarification-scope-override",
+            lambda: ApprovedClarification.from_dict(with_reason),
+        )
+
     def test_card_clarification_evidence_is_hash_and_clause_bound(self) -> None:
         manifest, clarification, _ = self._build_with_user_clarification(
             clarification_format="card",

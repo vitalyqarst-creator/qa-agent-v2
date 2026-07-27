@@ -13,7 +13,7 @@ Before launch, these inputs must exist:
 
 - package-local `scope-registry.json` with the selected scope, stable `tc_prefix`, structural XHTML boundary, and complete DOCX/XHTML/PDF/support/mockups registry;
 - DOCX as source of truth and matching XHTML as mandatory extraction source;
-- source evidence with manifest v4, an independent accepted review receipt for the exact digest, and a hash-bound semantic compiler projection;
+- source evidence with manifest v4 and an independent accepted review receipt for the exact digest; a semantic compiler projection is optional and belongs only to an explicitly requested bridge route;
 - compiler-v3 obligations;
 - package `AGENT-NOTES.md`, when present.
 

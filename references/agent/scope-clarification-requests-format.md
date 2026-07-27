@@ -91,6 +91,10 @@ Production-ready semantics разрешено строить только из �
 `product-owner/product-confirmed`. `working-assumption`, `rejected`,
 `superseded`, `unanswered` и `not-provided` не являются утверждённым evidence.
 
+Для reused approved clarification из более широкого source scope manifest может
+добавить только вместе `source_scope_slug` и `scope_slug_override_reason`; это
+не BA-facing поля карточек, а provenance для `source-assertions.json`.
+
 ## Достаточность и детализация вопроса
 
 Вопрос к БА должен быть самодостаточным: человек должен понять его без чтения

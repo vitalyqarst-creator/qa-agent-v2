@@ -1145,6 +1145,8 @@ class ApprovedClarification:
     evidence_source_sha256: str
     binding_scope: str = "requirement-code"
     source_row_ids: tuple[str, ...] = ()
+    source_scope_slug: str = ""
+    scope_slug_override_reason: str = ""
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ApprovedClarification":
@@ -1164,15 +1166,28 @@ class ApprovedClarification:
                 "evidence_source_path",
                 "evidence_source_sha256",
             },
-            optional={"binding_scope", "source_row_ids"},
+            optional={
+                "binding_scope",
+                "source_row_ids",
+                "source_scope_slug",
+                "scope_slug_override_reason",
+            },
             label="approved clarification",
         )
         has_binding_scope = "binding_scope" in payload
         has_source_row_ids = "source_row_ids" in payload
+        has_source_scope_slug = "source_scope_slug" in payload
+        has_scope_slug_override_reason = "scope_slug_override_reason" in payload
         if has_binding_scope != has_source_row_ids:
             _fail(
                 "partial-clarification-binding-scope",
                 "approved clarification must declare binding_scope and source_row_ids together",
+            )
+        if has_source_scope_slug != has_scope_slug_override_reason:
+            _fail(
+                "partial-clarification-scope-override",
+                "approved clarification must declare source_scope_slug and "
+                "scope_slug_override_reason together",
             )
         result = cls(
             clarification_id=_nonempty_text(
@@ -1235,6 +1250,22 @@ class ApprovedClarification:
                 if has_source_row_ids
                 else ()
             ),
+            source_scope_slug=(
+                _nonempty_text(
+                    payload["source_scope_slug"],
+                    "approved clarification.source_scope_slug",
+                )
+                if has_source_scope_slug
+                else ""
+            ),
+            scope_slug_override_reason=(
+                _nonempty_text(
+                    payload["scope_slug_override_reason"],
+                    "approved clarification.scope_slug_override_reason",
+                )
+                if has_scope_slug_override_reason
+                else ""
+            ),
         )
         result.validate_shape()
         return result
@@ -1251,6 +1282,21 @@ class ApprovedClarification:
                 "approved clarification.gap_id must name one GAP-*",
             )
         _nonempty_text(self.scope_slug, "approved clarification.scope_slug")
+        if bool(self.source_scope_slug) != bool(self.scope_slug_override_reason):
+            _fail(
+                "partial-clarification-scope-override",
+                f"{self.clarification_id} must declare source_scope_slug and "
+                "scope_slug_override_reason together",
+            )
+        if self.source_scope_slug:
+            _nonempty_text(
+                self.source_scope_slug,
+                "approved clarification.source_scope_slug",
+            )
+            _nonempty_text(
+                self.scope_slug_override_reason,
+                "approved clarification.scope_slug_override_reason",
+            )
         if self.binding_scope not in CLARIFICATION_BINDING_SCOPES:
             _fail(
                 "invalid-clarification-binding-scope",
@@ -1351,7 +1397,7 @@ class ApprovedClarification:
 
     def to_dict(self) -> dict[str, Any]:
         self.validate_shape()
-        return {
+        payload: dict[str, Any] = {
             "clarification_id": self.clarification_id,
             "gap_id": self.gap_id,
             "scope_slug": self.scope_slug,
@@ -1367,6 +1413,10 @@ class ApprovedClarification:
             "binding_scope": self.binding_scope,
             "source_row_ids": list(self.source_row_ids),
         }
+        if self.source_scope_slug:
+            payload["source_scope_slug"] = self.source_scope_slug
+            payload["scope_slug_override_reason"] = self.scope_slug_override_reason
+        return payload
 
 
 @dataclass(frozen=True)
@@ -3063,7 +3113,9 @@ class SourceAssertionManifest:
             expected_row = {
                 "clarification_id": clarification.clarification_id,
                 "gap_id": clarification.gap_id,
-                "scope_slug": clarification.scope_slug,
+                "scope_slug": (
+                    clarification.source_scope_slug or clarification.scope_slug
+                ),
                 "authority": clarification.authority,
                 "user_response": clarification.exact_answer,
                 "response_status": clarification.response_status,
@@ -3232,19 +3284,29 @@ class SourceAssertionManifest:
         }
         for evidence_path in sorted(bound_clarification_paths):
             canonical_rows = clarification_rows_by_path[evidence_path]
+            registered_by_id_for_path = {
+                item.clarification_id: item
+                for item in self.clarifications
+                if item.evidence_source_path == evidence_path
+            }
             canonical_approved_ids = {
                 clarification_id
                 for clarification_id, row in canonical_rows.items()
-                if row["scope_slug"] == self.scope_slug
+                if (
+                    row["scope_slug"] == self.scope_slug
+                    or (
+                        clarification_id in registered_by_id_for_path
+                        and registered_by_id_for_path[
+                            clarification_id
+                        ].source_scope_slug
+                        == row["scope_slug"]
+                    )
+                )
                 and row["response_status"] == "answered"
                 and row["response_type"]
                 in APPROVED_CLARIFICATION_RESPONSE_TYPES
             }
-            registered_ids = {
-                item.clarification_id
-                for item in self.clarifications
-                if item.evidence_source_path == evidence_path
-            }
+            registered_ids = set(registered_by_id_for_path)
             if canonical_approved_ids != registered_ids:
                 _fail(
                     "clarification-record-set-mismatch",
