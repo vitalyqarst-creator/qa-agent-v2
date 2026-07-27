@@ -553,13 +553,18 @@ class CoverageGraphTests(unittest.TestCase):
         )
 
         self.assertEqual((), validate_coverage_graph(graph))
+        self.assertEqual(3, len(graph.cases))
         by_variant = {
             case.case_key.split("|")[3]: case.status for case in graph.cases
         }
         self.assertEqual("executable", by_variant["length-limit-valid-boundary"])
         self.assertEqual(
             "candidate-ui-calibration",
-            by_variant["length-limit-invalid-boundary"],
+            by_variant["length-limit-too-short-boundary"],
+        )
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["length-limit-too-long-boundary"],
         )
 
     def test_exact_length_resolved_oracle_splits_to_executable_boundaries(self) -> None:
@@ -567,7 +572,15 @@ class CoverageGraphTests(unittest.TestCase):
             "sample-scope",
             (FakeAssertion("ASSERT-001", "SRC-001", ("BSR 1",), ("OBL-001",)),),
         )
-        prepared = obligation_set(obligation("OBL-001", "ATOM-001", "SRC-001"))
+        prepared = obligation_set(
+            replace(
+                obligation("OBL-001", "ATOM-001", "SRC-001"),
+                observable_oracle=(
+                    "Пятый символ не вводится; в поле остается ограниченное "
+                    "значение длиной не более 4 символов."
+                ),
+            )
+        )
         graph = build_coverage_graph(
             ft_slug="Sample",
             tc_prefix="SMP",
@@ -582,7 +595,13 @@ class CoverageGraphTests(unittest.TestCase):
                     "source-format",
                     {"OBL-001": "length-limit"},
                     validation_trigger="Попытаться ввести пятый символ.",
+                    source_oracle_ids={"OBL-001": "SO-CAL-004"},
                     fixture_values={"OBL-001": ("1234", "123", "12345")},
+                    calibration_questions={
+                        "OBL-001": (
+                            "Какой точный UI-отклик подтверждает короткую длину?"
+                        )
+                    },
                 ),
             ),
         )
@@ -592,7 +611,11 @@ class CoverageGraphTests(unittest.TestCase):
             case.case_key.split("|")[3]: case.status for case in graph.cases
         }
         self.assertEqual("executable", by_variant["length-limit-valid-boundary"])
-        self.assertEqual("executable", by_variant["length-limit-invalid-boundary"])
+        self.assertEqual(
+            "candidate-ui-calibration",
+            by_variant["length-limit-too-short-boundary"],
+        )
+        self.assertEqual("executable", by_variant["length-limit-too-long-boundary"])
 
     def test_date_boundary_calibration_splits_valid_boundary_and_future_case(self) -> None:
         manifest = FakeManifest(

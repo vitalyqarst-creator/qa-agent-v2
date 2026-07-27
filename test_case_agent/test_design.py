@@ -1222,6 +1222,8 @@ _SOURCE_FORMAT_NEGATIVE_VARIANTS = {
     "digits-only",
     "length-limit",
     "repeated-digits",
+    "length-limit-too-short-boundary",
+    "length-limit-too-long-boundary",
 }
 
 
@@ -1844,13 +1846,26 @@ def _materialize(
                 + "."
             )
         else:
-            invalid_fixtures = (
-                fixtures[1:]
-                if case_variant
-                in {"allowed-class-invalid", "length-limit-invalid-boundary"}
-                else fixtures
-            )
-            title = f"Недопустимые классы формата: {_display_subject(label)}"
+            if case_variant == "length-limit-too-short-boundary":
+                invalid_fixtures = fixtures[1:2]
+                title = (
+                    f"Недопустимое короткое значение точной длины: "
+                    f"{_display_subject(label)}"
+                )
+            elif case_variant == "length-limit-too-long-boundary":
+                invalid_fixtures = fixtures[2:3] or fixtures[1:]
+                title = (
+                    f"Недопустимое длинное значение точной длины: "
+                    f"{_display_subject(label)}"
+                )
+            else:
+                invalid_fixtures = (
+                    fixtures[1:]
+                    if case_variant
+                    in {"allowed-class-invalid", "length-limit-invalid-boundary"}
+                    else fixtures
+                )
+                title = f"Недопустимые классы формата: {_display_subject(label)}"
             case_type = "негативный"
             question_fixtures = invalid_fixtures
             test_data = [

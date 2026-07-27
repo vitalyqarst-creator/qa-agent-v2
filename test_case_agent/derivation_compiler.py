@@ -1449,12 +1449,20 @@ def compile_source_first_property_derivations(
                 )
                 if exact_length_values:
                     fixtures = exact_length_values
-                    if len(exact_length_values) >= 3 and not expected_oracle:
-                        source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
+                    if len(exact_length_values) >= 3:
+                        source_oracles.setdefault(
+                            obligation_id,
+                            "SO-CAL-" + hashlib.sha256(
                             obligation_id.encode("utf-8")
-                        ).hexdigest()[:16].upper()
-                        questions[obligation_id] = (
-                            expected_oracle or prepared.atomic_statement
+                            ).hexdigest()[:16].upper(),
+                        )
+                        questions.setdefault(
+                            obligation_id,
+                            (
+                                "Какой точный UI-отклик подтверждает, что "
+                                "значение короче точной длины не принимается "
+                                "как валидное?"
+                            ),
                         )
             if property_kind == "source-format" and variant == "digits-only":
                 digit_class_values = _source_first_digits_only_fixture_values(

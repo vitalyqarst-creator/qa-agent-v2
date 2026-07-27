@@ -147,6 +147,16 @@ _RUNTIME_COMMIT_ACTION_RE = re.compile(
     r"нажать\s+`?(?:далее|готово|ok|ок)`?|снять\s+фокус|blur)",
     re.IGNORECASE,
 )
+_RUNTIME_FIELD_DISPLAY_CHECK_RE = re.compile(
+    r"(?:провер\w*|убедить\w*)[^.\n;]{0,100}"
+    r"(?:отображ\w*|содерж\w*|установлен\w*)",
+    re.IGNORECASE,
+)
+_RUNTIME_FIELD_DISPLAY_ORACLE_RE = re.compile(
+    r"(?:пол[ея]|field)[^.\n;]{0,120}"
+    r"(?:отображ\w*|содерж\w*|установлен\w*)",
+    re.IGNORECASE,
+)
 _RUNTIME_TEMPLATE_ORACLE_RE = re.compile(
     r"(?:маск\w*|шаблон\w*|template)",
     re.IGNORECASE,
@@ -1744,6 +1754,41 @@ def _validate_runtime_writer_executes_seed_prepared_values(
         )
 
 
+def _validate_runtime_writer_does_not_accept_invalid_length_boundary(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    steps: Sequence[str],
+    expected_result: str,
+) -> None:
+    if not any(
+        marker in case_key
+        for marker in (
+            "length-limit-too-short-boundary",
+            "length-limit-too-long-boundary",
+            "length-limit-invalid-boundary",
+        )
+    ):
+        return
+    invalid_values = _seed_invalid_values(seed)
+    if not invalid_values:
+        return
+    for value in invalid_values:
+        if value in expected_result and _RUNTIME_FIELD_DISPLAY_ORACLE_RE.search(
+            expected_result
+        ):
+            raise IterationContractError(
+                "runtime writer returned invalid exact-length value display oracle "
+                f"for {case_key}: {value!r}"
+            )
+        for step in steps:
+            if value in step and _RUNTIME_FIELD_DISPLAY_CHECK_RE.search(step):
+                raise IterationContractError(
+                    "runtime writer returned invalid exact-length value display "
+                    f"check for {case_key}: {value!r}"
+                )
+
+
 def _runtime_nonconcrete_value_problem(
     *,
     test_data: Sequence[str],
@@ -2087,6 +2132,12 @@ def validate_runtime_writer_response(
             case_key=case_key,
             seed=seed,
             steps=steps,
+        )
+        _validate_runtime_writer_does_not_accept_invalid_length_boundary(
+            case_key=case_key,
+            seed=seed,
+            steps=steps,
+            expected_result=expected_result,
         )
         _validate_runtime_writer_preserves_seed_no_test_data(
             case_key=case_key,

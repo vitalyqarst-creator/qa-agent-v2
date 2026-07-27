@@ -21,6 +21,13 @@ class CoverageGraphError(ValueError):
 
 _REQ_CODE = re.compile(r"\b(?:BSR|GSR|DIT)\s+[A-Za-z0-9._/-]+\b", re.IGNORECASE)
 _IDENTIFIER = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]*")
+_LENGTH_TOO_LONG_ORACLE_RE = re.compile(
+    r"(?:пят\w*|седьм\w*|лишн\w*|сверх|более|длинн\w*)"
+    r"[^.\n;]{0,120}(?:не\s+ввод\w*|огранич\w*|лимит\w*)"
+    r"|(?:не\s+ввод\w*|огранич\w*|лимит\w*)"
+    r"[^.\n;]{0,120}(?:пят\w*|седьм\w*|лишн\w*|сверх|более|длинн\w*)",
+    re.IGNORECASE,
+)
 _PROPERTY_DISPOSITIONS = {"tc", "gap", "not-applicable"}
 _CASE_STATUSES = {"executable", "candidate-ui-calibration"}
 _SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -31,6 +38,8 @@ _SPLIT_CASE_VARIANTS_BY_KIND = {
             "allowed-class-invalid",
             "length-limit-valid-boundary",
             "length-limit-invalid-boundary",
+            "length-limit-too-short-boundary",
+            "length-limit-too-long-boundary",
         }
     ),
     "source-date-boundary": frozenset(
@@ -62,6 +71,10 @@ def _case_coverage_variant(case_key: str) -> str:
     return parts[3] if len(parts) == 5 else ""
 
 
+def _has_length_too_long_oracle(value: str) -> bool:
+    return _LENGTH_TOO_LONG_ORACLE_RE.search(value) is not None
+
+
 def _split_case_specs_for_obligation(
     *,
     scope_slug: str,
@@ -71,6 +84,7 @@ def _split_case_specs_for_obligation(
     condition_key: str,
     fixture_values: Sequence[str],
     effective_calibration_status: str,
+    has_executable_observable_oracle: bool = False,
 ) -> tuple[tuple[str, str], ...]:
     if (
         property_kind == "source-format"
@@ -105,10 +119,14 @@ def _split_case_specs_for_obligation(
         and variant == "length-limit"
         and len(tuple(fixture_values)) >= 3
     ):
-        invalid_status = (
-            "candidate-ui-calibration"
-            if effective_calibration_status == "ui-calibration-required"
-            else "executable"
+        too_long_status = (
+            "executable"
+            if has_executable_observable_oracle
+            else (
+                "candidate-ui-calibration"
+                if effective_calibration_status == "ui-calibration-required"
+                else "executable"
+            )
         )
         return (
             (
@@ -126,10 +144,20 @@ def _split_case_specs_for_obligation(
                     scope_slug=scope_slug,
                     subject_key=subject_key,
                     property_kind=property_kind,
-                    coverage_variant="length-limit-invalid-boundary",
+                    coverage_variant="length-limit-too-short-boundary",
                     condition_key=condition_key,
                 ),
-                invalid_status,
+                "candidate-ui-calibration",
+            ),
+            (
+                semantic_case_key(
+                    scope_slug=scope_slug,
+                    subject_key=subject_key,
+                    property_kind=property_kind,
+                    coverage_variant="length-limit-too-long-boundary",
+                    condition_key=condition_key,
+                ),
+                too_long_status,
             ),
         )
     if (
@@ -234,30 +262,55 @@ def _duplicate_obligation_case_coverage_allowed(
     statuses = {variant: case.status for variant, case in zip(variants, cases)}
     if property_kind == "source-format":
         if obligation.coverage_variant == "allowed-class":
-            return (
-                statuses.get("allowed-class-valid") == "executable"
-                and statuses.get("allowed-class-invalid") == "candidate-ui-calibration"
+            expected = {
+                "allowed-class-valid": {"executable"},
+                "allowed-class-invalid": {"candidate-ui-calibration"},
+            }
+            return all(
+                variant in expected and status in expected[variant]
+                for variant, status in statuses.items()
             )
         if obligation.coverage_variant == "length-limit":
-            return (
-                statuses.get("length-limit-valid-boundary") == "executable"
-                and statuses.get("length-limit-invalid-boundary")
-                in {"candidate-ui-calibration", "executable"}
+            expected = {
+                "length-limit-valid-boundary": {"executable"},
+                "length-limit-too-short-boundary": {"candidate-ui-calibration"},
+                "length-limit-too-long-boundary": {
+                    "candidate-ui-calibration",
+                    "executable",
+                },
+            }
+            return all(
+                variant in expected and status in expected[variant]
+                for variant, status in statuses.items()
             )
         return False
     if property_kind == "source-date-boundary":
         if obligation.coverage_variant == "not-future":
-            return (
-                statuses.get("not-future-valid-boundary") == "executable"
-                and statuses.get("not-future-invalid-future")
-                in {"candidate-ui-calibration", "executable"}
+            expected = {
+                "not-future-valid-boundary": {"executable"},
+                "not-future-invalid-future": {
+                    "candidate-ui-calibration",
+                    "executable",
+                },
+            }
+            return all(
+                variant in expected and status in expected[variant]
+                for variant, status in statuses.items()
             )
         if obligation.coverage_variant == "date-window":
-            return (
-                statuses.get("date-window-valid-boundary")
-                in {"candidate-ui-calibration", "executable"}
-                and statuses.get("date-window-invalid-boundary")
-                in {"candidate-ui-calibration", "executable"}
+            expected = {
+                "date-window-valid-boundary": {
+                    "candidate-ui-calibration",
+                    "executable",
+                },
+                "date-window-invalid-boundary": {
+                    "candidate-ui-calibration",
+                    "executable",
+                },
+            }
+            return all(
+                variant in expected and status in expected[variant]
+                for variant, status in statuses.items()
             )
         return False
     return False
@@ -586,8 +639,14 @@ def build_coverage_graph(
             if (
                 effective_calibration_status == "ui-calibration-required"
                 and not (
-                    property_kind == "source-date-boundary"
-                    and variant == "date-window"
+                    (
+                        property_kind == "source-date-boundary"
+                        and variant == "date-window"
+                    )
+                    or (
+                        property_kind == "source-format"
+                        and variant == "length-limit"
+                    )
                 )
             ):
                 observable_oracle = item.atomic_statement
@@ -620,6 +679,14 @@ def build_coverage_graph(
                     condition_key=condition_key,
                     fixture_values=fixture_values,
                     effective_calibration_status=effective_calibration_status,
+                    has_executable_observable_oracle=(
+                        _has_length_too_long_oracle(item.observable_oracle)
+                        if (
+                            property_kind == "source-format"
+                            and variant == "length-limit"
+                        )
+                        else bool(item.observable_oracle.strip())
+                    ),
                 )
                 for case_key, status in split_specs:
                     case_specs.append((case_key, obligation_id, status))

@@ -1367,11 +1367,20 @@ class TestDesignTests(unittest.TestCase):
                 CoverageCase(
                     case_key=(
                         "customer|customer-name|source-format|"
-                        "length-limit-invalid-boundary|always"
+                        "length-limit-too-short-boundary|always"
                     ),
-                    tc_id="TC-CUST-LEN-INVALID",
+                    tc_id="TC-CUST-LEN-SHORT",
                     obligation_ids=("OBL-001",),
                     status="candidate-ui-calibration",
+                ),
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-format|"
+                        "length-limit-too-long-boundary|always"
+                    ),
+                    tc_id="TC-CUST-LEN-LONG",
+                    obligation_ids=("OBL-001",),
+                    status="executable",
                 ),
             ),
             obligations=(
@@ -1389,18 +1398,27 @@ class TestDesignTests(unittest.TestCase):
         valid_case = next(
             item for item in cases if "length-limit-valid-boundary" in item.case_key
         )
-        invalid_case = next(
-            item for item in cases if "length-limit-invalid-boundary" in item.case_key
+        short_case = next(
+            item for item in cases if "length-limit-too-short-boundary" in item.case_key
+        )
+        long_case = next(
+            item for item in cases if "length-limit-too-long-boundary" in item.case_key
         )
 
         self.assertEqual("позитивный", valid_case.case_type)
         self.assertIn("1234", "\n".join(valid_case.steps))
         self.assertNotIn("12345", "\n".join(valid_case.steps))
-        self.assertEqual("негативный", invalid_case.case_type)
-        self.assertEqual("candidate-ui-calibration", invalid_case.status)
-        self.assertIn("123", "\n".join(invalid_case.steps))
-        self.assertIn("12345", "\n".join(invalid_case.steps))
-        self.assertIn("UI-калибровки", invalid_case.expected_result)
+        self.assertEqual("негативный", short_case.case_type)
+        self.assertEqual("candidate-ui-calibration", short_case.status)
+        self.assertIn("123", "\n".join(short_case.steps))
+        self.assertNotIn("12345", "\n".join(short_case.steps))
+        self.assertIn("UI-калибровки", short_case.expected_result)
+        self.assertNotIn("отображает значение `123`", short_case.expected_result)
+        self.assertEqual("негативный", long_case.case_type)
+        self.assertEqual("executable", long_case.status)
+        self.assertNotIn("Недопустимое значение: `123`", "\n".join(long_case.test_data))
+        self.assertIn("12345", "\n".join(long_case.steps))
+        self.assertIn("Пятый символ не вводится", long_case.expected_result)
 
     def test_source_date_window_split_renders_boundary_conditions(self) -> None:
         graph = _graph(

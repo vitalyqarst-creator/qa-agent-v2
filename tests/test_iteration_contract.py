@@ -850,6 +850,65 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_rejects_invalid_exact_length_display_oracle(self) -> None:
+        graph = _graph(
+            kind="source-format",
+            fixtures=("1234", "123"),
+            status="candidate-ui-calibration",
+            question="Как UI отклоняет значение короче точной длины?",
+        )
+        graph = replace(
+            graph,
+            obligations=(
+                replace(
+                    graph.obligations[0],
+                    coverage_variant="length-limit",
+                    atomic_statement=(
+                        "Поле «Серия» принимает ровно 4 числовых символа."
+                    ),
+                    observable_oracle=(
+                        "Поле «Серия» принимает ровно 4 числовых символа."
+                    ),
+                ),
+            ),
+            cases=(
+                CoverageCase(
+                    case_key=(
+                        "customer|customer-name|source-format|"
+                        "length-limit-too-short-boundary|always"
+                    ),
+                    tc_id="TC-CUST-LEN-SHORT",
+                    obligation_ids=("OBL-001",),
+                    status="candidate-ui-calibration",
+                ),
+            ),
+        )
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    steps=[
+                        "Ввести `123` в поле «Серия» и проверить отображаемое значение.",
+                    ],
+                    expected_result="Поле «Серия» отображает значение `123`.",
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "invalid exact-length value display",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_rejects_negated_rejection_positive_oracle(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
