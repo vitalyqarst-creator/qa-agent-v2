@@ -380,6 +380,36 @@ def _validate_non_testable_prepared_context(
         )
 
 
+def _accepted_oracle_clause_projection(
+    assertion: SourceAssertion,
+    prepared_oracle: str,
+    *,
+    obligation_id: str,
+) -> tuple[str, ...]:
+    clauses = tuple(assertion.oracle_clauses)
+    expected_full_oracle = "; ".join(clauses)
+    if prepared_oracle == expected_full_oracle:
+        return clauses
+    if prepared_oracle in clauses:
+        return (prepared_oracle,)
+    _fail(
+        "prepared-oracle-drift",
+        f"{obligation_id} oracle differs from accepted source clauses",
+    )
+
+
+def _validate_oracle_clause_coverage(
+    assertion: SourceAssertion,
+    covered_clauses: set[str],
+) -> None:
+    missing = [clause for clause in assertion.oracle_clauses if clause not in covered_clauses]
+    if missing:
+        _fail(
+            "prepared-oracle-drift",
+            f"{assertion.assertion_id} accepted oracle clauses are not covered by prepared obligations",
+        )
+
+
 def _fixture_values(
     semantic: Mapping[str, Any], obligation: PreparedObligation
 ) -> tuple[str, ...]:
@@ -1416,6 +1446,7 @@ def compile_source_first_property_derivations(
         property_kinds: set[str] = set()
         action_contract = "; ".join(assertion.action_clauses)
         expected_oracle = "; ".join(assertion.oracle_clauses)
+        covered_oracle_clauses: set[str] = set()
         for obligation_id in assertion.obligation_ids:
             prepared = prepared_by_id[obligation_id]
             if prepared.traceability_atom_id != assertion.atom_id:
@@ -1423,11 +1454,13 @@ def compile_source_first_property_derivations(
                     "obligation-chain-drift",
                     f"{obligation_id} is outside its accepted ASSERT/ATOM chain",
                 )
-            if prepared.observable_oracle != expected_oracle:
-                _fail(
-                    "prepared-oracle-drift",
-                    f"{obligation_id} oracle differs from accepted source clauses",
+            covered_oracle_clauses.update(
+                _accepted_oracle_clause_projection(
+                    assertion,
+                    prepared.observable_oracle,
+                    obligation_id=obligation_id,
                 )
+            )
             fixtures = _source_first_fixture_values(repo_root, prepared)
             property_kind, variant = _source_first_kind_and_variant(
                 assertion=assertion,
@@ -1546,19 +1579,22 @@ def compile_source_first_property_derivations(
                 source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                     obligation_id.encode("utf-8")
                 ).hexdigest()[:16].upper()
-                question = expected_oracle or prepared.atomic_statement
+                question = prepared.observable_oracle or prepared.atomic_statement
                 if not question:
                     _fail("calibration-question-missing", obligation_id)
                 questions[obligation_id] = question
             elif _needs_validation_trigger_calibration(
                 polarity=assertion.polarity,
-                oracle=expected_oracle,
+                oracle=prepared.observable_oracle,
                 action=action_contract,
             ) and not _source_first_has_explicit_validation_action(action_contract):
                 source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                     obligation_id.encode("utf-8")
                 ).hexdigest()[:16].upper()
-                questions[obligation_id] = expected_oracle or prepared.atomic_statement
+                questions[obligation_id] = (
+                    prepared.observable_oracle or prepared.atomic_statement
+                )
+        _validate_oracle_clause_coverage(assertion, covered_oracle_clauses)
         if len(property_kinds) != 1:
             _fail(
                 "mixed-property-kind",
@@ -1883,6 +1919,8 @@ def compile_property_derivations(
         questions: dict[str, str] = {}
         property_kinds: set[str] = set()
         action_contract = "; ".join(assertion.action_clauses)
+        expected_oracle = "; ".join(assertion.oracle_clauses)
+        covered_oracle_clauses: set[str] = set()
         for obligation_id in assertion.obligation_ids:
             prepared = prepared_by_id[obligation_id]
             semantic = raw_by_obligation[obligation_id]
@@ -1895,12 +1933,13 @@ def compile_property_derivations(
                     "obligation-chain-drift",
                     f"{obligation_id} is outside its accepted ASSERT/ATOM/package chain",
                 )
-            expected_oracle = "; ".join(assertion.oracle_clauses)
-            if prepared.observable_oracle != expected_oracle:
-                _fail(
-                    "prepared-oracle-drift",
-                    f"{obligation_id} oracle differs from accepted source clauses",
+            covered_oracle_clauses.update(
+                _accepted_oracle_clause_projection(
+                    assertion,
+                    prepared.observable_oracle,
+                    obligation_id=obligation_id,
                 )
+            )
             fixtures = _fixture_values(semantic, prepared)
             derived_signals = format_calibration_signals.get(obligation_id, ())
             if derived_signals:
@@ -1972,7 +2011,7 @@ def compile_property_derivations(
                     source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
                         obligation_id.encode("utf-8")
                     ).hexdigest()[:16].upper()
-                question = oracle_questions.get(obligation_id) or expected_oracle
+                question = oracle_questions.get(obligation_id) or prepared.observable_oracle
                 if not question:
                     _fail("calibration-question-missing", obligation_id)
                 questions[obligation_id] = question
@@ -1986,7 +2025,7 @@ def compile_property_derivations(
                 )
             elif _needs_validation_trigger_calibration(
                 polarity=assertion.polarity,
-                oracle=expected_oracle,
+                oracle=prepared.observable_oracle,
                 action=action_contract,
             ):
                 # Never invent a Save, Continue or blur trigger.  Preserve the
@@ -2030,7 +2069,7 @@ def compile_property_derivations(
                 property_type=str(semantic.get("property_type", "")).casefold(),
                 coverage_class=variant.casefold(),
                 statement=prepared.atomic_statement,
-                oracle=expected_oracle,
+                oracle=prepared.observable_oracle,
                 action=action_contract,
             ):
                 source_oracles.setdefault(
@@ -2048,6 +2087,7 @@ def compile_property_derivations(
                     f"{target} значение `текущая дата + 1 день` не "
                     "принимается, и какое действие запускает эту проверку?"
                 )
+        _validate_oracle_clause_coverage(assertion, covered_oracle_clauses)
         if len(property_kinds) != 1:
             _fail(
                 "mixed-property-kind",

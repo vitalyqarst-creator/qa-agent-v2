@@ -143,6 +143,116 @@ class DerivationCompilerTests(unittest.TestCase):
             derivation.fixture_values["OBL-PASS-CUR-028"],  # type: ignore[index]
         )
 
+    def test_source_first_allows_exact_split_oracle_clauses_across_obligations(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-SPLIT",
+            atom_id="ATOM-SPLIT",
+            exact_source_text="AS 6. The widget displays primary and secondary values.",
+            canonical_statement="The widget displays primary and secondary values.",
+            action_clauses=("Open the widget.",),
+            oracle_clauses=("Primary value is displayed.", "Secondary value is displayed."),
+            requirement_codes=("AS 6",),
+            obligation_ids=("OBL-PRIMARY", "OBL-SECONDARY"),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PRIMARY",
+                    source_refs=("SRC-001", "AS 6"),
+                    atomic_statement="The widget displays primary value.",
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent="Open the widget and check the primary value.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-SPLIT",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-SECONDARY",
+                    source_refs=("SRC-001", "AS 6"),
+                    atomic_statement="The widget displays secondary value.",
+                    observable_oracle=assertion.oracle_clauses[1],
+                    test_intent="Open the widget and check the secondary value.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-SPLIT",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("sample-scope", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+
+        derivation = compiled.document.derivations[0]
+        self.assertEqual(
+            {"OBL-PRIMARY", "OBL-SECONDARY"},
+            set(derivation.obligation_variants),
+        )
+
+    def test_source_first_rejects_split_oracle_when_clause_is_lost(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-SPLIT",
+            atom_id="ATOM-SPLIT",
+            exact_source_text="AS 6. The widget displays primary and secondary values.",
+            canonical_statement="The widget displays primary and secondary values.",
+            action_clauses=("Open the widget.",),
+            oracle_clauses=("Primary value is displayed.", "Secondary value is displayed."),
+            requirement_codes=("AS 6",),
+            obligation_ids=("OBL-PRIMARY", "OBL-SECONDARY"),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PRIMARY",
+                    source_refs=("SRC-001", "AS 6"),
+                    atomic_statement="The widget displays primary value.",
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent="Open the widget and check the primary value.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-SPLIT",
+                ),
+                PreparedObligation(
+                    obligation_id="OBL-SECONDARY",
+                    source_refs=("SRC-001", "AS 6"),
+                    atomic_statement="The widget displays secondary value.",
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent="Open the widget and check the secondary value.",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-SPLIT",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        with self.assertRaisesRegex(
+            DerivationCompilationError,
+            "accepted oracle clauses are not covered",
+        ):
+            compile_source_first_property_derivations(
+                repo_root=self.root,
+                ft_slug="sample",
+                source_manifest=_Manifest("sample-scope", (assertion,)),  # type: ignore[arg-type]
+                obligation_set=obligations,
+            )
+
     def test_positive_and_negative_persistence_require_commit_trigger(self) -> None:
         for polarity, oracle in (
             ("positive", "Поле сохраняет текущую дату."),
