@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -25,6 +26,11 @@ class ScopeCompilationError(ValueError):
     """A registry boundary cannot be compiled into exact source evidence."""
 
 
+_SOURCE_LITERAL_REQUIREMENT_CODE_RE = re.compile(
+    r"(?P<prefix>[A-Z][A-Z0-9_-]*)(?:[ .])(?P<number>[1-9][0-9]*)"
+)
+
+
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as stream:
@@ -41,6 +47,23 @@ def _repo_relative(path: Path, repo_root: Path) -> str:
             f"registered source is outside repo_root: {path}"
         ) from exc
     return relative.as_posix()
+
+
+def _scope_guard_allows_source_literal_code(guard: Any, code: str) -> bool:
+    """Allow source-fidelity codes such as ``AS.20`` to bind to ``AS 20`` guards.
+
+    The registry remains canonical: allowed/excluded codes are still stored as
+    ``PREFIX number``.  This normalization is only for comparing source-literal
+    requirement codes extracted from DOCX/XHTML/PDF evidence against that guard.
+    """
+
+    if guard.allows(code):
+        return True
+    match = _SOURCE_LITERAL_REQUIREMENT_CODE_RE.fullmatch(code)
+    if match is None:
+        return False
+    normalized = f"{match.group('prefix')} {match.group('number')}"
+    return guard.allows(normalized)
 
 
 @dataclass(frozen=True)
@@ -405,7 +428,9 @@ def validate_manifest_scope_binding(
             for code in clarification.requirement_codes
         )
     rejected = sorted(
-        f"{code} ({owner})" for code, owner in code_owners if not guard.allows(code)
+        f"{code} ({owner})"
+        for code, owner in code_owners
+        if not _scope_guard_allows_source_literal_code(guard, code)
     )
     if rejected:
         raise ScopeCompilationError(

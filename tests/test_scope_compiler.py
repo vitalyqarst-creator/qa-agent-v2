@@ -228,6 +228,43 @@ class ScopeCompilerTests(unittest.TestCase):
             package_root=self.package_root,
         )
 
+    def test_manifest_binding_accepts_source_literal_dot_requirement_codes(self) -> None:
+        compiled, manifest = self._manifest()
+        support = manifest.evidence_sources[2]
+        dotted_rows = tuple(
+            replace(
+                row,
+                requirement_codes=tuple(
+                    code.replace("BSR ", "BSR.") for code in row.requirement_codes
+                ),
+            )
+            for row in manifest.source_rows
+        )
+        manifest = replace(
+            manifest,
+            source_rows=dotted_rows,
+            assertions=(_Assertion("ASSERT-001", ("BSR.10",)),),
+            clarifications=(
+                _Clarification(
+                    clarification_id="CLR-001",
+                    evidence_source_path=support.path,
+                    evidence_source_sha256=support.sha256,
+                    requirement_codes=("BSR.20",),
+                ),
+            ),
+            evidence_sources=(
+                *manifest.evidence_sources[:2],
+                replace(support, role="approved-clarification"),
+            ),
+        )
+
+        validate_manifest_scope_binding(
+            manifest,  # type: ignore[arg-type]
+            compiled=compiled,
+            repo_root=self.repo_root,
+            package_root=self.package_root,
+        )
+
     def test_stale_manifest_diagnostics_tell_how_to_recover(self) -> None:
         compiled, manifest = self._manifest()
         stale_cases = (
