@@ -877,6 +877,63 @@ class DerivationCompilerTests(unittest.TestCase):
             derivation.fixture_values["OBL-PASS-CUR-003"],  # type: ignore[index]
         )
 
+    def test_source_first_digits_only_does_not_inherit_exact_length_boundaries(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PASS-CUR-004",
+            atom_id="ATOM-004",
+            obligation_ids=("OBL-PASS-CUR-004",),
+            exact_source_text=(
+                "РќРѕРјРµСЂ Р”Р° Р”Р° РџРѕР»Рµ РІРІРѕРґР° РўРµРєСЃС‚ РЎС‚СЂРѕРєР° BSR 88. "
+                "РћРіСЂР°РЅРёС‡РµРЅРёРµ РЅР° С„РѕСЂРјР°С‚: С‚РѕР»СЊРєРѕ 6 С‡РёСЃР»РѕРІС‹С… СЃРёРјРІРѕР»РѕРІ."
+            ),
+            canonical_statement=(
+                "Field `Number` rejects a non-numeric symbol."
+            ),
+            polarity="negative",
+            action_clauses=("Try to enter non-numeric symbol `A`.",),
+            oracle_clauses=("Symbol `A` is not entered into the field.",),
+            requirement_codes=("BSR 88",),
+        )
+        obligations = PreparedObligationSet.create(
+            package_id="WP-01",
+            obligations=(
+                PreparedObligation(
+                    obligation_id="OBL-PASS-CUR-004",
+                    source_refs=("SRC-001", "BSR 88"),
+                    atomic_statement=assertion.canonical_statement,
+                    observable_oracle=assertion.oracle_clauses[0],
+                    test_intent=(
+                        "Action contract: Try to enter non-numeric symbol `A`.; "
+                        "Test data: Try to enter non-numeric symbol `A`."
+                    ),
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id="ATOM-004",
+                ),
+            ),
+            coverage_gaps=(),
+        )
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=_Manifest("4-3-current-passport-data", (assertion,)),  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+        derivation = compiled.document.derivations[0]
+
+        self.assertEqual(
+            "digits-only",
+            derivation.obligation_variants["OBL-PASS-CUR-004"],
+        )
+        self.assertEqual(
+            ("A",),
+            derivation.fixture_values["OBL-PASS-CUR-004"],  # type: ignore[index]
+        )
+
     def test_source_first_reverse_save_block_date_window_becomes_calibration(self) -> None:
         assertion = replace(
             self._assertion(),

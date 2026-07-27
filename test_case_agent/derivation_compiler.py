@@ -1059,7 +1059,6 @@ def _source_first_dadata_fixture_values(
 def _source_first_fixture_values(
     repo_root: Path,
     obligation: PreparedObligation,
-    assertion: SourceAssertion | None = None,
 ) -> tuple[str, ...]:
     dictionary_values = _dictionary_fixtures(obligation)
     if obligation.dictionary_refs:
@@ -1078,16 +1077,6 @@ def _source_first_fixture_values(
     raw = match.group("value").strip()
     if raw.casefold() in _PLACEHOLDER_FIXTURES:
         return ()
-    source_text = _source_first_text(
-        raw,
-        obligation.atomic_statement,
-        obligation.observable_oracle,
-        obligation.test_intent,
-        *((assertion.exact_source_text, assertion.canonical_statement) if assertion is not None else ()),
-    )
-    exact_length_values = exact_numeric_length_representatives(source_text)
-    if exact_length_values:
-        return exact_length_values
     labels = tuple(
         dict.fromkeys(
             label
@@ -1353,17 +1342,27 @@ def compile_source_first_property_derivations(
                     "prepared-oracle-drift",
                     f"{obligation_id} oracle differs from accepted source clauses",
                 )
-            fixtures = _source_first_fixture_values(
-                repo_root,
-                prepared,
-                assertion,
-            )
+            fixtures = _source_first_fixture_values(repo_root, prepared)
             property_kind, variant = _source_first_kind_and_variant(
                 assertion=assertion,
                 obligation=prepared,
                 fixtures=fixtures,
                 complex_condition=complex_condition,
             )
+            if property_kind == "source-format" and variant == "length-limit":
+                exact_length_values = exact_numeric_length_representatives(
+                    _source_first_text(
+                        assertion.exact_source_text,
+                        assertion.canonical_statement,
+                        *assertion.action_clauses,
+                        *assertion.oracle_clauses,
+                        prepared.atomic_statement,
+                        prepared.observable_oracle,
+                        prepared.test_intent,
+                    )
+                )
+                if exact_length_values:
+                    fixtures = exact_length_values
             if property_kind == "source-date-boundary" and variant == "not-future":
                 fixtures = _date_boundary_fixture_values()
             variants[obligation_id] = variant
