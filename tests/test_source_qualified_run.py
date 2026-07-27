@@ -24,7 +24,10 @@ from test_case_agent.coverage_io import (
     PropertyDerivationDocument,
     write_property_derivations,
 )
-from test_case_agent.derivation_compiler import compile_property_derivations
+from test_case_agent.derivation_compiler import (
+    compile_property_derivations,
+    compile_source_first_property_derivations,
+)
 from test_case_agent.iteration_contract import validate_suite
 from test_case_agent.immutable_iteration import (
     ImmutableIterationResult,
@@ -1104,6 +1107,87 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertIn(
             self._relative(semantic_path),
             terminal["protected_semantic_artifact_paths"],
+        )
+
+    def test_v2_generates_derivations_from_source_first_contract_without_bridge(
+        self,
+    ) -> None:
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.repo,
+            ft_slug="sample",
+            source_manifest=self.accepted_manifest,
+            obligation_set=self.prepared_obligations,
+        )
+        context = DesignContext(
+            package_id="WP-01",
+            scope_title=compiled.scope_title,
+            base_preconditions=compiled.base_preconditions,
+            subject_labels=compiled.subject_labels,
+            condition_preconditions=compiled.condition_preconditions,
+        )
+        graph = build_coverage_graph(
+            ft_slug="sample",
+            tc_prefix="SMP",
+            source_manifest=self.accepted_manifest,
+            obligation_set=self.prepared_obligations,
+            derivations=compiled.document.derivations,
+        )
+        graph, _tc_id_map = with_sequential_tc_ids(graph, tc_prefix="SMP")
+        plan = build_test_design_plan(graph, context=context)
+        draft = render_test_cases(
+            plan.deterministic_cases,
+            scope_title=compiled.scope_title,
+        )
+        gate = validate_suite(
+            graph=graph,
+            cases=plan.deterministic_cases,
+            markdown=draft,
+            checked_path="shadow-test-cases.md",
+        )
+        self.assertTrue(gate.passed, gate.production_gate)
+        self._write_json(
+            self.reviewer_response,
+            _accepted_review(graph, gate.draft_sha256),
+        )
+        self.assertNotIn(
+            "Immutable semantic-design bridge projection",
+            self.source_evidence.read_text(encoding="utf-8"),
+        )
+        self._write_json(
+            self.config,
+            {
+                "schema_version": 2,
+                "registry": self._relative(self.registry),
+                "ft_root": self._relative(self.ft),
+                "scope": "sample-scope",
+                "source_evidence": self._relative(self.source_evidence),
+                "obligations": self._relative(self.obligations),
+            },
+        )
+        output = self.ft / "work" / "source-qualified-runs" / "run-v2-source-first"
+
+        exit_code, _, stderr = self._run(output)
+
+        terminal = json.loads(
+            (output / "terminal-summary.json").read_text(encoding="utf-8")
+        )
+        receipt = json.loads(
+            (output / "run-input-receipt.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(0, exit_code, f"{stderr}\n{terminal}")
+        self.assertEqual("accepted-shadow", terminal["status"])
+        self.assertEqual(
+            "generated-from-source-first-contract",
+            terminal["derivation_mode"],
+        )
+        self.assertEqual([], terminal["protected_semantic_artifact_paths"])
+        self.assertEqual(
+            "generated-from-source-first-contract",
+            receipt["derivation_mode"],
+        )
+        self.assertNotIn("derivations", {item["role"] for item in receipt["inputs"]})
+        self.assertTrue(
+            (output / "bindings" / "generated-property-derivations.json").is_file()
         )
 
     def test_v2_rejects_unaccounted_source_row_semantic_signals(self) -> None:

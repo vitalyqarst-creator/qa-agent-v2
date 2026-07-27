@@ -58,7 +58,8 @@ class ScopeExecutionProfileTests(unittest.TestCase):
         payload = profile.to_dict()
 
         self.assertEqual(STANDARD_PROFILE, profile.selected_profile)
-        self.assertEqual("semantic-design-bridge-required", profile.route_action)
+        self.assertEqual("standard-detailed-v1-not-supported", profile.route_action)
+        self.assertFalse(profile.semantic_design_bridge_required)
         self.assertEqual(22, payload["diagnostics"]["unique_requirement_code_count"])
         self.assertEqual([], payload["unknown_criteria"])
         self.assertEqual(
@@ -173,7 +174,7 @@ class ScopeExecutionProfileTests(unittest.TestCase):
         )
 
         self.assertEqual("invoke-standard-scope-boundary-v2", profile.route_action)
-        self.assertTrue(profile.semantic_design_bridge_required)
+        self.assertFalse(profile.semantic_design_bridge_required)
 
 
 if __name__ == "__main__":

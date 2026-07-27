@@ -30,7 +30,8 @@ from test_case_agent.coverage_io import (
 from test_case_agent.derivation_compiler import (
     DerivationCompilationError,
     compile_property_derivations,
-    extract_semantic_compiler_projection,
+    compile_source_first_property_derivations,
+    extract_optional_semantic_compiler_projection,
 )
 from test_case_agent.immutable_iteration import (
     ImmutableIterationError,
@@ -901,6 +902,7 @@ def _run_source_qualified_scope(
         bindings_dir = output_dir / "bindings"
         bindings_dir.mkdir()
         generated_derivation_path: Path | None = None
+        generated_derivation_mode = "legacy-explicit-input"
         derived_semantic_artifact_paths: tuple[str, ...] = ()
         derived_semantic_snapshots: tuple[tuple[Path, str, int], ...] = ()
         generated_subject_labels: Mapping[str, str] = {}
@@ -913,15 +915,26 @@ def _run_source_qualified_scope(
                 expected_obligation_set_digest=obligations.digest,
             )
         else:
-            compiled_derivations = compile_property_derivations(
-                repo_root=repo_root,
-                ft_slug=derived_ft_slug,
-                source_manifest=contract.manifest,
-                obligation_set=obligations,
-                semantic_projection=extract_semantic_compiler_projection(
-                    evidence_text
-                ),
+            semantic_projection = extract_optional_semantic_compiler_projection(
+                evidence_text
             )
+            if semantic_projection is not None:
+                compiled_derivations = compile_property_derivations(
+                    repo_root=repo_root,
+                    ft_slug=derived_ft_slug,
+                    source_manifest=contract.manifest,
+                    obligation_set=obligations,
+                    semantic_projection=semantic_projection,
+                )
+                generated_derivation_mode = "generated-from-semantic-projection"
+            else:
+                compiled_derivations = compile_source_first_property_derivations(
+                    repo_root=repo_root,
+                    ft_slug=derived_ft_slug,
+                    source_manifest=contract.manifest,
+                    obligation_set=obligations,
+                )
+                generated_derivation_mode = "generated-from-source-first-contract"
             generated_derivation_path = (
                 bindings_dir / "generated-property-derivations.json"
             )
@@ -1023,11 +1036,7 @@ def _run_source_qualified_scope(
                 "source_row_baseline_digest": compiled.baseline.digest,
                 "accepted_coverage_binding_digest": binding.digest,
                 "derivation_document_digest": derivations.digest,
-                "derivation_mode": (
-                    "generated-from-semantic-projection"
-                    if generated_derivation_path is not None
-                    else "legacy-explicit-input"
-                ),
+                "derivation_mode": generated_derivation_mode,
                 "generated_derivation_path": (
                     _relative(generated_derivation_path, repo_root)
                     if generated_derivation_path is not None
@@ -1196,11 +1205,7 @@ def _run_source_qualified_scope(
             "source_review_receipt_digest": binding.source_review_receipt_digest,
             "obligation_set_digest": obligations.digest,
             "derivation_document_digest": derivations.digest,
-            "derivation_mode": (
-                "generated-from-semantic-projection"
-                if generated_derivation_path is not None
-                else "legacy-explicit-input"
-            ),
+            "derivation_mode": generated_derivation_mode,
             "coverage_graph_digest": graph.digest,
             "accepted_coverage_binding_digest": binding.digest,
             "test_case_count": iteration.test_case_count,

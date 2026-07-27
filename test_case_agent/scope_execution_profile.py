@@ -51,7 +51,7 @@ class ScopeExecutionProfile:
             return "invoke-lean-detailed-v1"
         if self.effective_contract_version == 2:
             return "invoke-standard-scope-boundary-v2"
-        return "semantic-design-bridge-required"
+        return "standard-detailed-v1-not-supported"
 
     def with_contract_version(self, contract_version: int | None) -> "ScopeExecutionProfile":
         effective = self.default_contract_version if contract_version is None else contract_version
@@ -240,7 +240,7 @@ def select_scope_execution_profile(
         lean_eligible=lean_eligible,
         default_contract_version=default_contract,
         effective_contract_version=default_contract,
-        semantic_design_bridge_required=(selected == STANDARD_PROFILE),
+        semantic_design_bridge_required=False,
         source_row_count=source_row_count,
         requirement_code_count=len(_requirement_codes(rows)),
         expected_assertion_count=expected_assertions,

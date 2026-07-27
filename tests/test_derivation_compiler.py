@@ -18,6 +18,8 @@ from test_case_agent.coverage_io import (
 from test_case_agent.derivation_compiler import (
     DerivationCompilationError,
     compile_property_derivations,
+    compile_source_first_property_derivations,
+    extract_optional_semantic_compiler_projection,
     extract_semantic_compiler_projection,
 )
 from test_case_agent.review_cycle.prepared_package import (
@@ -421,6 +423,33 @@ class DerivationCompilerTests(unittest.TestCase):
             DerivationCompilationError, "semantic-projection-count"
         ):
             extract_semantic_compiler_projection(evidence + evidence)
+        self.assertIsNone(
+            extract_optional_semantic_compiler_projection(
+                "# Accepted source evidence without bridge\n"
+            )
+        )
+
+    def test_source_first_compiles_without_semantic_projection(self) -> None:
+        manifest, obligations, _projection, _ = self._fixture()
+
+        compiled = compile_source_first_property_derivations(
+            repo_root=self.root,
+            ft_slug="sample",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=obligations,
+        )
+
+        self.assertEqual((), compiled.registered_artifacts)
+        self.assertEqual((), compiled.registered_artifact_snapshots)
+        derivation = compiled.document.derivations[0]
+        self.assertEqual("visibility", derivation.property_kind)
+        self.assertEqual({"OBL-001": "visible"}, derivation.obligation_variants)
+        self.assertEqual("OBL-001", next(iter(derivation.fixture_values)))
+        self.assertNotEqual("always", derivation.condition_key)
+        self.assertEqual(
+            tuple(compiled.condition_preconditions.values()),
+            (manifest.assertions[0].condition_clauses[0],),
+        )
 
     def test_compiles_and_round_trips_without_manual_derivation(self) -> None:
         manifest, obligations, projection, _ = self._fixture()

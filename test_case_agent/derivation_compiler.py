@@ -183,6 +183,26 @@ def extract_semantic_compiler_projection(evidence_text: str) -> Mapping[str, Any
     return projection
 
 
+def extract_optional_semantic_compiler_projection(
+    evidence_text: str,
+) -> Mapping[str, Any] | None:
+    """Extract a semantic projection when the source evidence explicitly has one.
+
+    Schema-v2 source-first runs no longer require the standard semantic bridge.
+    A present projection remains strict and hash-bound; an absent projection is
+    handled by the source-first derivation compiler.
+    """
+
+    if not isinstance(evidence_text, str):
+        _fail("invalid-evidence", "source evidence must be text")
+    count = len(
+        [match.start() for match in re.finditer(re.escape(_HEADING), evidence_text)]
+    )
+    if count == 0:
+        return None
+    return extract_semantic_compiler_projection(evidence_text)
+
+
 def _repo_artifact(
     repo_root: Path,
     payload: Any,
@@ -756,6 +776,386 @@ def _validate_source_signal_accounting(
     }
 
 
+_SOURCE_FIRST_RUNTIME_LABEL = re.compile(
+    r"`([^`\r\n]{1,160})`|«([^»\r\n]{1,160})»|В«([^В»\r\n]{1,160})В»"
+)
+_SOURCE_FIRST_EN_FIELD = re.compile(
+    r"\b(?:the\s+)?([A-Za-z][A-Za-z0-9 _/-]{1,100}\s+"
+    r"(?:field|block|button|list|section|tab))\b",
+    re.IGNORECASE,
+)
+_SOURCE_FIRST_TEST_DATA = re.compile(
+    r"(?:^|;\s*)Test data:\s*(?P<value>.*?)(?=$|;\s*[A-Za-z][A-Za-z ]+ contract:)",
+    re.IGNORECASE,
+)
+_SOURCE_FIRST_SUBJECT_PREFIXES = (
+    "поле",
+    "поля",
+    "полю",
+    "блок",
+    "блока",
+    "блоке",
+    "кнопк",
+    "спис",
+    "раздел",
+    "вкладк",
+    "field",
+    "block",
+    "button",
+    "list",
+    "section",
+    "tab",
+)
+
+
+def _source_first_text(*values: str) -> str:
+    return " ".join(value for value in values if value).casefold()
+
+
+def _source_first_runtime_labels_with_prefix(
+    value: str,
+) -> tuple[tuple[str, str], ...]:
+    labels: list[tuple[str, str]] = []
+    for match in _SOURCE_FIRST_RUNTIME_LABEL.finditer(value):
+        label = next(group for group in match.groups() if group is not None).strip()
+        prefix = value[max(0, match.start() - 80) : match.start()].casefold()
+        if label:
+            labels.append((label, prefix))
+    return tuple(labels)
+
+
+def _source_first_subject_label(
+    assertion: SourceAssertion,
+    obligations: Sequence[PreparedObligation],
+) -> str:
+    evidence = " ".join(
+        (
+            assertion.canonical_statement,
+            *assertion.condition_clauses,
+            *assertion.action_clauses,
+            *assertion.oracle_clauses,
+            *(item.atomic_statement for item in obligations),
+            *(item.observable_oracle for item in obligations),
+            *(item.test_intent for item in obligations),
+        )
+    )
+    for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
+        if any(marker in prefix for marker in _SOURCE_FIRST_SUBJECT_PREFIXES):
+            return label
+    match = _SOURCE_FIRST_EN_FIELD.search(evidence)
+    if match is not None:
+        return match.group(1).strip()
+    # Safe fallback: the accepted canonical statement is already source-bound
+    # and passes design-context validation, even if it is less readable.
+    return assertion.canonical_statement.strip()
+
+
+def _source_first_scope_title(source_manifest: SourceAssertionManifest) -> str:
+    preferred_markers = ("блок", "block", "section", "раздел")
+    for assertion in source_manifest.assertions:
+        evidence = " ".join(
+            (
+                assertion.canonical_statement,
+                *assertion.condition_clauses,
+                *assertion.action_clauses,
+                *assertion.oracle_clauses,
+            )
+        )
+        for label, prefix in _source_first_runtime_labels_with_prefix(evidence):
+            if any(marker in prefix for marker in preferred_markers):
+                return label
+    return source_manifest.scope_slug
+
+
+def _source_first_fixture_values(obligation: PreparedObligation) -> tuple[str, ...]:
+    dictionary_values = _dictionary_fixtures(obligation)
+    if obligation.dictionary_refs:
+        if not dictionary_values:
+            _fail(
+                "dictionary-values-missing",
+                f"{obligation.obligation_id} has no compiled dictionary values",
+            )
+        return dictionary_values
+    match = _SOURCE_FIRST_TEST_DATA.search(obligation.test_intent)
+    if match is None:
+        return ()
+    raw = match.group("value").strip()
+    if raw.casefold() in _PLACEHOLDER_FIXTURES:
+        return ()
+    labels = tuple(
+        dict.fromkeys(
+            label
+            for label, _prefix in _source_first_runtime_labels_with_prefix(raw)
+            if label.casefold() not in _PLACEHOLDER_FIXTURES
+        )
+    )
+    if labels:
+        return labels
+    return (raw,) if raw else ()
+
+
+def _source_first_kind_and_variant(
+    *,
+    assertion: SourceAssertion,
+    obligation: PreparedObligation,
+    fixtures: Sequence[str],
+    complex_condition: bool,
+) -> tuple[str, str]:
+    del fixtures
+    text = _source_first_text(
+        assertion.canonical_statement,
+        *assertion.action_clauses,
+        *assertion.oracle_clauses,
+        obligation.atomic_statement,
+        obligation.observable_oracle,
+        obligation.test_intent,
+    )
+    if complex_condition:
+        return "source-complex-condition-runtime", "runtime"
+    if obligation.dictionary_refs or obligation.dictionary_requirements:
+        return "dictionary", "dictionary"
+    if any(token in text for token in ("по умолчанию", "default")):
+        return "default", "default"
+    if any(token in text for token in ("видим", "отображ", "visible", "displayed")):
+        return "visibility", "visible"
+    if any(token in text for token in ("редакт", "editable", "editability")):
+        return "source-editability", "editable"
+    if any(
+        token in text
+        for token in (
+            "обязател",
+            "пуст",
+            "required",
+            "empty",
+            "выберите значение",
+            "введите дату",
+        )
+    ):
+        if any(token in text for token in ("не обязатель", "optional", "optionalness")):
+            return "source-optionalness", "optional-empty"
+        return "source-requiredness", "required-empty"
+    if any(
+        token in text
+        for token in ("будущ", "больше текущ", "future date", "not-future")
+    ):
+        return "source-date-boundary", "not-future"
+    if any(
+        token in text
+        for token in (
+            "нечислов",
+            "только циф",
+            "цифр",
+            "символ",
+            "длин",
+            "повтор",
+            "numeric",
+            "digit",
+            "length",
+            "format",
+        )
+    ):
+        if any(token in text for token in ("текстов", "латини", "пробел", "hyphen")):
+            return "source-format", "allowed-class"
+        if any(token in text for token in ("нечислов", "numeric", "digit")):
+            return "source-format", "digits-only"
+        if "повтор" in text:
+            return "source-format", "repeated-digits"
+        if any(token in text for token in ("длин", "length")):
+            return "source-format", "length-limit"
+        return "source-format", "format"
+    return "source-runtime", "runtime"
+
+
+def compile_source_first_property_derivations(
+    *,
+    repo_root: Path,
+    ft_slug: str,
+    source_manifest: SourceAssertionManifest,
+    obligation_set: PreparedObligationSet,
+) -> CompiledPropertyDerivations:
+    """Produce typed derivations directly from accepted source-first contracts.
+
+    This is the production default for schema-v2 prepared runs.  It does not
+    parse raw FT prose and does not require semantic-design bridge artifacts.
+    It only projects the already accepted source assertion manifest plus the
+    compiler-v3 prepared obligations into the technical coverage graph format.
+    """
+
+    repo_root = Path(repo_root).resolve()
+    if not repo_root.is_dir():
+        _fail("missing-repo-root", str(repo_root))
+    ft_slug = _typed(ft_slug, "ft_slug")
+    obligation_set.validate()
+
+    prepared_by_id = {
+        item.obligation_id: item for item in obligation_set.obligations
+    }
+    expected_obligations = {
+        obligation_id
+        for assertion in source_manifest.assertions
+        if assertion.semantic_disposition == "testable"
+        for obligation_id in assertion.obligation_ids
+    }
+    missing_prepared = expected_obligations - set(prepared_by_id)
+    if missing_prepared:
+        _fail(
+            "obligation-set-mismatch",
+            "prepared obligations are missing " + ", ".join(sorted(missing_prepared)),
+        )
+    assertions_by_atom = {
+        assertion.atom_id: assertion for assertion in source_manifest.assertions
+    }
+    if len(assertions_by_atom) != len(source_manifest.assertions):
+        _fail("duplicate-accepted-atom", "accepted assertions repeat an ATOM id")
+    for extra_id in sorted(set(prepared_by_id) - expected_obligations):
+        _validate_non_testable_prepared_context(
+            prepared_by_id[extra_id], assertions_by_atom
+        )
+
+    derivations: list[PropertyDerivation] = []
+    subject_labels: dict[str, str] = {}
+    condition_preconditions: dict[str, str] = {}
+    for assertion in source_manifest.assertions:
+        if assertion.semantic_disposition != "testable":
+            continue
+        assertion_obligations = tuple(
+            prepared_by_id[obligation_id]
+            for obligation_id in assertion.obligation_ids
+        )
+        subject_label = _source_first_subject_label(assertion, assertion_obligations)
+        if not subject_label:
+            _fail("subject-label-missing", assertion.assertion_id)
+        subject_key = "subject:" + hashlib.sha256(
+            " ".join(subject_label.casefold().split()).encode("utf-8")
+        ).hexdigest()[:16]
+        existing_label = subject_labels.get(subject_key)
+        if existing_label is not None and (
+            " ".join(existing_label.casefold().split())
+            != " ".join(subject_label.casefold().split())
+        ):
+            _fail(
+                "subject-key-collision",
+                f"{assertion.assertion_id} collides with a different subject label",
+            )
+        subject_labels.setdefault(subject_key, subject_label)
+        condition_key, condition_precondition, complex_condition = (
+            _condition_binding(assertion)
+        )
+        if condition_key != "always":
+            existing_condition = condition_preconditions.get(condition_key)
+            if (
+                existing_condition is not None
+                and existing_condition != condition_precondition
+            ):
+                _fail(
+                    "condition-key-collision",
+                    f"{assertion.assertion_id} collides with a different condition",
+                )
+            condition_preconditions.setdefault(
+                condition_key, condition_precondition
+            )
+
+        variants: dict[str, str] = {}
+        source_oracles: dict[str, str] = {}
+        fixtures_by_obligation: dict[str, tuple[str, ...]] = {}
+        questions: dict[str, str] = {}
+        property_kinds: set[str] = set()
+        action_contract = "; ".join(assertion.action_clauses)
+        expected_oracle = "; ".join(assertion.oracle_clauses)
+        for obligation_id in assertion.obligation_ids:
+            prepared = prepared_by_id[obligation_id]
+            if prepared.traceability_atom_id != assertion.atom_id:
+                _fail(
+                    "obligation-chain-drift",
+                    f"{obligation_id} is outside its accepted ASSERT/ATOM chain",
+                )
+            if prepared.observable_oracle != expected_oracle:
+                _fail(
+                    "prepared-oracle-drift",
+                    f"{obligation_id} oracle differs from accepted source clauses",
+                )
+            fixtures = _source_first_fixture_values(prepared)
+            property_kind, variant = _source_first_kind_and_variant(
+                assertion=assertion,
+                obligation=prepared,
+                fixtures=fixtures,
+                complex_condition=complex_condition,
+            )
+            if property_kind == "source-date-boundary" and variant == "not-future":
+                fixtures = _date_boundary_fixture_values()
+            variants[obligation_id] = variant
+            if fixtures:
+                fixtures_by_obligation[obligation_id] = fixtures
+            property_kinds.add(property_kind)
+            if prepared.calibration_status == "ui-calibration-required":
+                source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
+                    obligation_id.encode("utf-8")
+                ).hexdigest()[:16].upper()
+                question = expected_oracle or prepared.atomic_statement
+                if not question:
+                    _fail("calibration-question-missing", obligation_id)
+                questions[obligation_id] = question
+            elif _needs_validation_trigger_calibration(
+                polarity=assertion.polarity,
+                oracle=expected_oracle,
+                action=action_contract,
+            ):
+                source_oracles[obligation_id] = "SO-CAL-" + hashlib.sha256(
+                    obligation_id.encode("utf-8")
+                ).hexdigest()[:16].upper()
+                questions[obligation_id] = expected_oracle or prepared.atomic_statement
+        if len(property_kinds) != 1:
+            _fail(
+                "mixed-property-kind",
+                f"{assertion.assertion_id} maps incompatible obligation kinds",
+            )
+        property_kind = next(iter(property_kinds))
+        derivations.append(
+            PropertyDerivation(
+                source_manifest_digest=source_manifest.digest,
+                obligation_set_digest=obligation_set.digest,
+                assertion_id=assertion.assertion_id,
+                source_row_id=assertion.source_row_id,
+                atom_id=assertion.atom_id,
+                source_text_sha256=hashlib.sha256(
+                    assertion.exact_source_text.encode("utf-8")
+                ).hexdigest(),
+                property_key=f"property:{assertion.assertion_id}",
+                subject_key=subject_key,
+                property_kind=property_kind,
+                obligation_variants=variants,
+                condition_key=condition_key,
+                validation_trigger=_effective_validation_trigger(
+                    property_kind=property_kind,
+                    action_contract=action_contract,
+                ),
+                cleanup_strategy="",
+                source_oracle_ids=source_oracles or None,
+                fixture_values=fixtures_by_obligation or None,
+                calibration_questions=questions or None,
+            )
+        )
+
+    document = PropertyDerivationDocument(
+        schema_version=1,
+        ft_slug=ft_slug,
+        scope_slug=source_manifest.scope_slug,
+        source_manifest_digest=source_manifest.digest,
+        obligation_set_digest=obligation_set.digest,
+        derivations=tuple(derivations),
+    )
+    _canonical_sha256(document.to_dict())
+    return CompiledPropertyDerivations(
+        document=document,
+        registered_artifacts=(),
+        subject_labels=dict(sorted(subject_labels.items())),
+        condition_preconditions=dict(sorted(condition_preconditions.items())),
+        scope_title=_source_first_scope_title(source_manifest),
+        base_preconditions=(),
+        registered_artifact_snapshots=(),
+    )
+
+
 def compile_property_derivations(
     *,
     repo_root: Path,
@@ -1245,5 +1645,7 @@ __all__ = [
     "DerivationCompilationError",
     "SEMANTIC_PROJECTION_CONTRACT",
     "compile_property_derivations",
+    "compile_source_first_property_derivations",
+    "extract_optional_semantic_compiler_projection",
     "extract_semantic_compiler_projection",
 ]

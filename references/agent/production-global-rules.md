@@ -26,7 +26,7 @@ This file is the self-contained production projection of the full repository's g
 ## Execution
 
 - Before shell commands, use a saved environment probe or `scripts/probe_environment.py`; follow the UTF-8 policy and do not assume the shell.
-- This downstream bundle does not perform discovery or source qualification. Before start, it receives an independently accepted manifest v4, compiler-v3 obligations, hash-bound semantic projection, and registered scope boundary.
+- This downstream bundle does not perform discovery or source qualification. Before start, it receives an independently accepted manifest v4, compiler-v3 obligations, source-evidence, and registered scope boundary. A hash-bound semantic projection is optional legacy/explicit-route evidence, not a default production requirement.
 - Load only scenario `iteration.deterministic_production` from `production-instruction-loading.md`.
 - `ft-agent run` works only with a closed schema-v2 config and a new immutable output directory. Canonical, source files, and workflow state are not changed.
 - Allowed successful terminal statuses: `accepted-shadow` for a fully executable suite and `accepted-with-calibration-pending` when the reviewer explicitly confirms calibration candidates as `calibration-pending`. The second status always has `promotion_eligible=false`; publication is not part of a production run.

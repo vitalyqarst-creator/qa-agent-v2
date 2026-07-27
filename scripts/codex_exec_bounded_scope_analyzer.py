@@ -1978,7 +1978,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             _write_empty(args.stderr_output)
             error = (
                 "standard-production scope cannot run the monolithic detailed-v1 "
-                "contract; semantic-design bridge routing is required"
+                "contract; run standard boundary-v2/source-first routing or use "
+                "the explicit semantic-design bridge route"
             )
             receipt_error = _publish_terminal_receipt(
                 args.terminal_receipt_output,

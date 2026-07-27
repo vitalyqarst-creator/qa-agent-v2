@@ -39,7 +39,19 @@ scope целиком и передай его в standard semantic-design bridge
 До assessment проверь обязательный hash binding prepared context; не принимай
 ручные или изменённые после подготовки eligibility facts без совпадающего digest.
 
-## Standard-production semantic-design bridge
+## Standard-production source-first route
+
+For new `standard-production` work, use boundary-v2/source-first routing by
+default. Do not materialize the semantic-design bridge merely because a scope is
+large or not lean-eligible. The bridge route remains available only when the
+user or a recovery procedure explicitly requests it.
+
+The default standard path is: boundary/source inventory -> source assertions ->
+independent source assertion review -> production input finalization ->
+`ft-agent run` schema v2. When no semantic bridge projection is embedded, the
+runner builds typed derivations from the accepted source-first contract.
+
+Legacy explicit semantic-design bridge behavior:
 
 Для `standard-production` следуй `lean-production-workflow.md`: boundary-v2 →
 semantic author → materialization → независимый source review. Boundary
