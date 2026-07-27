@@ -5,41 +5,7 @@ description: Выделяет релевантные разделы ФТ, суж
 
 # FT Scope Analyzer
 
-## Bounded lean-production path
-
-Если scope удовлетворяет eligibility из
-`references/agent/lean-production-workflow.md`, используй этот профиль по
-умолчанию. Его цель — пройти scope → source review → writer → reviewer →
-promotion в одной пользовательской задаче, сохранив независимые модельные
-сессии и все source/compiler/quality gates.
-
-Для lean-run:
-
-- загружай instruction scenario `scope.bounded_production`, а не полный
-  `scope.manual` pack;
-- материализуй все scope/compiler inputs одним patch и проверь их одним
-  aggregate validation; допускается не более одного correction patch;
-- не создавай успешные session logs, decision logs, `scope-agent-final.md`,
-  `scope-execution-options.md`, N/A-only oracle inventories, `artifact-write/*`,
-  schema canary и сохранённый dispatcher config;
-- сохраняй один active prompt только для независимого source assertion review;
-  после accepted receipt runner строит writer/reviewer input из prepared package;
-- измеряй полный пользовательский wall-clock, включая orchestration и file work,
-  по time budget канонического lean profile.
-
-Если eligibility не выполнена или aggregate validation обнаружил semantic defect,
-не маскируй это fast path: перейди на полный маршрут либо заверши `blocked-input`.
-После deterministic dependency gate и до detailed v1 model call обязательно
-примени scope execution profile assessment из `lean-production-workflow.md`.
-Неизвестный eligibility-критерий или превышение лимита маршрутизирует scope в
-`standard-production`; не используй количество BSR/GSR как оценку assertions/TC
-и не запускай монолитный detailed v1 для standard scope. Сохрани внешний
-scope целиком и передай его в standard semantic-design bridge; внутренние
-`WP-*` не заменяют внешний scope и не создаются ради lean-лимита.
-До assessment проверь обязательный hash binding prepared context; не принимай
-ручные или изменённые после подготовки eligibility facts без совпадающего digest.
-
-## Standard-production source-first route
+## Default source-first production route
 
 For new `standard-production` work, use boundary-v2/source-first routing by
 default. Do not materialize the semantic-design bridge merely because a scope is
@@ -50,13 +16,6 @@ The default standard path is: boundary/source inventory -> source assertions ->
 independent source assertion review -> production input finalization ->
 `ft-agent run` schema v2. When no semantic bridge projection is embedded, the
 runner builds typed derivations from the accepted source-first contract.
-
-Legacy explicit semantic-design bridge behavior:
-
-Для `standard-production` следуй `lean-production-workflow.md`: boundary-v2 →
-semantic author → materialization → независимый source review. Boundary
-immutable; defect блокирует writer; retry/fallback/synthesis запрещены.
-Materialization связывает обязательные compact session/decision logs.
 
 ## Source-first contract for new production cycles
 
@@ -147,8 +106,8 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
 ## Workflow
 
-Для полного, eval или diagnostic route перед завершением стадии создай или обнови `scope-analyzer-session-log.md` по `session-log-format.md`: зафиксируй inputs read, inputs not used, key decisions, risks/fallbacks, validation и contamination check. Для clean eval/diagnostic run добавь audit-секции `Event Timeline`, `Quality Checkpoints`, `Artifact Write Strategy`, `Technical Fallbacks`, `Handoff Notes For Next Session`. Chunked writer включай только по size/count thresholds из `lean-production-workflow.md`, а не из-за самого наличия `WP-*` или row inventory. Если был лимит команды, failed patch, chunked writing, helper script, temp content file или encoding fallback, заполни `Technical Fallbacks` строкой `TF-*`. Свяжи лог из `workflow-state.yaml` через `latest_artifacts.session_log` или `latest_artifacts.scope_analyzer_session_log`.
-Для полного/eval/diagnostic route параллельно веди `agent-decision-log.md` по `agent-decision-log-format.md`. Успешный `lean-production` run не создает оба лога: typed receipts, workflow state и общий performance record являются audit trail; при failure создай один `failure-diagnostic.json`.
+Перед завершением стадии создай или обнови `scope-analyzer-session-log.md` по `session-log-format.md`: зафиксируй inputs read, inputs not used, key decisions, risks/fallbacks, validation и contamination check. Если был лимит команды, failed patch, chunked writing, helper script, temp content file или encoding fallback, заполни `Technical Fallbacks` строкой `TF-*`. Свяжи лог из `workflow-state.yaml` через `latest_artifacts.session_log` или `latest_artifacts.scope_analyzer_session_log`.
+Параллельно веди `agent-decision-log.md` по `agent-decision-log-format.md`, кроме случаев, когда stage создаёт runner-owned typed receipt и отдельный failure diagnostic.
 Для русскоязычных источников перед PowerShell-командами выставляй UTF-8 preamble из `session-log-format.md`; если вывод консоли искажает кириллицу, перечитай источник через явный UTF-8 file/script path, не используй mojibake stdout как evidence и зафиксируй это в `Technical Fallbacks`.
 
 1. Перед `resolve_sections()` или любым scope narrowing проверь `source-selection.md`: если `xhtml_available != yes`, останови workflow как `blocked-input`, зафиксируй отсутствие обязательного `main-ft-xhtml` и не создавай `scope-contract.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
@@ -217,7 +176,6 @@ gap.
 - Handoff-модель и numbered naming: [../../references/agent/stage-handoff-model.md](../../references/agent/stage-handoff-model.md)
 - Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
 - Source parsing quality: [../../references/agent/source-parsing-quality.md](../../references/agent/source-parsing-quality.md)
-- Lean production workflow: [../../references/agent/lean-production-workflow.md](../../references/agent/lean-production-workflow.md)
 
 ## Ограничения
 

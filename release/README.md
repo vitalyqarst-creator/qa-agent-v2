@@ -94,3 +94,29 @@ Output directory обязан быть новым. В корне bundle созд
 Benchmark profile не превращается в отдельную кодовую ветку. Production bundle
 строится из того же commit/tag, поэтому исправления runtime и quality gates не
 расходятся между qualification и production.
+
+## Operational
+
+`operational-manifest.json` — clean bundle для переноса полноценного Codex-
+агента в отдельный GitLab repository. В отличие от узкого production runtime, он
+включает `AGENTS.md`, все официальные project skills, agent/QA references,
+source qualification, scope analysis, writer/reviewer iteration, UI-prep
+инструкции, architecture auditor и общие validation/materialization scripts.
+
+Профиль намеренно не включает локальные FT inputs, generated `work/`,
+`test-cases/`, `evals/`, tests, dashboard, benchmark results, overnight
+controller, incremental update runtime/docs, old `lean_v2` package, session-based
+orchestration docs и публичные standard bridge/sharding entrypoints. Внутренний
+`semantic_design_bridge.py` может входить как библиотечная dependency текущего
+runtime, но bridge-route scripts не экспортируются.
+
+```powershell
+python scripts/build_release_bundle.py `
+  --manifest release/operational-manifest.json `
+  --output dist/ft-test-case-agent-operational
+```
+
+Этот профиль подходит для обычной рабочей сессии по новому FT-пакету: агент
+сможет пройти `ft-source-locator` → `ft-scope-analyzer` →
+`ft-test-case-reviewer/source_assertion_review` → `ft-test-case-iteration`, не
+получая вместе с кодом старые AutoFin documents, attempts или benchmark history.

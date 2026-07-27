@@ -16,9 +16,8 @@ Canonical list of active skills:
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
 - If the scope is fixed and new cases must be written in one writer pass without a review cycle: `ft-test-case-writer`.
 - If the scope is independently qualified and a production shadow is needed: `ft-test-case-iteration` through `ft-agent run`.
-- If the scope has compiler-v3 obligations and an independently accepted v4 source contract: source-qualified `ft-test-case-iteration` `lean_v2` through one public `ft-agent run`; for new production attempts, explicitly set `writer_mode: model-runtime-prose`.
-- If a new FT version must update a signed-off suite: conditional `ft-test-case-iteration` mode `incremental-update` through `scripts/run_incremental_update_iteration.py`; normal full-loop runs do not load its instructions.
-- If a checked-in full-process config with `schema_version = 2` is explicitly provided: route directly to `ft-test-case-iteration` through `scripts/start_full_process_observation.py --execute`; generic discovery/scope chains remain for runs without that config.
+- If the scope has compiler-v3 obligations and an independently accepted v4 source contract: source-qualified `ft-test-case-iteration` through one public `ft-agent run`; for new production attempts, explicitly set `writer_mode: model-runtime-prose`.
+- Incremental FT-version update, full-process observation, benchmark and overnight routes are not default operational routes. Use them only in a separate development/qualification repository where their scripts are explicitly present.
 - The old session-based writer/reviewer cycle remains a qualification/development compatibility tool and is not the production route.
 - If cases already exist and review is needed: `ft-test-case-reviewer`. By default, it runs in `full` mode and performs `traceability` -> `structure` -> `test-design`.
 - If the suite already has `signed-off` and must be checked against the real UI before automation: `ft-ui-automation-prep`.
@@ -29,7 +28,6 @@ Canonical list of active skills:
 - New test-case suite: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer`
 - Recommended production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
 - Full new scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
-- New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.
 - Automation-ready preparation after sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` -> `ft-ui-automation-prep`
 - Existing-suite review: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
 - Agent-layer audit: `agent-architecture-auditor` with script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
@@ -52,8 +50,6 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
 - Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
-- Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
-- Codex SDK orchestration: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)
 - Quality feedback loop: [../references/agent/quality-feedback-loop.md](../references/agent/quality-feedback-loop.md)
 - User interaction guide: [../references/agent/user-interaction-guide.md](../references/agent/user-interaction-guide.md)
 - End-to-end use case: [../references/agent/test-case-writing-use-case.md](../references/agent/test-case-writing-use-case.md)

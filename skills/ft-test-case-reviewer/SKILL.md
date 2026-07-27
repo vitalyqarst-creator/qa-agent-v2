@@ -236,7 +236,6 @@ Rules:
 - Legacy traceability matrix report: [../../references/agent/traceability-legacy-matrix-report-2026-05-25.md](../../references/agent/traceability-legacy-matrix-report-2026-05-25.md)
 - Strict validator debt report: [../../references/agent/strict-debt-report-2026-05-25.md](../../references/agent/strict-debt-report-2026-05-25.md)
 - Reviewer sign-off migration report: [../../references/agent/reviewer-signoff-migration-report-2026-05-25.md](../../references/agent/reviewer-signoff-migration-report-2026-05-25.md)
-- Eval run report format: [../../references/agent/eval-run-report-format.md](../../references/agent/eval-run-report-format.md)
 - Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
 - Правила трассировки: [../../references/qa/traceability-rules.md](../../references/qa/traceability-rules.md)
 - Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)

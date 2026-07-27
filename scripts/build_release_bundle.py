@@ -22,8 +22,10 @@ def _load_manifest(path: Path) -> dict[str, Any]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or payload.get("schema_version") != 1:
         raise ReleaseBundleError("release manifest must be a schema v1 object")
-    if payload.get("profile") not in {"qualification", "production"}:
-        raise ReleaseBundleError("release profile must be qualification or production")
+    if payload.get("profile") not in {"qualification", "production", "operational"}:
+        raise ReleaseBundleError(
+            "release profile must be qualification, production or operational"
+        )
     for key in (
         "include",
         "exclude",

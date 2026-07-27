@@ -118,6 +118,103 @@ class ReleaseBundleTests(unittest.TestCase):
             10,
         )
 
+    def test_operational_profile_keeps_full_agent_layer_without_local_artifacts(self) -> None:
+        receipt = build_release_bundle(
+            root=ROOT,
+            manifest_path=ROOT / "release" / "operational-manifest.json",
+            output=None,
+            check_only=True,
+            require_local_inputs=False,
+        )
+        paths = {item["path"] for item in receipt["files"]}
+
+        self.assertEqual("operational", receipt["profile"])
+        self.assertIn("AGENTS.md", paths)
+        self.assertIn("README.md", paths)
+        self.assertIn("release/operational-manifest.json", paths)
+        self.assertIn("scripts/build_release_bundle.py", paths)
+        self.assertIn("scripts/validate_agent_artifacts.py", paths)
+        self.assertIn("scripts/build_docx_source_json.py", paths)
+        self.assertIn("scripts/compile_prepared_stage_package.py", paths)
+        self.assertIn("scripts/promote_review_cycle.py", paths)
+        self.assertIn("test_case_agent/semantic_design_bridge.py", paths)
+        self.assertIn("test_case_agent/source_json_projection.py", paths)
+        self.assertIn(
+            "skills/agent-architecture-auditor/scripts/audit_agent_architecture.py",
+            paths,
+        )
+        self.assertEqual(
+            {
+                "skills/agent-architecture-auditor/SKILL.md",
+                "skills/ft-scope-analyzer/SKILL.md",
+                "skills/ft-source-locator/SKILL.md",
+                "skills/ft-test-case-iteration/SKILL.md",
+                "skills/ft-test-case-reviewer/SKILL.md",
+                "skills/ft-test-case-writer/SKILL.md",
+                "skills/ft-ui-automation-prep/SKILL.md",
+            },
+            {
+                path
+                for path in paths
+                if path.startswith("skills/") and path.endswith("/SKILL.md")
+            },
+        )
+
+        forbidden_paths = {
+            "scripts/run_incremental_update_iteration.py",
+            "scripts/run_overnight_controller.py",
+            "scripts/run_standard_production_iteration.py",
+            "scripts/run_standard_scope_bridge.py",
+            "scripts/replay_semantic_design_shards.py",
+            "scripts/merge_semantic_design_qualification_shards.py",
+            "scripts/workflow_wall_clock.py",
+            "references/agent/codex-sdk-orchestration-format.md",
+            "references/agent/eval-run-report-format.md",
+            "references/agent/full-process-timing-observation.md",
+            "references/agent/incremental-update-iteration.md",
+            "references/agent/lean-production-workflow.md",
+            "references/agent/overnight-controller-format.md",
+            "references/agent/session-based-review-cycle-format.md",
+            "test_case_agent/lean_production.py",
+            "test_case_agent/review_cycle/schema_canary_contract.py",
+            "test_case_agent/semantic_design_sharding.py",
+            "test_case_agent/quality_proof.py",
+        }
+        self.assertTrue(forbidden_paths.isdisjoint(paths))
+        self.assertFalse(any(path.startswith("evals/") for path in paths))
+        self.assertFalse(any(path.startswith("tests/") for path in paths))
+        self.assertFalse(any(path.startswith("fts/") for path in paths))
+        self.assertFalse(any(path.startswith("work/") for path in paths))
+        self.assertFalse(any(path.startswith("dashboard/") for path in paths))
+        self.assertFalse(
+            any(path.startswith("test_case_agent/incremental_update/") for path in paths)
+        )
+        self.assertFalse(
+            any(path.startswith("test_case_agent/overnight_controller/") for path in paths)
+        )
+        self.assertFalse(any(path.startswith("test_case_agent/lean_v2/") for path in paths))
+        self.assertFalse(any("autofin" in Path(path).name.casefold() for path in paths))
+        self.assertFalse(any("canary" in Path(path).name.casefold() for path in paths))
+        forbidden_input_suffixes = {
+            ".docx",
+            ".pdf",
+            ".xlsx",
+            ".xls",
+            ".avif",
+            ".bmp",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".gif",
+            ".webp",
+        }
+        self.assertFalse(
+            any(
+                Path(path).suffix.casefold() in forbidden_input_suffixes
+                for path in paths
+            )
+        )
+
     def test_historical_qualification_receipt_keeps_its_original_binding(self) -> None:
         receipt = json.loads(
             (
