@@ -85,6 +85,13 @@ assertion source до появления generalized multi-source baseline.
 - `approved-clarification` — UTF-8 Markdown с canonical structured row ответа,
   который разрешён для ready semantics только через typed clarification binding.
 
+`approved-clarification` evidence source scope-local by default: do not copy
+approved clarification files from a shared `source-selection.md` registry into a
+scope manifest unless this manifest also contains at least one typed
+`clarifications[]` record for the same evidence path and current `scope_slug`
+or an explicit `source_scope_slug` override. Unrelated clarification files from
+other scopes are not supporting context; omit them from `evidence_sources`.
+
 Если UTF-8 extraction source не является каноническим source of truth,
 `evidence_sources` обязателен. Для FT-пакета DOCX+XHTML+PDF: XHTML регистрируется в
 `sources`, DOCX — как `semantic-source-of-truth`, PDF — как
@@ -305,7 +312,9 @@ canonical records текущего `scope_slug` с `response_status = answered` 
 `response_type` обязано точно совпадать с `clarifications[]` этого path. Принятый
 ответ нельзя молча оставить незарегистрированным; typed record, clause bindings и
 точный code/row union остаются обязательными. Записи другого scope и ответы с
-неapproved type не становятся ready semantics и в это множество не входят.
+неapproved type не становятся ready semantics и в это множество не входят. Если
+в файле есть только записи другого scope, этот файл не регистрируется в
+`evidence_sources` текущего manifest.
 
 `clarifications[]` — typed registry, а не копия prose. Каждая запись содержит
 `clarification_id`, `gap_id`, `scope_slug`, `binding_scope`, `source_row_ids`,

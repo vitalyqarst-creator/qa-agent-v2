@@ -131,6 +131,11 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 10b. Если source задает restriction/requiredness, но exact UI oracle отсутствует, не теряй obligation: укажи `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, stable `scope_obligation_id` (`SO-NEG-*` / `SO-REQ-*`) и передай writer-у как candidate TC по `negative-ui-calibration-policy.md`. Parent `GAP-*` используй только для общего неизвестного oracle, но child obligations перечисляй отдельно. `gap_required` оставляй для случаев, когда нельзя сформировать даже candidate TC.
 10c. Если scope содержит буквальный UI-текст/сообщение или неоднозначное преобразование единиц, создай `source-to-package-fidelity.json` по canonical format и зарегистрируй его в `latest_artifacts`. Не преобразуй `МБ` в точные байты без source-backed policy; неизвестную точную boundary fixture сохрани как отдельный `GAP-*` obligation.
 10d. Для нового production/promotion-capable workflow создай `source-assertions.json` по `source-assertions-format.md`, примени `source-assertion-semantic-rule-card.md` и покрой ровно все строки `source-row-inventory.md`. Если manifest не готов к независимому source review, оставь workflow в `blocked-input`.
+10e. При материализации `source-assertions.json` не копируй в `evidence_sources`
+`approved-clarification` files из shared `source-selection.md`, если для текущего
+`scope_slug` нет typed `clarifications[]` records из этого exact path. Чужие
+clarification artifacts не являются supporting context и должны быть omitted, а
+не downgraded до `supporting-material`.
 11. Добавь в `scope-contract.md` секцию `Внутренние Рабочие Пакеты` для каждого подтвержденного scope. Если scope простой, создай один `WP-01`; если неоднородный, раздели работу на несколько `WP-*`. Не используй внутренние рабочие пакеты как замену внешнему split для всего ФТ.
 12. Каждый внутренний рабочий пакет должен иметь focus, source_refs, included_requirements, design_method, expected_outputs и split_required. Это рабочий план writer-а, а не новый внешний scope. `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` должны явно требовать `package_id`, package ledger gate, Package Test Design Plan gate и package TC gate.
 13. Если PDF для structural cross-check отсутствует, явно укажи это в промежуточных заметках или `coverage gaps`, а не оставляй неявным.
