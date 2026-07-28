@@ -210,6 +210,47 @@ class DerivationCompilerTests(unittest.TestCase):
                     ),
                 )
 
+    def test_source_first_editability_wins_over_visible_condition(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-PHONE-TYPE-EDIT",
+            atom_id="ATOM-PHONE-TYPE-EDIT",
+            exact_source_text=(
+                "Тип телефона Да Раскрывающийся список. Видимость-да, если нажата "
+                "кнопка `Добавить телефон`."
+            ),
+            canonical_statement="Поле `Тип телефона` редактируемо.",
+            condition_clauses=(
+                "В блоке повторителе отображается поле `Тип телефона`.",
+            ),
+            action_clauses=("Выбрать значение в поле `Тип телефона`.",),
+            oracle_clauses=("Поле допускает выбор значения пользователем.",),
+            requirement_codes=(),
+            obligation_ids=("OBL-PHONE-TYPE-EDIT",),
+        )
+        obligation = PreparedObligation(
+            obligation_id="OBL-PHONE-TYPE-EDIT",
+            source_refs=("SRC-001",),
+            atomic_statement="Поле `Тип телефона` редактируемо.",
+            observable_oracle="Поле допускает выбор значения пользователем.",
+            test_intent="Выбрать значение в поле `Тип телефона`.",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+            atom_id="ATOM-PHONE-TYPE-EDIT",
+        )
+
+        self.assertEqual(
+            ("source-editability", "editable"),
+            derivation_compiler_module._source_first_kind_and_variant(
+                assertion=assertion,
+                obligation=obligation,
+                fixtures=(),
+                complex_condition=False,
+            ),
+        )
+
     def test_source_first_default_fixture_uses_oracle_value_not_block_label(self) -> None:
         assertion = replace(
             self._assertion(),

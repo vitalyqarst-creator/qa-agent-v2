@@ -1389,6 +1389,24 @@ def _source_first_kind_and_variant(
         and any(token in text for token in ("нажат", "кноп", "click", "button", "add"))
     ):
         return "source-add-row", "repeater-add"
+    edit_popup_open = (
+        any(token in text for token in ("откры", "open"))
+        and any(token in text for token in ("всплыва", "popup", "modal", "dialog"))
+        and any(token in text for token in ("редакт", "edit"))
+        and any(token in text for token in ("предзаполн", "prefill", "pre-filled", "prefilled"))
+    )
+    if not edit_popup_open and any(
+        token
+        in text
+        for token in (
+            "редакт",
+            "допускает выбор",
+            "выбрать значение",
+            "editable",
+            "editability",
+        )
+    ):
+        return "source-editability", "editable"
     if any(
         token in text for token in ("видим", "отображ", "visible", "displayed", "shown")
     ) and not any(
@@ -1434,15 +1452,8 @@ def _source_first_kind_and_variant(
         return "source-format", "format"
     if any(token in text for token in ("видим", "отображ", "visible", "displayed")):
         return "visibility", "visible"
-    if (
-        any(token in text for token in ("откры", "open"))
-        and any(token in text for token in ("всплыва", "popup", "modal", "dialog"))
-        and any(token in text for token in ("редакт", "edit"))
-        and any(token in text for token in ("предзаполн", "prefill", "pre-filled", "prefilled"))
-    ):
+    if edit_popup_open:
         return "source-runtime", "open-prefilled-edit-form"
-    if any(token in text for token in ("редакт", "editable", "editability")):
-        return "source-editability", "editable"
     return "source-runtime", "runtime"
 
 
