@@ -428,6 +428,31 @@ class SourceParityTests(unittest.TestCase):
 
         self.assertEqual(caught.exception.code, "docx-xhtml-text-unit-mismatch")
 
+    def test_leading_private_word_bullet_is_transport_noise(self) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>\uf02d Insurance companies are supported</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Insurance companies are supported")
+        document.save(self.docx)
+        manifest = self._single_row_manifest(
+            source_text="\uf02d Insurance companies are supported",
+            context_class="ancestor-and-section-preamble",
+            requirement_codes=(),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(),
+            self._single_literal_candidate(manifest),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual("semantic-paragraph", row_match["comparison_mode"])
+
     def test_fails_closed_when_one_docx_row_differs(self) -> None:
         manifest = self._manifest()
         self._write_docx(wrong_value=True)

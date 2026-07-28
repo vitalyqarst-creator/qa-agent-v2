@@ -80,6 +80,7 @@ _DASH_TRANSLATION = str.maketrans(
         "\uff0d": "-",
     }
 )
+_LEADING_LIST_BULLET_RE = re.compile(r"^\s*[\u00b7\u2022\u2043\u25cf\u25e6\uf02d]\s*")
 
 
 class SourceParityError(ValueError):
@@ -226,6 +227,7 @@ def _canonical_transport_text(
         )
     else:
         normalized = _REQUIREMENT_MARKER_RE.sub("", normalized)
+    normalized = _LEADING_LIST_BULLET_RE.sub("", normalized)
     # LibreOffice XHTML renders Word list bullets as hyphens after list-introducing
     # punctuation.  Do not remove other hyphens: they may be requirement content.
     return re.sub(r"([:,])\s*-\s*", r"\1", normalized)
