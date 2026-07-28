@@ -834,11 +834,39 @@ def _editability_fixture_values(
     related = subject_fixture_values.get(prop.subject_key, ())
     if related:
         return related[:2]
-    return tuple(
+    values = tuple(
         value
         for value in obligation.fixture_values
         if value.strip() and not _looks_like_generic_fixture(value)
     )[:2]
+    if values:
+        return values
+    representative = _source_valid_edit_probe_value(prop=prop, obligation=obligation)
+    if representative:
+        return (representative,)
+    return ()
+
+
+def _source_valid_edit_probe_value(
+    *,
+    prop: CoverageProperty,
+    obligation: CoverageObligation,
+) -> str:
+    text = _normalized_text(
+        " ".join(
+            (
+                prop.canonical_statement,
+                obligation.atomic_statement,
+                obligation.observable_oracle,
+                obligation.validation_trigger,
+            )
+        )
+    )
+    if re.search(r"\be-?mail\b", text, re.IGNORECASE) or "@" in text:
+        return "qa.autofin@example.ru"
+    if "телефон" in text and "10" in text and "числов" in text:
+        return "9123456789"
+    return ""
 
 
 def _source_input_action_with_value(

@@ -532,6 +532,63 @@ class TestDesignTests(unittest.TestCase):
         self.assertIn("`Мобильный`", rendered)
         self.assertNotIn("source-backed fixture only", rendered)
 
+    def test_source_editability_infers_representative_value_from_format_constraint(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "E-mail",
+                "Поле `E-mail` редактируемо, значение должно содержать символ `@`.",
+                "qa.autofin@example.ru",
+            ),
+            (
+                "Мобильный телефон",
+                "Поле `Мобильный телефон` редактируемо и допускает только 10 числовых символов.",
+                "9123456789",
+            ),
+        )
+        for label, statement, expected_value in cases:
+            with self.subTest(label=label):
+                graph = _graph(
+                    kind="source-editability",
+                    fixtures=("source-backed fixture only",),
+                    trigger=f"Ввести значение в поле `{label}`.",
+                )
+                graph = replace(
+                    graph,
+                    properties=(
+                        replace(
+                            graph.properties[0],
+                            canonical_statement=statement,
+                        ),
+                        *graph.properties[1:],
+                    ),
+                    obligations=(
+                        replace(
+                            graph.obligations[0],
+                            atomic_statement=statement,
+                            observable_oracle=(
+                                f"Поле `{label}` допускает редактирование пользователем."
+                            ),
+                            validation_trigger=f"Ввести значение в поле `{label}`.",
+                            fixture_values=("source-backed fixture only",),
+                        ),
+                    ),
+                )
+                context = replace(
+                    _context(),
+                    subject_labels={
+                        **_context().subject_labels,
+                        "customer-name": label,
+                    },
+                )
+
+                case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+                rendered = "\n".join((*case.test_data, *case.steps, case.expected_result))
+
+                self.assertIn(f"`{expected_value}`", rendered)
+                self.assertNotIn("source-backed fixture only", rendered)
+
     def test_input_action_without_target_gets_typed_subject_wrapper(self) -> None:
         graph = _graph(
             kind="source-format",
