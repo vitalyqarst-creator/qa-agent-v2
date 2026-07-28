@@ -1154,6 +1154,55 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertEqual("candidate-ui-calibration", designs[0]["status"])
         self.assertIn(previous_cases[0].tc_id, designs[0]["calibration_question"])
 
+    def assert_revision_finding_becomes_calibration_pending(
+        self,
+        *,
+        finding_type: str,
+        message: str,
+    ) -> None:
+        graph = _multi_runtime_graph()
+        _, revision_input, previous_cases = self.write_revision_source_attempt(
+            graph,
+            finding_type=finding_type,
+            message=message,
+        )
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            f"model-runtime-revision-{finding_type}",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        designs = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(
+                encoding="utf-8"
+            )
+        )["cases"]
+        self.assertEqual("candidate-ui-calibration", designs[0]["status"])
+        self.assertIn(previous_cases[0].tc_id, designs[0]["calibration_question"])
+
+    def test_model_runtime_revision_nonconcrete_test_data_becomes_calibration_pending(self) -> None:
+        self.assert_revision_finding_becomes_calibration_pending(
+            finding_type="test-data-nonconcrete",
+            message=(
+                "The TC requires two distinct partners but no source-backed fixture "
+                "is registered."
+            ),
+        )
+
+    def test_model_runtime_revision_incorrect_execution_status_becomes_calibration_pending(self) -> None:
+        self.assert_revision_finding_becomes_calibration_pending(
+            finding_type="execution-status-incorrect",
+            message=(
+                "The TC is executable only if a concrete disallowed transition "
+                "class is known."
+            ),
+        )
+
     def test_model_runtime_revision_source_bound_expected_result_can_be_repaired(self) -> None:
         graph = _multi_runtime_graph()
         _, revision_input, previous_cases = self.write_revision_source_attempt(

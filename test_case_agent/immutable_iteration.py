@@ -460,10 +460,12 @@ def _stage_prompt(stage: str, request: Mapping[str, Any]) -> str:
                     "the previous shadow draft. Do not rewrite unaffected TCs. "
                     "For affected executable cases, repair only source-backed "
                     "defects described in `findings_by_case`. If a finding requires "
-                    "an unknown UI observable or validation/commit trigger that is "
-                    "not source-bound, keep the case as calibration-pending by "
-                    "returning the provided `calibration_question`; do not invent "
-                    "UI messages, markers, buttons, or validation responses. If a "
+                    "an unknown UI observable, validation/commit trigger, concrete "
+                    "test fixture, or representative disallowed transition class "
+                    "that is not source-bound, keep the case as calibration-pending "
+                    "by returning the provided `calibration_question`; do not invent "
+                    "UI messages, markers, buttons, statuses, fixtures, or validation "
+                    "responses. If a "
                     "source-bound commit/validation action is explicit in the seed "
                     "or source evidence, write it as an action-oriented step. "
                     "Runner-owned identity and traceability remain immutable."
@@ -1088,7 +1090,9 @@ def _artifact_inventory(output_dir: Path) -> list[str]:
 
 _REVISION_CALIBRATION_FINDING_TYPES = {
     "commit-action-missing",
+    "execution-status-incorrect",
     "expected-result-unsupported",
+    "test-data-nonconcrete",
 }
 _REVISION_SOURCE_BOUND_REPAIR_HINT = (
     "Masked rendering belongs to ASSERT-019/OBL-BSR-183-PHONE-DEFAULT-MASK"
