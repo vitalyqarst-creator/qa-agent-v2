@@ -2110,9 +2110,7 @@ def validate_runtime_writer_response(
                     f"runtime writer omitted calibration question for {case_key}"
                 )
         elif calibration_question:
-            raise IterationContractError(
-                f"runtime writer added calibration question to executable case {case_key}"
-            )
+            calibration_question = ""
         title = _one_line(item["title"], f"$.cases[{index}].title")
         preconditions = _strings(
             item["preconditions"],

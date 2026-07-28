@@ -829,6 +829,32 @@ class IterationContractTests(unittest.TestCase):
         self.assertEqual(1, len(designs))
         self.assertEqual((), unresolved)
 
+    def test_runtime_writer_strips_executable_case_calibration_question(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    calibration_question=(
+                        "Какой точный элемент интерфейса инициирует переход?"
+                    ),
+                )
+            ],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual("", designs[0].calibration_question)
+
     def test_runtime_writer_accepts_multi_seed_model_runtime_response(self) -> None:
         graph = _multi_runtime_graph()
         plan = build_test_design_plan(graph, context=_context())
