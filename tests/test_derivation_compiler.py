@@ -157,6 +157,59 @@ class DerivationCompilerTests(unittest.TestCase):
             ),
         )
 
+    def test_source_first_repeater_mutations_are_not_repeated_digits(self) -> None:
+        examples = (
+            (
+                "ASSERT-ADD-PHONE",
+                "OBL-ADD-PHONE",
+                "Нажать кнопку `Добавить телефон`.",
+                "Появляется блок-повторитель с полями `Тип телефона` и `Номер телефона`.",
+                ("source-add-row", "repeater-add"),
+            ),
+            (
+                "ASSERT-DELETE-PHONE",
+                "OBL-DELETE-PHONE",
+                "Нажать кнопку `Корзина` для добавленного блока.",
+                "Блок-повторитель с полями `Тип телефона` и `Номер телефона` удаляется.",
+                ("source-delete-row", "repeater-delete"),
+            ),
+        )
+        for assertion_id, obligation_id, action, oracle, expected in examples:
+            with self.subTest(assertion_id=assertion_id):
+                assertion = replace(
+                    self._assertion(),
+                    assertion_id=assertion_id,
+                    atom_id=f"ATOM-{assertion_id}",
+                    exact_source_text=f"{action} {oracle}",
+                    canonical_statement=oracle,
+                    action_clauses=(action,),
+                    oracle_clauses=(oracle,),
+                    requirement_codes=("BSR 171",),
+                    obligation_ids=(obligation_id,),
+                )
+                obligation = PreparedObligation(
+                    obligation_id=obligation_id,
+                    source_refs=("SRC-001", "BSR 171"),
+                    atomic_statement=oracle,
+                    observable_oracle=oracle,
+                    test_intent=f"Action: {action}; Oracle: {oracle}",
+                    coverage_status="testable",
+                    gap_id="",
+                    dictionary_refs=(),
+                    notes="",
+                    atom_id=f"ATOM-{assertion_id}",
+                )
+
+                self.assertEqual(
+                    expected,
+                    derivation_compiler_module._source_first_kind_and_variant(
+                        assertion=assertion,
+                        obligation=obligation,
+                        fixtures=(),
+                        complex_condition=False,
+                    ),
+                )
+
     def test_source_first_default_fixture_uses_oracle_value_not_block_label(self) -> None:
         assertion = replace(
             self._assertion(),
