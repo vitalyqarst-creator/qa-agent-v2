@@ -121,6 +121,7 @@ class FixtureBackend:
         fail_on_stage: str | None = None,
         receipt_tokens: Any = None,
         bad_runtime_writer_response: bool = False,
+        runtime_writer_placeholder_leak: bool = False,
         all_runtime_writer_unresolved: bool = False,
         runtime_writer_state_only_precondition: bool = False,
         runtime_writer_ambiguous_precondition: bool = False,
@@ -133,6 +134,7 @@ class FixtureBackend:
         self.fail_on_stage = fail_on_stage
         self.receipt_tokens = receipt_tokens
         self.bad_runtime_writer_response = bad_runtime_writer_response
+        self.runtime_writer_placeholder_leak = runtime_writer_placeholder_leak
         self.all_runtime_writer_unresolved = all_runtime_writer_unresolved
         self.runtime_writer_state_only_precondition = runtime_writer_state_only_precondition
         self.runtime_writer_ambiguous_precondition = runtime_writer_ambiguous_precondition
@@ -208,6 +210,29 @@ class FixtureBackend:
                                 "test_data": list(runtime["test_data"]),
                                 "steps": list(seed["runner_traceability"]),
                                 "expected_result": runtime["expected_result"],
+                                "postconditions": list(runtime["postconditions"]),
+                                "calibration_question": runtime[
+                                    "calibration_question"
+                                ],
+                            }
+                        )
+                        continue
+                    if self.runtime_writer_placeholder_leak:
+                        cases.append(
+                            {
+                                "case_key": seed["case_key"],
+                                "tc_id": seed["tc_id"],
+                                "title": runtime["title"],
+                                "case_type": seed["case_type"],
+                                "preconditions": list(runtime["preconditions"]),
+                                "test_data": [
+                                    *runtime["test_data"],
+                                    "Фикстура: `source-backed fixture only`.",
+                                ],
+                                "steps": list(runtime["steps"]),
+                                "expected_result": (
+                                    "requires UI calibration for exact response"
+                                ),
                                 "postconditions": list(runtime["postconditions"]),
                                 "calibration_question": runtime[
                                     "calibration_question"
@@ -716,6 +741,33 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertIn("runtime writer leaked internal identifier", diagnostic["error"])
         self.assertIn("subject:", diagnostic["error"])
+
+    def test_model_runtime_prose_placeholder_leak_stops_before_draft_and_reviewer(self) -> None:
+        backend = FixtureBackend(runtime_writer_placeholder_leak=True)
+
+        result = self.run_engine(
+            _graph(),
+            "model-runtime-placeholder-leak",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+        )
+
+        self.assertEqual("blocked-contract", result.status)
+        self.assertEqual(["writer"], backend.calls)
+        self.assertEqual(1, result.writer_model_calls)
+        self.assertEqual(0, result.reviewer_model_calls)
+        self.assertTrue(
+            (result.output_dir / "model-stages" / "writer-response.json").exists()
+        )
+        self.assertFalse((result.output_dir / "reviewer-request.json").exists())
+        self.assertFalse((result.output_dir / "shadow-test-cases.md").exists())
+        diagnostic = json.loads(
+            (result.output_dir / "failure-diagnostic.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertIn("non-executable placeholder", diagnostic["error"])
+        self.assertIn("source-backed fixture only", diagnostic["error"])
 
     def test_model_runtime_prose_state_only_precondition_stops_before_draft_and_reviewer(self) -> None:
         backend = FixtureBackend(runtime_writer_state_only_precondition=True)

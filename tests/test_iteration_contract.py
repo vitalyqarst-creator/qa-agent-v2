@@ -1765,6 +1765,37 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_rejects_non_executable_placeholder_leaks(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = {
+            "schema_version": 1,
+            "writer_mode": "model-runtime-prose",
+            "graph_digest": graph.digest,
+            "route_contract_ack": "runtime-prose-one-case-per-seed",
+            "cases": [
+                _runtime_writer_case(
+                    seed,
+                    test_data=[
+                        "Фикстура: `source-backed fixture only`.",
+                    ],
+                )
+            ],
+            "unresolved": [],
+        }
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "non-executable placeholder in test_data.*source-backed fixture only",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_rejects_value_only_preconditions(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

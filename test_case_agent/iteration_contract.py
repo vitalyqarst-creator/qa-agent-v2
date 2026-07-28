@@ -102,6 +102,11 @@ _INTERNAL_RUNTIME_TOKEN_RE = re.compile(
     r"\bBSR\s+\d+\b)",
     re.IGNORECASE,
 )
+_RUNTIME_NONEXECUTABLE_PLACEHOLDER_RE = re.compile(
+    r"\b(?:source-backed fixture only|source-backed value only|"
+    r"requires ui calibration for exact response)\b",
+    re.IGNORECASE,
+)
 _BACKTICK_VALUE_RE = re.compile(r"`([^`]+)`")
 _RUNTIME_NO_SETUP_RE = re.compile(r"^не\s+требуются$", re.IGNORECASE)
 _RUNTIME_REJECTION_ORACLE_RE = re.compile(
@@ -1632,6 +1637,22 @@ def _runtime_internal_token(
     return None
 
 
+def _runtime_nonexecutable_placeholder(
+    *,
+    case_key: str,
+    field: str,
+    values: Sequence[str],
+) -> str | None:
+    for value in values:
+        match = _RUNTIME_NONEXECUTABLE_PLACEHOLDER_RE.search(value)
+        if match is not None:
+            return (
+                f"runtime writer leaked non-executable placeholder in {field} "
+                f"for {case_key}: {match.group(0)}"
+            )
+    return None
+
+
 def _validate_runtime_writer_prose(
     *,
     case_key: str,
@@ -1655,6 +1676,13 @@ def _validate_runtime_writer_prose(
     )
     for field, values in fields:
         problem = _runtime_internal_token(
+            case_key=case_key,
+            field=field,
+            values=values,
+        )
+        if problem is not None:
+            raise IterationContractError(problem)
+        problem = _runtime_nonexecutable_placeholder(
             case_key=case_key,
             field=field,
             values=values,
