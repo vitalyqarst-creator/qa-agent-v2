@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from dataclasses import replace
 
+import test_case_agent.test_design as test_design_module
 from test_case_agent.coverage_graph import (
     CoverageCase,
     CoverageGraph,
@@ -275,6 +276,20 @@ def _repeater_graph_and_context() -> tuple[CoverageGraph, DesignContext]:
 
 
 class TestDesignTests(unittest.TestCase):
+    def test_block_only_navigation_opens_enclosing_screen_first(self) -> None:
+        context = DesignContext(
+            package_id="WP-01",
+            scope_title="Блок «Партнеры»",
+            base_preconditions=(),
+            subject_labels={},
+            condition_preconditions={},
+        )
+
+        self.assertEqual(
+            ("Открыть экран `Партнеры`.", "Перейти к блоку `Партнеры`."),
+            test_design_module._scope_navigation_from_context(context),
+        )
+
     def test_positive_input_is_deterministic_and_concrete(self) -> None:
         plan = build_test_design_plan(_graph(), context=_context())
 

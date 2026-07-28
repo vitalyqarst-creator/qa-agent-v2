@@ -762,7 +762,7 @@ def _scope_navigation_from_context(context: DesignContext) -> tuple[str, ...]:
     if card:
         return (f"Открыть карточку `{card}`.",)
     if block:
-        return (f"Перейти к блоку `{block}`.",)
+        return (f"Открыть экран `{block}`.", f"Перейти к блоку `{block}`.")
     return ()
 
 
