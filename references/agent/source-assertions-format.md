@@ -275,8 +275,18 @@ fragments из-за inline markup; primary text и все такие fragments �
 файлу запрещён. Cross-row evidence для condition/action/oracle и requirement
 code задаётся только через typed clause/code bindings. Прочее разрешённое
 semantic evidence задаётся через
-`supporting_source_bindings = {source_row_id, evidence_role,
-exact_source_fragment}`; fragment проверяется внутри bounded text declared row.
+`supporting_source_bindings` supports two closed forms:
+
+- row-bound: `{source_row_id, evidence_role, exact_source_fragment}` for
+  non-primary evidence that is still a registered `source_rows[]` row;
+- evidence-bound: `{evidence_source_path, evidence_locator, evidence_role,
+  exact_source_fragment}` for dictionary/support values registered as
+  `evidence_sources[]` with role `supporting-material`.
+
+Row-bound fragments are checked inside the declared row bounded text.
+Evidence-bound fragments are checked inside the hash-bound UTF-8 supporting
+material. Do not register support Markdown as a primary source row merely to
+bind dictionary values.
 Допустимые роли: `subject`, `property`, `applicability`, `constraint`,
 `cross-reference`, `definition`, `polarity`. Роли `condition`, `action`,
 `oracle` и `requirement-code` запрещены здесь: их единственный источник истины —

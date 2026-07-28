@@ -50,6 +50,8 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
 - Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
+- Legacy session review-cycle format: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
+- Codex SDK orchestration format: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)
 - Quality feedback loop: [../references/agent/quality-feedback-loop.md](../references/agent/quality-feedback-loop.md)
 - User interaction guide: [../references/agent/user-interaction-guide.md](../references/agent/user-interaction-guide.md)
 - End-to-end use case: [../references/agent/test-case-writing-use-case.md](../references/agent/test-case-writing-use-case.md)

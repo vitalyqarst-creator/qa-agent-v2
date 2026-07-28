@@ -814,22 +814,21 @@ class SourceRow:
 
 @dataclass(frozen=True)
 class SupportingSourceBinding:
-    source_row_id: str
     evidence_role: str
     exact_source_fragment: str
+    source_row_id: str | None = None
+    evidence_source_path: str | None = None
+    evidence_locator: str | None = None
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "SupportingSourceBinding":
         _exact_fields(
             payload,
-            required={"source_row_id", "evidence_role", "exact_source_fragment"},
+            required={"evidence_role", "exact_source_fragment"},
+            optional={"source_row_id", "evidence_source_path", "evidence_locator"},
             label="supporting source binding",
         )
         result = cls(
-            source_row_id=_nonempty_text(
-                payload["source_row_id"],
-                "supporting source binding.source_row_id",
-            ),
             evidence_role=_nonempty_text(
                 payload["evidence_role"],
                 "supporting source binding.evidence_role",
@@ -838,15 +837,61 @@ class SupportingSourceBinding:
                 payload["exact_source_fragment"],
                 "supporting source binding.exact_source_fragment",
             ),
+            source_row_id=(
+                _nonempty_text(
+                    payload["source_row_id"],
+                    "supporting source binding.source_row_id",
+                )
+                if "source_row_id" in payload and payload["source_row_id"] is not None
+                else None
+            ),
+            evidence_source_path=(
+                _relative_path(
+                    payload["evidence_source_path"],
+                    "supporting source binding.evidence_source_path",
+                )
+                if "evidence_source_path" in payload
+                and payload["evidence_source_path"] is not None
+                else None
+            ),
+            evidence_locator=(
+                _nonempty_text(
+                    payload["evidence_locator"],
+                    "supporting source binding.evidence_locator",
+                )
+                if "evidence_locator" in payload
+                and payload["evidence_locator"] is not None
+                else None
+            ),
         )
         result.validate_shape()
         return result
 
     def validate_shape(self) -> None:
-        if re.fullmatch(r"SRC-[A-Za-z0-9_.-]+", self.source_row_id) is None:
+        row_bound = self.source_row_id is not None
+        evidence_bound = self.evidence_source_path is not None
+        if row_bound == evidence_bound:
             _fail(
-                "invalid-supporting-source-row-id",
-                "supporting source binding.source_row_id must name one SRC-* row",
+                "ambiguous-supporting-source-binding",
+                "supporting source binding must bind either source_row_id or "
+                "evidence_source_path, but not both",
+            )
+        if row_bound:
+            assert self.source_row_id is not None
+            if self.evidence_locator is not None:
+                _fail(
+                    "row-supporting-source-locator-invalid",
+                    "row-bound supporting source binding must not declare evidence_locator",
+                )
+            if re.fullmatch(r"SRC-[A-Za-z0-9_.-]+", self.source_row_id) is None:
+                _fail(
+                    "invalid-supporting-source-row-id",
+                    "supporting source binding.source_row_id must name one SRC-* row",
+                )
+        elif self.evidence_locator is None:
+            _fail(
+                "supporting-evidence-locator-missing",
+                "evidence-bound supporting source binding must declare evidence_locator",
             )
         if self.evidence_role not in SUPPORTING_SOURCE_EVIDENCE_ROLES:
             _fail(
@@ -861,11 +906,26 @@ class SupportingSourceBinding:
 
     def to_dict(self) -> dict[str, Any]:
         self.validate_shape()
-        return {
-            "source_row_id": self.source_row_id,
+        payload: dict[str, Any] = {
             "evidence_role": self.evidence_role,
             "exact_source_fragment": self.exact_source_fragment,
         }
+        if self.source_row_id is not None:
+            payload["source_row_id"] = self.source_row_id
+        else:
+            payload["evidence_source_path"] = self.evidence_source_path
+            payload["evidence_locator"] = self.evidence_locator
+        return payload
+
+    def identity_key(self) -> tuple[str, str, str, str, str]:
+        self.validate_shape()
+        return (
+            self.source_row_id or "",
+            self.evidence_source_path or "",
+            self.evidence_locator or "",
+            self.evidence_role,
+            normalize_exact_source_text(self.exact_source_fragment),
+        )
 
 
 @dataclass(frozen=True)
@@ -2050,7 +2110,7 @@ class SourceAssertion:
                 f"{self.assertion_id}.clause_evidence_bindings must cover every "
                 "condition/action/oracle clause index and no others",
             )
-        supporting_keys: set[tuple[str, str, str]] = set()
+        supporting_keys: set[tuple[str, str, str, str, str]] = set()
         for binding in self.supporting_source_bindings:
             if not isinstance(binding, SupportingSourceBinding):
                 _fail(
@@ -2058,11 +2118,7 @@ class SourceAssertion:
                     f"{self.assertion_id}.supporting_source_bindings contains an invalid item",
                 )
             binding.validate_shape()
-            key = (
-                binding.source_row_id,
-                binding.evidence_role,
-                normalize_exact_source_text(binding.exact_source_fragment),
-            )
+            key = binding.identity_key()
             if key in supporting_keys:
                 _fail(
                     "duplicate-supporting-source-binding",
@@ -2687,6 +2743,13 @@ class SourceAssertionManifest:
                 "candidate-bound source rows",
             )
 
+        declared_evidence_sources_by_path = {
+            evidence_source.path: evidence_source
+            for evidence_source in self.evidence_sources
+        }
+        evidence_bound_supporting_bindings: list[
+            tuple[SourceAssertion, SupportingSourceBinding]
+        ] = []
         assertion_ids: set[str] = set()
         atom_ids: set[str] = set()
         obligation_ids: set[str] = set()
@@ -2761,32 +2824,48 @@ class SourceAssertionManifest:
                         f"source row {assertion.source_row_id}",
                     )
             for binding in assertion.supporting_source_bindings:
-                supporting_row = source_rows_by_id.get(binding.source_row_id)
-                if supporting_row is None:
+                if binding.source_row_id is not None:
+                    supporting_row = source_rows_by_id.get(binding.source_row_id)
+                    if supporting_row is None:
+                        _fail(
+                            "supporting-source-row-missing",
+                            f"{assertion.assertion_id} supporting binding references absent "
+                            f"source row {binding.source_row_id}",
+                        )
+                    if binding.source_row_id == assertion.source_row_id:
+                        _fail(
+                            "supporting-source-binding-primary-row",
+                            f"{assertion.assertion_id} must keep primary-row fragments in "
+                            "exact_source_text/exact_source_fragments",
+                        )
+                    if not contains_token_bounded_source_fragment(
+                        normalize_exact_source_text(supporting_row.bounded_source_text),
+                        normalize_exact_source_text(binding.exact_source_fragment),
+                    ):
+                        _fail(
+                            "supporting-source-fragment-outside-declared-row",
+                            f"{assertion.assertion_id} supporting fragment is absent from "
+                            f"declared source row {binding.source_row_id}",
+                        )
+                    continue
+                assert binding.evidence_source_path is not None
+                bound_evidence = declared_evidence_sources_by_path.get(
+                    binding.evidence_source_path
+                )
+                if bound_evidence is None:
                     _fail(
-                        "supporting-source-row-missing",
+                        "supporting-evidence-source-missing",
                         f"{assertion.assertion_id} supporting binding references absent "
-                        f"source row {binding.source_row_id}",
+                        f"evidence source {binding.evidence_source_path}",
                     )
-                if binding.source_row_id == assertion.source_row_id:
+                if bound_evidence.role != "supporting-material":
                     _fail(
-                        "supporting-source-binding-primary-row",
-                        f"{assertion.assertion_id} must keep primary-row fragments in "
-                        "exact_source_text/exact_source_fragments",
+                        "supporting-evidence-source-role-mismatch",
+                        f"{assertion.assertion_id} evidence-bound supporting binding "
+                        "must bind a registered supporting-material evidence source",
                     )
-                if not contains_token_bounded_source_fragment(
-                    normalize_exact_source_text(supporting_row.bounded_source_text),
-                    normalize_exact_source_text(binding.exact_source_fragment),
-                ):
-                    _fail(
-                        "supporting-source-fragment-outside-declared-row",
-                        f"{assertion.assertion_id} supporting fragment is absent from "
-                        f"declared source row {binding.source_row_id}",
-                    )
-            evidence_sources_by_path = {
-                evidence_source.path: evidence_source
-                for evidence_source in self.evidence_sources
-            }
+                evidence_bound_supporting_bindings.append((assertion, binding))
+            evidence_sources_by_path = declared_evidence_sources_by_path
             for code_binding in assertion.requirement_code_bindings:
                 code_row = source_rows_by_id.get(code_binding.source_row_id)
                 if code_row is None:
@@ -2993,6 +3072,55 @@ class SourceAssertionManifest:
                     f"expected={evidence_source.sha256}, actual={actual_sha}",
                 )
             evidence_files_by_path[evidence_source.path] = actual_path
+
+        text_evidence_suffixes = {
+            ".csv",
+            ".html",
+            ".json",
+            ".md",
+            ".txt",
+            ".xhtml",
+            ".yaml",
+            ".yml",
+        }
+        evidence_texts_by_path: dict[str, str] = {}
+        for assertion, binding in evidence_bound_supporting_bindings:
+            assert binding.evidence_source_path is not None
+            bound_path = evidence_files_by_path.get(binding.evidence_source_path)
+            if bound_path is None:
+                _fail(
+                    "supporting-evidence-source-missing",
+                    f"{assertion.assertion_id} supporting binding references absent "
+                    f"evidence source {binding.evidence_source_path}",
+                )
+            if bound_path.suffix.lower() not in text_evidence_suffixes:
+                _fail(
+                    "supporting-evidence-source-not-text",
+                    f"{assertion.assertion_id} evidence-bound supporting binding "
+                    "requires a UTF-8 text evidence source",
+                )
+            if binding.evidence_source_path not in evidence_texts_by_path:
+                try:
+                    evidence_texts_by_path[binding.evidence_source_path] = (
+                        normalize_exact_source_text(
+                            bound_path.read_text(encoding="utf-8")
+                        )
+                    )
+                except UnicodeDecodeError as exc:
+                    _fail(
+                        "supporting-evidence-source-not-utf8",
+                        f"{assertion.assertion_id} evidence-bound supporting source "
+                        f"is not valid UTF-8: {binding.evidence_source_path}: {exc}",
+                    )
+            if not contains_token_bounded_source_fragment(
+                evidence_texts_by_path[binding.evidence_source_path],
+                normalize_exact_source_text(binding.exact_source_fragment),
+            ):
+                _fail(
+                    "supporting-evidence-fragment-outside-declared-source",
+                    f"{assertion.assertion_id} supporting fragment is absent from "
+                    f"declared evidence source {binding.evidence_source_path}",
+                )
 
         clarification_by_id: dict[str, ApprovedClarification] = {}
         clarification_rows_by_path: dict[

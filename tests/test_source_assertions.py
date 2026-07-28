@@ -2200,6 +2200,83 @@ class SourceAssertionManifestTests(unittest.TestCase):
             ),
         )
 
+    def test_structured_supporting_binding_allows_supporting_material_evidence(self) -> None:
+        support_path = self.repo_root / "support" / "phone-types.md"
+        support_path.parent.mkdir(parents=True)
+        support_path.write_text(
+            "# Phone types\n\nAllowed values: Mobile, Home, Work.\n",
+            encoding="utf-8",
+        )
+        primary = replace(
+            self._assertion(3, "Фамилия"),
+            supporting_source_bindings=(
+                SupportingSourceBinding(
+                    evidence_source_path="support/phone-types.md",
+                    evidence_locator="section:Phone types",
+                    evidence_role="definition",
+                    exact_source_fragment="Mobile, Home, Work",
+                ),
+            ),
+        )
+
+        manifest = build_source_assertion_manifest(
+            self.repo_root,
+            scope_slug="applications-menu-search",
+            source_paths=("source/main.xhtml",),
+            assertions=(primary,),
+            evidence_sources=(("support/phone-types.md", "supporting-material"),),
+            expected_source_row_ids=("SRC-AMS-003",),
+        )
+
+        restored = SourceAssertionManifest.from_dict(manifest.to_dict())
+        binding = restored.assertions[0].supporting_source_bindings[0]
+        self.assertIsNone(binding.source_row_id)
+        self.assertEqual("support/phone-types.md", binding.evidence_source_path)
+        self.assertEqual("section:Phone types", binding.evidence_locator)
+
+        stale = replace(
+            primary,
+            supporting_source_bindings=(
+                SupportingSourceBinding(
+                    evidence_source_path="support/phone-types.md",
+                    evidence_locator="section:Phone types",
+                    evidence_role="definition",
+                    exact_source_fragment="Fax",
+                ),
+            ),
+        )
+        self.assert_contract_error(
+            "supporting-evidence-fragment-outside-declared-source",
+            lambda: build_source_assertion_manifest(
+                self.repo_root,
+                scope_slug="applications-menu-search",
+                source_paths=("source/main.xhtml",),
+                assertions=(stale,),
+                evidence_sources=(("support/phone-types.md", "supporting-material"),),
+            ),
+        )
+
+        missing_registration = replace(
+            primary,
+            supporting_source_bindings=(
+                SupportingSourceBinding(
+                    evidence_source_path="support/phone-types.md",
+                    evidence_locator="section:Phone types",
+                    evidence_role="definition",
+                    exact_source_fragment="Mobile",
+                ),
+            ),
+        )
+        self.assert_contract_error(
+            "supporting-evidence-source-missing",
+            lambda: build_source_assertion_manifest(
+                self.repo_root,
+                scope_slug="applications-menu-search",
+                source_paths=("source/main.xhtml",),
+                assertions=(missing_registration,),
+            ),
+        )
+
     def test_supporting_source_binding_roles_cover_composite_chains(self) -> None:
         self.assertTrue(
             {

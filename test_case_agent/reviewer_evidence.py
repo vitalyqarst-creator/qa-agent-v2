@@ -2084,6 +2084,7 @@ def _supporting_evidence_mapping(
     graph: CoverageGraph,
 ) -> list[dict[str, str]]:
     rows = {item.source_row_id: item for item in basis.manifest.source_rows}
+    evidence_sources = {item.path: item for item in basis.manifest.evidence_sources}
     properties = {item.assertion_id: item for item in graph.properties}
     obligations_by_property: dict[str, list[Any]] = {}
     for obligation in graph.obligations:
@@ -2122,23 +2123,43 @@ def _supporting_evidence_mapping(
         for binding in sorted(
             assertion.supporting_source_bindings,
             key=lambda item: (
-                item.source_row_id,
+                item.source_row_id or "",
+                item.evidence_source_path or "",
+                item.evidence_locator or "",
                 item.evidence_role,
                 item.exact_source_fragment,
             ),
         ):
-            source_row = rows.get(binding.source_row_id)
-            if source_row is None:  # manifest validation should reject this first
-                _fail(
-                    "supporting-source-row-missing",
-                    f"{assertion.assertion_id} references {binding.source_row_id}",
-                )
+            if binding.source_row_id is not None:
+                source_row = rows.get(binding.source_row_id)
+                if source_row is None:  # manifest validation should reject this first
+                    _fail(
+                        "supporting-source-row-missing",
+                        f"{assertion.assertion_id} references {binding.source_row_id}",
+                    )
+                source_row_id = binding.source_row_id
+                source_path = source_row.source_path
+                source_locator = source_row.source_locator
+                evidence_source_role = ""
+            else:
+                assert binding.evidence_source_path is not None
+                evidence_source = evidence_sources.get(binding.evidence_source_path)
+                if evidence_source is None:  # manifest validation should reject first
+                    _fail(
+                        "supporting-evidence-source-missing",
+                        f"{assertion.assertion_id} references {binding.evidence_source_path}",
+                    )
+                source_row_id = ""
+                source_path = binding.evidence_source_path
+                source_locator = binding.evidence_locator or ""
+                evidence_source_role = evidence_source.role
             for obligation_id, case_key, tc_id in downstream:
                 result.append(
                     {
-                        "source_row_id": binding.source_row_id,
-                        "source_path": source_row.source_path,
-                        "source_locator": source_row.source_locator,
+                        "source_row_id": source_row_id,
+                        "source_path": source_path,
+                        "source_locator": source_locator,
+                        "evidence_source_role": evidence_source_role,
                         "evidence_role": binding.evidence_role,
                         "exact_source_fragment": binding.exact_source_fragment,
                         "exact_source_fragment_sha256": hashlib.sha256(

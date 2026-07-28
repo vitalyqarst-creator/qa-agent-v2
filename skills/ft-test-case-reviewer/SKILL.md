@@ -65,7 +65,9 @@ Independently verify the extraction regions and complete candidate mapping, then
 emit the required digest-bound `source_inventory_review`. Reject primary fragments
 found only elsewhere in the same file; accept cross-row condition/action/oracle
 or requirement-code provenance only through the corresponding typed binding.
-Use `supporting_source_bindings` only for its closed non-clause semantic roles.
+Use `supporting_source_bindings` only for its closed non-clause semantic roles;
+dictionary/support values must use evidence-bound bindings to registered
+`supporting-material`, not invented primary source rows.
 Apply `source-assertion-semantic-rule-card.md` to every statement/action/oracle
 chain. For every assertion fill the exact thirteen-key `dimension_verdicts` map from the
 canonical contract. The assertion `verdict` must equal its aggregate; verified

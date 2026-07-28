@@ -2566,6 +2566,7 @@ def _validate_semantic_projection_graph(
                     *(
                         item.source_row_id
                         for item in assertion.supporting_source_bindings
+                        if item.source_row_id is not None
                     ),
                 }
                 if not dependency_rows.intersection(assertion_rows):
@@ -2633,7 +2634,11 @@ def _validate_semantic_projection_graph(
         for assertion in linked_assertions:
             assertion_rows = {
                 assertion.source_row_id,
-                *(item.source_row_id for item in assertion.supporting_source_bindings),
+                *(
+                    item.source_row_id
+                    for item in assertion.supporting_source_bindings
+                    if item.source_row_id is not None
+                ),
             }
             if not dependency_rows.intersection(assertion_rows):
                 raise StageRuntimeError(
@@ -2713,7 +2718,11 @@ def _validate_semantic_projection_graph(
             owner = assertion_by_obligation[obligation_id]
             allowed_source_rows = {
                 owner.source_row_id,
-                *(item.source_row_id for item in owner.supporting_source_bindings),
+                *(
+                    item.source_row_id
+                    for item in owner.supporting_source_bindings
+                    if item.source_row_id is not None
+                ),
             }
             if source_row_id not in allowed_source_rows:
                 raise StageRuntimeError(
