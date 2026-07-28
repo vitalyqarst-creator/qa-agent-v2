@@ -46,6 +46,14 @@ _LEADING_GENERIC_REQUIREMENT_CODE_RE = re.compile(
     r"^\s*(?P<prefix>[A-Z][A-Z0-9_-]*)(?P<separator>\s+|[.])\s*"
     r"(?P<number>[1-9][0-9]*)\s*[.]?\s+"
 )
+_LEADING_CONTEXT_LIST_MARKER_RE = re.compile(
+    r"^\s*(?P<marker>[1-9][0-9]*|[A-Za-z])\s*[.]\s+"
+)
+_LEADING_CAPTION_MARKER_RE = re.compile(
+    r"^\s*(?P<label>Рисунок|Таблица|Figure|Table)\s+"
+    r"(?P<number>[1-9][0-9]*)\s+",
+    flags=re.IGNORECASE,
+)
 _DOCX_OPTIONAL_LEADING_CODE_CONTEXT_CLASSES = frozenset(
     {
         "ancestor-and-section-preamble",
@@ -906,6 +914,82 @@ def _docx_omitted_leading_context_code_match(
     return comparable, _canonical_extracted_requirement_code(prefix, str(number))
 
 
+def _docx_omitted_leading_context_list_marker_match(
+    value: str,
+    *,
+    requirement_codes: object,
+    source_context_class: object,
+) -> tuple[str, str] | None:
+    if source_context_class not in _DOCX_OPTIONAL_LEADING_CODE_CONTEXT_CLASSES:
+        return None
+    if requirement_codes:
+        return None
+    match = _LEADING_CONTEXT_LIST_MARKER_RE.match(value)
+    if match is None:
+        return None
+    remainder = value[match.end() :]
+    comparable = _semantic_text(remainder)
+    if not comparable:
+        return None
+    return comparable, match.group("marker")
+
+
+def _docx_omitted_leading_caption_marker_match(
+    value: str,
+    *,
+    requirement_codes: object,
+) -> tuple[str, str] | None:
+    if requirement_codes:
+        return None
+    match = _LEADING_CAPTION_MARKER_RE.match(value)
+    if match is None:
+        return None
+    remainder = value[match.end() :]
+    comparable = _semantic_text(remainder)
+    if not comparable:
+        return None
+    marker = f"{match.group('label')} {int(match.group('number'))}"
+    return comparable, marker
+
+
+def _semantic_text_omitting_declared_nonbusiness_codes(
+    value: str,
+    *,
+    requirement_codes: object,
+) -> tuple[str, tuple[str, ...]]:
+    if not isinstance(requirement_codes, Sequence) or isinstance(
+        requirement_codes, (str, bytes)
+    ):
+        return _semantic_text(value), ()
+    nonbusiness_codes: list[tuple[str, int, str]] = []
+    for code in requirement_codes:
+        if not isinstance(code, str):
+            continue
+        parts = _requirement_code_parts(code)
+        if parts is None:
+            continue
+        prefix, number = parts
+        if prefix in _BUSINESS_REQUIREMENT_PREFIXES:
+            continue
+        nonbusiness_codes.append(
+            (prefix, number, _canonical_extracted_requirement_code(prefix, str(number)))
+        )
+    if not nonbusiness_codes:
+        return _semantic_text(value), ()
+    normalized = value
+    omitted: list[str] = []
+    for prefix, number, canonical in sorted(nonbusiness_codes, key=lambda item: item[2]):
+        pattern = re.compile(
+            rf"(?<![A-Z0-9_-]){re.escape(prefix)}(?:\s+|[.])\s*"
+            rf"{number}\s*[.]?\s*",
+            flags=re.IGNORECASE,
+        )
+        normalized, count = pattern.subn("", normalized)
+        if count:
+            omitted.append(canonical)
+    return _semantic_text(normalized), tuple(omitted)
+
+
 @dataclass(frozen=True)
 class _DocxMatchOption:
     resource_key: tuple[str, int, int, int]
@@ -1094,9 +1178,43 @@ def _verify_docx_xhtml_rows(
                     )
                 semantic_cells.append(_semantic_text(text))
             expected_cells = tuple(semantic_cells)
+            comparison_mode = "ordered-table-cells"
+            omitted_cell_requirement_codes: tuple[str, ...] = ()
             matching_rows = [
                 row for row in table_rows if row.semantic_cells == expected_cells
             ]
+            if not matching_rows and pdf_registered:
+                alternate_cells: list[str] = []
+                omitted_codes: list[str] = []
+                for cell in raw_cells:
+                    assert isinstance(cell, Mapping)
+                    text = cell.get("bounded_source_text")
+                    assert isinstance(text, str)
+                    comparable, omitted = (
+                        _semantic_text_omitting_declared_nonbusiness_codes(
+                            text,
+                            requirement_codes=literal.get("requirement_codes"),
+                        )
+                    )
+                    alternate_cells.append(comparable)
+                    omitted_codes.extend(omitted)
+                alternate_expected_cells = tuple(alternate_cells)
+                if omitted_codes and alternate_expected_cells != expected_cells:
+                    alternate_matching_rows = [
+                        row
+                        for row in table_rows
+                        if row.semantic_cells == alternate_expected_cells
+                    ]
+                    if alternate_matching_rows:
+                        matching_rows = alternate_matching_rows
+                        expected_cells = alternate_expected_cells
+                        comparison_mode = (
+                            "ordered-table-cells-with-nonbusiness-codes-"
+                            "omitted-in-docx"
+                        )
+                        omitted_cell_requirement_codes = tuple(
+                            sorted(set(omitted_codes))
+                        )
             if not matching_rows:
                 _fail(
                     "docx-xhtml-table-row-mismatch",
@@ -1128,10 +1246,19 @@ def _verify_docx_xhtml_rows(
                             bounded_text
                         ),
                         "element_kind": "tr",
-                        "comparison_mode": "ordered-table-cells",
+                        "comparison_mode": comparison_mode,
                         "semantic_cell_count": len(expected_cells),
                         "semantic_cells_sha256": _text_sha256(
                             "\u001f".join(expected_cells)
+                        ),
+                        **(
+                            {
+                                "omitted_requirement_codes_in_docx_cells": list(
+                                    omitted_cell_requirement_codes
+                                )
+                            }
+                            if omitted_cell_requirement_codes
+                            else {}
                         ),
                     },
                     options=tuple(
@@ -1160,6 +1287,8 @@ def _verify_docx_xhtml_rows(
         comparison_mode = f"semantic-{allowed_unit_kind}"
         semantic_text_for_result = expected_text
         omitted_leading_requirement_code: str | None = None
+        omitted_leading_list_marker: str | None = None
+        omitted_leading_caption_marker: str | None = None
         matching_units = [
             unit
             for unit in text_units
@@ -1188,6 +1317,49 @@ def _verify_docx_xhtml_rows(
                     )
                     semantic_text_for_result = comparable_text
                     omitted_leading_requirement_code = omitted_code
+        if not matching_units:
+            omitted_marker = _docx_omitted_leading_context_list_marker_match(
+                bounded_text,
+                requirement_codes=literal.get("requirement_codes"),
+                source_context_class=literal.get("source_context_class"),
+            )
+            if omitted_marker is not None:
+                comparable_text, list_marker = omitted_marker
+                omitted_matches = [
+                    unit
+                    for unit in text_units
+                    if unit.unit_kind == allowed_unit_kind
+                    and unit.semantic_text == comparable_text
+                ]
+                if omitted_matches:
+                    matching_units = omitted_matches
+                    comparison_mode = (
+                        f"semantic-{allowed_unit_kind}-with-leading-list-marker-"
+                        "omitted-in-docx"
+                    )
+                    semantic_text_for_result = comparable_text
+                    omitted_leading_list_marker = list_marker
+        if not matching_units and pdf_registered:
+            omitted_caption = _docx_omitted_leading_caption_marker_match(
+                bounded_text,
+                requirement_codes=literal.get("requirement_codes"),
+            )
+            if omitted_caption is not None:
+                comparable_text, caption_marker = omitted_caption
+                omitted_matches = [
+                    unit
+                    for unit in text_units
+                    if unit.unit_kind == allowed_unit_kind
+                    and unit.semantic_text == comparable_text
+                ]
+                if omitted_matches:
+                    matching_units = omitted_matches
+                    comparison_mode = (
+                        f"semantic-{allowed_unit_kind}-with-leading-caption-marker-"
+                        "omitted-in-docx"
+                    )
+                    semantic_text_for_result = comparable_text
+                    omitted_leading_caption_marker = caption_marker
         if not matching_units:
             _fail(
                 "docx-xhtml-text-unit-mismatch",
@@ -1227,6 +1399,24 @@ def _verify_docx_xhtml_rows(
                             )
                         }
                         if omitted_leading_requirement_code is not None
+                        else {}
+                    ),
+                    **(
+                        {
+                            "omitted_leading_list_marker_in_docx": (
+                                omitted_leading_list_marker
+                            )
+                        }
+                        if omitted_leading_list_marker is not None
+                        else {}
+                    ),
+                    **(
+                        {
+                            "omitted_leading_caption_marker_in_docx": (
+                                omitted_leading_caption_marker
+                            )
+                        }
+                        if omitted_leading_caption_marker is not None
                         else {}
                     ),
                 },

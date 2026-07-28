@@ -453,6 +453,237 @@ class SourceParityTests(unittest.TestCase):
         row_match = result["docx_xhtml"]["row_matches"][0]
         self.assertEqual("semantic-paragraph", row_match["comparison_mode"])
 
+    def test_context_decimal_list_number_omitted_from_docx_text_unit(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>1. Duplicate partner names are rejected</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Duplicate partner names are rejected")
+        document.save(self.docx)
+        manifest = self._single_row_manifest(
+            source_text="1. Duplicate partner names are rejected",
+            context_class="ancestor-and-section-preamble",
+            requirement_codes=(),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(),
+            self._single_literal_candidate(manifest),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual(
+            "semantic-paragraph-with-leading-list-marker-omitted-in-docx",
+            row_match["comparison_mode"],
+        )
+        self.assertEqual("1", row_match["omitted_leading_list_marker_in_docx"])
+
+    def test_context_alpha_list_marker_omitted_from_docx_text_unit(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>a. Same account can exist in another card</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Same account can exist in another card")
+        document.save(self.docx)
+        manifest = self._single_row_manifest(
+            source_text="a. Same account can exist in another card",
+            context_class="ancestor-and-section-preamble",
+            requirement_codes=(),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(),
+            self._single_literal_candidate(manifest),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual(
+            "semantic-paragraph-with-leading-list-marker-omitted-in-docx",
+            row_match["comparison_mode"],
+        )
+        self.assertEqual("a", row_match["omitted_leading_list_marker_in_docx"])
+
+    def test_figure_caption_marker_omitted_from_docx_text_unit(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>Figure 2 Partner screen mockup</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Partner screen mockup")
+        document.save(self.docx)
+        _write_text_pdf(self.pdf, ("Figure 2 Partner screen mockup",))
+        manifest = self._single_row_manifest(
+            source_text="Figure 2 Partner screen mockup",
+            context_class="scope-local",
+            requirement_codes=(),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(include_pdf=True),
+            self._single_literal_candidate(manifest),
+            requirement_guard=RequirementGuard.from_dict(
+                {
+                    "allowed_ranges": [{"prefix": "AS", "start": 1, "end": 1}],
+                    "excluded_codes": [],
+                }
+            ),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual(
+            "semantic-paragraph-with-leading-caption-marker-omitted-in-docx",
+            row_match["comparison_mode"],
+        )
+        self.assertEqual(
+            "Figure 2",
+            row_match["omitted_leading_caption_marker_in_docx"],
+        )
+
+    def test_table_caption_marker_omitted_from_docx_text_unit(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>Table 2 Partner fields</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Partner fields")
+        document.save(self.docx)
+        _write_text_pdf(self.pdf, ("Table 2 Partner fields",))
+        manifest = self._single_row_manifest(
+            source_text="Table 2 Partner fields",
+            context_class="scope-local",
+            requirement_codes=(),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(include_pdf=True),
+            self._single_literal_candidate(manifest),
+            requirement_guard=RequirementGuard.from_dict(
+                {
+                    "allowed_ranges": [{"prefix": "AS", "start": 1, "end": 1}],
+                    "excluded_codes": [],
+                }
+            ),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual(
+            "semantic-paragraph-with-leading-caption-marker-omitted-in-docx",
+            row_match["comparison_mode"],
+        )
+        self.assertEqual(
+            "Table 2",
+            row_match["omitted_leading_caption_marker_in_docx"],
+        )
+
+    def test_table_cell_nonbusiness_codes_omitted_from_docx_cells(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body><table>
+<tr><th>Action</th><th>Description</th></tr>
+<tr><td>Edit</td><td>AS.8 Button is available. AS.9 Popup opens.</td></tr>
+</table></body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        table = document.add_table(rows=0, cols=2)
+        header = table.add_row()
+        header.cells[0].text = "Action"
+        header.cells[1].text = "Description"
+        row = table.add_row()
+        row.cells[0].text = "Edit"
+        row.cells[1].text = "Button is available.\nPopup opens."
+        document.save(self.docx)
+        _write_text_pdf(
+            self.pdf,
+            ("Action Description Edit AS.8 Button is available. AS.9 Popup opens.",),
+        )
+        manifest = self._single_row_manifest(
+            source_text="Edit AS.8 Button is available. AS.9 Popup opens.",
+            context_class="scope-local",
+            requirement_codes=("AS.8", "AS.9"),
+        )
+        row = manifest.source_rows[0]
+        literal = {
+            "source_row_id": row.source_row_id,
+            "candidate_id": row.candidate_id,
+            "bounded_source_text": row.bounded_source_text,
+            "source_path": row.source_path,
+            "source_file_sha256": _sha256(self.xhtml),
+            "source_locator": "/*/*[1]/*[1]/*[2]",
+            "element_kind": "tr",
+            "structured_cells": [
+                {
+                    "physical_column_index": 1,
+                    "bounded_source_text": "Edit",
+                    "bounded_source_text_sha256": hashlib.sha256(
+                        b"Edit"
+                    ).hexdigest(),
+                },
+                {
+                    "physical_column_index": 2,
+                    "bounded_source_text": (
+                        "AS.8 Button is available. AS.9 Popup opens."
+                    ),
+                    "bounded_source_text_sha256": hashlib.sha256(
+                        b"AS.8 Button is available. AS.9 Popup opens."
+                    ).hexdigest(),
+                },
+            ],
+        }
+
+        result = verify_bounded_source_parity(
+            replace(
+                manifest,
+                source_rows=(
+                    replace(
+                        row,
+                        source_locator="/*/*[1]/*[1]/*[2]",
+                    ),
+                ),
+            ),
+            self._snapshots(include_pdf=True),
+            [literal],
+            requirement_guard=RequirementGuard.from_dict(
+                {
+                    "allowed_ranges": [{"prefix": "AS", "start": 8, "end": 9}],
+                    "excluded_codes": [],
+                }
+            ),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual(
+            "ordered-table-cells-with-nonbusiness-codes-omitted-in-docx",
+            row_match["comparison_mode"],
+        )
+        self.assertEqual(
+            ["AS.8", "AS.9"],
+            row_match["omitted_requirement_codes_in_docx_cells"],
+        )
+
     def test_fails_closed_when_one_docx_row_differs(self) -> None:
         manifest = self._manifest()
         self._write_docx(wrong_value=True)
