@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "bundle_kind": "postfinal-v2-ui-calibration-pack",
+  "created_at": "2026-07-28",
+  "agent_base_branch": "codex/new-ft-live-debug",
+  "agent_base_commit": "e10cd53d56500660fee97890be4d081b4453b83c",
+  "bundle_branch": "codex/postfinal-v2-ui-calibration-pack",
+  "ft_package": "fts/AutoFin/PostFinal-v2-rc5",
+  "source_files_included": false,
+  "source_files_note": "DOCX/XHTML/PDF/support/mockups are intentionally excluded from this bundle.",
+  "test_case_files": [
+    {
+      "path": "fts/AutoFin/PostFinal-v2-rc5/test-cases/11-4.3-application-documents-and-recognition.md",
+      "tc_count": 42,
+      "calibration_tc_count": 0,
+      "sha256": "5a13c8efb17b6939fb9bcc4499ef5505d471f9c4d3eb9c1153f3a3326aa8a595"
+    },
+    {
+      "path": "fts/AutoFin/PostFinal-v2-rc5/test-cases/4-3-contact-persons.md",
+      "tc_count": 38,
+      "calibration_tc_count": 11,
+      "sha256": "356b9c0dfd23784a37d33d4dfeefedbea06925dc619fdb70e1f795de3ea8f6a2"
+    },
+    {
+      "path": "fts/AutoFin/PostFinal-v2-rc5/test-cases/4-3-current-passport-data.md",
+      "tc_count": 44,
+      "calibration_tc_count": 7,
+      "sha256": "152cb6d97e87a85131e0a6a79c5404eee19bdca6c524e5af2aa2b0bce59d3d1c"
+    }
+  ],
+  "calibration_tc_count": 18,
+  "primary_entrypoint": "fts/AutoFin/PostFinal-v2-rc5/work/ui-calibration-prep/UI-AGENT-NOTES.md",
+  "calibration_index": "fts/AutoFin/PostFinal-v2-rc5/work/ui-calibration-prep/ui-calibration-index.md",
+  "results_dir": "fts/AutoFin/PostFinal-v2-rc5/work/ui-calibration-prep/results"
+}
+
