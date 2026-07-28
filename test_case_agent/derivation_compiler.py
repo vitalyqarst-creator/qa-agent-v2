@@ -1376,6 +1376,19 @@ def _source_first_kind_and_variant(
         )
     ):
         return "source-date-boundary", "date-window"
+    has_repeater_context = any(
+        token in text for token in ("блок-повтор", "строк", "repeater", "row")
+    )
+    if has_repeater_context and any(
+        token in text for token in ("удал", "корзин", "delete", "remove")
+    ):
+        return "source-delete-row", "repeater-delete"
+    if (
+        has_repeater_context
+        and any(token in text for token in ("появ", "добав", "appear", "add"))
+        and any(token in text for token in ("нажат", "кноп", "click", "button", "add"))
+    ):
+        return "source-add-row", "repeater-add"
     if any(
         token in text for token in ("видим", "отображ", "visible", "displayed", "shown")
     ) and not any(
@@ -1395,19 +1408,6 @@ def _source_first_kind_and_variant(
         )
     ):
         return "visibility", "visible"
-    has_repeater_context = any(
-        token in text for token in ("блок-повтор", "строк", "repeater", "row")
-    )
-    if has_repeater_context and any(
-        token in text for token in ("удал", "корзин", "delete", "remove")
-    ):
-        return "source-delete-row", "repeater-delete"
-    if (
-        has_repeater_context
-        and any(token in text for token in ("появ", "добав", "appear", "add"))
-        and any(token in text for token in ("нажат", "кноп", "click", "button", "add"))
-    ):
-        return "source-add-row", "repeater-add"
     if any(
         token in text
         for token in (
