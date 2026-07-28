@@ -1421,6 +1421,13 @@ def _source_first_kind_and_variant(
         return "source-format", "format"
     if any(token in text for token in ("видим", "отображ", "visible", "displayed")):
         return "visibility", "visible"
+    if (
+        any(token in text for token in ("откры", "open"))
+        and any(token in text for token in ("всплыва", "popup", "modal", "dialog"))
+        and any(token in text for token in ("редакт", "edit"))
+        and any(token in text for token in ("предзаполн", "prefill", "pre-filled", "prefilled"))
+    ):
+        return "source-runtime", "open-prefilled-edit-form"
     if any(token in text for token in ("редакт", "editable", "editability")):
         return "source-editability", "editable"
     return "source-runtime", "runtime"

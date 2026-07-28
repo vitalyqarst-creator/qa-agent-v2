@@ -85,6 +85,78 @@ class DerivationCompilerTests(unittest.TestCase):
             ),
         )
 
+    def test_source_first_edit_popup_open_is_not_edit_probe(self) -> None:
+        assertion = replace(
+            self._assertion(),
+            assertion_id="ASSERT-EDIT-POPUP",
+            atom_id="ATOM-EDIT-POPUP",
+            exact_source_text=(
+                "AS.9 При нажатии на кнопку Система должна открывать "
+                "всплывающее окно редактирования записи с предзаполненными данными."
+            ),
+            canonical_statement="Clicking Edit opens the edit popup with prefilled data.",
+            action_clauses=("Система должна открывать всплывающее окно редактирования записи",),
+            oracle_clauses=("с предзаполненными данными",),
+            requirement_codes=("AS.9",),
+            obligation_ids=("OBL-EDIT-POPUP",),
+        )
+        obligation = PreparedObligation(
+            obligation_id="OBL-EDIT-POPUP",
+            source_refs=("SRC-025", "AS.9"),
+            atomic_statement="Clicking Edit opens the edit popup with prefilled data.",
+            observable_oracle="с предзаполненными данными",
+            test_intent=(
+                "Verify the accepted subset behavior; action: Система должна "
+                "открывать всплывающее окно редактирования записи; condition: "
+                "При нажатии на кнопку."
+            ),
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+            atom_id="ATOM-EDIT-POPUP",
+        )
+
+        self.assertEqual(
+            ("source-runtime", "open-prefilled-edit-form"),
+            derivation_compiler_module._source_first_kind_and_variant(
+                assertion=assertion,
+                obligation=obligation,
+                fixtures=(),
+                complex_condition=False,
+            ),
+        )
+
+        editable_assertion = replace(
+            assertion,
+            assertion_id="ASSERT-EDIT-VALUE",
+            canonical_statement="Поле «Наименование» редактируемо.",
+            action_clauses=("Изменить значение поля «Наименование».",),
+            oracle_clauses=("Поле «Наименование» изменяет значение.",),
+        )
+        editable_obligation = PreparedObligation(
+            obligation_id="OBL-EDIT-VALUE",
+            source_refs=("SRC-001", "AS.1"),
+            atomic_statement="Изменить значение поля «Наименование».",
+            observable_oracle="Поле «Наименование» изменяет значение.",
+            test_intent="Ввести или изменить значение поля «Наименование».",
+            coverage_status="testable",
+            gap_id="",
+            dictionary_refs=(),
+            notes="",
+            atom_id="ATOM-EDIT-VALUE",
+        )
+
+        self.assertEqual(
+            ("source-editability", "editable"),
+            derivation_compiler_module._source_first_kind_and_variant(
+                assertion=editable_assertion,
+                obligation=editable_obligation,
+                fixtures=(),
+                complex_condition=False,
+            ),
+        )
+
     def test_source_first_default_fixture_uses_oracle_value_not_block_label(self) -> None:
         assertion = replace(
             self._assertion(),
