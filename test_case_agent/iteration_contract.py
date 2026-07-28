@@ -1314,6 +1314,17 @@ def build_runtime_writer_request(
                     "composition checks. Use `негативный` for rejection, validation, "
                     "blocked transition, error/no-save or requiredness feedback."
                 ),
+                "stateful_role_transition_cases": (
+                    "For role/status transition cases, `test_data` must contain "
+                    "a concrete fixture or deterministic selection rule for the "
+                    "entity under test, including the exact required initial "
+                    "status. If the source requires a forbidden role branch, "
+                    "steps must actually attempt the forbidden transition under "
+                    "that role before asserting no transition/no visibility. If "
+                    "the TC mutates entity status, postconditions must restore "
+                    "the source-backed initial status or explicitly state the "
+                    "source-backed reason why cleanup is not required."
+                ),
                 "input_restriction_classes": (
                     "If source says only a symbol class is allowed, do not cover it "
                     "with one mixed invalid value. The design must have separate "

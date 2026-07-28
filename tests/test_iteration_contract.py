@@ -644,6 +644,22 @@ class IterationContractTests(unittest.TestCase):
             test_design_contract["case_type_consistency"],
         )
         self.assertIn(
+            "role/status transition cases",
+            test_design_contract["stateful_role_transition_cases"],
+        )
+        self.assertIn(
+            "deterministic selection rule",
+            test_design_contract["stateful_role_transition_cases"],
+        )
+        self.assertIn(
+            "forbidden transition",
+            test_design_contract["stateful_role_transition_cases"],
+        )
+        self.assertIn(
+            "postconditions must restore",
+            test_design_contract["stateful_role_transition_cases"],
+        )
+        self.assertIn(
             "whitespace",
             test_design_contract["input_restriction_classes"],
         )
