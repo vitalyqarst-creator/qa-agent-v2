@@ -22,8 +22,10 @@ XHTML_ROLE = "machine-readable-xhtml"
 PDF_ROLE = "structural-visual-parity-pdf"
 
 _REQUIREMENT_CODE_RE = re.compile(
-    r"(?P<prefix>[A-Z][A-Z0-9_-]*)\s+(?P<number>[1-9][0-9]*)"
+    r"(?P<prefix>[A-Z][A-Z0-9_-]*)(?P<separator>\s+|[.])\s*"
+    r"(?P<number>[1-9][0-9]*)"
 )
+_BUSINESS_REQUIREMENT_PREFIXES = frozenset({"BSR", "GSR", "DIT"})
 _REQUIREMENT_MARKER_RE = re.compile(
     r"\b(?:BSR|GSR|DIT)\s*[1-9][0-9]*\s*[.]\s*",
     flags=re.IGNORECASE,
@@ -39,6 +41,17 @@ _DOCX_REQUIREMENT_LEVEL_RE = re.compile(
 _LEADING_REQUIREMENT_CODE_RE = re.compile(
     r"^\s*(?P<prefix>[A-Z][A-Z0-9_-]*)\s+"
     r"(?P<number>[1-9][0-9]*)\s*[.]",
+)
+_LEADING_GENERIC_REQUIREMENT_CODE_RE = re.compile(
+    r"^\s*(?P<prefix>[A-Z][A-Z0-9_-]*)(?P<separator>\s+|[.])\s*"
+    r"(?P<number>[1-9][0-9]*)\s*[.]?\s+"
+)
+_DOCX_OPTIONAL_LEADING_CODE_CONTEXT_CLASSES = frozenset(
+    {
+        "ancestor-and-section-preamble",
+        "cross-referenced-constraints",
+        "document-global-constraints",
+    }
 )
 _DASH_TRANSLATION = str.maketrans(
     {
@@ -696,6 +709,9 @@ def _literal_xhtml_rows(
             )
         normalized = dict(literal)
         normalized["element_kind"] = current.element_kind
+        normalized["source_context_class"] = (
+            expected_rows[source_row_id].source_context_class
+        )
         normalized["requirement_codes"] = list(
             expected_rows[source_row_id].requirement_codes
         )
@@ -818,6 +834,74 @@ def _literal_xhtml_rows(
 
 def _text_sha256(value: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _requirement_code_parts(value: str) -> tuple[str, int] | None:
+    match = _REQUIREMENT_CODE_RE.fullmatch(value)
+    if match is None:
+        return None
+    return (match.group("prefix").upper(), int(match.group("number")))
+
+
+def _canonical_requirement_code(value: str) -> str | None:
+    parts = _requirement_code_parts(value)
+    if parts is None:
+        return None
+    prefix, number = parts
+    separator = " " if prefix in _BUSINESS_REQUIREMENT_PREFIXES else "."
+    return f"{prefix}{separator}{number}"
+
+
+def _canonical_extracted_requirement_code(
+    prefix: str,
+    number: str,
+) -> str:
+    normalized_prefix = prefix.upper()
+    separator = " " if normalized_prefix in _BUSINESS_REQUIREMENT_PREFIXES else "."
+    return f"{normalized_prefix}{separator}{int(number)}"
+
+
+def _docx_omitted_leading_context_code_match(
+    value: str,
+    *,
+    requirement_codes: object,
+    source_context_class: object,
+) -> tuple[str, str] | None:
+    """Return comparable text when DOCX omits a non-business context code.
+
+    This is intentionally narrow.  It supports source-context rows such as
+    ``AS.3 ...`` where XHTML/PDF preserve a list marker but DOCX extraction
+    exposes only the semantic paragraph text.  It does not apply to executable
+    BSR/GSR/DIT requirement markers.
+    """
+
+    if source_context_class not in _DOCX_OPTIONAL_LEADING_CODE_CONTEXT_CLASSES:
+        return None
+    if not isinstance(requirement_codes, Sequence) or isinstance(
+        requirement_codes, (str, bytes)
+    ):
+        return None
+    declared_parts = {
+        parts
+        for code in requirement_codes
+        if isinstance(code, str)
+        for parts in [_requirement_code_parts(code)]
+        if parts is not None
+    }
+    match = _LEADING_GENERIC_REQUIREMENT_CODE_RE.match(value)
+    if match is None:
+        return None
+    prefix = match.group("prefix").upper()
+    number = int(match.group("number"))
+    if prefix in _BUSINESS_REQUIREMENT_PREFIXES:
+        return None
+    if (prefix, number) not in declared_parts:
+        return None
+    remainder = value[match.end() :]
+    comparable = _semantic_text(remainder)
+    if not comparable:
+        return None
+    return comparable, _canonical_extracted_requirement_code(prefix, str(number))
 
 
 @dataclass(frozen=True)
@@ -957,6 +1041,7 @@ def _verify_docx_xhtml_rows(
     *,
     docx: _RegisteredSnapshot,
     xhtml: _RegisteredSnapshot,
+    pdf_registered: bool,
 ) -> dict[str, Any]:
     table_rows, text_units = _load_docx_units(docx.path)
     requests: list[_DocxRowRequest] = []
@@ -1070,12 +1155,37 @@ def _verify_docx_xhtml_rows(
         allowed_unit_kind = (
             "table-cell" if element_kind in {"td", "th"} else "paragraph"
         )
+        comparison_mode = f"semantic-{allowed_unit_kind}"
+        semantic_text_for_result = expected_text
+        omitted_leading_requirement_code: str | None = None
         matching_units = [
             unit
             for unit in text_units
             if unit.unit_kind == allowed_unit_kind
             and unit.semantic_text == expected_text
         ]
+        if not matching_units and pdf_registered:
+            omitted = _docx_omitted_leading_context_code_match(
+                bounded_text,
+                requirement_codes=literal.get("requirement_codes"),
+                source_context_class=literal.get("source_context_class"),
+            )
+            if omitted is not None:
+                comparable_text, omitted_code = omitted
+                omitted_matches = [
+                    unit
+                    for unit in text_units
+                    if unit.unit_kind == allowed_unit_kind
+                    and unit.semantic_text == comparable_text
+                ]
+                if omitted_matches:
+                    matching_units = omitted_matches
+                    comparison_mode = (
+                        f"semantic-{allowed_unit_kind}-with-leading-context-code-"
+                        "omitted-in-docx"
+                    )
+                    semantic_text_for_result = comparable_text
+                    omitted_leading_requirement_code = omitted_code
         if not matching_units:
             _fail(
                 "docx-xhtml-text-unit-mismatch",
@@ -1106,8 +1216,17 @@ def _verify_docx_xhtml_rows(
                     "source_locator": literal["source_locator"],
                     "bounded_source_text_sha256": _text_sha256(bounded_text),
                     "element_kind": element_kind,
-                    "comparison_mode": f"semantic-{allowed_unit_kind}",
-                    "semantic_text_sha256": _text_sha256(expected_text),
+                    "comparison_mode": comparison_mode,
+                    "semantic_text_sha256": _text_sha256(semantic_text_for_result),
+                    **(
+                        {
+                            "omitted_leading_requirement_code_in_docx": (
+                                omitted_leading_requirement_code
+                            )
+                        }
+                        if omitted_leading_requirement_code is not None
+                        else {}
+                    ),
                 },
                 options=tuple(
                     _DocxMatchOption(
@@ -1296,12 +1415,18 @@ def _guard_parts(
         ranges.append((prefix, start, end))
     excluded: set[str] = set()
     for index, code in enumerate(raw_excluded):
-        if not isinstance(code, str) or _REQUIREMENT_CODE_RE.fullmatch(code) is None:
+        if not isinstance(code, str):
             _fail(
                 "invalid-pdf-requirement-guard",
                 f"excluded_codes[{index}] is invalid",
             )
-        excluded.add(code)
+        canonical = _canonical_requirement_code(code)
+        if canonical is None:
+            _fail(
+                "invalid-pdf-requirement-guard",
+                f"excluded_codes[{index}] is invalid",
+            )
+        excluded.add(canonical)
     return tuple(ranges), frozenset(excluded)
 
 
@@ -1310,13 +1435,12 @@ def _code_in_guard(
     ranges: Sequence[tuple[str, int, int]],
     excluded: frozenset[str],
 ) -> bool:
-    if code in excluded:
+    canonical = _canonical_requirement_code(code)
+    if canonical is None:
         return False
-    match = _REQUIREMENT_CODE_RE.fullmatch(code)
-    if match is None:
+    if canonical in excluded:
         return False
-    prefix = match.group("prefix")
-    number = int(match.group("number"))
+    prefix, number = _requirement_code_parts(code) or ("", 0)
     return any(
         prefix == range_prefix and start <= number <= end
         for range_prefix, start, end in ranges
@@ -1324,25 +1448,28 @@ def _code_in_guard(
 
 
 def _manifest_requirement_codes(manifest: SourceAssertionManifest) -> tuple[str, ...]:
-    codes = {
-        code
-        for row in manifest.source_rows
-        for code in row.requirement_codes
+    raw_codes = {
+        code for row in manifest.source_rows for code in row.requirement_codes
     }
-    codes.update(
+    raw_codes.update(
         binding.requirement_code
         for assertion in manifest.assertions
         for binding in assertion.requirement_code_bindings
     )
-    invalid = sorted(
-        code for code in codes if _REQUIREMENT_CODE_RE.fullmatch(code) is None
-    )
+    canonical_codes: set[str] = set()
+    invalid: list[str] = []
+    for code in sorted(raw_codes):
+        canonical = _canonical_requirement_code(code)
+        if canonical is None:
+            invalid.append(code)
+        else:
+            canonical_codes.add(canonical)
     if invalid:
         _fail(
             "invalid-manifest-requirement-code",
             "manifest contains malformed requirement codes: " + ", ".join(invalid),
         )
-    return tuple(sorted(codes))
+    return tuple(sorted(canonical_codes))
 
 
 @dataclass(frozen=True)
@@ -2295,14 +2422,17 @@ def _verify_pdf_codes(
     prefixes = sorted({prefix for prefix, _start, _end in ranges})
     prefix_pattern = "|".join(re.escape(prefix) for prefix in prefixes)
     code_pattern = re.compile(
-        rf"(?<![A-Z0-9_-])(?P<prefix>{prefix_pattern})\s+"
+        rf"(?<![A-Z0-9_-])(?P<prefix>{prefix_pattern})(?:\s+|[.])\s*"
         r"(?P<number>[1-9][0-9]*)(?![A-Z0-9_-])",
         flags=re.IGNORECASE,
     )
     pages_by_code: dict[str, set[int]] = {}
     for page_number, text in enumerate(page_texts, start=1):
         for match in code_pattern.finditer(unicodedata.normalize("NFKC", text)):
-            code = f"{match.group('prefix').upper()} {int(match.group('number'))}"
+            code = _canonical_extracted_requirement_code(
+                match.group("prefix"),
+                match.group("number"),
+            )
             if _code_in_guard(code, ranges, excluded):
                 pages_by_code.setdefault(code, set()).add(page_number)
 
@@ -2377,6 +2507,7 @@ def verify_bounded_source_parity(
         literal_xhtml_rows,
         docx=sources[DOCX_ROLE],
         xhtml=sources[XHTML_ROLE],
+        pdf_registered=PDF_ROLE in sources,
     )
     pdf_codes = _verify_pdf_codes(
         manifest,

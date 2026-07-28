@@ -271,6 +271,55 @@ class SourceParityTests(unittest.TestCase):
             }
         )
 
+    def _single_row_manifest(
+        self,
+        *,
+        source_text: str,
+        context_class: str,
+        requirement_codes: tuple[str, ...],
+    ) -> SourceAssertionManifest:
+        row = SourceRow(
+            source_row_id="SRC-CONTEXT",
+            source_path="main.xhtml",
+            source_locator="/*/*[1]/*[1]",
+            bounded_source_text=source_text,
+            source_context_class=context_class,
+            candidate_id="SRC-CAND-444444444444444444444444",
+            requirement_codes=requirement_codes,
+        )
+        return SourceAssertionManifest(
+            version=MANIFEST_VERSION,
+            scope_slug="demo-scope",
+            source_row_extraction_spec_digest="1" * 64,
+            source_row_baseline_digest="2" * 64,
+            source_row_candidate_count=1,
+            coverage_gaps_artifact=RegisteredArtifact(
+                path="gaps.md",
+                sha256="3" * 64,
+            ),
+            sources=(RegisteredSource(path="main.xhtml", sha256=_sha256(self.xhtml)),),
+            source_rows=(row,),
+            assertions=(),
+        )
+
+    def _single_literal_candidate(
+        self,
+        manifest: SourceAssertionManifest,
+    ) -> list[dict]:
+        row = manifest.source_rows[0]
+        return [
+            {
+                "source_row_id": row.source_row_id,
+                "candidate_id": row.candidate_id,
+                "bounded_source_text": row.bounded_source_text,
+                "source_path": row.source_path,
+                "source_file_sha256": _sha256(self.xhtml),
+                "source_locator": row.source_locator,
+                "element_kind": "p",
+                "structured_cells": [],
+            }
+        ]
+
     def test_verifies_every_literal_candidate_and_deduplicates_merged_cells(
         self,
     ) -> None:
@@ -297,6 +346,87 @@ class SourceParityTests(unittest.TestCase):
             1,
         )
         self.assertEqual(result["pdf_requirement_codes"]["status"], "not-registered")
+
+    def test_allows_nonbusiness_context_code_omitted_from_docx_text_unit(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>AS.3 Partners tab has actions</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Partners tab has actions")
+        document.save(self.docx)
+        _write_text_pdf(self.pdf, ("AS.3 Partners tab has actions",))
+        manifest = self._single_row_manifest(
+            source_text="AS.3 Partners tab has actions",
+            context_class="ancestor-and-section-preamble",
+            requirement_codes=("AS.3",),
+        )
+
+        result = verify_bounded_source_parity(
+            manifest,
+            self._snapshots(include_pdf=True),
+            self._single_literal_candidate(manifest),
+            requirement_guard=RequirementGuard.from_dict(
+                {
+                    "allowed_ranges": [{"prefix": "AS", "start": 3, "end": 3}],
+                    "excluded_codes": [],
+                }
+            ),
+        )
+
+        row_match = result["docx_xhtml"]["row_matches"][0]
+        self.assertEqual(
+            "semantic-paragraph-with-leading-context-code-omitted-in-docx",
+            row_match["comparison_mode"],
+        )
+        self.assertEqual(
+            "AS.3",
+            row_match["omitted_leading_requirement_code_in_docx"],
+        )
+        self.assertEqual(
+            ["AS.3"],
+            result["pdf_requirement_codes"]["manifest_relevant_codes"],
+        )
+
+    def test_business_requirement_code_omitted_from_docx_still_fails_closed(
+        self,
+    ) -> None:
+        self.xhtml.write_text(
+            """<html xmlns="http://www.w3.org/1999/xhtml"><body>
+<p>BSR 2. Field is mandatory</p>
+</body></html>""",
+            encoding="utf-8",
+        )
+        document = Document()
+        document.add_paragraph("Field is mandatory")
+        document.save(self.docx)
+        _write_text_pdf(self.pdf, ("BSR 2 Field is mandatory",))
+        manifest = self._single_row_manifest(
+            source_text="BSR 2. Field is mandatory",
+            context_class="ancestor-and-section-preamble",
+            requirement_codes=("BSR 2",),
+        )
+
+        with self.assertRaises(SourceParityError) as caught:
+            verify_bounded_source_parity(
+                manifest,
+                self._snapshots(include_pdf=True),
+                self._single_literal_candidate(manifest),
+                requirement_guard=RequirementGuard.from_dict(
+                    {
+                        "allowed_ranges": [
+                            {"prefix": "BSR", "start": 2, "end": 2}
+                        ],
+                        "excluded_codes": [],
+                    }
+                ),
+            )
+
+        self.assertEqual(caught.exception.code, "docx-xhtml-text-unit-mismatch")
 
     def test_fails_closed_when_one_docx_row_differs(self) -> None:
         manifest = self._manifest()
