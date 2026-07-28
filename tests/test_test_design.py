@@ -589,6 +589,78 @@ class TestDesignTests(unittest.TestCase):
                 self.assertIn(f"`{expected_value}`", rendered)
                 self.assertNotIn("source-backed fixture only", rendered)
 
+    def test_source_editability_uses_same_subject_format_probe_value(self) -> None:
+        graph = _graph(
+            kind="source-editability",
+            fixtures=("source-backed fixture only",),
+            trigger="Ввести значение в поле `Мобильный телефон`.",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement="Поле `Мобильный телефон` редактируемо.",
+                ),
+                CoverageProperty(
+                    property_id="PROP-MOBILE-FORMAT",
+                    assertion_id="ASSERT-MOBILE-FORMAT",
+                    property_key="mobile-phone:format",
+                    subject_key="customer-name",
+                    property_kind="source-format",
+                    source_row_id="SRC-MOBILE",
+                    source_path="requirements.xhtml",
+                    source_locator="/*/*[3]",
+                    source_text_sha256="7" * 64,
+                    canonical_statement=(
+                        "Поле `Мобильный телефон` допускает только 10 числовых символов."
+                    ),
+                    requirement_codes=("BSR 163",),
+                    disposition="tc",
+                    polarity="positive",
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                graph.obligations[0],
+                CoverageObligation(
+                    obligation_id="OBL-MOBILE-FORMAT",
+                    property_id="PROP-MOBILE-FORMAT",
+                    atom_id="ATOM-MOBILE-FORMAT",
+                    coverage_variant="format",
+                    condition_key="always",
+                    atomic_statement=(
+                        "Поле `Мобильный телефон` допускает только 10 числовых символов."
+                    ),
+                    observable_oracle="Допускаются только 10 числовых символов.",
+                    coverage_status="testable",
+                    requirement_codes=("BSR 163",),
+                    gap_id="",
+                    calibration_status="not-required",
+                    validation_trigger=(
+                        "Ввести значение, нарушающее класс `10 числовых символов`."
+                    ),
+                    cleanup_strategy="",
+                    source_oracle_id="",
+                    fixture_values=("requires UI calibration for exact response",),
+                    calibration_question="",
+                ),
+            ),
+        )
+        context = replace(
+            _context(),
+            subject_labels={
+                **_context().subject_labels,
+                "customer-name": "Мобильный телефон",
+            },
+        )
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+        rendered = "\n".join((*case.test_data, *case.steps, case.expected_result))
+
+        self.assertIn("`9123456789`", rendered)
+        self.assertNotIn("source-backed fixture only", rendered)
+
     def test_input_action_without_target_gets_typed_subject_wrapper(self) -> None:
         graph = _graph(
             kind="source-format",

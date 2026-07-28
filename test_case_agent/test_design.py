@@ -815,6 +815,7 @@ def _subject_fixture_values(
         prop = properties.get(obligation.property_id)
         if prop is None:
             continue
+        added = False
         for value in obligation.fixture_values:
             item = value.strip()
             if not item or _looks_like_generic_fixture(item):
@@ -822,6 +823,13 @@ def _subject_fixture_values(
             result.setdefault(prop.subject_key, [])
             if item not in result[prop.subject_key]:
                 result[prop.subject_key].append(item)
+            added = True
+        if not added:
+            item = _source_valid_edit_probe_value(prop=prop, obligation=obligation)
+            if item:
+                result.setdefault(prop.subject_key, [])
+                if item not in result[prop.subject_key]:
+                    result[prop.subject_key].append(item)
     return {key: tuple(values) for key, values in result.items()}
 
 
