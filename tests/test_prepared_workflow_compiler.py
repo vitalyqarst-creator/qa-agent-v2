@@ -2760,6 +2760,47 @@ coverage_gaps:
         )
         self.assertNotIn("## OBL-001", source_evidence)
 
+    def test_nested_ft_package_path_compiles_with_stable_prepared_slug(self) -> None:
+        nested_ft = self.root / "fts" / "AutoFin" / "demo"
+        nested_ft.parent.mkdir()
+        self.ft.rename(nested_ft)
+        self.ft = nested_ft
+        self.design = self.ft / "work" / "test-design" / "demo-scope"
+        self.state = (
+            self.ft
+            / "work"
+            / "stage-handoffs"
+            / "01-demo"
+            / "workflow-state.yaml"
+        )
+        self.state.write_text(
+            self.state.read_text(encoding="utf-8").replace(
+                "ft_slug: demo", "ft_slug: AutoFin/demo"
+            ),
+            encoding="utf-8",
+        )
+
+        cycle = self.ft / "work" / "review-cycles" / "nested-cycle"
+        result = compile_workflow_package(
+            workflow_state=self.state,
+            repo_root=self.root,
+            output_root=cycle / "prepared-input" / "demo-package",
+            package_id="demo-package",
+            attempt_root=cycle / "attempts" / "writer-r1" / "attempt-001",
+            expected_ft_slug="AutoFin/demo",
+        )
+
+        package = load_prepared_package(result.stage_package, self.root)
+        self.assertEqual("demo", package.ft_slug)
+        self.assertEqual(
+            self.state.resolve(),
+            resolve_workflow_compiler_inputs(
+                workflow_state=self.state,
+                repo_root=self.root,
+                expected_ft_slug="AutoFin/demo",
+            )["workflow_state"].resolve(),
+        )
+
     def test_semantic_bridge_projection_is_lossless_and_fingerprint_bound(self) -> None:
         self.enable_source_first_contract()
         semantic_path = self.enable_semantic_design_projection()

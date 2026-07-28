@@ -54,6 +54,7 @@ from .source_row_baseline import (
 TOKEN = re.compile(
     r"\b(?:ATOM|OBL|GAP|DICT|SRC)-[A-Za-z0-9_.-]+\b|\b(?:GSR|BSR|DIT)\s+\d+\b"
 )
+FT_PACKAGE_PATH_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
 DEPENDENCY_ID = re.compile(r"DEP-[A-Za-z0-9._-]+")
 TC_TOKEN = re.compile(r"\bTC-[A-Za-z0-9_.-]+\b")
 CANDIDATE_SCOPE_OBLIGATION = re.compile(
@@ -1897,15 +1898,18 @@ def resolve_workflow_compiler_inputs(
 
     repo_root = repo_root.resolve()
     workflow_state = workflow_state.resolve()
-    ft_root = (repo_root / "fts" / expected_ft_slug).resolve()
+    expected_ft_parts, package_ft_slug = _expected_ft_package(expected_ft_slug)
+    ft_root = (repo_root / "fts").joinpath(*expected_ft_parts).resolve()
     if not ft_root.is_dir():
         raise StageRuntimeError(f"expected FT package is missing: fts/{expected_ft_slug}")
     _within(workflow_state, ft_root, "workflow-state")
     state = load_workflow_state(workflow_state)
-    if state.get("ft_slug") != expected_ft_slug:
+    state_ft_slug = state.get("ft_slug")
+    if state_ft_slug not in {expected_ft_slug, package_ft_slug}:
         raise StageRuntimeError(
             "workflow-state ft_slug mismatch: "
-            f"expected {expected_ft_slug}, found {state.get('ft_slug', '')}"
+            f"expected {expected_ft_slug} or {package_ft_slug}, "
+            f"found {state.get('ft_slug', '')}"
         )
     contract_version = state.get("prepared_compiler_contract_version")
     if contract_version not in SUPPORTED_COMPILER_CONTRACT_VERSIONS:
@@ -3973,6 +3977,37 @@ def _within(path: Path, root: Path, label: str) -> Path:
     return path
 
 
+def _expected_ft_package(expected_ft_slug: str) -> tuple[tuple[str, ...], str]:
+    """Return repo-relative ``fts`` path parts and stable package metadata slug.
+
+    Historical workflows used one-segment ``ft_slug`` values such as ``AutoFin``.
+    Newer clean-run packages can live below a domain directory, for example
+    ``fts/AutoFin/PostFinal-v2-rc5``.  The compiler CLI keeps the legacy
+    ``--expected-ft-slug`` option for compatibility, but treats slash-delimited
+    values as an FT package path.  Immutable prepared packages still use a stable
+    one-segment slug: the package directory basename.
+    """
+
+    if not isinstance(expected_ft_slug, str) or not expected_ft_slug:
+        raise StageRuntimeError("expected_ft_slug must be a non-empty FT package path")
+    normalized = expected_ft_slug.replace("\\", "/")
+    path = PurePosixPath(normalized)
+    if path.is_absolute():
+        raise StageRuntimeError("expected_ft_slug must be relative to fts/")
+    parts = path.parts
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise StageRuntimeError("expected_ft_slug must stay inside fts/")
+    invalid = [
+        part for part in parts if FT_PACKAGE_PATH_SEGMENT.fullmatch(part) is None
+    ]
+    if invalid:
+        raise StageRuntimeError(
+            "expected_ft_slug path segments must be stable identifiers: "
+            + ", ".join(invalid)
+        )
+    return tuple(parts), parts[-1]
+
+
 @dataclass(frozen=True)
 class _SelectedSourceEntry:
     path: Path
@@ -4488,7 +4523,8 @@ def compile_workflow_package(
         raise StageRuntimeError(
             "output_mode must be one of " + ", ".join(sorted(OUTPUT_MODES))
         )
-    expected_ft_root = (repo_root / "fts" / expected_ft_slug).resolve()
+    expected_ft_parts, package_ft_slug = _expected_ft_package(expected_ft_slug)
+    expected_ft_root = (repo_root / "fts").joinpath(*expected_ft_parts).resolve()
     if not expected_ft_root.is_dir():
         raise StageRuntimeError(f"expected FT package is missing: fts/{expected_ft_slug}")
     _within(workflow_state, expected_ft_root, "workflow-state")
@@ -4512,9 +4548,10 @@ def compile_workflow_package(
     scope_slug = str(state.get("scope_slug", ""))
     if not ft_slug or not scope_slug:
         raise StageRuntimeError("workflow-state requires ft_slug and scope_slug")
-    if ft_slug != expected_ft_slug:
+    if ft_slug not in {expected_ft_slug, package_ft_slug}:
         raise StageRuntimeError(
-            f"workflow-state ft_slug mismatch: expected {expected_ft_slug}, found {ft_slug}"
+            "workflow-state ft_slug mismatch: "
+            f"expected {expected_ft_slug} or {package_ft_slug}, found {ft_slug}"
         )
     ft_root = expected_ft_root
     review_cycles_root = ft_root / "work" / "review-cycles"
@@ -6383,7 +6420,7 @@ def compile_workflow_package(
         builder.build(
             output_root=output_root,
             package_id=package_id,
-            ft_slug=ft_slug,
+            ft_slug=package_ft_slug,
             scope_slug=scope_slug,
             section_id=section_id,
             source_registry=_source_registry(
