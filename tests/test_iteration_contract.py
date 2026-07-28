@@ -788,6 +788,31 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_ignores_unresolved_duplicate_for_returned_case(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [_runtime_writer_case(seed)],
+            unresolved=(
+                {
+                    "case_key": seed.case_key,
+                    "reason": "Duplicate unresolved entry for an already returned case.",
+                },
+            ),
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual(1, len(designs))
+        self.assertEqual((), unresolved)
+
     def test_runtime_writer_accepts_multi_seed_model_runtime_response(self) -> None:
         graph = _multi_runtime_graph()
         plan = build_test_design_plan(graph, context=_context())

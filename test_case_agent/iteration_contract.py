@@ -2213,10 +2213,13 @@ def validate_runtime_writer_response(
                 calibration_question=calibration_question,
             )
         )
+    resolved_case_keys = set(seen)
     for index, raw in enumerate(raw_unresolved):
         item = _object(raw, f"$.unresolved[{index}]", {"case_key", "reason"})
         case_key = _one_line(item["case_key"], f"$.unresolved[{index}].case_key")
         reason = _one_line(item["reason"], f"$.unresolved[{index}].reason")
+        if case_key in resolved_case_keys:
+            continue
         if case_key not in expected or case_key in seen:
             raise IterationContractError(
                 f"unknown or duplicate unresolved case_key: {case_key}"
