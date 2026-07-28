@@ -458,6 +458,80 @@ class TestDesignTests(unittest.TestCase):
             case.expected_result,
         )
 
+    def test_source_editability_ignores_sentinel_fixture_and_uses_dictionary_value(
+        self,
+    ) -> None:
+        graph = _graph(
+            kind="source-editability",
+            fixtures=("source-backed fixture only",),
+            trigger="Выбрать значение в поле «Тип телефона».",
+        )
+        graph = replace(
+            graph,
+            properties=(
+                replace(
+                    graph.properties[0],
+                    canonical_statement="Список «Тип телефона» редактируем.",
+                ),
+                CoverageProperty(
+                    property_id="PROP-PHONE-TYPE-DICT",
+                    assertion_id="ASSERT-PHONE-TYPE-DICT",
+                    property_key="phone-type:dictionary",
+                    subject_key="customer-name",
+                    property_kind="dictionary",
+                    source_row_id="SRC-DICT",
+                    source_path="support.md",
+                    source_locator="dictionary:Тип телефона",
+                    source_text_sha256="7" * 64,
+                    canonical_statement=(
+                        "Список «Тип телефона» содержит значение `Мобильный`."
+                    ),
+                    requirement_codes=(),
+                    disposition="tc",
+                    polarity="positive",
+                ),
+                *graph.properties[1:],
+            ),
+            obligations=(
+                graph.obligations[0],
+                CoverageObligation(
+                    obligation_id="OBL-PHONE-TYPE-DICT",
+                    property_id="PROP-PHONE-TYPE-DICT",
+                    atom_id="ATOM-PHONE-TYPE-DICT",
+                    coverage_variant="dictionary",
+                    condition_key="always",
+                    atomic_statement=(
+                        "Список «Тип телефона» содержит значение `Мобильный`."
+                    ),
+                    observable_oracle=(
+                        "В списке «Тип телефона» отображается значение `Мобильный`."
+                    ),
+                    coverage_status="testable",
+                    requirement_codes=(),
+                    gap_id="",
+                    calibration_status="not-required",
+                    validation_trigger="Открыть список «Тип телефона».",
+                    cleanup_strategy="",
+                    source_oracle_id="",
+                    fixture_values=("Мобильный",),
+                    calibration_question="",
+                ),
+            ),
+        )
+        context = replace(
+            _context(),
+            subject_labels={
+                **_context().subject_labels,
+                "customer-name": "Тип телефона",
+            },
+        )
+
+        case = build_test_design_plan(graph, context=context).deterministic_cases[0]
+        rendered = "\n".join((*case.test_data, *case.steps, case.expected_result))
+
+        self.assertIn("`Мобильный`", rendered)
+        self.assertNotIn("source-backed fixture only", rendered)
+
     def test_input_action_without_target_gets_typed_subject_wrapper(self) -> None:
         graph = _graph(
             kind="source-format",

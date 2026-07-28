@@ -797,7 +797,13 @@ def _condition_needs_repeater_row(value: str) -> bool:
 
 
 def _looks_like_generic_fixture(value: str) -> bool:
-    return _normalized_text(value) in {"тест", "тестовое значение"}
+    normalized = _normalized_text(value)
+    sentinel = value.strip().casefold()
+    return normalized in {"тест", "тестовое значение"} or sentinel in {
+        "source-backed fixture only",
+        "source-backed value only",
+        "requires ui calibration for exact response",
+    }
 
 
 def _subject_fixture_values(
