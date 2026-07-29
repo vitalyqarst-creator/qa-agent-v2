@@ -2551,8 +2551,9 @@ def build_reviewer_request(
             if isinstance(item, Mapping) and item.get("case_key")
         ]
         expected_primary_bindings = [
-            (item.case_key, item.tc_id, item.obligation_ids[0])
+            (item.case_key, item.tc_id, obligation_id)
             for item in graph.cases
+            for obligation_id in item.obligation_ids
         ]
         if sorted(primary_bindings) != sorted(expected_primary_bindings):
             raise IterationContractError(

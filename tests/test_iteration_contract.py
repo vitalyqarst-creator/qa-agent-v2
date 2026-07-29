@@ -1593,6 +1593,55 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_design_support_mapping_accepts_merged_primary_obligations(self) -> None:
+        graph, context = _repeater_graph_and_context()
+        merged_case_key = "customer|customer-name|source-add-row|repeater-add|always"
+        cases = build_test_design_plan(graph, context=context).deterministic_cases
+        merged_graph = replace(
+            graph,
+            obligations=(
+                *graph.obligations,
+                replace(
+                    next(item for item in graph.obligations if item.obligation_id == "OBL-ADD"),
+                    obligation_id="OBL-ADD-META",
+                    atom_id="ATOM-ADD-META",
+                    observable_oracle=(
+                        "РџРѕСЏРІР»СЏРµС‚СЃСЏ РїРѕР»РЅР°СЏ СЃС‚СЂРѕРєР° СЃ РґРѕРїРѕР»РЅРёС‚РµР»СЊРЅС‹Рј РїРѕР»РµРј."
+                    ),
+                ),
+            ),
+            cases=tuple(
+                replace(case, obligation_ids=("OBL-ADD", "OBL-ADD-META"))
+                if case.case_key == merged_case_key
+                else case
+                for case in graph.cases
+            ),
+        )
+        cases = tuple(
+            replace(
+                case,
+                traceability=tuple(
+                    dict.fromkeys((*case.traceability, "OBL-ADD-META", "ATOM-ADD-META"))
+                ),
+            )
+            if case.case_key == merged_case_key
+            else case
+            for case in cases
+        )
+        merged_design = next(item for item in cases if item.case_key == merged_case_key)
+        mapping = build_design_support_mapping(merged_graph, cases)
+
+        self.assertIn("OBL-ADD", merged_design.traceability)
+        self.assertIn("OBL-ADD-META", merged_design.traceability)
+        self.assertEqual(
+            [("cleanup", "OBL-DELETE")],
+            [
+                (item["support_role"], item["obligation_id"])
+                for item in mapping
+                if item["case_key"] == merged_case_key
+            ],
+        )
+
     def test_runtime_writer_rejects_mixed_valid_and_invalid_input_actions(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

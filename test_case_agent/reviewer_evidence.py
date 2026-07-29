@@ -2282,9 +2282,9 @@ def build_design_support_mapping(
     Deterministic designs may use a sibling obligation to prepare state, perform
     a source-backed transition, or clean up.  Those obligations belong in the
     design traceability, but they must not be promoted to an additional primary
-    coverage owner for the case.  This projection keeps the primary mapping
-    atomic while giving the reviewer an exact, role-tagged chain for each
-    materialized sibling action.
+    coverage owner for the case.  A source-first merged case may already own
+    multiple primary graph obligations with one semantic case key; those remain
+    primary bindings and only extra traced siblings require materialized support.
     """
 
     properties = {item.property_id: item for item in graph.properties}
@@ -2298,20 +2298,20 @@ def build_design_support_mapping(
     result: list[dict[str, Any]] = []
     for design in sorted(cases, key=lambda item: item.case_key):
         graph_case = graph_cases.get(design.case_key)
-        if graph_case is None or len(graph_case.obligation_ids) != 1:
+        if graph_case is None or not graph_case.obligation_ids:
             _fail(
                 "design-support-primary-binding-invalid",
-                f"{design.case_key} must have exactly one primary graph obligation",
+                f"{design.case_key} must have at least one primary graph obligation",
             )
-        primary_obligation_id = graph_case.obligation_ids[0]
+        primary_obligation_ids = tuple(graph_case.obligation_ids)
         traced_siblings = sorted(
             {
                 token
                 for token in design.traceability
-                if token in obligations and token != primary_obligation_id
+                if token in obligations and token not in primary_obligation_ids
             }
         )
-        support_obligation_ids = (primary_obligation_id, *traced_siblings)
+        support_obligation_ids = (*primary_obligation_ids, *traced_siblings)
         for obligation_id in support_obligation_ids:
             obligation = obligations[obligation_id]
             prop = properties.get(obligation.property_id)
@@ -2333,7 +2333,7 @@ def build_design_support_mapping(
             materialized = False
             for support_role, field_name in sections:
                 if (
-                    obligation_id == primary_obligation_id
+                    obligation_id in primary_obligation_ids
                     and support_role == "action"
                 ):
                     continue
@@ -2366,7 +2366,7 @@ def build_design_support_mapping(
                             "tc_id": design.tc_id,
                         }
                     )
-            if obligation_id != primary_obligation_id and not materialized:
+            if obligation_id not in primary_obligation_ids and not materialized:
                 _fail(
                     "design-support-traceability-not-materialized",
                     f"{design.tc_id} traces sibling {obligation_id} without a "
