@@ -8,7 +8,7 @@
 - `stand_url`: `http://fp-autofinance-dev.fisgroup.ru:8080/web/FormRunner/#/applicationlist/`
 - `application_url`: `http://fp-autofinance-dev.fisgroup.ru:8080/web/FormRunner/#/application/card/create`
 - `date`: 2026-07-29
-- `browser`: Playwright Chromium profile `client-contacts`
+- `browser`: Playwright Chromium profiles `client-contacts`, `phone-negative-recheck`
 
 Only UI facts were checked. Baseline `test-cases/*.md`, DOCX/XHTML/PDF, support/mockups, and agent code/instructions were not edited.
 
@@ -18,10 +18,10 @@ Only UI facts were checked. Baseline `test-cases/*.md`, DOCX/XHTML/PDF, support/
 |---|---|---|---|---|---|---|---|
 | Phone | `Мобильный телефон` | Initial empty required state | empty | Open fresh application card | Field has `*`, DOM `required=true`, state `empty required ... invalid`; no standalone message in contacts section. | `confirmed` | Assert required marker/state; screenshot `contacts-initial.png`. |
 | Phone | `Мобильный телефон` | Valid phone | `9991234567` | `fill`, `Tab` blur | Displayed as `+7 (999) 912–34–56`; state `valid`; value did not clear. | `confirmed` | Assert actual mask observed for this input, or verify with manual keyboard if automation needs literal digit mapping. |
-| Phone | `Мобильный телефон` | Short phone | `999123456` | `fill`, `Tab` blur | Mask field did not reset reliably between values; observed previous valid-looking value. | `blocked-observability` | Use a fresh card per value or a proven clear/reset action before automating this negative case. |
-| Phone | `Мобильный телефон` | Long phone | `99912345678` | `fill`, `Tab` blur | Same reset limitation; isolated long-value behavior not reliable. | `blocked-observability` | Same as above. |
-| Phone | `Мобильный телефон` | Alpha phone | `99912A4567` | `fill`, `Tab` blur | Observed `+7 (999) 912–45–67`, state `valid`, no message; isolation limited by mask reset behavior. | `blocked-observability` | Recheck on fresh field before turning into strict assertion. |
-| Phone | `Мобильный телефон` | Space phone | `99912 4567` | `fill`, `Tab` blur | Observed `+7 (999) 912–45–67`, state `valid`, no message; isolation limited by mask reset behavior. | `blocked-observability` | Recheck on fresh field before turning into strict assertion. |
+| Phone | `Мобильный телефон` | Short phone | `999123456` | `Ctrl+A`, `Backspace`, `Delete`, `Tab` clear verification; then `keyboard.type`, `Tab` blur | Clear step produced empty field with state `invalid required empty`; after input UI displayed `+7 (999) 912–34–56`, state `valid`, no visible message. | `confirmed` | Do not assert rejection for this value; assert mask normalization/accepted valid state if this scenario is automated. |
+| Phone | `Мобильный телефон` | Long phone | `99912345678` | `Ctrl+A`, `Backspace`, `Delete`, `Tab` clear verification; then `keyboard.type`, `Tab` blur | Clear step produced empty field with state `invalid required empty`; after input UI displayed `+7 (999) 912–34–56`, state `valid`, no visible message; extra digit was ignored by mask. | `confirmed` | Do not assert rejection for this value; assert accepted masked value and valid state. |
+| Phone | `Мобильный телефон` | Alpha phone | `99912A4567` | `Ctrl+A`, `Backspace`, `Delete`, `Tab` clear verification; then `keyboard.type`, `Tab` blur | Clear step produced empty field with state `invalid required empty`; after input UI displayed `+7 (999) 912–45–67`, state `valid`, no visible message; alpha character was ignored by mask. | `confirmed` | Do not assert error text; assert that non-digit input is filtered by the mask. |
+| Phone | `Мобильный телефон` | Space phone | `99912 4567` | `Ctrl+A`, `Backspace`, `Delete`, `Tab` clear verification; then `keyboard.type`, `Tab` blur | Clear step produced empty field with state `invalid required empty`; after input UI displayed `+7 (999) 912–45–67`, state `valid`, no visible message; space was ignored by mask. | `confirmed` | Do not assert error text; assert that spaces are filtered by the mask. |
 | Phone | `Мобильный телефон` | Repeating digits | `9999999999` | `fill`, `Tab` blur | Displayed as `+7 (999) 999–99–99`; state `valid`; no message. | `confirmed` | Repeating digits are not rejected by observed UI. |
 | E-mail | `E-mail` | Field presence/required | empty | Open contacts block | Field visible, no `*`, DOM `required=false`. | `confirmed` | Treat e-mail as optional. |
 | E-mail | `E-mail` | Valid e-mail | `one@example.ru` | `fill`, `Tab` blur | Value remained; no invalid state/message. | `confirmed` | Positive e-mail fixture can use `one@example.ru`. |
@@ -42,8 +42,8 @@ Only UI facts were checked. Baseline `test-cases/*.md`, DOCX/XHTML/PDF, support/
 
 ## Summary
 
-- Confirmed scenarios: 18
-- Blocked-observability scenarios: 5
+- Confirmed scenarios: 22
+- Blocked-observability scenarios: 1
 
 ## Key facts for automation-ready tests
 
@@ -52,4 +52,4 @@ Only UI facts were checked. Baseline `test-cases/*.md`, DOCX/XHTML/PDF, support/
 3. Added phone row fields: `Тип телефона *`, `Номер телефона *`, delete action `-`.
 4. `Тип телефона` dropdown values: `Мобильный`, `Рабочий`, `Домашний`.
 5. E-mail invalid/multiple values clear on blur without visible message.
-6. Main phone mask requires more careful automation setup; several negative values could not be isolated reliably without resetting the card/field.
+6. Main phone mask can be reset reliably with `Ctrl+A`, `Backspace`, `Delete`, and `Tab`; after verified clear state, values `999123456`, `99912345678`, `99912A4567`, and `99912 4567` were accepted as valid masked values with no visible error message.
