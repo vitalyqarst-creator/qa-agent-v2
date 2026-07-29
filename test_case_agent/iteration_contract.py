@@ -111,6 +111,7 @@ _BACKTICK_VALUE_RE = re.compile(r"`([^`]+)`")
 _RUNTIME_NO_SETUP_RE = re.compile(r"^не\s+требуются$", re.IGNORECASE)
 _RUNTIME_REJECTION_ORACLE_RE = re.compile(
     r"(?:ошибк\w*|валидаци\w*|недопустим\w*|невалидн\w*|"
+    r"invalid|required|обязательн\w*\s+к\s+заполн\w*|выберите\s+значени\w*|"
     r"(?<!не\s)отклон\w*|не\s+принима\w*|не\s+сохраня\w*|"
     r"(?:переход|кнопк\w*|действи\w*)[^.\n;]{0,80}заблок\w*|"
     r"невозможн\w*[^.\n;]{0,80}(?:сохран|перейти|продолж))",
@@ -131,6 +132,26 @@ _RUNTIME_ABSENT_ERROR_ORACLE_RE = re.compile(
     r"|"
     r"\u0431\u0435\u0437[^.\n;]{0,100}(?:\u0441\u043e\u043e\u0431\u0449\u0435\u043d\w*)?[^.\n;]{0,100}(?:\u043e\u0448\u0438\u0431\u043a\w*|\u0432\u0430\u043b\u0438\u0434\u0430\u0446\u0438\w*)"
     r")",
+    re.IGNORECASE,
+)
+_RUNTIME_POSITIVE_MASK_NORMALIZATION_RE = re.compile(
+    r"(?:фильтру\w*|игнорир\w*|нормализ\w*|усека\w*|маск\w*|"
+    r"truncat\w*|normaliz\w*|filter\w*)",
+    re.IGNORECASE,
+)
+_RUNTIME_VALID_STATE_RE = re.compile(
+    r"(?:состояни\w*\s+`?valid`?|state\s+`?valid`?)",
+    re.IGNORECASE,
+)
+_RUNTIME_POSITIVE_FILTERING_TERMS_RE = re.compile(
+    r"(?:недопустим\w*\s+(?:символ|знак|значени\w*)|"
+    r"(?:символ|знак|букв\w*|пробел\w*)\s+фильтру\w*)",
+    re.IGNORECASE,
+)
+_RUNTIME_BLOCKING_OR_ERROR_OUTCOME_RE = re.compile(
+    r"(?:invalid|required|ошибк\w*|валидаци\w*|обязательн\w*\s+к\s+заполн\w*|"
+    r"выберите\s+значени\w*|очища\w*|не\s+принима\w*|не\s+сохраня\w*|"
+    r"(?:переход|кнопк\w*|действи\w*)[^.\n;]{0,80}заблок\w*)",
     re.IGNORECASE,
 )
 _RUNTIME_NEGATED_REJECTION_ACCEPTANCE_RE = re.compile(
@@ -182,6 +203,10 @@ _RUNTIME_UNBOUNDED_INVARIANT_RE = re.compile(
 )
 _RUNTIME_ENTRYPOINT_PRECONDITION_RE = re.compile(
     r"^(?:Открыть\s+карточк\w*|Перейти\s+(?:к|в)\s+блок\w*)\b",
+    re.IGNORECASE,
+)
+_RUNTIME_QUOTED_ENTRYPOINT_LABEL_RE = re.compile(
+    r"^(?:Открыть\s+карточк\w*|Перейти\s+(?:к|в)\s+блок\w*)\s+[`«\"]([^`»\"]+)[`»\"]",
     re.IGNORECASE,
 )
 _CLEANUP_ORACLE_RE = re.compile(
@@ -1559,9 +1584,29 @@ def _runtime_has_executable_step(steps: Sequence[str]) -> bool:
     )
 
 
+def _runtime_is_positive_mask_normalization_oracle(expected_result: str) -> bool:
+    without_absent_error = _RUNTIME_ABSENT_ERROR_ORACLE_RE.sub("", expected_result)
+    without_absent_error = _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE.sub(
+        "",
+        without_absent_error,
+    )
+    return (
+        _RUNTIME_POSITIVE_MASK_NORMALIZATION_RE.search(expected_result) is not None
+        and _RUNTIME_VALID_STATE_RE.search(expected_result) is not None
+        and (
+            _RUNTIME_ABSENT_ERROR_ORACLE_RE.search(expected_result) is not None
+            or _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE.search(expected_result)
+            is not None
+        )
+        and _RUNTIME_BLOCKING_OR_ERROR_OUTCOME_RE.search(without_absent_error) is None
+    )
+
+
 def _runtime_has_rejection_oracle(expected_result: str) -> bool:
     inspected = _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE.sub("", expected_result)
     inspected = _RUNTIME_ABSENT_ERROR_ORACLE_RE.sub("", inspected)
+    if _runtime_is_positive_mask_normalization_oracle(expected_result):
+        inspected = _RUNTIME_POSITIVE_FILTERING_TERMS_RE.sub("", inspected)
     return _RUNTIME_REJECTION_ORACLE_RE.search(inspected) is not None
 
 
@@ -1907,6 +1952,46 @@ def _seed_entrypoint_preconditions(seed: TestCaseDesign) -> tuple[str, ...]:
     )
 
 
+def _runtime_text_mentions_label_as_field(label: str, values: Sequence[str]) -> bool:
+    escaped = re.escape(label.strip())
+    if not escaped:
+        return False
+    field_re = re.compile(
+        rf"(?:пол[ея]|списк\w*|значени\w*)\s+[`«\"]{escaped}[`»\"]",
+        re.IGNORECASE,
+    )
+    return any(field_re.search(value) is not None for value in values)
+
+
+def _validate_runtime_writer_does_not_promote_field_labels_to_entrypoints(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    preconditions: Sequence[str],
+    test_data: Sequence[str],
+    steps: Sequence[str],
+    expected_result: str,
+) -> None:
+    protected_entrypoints = {
+        _normalized_ui_label(item) for item in _seed_entrypoint_preconditions(seed)
+    }
+    runtime_values = (*test_data, *steps, expected_result, seed.expected_result, *seed.steps)
+    for precondition in preconditions:
+        if _normalized_ui_label(precondition) in protected_entrypoints:
+            continue
+        match = _RUNTIME_QUOTED_ENTRYPOINT_LABEL_RE.search(precondition.strip())
+        if match is None:
+            continue
+        label = match.group(1).strip()
+        if not _runtime_text_mentions_label_as_field(label, runtime_values):
+            continue
+        raise IterationContractError(
+            "runtime writer promoted field label to card/block entrypoint for "
+            f"{case_key}: {precondition}. Open the real enclosing card/form/section "
+            "before navigating to business fields."
+        )
+
+
 def _validate_runtime_writer_preserves_seed_entrypoint_preconditions(
     *,
     case_key: str,
@@ -2210,6 +2295,14 @@ def validate_runtime_writer_response(
             expected_result=expected_result,
             postconditions=postconditions,
             calibration_question=calibration_question,
+        )
+        _validate_runtime_writer_does_not_promote_field_labels_to_entrypoints(
+            case_key=case_key,
+            seed=seed,
+            preconditions=preconditions,
+            test_data=test_data,
+            steps=steps,
+            expected_result=expected_result,
         )
         _validate_runtime_writer_executes_seed_prepared_values(
             case_key=case_key,

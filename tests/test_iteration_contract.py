@@ -1627,6 +1627,68 @@ class IterationContractTests(unittest.TestCase):
             designs[0].expected_result,
         )
 
+    def test_runtime_writer_accepts_positive_phone_mask_filtering_normalization(
+        self,
+    ) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        expected_result = (
+            "Для `99912A4567`, `99912 4567`, `99912@4567`, `99912.4567` "
+            "и `99912-4567` недопустимый символ фильтруется, отображается "
+            "`+7 (999) 912-45-67`, поле находится в состоянии `valid`, "
+            "сообщение отсутствует."
+        )
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    case_type="позитивный",
+                    expected_result=expected_result,
+                )
+            ],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(expected_result, designs[0].expected_result)
+
+    def test_runtime_writer_rejects_positive_required_error_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    case_type="позитивный",
+                    expected_result=(
+                        "Для `999123456` значение поля очищается и отображается "
+                        "сообщение `Обязательно к заполнению`."
+                    ),
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "positive case_type conflicts",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_accepts_positive_absent_error_oracle(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
@@ -1842,6 +1904,38 @@ class IterationContractTests(unittest.TestCase):
         with self.assertRaisesRegex(
             IterationContractError,
             "non-reproducible precondition.*Открыта карточка",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_field_label_promoted_to_card_entrypoint(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    preconditions=[
+                        *seed.preconditions,
+                        "Открыть карточку `Мобильный телефон`.",
+                    ],
+                    steps=[
+                        "Ввести `Иван` в поле `Мобильный телефон`.",
+                        "Проверить отображаемое значение поля `Мобильный телефон`.",
+                    ],
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "promoted field label to card/block entrypoint",
         ):
             validate_runtime_writer_response(
                 payload,
