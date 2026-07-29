@@ -20,6 +20,10 @@ All paths are repo-relative.
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-long-99912345678.png` | Main phone after long input attempt. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-alpha-99912A4567.png` | Main phone after alpha input attempt. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-space-99912-4567.png` | Main phone after space input attempt. |
+| `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-negative-recheck-short-999123456.png` | Recheck after verified clear: short input accepted as masked valid value. |
+| `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-negative-recheck-long-99912345678.png` | Recheck after verified clear: long input accepted as masked valid value. |
+| `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-negative-recheck-alpha-99912A4567.png` | Recheck after verified clear: alpha character filtered; field valid. |
+| `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-negative-recheck-space-99912-4567.png` | Recheck after verified clear: space filtered; field valid. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-repeat-9999999999.png` | Main phone after repeated digits. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/email-valid-one-example-ru.png` | Valid e-mail. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/email-invalid-no-at.png` | Invalid e-mail without `@`. |
