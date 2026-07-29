@@ -22,15 +22,17 @@
 Использованные статусы:
 
 - `confirmed`: фактическое поведение UI соответствует смыслу теста и воспроизводится на стенде.
-- `needs-test-case-update`: кейс удалось выполнить в UI, но фактические labels/messages/control behavior отличаются от текущей формулировки test-case или кейсу не хватает стабильных предусловий/данных.
-- `blocked-ui-input`: UI/data/access path недостаточны для выполнения кейса без выдумывания поведения.
+- `mismatch-ft-ui`: кейс удалось выполнить в UI, но фактические labels/messages/control behavior отличаются от текущей формулировки test-case или требуют отдельного FT/UI triage.
+- `blocked-observability`: UI/data path недостаточны для выполнения кейса без выдумывания поведения.
+- `not-automatable-manual-only`: проверка требует внешнего manual/mobile/drag-and-drop path, не воспроизведенного в текущей automation session.
 
 ## Сводка
 
 - Всего проверено: 124
 - `confirmed`: 91
-- `needs-test-case-update`: 24
-- `blocked-ui-input`: 9
+- `mismatch-ft-ui`: 24
+- `blocked-observability`: 4
+- `not-automatable-manual-only`: 5
 
 По файлам:
 
@@ -58,56 +60,56 @@
 
 ### Контактные лица
 
-| TC-ID | Фактическое поведение UI | Требуемая корректировка |
-| --- | --- | --- |
-| `TC-CP-B78F72E22B` | При выборе отношения `иное` значение заполняется в поле отношения; дополнительное видимое поле уточнения в строке контактного лица не появилось. | Убрать ожидаемый шаг/результат про дополнительное текстовое поле или добавить недостающее предусловие, если поле появляется только для другого состояния продукта/процесса. |
-| `TC-CP-6560C2E054` | Пустое поле отношения обязательно и получает invalid state; точное видимое сообщение в строке контакта в откалиброванном состоянии не отображалось. | Не ожидать конкретный error text, если шаг явно не приводит UI в то же состояние валидации, где этот текст появляется. |
-| `TC-CP-B01529711C` | Телефон принимает 10 цифр и визуально форматируется как `+7 (999) 123-45-67`; 11-я лишняя цифра игнорируется/обрезается; буквы игнорируются, неполное значение очищается при blur. | Заменить ожидание invalid-long на truncation/ignore behavior; указать точную валидную маску и поведение при blur. |
-| `TC-CP-C76A595256` | Пустой телефон обязателен, поле получает `invalid empty required`; отдельное видимое текстовое сообщение для телефона контактного лица не наблюдалось. | Использовать state поля/required marker как ожидаемый результат, а не выдуманный текст сообщения. |
-| `TC-CP-BF2F522CE8` | Невалидные символы/цифры в имени контактного лица можно ввести временно, затем поле очищается при blur; конкретный видимый error text не остается. | Обновить ожидаемый результат на filtering/clear-on-blur behavior. |
-| `TC-CP-116443D9EB` | Пустое имя обязательно; в этом UI поле может показывать `Выберите значение`, потому что реализовано как autocomplete/select-like control. | Указать select/autocomplete behavior и точное сообщение, если валидация триггерится. |
-| `TC-CP-351CD544DE` | Невалидная фамилия очищается при blur; persistent message не наблюдался. | Обновить expected result для invalid-input на clear-on-blur. |
-| `TC-CP-C0C583C405` | Пустая фамилия обязательна; отдельное сообщение в проверенном состоянии не отображалось. | Проверять required marker/invalid state, а не незафиксированный текст. |
-| `TC-CP-C5BCDBF312` | Отчество необязательно, но невалидные символы/цифры все равно очищаются при blur; persistent message не наблюдался. | Уточнить, что optional field все равно применяет input filtering. |
-| `TC-CP-7EC8C7FA5A` | Будущая дата `29.07.2026` остается в поле, поле становится invalid; видимый текст сообщения для DOB контактного лица не наблюдался. | Ожидать invalid state без предположения о сообщении. |
-| `TC-CP-30984FE5C2` | Пустая DOB обязательна и invalid; отдельное текстовое сообщение для DOB контактного лица не наблюдалось. | Использовать required marker/invalid state как expected result. |
+| Test Case ID | UI Verification Status | Фактическое поведение UI | Требуемая корректировка |
+| --- | --- | --- | --- |
+| `TC-CP-B78F72E22B` | `mismatch-ft-ui` | При выборе отношения `иное` значение заполняется в поле отношения; дополнительное видимое поле уточнения в строке контактного лица не появилось. | Убрать ожидаемый шаг/результат про дополнительное текстовое поле или добавить недостающее предусловие, если поле появляется только для другого состояния продукта/процесса. |
+| `TC-CP-6560C2E054` | `mismatch-ft-ui` | Пустое поле отношения обязательно и получает invalid state; точное видимое сообщение в строке контакта в откалиброванном состоянии не отображалось. | Не ожидать конкретный error text, если шаг явно не приводит UI в то же состояние валидации, где этот текст появляется. |
+| `TC-CP-B01529711C` | `mismatch-ft-ui` | Телефон принимает 10 цифр и визуально форматируется как `+7 (999) 123-45-67`; 11-я лишняя цифра игнорируется/обрезается; буквы игнорируются, неполное значение очищается при blur. | Заменить ожидание invalid-long на truncation/ignore behavior; указать точную валидную маску и поведение при blur. |
+| `TC-CP-C76A595256` | `mismatch-ft-ui` | Пустой телефон обязателен, поле получает `invalid empty required`; отдельное видимое текстовое сообщение для телефона контактного лица не наблюдалось. | Использовать state поля/required marker как ожидаемый результат, а не выдуманный текст сообщения. |
+| `TC-CP-BF2F522CE8` | `mismatch-ft-ui` | Невалидные символы/цифры в имени контактного лица можно ввести временно, затем поле очищается при blur; конкретный видимый error text не остается. | Обновить ожидаемый результат на filtering/clear-on-blur behavior. |
+| `TC-CP-116443D9EB` | `mismatch-ft-ui` | Пустое имя обязательно; в этом UI поле может показывать `Выберите значение`, потому что реализовано как autocomplete/select-like control. | Указать select/autocomplete behavior и точное сообщение, если валидация триггерится. |
+| `TC-CP-351CD544DE` | `mismatch-ft-ui` | Невалидная фамилия очищается при blur; persistent message не наблюдался. | Обновить expected result для invalid-input на clear-on-blur. |
+| `TC-CP-C0C583C405` | `mismatch-ft-ui` | Пустая фамилия обязательна; отдельное сообщение в проверенном состоянии не отображалось. | Проверять required marker/invalid state, а не незафиксированный текст. |
+| `TC-CP-C5BCDBF312` | `mismatch-ft-ui` | Отчество необязательно, но невалидные символы/цифры все равно очищаются при blur; persistent message не наблюдался. | Уточнить, что optional field все равно применяет input filtering. |
+| `TC-CP-7EC8C7FA5A` | `mismatch-ft-ui` | Будущая дата `29.07.2026` остается в поле, поле становится invalid; видимый текст сообщения для DOB контактного лица не наблюдался. | Ожидать invalid state без предположения о сообщении. |
+| `TC-CP-30984FE5C2` | `mismatch-ft-ui` | Пустая DOB обязательна и invalid; отдельное текстовое сообщение для DOB контактного лица не наблюдалось. | Использовать required marker/invalid state как expected result. |
 
 ### Текущие паспортные данные
 
-| TC-ID | Фактическое поведение UI | Требуемая корректировка |
-| --- | --- | --- |
-| `TC-PASSCUR-010` | Нечисловой номер паспорта очищается при blur и показывает required-style validation (`Обязательно к заполнению`), потому что значение становится пустым. | Expected result должен описывать clear-on-blur плюс required message, а не generic `invalid number`. |
-| `TC-PASSCUR-011` | 7-значный номер обрезается до 6 цифр и становится valid (`123456`); как слишком длинный он не отклоняется. | Заменить `too long is invalid` на `extra digit is ignored/truncated`. |
-| `TC-PASSCUR-012` | 5-значный номер очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
-| `TC-PASSCUR-031` | Нечисловая серия очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
-| `TC-PASSCUR-032` | 5-значная серия обрезается до 4 цифр и становится valid (`1234`). | Заменить `too long is invalid` на truncation behavior. |
-| `TC-PASSCUR-033` | 3-значная серия очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
-| `TC-PASSCUR-038` | Нечисловой код подразделения очищается при blur и показывает `Код подразделения не в формате 000-000`. | Использовать точное сообщение и clear-on-blur behavior. |
-| `TC-PASSCUR-040` | 7-значный код подразделения обрезается/форматируется в `123-456` и становится valid; как слишком длинный он не отклоняется. | Заменить `too long is invalid` на truncation/format behavior. |
-| `TC-PASSCUR-041` | 5-значный код подразделения очищается и показывает `Код подразделения не в формате 000-000`. | Использовать точное сообщение и clear-on-blur behavior. |
+| Test Case ID | UI Verification Status | Фактическое поведение UI | Требуемая корректировка |
+| --- | --- | --- | --- |
+| `TC-PASSCUR-010` | `mismatch-ft-ui` | Нечисловой номер паспорта очищается при blur и показывает required-style validation (`Обязательно к заполнению`), потому что значение становится пустым. | Expected result должен описывать clear-on-blur плюс required message, а не generic `invalid number`. |
+| `TC-PASSCUR-011` | `mismatch-ft-ui` | 7-значный номер обрезается до 6 цифр и становится valid (`123456`); как слишком длинный он не отклоняется. | Заменить `too long is invalid` на `extra digit is ignored/truncated`. |
+| `TC-PASSCUR-012` | `mismatch-ft-ui` | 5-значный номер очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
+| `TC-PASSCUR-031` | `mismatch-ft-ui` | Нечисловая серия очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
+| `TC-PASSCUR-032` | `mismatch-ft-ui` | 5-значная серия обрезается до 4 цифр и становится valid (`1234`). | Заменить `too long is invalid` на truncation behavior. |
+| `TC-PASSCUR-033` | `mismatch-ft-ui` | 3-значная серия очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
+| `TC-PASSCUR-038` | `mismatch-ft-ui` | Нечисловой код подразделения очищается при blur и показывает `Код подразделения не в формате 000-000`. | Использовать точное сообщение и clear-on-blur behavior. |
+| `TC-PASSCUR-040` | `mismatch-ft-ui` | 7-значный код подразделения обрезается/форматируется в `123-456` и становится valid; как слишком длинный он не отклоняется. | Заменить `too long is invalid` на truncation/format behavior. |
+| `TC-PASSCUR-041` | `mismatch-ft-ui` | 5-значный код подразделения очищается и показывает `Код подразделения не в формате 000-000`. | Использовать точное сообщение и clear-on-blur behavior. |
 
 ### Документы по заявке и распознавание
 
-| TC-ID | Фактическое поведение UI | Требуемая корректировка |
-| --- | --- | --- |
-| `TC-DOC-023` | После валидной загрузки в `Анкета клиента` picker скрывается, отображаются иконки view/delete/download; видимого пути прикрепить второй файл к тому же полю нет. | Заменить duplicate-file scenario на `single-file control hides picker after upload` или добавить валидное предусловие/путь для multiple upload, если это поддерживается в другом месте. |
-| `TC-DOC-029` | После валидной загрузки в `Паспорт клиента` picker скрывается, отображаются action icons. | Та же корректировка, что и для duplicate-file case выше. |
-| `TC-DOC-034` | После валидной загрузки в `Второй документ` picker скрывается, отображаются action icons. | Та же корректировка, что и для duplicate-file case выше. |
-| `TC-DOC-036` | Иконка просмотра открывает загруженный PDF в новой вкладке браузера с `blob:http://...`; in-page modal не наблюдался. | Expected result должен говорить `открывается новая blob-вкладка/окно`, а не modal, если не требуется другая настройка viewer. |
+| Test Case ID | UI Verification Status | Фактическое поведение UI | Требуемая корректировка |
+| --- | --- | --- | --- |
+| `TC-DOC-023` | `mismatch-ft-ui` | После валидной загрузки в `Анкета клиента` picker скрывается, отображаются иконки view/delete/download; видимого пути прикрепить второй файл к тому же полю нет. | Заменить duplicate-file scenario на `single-file control hides picker after upload` или добавить валидное предусловие/путь для multiple upload, если это поддерживается в другом месте. |
+| `TC-DOC-029` | `mismatch-ft-ui` | После валидной загрузки в `Паспорт клиента` picker скрывается, отображаются action icons. | Та же корректировка, что и для duplicate-file case выше. |
+| `TC-DOC-034` | `mismatch-ft-ui` | После валидной загрузки в `Второй документ` picker скрывается, отображаются action icons. | Та же корректировка, что и для duplicate-file case выше. |
+| `TC-DOC-036` | `mismatch-ft-ui` | Иконка просмотра открывает загруженный PDF в новой вкладке браузера с `blob:http://...`; in-page modal не наблюдался. | Expected result должен говорить `открывается новая blob-вкладка/окно`, а не modal, если не требуется другая настройка viewer. |
 
 ## Blocked UI input
 
-| TC-ID | Причина блокировки |
-| --- | --- |
-| `TC-PASSCUR-003` | Код подразделения `770000` форматируется в `770-000`, но `Кем выдан` не автозаполняется. Нужны стабильные DaData/code test data. |
-| `TC-PASSCUR-005` | Список DaData-подсказок для `Кем выдан` не воспроизвелся с проверенным вводом (`ОВД`); поле осталось в состоянии `Выберите значение`. |
-| `TC-PASSCUR-018` | Та же зависимость от DaData: suggestions/autocomplete options не удалось сделать видимыми с доступными данными стенда. |
-| `TC-DOC-019` | Drag-and-drop upload для `Анкета клиента` не удалось надежно выполнить в доступном browser automation path; вместо него проверен file chooser upload. |
-| `TC-DOC-020` | QR/mobile upload path для `Анкета клиента` требует внешнего phone/QR flow; usable QR dialog из видимого контрола не открылся. |
-| `TC-DOC-025` | Drag-and-drop upload для `Паспорт клиента` не удалось надежно выполнить в доступном browser automation path. |
-| `TC-DOC-026` | QR/mobile upload path для `Паспорт клиента` требует внешнего phone/QR flow. |
-| `TC-DOC-031` | Drag-and-drop upload для `Второй документ` не удалось надежно выполнить в доступном browser automation path. |
-| `TC-DOC-040` | `Прикрепить с телефона` отображается в `Документы по заявке`, но клик не открыл воспроизводимый QR dialog в проверенной сессии. |
+| Test Case ID | UI Verification Status | Причина блокировки |
+| --- | --- | --- |
+| `TC-PASSCUR-003` | `blocked-observability` | Код подразделения `770000` форматируется в `770-000`, но `Кем выдан` не автозаполняется. Нужны стабильные DaData/code test data. |
+| `TC-PASSCUR-005` | `blocked-observability` | Список DaData-подсказок для `Кем выдан` не воспроизвелся с проверенным вводом (`ОВД`); поле осталось в состоянии `Выберите значение`. |
+| `TC-PASSCUR-018` | `blocked-observability` | Та же зависимость от DaData: suggestions/autocomplete options не удалось сделать видимыми с доступными данными стенда. |
+| `TC-DOC-019` | `not-automatable-manual-only` | Drag-and-drop upload для `Анкета клиента` не удалось надежно выполнить в доступном browser automation path; вместо него проверен file chooser upload. |
+| `TC-DOC-020` | `not-automatable-manual-only` | QR/mobile upload path для `Анкета клиента` требует внешнего phone/QR flow; usable QR dialog из видимого контрола не открылся. |
+| `TC-DOC-025` | `not-automatable-manual-only` | Drag-and-drop upload для `Паспорт клиента` не удалось надежно выполнить в доступном browser automation path. |
+| `TC-DOC-026` | `not-automatable-manual-only` | QR/mobile upload path для `Паспорт клиента` требует внешнего phone/QR flow. |
+| `TC-DOC-031` | `not-automatable-manual-only` | Drag-and-drop upload для `Второй документ` не удалось надежно выполнить в доступном browser automation path. |
+| `TC-DOC-040` | `blocked-observability` | `Прикрепить с телефона` отображается в `Документы по заявке`, но клик не открыл воспроизводимый QR dialog в проверенной сессии. |
 
 ## Ключевое фактическое поведение UI
 
@@ -190,11 +192,11 @@
 - `alltc-doc-attach-phone-click.png`
 - `alltc-doc-download-click.png`
 
-Upload fixtures:
+Upload fixture filenames used on the remote stand; fixture files were not committed as evidence artifacts:
 
-- `upload-fixtures/valid-small.pdf`
-- `upload-fixtures/invalid-format.txt`
-- `upload-fixtures/large-over-40mb.pdf`
+- valid-small.pdf
+- invalid-format.txt
+- large-over-40mb.pdf
 
 ## Точные изменения для внесения в test-cases после калибровки
 
@@ -208,4 +210,3 @@ Upload fixtures:
 8. Обновить ожидание просмотра документа: загруженный PDF открывается в новой вкладке `blob:http://...`, а не в наблюдаемой in-page modal.
 9. Заменить duplicate upload cases на single-file-control behavior или добавить конкретный multiple-upload path. Picker скрывается после валидного файла, отображаются view/delete/download icons.
 10. Добавить explicit test-environment prerequisites для drag-and-drop и QR/mobile upload cases. В проверенной automation session drag-and-drop не был надежным, а phone upload не открыл usable QR dialog.
-
