@@ -22,6 +22,20 @@
 - Действие по test-case: обновить TC так, чтобы обязательность поля `Имя` проверялась с учётом DaData/autocomplete поведения. Не выдумывать точный текст ошибки, если UI его не отображает.
 - Действие по UI evidence: считать observed required marker / required empty state достаточным evidence для текущего TC.
 
+### DEC-UI-002A — FIO DaData/autocomplete consistency
+
+- Область: `4.3-contact-persons`.
+- Суть: после принятия DEC-UI-002 все ФИО-кейсы должны использовать единую модель поля: DaData/autocomplete control, а не обычный свободный text input.
+- Решение: закрыть FIO calibration candidates по уже собранному evidence:
+  - `TC-CP-BF2F522CE8`: invalid `Имя` может временно вводиться, но очищается после blur.
+  - `TC-CP-351CD544DE`: invalid `Фамилия` может временно вводиться, но очищается после blur.
+  - `TC-CP-C0C583C405`: пустая `Фамилия` проверяется как обязательное DaData/autocomplete поле без обязательного exact error text.
+  - `TC-CP-C5BCDBF312`: invalid `Отчество` очищается после blur; пустое `Отчество` остаётся допустимым.
+  - `TC-CP-FD0683A355`: пустое `Отчество` подтверждено как необязательное поле без `*`, `required` и `invalid`.
+- Действие по test-case: обновить перечисленные TC и убрать `ui-calibration-required` / `candidate-ui-calibration`.
+- Editability consistency: `TC-CP-FD0866A774`, `TC-CP-1E7C130DD4`, `TC-CP-23A987DEFD` должны проверять ввод поискового значения в DaData/autocomplete поле, а не обычное свободное редактирование или выбор конкретного fixture.
+- Ограничение: не создавать новые positive DaData-selection TC без конкретных проверенных query / fixture values.
+
 ### DEC-UI-003 — `TC-PASSCUR-011`, `TC-PASSCUR-032`, `TC-PASSCUR-040`
 
 - Область: `4.3-current-passport-data`.

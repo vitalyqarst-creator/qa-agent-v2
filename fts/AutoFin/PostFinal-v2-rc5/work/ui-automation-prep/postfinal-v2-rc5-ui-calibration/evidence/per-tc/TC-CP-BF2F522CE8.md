@@ -49,13 +49,13 @@
 
 ## Result
 
-- `needs-test-case-update`
+- `confirmed-after-test-case-update`
 
 ## Recommended test-case update
 
-- Expected behavior should say invalid input can be typed before blur but is cleared on blur; no visible error message appears.
+- Applied in `test-cases/4-3-contact-persons.md`: invalid non-selected input can be typed before blur, clears on blur, and no visible error message is expected.
 
 ## Notes / risks
 
 - Field is an autocomplete/select-style input.
-
+- Product decision after evidence review: DaData/autocomplete behavior for contact person FIO fields is treated as a requirement/clarification.

@@ -17,7 +17,7 @@
 
 ## Объем проверки и метод
 
-На UI-стенде проверены все 124 TC-ID из трех файлов `test-cases`. Source analysis, writer, reviewer, bridge, benchmark, sharding и генерация новых test-cases не запускались. Исходные файлы test-case не редактировались.
+На UI-стенде проверены все 124 TC-ID из трех файлов `test-cases`. Source analysis, writer, reviewer, bridge, benchmark, sharding и генерация новых test-cases не запускались. В первичном UI-прогоне исходные файлы test-case не редактировались; последующие точечные правки внесены только по зафиксированным product decisions и UI evidence.
 
 Использованные статусы:
 
@@ -29,8 +29,8 @@
 ## Сводка
 
 - Всего проверено: 124
-- `confirmed`: 91
-- `mismatch-ft-ui`: 24
+- `confirmed`: 102
+- `mismatch-ft-ui`: 13
 - `blocked-observability`: 4
 - `not-automatable-manual-only`: 5
 
@@ -38,23 +38,23 @@
 
 | Файл | Всего | Confirmed | Needs update | Blocked |
 | --- | ---: | ---: | ---: | ---: |
-| `4-3-contact-persons.md` | 38 | 27 | 11 | 0 |
-| `4-3-current-passport-data.md` | 44 | 32 | 9 | 3 |
-| `11-4.3-application-documents-and-recognition.md` | 42 | 32 | 4 | 6 |
+| `4-3-contact-persons.md` | 38 | 32 | 6 | 0 |
+| `4-3-current-passport-data.md` | 44 | 35 | 6 | 3 |
+| `11-4.3-application-documents-and-recognition.md` | 42 | 35 | 1 | 6 |
 
 ## Confirmed TC-ID
 
 ### Контактные лица
 
-`TC-CP-AD5F4C7217`, `TC-CP-069C73C682`, `TC-CP-59FA884A01`, `TC-CP-1031D2F0FF`, `TC-CP-547CF72DA6`, `TC-CP-3C9ECFD5DC`, `TC-CP-3D0077E42F`, `TC-CP-A84688D4DB`, `TC-CP-05637FFFE5`, `TC-CP-254BA94E1D`, `TC-CP-43B1FF4F19`, `TC-CP-3921E86CCA`, `TC-CP-216EC18624`, `TC-CP-2CBD2F1BE6`, `TC-CP-FD0866A774`, `TC-CP-D49350060B`, `TC-CP-443F3F4189`, `TC-CP-1E7C130DD4`, `TC-CP-382F750F94`, `TC-CP-2DD9D4E006`, `TC-CP-23A987DEFD`, `TC-CP-FD0683A355`, `TC-CP-AB0B41DC31`, `TC-CP-9CF13C2E86`, `TC-CP-F374C4FBF7`, `TC-CP-36147078D3`, `TC-CP-FEEAF4F60E`
+`TC-CP-AD5F4C7217`, `TC-CP-069C73C682`, `TC-CP-59FA884A01`, `TC-CP-1031D2F0FF`, `TC-CP-547CF72DA6`, `TC-CP-3C9ECFD5DC`, `TC-CP-3D0077E42F`, `TC-CP-A84688D4DB`, `TC-CP-05637FFFE5`, `TC-CP-254BA94E1D`, `TC-CP-43B1FF4F19`, `TC-CP-3921E86CCA`, `TC-CP-216EC18624`, `TC-CP-2CBD2F1BE6`, `TC-CP-BF2F522CE8`, `TC-CP-FD0866A774`, `TC-CP-116443D9EB`, `TC-CP-D49350060B`, `TC-CP-443F3F4189`, `TC-CP-351CD544DE`, `TC-CP-1E7C130DD4`, `TC-CP-C0C583C405`, `TC-CP-382F750F94`, `TC-CP-2DD9D4E006`, `TC-CP-C5BCDBF312`, `TC-CP-23A987DEFD`, `TC-CP-FD0683A355`, `TC-CP-AB0B41DC31`, `TC-CP-9CF13C2E86`, `TC-CP-F374C4FBF7`, `TC-CP-36147078D3`, `TC-CP-FEEAF4F60E`
 
 ### Текущие паспортные данные
 
-`TC-PASSCUR-001`, `TC-PASSCUR-002`, `TC-PASSCUR-004`, `TC-PASSCUR-006`, `TC-PASSCUR-007`, `TC-PASSCUR-008`, `TC-PASSCUR-009`, `TC-PASSCUR-013`, `TC-PASSCUR-014`, `TC-PASSCUR-015`, `TC-PASSCUR-016`, `TC-PASSCUR-017`, `TC-PASSCUR-019`, `TC-PASSCUR-020`, `TC-PASSCUR-021`, `TC-PASSCUR-022`, `TC-PASSCUR-023`, `TC-PASSCUR-024`, `TC-PASSCUR-025`, `TC-PASSCUR-026`, `TC-PASSCUR-027`, `TC-PASSCUR-028`, `TC-PASSCUR-029`, `TC-PASSCUR-030`, `TC-PASSCUR-034`, `TC-PASSCUR-035`, `TC-PASSCUR-036`, `TC-PASSCUR-037`, `TC-PASSCUR-039`, `TC-PASSCUR-042`, `TC-PASSCUR-043`, `TC-PASSCUR-044`
+`TC-PASSCUR-001`, `TC-PASSCUR-002`, `TC-PASSCUR-004`, `TC-PASSCUR-006`, `TC-PASSCUR-007`, `TC-PASSCUR-008`, `TC-PASSCUR-009`, `TC-PASSCUR-011`, `TC-PASSCUR-013`, `TC-PASSCUR-014`, `TC-PASSCUR-015`, `TC-PASSCUR-016`, `TC-PASSCUR-017`, `TC-PASSCUR-019`, `TC-PASSCUR-020`, `TC-PASSCUR-021`, `TC-PASSCUR-022`, `TC-PASSCUR-023`, `TC-PASSCUR-024`, `TC-PASSCUR-025`, `TC-PASSCUR-026`, `TC-PASSCUR-027`, `TC-PASSCUR-028`, `TC-PASSCUR-029`, `TC-PASSCUR-030`, `TC-PASSCUR-032`, `TC-PASSCUR-034`, `TC-PASSCUR-035`, `TC-PASSCUR-036`, `TC-PASSCUR-037`, `TC-PASSCUR-039`, `TC-PASSCUR-040`, `TC-PASSCUR-042`, `TC-PASSCUR-043`, `TC-PASSCUR-044`
 
 ### Документы по заявке и распознавание
 
-`TC-DOC-001`, `TC-DOC-002`, `TC-DOC-003`, `TC-DOC-004`, `TC-DOC-005`, `TC-DOC-006`, `TC-DOC-007`, `TC-DOC-008`, `TC-DOC-009`, `TC-DOC-010`, `TC-DOC-011`, `TC-DOC-012`, `TC-DOC-013`, `TC-DOC-014`, `TC-DOC-015`, `TC-DOC-016`, `TC-DOC-017`, `TC-DOC-018`, `TC-DOC-021`, `TC-DOC-022`, `TC-DOC-024`, `TC-DOC-027`, `TC-DOC-028`, `TC-DOC-030`, `TC-DOC-032`, `TC-DOC-033`, `TC-DOC-035`, `TC-DOC-037`, `TC-DOC-038`, `TC-DOC-039`, `TC-DOC-041`, `TC-DOC-042`
+`TC-DOC-001`, `TC-DOC-002`, `TC-DOC-003`, `TC-DOC-004`, `TC-DOC-005`, `TC-DOC-006`, `TC-DOC-007`, `TC-DOC-008`, `TC-DOC-009`, `TC-DOC-010`, `TC-DOC-011`, `TC-DOC-012`, `TC-DOC-013`, `TC-DOC-014`, `TC-DOC-015`, `TC-DOC-016`, `TC-DOC-017`, `TC-DOC-018`, `TC-DOC-021`, `TC-DOC-022`, `TC-DOC-023`, `TC-DOC-024`, `TC-DOC-027`, `TC-DOC-028`, `TC-DOC-029`, `TC-DOC-030`, `TC-DOC-032`, `TC-DOC-033`, `TC-DOC-034`, `TC-DOC-035`, `TC-DOC-037`, `TC-DOC-038`, `TC-DOC-039`, `TC-DOC-041`, `TC-DOC-042`
 
 ## Требуют обновления test-case
 
@@ -66,11 +66,6 @@
 | `TC-CP-6560C2E054` | `mismatch-ft-ui` | Пустое поле отношения обязательно и получает invalid state; точное видимое сообщение в строке контакта в откалиброванном состоянии не отображалось. | Не ожидать конкретный error text, если шаг явно не приводит UI в то же состояние валидации, где этот текст появляется. |
 | `TC-CP-B01529711C` | `mismatch-ft-ui` | Телефон принимает 10 цифр и визуально форматируется как `+7 (999) 123-45-67`; 11-я лишняя цифра игнорируется/обрезается; буквы игнорируются, неполное значение очищается при blur. | Заменить ожидание invalid-long на truncation/ignore behavior; указать точную валидную маску и поведение при blur. |
 | `TC-CP-C76A595256` | `mismatch-ft-ui` | Пустой телефон обязателен, поле получает `invalid empty required`; отдельное видимое текстовое сообщение для телефона контактного лица не наблюдалось. | Использовать state поля/required marker как ожидаемый результат, а не выдуманный текст сообщения. |
-| `TC-CP-BF2F522CE8` | `mismatch-ft-ui` | Невалидные символы/цифры в имени контактного лица можно ввести временно, затем поле очищается при blur; конкретный видимый error text не остается. | Обновить ожидаемый результат на filtering/clear-on-blur behavior. |
-| `TC-CP-116443D9EB` | `confirmed` | Пустое имя обязательно; поле ФИО работает как DaData/autocomplete control. | Product decision: DaData/autocomplete для ФИО считать требованием/уточнением. TC обновлён без выдуманного exact error text. |
-| `TC-CP-351CD544DE` | `mismatch-ft-ui` | Невалидная фамилия очищается при blur; persistent message не наблюдался. | Обновить expected result для invalid-input на clear-on-blur. |
-| `TC-CP-C0C583C405` | `mismatch-ft-ui` | Пустая фамилия обязательна; отдельное сообщение в проверенном состоянии не отображалось. | Проверять required marker/invalid state, а не незафиксированный текст. |
-| `TC-CP-C5BCDBF312` | `mismatch-ft-ui` | Отчество необязательно, но невалидные символы/цифры все равно очищаются при blur; persistent message не наблюдался. | Уточнить, что optional field все равно применяет input filtering. |
 | `TC-CP-7EC8C7FA5A` | `mismatch-ft-ui` | Будущая дата `29.07.2026` остается в поле, поле становится invalid; видимый текст сообщения для DOB контактного лица не наблюдался. | Ожидать invalid state без предположения о сообщении. |
 | `TC-CP-30984FE5C2` | `mismatch-ft-ui` | Пустая DOB обязательна и invalid; отдельное текстовое сообщение для DOB контактного лица не наблюдалось. | Использовать required marker/invalid state как expected result. |
 
@@ -79,22 +74,16 @@
 | Test Case ID | UI Verification Status | Фактическое поведение UI | Требуемая корректировка |
 | --- | --- | --- | --- |
 | `TC-PASSCUR-010` | `mismatch-ft-ui` | Нечисловой номер паспорта очищается при blur и показывает required-style validation (`Обязательно к заполнению`), потому что значение становится пустым. | Expected result должен описывать clear-on-blur плюс required message, а не generic `invalid number`. |
-| `TC-PASSCUR-011` | `confirmed` | 7-значный номер обрезается до 6 цифр и становится valid (`123456`); как слишком длинный он не отклоняется. | Product decision: реализация корректна; текущий baseline уже ожидает truncation/mask behavior. |
 | `TC-PASSCUR-012` | `mismatch-ft-ui` | 5-значный номер очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
 | `TC-PASSCUR-031` | `mismatch-ft-ui` | Нечисловая серия очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
-| `TC-PASSCUR-032` | `confirmed` | 5-значная серия обрезается до 4 цифр и становится valid (`1234`). | Product decision: реализация корректна; текущий baseline уже ожидает truncation/mask behavior. |
 | `TC-PASSCUR-033` | `mismatch-ft-ui` | 3-значная серия очищается при blur и показывает `Обязательно к заполнению`. | Использовать точное сообщение и clear-on-blur behavior. |
 | `TC-PASSCUR-038` | `mismatch-ft-ui` | Нечисловой код подразделения очищается при blur и показывает `Код подразделения не в формате 000-000`. | Использовать точное сообщение и clear-on-blur behavior. |
-| `TC-PASSCUR-040` | `confirmed` | 7-значный код подразделения обрезается/форматируется в `123-456` и становится valid; как слишком длинный он не отклоняется. | Product decision: реализация корректна; текущий baseline уже ожидает truncation/mask behavior. |
 | `TC-PASSCUR-041` | `mismatch-ft-ui` | 5-значный код подразделения очищается и показывает `Код подразделения не в формате 000-000`. | Использовать точное сообщение и clear-on-blur behavior. |
 
 ### Документы по заявке и распознавание
 
 | Test Case ID | UI Verification Status | Фактическое поведение UI | Требуемая корректировка |
 | --- | --- | --- | --- |
-| `TC-DOC-023` | `confirmed` | После валидной загрузки в `Анкета клиента` picker скрывается, отображаются иконки view/delete/download; видимого пути прикрепить второй файл к тому же полю нет. | Product decision: duplicate-upload TC заменён на single-file state проверку. |
-| `TC-DOC-029` | `confirmed` | После валидной загрузки в `Паспорт клиента` picker скрывается, отображаются action icons. | Product decision: duplicate-upload TC заменён на single-file state проверку. |
-| `TC-DOC-034` | `confirmed` | После валидной загрузки в `Второй документ` picker скрывается, отображаются action icons. | Product decision: duplicate-upload TC заменён на single-file state проверку. |
 | `TC-DOC-036` | `mismatch-ft-ui` | Иконка просмотра открывает загруженный PDF в новой вкладке браузера с `blob:http://...`; in-page modal не наблюдался. | Expected result должен говорить `открывается новая blob-вкладка/окно`, а не modal, если не требуется другая настройка viewer. |
 
 ## Blocked UI input
@@ -201,9 +190,9 @@ Upload fixture filenames used on the remote stand; fixture files were not commit
 
 ## Точные изменения для внесения в test-cases после калибровки
 
-1. Заменить assertions про generic invalid input в имени/фамилии/отчестве контактного лица на фактическое поведение: невалидные символы могут появляться при вводе, но поле очищается при blur; persistent standalone error text не наблюдался.
+1. Выполнено: assertions про generic invalid input в имени/фамилии/отчестве контактного лица заменены на фактическое поведение DaData/autocomplete: невалидные символы могут появляться при вводе, но поле очищается при blur; persistent standalone error text не наблюдался.
 2. Заменить ожидания для long/alpha/short телефона контактного лица на фактическое mask behavior: валидные 10 цифр форматируются в `+7 (999) 123-45-67`; лишние цифры игнорируются; буквы игнорируются; неполное значение очищается при blur.
-3. Для обязательных контактных полей проверять required marker и invalid CSS/state, а не ненаблюдаемые error messages. Это относится к relation, phone, name, surname и DOB.
+3. Для обязательных контактных полей проверять required marker и observed UI state, а не ненаблюдаемые error messages. Для `Имя` и `Фамилия` это выполнено с учётом DaData/autocomplete поведения.
 4. Обновить список вариантов отношения до наблюдаемых значений в нижнем регистре. Ожидание дополнительного поля при выборе `иное` не убирать: по продуктовому решению отсутствие поля в UI считается дефектом реализации.
 5. Для серии/номера паспорта/кода подразделения с short и nonnumeric values зафиксировать clear-on-blur и точные сообщения. Для long values зафиксировать truncation до максимальной валидной длины; это признано корректным mask behavior.
 6. Добавить стабильные DaData prerequisites для `Кем выдан`: известный код подразделения/input value, который на этом стенде возвращает suggestions и/или автозаполняет issuing authority. Без этого `TC-PASSCUR-003`, `TC-PASSCUR-005` и `TC-PASSCUR-018` остаются blocked.
