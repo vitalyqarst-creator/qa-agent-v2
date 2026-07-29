@@ -36,4 +36,3 @@ Visible values:
 
 - Use a dropdown-item locator scoped to `li.ui-menu-item` or equivalent, not generic `text=Мобильный`, because `Мобильный телефон` labels collide with the option text.
 - Positive scenario can use `Мобильный`.
-

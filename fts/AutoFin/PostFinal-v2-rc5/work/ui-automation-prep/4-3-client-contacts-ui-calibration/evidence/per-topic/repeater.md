@@ -20,4 +20,3 @@
 - The stable action label is `Добавить телефон`.
 - Use a selector scoped to the visible `.button.ui-button.additional` with text `ДОБАВИТЬ ТЕЛЕФОН`.
 - Added row delete action is visible as `-`.
-

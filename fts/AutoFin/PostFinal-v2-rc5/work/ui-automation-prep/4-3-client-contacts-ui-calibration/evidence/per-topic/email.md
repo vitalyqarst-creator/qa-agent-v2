@@ -29,4 +29,3 @@
 
 - Use one e-mail per field.
 - Do not expect visible validation text for invalid e-mail inputs; assert clear-on-blur behavior instead.
-

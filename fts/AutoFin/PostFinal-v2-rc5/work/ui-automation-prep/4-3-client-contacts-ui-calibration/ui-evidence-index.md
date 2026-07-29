@@ -34,4 +34,3 @@ All paths are repo-relative.
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-type-mobile-selected.png` | Generic text click collision left phone type empty/invalid. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/phone-type-mobile-selected-dom.png` | Phone type `Мобильный` selected and valid. |
 | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/screenshots/repeater-after-delete-phone.png` | Added phone row removed. |
-
