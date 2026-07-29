@@ -53,3 +53,10 @@ Only UI facts were checked. Baseline `test-cases/*.md`, DOCX/XHTML/PDF, support/
 4. `Тип телефона` dropdown values: `Мобильный`, `Рабочий`, `Домашний`.
 5. E-mail invalid/multiple values clear on blur without visible message.
 6. Main phone mask can be reset reliably with `Ctrl+A`, `Backspace`, `Delete`, and `Tab`; after verified clear state, values `999123456`, `99912345678`, `99912A4567`, and `99912 4567` were accepted as valid masked values with no visible error message.
+
+## Blur clearing clarification
+
+- The expected rule "short phone clears on blur, valid phone remains on blur" was checked explicitly and was not confirmed for the short phone case.
+- For `999123456`, after verified pre-clear and blur, the field did not clear; UI displayed `+7 (999) 912–34–56` and the field state became `valid`.
+- For valid input `9991234567`, after blur the value also remained in the field as `+7 (999) 912–34–56`, state `valid`.
+- Automation-ready tests should not assert clear-on-blur for short phone input unless the product behavior changes or another validation trigger is identified.

@@ -32,3 +32,10 @@
 - `fill` on this masked field produced a non-obvious mask result for `9991234567`: `+7 (999) 912–34–56`.
 - The field can be reset between attempts with `Ctrl+A`, `Backspace`, `Delete`, and `Tab`; the clear step was confirmed by empty value and `invalid required empty` container state before each rechecked input.
 - Short, long, alpha, and space-containing inputs were not rejected by observed UI. The mask normalized/filtered the input and left the field in `valid` state without a visible message.
+
+## Blur clearing clarification
+
+- Explicit check performed: compare blur behavior for short `999123456` and valid `9991234567`.
+- Short `999123456` did not clear on blur after a verified empty pre-state. UI displayed `+7 (999) 912–34–56`, state `valid`, no visible message.
+- Valid `9991234567` remained in the field after blur as `+7 (999) 912–34–56`, state `valid`.
+- Therefore, the UI evidence does not support a test expectation that short phone input clears on blur.
