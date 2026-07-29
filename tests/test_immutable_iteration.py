@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from test_case_agent.coverage_graph import CoverageCase
 from test_case_agent.immutable_iteration import (
     ImmutableIterationError,
     MAX_REVIEWER_PROMPT_BYTES,
@@ -109,6 +110,116 @@ def _passed_falsification(
         }
         for probe in REVIEWER_FALSIFICATION_PROBES
     }
+
+
+def _requiredness_revision_graph():
+    graph = _multi_runtime_graph()
+    first_case = graph.cases[0]
+    return replace(
+        graph,
+        properties=(
+            replace(
+                graph.properties[0],
+                property_kind="source-requiredness",
+            ),
+            replace(
+                graph.properties[0],
+                property_id="PROP-2",
+                property_key="customer-name:clear",
+                property_kind="positive-input",
+                assertion_id="ASSERT-002",
+                source_row_id="SRC-002",
+            ),
+            *graph.properties[1:],
+        ),
+        obligations=(
+            replace(
+                graph.obligations[0],
+                coverage_variant="required-empty",
+                fixture_values=(
+                    "999123456",
+                    "99912345678",
+                    "99912A4567",
+                    "99912 4567",
+                    "99912@4567",
+                    "99912.4567",
+                    "99912-4567",
+                ),
+                validation_trigger="Снять фокус с поля.",
+                calibration_status="ui-calibration-required",
+                source_oracle_id="SO-PHONE-REQUIRED",
+                calibration_question="Какой точный UI-отклик для специальных символов?",
+            ),
+            replace(
+                graph.obligations[1],
+                property_id="PROP-2",
+            ),
+        ),
+        cases=(
+            CoverageCase(
+                case_key=(
+                    "customer|customer-name|source-requiredness|"
+                    "required-empty|always"
+                ),
+                tc_id=first_case.tc_id,
+                obligation_ids=first_case.obligation_ids,
+                status="candidate-ui-calibration",
+            ),
+            graph.cases[1],
+        ),
+    )
+
+
+def _write_previous_mixed_requiredness_design(
+    previous_dir: Path,
+    *,
+    only_positive: bool = False,
+) -> None:
+    designs_path = previous_dir / "test-case-designs.json"
+    payload = json.loads(designs_path.read_text(encoding="utf-8"))
+    expected = (
+        "Для `99912345678` отображается `+7 (999) 123-45-67`: лишний "
+        "символ отброшен, поле находится в состоянии `valid`, сообщение "
+        "отсутствует."
+    )
+    test_data = (
+        "Проверяемые значения номера телефона: `99912345678`."
+    )
+    if not only_positive:
+        expected = (
+            "Для `999123456` и `99912A4567` поле очищается и отображается "
+            "сообщение `Обязательно к заполнению`. "
+            + expected
+            + " Ожидаемая реакция на `99912@4567`, `99912.4567` и "
+            "`99912-4567` требует UI-калибровки."
+        )
+        test_data = (
+            "Проверяемые значения номера телефона: `999123456`, "
+            "`99912345678`, `99912A4567`, `99912@4567`, "
+            "`99912.4567`, `99912-4567`."
+        )
+    target = next(
+        item
+        for item in payload["cases"]
+        if "|source-requiredness|required-empty|" in item["case_key"]
+    )
+    target.update(
+        {
+            "status": "candidate-ui-calibration",
+            "case_type": "позитивный" if only_positive else "негативный",
+            "test_data": [test_data],
+            "steps": [
+                "Очистить поле `Номер телефона`, ввести каждое проверяемое "
+                "значение и снять фокус с поля."
+            ],
+            "expected_result": expected,
+            "calibration_question": "Какой точный UI-отклик для специальных символов?",
+        }
+    )
+    designs_path.write_text(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, indent=2),
+        encoding="utf-8",
+    )
 
 
 class FixtureBackend:
@@ -517,12 +628,13 @@ class ImmutableIterationTests(unittest.TestCase):
         graph,
         *,
         affected_index: int = 0,
+        source_name: str = "previous-iteration",
         finding_type: str = "expected-result-unsupported",
         message: str = "The TC supplies no observable rejection behavior or validation trigger.",
     ) -> tuple[Path, dict[str, Any], tuple[Any, ...]]:
         plan = build_test_design_plan(graph, context=_context())
         cases = plan.deterministic_cases
-        previous_dir = self.root / "previous-iteration"
+        previous_dir = self.root / source_name
         previous_dir.mkdir()
         markdown = render_test_cases(cases, scope_title=_context().scope_title)
         draft_path = previous_dir / "shadow-test-cases.md"
@@ -907,6 +1019,170 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertEqual("candidate-ui-calibration", designs["cases"][0]["status"])
         self.assertIn(previous_cases[0].tc_id, designs["cases"][0]["calibration_question"])
+
+    def test_model_runtime_revision_splits_mixed_outcome_seed_before_writer(self) -> None:
+        graph = _requiredness_revision_graph()
+        previous_dir, revision_input, previous_cases = self.write_revision_source_attempt(
+            graph,
+            affected_index=1,
+            finding_type="missing-equivalence-class",
+            message=(
+                "The case must add a valid exact 10-digit representative such as "
+                "registered fixture `9999999999` and keep invalid symbol classes split."
+            ),
+        )
+        _write_previous_mixed_requiredness_design(previous_dir)
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-mixed-outcome-split",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        writer_request = json.loads(
+            (result.output_dir / "writer-request.json").read_text(encoding="utf-8")
+        )
+        case_keys = [item["case_key"] for item in writer_request["cases"]]
+        self.assertEqual(3, len(case_keys))
+        self.assertTrue(
+            any("required-empty-positive-outcome" in key for key in case_keys)
+        )
+        self.assertTrue(
+            any("required-empty-negative-outcome" in key for key in case_keys)
+        )
+        self.assertTrue(
+            any("required-empty-calibration-outcome" in key for key in case_keys)
+        )
+        positive_seed = next(
+            item
+            for item in writer_request["cases"]
+            if "required-empty-positive-outcome" in item["case_key"]
+        )
+        negative_seed = next(
+            item
+            for item in writer_request["cases"]
+            if "required-empty-negative-outcome" in item["case_key"]
+        )
+        calibration_seed = next(
+            item
+            for item in writer_request["cases"]
+            if "required-empty-calibration-outcome" in item["case_key"]
+        )
+        self.assertEqual("позитивный", positive_seed["case_type"])
+        self.assertEqual("негативный", negative_seed["case_type"])
+        self.assertEqual("candidate-ui-calibration", calibration_seed["status"])
+        self.assertIn(
+            "99912345678",
+            positive_seed["seed_runtime"]["expected_result"],
+        )
+        self.assertNotIn(
+            "Обязательно к заполнению",
+            positive_seed["seed_runtime"]["expected_result"],
+        )
+        self.assertIn(
+            "Обязательно к заполнению",
+            negative_seed["seed_runtime"]["expected_result"],
+        )
+        self.assertIn(
+            "99912@4567",
+            calibration_seed["seed_runtime"]["expected_result"],
+        )
+        self.assertIn(
+            "9999999999",
+            json.dumps(
+                writer_request["revision_context"]["findings_by_case"],
+                ensure_ascii=False,
+            ),
+        )
+        diff = json.loads(
+            (result.output_dir / "revision-diff.json").read_text(encoding="utf-8")
+        )
+        self.assertTrue(diff["unaffected_byte_identical"])
+        self.assertEqual(1, diff["unchanged_tc_count"])
+        self.assertIn(previous_cases[0].tc_id, diff["unchanged_tc_hashes"])
+        self.assertIn(previous_cases[1].tc_id, diff["changed_tc_ids"])
+        self.assertTrue(diff["added_tc_ids"])
+
+    def test_model_runtime_revision_split_child_ids_are_stable(self) -> None:
+        first_graph = _requiredness_revision_graph()
+        first_previous, first_revision_input, _ = self.write_revision_source_attempt(
+            first_graph,
+            affected_index=1,
+            source_name="previous-iteration-a",
+            finding_type="missing-equivalence-class",
+            message="Add exact boundary value `9999999999`.",
+        )
+        _write_previous_mixed_requiredness_design(first_previous)
+        first_result = self.run_engine(
+            first_graph,
+            "model-runtime-revision-mixed-outcome-stable-a",
+            backend=FixtureBackend(),
+            writer_mode="model-runtime-prose",
+            revision_input=first_revision_input,
+        )
+
+        second_graph = _requiredness_revision_graph()
+        second_previous, second_revision_input, _ = self.write_revision_source_attempt(
+            second_graph,
+            affected_index=1,
+            source_name="previous-iteration-b",
+            finding_type="missing-equivalence-class",
+            message="Add exact boundary value `9999999999`.",
+        )
+        _write_previous_mixed_requiredness_design(second_previous)
+        second_result = self.run_engine(
+            second_graph,
+            "model-runtime-revision-mixed-outcome-stable-b",
+            backend=FixtureBackend(),
+            writer_mode="model-runtime-prose",
+            revision_input=second_revision_input,
+        )
+
+        first_request = json.loads(
+            (first_result.output_dir / "writer-request.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        second_request = json.loads(
+            (second_result.output_dir / "writer-request.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            [(item["case_key"], item["tc_id"]) for item in first_request["cases"]],
+            [(item["case_key"], item["tc_id"]) for item in second_request["cases"]],
+        )
+
+    def test_model_runtime_revision_does_not_split_single_polarity_seed(self) -> None:
+        graph = _requiredness_revision_graph()
+        previous_dir, revision_input, previous_cases = self.write_revision_source_attempt(
+            graph,
+            affected_index=1,
+            finding_type="missing-equivalence-class",
+            message="Add exact boundary value `9999999999`.",
+        )
+        _write_previous_mixed_requiredness_design(previous_dir, only_positive=True)
+        backend = FixtureBackend()
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-single-polarity-no-split",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertEqual("accepted-with-calibration-pending", result.status)
+        writer_request = json.loads(
+            (result.output_dir / "writer-request.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(1, len(writer_request["cases"]))
+        self.assertEqual(previous_cases[1].case_key, writer_request["cases"][0]["case_key"])
 
     def test_model_runtime_revision_allows_bound_case_type_polarity_repair(self) -> None:
         graph = _graph()

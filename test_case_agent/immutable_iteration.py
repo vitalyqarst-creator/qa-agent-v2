@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import re
 import time
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -12,7 +13,11 @@ from test_case_agent.strict_output_schema import (
     validate_openai_strict_output_instance,
     validate_openai_strict_output_schema,
 )
-from test_case_agent.coverage_graph import CoverageGraph, validate_coverage_graph
+from test_case_agent.coverage_graph import (
+    CoverageCase,
+    CoverageGraph,
+    validate_coverage_graph,
+)
 from test_case_agent.iteration_contract import (
     REVIEWER_FALSIFICATION_PROBES,
     IterationContractError,
@@ -1117,6 +1122,255 @@ class _RevisionContext:
     source_attempt_dir: Path
 
 
+@dataclass(frozen=True)
+class _RevisionSplitPlan:
+    graph: CoverageGraph
+    active_cases: tuple[TestCaseDesign, ...]
+    affected_case_keys: tuple[str, ...]
+    findings_by_case: Mapping[str, tuple[Mapping[str, Any], ...]]
+    child_cases_by_parent_key: Mapping[str, tuple[TestCaseDesign, ...]]
+
+
+_REVISION_EXPECTED_CLAUSE_RE = re.compile(
+    r"(?<=[.!?])\s+(?=(?:Для|Ожидаемая реакция|Проверить|После)\s+|$)"
+)
+_REVISION_BACKTICK_VALUE_RE = re.compile(r"`([^`]+)`")
+_REVISION_CALIBRATION_RE = re.compile(
+    r"(?:UI[- ]?калибровк|калибровк|требует\s+UI|calibration)",
+    re.IGNORECASE,
+)
+_REVISION_NEGATIVE_OUTCOME_RE = re.compile(
+    r"(?:очища\w*|обязательн\w*\s+к\s+заполн|ошибк\w*|invalid|required|"
+    r"не\s+принима\w*|не\s+сохраня\w*|отклон\w*)",
+    re.IGNORECASE,
+)
+_REVISION_POSITIVE_OUTCOME_RE = re.compile(
+    r"(?:состояни\w*\s+`?valid`?|валидн\w*|valid|отобража\w*|"
+    r"нормализ\w*|игнорир\w*|отброш\w*|фильтру\w*|сообщени\w*[^.;]*отсутств\w*)",
+    re.IGNORECASE,
+)
+
+
+def _revision_expected_clauses(expected_result: str) -> tuple[str, ...]:
+    clauses = tuple(
+        item.strip()
+        for item in _REVISION_EXPECTED_CLAUSE_RE.split(expected_result.strip())
+        if item.strip()
+    )
+    return clauses or (expected_result.strip(),)
+
+
+def _revision_clause_polarity(clause: str) -> str:
+    if _REVISION_CALIBRATION_RE.search(clause) is not None:
+        return "calibration"
+    if _REVISION_NEGATIVE_OUTCOME_RE.search(clause) is not None:
+        return "negative"
+    if _REVISION_POSITIVE_OUTCOME_RE.search(clause) is not None:
+        return "positive"
+    return "neutral"
+
+
+def _revision_values_in_text(value: str) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(_REVISION_BACKTICK_VALUE_RE.findall(value)))
+
+
+def _revision_case_key_variant(case_key: str, polarity: str) -> str | None:
+    parts = case_key.split("|")
+    if len(parts) != 5:
+        return None
+    property_kind = parts[2]
+    variant = parts[3]
+    mapping = {
+        ("source-format", "allowed-class", "positive"): "allowed-class-valid",
+        ("source-format", "allowed-class", "negative"): "allowed-class-invalid",
+        ("source-format", "allowed-class", "calibration"): "allowed-class-calibration",
+        (
+            "source-requiredness",
+            "required-empty",
+            "positive",
+        ): "required-empty-positive-outcome",
+        (
+            "source-requiredness",
+            "required-empty",
+            "negative",
+        ): "required-empty-negative-outcome",
+        (
+            "source-requiredness",
+            "required-empty",
+            "calibration",
+        ): "required-empty-calibration-outcome",
+    }
+    child_variant = mapping.get((property_kind, variant, polarity))
+    if child_variant is None:
+        return None
+    return "|".join((*parts[:3], child_variant, parts[4]))
+
+
+def _revision_child_tc_id(parent_tc_id: str, polarity: str, *, first: bool) -> str:
+    if first:
+        return parent_tc_id
+    suffix = {
+        "positive": "POS",
+        "negative": "NEG",
+        "calibration": "OBS",
+    }[polarity]
+    return f"{parent_tc_id}-{suffix}"
+
+
+def _revision_filtered_runtime_items(
+    items: Sequence[str],
+    values: Sequence[str],
+) -> tuple[str, ...]:
+    if not values:
+        return tuple(items)
+    selected: list[str] = []
+    for item in items:
+        item_values = set(_revision_values_in_text(item))
+        if not item_values or item_values.intersection(values):
+            selected.append(item)
+    return tuple(selected) or tuple(items)
+
+
+def _revision_split_case_by_outcome(case: TestCaseDesign) -> tuple[TestCaseDesign, ...]:
+    grouped: dict[str, list[str]] = {"positive": [], "negative": [], "calibration": []}
+    neutral: list[str] = []
+    for clause in _revision_expected_clauses(case.expected_result):
+        polarity = _revision_clause_polarity(clause)
+        if polarity in grouped:
+            grouped[polarity].append(clause)
+        else:
+            neutral.append(clause)
+    present = tuple(polarity for polarity, clauses in grouped.items() if clauses)
+    if len(present) < 2:
+        return (case,)
+    children: list[TestCaseDesign] = []
+    for polarity in present:
+        child_key = _revision_case_key_variant(case.case_key, polarity)
+        if child_key is None:
+            return (case,)
+        clauses = [*neutral, *grouped[polarity]]
+        expected_result = " ".join(clauses).strip()
+        values = _revision_values_in_text(expected_result)
+        status = (
+            "candidate-ui-calibration"
+            if polarity == "calibration"
+            else "executable"
+        )
+        child_case_type = "позитивный" if polarity == "positive" else "негативный"
+        children.append(
+            replace(
+                case,
+                case_key=child_key,
+                tc_id=_revision_child_tc_id(
+                    case.tc_id,
+                    polarity,
+                    first=not children,
+                ),
+                status=status,
+                case_type=child_case_type,
+                title=f"{case.title} ({polarity})",
+                test_data=_revision_filtered_runtime_items(case.test_data, values),
+                steps=_revision_filtered_runtime_items(case.steps, values),
+                expected_result=expected_result,
+                calibration_question=(
+                    case.calibration_question
+                    if status == "candidate-ui-calibration"
+                    else ""
+                ),
+            )
+        )
+    return tuple(children)
+
+
+def _revision_findings_for_child(
+    *,
+    child: TestCaseDesign,
+    parent_findings: Sequence[Mapping[str, Any]],
+    parent_tc_id: str,
+) -> tuple[Mapping[str, Any], ...]:
+    child_values = set(_revision_values_in_text(child.expected_result))
+    matched: list[Mapping[str, Any]] = []
+    for raw in parent_findings:
+        message = str(raw.get("message") or "")
+        message_values = set(_revision_values_in_text(message))
+        if message_values and child_values and message_values.isdisjoint(child_values):
+            continue
+        finding = dict(raw)
+        finding["case_key"] = child.case_key
+        finding["tc_id"] = child.tc_id
+        if child.tc_id != parent_tc_id:
+            finding["split_parent_tc_id"] = parent_tc_id
+        matched.append(finding)
+    if matched:
+        return tuple(matched)
+    return tuple(
+        {
+            **dict(raw),
+            "case_key": child.case_key,
+            "tc_id": child.tc_id,
+            **({"split_parent_tc_id": parent_tc_id} if child.tc_id != parent_tc_id else {}),
+        }
+        for raw in parent_findings
+    )
+
+
+def _prepare_revision_split_plan(
+    *,
+    graph: CoverageGraph,
+    revision_context: _RevisionContext,
+) -> _RevisionSplitPlan:
+    graph_cases_by_key = {case.case_key: case for case in graph.cases}
+    previous_cases_by_key = {
+        case.case_key: case for case in revision_context.previous_cases
+    }
+    active_graph_cases = list(graph.cases)
+    active_seed_cases: list[TestCaseDesign] = []
+    active_findings: dict[str, tuple[Mapping[str, Any], ...]] = {}
+    replacements: dict[str, tuple[TestCaseDesign, ...]] = {}
+    for case_key in revision_context.affected_case_keys:
+        parent_seed = _revision_seed_case(
+            previous_cases_by_key[case_key],
+            revision_context.findings_by_case[case_key],
+        )
+        children = _revision_split_case_by_outcome(parent_seed)
+        if len(children) == 1 and children[0].case_key == case_key:
+            active_seed_cases.append(parent_seed)
+            active_findings[case_key] = revision_context.findings_by_case[case_key]
+            continue
+        parent_graph_case = graph_cases_by_key[case_key]
+        replacements[case_key] = children
+        active_graph_cases = [
+            item for item in active_graph_cases if item.case_key != case_key
+        ]
+        active_graph_cases.extend(
+            CoverageCase(
+                case_key=child.case_key,
+                tc_id=child.tc_id,
+                obligation_ids=parent_graph_case.obligation_ids,
+                status=child.status,
+            )
+            for child in children
+        )
+        active_seed_cases.extend(children)
+        for child in children:
+            active_findings[child.case_key] = _revision_findings_for_child(
+                child=child,
+                parent_findings=revision_context.findings_by_case[case_key],
+                parent_tc_id=parent_seed.tc_id,
+            )
+    active_graph = replace(
+        graph,
+        cases=tuple(sorted(active_graph_cases, key=lambda item: item.case_key)),
+    )
+    return _RevisionSplitPlan(
+        graph=active_graph,
+        active_cases=tuple(sorted(active_seed_cases, key=lambda item: item.case_key)),
+        affected_case_keys=tuple(sorted(active_findings)),
+        findings_by_case=active_findings,
+        child_cases_by_parent_key=replacements,
+    )
+
+
 def _text_field(raw: Mapping[str, Any], field: str, label: str) -> str:
     value = raw.get(field)
     if not isinstance(value, str) or not value.strip():
@@ -1241,13 +1495,23 @@ def _revision_reviewer_scope(
     previous_cases_by_key: Mapping[str, TestCaseDesign],
     changed_tc_ids: Sequence[str],
     unchanged_hashes: Mapping[str, str],
+    changed_cases: Sequence[TestCaseDesign] = (),
 ) -> dict[str, Any]:
     changed_tc_id_set = set(changed_tc_ids)
     changed_case_keys = tuple(
         sorted(
-            case.case_key
-            for case in revision_context.previous_cases
-            if case.tc_id in changed_tc_id_set
+            {
+                *(
+                    case.case_key
+                    for case in revision_context.previous_cases
+                    if case.tc_id in changed_tc_id_set
+                ),
+                *(
+                    case.case_key
+                    for case in changed_cases
+                    if case.tc_id in changed_tc_id_set
+                ),
+            }
         )
     )
     previous_disposition = _previous_reviewer_disposition_by_case(
@@ -1278,6 +1542,7 @@ def _revision_reviewer_scope(
         "affected_tc_ids": sorted(
             previous_cases_by_key[key].tc_id
             for key in revision_context.affected_case_keys
+            if key in previous_cases_by_key
         ),
         "unchanged_byte_identical_cases": unchanged_cases,
         "policy": {
@@ -1705,6 +1970,7 @@ def run_immutable_iteration(
         with timer.phase("request-validation"):
             if not isinstance(graph, CoverageGraph):
                 raise ImmutableIterationError("graph must be a CoverageGraph")
+            source_graph = graph
             if reviewer_evidence_basis is not None and not isinstance(
                 reviewer_evidence_basis, ReviewerEvidenceBasis
             ):
@@ -1735,7 +2001,45 @@ def run_immutable_iteration(
                     graph=graph,
                     writer_mode=writer_mode,
                 )
+                if writer_mode == "model-runtime-prose":
+                    revision_split_plan = _prepare_revision_split_plan(
+                        graph=graph,
+                        revision_context=revision_context,
+                    )
+                    graph = revision_split_plan.graph
+                    graph_findings = validate_coverage_graph(graph)
+                    graph_errors = [
+                        item for item in graph_findings if item.severity == "error"
+                    ]
+                    if graph_errors:
+                        raise ImmutableIterationError(
+                            "revision split coverage graph is invalid: "
+                            + "; ".join(item.finding_id for item in graph_errors)
+                        )
+                else:  # pragma: no cover - guarded above
+                    revision_split_plan = None
+            else:
+                revision_split_plan = None
             _write_json(output_dir / "coverage-graph.json", graph.to_dict())
+            if revision_split_plan is not None:
+                _write_json(
+                    output_dir / "revision-split-plan.json",
+                    {
+                        "schema_version": 1,
+                        "source_graph_digest": source_graph.digest,
+                        "active_graph_digest": graph.digest,
+                        "affected_case_keys": list(
+                            revision_context.affected_case_keys
+                        ),
+                        "active_affected_case_keys": list(
+                            revision_split_plan.affected_case_keys
+                        ),
+                        "replacements": {
+                            key: [case.to_dict() for case in cases]
+                            for key, cases in revision_split_plan.child_cases_by_parent_key.items()
+                        },
+                    },
+                )
             _write_json(output_dir / "design-context.json", _context_payload(context))
             _write_json(
                 output_dir / "protected-inputs.receipt.json",
@@ -1819,16 +2123,23 @@ def run_immutable_iteration(
             previous_cases_by_key = {
                 item.case_key: item for item in revision_context.previous_cases
             }
-            affected_cases = tuple(
-                _revision_seed_case(
-                    previous_cases_by_key[case_key],
-                    revision_context.findings_by_case[case_key],
+            if revision_split_plan is not None:
+                affected_cases = revision_split_plan.active_cases
+                active_findings_by_case = revision_split_plan.findings_by_case
+                active_affected_case_keys = revision_split_plan.affected_case_keys
+            else:  # pragma: no cover - revision split is always prepared above
+                affected_cases = tuple(
+                    _revision_seed_case(
+                        previous_cases_by_key[case_key],
+                        revision_context.findings_by_case[case_key],
+                    )
+                    for case_key in revision_context.affected_case_keys
                 )
-                for case_key in revision_context.affected_case_keys
-            )
+                active_findings_by_case = revision_context.findings_by_case
+                active_affected_case_keys = revision_context.affected_case_keys
             active_plan = TestDesignPlan(
                 schema_version=plan.schema_version,
-                graph_digest=plan.graph_digest,
+                graph_digest=graph.digest,
                 deterministic_cases=affected_cases,
                 writer_cards=(),
                 blocked_cards=(),
@@ -1846,13 +2157,28 @@ def run_immutable_iteration(
                 writer_request = dict(writer_request)
                 writer_request.pop("revision_findings", None)
                 previous_blocks = {
-                    case_key: revision_context.previous_blocks_by_tc_id[
-                        previous_cases_by_key[case_key].tc_id
-                    ]
-                    for case_key in revision_context.affected_case_keys
-                    if previous_cases_by_key[case_key].tc_id
-                    in revision_context.previous_blocks_by_tc_id
+                    case_key: revision_context.previous_blocks_by_tc_id[parent.tc_id]
+                    for parent_key, child_cases in (
+                        revision_split_plan.child_cases_by_parent_key.items()
+                        if revision_split_plan is not None
+                        else ()
+                    )
+                    for parent in (previous_cases_by_key[parent_key],)
+                    for case_key in [case.case_key for case in child_cases]
+                    if parent.tc_id in revision_context.previous_blocks_by_tc_id
                 }
+                previous_blocks.update(
+                    {
+                        case_key: revision_context.previous_blocks_by_tc_id[
+                            previous_cases_by_key[case_key].tc_id
+                        ]
+                        for case_key in revision_context.affected_case_keys
+                        if case_key in previous_cases_by_key
+                        and case_key not in previous_blocks
+                        and previous_cases_by_key[case_key].tc_id
+                        in revision_context.previous_blocks_by_tc_id
+                    }
+                )
                 unaffected_manifest = _revision_unaffected_manifest(
                     previous_cases=revision_context.previous_cases,
                     affected_case_keys=revision_context.affected_case_keys,
@@ -1867,14 +2193,19 @@ def run_immutable_iteration(
                                 repo_root
                             ).as_posix()
                         ),
-                        "affected_case_keys": list(
-                            revision_context.affected_case_keys
-                        ),
+                        "affected_case_keys": list(active_affected_case_keys),
                         "findings_by_case": {
                             key: list(value)
-                            for key, value in revision_context.findings_by_case.items()
-                            if key in revision_context.affected_case_keys
+                            for key, value in active_findings_by_case.items()
+                            if key in active_affected_case_keys
                         },
+                        "split_parent_case_keys": list(
+                            (
+                                revision_split_plan.child_cases_by_parent_key.keys()
+                                if revision_split_plan is not None
+                                else ()
+                            )
+                        ),
                         "previous_draft_blocks_by_case": previous_blocks,
                         "unaffected_cases_manifest": list(unaffected_manifest),
                         "unaffected_cases_policy": (
@@ -1910,11 +2241,21 @@ def run_immutable_iteration(
                         repo_root
                     ).as_posix(),
                     "affected_case_keys": list(revision_context.affected_case_keys),
+                    "active_affected_case_keys": (
+                        list(revision_split_plan.affected_case_keys)
+                        if revision_split_plan is not None
+                        else list(revision_context.affected_case_keys)
+                    ),
                     "finding_count": sum(
                         len(items)
                         for items in revision_context.findings_by_case.values()
                     ),
                     "previous_case_count": len(revision_context.previous_cases),
+                    "split_replacement_count": (
+                        len(revision_split_plan.child_cases_by_parent_key)
+                        if revision_split_plan is not None
+                        else 0
+                    ),
                 },
             )
         writer_cases: tuple[TestCaseDesign, ...] = ()
@@ -1944,7 +2285,7 @@ def run_immutable_iteration(
                     context=context,
                     mockup_label_aliases=mockup_label_aliases,
                     revision_findings_by_case=(
-                        revision_context.findings_by_case
+                        active_findings_by_case
                         if revision_context is not None
                         else None
                     ),
@@ -2006,10 +2347,21 @@ def run_immutable_iteration(
             nonlocal_cases: tuple[TestCaseDesign, ...]
             if writer_mode == "model-runtime-prose" and revision_context is not None:
                 revised_by_key = {item.case_key: item for item in writer_cases}
-                nonlocal_cases = tuple(
-                    revised_by_key.get(item.case_key, item)
-                    for item in revision_context.previous_cases
-                )
+                merged_cases: list[TestCaseDesign] = []
+                for item in revision_context.previous_cases:
+                    child_cases = (
+                        revision_split_plan.child_cases_by_parent_key.get(item.case_key)
+                        if revision_split_plan is not None
+                        else None
+                    )
+                    if child_cases:
+                        merged_cases.extend(
+                            revised_by_key.get(child.case_key, child)
+                            for child in child_cases
+                        )
+                    else:
+                        merged_cases.append(revised_by_key.get(item.case_key, item))
+                nonlocal_cases = tuple(merged_cases)
             elif writer_mode == "model-runtime-prose":
                 nonlocal_cases = writer_cases
             else:
@@ -2058,11 +2410,23 @@ def run_immutable_iteration(
                     previous_cases_by_key[key].tc_id
                     for key in revision_context.affected_case_keys
                 }
-                changed_tc_ids = tuple(
+                added_tc_ids = tuple(
                     sorted(
                         tc_id
-                        for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
-                        if new_blocks.get(tc_id) != old_block
+                        for tc_id in new_blocks
+                        if tc_id not in revision_context.previous_blocks_by_tc_id
+                    )
+                )
+                changed_tc_ids = tuple(
+                    sorted(
+                        {
+                            *(
+                                tc_id
+                                for tc_id, old_block in revision_context.previous_blocks_by_tc_id.items()
+                                if new_blocks.get(tc_id) != old_block
+                            ),
+                            *added_tc_ids,
+                        }
                     )
                 )
                 revision_changed_tc_ids = changed_tc_ids
@@ -2081,6 +2445,9 @@ def run_immutable_iteration(
                     previous_cases_by_key=previous_cases_by_key,
                     changed_tc_ids=changed_tc_ids,
                     unchanged_hashes=unchanged_hashes,
+                    changed_cases=tuple(
+                        case for case in cases if case.tc_id in changed_tc_ids
+                    ),
                 )
                 _write_json(
                     output_dir / "revision-diff.json",
@@ -2093,6 +2460,7 @@ def run_immutable_iteration(
                             revision_context.affected_case_keys
                         ),
                         "affected_tc_ids": sorted(affected_tc_ids),
+                        "added_tc_ids": list(added_tc_ids),
                         "changed_tc_ids": list(changed_tc_ids),
                         "changed_tc_count": len(changed_tc_ids),
                         "unchanged_tc_count": len(unchanged_hashes),

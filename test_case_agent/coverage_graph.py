@@ -36,6 +36,7 @@ _SPLIT_CASE_VARIANTS_BY_KIND = {
         {
             "allowed-class-valid",
             "allowed-class-invalid",
+            "allowed-class-calibration",
             "length-limit-valid-boundary",
             "length-limit-invalid-boundary",
             "length-limit-too-short-boundary",
@@ -48,6 +49,13 @@ _SPLIT_CASE_VARIANTS_BY_KIND = {
             "not-future-invalid-future",
             "date-window-valid-boundary",
             "date-window-invalid-boundary",
+        }
+    ),
+    "source-requiredness": frozenset(
+        {
+            "required-empty-positive-outcome",
+            "required-empty-negative-outcome",
+            "required-empty-calibration-outcome",
         }
     ),
 }
@@ -300,6 +308,7 @@ def _duplicate_obligation_case_coverage_allowed(
             expected = {
                 "allowed-class-valid": {"executable"},
                 "allowed-class-invalid": {"candidate-ui-calibration"},
+                "allowed-class-calibration": {"candidate-ui-calibration"},
             }
             return all(
                 variant in expected and status in expected[variant]
@@ -342,6 +351,18 @@ def _duplicate_obligation_case_coverage_allowed(
                     "candidate-ui-calibration",
                     "executable",
                 },
+            }
+            return all(
+                variant in expected and status in expected[variant]
+                for variant, status in statuses.items()
+            )
+        return False
+    if property_kind == "source-requiredness":
+        if obligation.coverage_variant == "required-empty":
+            expected = {
+                "required-empty-positive-outcome": {"executable"},
+                "required-empty-negative-outcome": {"executable"},
+                "required-empty-calibration-outcome": {"candidate-ui-calibration"},
             }
             return all(
                 variant in expected and status in expected[variant]
