@@ -17,6 +17,11 @@
 
 Итого: 124 test cases, 12 требуют UI-калибровки после закрытия ФИО-кейсов продуктовым решением в `work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/post-ui-product-decisions.md`.
 
+
+## Resolution update 2026-07-29
+
+The active automation-ready draft is now in `test-cases/automation-ready/`. The 12 calibration questions listed below were consumed into that draft where UI evidence was sufficient. DaData/FMS blockers `TC-PASSCUR-003`, `TC-PASSCUR-005`, `TC-PASSCUR-018` are resolved by `work/ui-automation-prep/passcur-dadata-fms-772-053/`. Manual/mobile-only cases are intentionally not processed in this iteration.
+
 ## Calibration cases
 
 | TC-ID | Файл | Название | Что нужно уточнить в UI |

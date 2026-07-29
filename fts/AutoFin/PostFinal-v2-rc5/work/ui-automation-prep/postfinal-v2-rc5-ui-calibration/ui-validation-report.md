@@ -29,9 +29,9 @@
 ## Сводка
 
 - Всего проверено: 124
-- `confirmed`: 102
+- `confirmed`: 105
 - `mismatch-ft-ui`: 13
-- `blocked-observability`: 4
+- `blocked-observability`: 1
 - `not-automatable-manual-only`: 5
 
 По файлам:
@@ -39,7 +39,7 @@
 | Файл | Всего | Confirmed | Needs update | Blocked |
 | --- | ---: | ---: | ---: | ---: |
 | `4-3-contact-persons.md` | 38 | 32 | 6 | 0 |
-| `4-3-current-passport-data.md` | 44 | 35 | 6 | 3 |
+| `4-3-current-passport-data.md` | 44 | 38 | 6 | 0 |
 | `11-4.3-application-documents-and-recognition.md` | 42 | 35 | 1 | 6 |
 
 ## Confirmed TC-ID
@@ -50,7 +50,7 @@
 
 ### Текущие паспортные данные
 
-`TC-PASSCUR-001`, `TC-PASSCUR-002`, `TC-PASSCUR-004`, `TC-PASSCUR-006`, `TC-PASSCUR-007`, `TC-PASSCUR-008`, `TC-PASSCUR-009`, `TC-PASSCUR-011`, `TC-PASSCUR-013`, `TC-PASSCUR-014`, `TC-PASSCUR-015`, `TC-PASSCUR-016`, `TC-PASSCUR-017`, `TC-PASSCUR-019`, `TC-PASSCUR-020`, `TC-PASSCUR-021`, `TC-PASSCUR-022`, `TC-PASSCUR-023`, `TC-PASSCUR-024`, `TC-PASSCUR-025`, `TC-PASSCUR-026`, `TC-PASSCUR-027`, `TC-PASSCUR-028`, `TC-PASSCUR-029`, `TC-PASSCUR-030`, `TC-PASSCUR-032`, `TC-PASSCUR-034`, `TC-PASSCUR-035`, `TC-PASSCUR-036`, `TC-PASSCUR-037`, `TC-PASSCUR-039`, `TC-PASSCUR-040`, `TC-PASSCUR-042`, `TC-PASSCUR-043`, `TC-PASSCUR-044`
+`TC-PASSCUR-001`, `TC-PASSCUR-002`, `TC-PASSCUR-003`, `TC-PASSCUR-004`, `TC-PASSCUR-005`, `TC-PASSCUR-006`, `TC-PASSCUR-007`, `TC-PASSCUR-008`, `TC-PASSCUR-009`, `TC-PASSCUR-011`, `TC-PASSCUR-013`, `TC-PASSCUR-014`, `TC-PASSCUR-015`, `TC-PASSCUR-016`, `TC-PASSCUR-017`, `TC-PASSCUR-018`, `TC-PASSCUR-019`, `TC-PASSCUR-020`, `TC-PASSCUR-021`, `TC-PASSCUR-022`, `TC-PASSCUR-023`, `TC-PASSCUR-024`, `TC-PASSCUR-025`, `TC-PASSCUR-026`, `TC-PASSCUR-027`, `TC-PASSCUR-028`, `TC-PASSCUR-029`, `TC-PASSCUR-030`, `TC-PASSCUR-032`, `TC-PASSCUR-034`, `TC-PASSCUR-035`, `TC-PASSCUR-036`, `TC-PASSCUR-037`, `TC-PASSCUR-039`, `TC-PASSCUR-040`, `TC-PASSCUR-042`, `TC-PASSCUR-043`, `TC-PASSCUR-044`
 
 ### Документы по заявке и распознавание
 
@@ -85,6 +85,14 @@
 | Test Case ID | UI Verification Status | Фактическое поведение UI | Требуемая корректировка |
 | --- | --- | --- | --- |
 | `TC-DOC-036` | `mismatch-ft-ui` | Иконка просмотра открывает загруженный PDF в новой вкладке браузера с `blob:http://...`; in-page modal не наблюдался. | Expected result должен говорить `открывается новая blob-вкладка/окно`, а не modal, если не требуется другая настройка viewer. |
+
+## Resolved by follow-up DaData/FMS evidence
+
+| Test Case ID | Previous status | New status | Evidence |
+| --- | --- | --- | --- |
+| `TC-PASSCUR-003` | `blocked-observability` | `confirmed` | `work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
+| `TC-PASSCUR-005` | `blocked-observability` | `confirmed` | `work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
+| `TC-PASSCUR-018` | `blocked-observability` | `confirmed` | `work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
 
 ## Blocked UI input
 
@@ -200,3 +208,7 @@ Upload fixture filenames used on the remote stand; fixture files were not commit
 8. Обновить ожидание просмотра документа: загруженный PDF открывается в новой вкладке `blob:http://...`, а не в наблюдаемой in-page modal.
 9. Заменить duplicate upload cases на single-file-control behavior. Picker скрывается после валидного файла, отображаются view/delete/download icons; путь загрузки второго файла в то же поле не тестируется.
 10. Добавить explicit test-environment prerequisites для drag-and-drop и QR/mobile upload cases. В проверенной automation session drag-and-drop не был надежным, а phone upload не открыл usable QR dialog.
+
+## Automation-ready draft
+
+?????? ????????? draft: `fts/AutoFin/PostFinal-v2-rc5/test-cases/automation-ready/`. Baseline `test-cases/*.md` ?? ???????????. Manual/mobile-only ????? ???? ?? ???????????? ? automation-ready ?? ????????????????? ???????????.

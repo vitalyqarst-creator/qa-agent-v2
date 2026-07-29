@@ -171,3 +171,13 @@ All paths below are repo-relative. Source `test-cases/*.md`, DOCX/XHTML/PDF/supp
 - ts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/
 
 В этом index намеренно оставлена только canonical artifact table, чтобы validator не интерпретировал descriptive status tables как artifact-path таблицы.
+
+## Supplemental DaData/FMS evidence
+
+Follow-up evidence from branch `codex/postfinal-v2-rc5-ui-calibration`, commit `54d2abaafdd1279dd018ea56f4292ad794bed154`, is merged into this triage branch.
+
+| test_case_id | status | evidence |
+| --- | --- | --- |
+| `TC-PASSCUR-003` | `confirmed-ui-ready` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
+| `TC-PASSCUR-005` | `confirmed-ui-ready` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
+| `TC-PASSCUR-018` | `confirmed-ui-ready` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
