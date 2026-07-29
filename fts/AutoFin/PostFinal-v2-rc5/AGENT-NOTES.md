@@ -18,6 +18,19 @@
 4. Фиксируй фактическое поведение в `work/ui-calibration-prep/results/`.
 5. Не изменяй файлы в `test-cases/` напрямую.
 
+## Решения после UI-калибровки
+
+Если работаешь с уже собранным UI calibration evidence, сначала открой:
+
+- `work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/post-ui-product-decisions.md`.
+
+Зафиксированные решения:
+
+- `TC-CP-B78F72E22B`: ориентироваться на ФТ; отсутствие дополнительного текстового поля при выборе `Иное` считать дефектом реализации.
+- `TC-CP-116443D9EB`: DaData/autocomplete для полей ФИО контактного лица считать требованием/уточнением.
+- `TC-PASSCUR-011`, `TC-PASSCUR-032`, `TC-PASSCUR-040`: truncation/mask behavior считать корректной реализацией.
+- `TC-DOC-023`, `TC-DOC-029`, `TC-DOC-034`: не тестировать загрузку второго файла в одно поле; проверять single-file состояние после валидной загрузки.
+
 ## Что считать результатом
 
 Результат UI-калибровки — это не переписанный canonical файл, а evidence/report:
@@ -27,4 +40,3 @@
 - какой trigger запускает проверку;
 - какой exact message / marker / filtering / blocking / save effect отображается;
 - какие кейсы остались не проверены и почему.
-

@@ -4,7 +4,7 @@
 
 Этот triage принимает UI evidence из commit `5be541547f3b1ec4459c91272a2cfcaa64c275d5` и классифицирует, что можно делать дальше с тест-кейсами.
 
-UI-наблюдение не заменяет ФТ. Baseline FT-first файлы в `test-cases/*.md` не должны переписываться автоматически по фактической реализации. Любая правка по UI допустима только в отдельной `automation-ready` версии или как явно помеченное `FT/UI Divergence`.
+UI-наблюдение не заменяет ФТ. Baseline FT-first файлы в `test-cases/*.md` не должны переписываться автоматически по фактической реализации. Исключение — явно зафиксированное продуктовое решение в `post-ui-product-decisions.md`, где указано, что менять: сохранить FT-ожидание, признать дефект реализации, добавить уточнение требования или исправить дефект тест-дизайна.
 
 ## Входные артефакты
 
@@ -42,7 +42,7 @@ UI-наблюдение не заменяет ФТ. Baseline FT-first файлы
 | --- | ---: | --- |
 | Confirmed | 91 | Можно переносить в automation-ready как `confirmed`, если у кейса есть воспроизводимый setup path и screenshot evidence. Baseline не менять. |
 | Safe automation-ready wording/update | 16 | Можно уточнить automation-ready expected result/steps по observed UI без изменения FT-смысла. Baseline менять только после отдельной source-review проверки, если исходный TC реально был wording defect. |
-| Requires FT/UI decision | 8 | Нельзя молча менять тест-кейс под UI. Нужно решить: дефект реализации, дефект ФТ/макета, или устаревший тестовый intent. |
+| Resolved product decision | 8 | Решения зафиксированы в `post-ui-product-decisions.md`: 1 implementation defect, 1 requirement update, 3 confirmed mask behavior, 3 test-design replacements. |
 | Blocked | 9 | Не обновлять expected result. Нужны стабильные данные, внешний path или ручной/повторный UI-прогон. |
 
 ## Triage по mismatch / needs update
@@ -51,12 +51,12 @@ UI-наблюдение не заменяет ФТ. Baseline FT-first файлы
 
 | TC-ID | UI finding | Triage decision | Что делать дальше |
 | --- | --- | --- | --- |
-| `TC-CP-B78F72E22B` | При выборе `иное` дополнительное поле уточнения не появилось. | `requires-ft-ui-decision` | Не удалять ожидаемое поле из baseline без проверки ФТ/source. В automation-ready можно отметить фактическое UI-поведение и `FT/UI Divergence`. |
+| `TC-CP-B78F72E22B` | При выборе `иное` дополнительное поле уточнения не появилось. | `implementation-defect` | Ориентироваться на ФТ: baseline не менять; отсутствие дополнительного поля считать дефектом реализации и сохранять `mismatch-ft-ui`. |
 | `TC-CP-6560C2E054` | Пустое `Отношение к заявителю` invalid, но отдельный текст ошибки не виден. | `safe-automation-ready-update` | В automation-ready ожидать required/invalid state, не конкретный message. Baseline менять только если source не требует message. |
 | `TC-CP-B01529711C` | Телефон: 10 цифр форматируются, лишняя цифра игнорируется, буквы игнорируются, неполное значение очищается при blur. | `safe-automation-ready-update` | В automation-ready зафиксировать exact mask и clear/truncate behavior. Не считать это изменением FT, если ФТ задаёт только формат/маску. |
 | `TC-CP-C76A595256` | Пустой телефон invalid/required, отдельный текст не виден. | `safe-automation-ready-update` | В automation-ready проверять required/invalid state. |
 | `TC-CP-BF2F522CE8` | Невалидное имя временно вводится, очищается при blur, persistent message нет. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur. Baseline FT-first оставить как запрет невалидных символов, если ФТ задаёт класс допустимых символов. |
-| `TC-CP-116443D9EB` | Пустое имя required/invalid; возможно сообщение `Выберите значение` из autocomplete/select-like control. | `requires-ft-ui-decision` | Нужно решить, корректен ли select/autocomplete для ФИО контактного лица. Не фиксировать `Выберите значение` как окончательный oracle без повторной проверки/подтверждения. |
+| `TC-CP-116443D9EB` | Пустое имя required/invalid; ФИО контактного лица работает как DaData/autocomplete. | `requirement-update-confirmed` | DaData/autocomplete для ФИО считать требованием/уточнением. TC обновлён: проверяется обязательное DaData/autocomplete поле без выдуманного exact error text. |
 | `TC-CP-351CD544DE` | Невалидная фамилия очищается при blur; persistent message нет. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur. |
 | `TC-CP-C0C583C405` | Пустая фамилия required/invalid, отдельный текст не виден. | `safe-automation-ready-update` | В automation-ready проверять required/invalid state. |
 | `TC-CP-C5BCDBF312` | Отчество необязательно, но невалидные символы очищаются при blur. | `safe-automation-ready-update` | В automation-ready разделить optional requiredness и format filtering. |
@@ -68,22 +68,22 @@ UI-наблюдение не заменяет ФТ. Baseline FT-first файлы
 | TC-ID | UI finding | Triage decision | Что делать дальше |
 | --- | --- | --- | --- |
 | `TC-PASSCUR-010` | Нечисловой номер очищается при blur и даёт `Обязательно к заполнению`. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur + точный message. |
-| `TC-PASSCUR-011` | 7-значный номер обрезается до 6 цифр и становится valid. | `requires-ft-ui-decision` | Если ФТ требует строго 6 цифр, truncation может быть допустимым UI-механизмом или дефектом теста. Не называть это ошибкой продукта без source decision. |
+| `TC-PASSCUR-011` | 7-значный номер обрезается до 6 цифр и становится valid. | `confirmed-mask-behavior` | Реализация корректна: это input mask behavior. Текущий baseline уже ожидает truncation до `123456`; переписывать TC не требуется. |
 | `TC-PASSCUR-012` | 5-значный номер очищается при blur и даёт `Обязательно к заполнению`. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur + exact message. |
 | `TC-PASSCUR-031` | Нечисловая серия очищается при blur и даёт `Обязательно к заполнению`. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur + exact message. |
-| `TC-PASSCUR-032` | 5-значная серия обрезается до 4 цифр и становится valid. | `requires-ft-ui-decision` | Не фиксировать как regression defect без source decision. Для automation-ready можно описать observed truncation с `FT/UI Divergence`, если baseline ожидал rejection. |
+| `TC-PASSCUR-032` | 5-значная серия обрезается до 4 цифр и становится valid. | `confirmed-mask-behavior` | Реализация корректна: это input mask behavior. Текущий baseline уже ожидает truncation до `1234`; переписывать TC не требуется. |
 | `TC-PASSCUR-033` | 3-значная серия очищается при blur и даёт `Обязательно к заполнению`. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur + exact message. |
 | `TC-PASSCUR-038` | Нечисловой код подразделения очищается и даёт `Код подразделения не в формате 000-000`. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur + exact message. |
-| `TC-PASSCUR-040` | 7-значный код подразделения обрезается/форматируется в `123-456` и становится valid. | `requires-ft-ui-decision` | Нужна source/product decision: это маска ввода или дефект обработки лишнего символа. |
+| `TC-PASSCUR-040` | 7-значный код подразделения обрезается/форматируется в `123-456` и становится valid. | `confirmed-mask-behavior` | Реализация корректна: это input mask behavior. Текущий baseline уже ожидает ограничение до шести цифр; переписывать TC не требуется. |
 | `TC-PASSCUR-041` | 5-значный код подразделения очищается и даёт `Код подразделения не в формате 000-000`. | `safe-automation-ready-update` | В automation-ready описать clear-on-blur + exact message. |
 
 ### 11-4.3-application-documents-and-recognition
 
 | TC-ID | UI finding | Triage decision | Что делать дальше |
 | --- | --- | --- | --- |
-| `TC-DOC-023` | После загрузки анкеты picker скрывается, второго file picker path нет. | `requires-ft-ui-decision` | Проверить ФТ: если multiple upload не требуется, это test-design defect; если требуется, это FT/UI divergence. Не заменять молча на single-file behavior. |
-| `TC-DOC-029` | После загрузки паспорта клиента picker скрывается. | `requires-ft-ui-decision` | То же: нужна проверка source intent по duplicate/multiple upload. |
-| `TC-DOC-034` | После загрузки второго документа picker скрывается. | `requires-ft-ui-decision` | То же: не переписывать duplicate scenario без source decision. |
+| `TC-DOC-023` | После загрузки анкеты picker скрывается, второго file picker path нет. | `test-design-replaced` | Duplicate-upload сценарий заменён на single-file state проверку: файл отображается, доступны view/delete/download, picker второго файла отсутствует. |
+| `TC-DOC-029` | После загрузки паспорта клиента picker скрывается. | `test-design-replaced` | Duplicate-upload сценарий заменён на single-file state проверку. |
+| `TC-DOC-034` | После загрузки второго документа picker скрывается. | `test-design-replaced` | Duplicate-upload сценарий заменён на single-file state проверку. |
 | `TC-DOC-036` | View icon открывает PDF в новой `blob:` вкладке, а не in-page modal. | `safe-automation-ready-update` | Если ФТ требует только просмотр, automation-ready можно обновить на observed new-tab behavior. Если ФТ/макет требует modal, пометить `FT/UI Divergence`. |
 
 ## Triage по blocked
@@ -102,31 +102,30 @@ UI-наблюдение не заменяет ФТ. Baseline FT-first файлы
 
 ## Рекомендации по следующему шагу
 
-1. Не менять `test-cases/*.md`.
-2. Создать отдельные initial automation-ready файлы по трём baseline files.
+1. Использовать `post-ui-product-decisions.md` как обязательный input перед downstream-работой с этим evidence.
+2. Сохранить `TC-CP-B78F72E22B` как FT-ожидание и завести/передать дефект реализации по отсутствующему уточняющему полю для `Иное`.
 3. При создании automation-ready:
    - confirmed TC получить `UI Verification Status: confirmed`;
    - safe update TC обновить по observed UI и evidence;
-   - requires-ft-ui-decision TC оставить с `UI Verification Status: mismatch-ft-ui` и явным `FT/UI Divergence`;
+   - `TC-CP-B78F72E22B` оставить с `UI Verification Status: mismatch-ft-ui` и явным `FT/UI Divergence`;
+   - `TC-CP-116443D9EB` использовать как confirmed requirement-update case;
+   - `TC-PASSCUR-011`, `TC-PASSCUR-032`, `TC-PASSCUR-040` считать confirmed mask behavior;
+   - `TC-DOC-023`, `TC-DOC-029`, `TC-DOC-034` брать уже в заменённой single-file формулировке;
    - blocked TC оставить в файле с canonical blocker status и без выдуманного expected result.
 4. Для DaData/FMS blocked TC подготовить отдельный короткий UI rerun prompt со стабильными query/fixture values.
-5. Для duplicate upload, QR/mobile upload и `иное` в отношении сначала сверить ФТ/source. Если source не требует поведения, удалить/заменить можно только через обычный test-case review/revision, не через UI evidence alone.
+5. Для QR/mobile upload оставить manual/blocked path до отдельной проверки.
 
 ## Что можно считать готовым к automation-ready без обсуждения
 
 - 91 confirmed TC как перенос статуса/evidence.
 - 16 safe automation-ready wording/update TC из таблиц выше.
 
-## Что требует отдельного решения
+## Что закрыто продуктовым решением
 
-- `TC-CP-B78F72E22B`
-- `TC-CP-116443D9EB`
-- `TC-PASSCUR-011`
-- `TC-PASSCUR-032`
-- `TC-PASSCUR-040`
-- `TC-DOC-023`
-- `TC-DOC-029`
-- `TC-DOC-034`
+- `TC-CP-B78F72E22B` — implementation defect, baseline preserved.
+- `TC-CP-116443D9EB` — DaData/autocomplete requirement update.
+- `TC-PASSCUR-011`, `TC-PASSCUR-032`, `TC-PASSCUR-040` — confirmed mask behavior.
+- `TC-DOC-023`, `TC-DOC-029`, `TC-DOC-034` — duplicate upload TC replaced by single-file state TC.
 
 ## Что требует повторного UI/data-prerequisite прогона
 

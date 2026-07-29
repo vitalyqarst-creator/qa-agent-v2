@@ -49,7 +49,7 @@ All paths below are repo-relative. Source `test-cases/*.md`, DOCX/XHTML/PDF/supp
 | TC-CP-2CBD2F1BE6 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/contact-person-empty-after-add.png | confirmed; Телефон виден после добавления контакта |
 | TC-CP-BF2F522CE8 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-CP-BF2F522CE8.md | mismatch-ft-ui; Невалидный ввод имени |
 | TC-CP-FD0866A774 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/contact-person-empty-after-add.png | confirmed; Редактируемость имени |
-| TC-CP-116443D9EB | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-CP-116443D9EB.md | mismatch-ft-ui; Обязательность имени |
+| TC-CP-116443D9EB | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-CP-116443D9EB.md | confirmed; Обязательность имени; DaData/autocomplete requirement accepted |
 | TC-CP-D49350060B | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/application-create-after-contact-add-attempt.png | confirmed; Имя не видно до добавления контакта |
 | TC-CP-443F3F4189 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/contact-person-empty-after-add.png | confirmed; Имя видно после добавления контакта |
 | TC-CP-351CD544DE | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-CP-351CD544DE.md | mismatch-ft-ui; Невалидный ввод фамилии |
@@ -77,7 +77,7 @@ All paths below are repo-relative. Source `test-cases/*.md`, DOCX/XHTML/PDF/supp
 | TC-PASSCUR-008 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Обязательность места рождения |
 | TC-PASSCUR-009 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Отображение места рождения |
 | TC-PASSCUR-010 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | mismatch-ft-ui; Нечисловой номер паспорта |
-| TC-PASSCUR-011 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | mismatch-ft-ui; Слишком длинный номер паспорта |
+| TC-PASSCUR-011 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Слишком длинный номер паспорта обрезается маской |
 | TC-PASSCUR-012 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-PASSCUR-012.md | mismatch-ft-ui; Короткий номер паспорта |
 | TC-PASSCUR-013 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Валидный 6-значный номер |
 | TC-PASSCUR-014 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Шесть одинаковых цифр номера |
@@ -98,7 +98,7 @@ All paths below are repo-relative. Source `test-cases/*.md`, DOCX/XHTML/PDF/supp
 | TC-PASSCUR-029 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Обязательность даты выдачи |
 | TC-PASSCUR-030 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Отображение даты выдачи |
 | TC-PASSCUR-031 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | mismatch-ft-ui; Нечисловая серия |
-| TC-PASSCUR-032 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | mismatch-ft-ui; Слишком длинная серия |
+| TC-PASSCUR-032 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Слишком длинная серия обрезается маской |
 | TC-PASSCUR-033 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-PASSCUR-033.md | mismatch-ft-ui; Короткая серия |
 | TC-PASSCUR-034 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Валидная 4-значная серия |
 | TC-PASSCUR-035 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Три одинаковых цифры в серии |
@@ -106,7 +106,7 @@ All paths below are repo-relative. Source `test-cases/*.md`, DOCX/XHTML/PDF/supp
 | TC-PASSCUR-037 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Отображение серии |
 | TC-PASSCUR-038 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | mismatch-ft-ui; Нечисловой код подразделения |
 | TC-PASSCUR-039 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-passport-dadata-code-770000.png | confirmed; Форматирование кода подразделения |
-| TC-PASSCUR-040 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | mismatch-ft-ui; Слишком длинный код подразделения |
+| TC-PASSCUR-040 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Слишком длинный код подразделения обрезается/форматируется маской |
 | TC-PASSCUR-041 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/per-tc/TC-PASSCUR-041.md | mismatch-ft-ui; Короткий код подразделения |
 | TC-PASSCUR-042 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-passport-dadata-code-770000.png | confirmed; Валидный 6-значный код |
 | TC-PASSCUR-043 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | confirmed; Обязательность кода подразделения |
@@ -133,18 +133,18 @@ All paths below are repo-relative. Source `test-cases/*.md`, DOCX/XHTML/PDF/supp
 | TC-DOC-020 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-attach-phone-click.png | not-automatable-manual-only; QR/mobile upload анкеты |
 | TC-DOC-021 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-anketa-invalid-format.png | confirmed; Invalid format upload анкеты |
 | TC-DOC-022 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-anketa-large-file.png | confirmed; Large PDF upload анкеты |
-| TC-DOC-023 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-anketa-valid-upload.png | mismatch-ft-ui; Duplicate upload анкеты |
+| TC-DOC-023 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-anketa-valid-upload.png | confirmed; Single-file state после загрузки анкеты |
 | TC-DOC-024 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-passport-second-valid-upload.png | confirmed; Upload valid PDF в `Паспорт клиента` |
 | TC-DOC-025 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | not-automatable-manual-only; Drag-and-drop upload паспорта клиента |
 | TC-DOC-026 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | not-automatable-manual-only; QR/mobile upload паспорта клиента |
 | TC-DOC-027 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/doc-passport-second-invalid-large.png | confirmed; Invalid format паспорта клиента |
 | TC-DOC-028 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/doc-passport-second-invalid-large.png | confirmed; Large PDF паспорта клиента |
-| TC-DOC-029 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-passport-second-valid-upload.png | mismatch-ft-ui; Duplicate upload паспорта клиента |
+| TC-DOC-029 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-passport-second-valid-upload.png | confirmed; Single-file state после загрузки паспорта клиента |
 | TC-DOC-030 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-passport-second-valid-upload.png | confirmed; Upload valid PDF во `Второй документ` |
 | TC-DOC-031 | log | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/ui-validation-report.md | not-automatable-manual-only; Drag-and-drop upload второго документа |
 | TC-DOC-032 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/doc-passport-second-invalid-large.png | confirmed; Invalid format второго документа |
 | TC-DOC-033 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/doc-passport-second-invalid-large.png | confirmed; Large PDF второго документа |
-| TC-DOC-034 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-passport-second-valid-upload.png | mismatch-ft-ui; Duplicate upload второго документа |
+| TC-DOC-034 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-passport-second-valid-upload.png | confirmed; Single-file state после загрузки второго документа |
 | TC-DOC-035 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-anketa-valid-upload.png | confirmed; Отображение eye/view icon |
 | TC-DOC-036 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-visible-view-click.png | mismatch-ft-ui; Поведение eye/view icon |
 | TC-DOC-037 | screenshot | fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/postfinal-v2-rc5-ui-calibration/evidence/screenshots/alltc-doc-anketa-valid-upload.png | confirmed; Отображение trash/delete icon |
