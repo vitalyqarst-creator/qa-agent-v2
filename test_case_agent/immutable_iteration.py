@@ -1217,6 +1217,15 @@ def _revision_child_tc_id(parent_tc_id: str, polarity: str, *, first: bool) -> s
     return f"{parent_tc_id}-{suffix}"
 
 
+def _revision_child_title(parent_title: str, polarity: str) -> str:
+    suffix = {
+        "positive": "допустимые значения",
+        "negative": "недопустимые значения",
+        "calibration": "значения со специальными символами",
+    }[polarity]
+    return f"{parent_title} - {suffix}"
+
+
 def _revision_filtered_runtime_items(
     items: Sequence[str],
     values: Sequence[str],
@@ -1268,7 +1277,7 @@ def _revision_split_case_by_outcome(case: TestCaseDesign) -> tuple[TestCaseDesig
                 ),
                 status=status,
                 case_type=child_case_type,
-                title=f"{case.title} ({polarity})",
+                title=_revision_child_title(case.title, polarity),
                 test_data=_revision_filtered_runtime_items(case.test_data, values),
                 steps=_revision_filtered_runtime_items(case.steps, values),
                 expected_result=expected_result,

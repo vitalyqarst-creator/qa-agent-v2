@@ -1076,6 +1076,11 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertEqual("позитивный", positive_seed["case_type"])
         self.assertEqual("негативный", negative_seed["case_type"])
         self.assertEqual("candidate-ui-calibration", calibration_seed["status"])
+        for marker in ("calibration", "Калибровка", "UI calibration", "blocked-observability"):
+            self.assertNotIn(
+                marker.casefold(),
+                calibration_seed["seed_runtime"]["title"].casefold(),
+            )
         self.assertIn(
             "99912345678",
             positive_seed["seed_runtime"]["expected_result"],
@@ -1107,6 +1112,18 @@ class ImmutableIterationTests(unittest.TestCase):
         self.assertIn(previous_cases[0].tc_id, diff["unchanged_tc_hashes"])
         self.assertIn(previous_cases[1].tc_id, diff["changed_tc_ids"])
         self.assertTrue(diff["added_tc_ids"])
+        designs = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
+        )["cases"]
+        calibration_design = next(
+            item
+            for item in designs
+            if "required-empty-calibration-outcome" in item["case_key"]
+        )
+        self.assertEqual("candidate-ui-calibration", calibration_design["status"])
+        self.assertTrue(calibration_design["calibration_question"])
+        for marker in ("calibration", "Калибровка", "UI calibration", "blocked-observability"):
+            self.assertNotIn(marker.casefold(), calibration_design["title"].casefold())
 
     def test_model_runtime_revision_split_child_ids_are_stable(self) -> None:
         first_graph = _requiredness_revision_graph()
