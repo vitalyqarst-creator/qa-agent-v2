@@ -24,6 +24,7 @@ from test_case_agent.review_cycle.source_assertions import (
     SUPPORTING_SOURCE_EVIDENCE_ROLES,
     ClauseEvidenceBinding,
     RequirementCodeBinding,
+    ScopeBoundaryAbsentContext,
     ScopeBoundaryManifestContext,
     ScopeBoundaryExclusion,
     ScopeBoundaryReview,
@@ -751,6 +752,7 @@ class SourceAssertionManifestTests(unittest.TestCase):
         verdict: str = "verified",
         reviewed_manifest_contexts: tuple[ScopeBoundaryManifestContext, ...] | None = None,
         excluded_contexts: tuple[ScopeBoundaryExclusion, ...] | None = None,
+        absent_contexts: tuple[ScopeBoundaryAbsentContext, ...] = (),
         required_change: str | None = None,
     ) -> ScopeBoundaryReview:
         if reviewed_manifest_contexts is None:
@@ -815,6 +817,7 @@ class SourceAssertionManifestTests(unittest.TestCase):
             ),
             reviewed_manifest_contexts=reviewed_manifest_contexts,
             excluded_contexts=excluded_contexts,
+            absent_contexts=absent_contexts,
             required_change=(
                 required_change
                 if required_change is not None
@@ -4069,6 +4072,134 @@ class SourceAssertionManifestTests(unittest.TestCase):
             ),
         )
         reported_missing_evidence.validate(manifest)
+
+    def test_scope_boundary_accepts_cross_reference_none_found_over_selected_rows(self) -> None:
+        selected = replace(
+            self._assertion(3, "\u0424\u0430\u043c\u0438\u043b\u0438\u044f"),
+            source_context_class="scope-local",
+        )
+        manifest = self._build((selected,))
+        boundary = self._scope_boundary(manifest)
+        without_cross_reference = replace(
+            boundary,
+            excluded_contexts=tuple(
+                item
+                for item in boundary.excluded_contexts
+                if item.context_class != "cross-referenced-constraints"
+            ),
+            absent_contexts=(
+                ScopeBoundaryAbsentContext(
+                    context_class="cross-referenced-constraints",
+                    basis_source_row_ids=(manifest.source_rows[0].source_row_id,),
+                    explanation=(
+                        "The selected source rows were inspected and no "
+                        "cross-referenced obligations or citations were found."
+                    ),
+                ),
+            ),
+        )
+
+        without_cross_reference.validate(manifest)
+
+    def test_scope_boundary_accepts_russian_cross_reference_none_found_explanation(self) -> None:
+        selected = replace(
+            self._assertion(3, "\u0424\u0430\u043c\u0438\u043b\u0438\u044f"),
+            source_context_class="scope-local",
+        )
+        manifest = self._build((selected,))
+        boundary = self._scope_boundary(manifest)
+        candidate = replace(
+            boundary,
+            excluded_contexts=tuple(
+                item
+                for item in boundary.excluded_contexts
+                if item.context_class != "cross-referenced-constraints"
+            ),
+            absent_contexts=(
+                ScopeBoundaryAbsentContext(
+                    context_class="cross-referenced-constraints",
+                    basis_source_row_ids=(selected.source_row_id,),
+                    explanation=(
+                        "\u0412\u044b\u0431\u0440\u0430\u043d\u043d\u044b\u0435 "
+                        "\u0441\u0442\u0440\u043e\u043a\u0438 BSR 1-3 "
+                        "\u043f\u0440\u043e\u0432\u0435\u0440\u0435\u043d\u044b: "
+                        "\u0441\u0441\u044b\u043b\u043e\u043a \u043d\u0430 "
+                        "\u0434\u0440\u0443\u0433\u0438\u0435 "
+                        "\u0440\u0430\u0437\u0434\u0435\u043b\u044b, "
+                        "\u0442\u0440\u0435\u0431\u043e\u0432\u0430\u043d\u0438\u044f "
+                        "\u0438\u043b\u0438 support-\u043f\u0440\u0430\u0432\u0438\u043b\u0430, "
+                        "\u0434\u043e\u0431\u0430\u0432\u043b\u044f\u044e\u0449\u0438\u0445 "
+                        "\u043e\u0431\u044f\u0437\u0430\u043d\u043d\u043e\u0441\u0442\u0438 "
+                        "\u044d\u0442\u043e\u043c\u0443 scope, "
+                        "\u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d\u043e."
+                    ),
+                ),
+            ),
+        )
+
+        candidate.validate(manifest)
+
+    def test_scope_boundary_absent_context_is_limited_to_selected_cross_reference_rows(self) -> None:
+        selected = replace(
+            self._assertion(3, "\u0424\u0430\u043c\u0438\u043b\u0438\u044f"),
+            source_context_class="scope-local",
+        )
+        ancestor = self._as_not_applicable(
+            self._assertion(6, "\u0418\u043c\u044f"),
+            context_class="ancestor-and-section-preamble",
+        )
+        manifest = self._build((selected, ancestor))
+        boundary = self._scope_boundary(manifest)
+        base = replace(
+            boundary,
+            excluded_contexts=tuple(
+                item
+                for item in boundary.excluded_contexts
+                if item.context_class != "cross-referenced-constraints"
+            ),
+        )
+
+        cases = (
+            (
+                "scope-boundary-absent-context-class-invalid",
+                ScopeBoundaryAbsentContext(
+                    context_class="document-global-constraints",
+                    basis_source_row_ids=(selected.source_row_id,),
+                    explanation=(
+                        "The selected source rows were inspected and no "
+                        "cross-referenced obligations or citations were found."
+                    ),
+                ),
+            ),
+            (
+                "scope-boundary-absent-basis-row-not-selected-scope",
+                ScopeBoundaryAbsentContext(
+                    context_class="cross-referenced-constraints",
+                    basis_source_row_ids=(ancestor.source_row_id,),
+                    explanation=(
+                        "The selected source rows were inspected and no "
+                        "cross-referenced obligations or citations were found."
+                    ),
+                ),
+            ),
+            (
+                "scope-boundary-absent-explanation-insufficient",
+                ScopeBoundaryAbsentContext(
+                    context_class="cross-referenced-constraints",
+                    basis_source_row_ids=(selected.source_row_id,),
+                    explanation="Cross references are fine for this scope.",
+                ),
+            ),
+        )
+        for code, absent_context in cases:
+            with self.subTest(code=code):
+                self.assert_contract_error(
+                    code,
+                    lambda absent_context=absent_context: replace(
+                        base,
+                        absent_contexts=(absent_context,),
+                    ).validate(manifest),
+                )
 
     def test_scope_boundary_review_retains_all_not_applicable_manifest_rows(self) -> None:
         assertions = (

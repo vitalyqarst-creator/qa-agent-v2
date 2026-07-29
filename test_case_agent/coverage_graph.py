@@ -513,6 +513,32 @@ def _codes_in_refs(source_refs: Sequence[str]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(values))
 
 
+def _merge_case_specs(
+    case_specs: Sequence[tuple[str, str, str]],
+) -> tuple[tuple[str, tuple[str, ...], str], ...]:
+    by_key: dict[str, dict[str, set[str]]] = {}
+    for case_key, obligation_id, status in case_specs:
+        entry = by_key.setdefault(case_key, {"obligation_ids": set(), "statuses": set()})
+        entry["obligation_ids"].add(obligation_id)
+        entry["statuses"].add(status)
+
+    merged: list[tuple[str, tuple[str, ...], str]] = []
+    for case_key in sorted(by_key):
+        obligation_ids = tuple(sorted(by_key[case_key]["obligation_ids"]))
+        statuses = by_key[case_key]["statuses"]
+        if len(statuses) == 1:
+            status = next(iter(statuses))
+        elif "candidate-ui-calibration" in statuses:
+            status = "candidate-ui-calibration"
+        else:
+            raise CoverageGraphError(
+                f"case_key {case_key} has conflicting statuses: "
+                + ", ".join(sorted(statuses))
+            )
+        merged.append((case_key, obligation_ids, status))
+    return tuple(merged)
+
+
 def build_coverage_graph(
     *,
     ft_slug: str,
@@ -760,18 +786,19 @@ def build_coverage_graph(
             "prepared obligations are not owned by a source property: "
             + ", ".join(unsafe_orphans)
         )
+    merged_case_specs = _merge_case_specs(case_specs)
     ids = assign_stable_ids(
-        (case_key for case_key, _, _ in case_specs),
+        (case_key for case_key, _, _ in merged_case_specs),
         prefix=tc_prefix,
     )
     cases = tuple(
         CoverageCase(
             case_key=case_key,
             tc_id=ids[case_key],
-            obligation_ids=(obligation_id,),
+            obligation_ids=obligation_ids,
             status=status,
         )
-        for case_key, obligation_id, status in sorted(case_specs)
+        for case_key, obligation_ids, status in merged_case_specs
     )
     gap_by_id = {item.gap_id: item for item in obligation_set.coverage_gaps}
     gaps = tuple(

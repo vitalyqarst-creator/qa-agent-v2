@@ -304,6 +304,49 @@ class TestDesignTests(unittest.TestCase):
             "В поле «Имя» отображается введённое значение.",
         )
 
+    def test_merged_case_keeps_all_obligations_in_deterministic_design(self) -> None:
+        graph = _graph()
+        secondary_prop = replace(
+            graph.properties[0],
+            property_id="PROP-2",
+            assertion_id="ASSERT-002",
+            property_key="customer-name:secondary-input",
+            canonical_statement=(
+                "РџРѕР»Рµ В«РРјСЏВ» Р·Р°РїРѕР»РЅСЏРµС‚СЃСЏ РІ РѕРґРЅРѕРј С†РµР»РµРІРѕРј С†РµРїРѕС‡РєРµ."
+            ),
+        )
+        secondary_obligation = replace(
+            graph.obligations[0],
+            obligation_id="OBL-002",
+            property_id="PROP-2",
+            atom_id="ATOM-002",
+            observable_oracle="Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ СЃРІСЏР·Р°РЅРЅР°СЏ РїСЂРѕРІРµСЂРєР° РІС‹РїРѕР»РЅРµРЅР°.",
+        )
+        graph = replace(
+            graph,
+            properties=(graph.properties[0], secondary_prop, *graph.properties[1:]),
+            obligations=(graph.obligations[0], secondary_obligation),
+            cases=(
+                replace(
+                    graph.cases[0],
+                    obligation_ids=("OBL-001", "OBL-002"),
+                ),
+            ),
+        )
+
+        plan = build_test_design_plan(graph, context=_context())
+
+        self.assertEqual(1, len(plan.deterministic_cases))
+        case = plan.deterministic_cases[0]
+        self.assertIn("OBL-001", case.traceability)
+        self.assertIn("OBL-002", case.traceability)
+        self.assertIn("ASSERT-001", case.traceability)
+        self.assertIn("ASSERT-002", case.traceability)
+        self.assertIn(
+            "Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ СЃРІСЏР·Р°РЅРЅР°СЏ РїСЂРѕРІРµСЂРєР°",
+            case.expected_result,
+        )
+
     def test_unknown_property_is_explicit_writer_card(self) -> None:
         plan = build_test_design_plan(_graph(kind="cross-field-rule"), context=_context())
 

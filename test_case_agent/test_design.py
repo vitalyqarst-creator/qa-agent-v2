@@ -473,19 +473,54 @@ class TestDesignPlan:
         return asdict(self)
 
 
-def _one_case_obligation(
+def _case_obligation_bindings(
     case: CoverageCase,
     obligations: Mapping[str, CoverageObligation],
-) -> CoverageObligation:
-    if len(case.obligation_ids) != 1:
-        raise DesignError(
-            f"{case.tc_id} must own exactly one obligation before deterministic design"
-        )
-    obligation_id = case.obligation_ids[0]
-    try:
-        return obligations[obligation_id]
-    except KeyError as exc:  # pragma: no cover - coverage graph validation owns this
-        raise DesignError(f"{case.tc_id} references unknown {obligation_id}") from exc
+    properties: Mapping[str, CoverageProperty],
+) -> tuple[tuple[CoverageProperty, CoverageObligation], ...]:
+    bindings: list[tuple[CoverageProperty, CoverageObligation]] = []
+    for obligation_id in case.obligation_ids:
+        try:
+            obligation = obligations[obligation_id]
+        except KeyError as exc:  # pragma: no cover - coverage graph validation owns this
+            raise DesignError(f"{case.tc_id} references unknown {obligation_id}") from exc
+        try:
+            prop = properties[obligation.property_id]
+        except KeyError as exc:  # pragma: no cover - coverage graph validation owns this
+            raise DesignError(
+                f"{obligation.obligation_id} references unknown property"
+            ) from exc
+        bindings.append((prop, obligation))
+    if not bindings:
+        raise DesignError(f"{case.tc_id} must own at least one obligation")
+    if len(bindings) == 1:
+        return tuple(bindings)
+
+    primary_prop, primary_obligation = bindings[0]
+    for prop, obligation in bindings[1:]:
+        conflicts: list[str] = []
+        if prop.subject_key != primary_prop.subject_key:
+            conflicts.append("subject")
+        if prop.property_kind != primary_prop.property_kind:
+            conflicts.append("property_kind")
+        if obligation.coverage_variant != primary_obligation.coverage_variant:
+            conflicts.append("coverage_variant")
+        if obligation.condition_key != primary_obligation.condition_key:
+            conflicts.append("condition_key")
+        if obligation.validation_trigger != primary_obligation.validation_trigger:
+            conflicts.append("validation_trigger")
+        if obligation.cleanup_strategy != primary_obligation.cleanup_strategy:
+            conflicts.append("cleanup_strategy")
+        if obligation.coverage_status != primary_obligation.coverage_status:
+            conflicts.append("coverage_status")
+        if obligation.calibration_status != primary_obligation.calibration_status:
+            conflicts.append("calibration_status")
+        if conflicts:
+            raise DesignError(
+                f"{case.tc_id} merged obligations are incompatible: "
+                + ", ".join(conflicts)
+            )
+    return tuple(bindings)
 
 
 def _traceability(
@@ -1476,6 +1511,9 @@ def _materialize(
     dictionary_subject_keys: set[str] | frozenset[str] = frozenset(),
     invariant_transition: _InvariantTransition | None = None,
     repeater_support: _RepeaterMutationSupport | None = None,
+    merged_support_obligations: Sequence[
+        tuple[CoverageProperty, CoverageObligation]
+    ] = (),
 ) -> TestCaseDesign | WriterCard | BlockedCard:
     label = context.subject_labels.get(prop.subject_key, "").strip()
     if not label:
@@ -2334,6 +2372,20 @@ def _materialize(
         preconditions=preconditions,
         repeater_support=repeater_support,
     )
+    if merged_support_obligations:
+        expected_result = "; ".join(
+            dict.fromkeys(
+                item.strip()
+                for item in (
+                    expected_result,
+                    *(
+                        support_obligation.observable_oracle
+                        for _support_prop, support_obligation in merged_support_obligations
+                    ),
+                )
+                if item.strip()
+            )
+        )
     calibration_question = ""
     if case.status == "candidate-ui-calibration":
         title = _candidate_product_title(title)
@@ -2359,6 +2411,15 @@ def _materialize(
         ),
         invariant_transition=invariant_transition,
         repeater_support=repeater_support,
+    )
+    support_obligations = tuple(
+        {
+            support_obligation.obligation_id: (support_prop, support_obligation)
+            for support_prop, support_obligation in (
+                *merged_support_obligations,
+                *support_obligations,
+            )
+        }.values()
     )
     return TestCaseDesign(
         case_key=case.case_key,
@@ -2461,13 +2522,8 @@ def build_test_design_plan(
     writer_cards: list[WriterCard] = []
     blocked_cards: list[BlockedCard] = []
     for case in sorted(graph.cases, key=lambda item: item.case_key):
-        obligation = _one_case_obligation(case, obligations)
-        try:
-            prop = properties[obligation.property_id]
-        except KeyError as exc:  # pragma: no cover - graph validation owns this
-            raise DesignError(
-                f"{obligation.obligation_id} references unknown property"
-            ) from exc
+        case_bindings = _case_obligation_bindings(case, obligations, properties)
+        prop, obligation = case_bindings[0]
         result = _materialize(
             case=case,
             prop=prop,
@@ -2484,6 +2540,7 @@ def build_test_design_plan(
                 mutation_supports.get(obligation.obligation_id)
                 or default_repeater_support
             ),
+            merged_support_obligations=case_bindings[1:],
         )
         if isinstance(result, TestCaseDesign):
             deterministic.append(result)

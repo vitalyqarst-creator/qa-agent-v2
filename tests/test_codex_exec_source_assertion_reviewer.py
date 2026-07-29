@@ -221,6 +221,7 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
                     for row in manifest.source_rows
                 ],
                 "excluded_contexts": [],
+                "absent_contexts": [],
                 "required_change": "none_required",
                 "note": "Verified against all registered boundary contexts.",
             },
@@ -243,6 +244,12 @@ class CodexExecSourceAssertionReviewerTests(unittest.TestCase):
         self.assertEqual(13, len(dimensions["required"]))
         boundary = schema["properties"]["scope_boundary_review"]
         self.assertEqual(3, boundary["properties"]["reviewed_manifest_contexts"]["minItems"])
+        self.assertIn("absent_contexts", boundary["properties"])
+        absent = boundary["properties"]["absent_contexts"]["items"]["properties"]
+        self.assertEqual(
+            ["cross-referenced-constraints"],
+            absent["context_class"]["enum"],
+        )
         validate_openai_strict_output_schema(schema)
         serialized = json.dumps(schema, sort_keys=True)
         for unsupported in ("$schema", "const", "minLength", "uniqueItems"):

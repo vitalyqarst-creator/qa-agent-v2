@@ -4170,6 +4170,144 @@ class ScopeBoundaryExclusion:
 
 
 @dataclass(frozen=True)
+class ScopeBoundaryAbsentContext:
+    context_class: str
+    basis_source_row_ids: tuple[str, ...]
+    explanation: str
+
+    @classmethod
+    def from_dict(cls, payload: Mapping[str, Any]) -> "ScopeBoundaryAbsentContext":
+        _exact_fields(
+            payload,
+            required={"context_class", "basis_source_row_ids", "explanation"},
+            label="scope boundary absent context",
+        )
+        result = cls(
+            context_class=_nonempty_text(
+                payload["context_class"],
+                "scope boundary absent context.context_class",
+            ),
+            basis_source_row_ids=tuple(
+                _text_list(
+                    payload["basis_source_row_ids"],
+                    "scope boundary absent context.basis_source_row_ids",
+                    allow_empty=False,
+                )
+            ),
+            explanation=_review_explanation(
+                payload["explanation"],
+                "scope boundary absent context.explanation",
+            ),
+        )
+        result.validate_shape()
+        return result
+
+    def validate_shape(self) -> None:
+        if self.context_class != "cross-referenced-constraints":
+            _fail(
+                "scope-boundary-absent-context-class-invalid",
+                "scope boundary absent_contexts may account only for "
+                "cross-referenced-constraints",
+            )
+        if len(self.basis_source_row_ids) != len(set(self.basis_source_row_ids)):
+            _fail(
+                "duplicate-scope-boundary-absent-basis-row",
+                "scope boundary absent_contexts basis_source_row_ids must not repeat rows",
+            )
+        for source_row_id in self.basis_source_row_ids:
+            if not re.fullmatch(r"SRC-[A-Za-z0-9_.-]+", source_row_id):
+                _fail(
+                    "invalid-scope-boundary-absent-basis-row",
+                    "scope boundary absent_contexts basis_source_row_ids must name SRC-* rows",
+                )
+        _review_explanation(
+            self.explanation,
+            "scope boundary absent context.explanation",
+        )
+
+    def validate(self, manifest: SourceAssertionManifest) -> None:
+        self.validate_shape()
+        rows_by_id = {item.source_row_id: item for item in manifest.source_rows}
+        source_paths = {item.path for item in manifest.sources}
+        for source_row_id in self.basis_source_row_ids:
+            source_row = rows_by_id.get(source_row_id)
+            if source_row is None:
+                _fail(
+                    "scope-boundary-absent-basis-row-missing",
+                    "scope boundary absent_contexts basis row is absent from manifest: "
+                    + source_row_id,
+                )
+            if source_row.source_path not in source_paths:
+                _fail(
+                    "scope-boundary-absent-basis-row-source-unregistered",
+                    "scope boundary absent_contexts basis row must bind a manifest source: "
+                    + source_row_id,
+                )
+            if source_row.candidate_id is None or source_row.source_context_class != "scope-local":
+                _fail(
+                    "scope-boundary-absent-basis-row-not-selected-scope",
+                    "scope boundary absent_contexts basis rows must be selected "
+                    "scope-local source rows, not external exclusions or boundary rows: "
+                    + source_row_id,
+                )
+        normalized_explanation = normalize_exact_source_text(self.explanation).casefold()
+        has_selected = "selected" in normalized_explanation or "выбран" in normalized_explanation
+        has_source_rows = (
+            "source row" in normalized_explanation
+            or "source-row" in normalized_explanation
+            or "строк" in normalized_explanation
+        )
+        has_inspected = (
+            "inspected" in normalized_explanation
+            or "reviewed" in normalized_explanation
+            or "провер" in normalized_explanation
+        )
+        has_none_found = (
+            "no " in normalized_explanation
+            or "not found" in normalized_explanation
+            or "none found" in normalized_explanation
+            or "не обнаруж" in normalized_explanation
+            or "не найден" in normalized_explanation
+            or "отсутств" in normalized_explanation
+        )
+        has_cross_reference = (
+            "cross-referenced" in normalized_explanation
+            or "cross referenced" in normalized_explanation
+            or "ссыл" in normalized_explanation
+            or "друг" in normalized_explanation
+        )
+        has_obligation_or_citation = (
+            "obligation" in normalized_explanation
+            or "citation" in normalized_explanation
+            or "обязанност" in normalized_explanation
+            or "требован" in normalized_explanation
+            or "ссыл" in normalized_explanation
+        )
+        if not (
+            has_selected
+            and has_source_rows
+            and has_inspected
+            and has_none_found
+            and has_cross_reference
+            and has_obligation_or_citation
+        ):
+            _fail(
+                "scope-boundary-absent-explanation-insufficient",
+                "scope boundary absent_contexts explanation must state that selected "
+                "source rows were inspected and no cross-referenced obligations or "
+                "citations were found",
+            )
+
+    def to_dict(self) -> dict[str, Any]:
+        self.validate_shape()
+        return {
+            "context_class": self.context_class,
+            "basis_source_row_ids": list(self.basis_source_row_ids),
+            "explanation": self.explanation,
+        }
+
+
+@dataclass(frozen=True)
 class ScopeBoundaryReview:
     verdict: str
     checked_context_classes: tuple[str, ...]
@@ -4177,6 +4315,7 @@ class ScopeBoundaryReview:
     excluded_contexts: tuple[ScopeBoundaryExclusion, ...]
     required_change: str
     note: str
+    absent_contexts: tuple[ScopeBoundaryAbsentContext, ...] = ()
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ScopeBoundaryReview":
@@ -4190,6 +4329,7 @@ class ScopeBoundaryReview:
                 "required_change",
                 "note",
             },
+            optional={"absent_contexts"},
             label="scope boundary review",
         )
         reviewed_manifest_contexts = payload["reviewed_manifest_contexts"]
@@ -4203,6 +4343,12 @@ class ScopeBoundaryReview:
             _fail(
                 "invalid-scope-boundary-exclusions",
                 "scope boundary review.excluded_contexts must be a JSON array",
+            )
+        absent_contexts = payload.get("absent_contexts", [])
+        if not isinstance(absent_contexts, list):
+            _fail(
+                "invalid-scope-boundary-absent-contexts",
+                "scope boundary review.absent_contexts must be a JSON array",
             )
         result = cls(
             verdict=_nonempty_text(
@@ -4229,6 +4375,10 @@ class ScopeBoundaryReview:
             note=_review_explanation(
                 payload["note"],
                 "scope boundary review.note",
+            ),
+            absent_contexts=tuple(
+                ScopeBoundaryAbsentContext.from_dict(item)
+                for item in absent_contexts
             ),
         )
         return result
@@ -4332,9 +4482,23 @@ class ScopeBoundaryReview:
                 )
             exclusion_keys.add(key)
             exclusion_bindings[binding] = exclusion.context_class
+        absent_context_classes: set[str] = set()
+        for absent_context in self.absent_contexts:
+            if not isinstance(absent_context, ScopeBoundaryAbsentContext):
+                _fail(
+                    "invalid-scope-boundary-absent-context",
+                    "scope boundary review.absent_contexts contains an invalid item",
+                )
+            absent_context.validate(manifest)
+            if absent_context.context_class in absent_context_classes:
+                _fail(
+                    "duplicate-scope-boundary-absent-context",
+                    "scope boundary review.absent_contexts contains duplicate context_class",
+                )
+            absent_context_classes.add(absent_context.context_class)
         accounted_context_classes = {
             item.context_class for item in self.reviewed_manifest_contexts
-        } | {item.context_class for item in self.excluded_contexts}
+        } | {item.context_class for item in self.excluded_contexts} | absent_context_classes
         missing_context_evidence = sorted(
             SCOPE_BOUNDARY_CONTEXT_CLASSES - accounted_context_classes
         )
@@ -4374,6 +4538,7 @@ class ScopeBoundaryReview:
             "excluded_contexts": [item.to_dict() for item in self.excluded_contexts],
             "required_change": self.required_change,
             "note": self.note,
+            "absent_contexts": [item.to_dict() for item in self.absent_contexts],
         }
 
 

@@ -421,6 +421,26 @@ def receipt_schema(
             "reason": {"type": "string"},
         }
     )
+    absent_context = exact_object(
+        {
+            "context_class": {
+                "type": "string",
+                "enum": ["cross-referenced-constraints"],
+            },
+            "basis_source_row_ids": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": [
+                        item.source_row_id
+                        for item in manifest.source_rows
+                    ],
+                },
+                "minItems": 1,
+            },
+            "explanation": {"type": "string"},
+        }
+    )
     boundary_review = exact_object(
         {
             "verdict": {"type": "string", "enum": ["verified", "incorrect"]},
@@ -440,6 +460,11 @@ def receipt_schema(
                 "maxItems": len(boundary_rows),
             },
             "excluded_contexts": {"type": "array", "items": exclusion},
+            "absent_contexts": {
+                "type": "array",
+                "items": absent_context,
+                "maxItems": 1,
+            },
             "required_change": {"type": "string"},
             "note": {"type": "string"},
         }
@@ -1019,6 +1044,33 @@ def prepare_evidence_set(
     missing_boundary_classes = sorted(
         SCOPE_BOUNDARY_CONTEXT_CLASSES - represented_boundary_classes
     )
+    selected_scope_row_ids = [
+        row.source_row_id
+        for row in manifest.source_rows
+        if row.source_context_class == "scope-local" and row.candidate_id is not None
+    ]
+    absent_context_candidates: list[dict[str, object]] = []
+    missing_boundary_classes_requiring_exclusion = list(missing_boundary_classes)
+    if (
+        "cross-referenced-constraints" in missing_boundary_classes
+        and selected_scope_row_ids
+    ):
+        absent_context_candidates.append(
+            {
+                "context_class": "cross-referenced-constraints",
+                "basis_source_row_ids": selected_scope_row_ids,
+                "explanation_required": (
+                    "State that the selected source rows were inspected and no "
+                    "cross-referenced obligations or citations were found."
+                ),
+                "receipt_field": "scope_boundary_review.absent_contexts",
+            }
+        )
+        missing_boundary_classes_requiring_exclusion = [
+            item
+            for item in missing_boundary_classes_requiring_exclusion
+            if item != "cross-referenced-constraints"
+        ]
     boundary_exclusion_candidate_count = 0
     boundary_exclusion_locators: set[str] = set()
     for source_path, expected_sha in registered_sources.items():
@@ -1123,6 +1175,7 @@ def prepare_evidence_set(
             "source_sha256": digest,
             "source_rows": [item.to_dict() for item in rows],
             "missing_boundary_context_classes": missing_boundary_classes,
+            "source_verified_absent_context_candidates": absent_context_candidates,
             "source_verified_boundary_exclusion_candidates": boundary_candidates,
         }
         virtual_path = f"runner://manifest-source-rows/{source_path}"
@@ -1158,12 +1211,14 @@ def prepare_evidence_set(
             }
         )
 
-    if missing_boundary_classes:
-        if boundary_exclusion_candidate_count < len(missing_boundary_classes):
+    if missing_boundary_classes_requiring_exclusion:
+        if boundary_exclusion_candidate_count < len(
+            missing_boundary_classes_requiring_exclusion
+        ):
             raise SourceReviewerRunnerError(
                 "each boundary class with zero manifest rows requires a distinct, "
                 "source-verified exclusion candidate; missing_classes="
-                + ", ".join(missing_boundary_classes)
+                + ", ".join(missing_boundary_classes_requiring_exclusion)
             )
 
     for source_path, (expected_sha, evidence_role) in registered_evidence.items():
@@ -1618,6 +1673,14 @@ def render_prompt(
         + reviewer_transport_basis_json(manifest, assertion_ids=selected_ids)
         + "\n```"
     )
+    parts.append(
+        "## Boundary absent-context contract\n\n"
+        "When runner-inline manifest-source-row evidence contains "
+        "`source_verified_absent_context_candidates`, account for those candidates in "
+        "`scope_boundary_review.absent_contexts`. Do not turn selected manifest rows "
+        "into `excluded_contexts`; exclusions are only for source-bound context outside "
+        "manifest source rows."
+    )
     for path, content in evidence.inline_files:
         if Path(path).name in {
             "source-row-inventory.md",
@@ -1689,9 +1752,9 @@ def plan_review_prompt_shards(
         raise SourceReviewerRunnerError(
             "source reviewer max_assertions_per_shard must be positive"
         )
-    if type(max_shards) is not int or not 2 <= max_shards <= 999:
+    if type(max_shards) is not int or not 1 <= max_shards <= 999:
         raise SourceReviewerRunnerError(
-            "source reviewer max_shards must be between 2 and 999"
+            "source reviewer max_shards must be between 1 and 999"
         )
     full_ids = tuple(item.assertion_id for item in manifest.assertions)
     full_prompt = render_prompt(
@@ -1714,6 +1777,10 @@ def plan_review_prompt_shards(
                 prompt_bytes=full_bytes,
                 schema=receipt_schema(manifest),
             ),
+        )
+    if max_shards == 1:
+        raise SourceReviewerRunnerError(
+            "source reviewer prompt exceeds the one-shot cap and sharding is disabled"
         )
 
     assertions_by_row: dict[str, list[str]] = {}

@@ -301,6 +301,52 @@ class CoverageGraphTests(unittest.TestCase):
             all(":obl:" in item.case_key for item in graph.cases)
         )
 
+    def test_same_semantic_case_key_merges_obligation_traceability(self) -> None:
+        manifest = FakeManifest(
+            "sample-scope",
+            (
+                FakeAssertion("ASSERT-001", "SRC-001", (), ("OBL-001",)),
+                FakeAssertion("ASSERT-002", "SRC-002", (), ("OBL-002",)),
+            ),
+        )
+        prepared = obligation_set(
+            obligation("OBL-001", "ATOM-001", "SRC-001"),
+            obligation("OBL-002", "ATOM-002", "SRC-002"),
+        )
+
+        graph = build_coverage_graph(
+            ft_slug="Sample",
+            tc_prefix="SMP",
+            source_manifest=manifest,  # type: ignore[arg-type]
+            obligation_set=prepared,
+            derivations=(
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-001",
+                    "phone-repeater.add-button",
+                    "source-add-row",
+                    {"OBL-001": "repeater-add"},
+                    subject_key="client-phones",
+                    cleanup_strategy="delete-added-row",
+                ),
+                derivation(
+                    manifest,
+                    prepared,
+                    "ASSERT-002",
+                    "phone-repeater.added-fields",
+                    "source-add-row",
+                    {"OBL-002": "repeater-add"},
+                    subject_key="client-phones",
+                    cleanup_strategy="delete-added-row",
+                ),
+            ),
+        )
+
+        self.assertEqual(1, len(graph.cases))
+        self.assertEqual(("OBL-001", "OBL-002"), graph.cases[0].obligation_ids)
+        self.assertEqual("executable", graph.cases[0].status)
+
     def test_foreign_row_wide_requirement_code_is_rejected(self) -> None:
         manifest = FakeManifest(
             "sample-scope",
