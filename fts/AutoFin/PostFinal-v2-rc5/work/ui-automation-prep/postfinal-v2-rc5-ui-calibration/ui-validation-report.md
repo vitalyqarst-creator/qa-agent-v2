@@ -90,17 +90,11 @@
 
 | Test Case ID | Previous status | New status | Evidence |
 | --- | --- | --- | --- |
-| `TC-PASSCUR-003` | `blocked-observability` | `confirmed` | `work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
-| `TC-PASSCUR-005` | `blocked-observability` | `confirmed` | `work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
-| `TC-PASSCUR-018` | `blocked-observability` | `confirmed` | `work/ui-automation-prep/passcur-dadata-fms-772-053/ui-validation-report.md` |
 
 ## Blocked UI input
 
 | Test Case ID | UI Verification Status | Причина блокировки |
 | --- | --- | --- |
-| `TC-PASSCUR-003` | `blocked-observability` | Код подразделения `770000` форматируется в `770-000`, но `Кем выдан` не автозаполняется. Нужны стабильные DaData/code test data. |
-| `TC-PASSCUR-005` | `blocked-observability` | Список DaData-подсказок для `Кем выдан` не воспроизвелся с проверенным вводом (`ОВД`); поле осталось в состоянии `Выберите значение`. |
-| `TC-PASSCUR-018` | `blocked-observability` | Та же зависимость от DaData: suggestions/autocomplete options не удалось сделать видимыми с доступными данными стенда. |
 | `TC-DOC-019` | `not-automatable-manual-only` | Drag-and-drop upload для `Анкета клиента` не удалось надежно выполнить в доступном browser automation path; вместо него проверен file chooser upload. |
 | `TC-DOC-020` | `not-automatable-manual-only` | QR/mobile upload path для `Анкета клиента` требует внешнего phone/QR flow; usable QR dialog из видимого контрола не открылся. |
 | `TC-DOC-025` | `not-automatable-manual-only` | Drag-and-drop upload для `Паспорт клиента` не удалось надежно выполнить в доступном browser automation path. |
@@ -203,12 +197,12 @@ Upload fixture filenames used on the remote stand; fixture files were not commit
 3. Для обязательных контактных полей проверять required marker и observed UI state, а не ненаблюдаемые error messages. Для `Имя` и `Фамилия` это выполнено с учётом DaData/autocomplete поведения.
 4. Обновить список вариантов отношения до наблюдаемых значений в нижнем регистре. Ожидание дополнительного поля при выборе `иное` не убирать: по продуктовому решению отсутствие поля в UI считается дефектом реализации.
 5. Для серии/номера паспорта/кода подразделения с short и nonnumeric values зафиксировать clear-on-blur и точные сообщения. Для long values зафиксировать truncation до максимальной валидной длины; это признано корректным mask behavior.
-6. Добавить стабильные DaData prerequisites для `Кем выдан`: известный код подразделения/input value, который на этом стенде возвращает suggestions и/или автозаполняет issuing authority. Без этого `TC-PASSCUR-003`, `TC-PASSCUR-005` и `TC-PASSCUR-018` остаются blocked.
+6. Выполнено follow-up evidence для DaData/FMS: для `TC-PASSCUR-003`, `TC-PASSCUR-005` и `TC-PASSCUR-018` использовать fixture `FX-DADATA-FMS-POS-001`, код `772-053`, focus/click в `Кем выдан`, выбор `ОВД ЗЮЗИНО Г. МОСКВЫ 772-053`.
 7. Использовать точные сообщения passport date validation и current-date-sensitive value `28.07.2026` в expected results, где проверяются future/expiry boundaries.
 8. Обновить ожидание просмотра документа: загруженный PDF открывается в новой вкладке `blob:http://...`, а не в наблюдаемой in-page modal.
 9. Заменить duplicate upload cases на single-file-control behavior. Picker скрывается после валидного файла, отображаются view/delete/download icons; путь загрузки второго файла в то же поле не тестируется.
 10. Добавить explicit test-environment prerequisites для drag-and-drop и QR/mobile upload cases. В проверенной automation session drag-and-drop не был надежным, а phone upload не открыл usable QR dialog.
 
-## Automation-ready draft
+## Automation-ready handoff
 
-?????? ????????? draft: `fts/AutoFin/PostFinal-v2-rc5/test-cases/automation-ready/`. Baseline `test-cases/*.md` ?? ???????????. Manual/mobile-only ????? ???? ?? ???????????? ? automation-ready ?? ????????????????? ???????????.
+Создан automation-ready draft: `fts/AutoFin/PostFinal-v2-rc5/test-cases/automation-ready/`. Baseline `test-cases/*.md` не перезаписываются. Все TC-ID сохранены; TC без воспроизводимого UI path остаются в наборе со статусом `blocked-observability`.
