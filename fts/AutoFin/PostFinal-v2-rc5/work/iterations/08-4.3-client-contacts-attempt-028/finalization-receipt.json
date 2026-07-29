@@ -1,0 +1,442 @@
+{
+    "schema_version":  1,
+    "scope":  "4-3-client-contacts",
+    "attempt_id":  "08-4.3-client-contacts-attempt-028",
+    "publication_type":  "controlled-ft-first-baseline",
+    "finalization_status":  "accepted-with-calibration-pending",
+    "created_at_utc":  "2026-07-29T14:25:45.4124076Z",
+    "source_attempt":  "fts/AutoFin/PostFinal-v2-rc5/work/iterations/08-4.3-client-contacts-attempt-028",
+    "shadow_test_cases":  "fts/AutoFin/PostFinal-v2-rc5/work/iterations/08-4.3-client-contacts-attempt-028/iteration/shadow-test-cases.md",
+    "shadow_sha256":  "85ef30c439edd9649babc7b61f9007e71e3e2b520400bb3b84c526c789549cf0",
+    "canonical_test_cases":  "fts/AutoFin/PostFinal-v2-rc5/test-cases/4-3-client-contacts.md",
+    "canonical_sha256":  "85ef30c439edd9649babc7b61f9007e71e3e2b520400bb3b84c526c789549cf0",
+    "reviewer":  {
+                     "decision":  "accepted",
+                     "accepted_zero_findings":  true,
+                     "source_projection_findings_count":  0,
+                     "test_case_findings_count":  0,
+                     "case_results_count":  25,
+                     "response_path":  "fts/AutoFin/PostFinal-v2-rc5/work/iterations/08-4.3-client-contacts-attempt-028/iteration/model-stages/reviewer-response.json"
+                 },
+    "production_promotion":  {
+                                 "status":  "not-performed",
+                                 "reason":  "calibration-pending",
+                                 "route_summary_canonical_publication":  "not-performed",
+                                 "route_summary_promotion":  "out-of-scope",
+                                 "route_summary_promotion_eligible":  false,
+                                 "route_summary_non_promotable_reason":  "calibration-pending"
+                             },
+    "validation":  {
+                       "suite_gate_passed":  true,
+                       "production_gate_passed":  true,
+                       "suite_readiness":  "ft-first-reviewed-with-calibration-pending",
+                       "test_case_count":  25,
+                       "execution_ready_count":  23,
+                       "calibration_candidate_count":  2,
+                       "findings":  [
+
+                                    ]
+                   },
+    "model_calls":  {
+                        "writer_model_calls":  1,
+                        "reviewer_model_calls":  1,
+                        "no_new_model_run_for_finalization":  true
+                    },
+    "pending_tc_ids":  [
+                           "TC-CONTACT-006-OBS",
+                           "TC-CONTACT-014-OBS"
+                       ],
+    "pending_cases":  [
+                          {
+                              "tc_id":  "TC-CONTACT-006-OBS",
+                              "status":  "candidate-ui-calibration",
+                              "calibration_question":  "Какой точный source-backed UI trigger/observable нужно проверить для TC-CONTACT-006 перед executable publication по reviewer findings expected-result-unsupported, missing-equivalence-class?"
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-014-OBS",
+                              "status":  "candidate-ui-calibration",
+                              "calibration_question":  "Какой точный source-backed UI trigger/observable нужно проверить для TC-CONTACT-014 перед executable publication по reviewer findings expected-result-unsupported?"
+                          }
+                      ],
+    "case_statuses":  [
+                          {
+                              "tc_id":  "TC-CONTACT-001",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|default|default|condition:d6126e2def5b2dee",
+                              "traceability":  [
+                                                   "OBL-CONTACT-017",
+                                                   "ATOM-CONTACT-017",
+                                                   "ASSERT-CONTACT-017",
+                                                   "BSR 168"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-002",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|default|default|condition:fca974ce31c58c54",
+                              "traceability":  [
+                                                   "OBL-CONTACT-022",
+                                                   "ATOM-CONTACT-022",
+                                                   "ASSERT-CONTACT-022",
+                                                   "BSR 170",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-003",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|source-add-row|repeater-add|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-018",
+                                                   "ATOM-CONTACT-018",
+                                                   "ASSERT-CONTACT-018",
+                                                   "BSR 168",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-004",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|source-editability|editable|condition:fca974ce31c58c54",
+                              "traceability":  [
+                                                   "OBL-CONTACT-020",
+                                                   "ATOM-CONTACT-020",
+                                                   "ASSERT-CONTACT-020",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-006-OBS",
+                              "status":  "candidate-ui-calibration",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|source-requiredness|required-empty-calibration-outcome|condition:9093c7d58044237c",
+                              "traceability":  [
+                                                   "OBL-CONTACT-021",
+                                                   "ATOM-CONTACT-021",
+                                                   "ASSERT-CONTACT-021",
+                                                   "BSR 169",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-006-NEG",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|source-requiredness|required-empty-negative-outcome|condition:9093c7d58044237c",
+                              "traceability":  [
+                                                   "OBL-CONTACT-021",
+                                                   "ATOM-CONTACT-021",
+                                                   "ASSERT-CONTACT-021",
+                                                   "BSR 169",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-006",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|source-requiredness|required-empty-positive-outcome|condition:9093c7d58044237c",
+                              "traceability":  [
+                                                   "OBL-CONTACT-021",
+                                                   "ATOM-CONTACT-021",
+                                                   "ASSERT-CONTACT-021",
+                                                   "BSR 169",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-005",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:2704fb7753d86fd2|source-requiredness|required-empty|condition:20585b0fdfdad85b",
+                              "traceability":  [
+                                                   "OBL-CONTACT-026",
+                                                   "ATOM-CONTACT-026",
+                                                   "ASSERT-CONTACT-026",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-007",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:39e0749da40f625e|source-editability|editable|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-009",
+                                                   "ATOM-CONTACT-009",
+                                                   "ASSERT-CONTACT-009"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-008",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:39e0749da40f625e|source-requiredness|required-empty|condition:37578b0f94f485be",
+                              "traceability":  [
+                                                   "OBL-CONTACT-010",
+                                                   "ATOM-CONTACT-010",
+                                                   "ASSERT-CONTACT-010",
+                                                   "BSR 166"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-009",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:39e0749da40f625e|source-requiredness|required-empty|condition:8c5b62c763e7f272",
+                              "traceability":  [
+                                                   "OBL-CONTACT-011",
+                                                   "ATOM-CONTACT-011",
+                                                   "ASSERT-CONTACT-011",
+                                                   "BSR 166"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-010",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:39e0749da40f625e|source-requiredness|required-empty|condition:c89de1304da6b819",
+                              "traceability":  [
+                                                   "OBL-CONTACT-008",
+                                                   "ATOM-CONTACT-008",
+                                                   "ASSERT-CONTACT-008"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-011",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:39e0749da40f625e|visibility|visible|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-007",
+                                                   "ATOM-CONTACT-007",
+                                                   "ASSERT-CONTACT-007",
+                                                   "BSR 165",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-012",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:73fae3766766cb37|default|default|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-006",
+                                                   "ATOM-CONTACT-006",
+                                                   "ASSERT-CONTACT-006",
+                                                   "BSR 164"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-013",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:73fae3766766cb37|source-editability|editable|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-004",
+                                                   "ATOM-CONTACT-004",
+                                                   "ASSERT-CONTACT-004"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-014-OBS",
+                              "status":  "candidate-ui-calibration",
+                              "case_key":  "4-3-client-contacts|subject:73fae3766766cb37|source-format|allowed-class-calibration|condition:5357669b30a548ea",
+                              "traceability":  [
+                                                   "OBL-CONTACT-005",
+                                                   "ATOM-CONTACT-005",
+                                                   "ASSERT-CONTACT-005",
+                                                   "BSR 163"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-014",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:73fae3766766cb37|source-format|allowed-class-valid|condition:5357669b30a548ea",
+                              "traceability":  [
+                                                   "OBL-CONTACT-005",
+                                                   "ATOM-CONTACT-005",
+                                                   "ASSERT-CONTACT-005",
+                                                   "BSR 163"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-015",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:73fae3766766cb37|source-requiredness|required-empty|condition:726c57b98c1644e6",
+                              "traceability":  [
+                                                   "OBL-CONTACT-003",
+                                                   "ATOM-CONTACT-003",
+                                                   "ASSERT-CONTACT-003"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-016",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:73fae3766766cb37|visibility|visible|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-002",
+                                                   "ATOM-CONTACT-002",
+                                                   "ASSERT-CONTACT-002",
+                                                   "BSR 162",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-017",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:7cd0bfc0e4f05584|default|default|condition:d6126e2def5b2dee",
+                              "traceability":  [
+                                                   "OBL-CONTACT-012",
+                                                   "ATOM-CONTACT-012",
+                                                   "ASSERT-CONTACT-012",
+                                                   "BSR 167"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-018",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:7cd0bfc0e4f05584|dictionary|dictionary|condition:f9447d9a3f757f2b",
+                              "traceability":  [
+                                                   "OBL-CONTACT-016",
+                                                   "ATOM-CONTACT-016",
+                                                   "ASSERT-CONTACT-016",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-019",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:7cd0bfc0e4f05584|source-add-row|repeater-add|condition:2dd85942f8fb9c5f",
+                              "traceability":  [
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-023",
+                                                   "ATOM-CONTACT-023",
+                                                   "ASSERT-CONTACT-023",
+                                                   "BSR 171",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-020",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:7cd0bfc0e4f05584|source-delete-row|repeater-delete|condition:47cdc04678121bb5",
+                              "traceability":  [
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172",
+                                                   "OBL-CONTACT-023",
+                                                   "ATOM-CONTACT-023",
+                                                   "ASSERT-CONTACT-023",
+                                                   "BSR 171"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-021",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:7cd0bfc0e4f05584|source-editability|editable|condition:f9447d9a3f757f2b",
+                              "traceability":  [
+                                                   "OBL-CONTACT-015",
+                                                   "ATOM-CONTACT-015",
+                                                   "ASSERT-CONTACT-015",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          },
+                          {
+                              "tc_id":  "TC-CONTACT-022",
+                              "status":  "executable",
+                              "case_key":  "4-3-client-contacts|subject:7cd0bfc0e4f05584|source-requiredness|required-empty|condition:a572db73653c842a",
+                              "traceability":  [
+                                                   "OBL-CONTACT-025",
+                                                   "ATOM-CONTACT-025",
+                                                   "ASSERT-CONTACT-025",
+                                                   "OBL-CONTACT-013",
+                                                   "ATOM-CONTACT-013",
+                                                   "ASSERT-CONTACT-013",
+                                                   "BSR 167",
+                                                   "OBL-CONTACT-024",
+                                                   "ATOM-CONTACT-024",
+                                                   "ASSERT-CONTACT-024",
+                                                   "BSR 172"
+                                               ]
+                          }
+                      ],
+    "constraints":  {
+                        "production_promotion_performed":  false,
+                        "manual_canonical_authoring":  false,
+                        "source_files_modified":  false
+                    }
+}
