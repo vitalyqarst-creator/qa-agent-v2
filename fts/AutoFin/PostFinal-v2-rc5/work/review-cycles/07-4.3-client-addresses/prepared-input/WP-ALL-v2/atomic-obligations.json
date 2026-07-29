@@ -1,0 +1,1481 @@
+{
+  "coverage_gaps": [
+    {
+      "blocking": false,
+      "gap_id": "GAP-003",
+      "handling": "Generate only source-backed behavior and mark exact UI-message expectations as calibration-pending; do not invent message text.",
+      "problem": "FT defines requiredness or numeric restrictions, but not exact UI message/trigger for every invalid manual-input variant.",
+      "source_refs": [
+        "BSR 117",
+        "BSR 124",
+        "BSR 125",
+        "BSR 127",
+        "BSR 128",
+        "BSR 130",
+        "BSR 132",
+        "BSR 133",
+        "BSR 134",
+        "BSR 142",
+        "BSR 150",
+        "BSR 153",
+        "BSR 154",
+        "BSR 155",
+        "BSR 157",
+        "BSR 159",
+        "BSR 161",
+        "ATOM-ADDR-005",
+        "ATOM-ADDR-013",
+        "ATOM-ADDR-014",
+        "ATOM-ADDR-021",
+        "ATOM-ADDR-023",
+        "ATOM-ADDR-031",
+        "ATOM-ADDR-040",
+        "ATOM-ADDR-047",
+        "ATOM-ADDR-049",
+        "ATOM-ADDR-051",
+        "ATOM-ADDR-052",
+        "ATOM-ADDR-053",
+        "ATOM-ADDR-056",
+        "ATOM-ADDR-057",
+        "ATOM-ADDR-058",
+        "ATOM-ADDR-059",
+        "ATOM-ADDR-060",
+        "ATOM-ADDR-061",
+        "ATOM-ADDR-062"
+      ]
+    }
+  ],
+  "digest": "2a4ffd437b8f4f7af1f94d6871aa3ce674af834166eb468ef14c06bb15e80de0",
+  "obligations": [
+    {
+      "atom_id": "ATOM-ADDR-001",
+      "atomic_statement": "Строка заголовков таблицы свойств полей задает контекст колонок и не является самостоятельной UI-проверкой.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "not-applicable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-ADDR-001",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-ROW-001"
+      ],
+      "state_change": null,
+      "test_intent": "Строка заголовков таблицы свойств полей задает контекст колонок и не является самостоятельной UI-проверкой."
+    },
+    {
+      "atom_id": "ATOM-ADDR-002",
+      "atomic_statement": "Строка является заголовком блока «Адреса клиента» и не задает самостоятельную исполнимую проверку.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "not-applicable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-ADDR-002",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-ROW-002"
+      ],
+      "state_change": null,
+      "test_intent": "Строка является заголовком блока «Адреса клиента» и не задает самостоятельную исполнимую проверку."
+    },
+    {
+      "atom_id": "ATOM-ADDR-003",
+      "atomic_statement": "Поле «Адрес регистрации» всегда видимо.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-003.",
+      "obligation_id": "OBL-ADDR-003",
+      "observable_oracle": "Поле «Адрес регистрации» отображается.",
+      "planned_test_case_id": "TC-ADDR-003",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 115",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок «Адреса клиента».; Design fixture: Открыть блок «Адреса клиента».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-004",
+      "atomic_statement": "Поле «Адрес регистрации» использует интеграцию с DaData.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [],
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-004.",
+      "obligation_id": "OBL-ADDR-004",
+      "observable_oracle": "Поле использует подсказки DaData; точные trigger/debounce/count/order не утверждаются.",
+      "planned_test_case_id": "TC-ADDR-004",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 116",
+        "CLR-001",
+        "CLR-002",
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Признак «Ввести вручную» для адреса регистрации имеет значение «Нет».; Action contract: Ввести часть адреса в поле «Адрес регистрации».; Design fixture: Ввести часть адреса в поле «Адрес регистрации».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-005",
+      "atomic_statement": "Для адреса регистрации должны быть введены регион и номер дома.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-005.",
+      "obligation_id": "OBL-ADDR-005",
+      "observable_oracle": "Система не принимает адрес регистрации без региона и номера дома; точный UI oracle по пустым полям не утвержден.",
+      "planned_test_case_id": "TC-ADDR-005",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 117",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Заполняется адрес регистрации.; Action contract: Оставить регион или дом незаполненным и инициировать проверку адреса.; Design fixture: Оставить регион или дом незаполненным и инициировать проверку адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-006",
+      "atomic_statement": "Если в адресе регистрации не указана квартира и не отмечен частный дом, поле подсвечивается красным и отображается подсказка о квартире или частном доме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-006.",
+      "obligation_id": "OBL-ADDR-006",
+      "observable_oracle": "Поле подсвечивается красным и отображается подсказка «Укажите номер квартиры или поставьте отметку о проживании в частном доме».",
+      "planned_test_case_id": "TC-ADDR-006",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 117",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Адрес регистрации заполнен без квартиры, признак частного дома не активирован.; Action contract: Инициировать проверку адреса регистрации.; Design fixture: Инициировать проверку адреса регистрации.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-007",
+      "atomic_statement": "Если DaData не находит адрес регистрации, отображается подсказка «Некорректно указан адрес».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-007.",
+      "obligation_id": "OBL-ADDR-007",
+      "observable_oracle": "Отображается подсказка «Некорректно указан адрес».",
+      "planned_test_case_id": "TC-ADDR-007",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 118",
+        "CLR-001",
+        "CLR-ADDR-001",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: В поле «Адрес регистрации» введен адрес, который DaData не находит.; Action contract: Инициировать поиск адреса регистрации через DaData.; Design fixture: Инициировать поиск адреса регистрации через DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-008",
+      "atomic_statement": "Если адрес регистрации найден в DaData, он раскладывается по полям блока ручного ввода.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-008.",
+      "obligation_id": "OBL-ADDR-008",
+      "observable_oracle": "Выбранный адрес раскладывается по полям блока ручного ввода.",
+      "planned_test_case_id": "TC-ADDR-008",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 119",
+        "CLR-001",
+        "CLR-ADDR-001",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: DaData нашла адрес регистрации.; Action contract: Выбрать найденный адрес регистрации.; Design fixture: Выбрать найденный адрес регистрации.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-009",
+      "atomic_statement": "При ручном заполнении поле «Адрес регистрации» автоматически формируется из ручных адресных полей.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-009.",
+      "obligation_id": "OBL-ADDR-009",
+      "observable_oracle": "Поле «Адрес регистрации» автоматически содержит почтовый индекс, регион, район при наличии, населенный пункт при наличии, город, улицу, дом, корпус при наличии и квартиру при наличии.",
+      "planned_test_case_id": "TC-ADDR-009",
+      "source_refs": [
+        "SRC-ROW-003",
+        "BSR 120",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Ручные поля адреса регистрации заполнены.; Action contract: Заполнить компоненты адреса регистрации вручную.; Design fixture: Заполнить компоненты адреса регистрации вручную.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-010",
+      "atomic_statement": "Признак «Ввести вручную» для адреса регистрации всегда видим.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-010.",
+      "obligation_id": "OBL-ADDR-010",
+      "observable_oracle": "Переключатель «Ввести вручную» для адреса регистрации отображается.",
+      "planned_test_case_id": "TC-ADDR-010",
+      "source_refs": [
+        "SRC-ROW-004",
+        "BSR 121",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок адресов.; Design fixture: Открыть блок адресов.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-011",
+      "atomic_statement": "Значение по умолчанию для «Ввести вручную» адреса регистрации равно «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-011.",
+      "obligation_id": "OBL-ADDR-011",
+      "observable_oracle": "Переключатель «Ввести вручную» имеет значение «Нет».",
+      "planned_test_case_id": "TC-ADDR-011",
+      "source_refs": [
+        "SRC-ROW-004",
+        "BSR 122",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок адресов.; Design fixture: Открыть блок адресов.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-012",
+      "atomic_statement": "Поле «Почтовый индекс» адреса регистрации видимо, если «Ввести вручную» = «Да».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-012.",
+      "obligation_id": "OBL-ADDR-012",
+      "observable_oracle": "Поле «Почтовый индекс» отображается.",
+      "planned_test_case_id": "TC-ADDR-012",
+      "source_refs": [
+        "SRC-ROW-005",
+        "BSR 123",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-013",
+      "atomic_statement": "Почтовый индекс адреса регистрации допускает только 6 числовых символов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-013. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-013",
+      "observable_oracle": "Нарушающее формат значение не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-013",
+      "source_refs": [
+        "SRC-ROW-005",
+        "BSR 124",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести значение, не соответствующее 6 числовым символам.; Design fixture: Попытаться ввести значение, не соответствующее 6 числовым символам.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-014",
+      "atomic_statement": "Поле «Регион» адреса регистрации видимо в ручном режиме и использует справочник регионов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-DADATA-REGION"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-DADATA-REGION",
+          "fixture_values": [],
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-014.",
+      "obligation_id": "OBL-ADDR-014",
+      "observable_oracle": "Поле «Регион» отображается и использует актуальные предложения регионов DaData как external dynamic dictionary.",
+      "planned_test_case_id": "TC-ADDR-014",
+      "source_refs": [
+        "SRC-ROW-006",
+        "BSR 125",
+        "CLR-001",
+        "CLR-ADDR-004",
+        "CLR-002",
+        "DICT-DADATA-REGION"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да» и открыть поле «Регион».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да» и открыть поле «Регион».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-015",
+      "atomic_statement": "Поле «Район» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-015.",
+      "obligation_id": "OBL-ADDR-015",
+      "observable_oracle": "Поле «Район» отображается.",
+      "planned_test_case_id": "TC-ADDR-015",
+      "source_refs": [
+        "SRC-ROW-007",
+        "BSR 126",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-016",
+      "atomic_statement": "Поле «Населенный пункт» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-016.",
+      "obligation_id": "OBL-ADDR-016",
+      "observable_oracle": "Поле «Населенный пункт» отображается.",
+      "planned_test_case_id": "TC-ADDR-016",
+      "source_refs": [
+        "SRC-ROW-008",
+        "BSR 127",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации.; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-017",
+      "atomic_statement": "Поле «Город» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-017.",
+      "obligation_id": "OBL-ADDR-017",
+      "observable_oracle": "Поле «Город» отображается.",
+      "planned_test_case_id": "TC-ADDR-017",
+      "source_refs": [
+        "SRC-ROW-009",
+        "BSR 128",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации.; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-018",
+      "atomic_statement": "Поле «Улица» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-018.",
+      "obligation_id": "OBL-ADDR-018",
+      "observable_oracle": "Поле «Улица» отображается.",
+      "planned_test_case_id": "TC-ADDR-018",
+      "source_refs": [
+        "SRC-ROW-010",
+        "BSR 129",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-019",
+      "atomic_statement": "Поле «Дом» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-019.",
+      "obligation_id": "OBL-ADDR-019",
+      "observable_oracle": "Поле «Дом» отображается.",
+      "planned_test_case_id": "TC-ADDR-019",
+      "source_refs": [
+        "SRC-ROW-011",
+        "BSR 130",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации.; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-020",
+      "atomic_statement": "Поле «Корпус» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-020.",
+      "obligation_id": "OBL-ADDR-020",
+      "observable_oracle": "Поле «Корпус» отображается.",
+      "planned_test_case_id": "TC-ADDR-020",
+      "source_refs": [
+        "SRC-ROW-012",
+        "BSR 131",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-021",
+      "atomic_statement": "Поле «Корпус» адреса регистрации допускает ввод только числовых символов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-021. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-021",
+      "observable_oracle": "Нечисловой символ не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-021",
+      "source_refs": [
+        "SRC-ROW-012",
+        "BSR 132",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести нечисловой символ в «Корпус».; Design fixture: Попытаться ввести нечисловой символ в «Корпус».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-022",
+      "atomic_statement": "Поле «Квартира» адреса регистрации видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-022.",
+      "obligation_id": "OBL-ADDR-022",
+      "observable_oracle": "Поле «Квартира» отображается.",
+      "planned_test_case_id": "TC-ADDR-022",
+      "source_refs": [
+        "SRC-ROW-013",
+        "BSR 133",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации.; Action contract: Установить «Ввести вручную» адреса регистрации = «Да».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-023",
+      "atomic_statement": "Поле «Квартира» адреса регистрации допускает ввод только числовых символов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-023. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-023",
+      "observable_oracle": "Нечисловой символ не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-023",
+      "source_refs": [
+        "SRC-ROW-013",
+        "BSR 134",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести нечисловой символ в «Квартира».; Design fixture: Попытаться ввести нечисловой символ в «Квартира».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-024",
+      "atomic_statement": "Флажок «Клиент зарегистрирован в частном доме» отображается только если в адресе регистрации не указан номер квартиры.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-024.",
+      "obligation_id": "OBL-ADDR-024",
+      "observable_oracle": "Без номера квартиры флажок «Клиент зарегистрирован в частном доме» отображается; при указанном номере квартиры флажок не отображается.",
+      "planned_test_case_id": "TC-ADDR-024",
+      "source_refs": [
+        "SRC-ROW-014",
+        "BSR 135",
+        "CLR-ADDR-002",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Проверить адрес регистрации без номера квартиры, затем указать номер квартиры.; Design fixture: Проверить адрес регистрации без номера квартиры, затем указать номер квартиры.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-025",
+      "atomic_statement": "Значение по умолчанию для «Клиент зарегистрирован в частном доме» равно «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-025.",
+      "obligation_id": "OBL-ADDR-025",
+      "observable_oracle": "Флажок «Клиент зарегистрирован в частном доме» имеет значение «Нет».",
+      "planned_test_case_id": "TC-ADDR-025",
+      "source_refs": [
+        "SRC-ROW-014",
+        "BSR 136",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок адресов.; Design fixture: Открыть блок адресов.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-026",
+      "atomic_statement": "Если флажок «Клиент зарегистрирован в частном доме» активирован, подсказка о квартире или частном доме исчезает с поля адреса регистрации.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-026.",
+      "obligation_id": "OBL-ADDR-026",
+      "observable_oracle": "Подсказка «Укажите номер квартиры или поставьте отметку о проживании в частном доме» исчезает с поля адреса регистрации.",
+      "planned_test_case_id": "TC-ADDR-026",
+      "source_refs": [
+        "SRC-ROW-014",
+        "BSR 137",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Активировать флажок «Клиент зарегистрирован в частном доме».; Design fixture: Активировать флажок «Клиент зарегистрирован в частном доме».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-027",
+      "atomic_statement": "Признак совпадения фактического адреса с адресом регистрации всегда видим.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-027.",
+      "obligation_id": "OBL-ADDR-027",
+      "observable_oracle": "Переключатель «Адрес фактического места жительства совпадает с адресом регистрации» отображается.",
+      "planned_test_case_id": "TC-ADDR-027",
+      "source_refs": [
+        "SRC-ROW-015",
+        "BSR 138",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок адресов.; Design fixture: Открыть блок адресов.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-028",
+      "atomic_statement": "Значение по умолчанию для признака совпадения фактического адреса с адресом регистрации равно «Да».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-028.",
+      "obligation_id": "OBL-ADDR-028",
+      "observable_oracle": "Переключатель совпадения адресов имеет значение «Да».",
+      "planned_test_case_id": "TC-ADDR-028",
+      "source_refs": [
+        "SRC-ROW-015",
+        "BSR 139",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок адресов.; Design fixture: Открыть блок адресов.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-029",
+      "atomic_statement": "Поле «Адрес фактического места жительства» видимо, если признак совпадения с адресом регистрации = «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-029.",
+      "obligation_id": "OBL-ADDR-029",
+      "observable_oracle": "Поле «Адрес фактического места жительства» отображается.",
+      "planned_test_case_id": "TC-ADDR-029",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 140",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Признак совпадения фактического адреса с адресом регистрации имеет значение «Нет».; Action contract: Установить признак совпадения адресов = «Нет».; Design fixture: Установить признак совпадения адресов = «Нет».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-030",
+      "atomic_statement": "Поле «Адрес фактического места жительства» использует интеграцию с DaData.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [],
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-030.",
+      "obligation_id": "OBL-ADDR-030",
+      "observable_oracle": "Поле использует подсказки DaData; точные trigger/debounce/count/order не утверждаются.",
+      "planned_test_case_id": "TC-ADDR-030",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 141",
+        "CLR-001",
+        "CLR-002",
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Признак совпадения адресов = «Нет», ручной режим фактического адреса = «Нет».; Action contract: Ввести часть адреса в поле фактического адреса.; Design fixture: Ввести часть адреса в поле фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-031",
+      "atomic_statement": "Для фактического адреса должны быть введены регион и номер дома.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-031.",
+      "obligation_id": "OBL-ADDR-031",
+      "observable_oracle": "Система не принимает фактический адрес без региона и номера дома; точный UI oracle по пустым полям не утвержден.",
+      "planned_test_case_id": "TC-ADDR-031",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 142",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Заполняется фактический адрес.; Action contract: Оставить регион или дом незаполненным и инициировать проверку адреса.; Design fixture: Оставить регион или дом незаполненным и инициировать проверку адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-032",
+      "atomic_statement": "Если в фактическом адресе не указана квартира и не отмечен частный дом, поле подсвечивается красным и отображается подсказка о квартире или частном доме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-032.",
+      "obligation_id": "OBL-ADDR-032",
+      "observable_oracle": "Поле подсвечивается красным и отображается подсказка «Укажите номер квартиры или поставьте отметку о проживании в частном доме».",
+      "planned_test_case_id": "TC-ADDR-032",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 142",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Фактический адрес заполнен без квартиры, признак частного дома не активирован.; Action contract: Инициировать проверку фактического адреса.; Design fixture: Инициировать проверку фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-033",
+      "atomic_statement": "Если DaData не находит фактический адрес, отображается подсказка «Некорректно указан адрес».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-033.",
+      "obligation_id": "OBL-ADDR-033",
+      "observable_oracle": "Отображается подсказка «Некорректно указан адрес».",
+      "planned_test_case_id": "TC-ADDR-033",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 143",
+        "CLR-001",
+        "CLR-ADDR-001",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: В поле фактического адреса введен адрес, который DaData не находит.; Action contract: Инициировать поиск фактического адреса через DaData.; Design fixture: Инициировать поиск фактического адреса через DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-034",
+      "atomic_statement": "Если фактический адрес найден в DaData, он раскладывается по полям блока ручного ввода.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-034.",
+      "obligation_id": "OBL-ADDR-034",
+      "observable_oracle": "Выбранный фактический адрес раскладывается по полям блока ручного ввода.",
+      "planned_test_case_id": "TC-ADDR-034",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 144",
+        "CLR-001",
+        "CLR-ADDR-001",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: DaData нашла фактический адрес.; Action contract: Выбрать найденный фактический адрес.; Design fixture: Выбрать найденный фактический адрес.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-035",
+      "atomic_statement": "При ручном заполнении поле фактического адреса автоматически формируется из ручных адресных полей.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-035.",
+      "obligation_id": "OBL-ADDR-035",
+      "observable_oracle": "Поле фактического адреса автоматически содержит почтовый индекс, регион, район при наличии, населенный пункт при наличии, город, улицу, дом, корпус при наличии и квартиру при наличии.",
+      "planned_test_case_id": "TC-ADDR-035",
+      "source_refs": [
+        "SRC-ROW-016",
+        "BSR 145",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Ручные поля фактического адреса заполнены.; Action contract: Заполнить компоненты фактического адреса вручную.; Design fixture: Заполнить компоненты фактического адреса вручную.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-036",
+      "atomic_statement": "Флажок «Клиент проживает в частном доме» видим, если адреса не совпадают и в фактическом адресе не указана квартира.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-036.",
+      "obligation_id": "OBL-ADDR-036",
+      "observable_oracle": "Флажок «Клиент проживает в частном доме» отображается.",
+      "planned_test_case_id": "TC-ADDR-036",
+      "source_refs": [
+        "SRC-ROW-017",
+        "BSR 146",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить совпадение адресов = «Нет» и заполнить фактический адрес без квартиры.; Design fixture: Установить совпадение адресов = «Нет» и заполнить фактический адрес без квартиры.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-037",
+      "atomic_statement": "Значение по умолчанию для «Клиент проживает в частном доме» равно «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-037.",
+      "obligation_id": "OBL-ADDR-037",
+      "observable_oracle": "Флажок «Клиент проживает в частном доме» имеет значение «Нет».",
+      "planned_test_case_id": "TC-ADDR-037",
+      "source_refs": [
+        "SRC-ROW-017",
+        "BSR 147",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Открыть блок адресов при несовпадающих адресах.; Design fixture: Открыть блок адресов при несовпадающих адресах.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-038",
+      "atomic_statement": "Признак «Ввести вручную» для фактического адреса видим, если адреса не совпадают.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-038.",
+      "obligation_id": "OBL-ADDR-038",
+      "observable_oracle": "Переключатель «Ввести вручную» для фактического адреса отображается.",
+      "planned_test_case_id": "TC-ADDR-038",
+      "source_refs": [
+        "SRC-ROW-018",
+        "BSR 148",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить совпадение адресов = «Нет».; Design fixture: Установить совпадение адресов = «Нет».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-039",
+      "atomic_statement": "Значение по умолчанию для «Ввести вручную» фактического адреса равно «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-039.",
+      "obligation_id": "OBL-ADDR-039",
+      "observable_oracle": "Переключатель «Ввести вручную» фактического адреса имеет значение «Нет».",
+      "planned_test_case_id": "TC-ADDR-039",
+      "source_refs": [
+        "SRC-ROW-018",
+        "BSR 149",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить совпадение адресов = «Нет».; Design fixture: Установить совпадение адресов = «Нет».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-040",
+      "atomic_statement": "Поле «Регион» фактического адреса видимо в ручном режиме и использует справочник регионов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [
+        "DICT-DADATA-REGION"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "reference-only",
+          "dictionary_id": "DICT-DADATA-REGION",
+          "fixture_values": [],
+          "required_values": []
+        }
+      ],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-040.",
+      "obligation_id": "OBL-ADDR-040",
+      "observable_oracle": "Поле «Регион» отображается и использует актуальные предложения регионов DaData как external dynamic dictionary.",
+      "planned_test_case_id": "TC-ADDR-040",
+      "source_refs": [
+        "SRC-ROW-019",
+        "BSR 150",
+        "CLR-001",
+        "CLR-ADDR-004",
+        "CLR-002",
+        "DICT-DADATA-REGION"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да» и открыть поле «Регион».; Design fixture: Установить ручной режим фактического адреса = «Да» и открыть поле «Регион».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-041",
+      "atomic_statement": "Поле «Район» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-041.",
+      "obligation_id": "OBL-ADDR-041",
+      "observable_oracle": "Поле «Район» отображается.",
+      "planned_test_case_id": "TC-ADDR-041",
+      "source_refs": [
+        "SRC-ROW-020",
+        "BSR 151",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-042",
+      "atomic_statement": "Поле «Населенный пункт» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-042.",
+      "obligation_id": "OBL-ADDR-042",
+      "observable_oracle": "Поле «Населенный пункт» отображается.",
+      "planned_test_case_id": "TC-ADDR-042",
+      "source_refs": [
+        "SRC-ROW-021",
+        "BSR 152",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-043",
+      "atomic_statement": "Поле «Город» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-043.",
+      "obligation_id": "OBL-ADDR-043",
+      "observable_oracle": "Поле «Город» отображается.",
+      "planned_test_case_id": "TC-ADDR-043",
+      "source_refs": [
+        "SRC-ROW-022",
+        "BSR 153",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим фактического адреса.; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-044",
+      "atomic_statement": "Поле «Улица» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-044.",
+      "obligation_id": "OBL-ADDR-044",
+      "observable_oracle": "Поле «Улица» отображается.",
+      "planned_test_case_id": "TC-ADDR-044",
+      "source_refs": [
+        "SRC-ROW-023",
+        "BSR 154",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим фактического адреса.; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-045",
+      "atomic_statement": "Поле «Дом» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-045.",
+      "obligation_id": "OBL-ADDR-045",
+      "observable_oracle": "Поле «Дом» отображается.",
+      "planned_test_case_id": "TC-ADDR-045",
+      "source_refs": [
+        "SRC-ROW-024",
+        "BSR 155",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим фактического адреса.; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-046",
+      "atomic_statement": "Поле «Корпус» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-046.",
+      "obligation_id": "OBL-ADDR-046",
+      "observable_oracle": "Поле «Корпус» отображается.",
+      "planned_test_case_id": "TC-ADDR-046",
+      "source_refs": [
+        "SRC-ROW-025",
+        "BSR 156",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-047",
+      "atomic_statement": "Поле «Квартира» фактического адреса обязательно, если «Клиент проживает в частном доме» = «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-047. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-047",
+      "observable_oracle": "Поле «Квартира» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-047",
+      "source_refs": [
+        "SRC-ROW-026",
+        "BSR 157",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Клиент проживает в частном доме» = «Нет» и оставить «Квартира» пустой.; Design fixture: Установить «Клиент проживает в частном доме» = «Нет» и оставить «Квартира» пустой.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-048",
+      "atomic_statement": "Поле «Квартира» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-048.",
+      "obligation_id": "OBL-ADDR-048",
+      "observable_oracle": "Поле «Квартира» отображается.",
+      "planned_test_case_id": "TC-ADDR-048",
+      "source_refs": [
+        "SRC-ROW-026",
+        "BSR 158",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-049",
+      "atomic_statement": "Поле «Квартира» фактического адреса допускает ввод только числовых символов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-049. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-049",
+      "observable_oracle": "Нечисловой символ не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-049",
+      "source_refs": [
+        "SRC-ROW-026",
+        "BSR 159",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести нечисловой символ в «Квартира» фактического адреса.; Design fixture: Попытаться ввести нечисловой символ в «Квартира» фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-050",
+      "atomic_statement": "Поле «Почтовый индекс» фактического адреса видимо в ручном режиме.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-050.",
+      "obligation_id": "OBL-ADDR-050",
+      "observable_oracle": "Поле «Почтовый индекс» отображается.",
+      "planned_test_case_id": "TC-ADDR-050",
+      "source_refs": [
+        "SRC-ROW-027",
+        "BSR 160",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да».; Design fixture: Установить ручной режим фактического адреса = «Да».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-051",
+      "atomic_statement": "Почтовый индекс фактического адреса отклоняет нечисловые символы.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-051. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-051",
+      "observable_oracle": "Нечисловой символ не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-051",
+      "source_refs": [
+        "SRC-ROW-027",
+        "BSR 161",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести нечисловой символ в «Почтовый индекс» фактического адреса.; Design fixture: Попытаться ввести нечисловой символ в «Почтовый индекс» фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-052",
+      "atomic_statement": "Почтовый индекс фактического адреса отклоняет значение короче 6 числовых символов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-052. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-052",
+      "observable_oracle": "Значение короче 6 числовых символов не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-052",
+      "source_refs": [
+        "SRC-ROW-027",
+        "BSR 161",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести 5 числовых символов в «Почтовый индекс» фактического адреса.; Design fixture: Попытаться ввести 5 числовых символов в «Почтовый индекс» фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-053",
+      "atomic_statement": "Почтовый индекс фактического адреса отклоняет значение длиннее 6 числовых символов.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-053. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-053",
+      "observable_oracle": "Значение длиннее 6 числовых символов не принимается; точное сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-053",
+      "source_refs": [
+        "SRC-ROW-027",
+        "BSR 161",
+        "CLR-002"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Попытаться ввести 7 числовых символов в «Почтовый индекс» фактического адреса.; Design fixture: Попытаться ввести 7 числовых символов в «Почтовый индекс» фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-054",
+      "atomic_statement": "Если адрес клиента заполнен посредством запроса DaData, он раскладывается по полям блока ручного ввода.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-054.",
+      "obligation_id": "OBL-ADDR-054",
+      "observable_oracle": "Выбранный адрес раскладывается по ручным адресным полям.",
+      "planned_test_case_id": "TC-ADDR-054",
+      "source_refs": [
+        "SRC-ROW-028",
+        "BSR 324",
+        "CLR-001",
+        "CLR-002",
+        "CLR-ADDR-005"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Адрес регистрации или фактического места жительства выбран из подсказки DaData.; Action contract: Выбрать адрес клиента из подсказки DaData.; Design fixture: Выбрать адрес клиента из подсказки DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+    },
+    {
+      "atom_id": "ATOM-ADDR-055",
+      "atomic_statement": "Внутреннее заполнение модели данных `kladr` исключено из исполнимого UI scope AutoFin и проверяется отдельно.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [],
+      "coverage_status": "not-applicable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts.",
+      "obligation_id": "OBL-ADDR-055",
+      "observable_oracle": "",
+      "source_refs": [
+        "SRC-ROW-028"
+      ],
+      "state_change": null,
+      "test_intent": "Внутреннее заполнение модели данных `kladr` исключено из исполнимого UI scope AutoFin и проверяется отдельно."
+    },
+    {
+      "atom_id": "ATOM-ADDR-056",
+      "atomic_statement": "Поле «Населенный пункт» адреса регистрации обязательно, если поле «Город» не заполнено.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-056. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-056",
+      "observable_oracle": "Поле «Населенный пункт» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-056",
+      "source_refs": [
+        "SRC-ROW-008"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации, поле «Город» не заполнено.; Action contract: Оставить поле «Населенный пункт» пустым.; Design fixture: Оставить поле «Населенный пункт» пустым.; Test data: source-backed representative value"
+    },
+    {
+      "atom_id": "ATOM-ADDR-057",
+      "atomic_statement": "Поле «Город» адреса регистрации обязательно, если поле «Населенный пункт» не заполнено.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-057. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-057",
+      "observable_oracle": "Поле «Город» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-057",
+      "source_refs": [
+        "SRC-ROW-009"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации, поле «Населенный пункт» не заполнено.; Action contract: Оставить поле «Город» пустым.; Design fixture: Оставить поле «Город» пустым.; Test data: source-backed representative value"
+    },
+    {
+      "atom_id": "ATOM-ADDR-058",
+      "atomic_statement": "Поле «Дом» адреса регистрации обязательно.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-058. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-058",
+      "observable_oracle": "Поле «Дом» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-058",
+      "source_refs": [
+        "SRC-ROW-011"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации.; Action contract: Оставить поле «Дом» пустым.; Design fixture: Оставить поле «Дом» пустым.; Test data: source-backed representative value"
+    },
+    {
+      "atom_id": "ATOM-ADDR-059",
+      "atomic_statement": "Поле «Квартира» адреса регистрации обязательно, если «Клиент зарегистрирован в частном доме» = «Нет».",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-059. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-059",
+      "observable_oracle": "Поле «Квартира» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-059",
+      "source_refs": [
+        "SRC-ROW-013"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим адреса регистрации, «Клиент зарегистрирован в частном доме» = «Нет».; Action contract: Оставить поле «Квартира» пустым.; Design fixture: Оставить поле «Квартира» пустым.; Test data: source-backed representative value"
+    },
+    {
+      "atom_id": "ATOM-ADDR-060",
+      "atomic_statement": "Поле «Город» фактического адреса обязательно.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-060. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-060",
+      "observable_oracle": "Поле «Город» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-060",
+      "source_refs": [
+        "SRC-ROW-022"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим фактического адреса.; Action contract: Оставить поле «Город» пустым.; Design fixture: Оставить поле «Город» пустым.; Test data: source-backed representative value"
+    },
+    {
+      "atom_id": "ATOM-ADDR-061",
+      "atomic_statement": "Поле «Улица» фактического адреса обязательно.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-061. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-061",
+      "observable_oracle": "Поле «Улица» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-061",
+      "source_refs": [
+        "SRC-ROW-023"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим фактического адреса.; Action contract: Оставить поле «Улица» пустым.; Design fixture: Оставить поле «Улица» пустым.; Test data: source-backed representative value"
+    },
+    {
+      "atom_id": "ATOM-ADDR-062",
+      "atomic_statement": "Поле «Дом» фактического адреса обязательно.",
+      "calibration_status": "none",
+      "constraint_gap_ids": [
+        "GAP-003"
+      ],
+      "coverage_status": "testable",
+      "dictionary_refs": [],
+      "dictionary_requirements": [],
+      "execution_semantics": "direct",
+      "gap_id": "",
+      "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-062. Non-blocking constraints: GAP-003.",
+      "obligation_id": "OBL-ADDR-062",
+      "observable_oracle": "Поле «Дом» требуется к заполнению; точное empty-field сообщение не утверждено.",
+      "planned_test_case_id": "TC-ADDR-062",
+      "source_refs": [
+        "SRC-ROW-024"
+      ],
+      "state_change": null,
+      "test_intent": "Condition contract: Включен ручной режим фактического адреса.; Action contract: Оставить поле «Дом» пустым.; Design fixture: Оставить поле «Дом» пустым.; Test data: source-backed representative value"
+    }
+  ],
+  "package_id": "WP-ALL-v2",
+  "package_version": 9
+}

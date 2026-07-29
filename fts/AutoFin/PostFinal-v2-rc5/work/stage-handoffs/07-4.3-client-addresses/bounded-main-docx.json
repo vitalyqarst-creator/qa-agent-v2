@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.docx",
+  "source_sha256": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689",
+  "extraction_method": "docx-xml-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "docx-text:address-scope-heading",
+      "exact_source_text": "Адреса клиента",
+      "exact_source_text_sha256": "bc567b8911d64312fa2ea1453b9edb3498b764ee4c27a999e736b324f2f4567c"
+    }
+  ]
+}

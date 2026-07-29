@@ -1,0 +1,7 @@
+{
+  "category": "contract",
+  "error_type": "DerivationCompilationError",
+  "failed_stage": "source-contract-binding",
+  "message": "dictionary-values-missing: OBL-ADDR-004 has no compiled dictionary values",
+  "schema_version": 1
+}

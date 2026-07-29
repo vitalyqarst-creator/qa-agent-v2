@@ -1,0 +1,9 @@
+{
+  "schema_version": 2,
+  "registry": "fts/AutoFin/PostFinal-v2-rc5/scope-registry.json",
+  "ft_root": "fts/AutoFin/PostFinal-v2-rc5",
+  "scope": "4-3-client-addresses",
+  "writer_mode": "model-runtime-prose",
+  "source_evidence": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/source-evidence.md",
+  "obligations": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/atomic-obligations.json"
+}

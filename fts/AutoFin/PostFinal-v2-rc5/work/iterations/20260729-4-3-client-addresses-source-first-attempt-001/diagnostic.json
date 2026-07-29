@@ -1,0 +1,7 @@
+{
+  "category": "contract",
+  "error_type": "ScopeCompilationError",
+  "failed_stage": "source-contract-binding",
+  "message": "manifest file registry is not the exact scope source set: missing=['fts/AutoFin/PostFinal-v2-rc5/support/client-addresses-approved-clarifications-v2.md', 'fts/AutoFin/PostFinal-v2-rc5/support/client-addresses-approved-clarifications.md', 'fts/AutoFin/PostFinal-v2-rc5/support/АФБ справочники 26.06.26.md'], extra=['fts/AutoFin/PostFinal-v2-rc5/work/stage-handoffs/07-4.3-client-addresses/scope-clarification-requests.md']",
+  "schema_version": 1
+}

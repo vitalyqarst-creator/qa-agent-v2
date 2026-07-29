@@ -1,0 +1,131 @@
+ft_slug: "AutoFin/PostFinal-v2-rc5"
+scope_slug: "4-3-client-addresses"
+selected_scope_slug: "4.3-client-addresses"
+current_stage: "production-input-finalization"
+stage_status: "source-review-accepted-ready-for-finalization"
+current_round: 0
+next_skill: "ft-scope-analyzer"
+scope_mode: "manual-scope"
+candidate_scope_status: "source-first-review-accepted"
+prepared_compiler_contract_version: 3
+
+required_inputs:
+  - "work/stage-handoffs/00-source-selection/source-selection.md"
+  - "work/stage-handoffs/00-source-selection/scope-options.md"
+  - "work/stage-handoffs/00-source-selection/scope-selection-prompts.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/scope-selection-confirmation.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/prompt.scope-to-analyzer.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/scope-contract.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/scope-coverage-gaps.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/scope-clarification-requests.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-parity-check.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-row-inventory.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-row-extraction-spec.json"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-row-baseline.json"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-assertions.json"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-assertion-review.v11.json"
+  - "work/stage-handoffs/07-4.3-client-addresses/source-gate-validation.v15.json"
+  - "work/stage-handoffs/07-4.3-client-addresses/atomic-requirements-ledger.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/coverage-obligation-table.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/package-test-design-plan.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/test-design-applicability-matrix.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/dictionary-inventory.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/scope-analyzer-session-log.md"
+  - "work/stage-handoffs/07-4.3-client-addresses/agent-decision-log.md"
+  - "source/PostFinal-v2.docx"
+  - "source/PostFinal-v2.xhtml"
+  - "source/PostFinal-v2.pdf"
+  - "AGENT-NOTES.md"
+  - "work/vendor-references/dadata-reference.md"
+  - "support/client-addresses-approved-clarifications-v3.md"
+  - "support/client-addresses-approved-clarifications-v2.md"
+  - "support/client-addresses-approved-clarifications.md"
+
+latest_artifacts:
+  source_selection: "work/stage-handoffs/07-4.3-client-addresses/source-selection.scope-local.md"
+  scope_options: "work/stage-handoffs/00-source-selection/scope-options.md"
+  scope_selection_prompts: "work/stage-handoffs/00-source-selection/scope-selection-prompts.md"
+  scope_selection_confirmation: "work/stage-handoffs/07-4.3-client-addresses/scope-selection-confirmation.md"
+  active_transition_prompt: "work/stage-handoffs/07-4.3-client-addresses/prompt.scope-assertions-to-reviewer.md"
+  scope_contract: "work/stage-handoffs/07-4.3-client-addresses/scope-contract.md"
+  coverage_gaps: "work/stage-handoffs/07-4.3-client-addresses/scope-coverage-gaps.md"
+  scope_clarification_requests: "work/stage-handoffs/07-4.3-client-addresses/scope-clarification-requests.md"
+  source_parity_check: "work/stage-handoffs/07-4.3-client-addresses/source-parity-check.md"
+  source_row_inventory: "work/stage-handoffs/07-4.3-client-addresses/source-row-inventory.md"
+  source_row_extraction_spec: "work/stage-handoffs/07-4.3-client-addresses/source-row-extraction-spec.json"
+  source_row_baseline: "work/stage-handoffs/07-4.3-client-addresses/source-row-baseline.json"
+  source_assertions: "work/stage-handoffs/07-4.3-client-addresses/source-assertions.json"
+  source_assertion_review: "work/stage-handoffs/07-4.3-client-addresses/source-assertion-review.v11.json"
+  source_gate_validation: "work/stage-handoffs/07-4.3-client-addresses/source-gate-validation.v15.json"
+  atomic_requirements_ledger: "work/stage-handoffs/07-4.3-client-addresses/atomic-requirements-ledger.md"
+  coverage_obligation_table: "work/stage-handoffs/07-4.3-client-addresses/coverage-obligation-table.md"
+  package_test_design_plan: "work/stage-handoffs/07-4.3-client-addresses/package-test-design-plan.md"
+  test_design_applicability_matrix: "work/stage-handoffs/07-4.3-client-addresses/test-design-applicability-matrix.md"
+  dictionary_inventory: "work/stage-handoffs/07-4.3-client-addresses/dictionary-inventory.md"
+  production_input_finalization_blocker: "work/stage-handoffs/07-4.3-client-addresses/production-input-finalization.blocked.json"
+  bounded_boundary_exclusions: "work/stage-handoffs/07-4.3-client-addresses/bounded-boundary-exclusions.xhtml.json"
+  bounded_main_docx: "work/stage-handoffs/07-4.3-client-addresses/bounded-main-docx.json"
+  bounded_main_pdf: "work/stage-handoffs/07-4.3-client-addresses/bounded-main-pdf.json"
+  session_log: "work/stage-handoffs/07-4.3-client-addresses/scope-analyzer-session-log.md"
+  scope_analyzer_session_log: "work/stage-handoffs/07-4.3-client-addresses/scope-analyzer-session-log.md"
+  decision_log: "work/stage-handoffs/07-4.3-client-addresses/agent-decision-log.md"
+  main_ft_docx: "source/PostFinal-v2.docx"
+  main_ft_xhtml: "source/PostFinal-v2.xhtml"
+  structural_cross_check_pdf: "source/PostFinal-v2.pdf"
+  package_notes: "AGENT-NOTES.md"
+  dadata_vendor_reference: "work/vendor-references/dadata-reference.md"
+  approved_address_clarifications_v3: "support/client-addresses-approved-clarifications-v3.md"
+
+source_context:
+  missing_required_sources: "none"
+  resolved_required_sources: "work/vendor-references/dadata-reference.md"
+  resolved_clarifications: "CLR-001; CLR-002"
+  support_candidates: "support/client-addresses-approved-clarifications-v3.md; support/client-addresses-approved-clarifications-v2.md; support/client-addresses-approved-clarifications.md"
+
+scope_boundary:
+  section: "4.3"
+  source_rows: "33-58"
+  requirement_ranges: "BSR 115-161"
+  cross_references: "BSR 324"
+
+source_row_completeness:
+  candidate_count: 28
+  mapped_xhtml_source_row_count: 28
+  non_xhtml_source_row_count: 0
+
+source_assertion_manifest:
+  status: "accepted"
+  path: "work/stage-handoffs/07-4.3-client-addresses/source-assertions.json"
+  manifest_digest: "6455e7cc961a4db024123906a3f2fef5e56ba4f3ca543c8ae25735f06e928538"
+  source_gate_receipt: "work/stage-handoffs/07-4.3-client-addresses/source-gate-validation.v15.json"
+
+source_assertion_review:
+  status: "accepted"
+  path: "work/stage-handoffs/07-4.3-client-addresses/source-assertion-review.v11.json"
+  summary_path: "work/stage-handoffs/07-4.3-client-addresses/source-assertion-review-summary.v11.json"
+  manifest_digest: "6455e7cc961a4db024123906a3f2fef5e56ba4f3ca543c8ae25735f06e928538"
+  execution_route: "one-shot"
+  model_session_count: 1
+  review_shard_count: 1
+
+coverage_gaps:
+  blocking: 0
+  non_blocking: 1
+  resolved_ids: "GAP-001; GAP-002"
+  blocking_ids: "none"
+  non_blocking_ids: "GAP-003"
+
+open_questions:
+  - "CLR-003: provide exact UI oracle for manual address validation errors if required."
+
+blocking_reasons: []
+
+accepted_risks: []
+
+downstream_route:
+  next_mode: "production-input-finalization"
+  writer_allowed: false
+  reviewer_allowed: false
+  source_assertion_review_allowed: false
+  production_input_finalization_allowed: true
+  required_before_next_attempt: "Run prepared compiler release with GAP-003 preserved as calibration-pending where exact UI oracle is absent."

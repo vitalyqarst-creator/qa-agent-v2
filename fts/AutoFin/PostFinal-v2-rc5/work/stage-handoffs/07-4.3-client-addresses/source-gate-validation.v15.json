@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "started_at_utc": "2026-07-29T15:37:27.025328Z",
+  "finished_at_utc": "2026-07-29T15:37:28.305342Z",
+  "status": "passed",
+  "validation_invocation_count": 1,
+  "manifest_digest": "6455e7cc961a4db024123906a3f2fef5e56ba4f3ca543c8ae25735f06e928538",
+  "source_row_count": 28,
+  "candidate_count": 28,
+  "assertion_count": 62,
+  "authenticated_testable_obligation_count": 59,
+  "checks": [
+    "assertion-atom-obligation-chain",
+    "coverage-gap-chain-binding",
+    "manifest-v4-shape-and-source-fragments",
+    "source-row-baseline-bijection",
+    "source-selection-exact-registry"
+  ]
+}

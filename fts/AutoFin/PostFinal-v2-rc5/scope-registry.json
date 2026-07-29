@@ -1,0 +1,734 @@
+{
+  "version": 1,
+  "scopes": [
+    {
+      "scope_id": "4-1-4-2-menu-filters-and-list-fields",
+      "tc_prefix": "MENULIST",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 58,
+            "end": 72
+          },
+          {
+            "role": "context",
+            "start": 77,
+            "end": 77
+          },
+          {
+            "role": "context",
+            "start": 82,
+            "end": 82
+          },
+          {
+            "role": "testable",
+            "start": 85,
+            "end": 86
+          }
+        ],
+        "cross_references": [
+          {
+            "reference_id": "table-1-header",
+            "xpath": "/*/*[2]/*[78]/*[2]"
+          },
+          {
+            "reference_id": "table-1-filter-last-name",
+            "xpath": "/*/*[2]/*[78]/*[3]"
+          },
+          {
+            "reference_id": "table-1-filter-first-name",
+            "xpath": "/*/*[2]/*[78]/*[4]"
+          },
+          {
+            "reference_id": "table-1-filter-middle-name",
+            "xpath": "/*/*[2]/*[78]/*[5]"
+          },
+          {
+            "reference_id": "table-1-filter-birth-date",
+            "xpath": "/*/*[2]/*[78]/*[6]"
+          },
+          {
+            "reference_id": "table-1-filter-mobile-phone",
+            "xpath": "/*/*[2]/*[78]/*[7]"
+          },
+          {
+            "reference_id": "table-1-filter-passport-series",
+            "xpath": "/*/*[2]/*[78]/*[8]"
+          },
+          {
+            "reference_id": "table-1-filter-passport-number",
+            "xpath": "/*/*[2]/*[78]/*[9]"
+          },
+          {
+            "reference_id": "table-1-filter-vin",
+            "xpath": "/*/*[2]/*[78]/*[10]"
+          },
+          {
+            "reference_id": "table-1-filter-application-number",
+            "xpath": "/*/*[2]/*[78]/*[11]"
+          },
+          {
+            "reference_id": "table-1-filter-application-created-date",
+            "xpath": "/*/*[2]/*[78]/*[12]"
+          },
+          {
+            "reference_id": "table-1-filter-application-status",
+            "xpath": "/*/*[2]/*[78]/*[13]"
+          },
+          {
+            "reference_id": "table-1-filter-sales-point",
+            "xpath": "/*/*[2]/*[78]/*[14]"
+          },
+          {
+            "reference_id": "table-1-filter-responsible",
+            "xpath": "/*/*[2]/*[78]/*[15]"
+          },
+          {
+            "reference_id": "table-2-header",
+            "xpath": "/*/*[2]/*[83]/*[2]"
+          },
+          {
+            "reference_id": "table-2-col-application-number",
+            "xpath": "/*/*[2]/*[83]/*[3]"
+          },
+          {
+            "reference_id": "table-2-col-application-status",
+            "xpath": "/*/*[2]/*[83]/*[4]"
+          },
+          {
+            "reference_id": "table-2-col-created-date",
+            "xpath": "/*/*[2]/*[83]/*[5]"
+          },
+          {
+            "reference_id": "table-2-col-client",
+            "xpath": "/*/*[2]/*[83]/*[6]"
+          },
+          {
+            "reference_id": "table-2-col-client-birth-date",
+            "xpath": "/*/*[2]/*[83]/*[7]"
+          },
+          {
+            "reference_id": "table-2-col-client-mobile-phone",
+            "xpath": "/*/*[2]/*[83]/*[8]"
+          },
+          {
+            "reference_id": "table-2-col-client-passport",
+            "xpath": "/*/*[2]/*[83]/*[9]"
+          },
+          {
+            "reference_id": "table-2-col-client-id",
+            "xpath": "/*/*[2]/*[83]/*[10]"
+          },
+          {
+            "reference_id": "table-2-col-product",
+            "xpath": "/*/*[2]/*[83]/*[11]"
+          },
+          {
+            "reference_id": "table-2-col-sales-office",
+            "xpath": "/*/*[2]/*[83]/*[12]"
+          },
+          {
+            "reference_id": "table-2-col-vin",
+            "xpath": "/*/*[2]/*[83]/*[13]"
+          },
+          {
+            "reference_id": "table-2-col-responsible-km",
+            "xpath": "/*/*[2]/*[83]/*[14]"
+          }
+        ]
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 1,
+            "end": 30
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/PAB_справочники_выгрузка_v2.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-MENU-LIST-001",
+        "GAP-MENU-LIST-002",
+        "GAP-MENU-LIST-003"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-client-addresses",
+      "tc_prefix": "ADDR",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 2,
+            "end": 2
+          },
+          {
+            "role": "testable",
+            "start": 33,
+            "end": 58
+          }
+        ],
+        "cross_references": [
+          {
+            "reference_id": "BSR-324-address-decomposition",
+            "xpath": "/*/*[2]/*[119]/*[1]"
+          }
+        ]
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 115,
+            "end": 161
+          },
+          {
+            "prefix": "BSR",
+            "start": 324,
+            "end": 324
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/client-addresses-approved-clarifications.md",
+        "support/client-addresses-approved-clarifications-v2.md",
+        "support/client-addresses-approved-clarifications-v3.md",
+        "support/АФБ справочники 26.06.26.md",
+        "work/vendor-references/dadata-reference.md",
+        "work/stage-handoffs/07-4.3-client-addresses/scope-clarification-requests.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-003"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-client-contacts",
+      "tc_prefix": "CONTACT",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 59,
+            "end": 59
+          },
+          {
+            "role": "testable",
+            "start": 60,
+            "end": 65
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 162,
+            "end": 172
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/PAB_справочники_выгрузка_v2.md",
+        "work/stage-handoffs/08-4.3-client-contacts/client-contacts-ui-product-clarification.md",
+        "work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/per-topic/email.md",
+        "work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/per-topic/phone-type.md",
+        "work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/per-topic/phone.md",
+        "work/ui-automation-prep/4-3-client-contacts-ui-calibration/evidence/per-topic/repeater.md",
+        "work/ui-automation-prep/4-3-client-contacts-ui-calibration/ui-evidence-index.md",
+        "work/ui-automation-prep/4-3-client-contacts-ui-calibration/ui-validation-report.md",
+        "work/ui-automation-prep/4-3-client-contacts-repeater-phone-ui-calibration/evidence/per-gap/GAP-CONTACT-PHONE-NUMBER-OPTIONALNESS-UI-001.md",
+        "work/ui-automation-prep/4-3-client-contacts-repeater-phone-ui-calibration/evidence/per-gap/GAP-CONTACT-PHONE-TYPE-OPTIONALNESS-UI-001.md",
+        "work/ui-automation-prep/4-3-client-contacts-repeater-phone-ui-calibration/evidence/per-gap/GAP-CONTACT-REPEATER-PHONE-FORMAT-UI-001.md",
+        "work/ui-automation-prep/4-3-client-contacts-repeater-phone-ui-calibration/ui-evidence-index.md",
+        "work/ui-automation-prep/4-3-client-contacts-repeater-phone-ui-calibration/ui-validation-report.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-CONTACT-PHONE-MASK-PRODUCT-CLARIFICATION-001",
+        "GAP-CONTACT-DATA-TYPES-OUT-OF-PROJECT-001"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-contact-persons",
+      "tc_prefix": "CP",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 2,
+            "end": 2
+          },
+          {
+            "role": "testable",
+            "start": 66,
+            "end": 74
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 173,
+            "end": 189
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/АФБ справочники 26.06.26.md",
+        "work/stage-handoffs/09-4.3-contact-persons/scope-clarification-requests.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-001",
+        "GAP-002",
+        "GAP-003"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-application-documents-and-recognition",
+      "tc_prefix": "DOCREC",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 2,
+            "end": 2
+          },
+          {
+            "role": "testable",
+            "start": 82,
+            "end": 95
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 206,
+            "end": 240
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "mockups/Рисунок 4 Макет всплывающего окна Распознание документов.jpg",
+        "support/application-card-personal-data-and-recognition-approved-clarifications.md",
+        "support/Анкета клиента.docx",
+        "support/Анкета клиента.pdf",
+        "support/АФБ справочники 26.06.26.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-personal-data",
+      "tc_prefix": "PERSON",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 5,
+            "end": 5
+          },
+          {
+            "role": "testable",
+            "start": 6,
+            "end": 15
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 47,
+            "end": 77
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/PAB_справочники_выгрузка_v2.md",
+        "support/application-card-personal-data-and-recognition-approved-clarifications.md",
+        "work/vendor-references/dadata-reference.md",
+        "work/stage-handoffs/04-4.3-personal-data/personal-data-user-clarifications.md",
+        "work/stage-handoffs/04-4.3-personal-data/personal-data-fio-gender-fixtures.json"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-PERSON-REQUIREDNESS-TRIGGER-001",
+        "GAP-PERSON-DADATA-FIO-SUGGESTION-LIST-CALIBRATION-001",
+        "GAP-PERSON-DADATA-FIO-FIXTURE-001",
+        "GAP-PERSON-FIO-GENDER-FIXTURE-001",
+        "GAP-PERSON-ABS-ID-FIXTURE-001",
+        "GAP-004",
+        "GAP-007",
+        "GAP-006"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-current-passport-data",
+      "tc_prefix": "PASSCUR",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 17,
+            "end": 17
+          },
+          {
+            "role": "testable",
+            "start": 18,
+            "end": 26
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 84,
+            "end": 104
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/passport-current-and-previous-approved-clarifications.md",
+        "work/stage-handoffs/12-4.3-current-passport-data/scope-clarification-requests.md",
+        "work/vendor-references/dadata-reference.md",
+        "work/vendor-references/dadata-fms-unit-reference.md",
+        "work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.response.json",
+        "work/vendor-references/dadata-fixtures/FX-DADATA-FMS-POS-001/FX-DADATA-FMS-POS-001.verification.json"
+      ],
+      "fixture_ids": [
+        "FX-DADATA-FMS-POS-001"
+      ],
+      "gap_ids": [
+        "GAP-PASS-003",
+        "GAP-PASS-CUR-001",
+        "GAP-PASS-CUR-002",
+        "GAP-PASS-CUR-003",
+        "GAP-PASS-CUR-004"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-previous-passports",
+      "tc_prefix": "PASSPREV",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "testable",
+            "start": 27,
+            "end": 32
+          }
+        ],
+        "cross_references": [
+          {
+            "reference_id": "current-passport-changed-flag",
+            "xpath": "/*/*[2]/*[116]/*[26]"
+          }
+        ]
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 103,
+            "end": 104
+          },
+          {
+            "prefix": "BSR",
+            "start": 105,
+            "end": 114
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/passport-current-and-previous-approved-clarifications.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-PASS-PREV-001",
+        "GAP-PASS-PREV-002"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-2-menu-actions-and-responsible-manager",
+      "tc_prefix": "MENU",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[88]",
+        "row_ranges": [
+          {
+            "role": "testable",
+            "start": 2,
+            "end": 9
+          }
+        ],
+        "cross_references": [
+          {
+            "reference_id": "responsible-km-row",
+            "xpath": "/*/*[2]/*[83]/*[14]"
+          },
+          {
+            "reference_id": "BSR-41",
+            "xpath": "/*/*[2]/*[90]/*[1]"
+          },
+          {
+            "reference_id": "BSR-42",
+            "xpath": "/*/*[2]/*[90]/*[2]"
+          }
+        ]
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 31,
+            "end": 42
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-additional-client-info",
+      "tc_prefix": "ADDINFO",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 75,
+            "end": 75
+          },
+          {
+            "role": "testable",
+            "start": 76,
+            "end": 81
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 190,
+            "end": 205
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/PAB_справочники_выгрузка_v2.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-ADDINFO-INN-INTEGRATION-001",
+        "GAP-ADDINFO-REQUIREDNESS-TRIGGER-001"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-3-employment-info",
+      "tc_prefix": "EMP",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[116]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 105,
+            "end": 106
+          },
+          {
+            "role": "testable",
+            "start": 107,
+            "end": 129
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 263,
+            "end": 309
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md",
+        "support/PAB_справочники_выгрузка_v2.md",
+        "support/employment-main-work-approved-clarifications.md",
+        "work/vendor-references/dadata-reference.md",
+        "work/vendor-references/dadata-fixture-catalog.md"
+      ],
+      "fixture_ids": [
+        "FX-DADATA-PARTY-ACTIVE-001",
+        "FX-DADATA-PARTY-LIQUIDATED-001"
+      ],
+      "gap_ids": [
+        "GAP-EMP-REQUIREDNESS-TRIGGER-001",
+        "GAP-EMP-GOSUSLUGI-INTEGRATION-001",
+        "GAP-EMP-DOCUMENT-ARCHIVE-001"
+      ],
+      "execution_profile": "standard-production"
+    },
+    {
+      "scope_id": "4-5-universal-application-card-common-actions",
+      "tc_prefix": "UACC",
+      "source_set": {
+        "docx": "source/PostFinal-v2.docx",
+        "xhtml": "source/PostFinal-v2.xhtml",
+        "pdf": "source/PostFinal-v2.pdf"
+      },
+      "boundary": {
+        "container_xpath": "/*/*[2]/*[134]",
+        "row_ranges": [
+          {
+            "role": "context",
+            "start": 1,
+            "end": 2
+          },
+          {
+            "role": "testable",
+            "start": 3,
+            "end": 3
+          }
+        ],
+        "cross_references": []
+      },
+      "requirement_guard": {
+        "allowed_ranges": [
+          {
+            "prefix": "BSR",
+            "start": 326,
+            "end": 326
+          },
+          {
+            "prefix": "BSR",
+            "start": 329,
+            "end": 329
+          }
+        ],
+        "excluded_codes": []
+      },
+      "reference_paths": [
+        "AGENT-NOTES.md"
+      ],
+      "fixture_ids": [],
+      "gap_ids": [
+        "GAP-001",
+        "GAP-002"
+      ],
+      "execution_profile": "standard-production"
+    }
+  ]
+}

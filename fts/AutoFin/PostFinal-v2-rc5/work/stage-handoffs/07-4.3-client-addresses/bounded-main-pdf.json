@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.pdf",
+  "source_sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218",
+  "extraction_method": "pdf-page-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "page:20",
+      "exact_source_text": "Адреса клиента",
+      "exact_source_text_sha256": "bc567b8911d64312fa2ea1453b9edb3498b764ee4c27a999e736b324f2f4567c"
+    }
+  ]
+}

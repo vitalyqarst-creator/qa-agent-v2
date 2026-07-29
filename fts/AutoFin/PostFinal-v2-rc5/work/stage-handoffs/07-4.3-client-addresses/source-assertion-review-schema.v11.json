@@ -1,0 +1,508 @@
+{
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [
+        6
+      ]
+    },
+    "manifest_digest": {
+      "type": "string",
+      "enum": [
+        "6455e7cc961a4db024123906a3f2fef5e56ba4f3ca543c8ae25735f06e928538"
+      ]
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "changes-required"
+      ]
+    },
+    "assertion_reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "assertion_id": {
+            "type": "string",
+            "enum": [
+              "ASSERT-ADDR-001",
+              "ASSERT-ADDR-002",
+              "ASSERT-ADDR-003",
+              "ASSERT-ADDR-004",
+              "ASSERT-ADDR-005",
+              "ASSERT-ADDR-006",
+              "ASSERT-ADDR-007",
+              "ASSERT-ADDR-008",
+              "ASSERT-ADDR-009",
+              "ASSERT-ADDR-010",
+              "ASSERT-ADDR-011",
+              "ASSERT-ADDR-012",
+              "ASSERT-ADDR-013",
+              "ASSERT-ADDR-014",
+              "ASSERT-ADDR-015",
+              "ASSERT-ADDR-016",
+              "ASSERT-ADDR-017",
+              "ASSERT-ADDR-018",
+              "ASSERT-ADDR-019",
+              "ASSERT-ADDR-020",
+              "ASSERT-ADDR-021",
+              "ASSERT-ADDR-022",
+              "ASSERT-ADDR-023",
+              "ASSERT-ADDR-024",
+              "ASSERT-ADDR-025",
+              "ASSERT-ADDR-026",
+              "ASSERT-ADDR-027",
+              "ASSERT-ADDR-028",
+              "ASSERT-ADDR-029",
+              "ASSERT-ADDR-030",
+              "ASSERT-ADDR-031",
+              "ASSERT-ADDR-032",
+              "ASSERT-ADDR-033",
+              "ASSERT-ADDR-034",
+              "ASSERT-ADDR-035",
+              "ASSERT-ADDR-036",
+              "ASSERT-ADDR-037",
+              "ASSERT-ADDR-038",
+              "ASSERT-ADDR-039",
+              "ASSERT-ADDR-040",
+              "ASSERT-ADDR-041",
+              "ASSERT-ADDR-042",
+              "ASSERT-ADDR-043",
+              "ASSERT-ADDR-044",
+              "ASSERT-ADDR-045",
+              "ASSERT-ADDR-046",
+              "ASSERT-ADDR-047",
+              "ASSERT-ADDR-048",
+              "ASSERT-ADDR-049",
+              "ASSERT-ADDR-050",
+              "ASSERT-ADDR-051",
+              "ASSERT-ADDR-052",
+              "ASSERT-ADDR-053",
+              "ASSERT-ADDR-054",
+              "ASSERT-ADDR-055",
+              "ASSERT-ADDR-056",
+              "ASSERT-ADDR-057",
+              "ASSERT-ADDR-058",
+              "ASSERT-ADDR-059",
+              "ASSERT-ADDR-060",
+              "ASSERT-ADDR-061",
+              "ASSERT-ADDR-062"
+            ]
+          },
+          "approved_polarity": {
+            "type": "string",
+            "enum": [
+              "negative",
+              "neutral",
+              "positive"
+            ]
+          },
+          "approved_semantic_disposition": {
+            "type": "string",
+            "enum": [
+              "ambiguous",
+              "not-applicable",
+              "testable"
+            ]
+          },
+          "approved_execution_readiness": {
+            "type": "string",
+            "enum": [
+              "dependency-blocked",
+              "not-applicable",
+              "ready"
+            ]
+          },
+          "approved_risk": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "low",
+              "medium"
+            ]
+          },
+          "dimension_verdicts": {
+            "type": "object",
+            "properties": {
+              "source-binding": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "canonical-statement": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "requirement-codes": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "polarity": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "semantic-disposition": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "risk": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "condition": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "action": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "oracle": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "gap-routing": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "execution-readiness": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "execution-dependencies": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              },
+              "clarification-provenance": {
+                "type": "string",
+                "enum": [
+                  "verified",
+                  "incorrect"
+                ]
+              }
+            },
+            "required": [
+              "source-binding",
+              "canonical-statement",
+              "requirement-codes",
+              "polarity",
+              "semantic-disposition",
+              "risk",
+              "condition",
+              "action",
+              "oracle",
+              "gap-routing",
+              "execution-readiness",
+              "execution-dependencies",
+              "clarification-provenance"
+            ],
+            "additionalProperties": false
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "incorrect"
+            ]
+          },
+          "required_change": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "assertion_id",
+          "approved_polarity",
+          "approved_semantic_disposition",
+          "approved_execution_readiness",
+          "approved_risk",
+          "dimension_verdicts",
+          "verdict",
+          "required_change",
+          "note"
+        ],
+        "additionalProperties": false
+      },
+      "minItems": 62,
+      "maxItems": 62
+    },
+    "source_inventory_review": {
+      "type": "object",
+      "properties": {
+        "extraction_spec_digest": {
+          "type": "string",
+          "enum": [
+            "0739b90634d3883e608fa355f563b039e45d0314fb756d1debfc92d06b79a32a"
+          ]
+        },
+        "baseline_digest": {
+          "type": "string",
+          "enum": [
+            "942c189ff4888b3648aadd9bca3fc55fd71dcef238fe6f5aacd1396d10095899"
+          ]
+        },
+        "candidate_count": {
+          "type": "integer",
+          "enum": [
+            28
+          ]
+        },
+        "mapped_source_row_count": {
+          "type": "integer",
+          "enum": [
+            28
+          ]
+        },
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "incorrect"
+          ]
+        },
+        "required_change": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "extraction_spec_digest",
+        "baseline_digest",
+        "candidate_count",
+        "mapped_source_row_count",
+        "verdict",
+        "required_change",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "scope_boundary_review": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "incorrect"
+          ]
+        },
+        "checked_context_classes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ancestor-and-section-preamble",
+              "cross-referenced-constraints",
+              "document-global-constraints"
+            ]
+          },
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "reviewed_manifest_contexts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "context_class": {
+                "type": "string",
+                "enum": [
+                  "ancestor-and-section-preamble",
+                  "cross-referenced-constraints",
+                  "document-global-constraints"
+                ]
+              },
+              "source_row_id": {
+                "type": "string",
+                "enum": [
+                  "SRC-ROW-001",
+                  "SRC-ROW-028"
+                ]
+              }
+            },
+            "required": [
+              "context_class",
+              "source_row_id"
+            ],
+            "additionalProperties": false
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "excluded_contexts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "context_class": {
+                "type": "string",
+                "enum": [
+                  "ancestor-and-section-preamble",
+                  "cross-referenced-constraints",
+                  "document-global-constraints"
+                ]
+              },
+              "source_path": {
+                "type": "string",
+                "enum": [
+                  "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.xhtml"
+                ]
+              },
+              "source_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "source_locator": {
+                "type": "string"
+              },
+              "exact_source_text": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "context_class",
+              "source_path",
+              "source_sha256",
+              "source_locator",
+              "exact_source_text",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "absent_contexts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "context_class": {
+                "type": "string",
+                "enum": [
+                  "cross-referenced-constraints"
+                ]
+              },
+              "basis_source_row_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "SRC-ROW-001",
+                    "SRC-ROW-002",
+                    "SRC-ROW-003",
+                    "SRC-ROW-004",
+                    "SRC-ROW-005",
+                    "SRC-ROW-006",
+                    "SRC-ROW-007",
+                    "SRC-ROW-008",
+                    "SRC-ROW-009",
+                    "SRC-ROW-010",
+                    "SRC-ROW-011",
+                    "SRC-ROW-012",
+                    "SRC-ROW-013",
+                    "SRC-ROW-014",
+                    "SRC-ROW-015",
+                    "SRC-ROW-016",
+                    "SRC-ROW-017",
+                    "SRC-ROW-018",
+                    "SRC-ROW-019",
+                    "SRC-ROW-020",
+                    "SRC-ROW-021",
+                    "SRC-ROW-022",
+                    "SRC-ROW-023",
+                    "SRC-ROW-024",
+                    "SRC-ROW-025",
+                    "SRC-ROW-026",
+                    "SRC-ROW-027",
+                    "SRC-ROW-028"
+                  ]
+                },
+                "minItems": 1
+              },
+              "explanation": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "context_class",
+              "basis_source_row_ids",
+              "explanation"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 1
+        },
+        "required_change": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "checked_context_classes",
+        "reviewed_manifest_contexts",
+        "excluded_contexts",
+        "absent_contexts",
+        "required_change",
+        "note"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "version",
+    "manifest_digest",
+    "decision",
+    "assertion_reviews",
+    "source_inventory_review",
+    "scope_boundary_review"
+  ],
+  "additionalProperties": false
+}

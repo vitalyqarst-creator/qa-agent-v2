@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "scope_slug": "4-3-client-addresses",
+  "selected_xhtml": {
+    "relative_path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.xhtml",
+    "sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93"
+  },
+  "namespaces": {
+    "xhtml": "http://www.w3.org/1999/xhtml"
+  },
+  "regions": [
+    {
+      "region_id": "4-3-client-addresses-context-2-2",
+      "source_context_class": "ancestor-and-section-preamble",
+      "selector": {
+        "kind": "contiguous-sibling-range",
+        "start_xpath": "/*/*[2]/*[116]/*[2]",
+        "end_xpath": "/*/*[2]/*[116]/*[2]",
+        "include_start": true,
+        "include_end": true
+      }
+    },
+    {
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "source_context_class": "scope-local",
+      "selector": {
+        "kind": "contiguous-sibling-range",
+        "start_xpath": "/*/*[2]/*[116]/*[33]",
+        "end_xpath": "/*/*[2]/*[116]/*[58]",
+        "include_start": true,
+        "include_end": true
+      }
+    },
+    {
+      "region_id": "4-3-client-addresses-xref-BSR-324-address-decomposition",
+      "source_context_class": "cross-referenced-constraints",
+      "selector": {
+        "kind": "contiguous-sibling-range",
+        "start_xpath": "/*/*[2]/*[119]/*[1]",
+        "end_xpath": "/*/*[2]/*[119]/*[1]",
+        "include_start": true,
+        "include_end": true
+      }
+    }
+  ]
+}

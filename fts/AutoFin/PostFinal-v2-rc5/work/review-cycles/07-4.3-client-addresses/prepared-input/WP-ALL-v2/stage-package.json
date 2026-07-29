@@ -1,0 +1,69 @@
+{
+  "created_at": "2026-07-29T15:41:15.798267+00:00",
+  "execution_profile": "standard-required",
+  "fallback_policy": "targeted-only",
+  "forbidden_evidence_roots": [
+    "fts/AutoFin/PostFinal-v2-rc5/test-cases",
+    "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles"
+  ],
+  "ft_slug": "PostFinal-v2-rc5",
+  "input_fingerprint": "e9a028ae3a5ac343d4d5d59814b619cec6fd6c2bf75184131eb9a3c977e98d30",
+  "package_artifacts": [
+    {
+      "bytes": 277048,
+      "kind": "source-evidence",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/source-evidence.md",
+      "sha256": "c013d3113b899afd4502a13a4191aa39517728236d0ccfc4400fd7948dc37ff2"
+    },
+    {
+      "bytes": 87155,
+      "kind": "atomic-obligations",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/atomic-obligations.json",
+      "sha256": "a73b3ccc09ab8636db259fc7c7640b482c5db20deefa71a1307a05c008d9dda9"
+    },
+    {
+      "bytes": 1415,
+      "kind": "stage-instructions",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/stage-instructions.md",
+      "sha256": "0c73952925c4e5140d30ae75f9f203b72cd3c2fc1d9bf1a36d4e6a9fdb911f92"
+    }
+  ],
+  "package_digest": "e13eacf38d4592a1088527bdad4781a279be24ad90f4c9653ee105a07f67be51",
+  "package_id": "WP-ALL-v2",
+  "package_version": 9,
+  "release_status": {
+    "blocking_gap_ids": [],
+    "contract": "prepared-package-release-status-v1",
+    "excluded_execution_obligation_ids": [],
+    "execution_dependency_registry": [],
+    "output_mode": "release",
+    "release_blocking_finding_codes": [],
+    "release_eligible": true,
+    "unsigned_status": "none"
+  },
+  "scope_slug": "4-3-client-addresses",
+  "section_id": "4.3",
+  "source_registry": [
+    {
+      "locator": "pinned by source-selection.scope-local.md",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.docx",
+      "role": "source-of-truth",
+      "sha256": "36f5bb498cab45072c01e78651fa041bcdee193cdd84ae03cf2b021fed591689"
+    },
+    {
+      "locator": "pinned by source-selection.scope-local.md",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.xhtml",
+      "role": "machine-readable",
+      "sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93"
+    },
+    {
+      "locator": "pinned by source-selection.scope-local.md",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.pdf",
+      "role": "structural-cross-check",
+      "sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218"
+    }
+  ],
+  "unsupported_dimensions": [
+    "integration-persistence"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "canonical_publication": "not-performed",
+  "diagnostic": "fts/AutoFin/PostFinal-v2-rc5/work/iterations/20260729-4-3-client-addresses-source-first-attempt-002/diagnostic.json",
+  "failed_stage": "source-contract-binding",
+  "mode": "source-qualified-immutable",
+  "promotion": "out-of-scope",
+  "schema_version": 1,
+  "stage_timings_ms": {
+    "input-resolution": 9,
+    "scope-compilation": 350,
+    "source-contract-binding": 1127
+  },
+  "status": "blocked-contract",
+  "total_duration_ms": 1515
+}

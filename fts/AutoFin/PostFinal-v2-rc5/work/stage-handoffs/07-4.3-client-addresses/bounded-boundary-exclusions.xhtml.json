@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "source_path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.xhtml",
+  "source_sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93",
+  "extraction_method": "utf8-literal-fragments-v1",
+  "fragments": [
+    {
+      "source_locator": "xhtml-literal:section-5-document-global-constraints",
+      "exact_source_text": "Ограничения по типам данных",
+      "exact_source_text_sha256": "e6853de03b0dca6232391eacd3a550dfc05a9dc97c55968544f75610d1479a17"
+    }
+  ]
+}

@@ -1,0 +1,264 @@
+{
+  "version": 1,
+  "scope_slug": "4-3-client-addresses",
+  "selected_xhtml": {
+    "relative_path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.xhtml",
+    "sha256": "602e9f7215e72128815c0e185807195533f92e7ab5f615d979ef083f302cbb93"
+  },
+  "extraction_spec_sha256": "0739b90634d3883e608fa355f563b039e45d0314fb756d1debfc92d06b79a32a",
+  "candidate_set_sha256": "947af0703cf00ffa5e469c13463dea18866578b96a624c4da63a21a26870ab6e",
+  "candidates": [
+    {
+      "candidate_id": "SRC-CAND-54430489fc836ba75104ee38",
+      "candidate_hash": "54430489fc836ba75104ee38405d111b539f888e5e1e266997c7f316b74dea77",
+      "region_id": "4-3-client-addresses-context-2-2",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[2]",
+      "bounded_source_text": "Название О Р Тип ввода поля Тип значения Примечание",
+      "source_context_class": "ancestor-and-section-preamble"
+    },
+    {
+      "candidate_id": "SRC-CAND-0beff0aed96b23e07adc4e43",
+      "candidate_hash": "0beff0aed96b23e07adc4e437b92587f0f64f6ba645ba5273d3c57ad4949fb71",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[33]",
+      "bounded_source_text": "Блок «Адреса клиента»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-3cffed1c0e0334040a6b7617",
+      "candidate_hash": "3cffed1c0e0334040a6b761769d9223aa5c9ed39b503bdc7032fcf76bdf14b4c",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[34]",
+      "bounded_source_text": "Адрес регистрации Да, если признак «Ввести вручную»= «Нет» Да, если признак «Ввести вручную»= «Нет» Поле ввода Текст Строка BSR 115. Видимость-всегда. BSR 116. Интеграция с DaData. BSR 117. Правило: обязательно должн ы быть введен ы регион и номер дома. Если в адресе не указана квартира, поле подсвечивается красным и отображается подсказка: «Укажите номер квартиры или поставьте отметку о проживании в частном доме». BSR 118. Если в DaData не найден адрес , то отображается подсказка : « Некорректно указан адрес ». BSR 119. Если адрес найден, то он раскладывается по полям в блоке Ручного ввода. BSR 120. При ручном заполнении поле автоматически заполняется значениями из полей «Почтовый индекс» + «Регион» + «Район» (при наличии) + «Населенный пункт» (при наличии) + «Город» + «Улица» + «Дом» + «Корпус» (при наличии) + «Квартира» (при наличии).",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-a2c102921eef093eb983373e",
+      "candidate_hash": "a2c102921eef093eb983373efdf58a1d86d2beeb2183cebe307e5e36f6a8aa71",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[35]",
+      "bounded_source_text": "Ввести вручную Нет Да Переключатель Логическое Да/Нет BSR 121. Видимость-всегда. BSR 122. Значение по умолчанию «Нет»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-5b74762197c1cfebdc0c8231",
+      "candidate_hash": "5b74762197c1cfebdc0c823180a3c016ee110aa93d8781c805cb325459361738",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[36]",
+      "bounded_source_text": "Почтовый индекс Нет Да Поле ввода Текст Строка BSR 123. Видимость: Да, если признак «Ввести вручную»= «Да». BSR 124. Ограничение на формат: только 6 числовых символов.",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-c6dda28d88dfd108020f5c4d",
+      "candidate_hash": "c6dda28d88dfd108020f5c4d74d7689243e9b04d07cac143b7c66879d9f4a31b",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[37]",
+      "bounded_source_text": "Регион Да Да Поле ввода Текст Список BSR 125. Видимость: Да, если признак «Ввести вручную»= «Да» По справочнику регионов",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-a04cbadbb5ea81a54829d594",
+      "candidate_hash": "a04cbadbb5ea81a54829d594d534c6b7c500df3b40f0cfae7bf5378f3d36fe17",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[38]",
+      "bounded_source_text": "Район Нет Да Поле ввода Текст Строка BSR 126. Видимость: Да, если признак «Ввести вручную»= «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-9b0ff11b034754b649a16fc2",
+      "candidate_hash": "9b0ff11b034754b649a16fc228be42ecae11ed2b4ee7b0ddad145f58b1f0f11d",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[39]",
+      "bounded_source_text": "Населенный пункт Да, если не заполнен о поле «Город» Да Поле ввода Текст Строка BSR 127. Видимость: Да, если признак «Ввести вручную»= «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-3c4658371998b0b837ca0aec",
+      "candidate_hash": "3c4658371998b0b837ca0aec11252fb67233a23289c99b4defada63887a8b2b8",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[40]",
+      "bounded_source_text": "Город Да, если не заполнено поле «Населенный пункт» Да Поле ввода Текст Строка BSR 128. Видимость: Да, если признак «Ввести вручную»= «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-89f85280eb0e735dd282bc3b",
+      "candidate_hash": "89f85280eb0e735dd282bc3bc82674d91a8e06767c1fce22ce44f4a62eceab6d",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[41]",
+      "bounded_source_text": "Улица Нет Да Поле ввода Текст Строка BSR 129. Видимость: Да, если признак «Ввести вручную»= «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-424e6e9d552bb2119af05b36",
+      "candidate_hash": "424e6e9d552bb2119af05b36ef0b4068b801ef699299b1c2aed5c449b4243682",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[42]",
+      "bounded_source_text": "Дом Да Да Поле ввода Текст Строка BSR 130. Видимость: Да, если признак «Ввести вручную»= «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-0df76ca817ece72d35860818",
+      "candidate_hash": "0df76ca817ece72d358608189ea99c2528b674ec452b5d868e102b56b4a873d6",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[43]",
+      "bounded_source_text": "Корпус Нет Да Поле ввода Текст Строка BSR 131. Видимость: Да, если признак «Ввести вручную»= «Да». BSR 132. Возможен ввод только числовых символов.",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-f86bb336a064fd586014441a",
+      "candidate_hash": "f86bb336a064fd586014441ae7f39039d5a44e890075badab2144d5ad9a9d3b0",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[44]",
+      "bounded_source_text": "Квартира Да; если признак «Клиент зарегистрирован в частном доме» = «Нет» Да Поле ввода Текст Строка BSR 133. Видимость: Да, если признак «Ввести вручную»= «Да». BSR 134. Возможен ввод только числовых символов.",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-dfd1d538d6eae87627134c56",
+      "candidate_hash": "dfd1d538d6eae87627134c5620f8cc49b8c180ee06e634831fd084300f1d6809",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[45]",
+      "bounded_source_text": "Клиент зарегистрирован в частном доме Нет Да Флажок Логическое Да/Нет BSR 135. Видимость: Отображается только если в поле \"Адрес постоянной регистрации\" не указан номер квартиры. BSR 136. Значение по умолчанию «Нет». BSR 137. Если чек-бокс активирован, то исчезает подсказка \"Укажите номер квартиры или поставьте отметку о проживании в частном доме\" с поля \"Адрес постоянной регистрации\"",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-f44f38d965ce50c681411284",
+      "candidate_hash": "f44f38d965ce50c681411284c5c5201c8acf8e2733347ff807e04392da915c18",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[46]",
+      "bounded_source_text": "Адрес фактического места жительства совпадает с адресом регистрации Нет Да Переключатель Логическое Да/Нет BSR 138. Видимость-всегда. BSR 139. Значение по умолчанию «Да»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-f33e15b4ccc601aaa0daf48b",
+      "candidate_hash": "f33e15b4ccc601aaa0daf48b62243c726310ff23686ecadfbfeba024eb8cd13d",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[47]",
+      "bounded_source_text": "Адрес фактического места жительства Да, если признак «Ввести вручную»= «Нет» Да, если признак «Ввести вручную»= «Нет» Поле ввода Текст Строка BSR 140. Видимость: Да, если признак «Адрес фактического места жительства совпадает с адресом регистрации»= «Нет». BSR 141. Интеграция с DaData. BSR 142. Правило: обязательно должны быть введены регион и номер дома. Если в адресе не указана квартира, поле подсвечивается красным и отображается подсказка: «Укажите номер квартиры или поставьте отметку о проживании в частном доме». BSR 143. Если в DaData не найден адрес, то отображается подсказка: «Некорректно указан адрес». BSR 144. Если адрес найден, то он раскладывается по полям в блоке Ручного ввода. BSR 145. При ручном заполнении поле автоматически заполняется значениями из полей «Почтовый индекс» + «Регион» + «Район» (при наличии) + «Населенный пункт» (при наличии) + «Город» + «Улица» + «Дом» + «Корпус» (при наличии) + «Квартира» (при наличии).",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-f459304b96aaa2c4e388533e",
+      "candidate_hash": "f459304b96aaa2c4e388533ecaf105e8e34682b9e9df127371e3896b63b380b6",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[48]",
+      "bounded_source_text": "Клиент проживает в частном доме Нет Да Флажок Логическое Да/Нет BSR 146. Видимость: Да, если признак «Адрес фактического места жительства совпадает с адресом регистрации»= «Нет» И если в поле «Адрес фактического места жительства» не указан квартиры BSR 147. Значение по умолчанию «Нет»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-3edc914466abaec74608a067",
+      "candidate_hash": "3edc914466abaec74608a067f0800ce9a2392904cf571c56a46a0571e36722e9",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[49]",
+      "bounded_source_text": "Ввести вручную Нет Да Переключатель Логическое Да/Нет BSR 148. Видимость: Да, если признак «Адрес фактического места жительства совпадает с адресом регистрации»= «Нет». BSR 149. Значение по умолчанию «Нет»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-1a75665ea175009726b46cbc",
+      "candidate_hash": "1a75665ea175009726b46cbca37d5ea4be4ae7de55effb299df847b7ad014603",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[50]",
+      "bounded_source_text": "Регион Да Да Поле ввода Текст Список BSR 150. Видимость: Да, если признак «Ввести вручную» = «Да» По справочнику регионов",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-9277a49dc652eb6a00e97dd6",
+      "candidate_hash": "9277a49dc652eb6a00e97dd62dcb32c0efe0b361bc5b491b9439de3df044789b",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[51]",
+      "bounded_source_text": "Район Нет Да Поле ввода Текст Строка BSR 151. Видимость: Да, если признак «Ввести вручную» = «Да»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-857884c30851e93f09f63ae4",
+      "candidate_hash": "857884c30851e93f09f63ae4c15e8d611af604fbb81282aeb9066039209a053d",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[52]",
+      "bounded_source_text": "Населенный пункт Нет Да Поле ввода Текст Строка BSR 152. Видимость: Да, если признак «Ввести вручную» = «Да»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-c9a0decc5df5985714be9832",
+      "candidate_hash": "c9a0decc5df5985714be98329215be92f926d2728af80240d71db8681c24c003",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[53]",
+      "bounded_source_text": "Город Да Да Поле ввода Текст Строка BSR 153. Видимость: Да, если признак «Ввести вручную» = «Да»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-fc4c460dec177532e776515f",
+      "candidate_hash": "fc4c460dec177532e776515f8dcc4d0a7f365ff5cc6238403998c3f04bd08277",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[54]",
+      "bounded_source_text": "Улица Да Да Поле ввода Текст Строка BSR 154. Видимость: Да, если признак «Ввести вручную» = «Да»",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-55881bb567ab7f6192cee68b",
+      "candidate_hash": "55881bb567ab7f6192cee68bb994f7724364230cce5765cbad423b024f174996",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[55]",
+      "bounded_source_text": "Дом Да Да Поле ввода Текст Строка BSR 155. Видимость: Да, если признак «Ввести вручную» = «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-0e45f2ac67fb0d4f44df9015",
+      "candidate_hash": "0e45f2ac67fb0d4f44df9015b030eb16200d54a4bd3d20d4a822c56e5e70a433",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[56]",
+      "bounded_source_text": "Корпус Нет Да Поле ввода Текст Строка BSR 156. Видимость: Да, если признак «Ввести вручную» = «Да».",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-cd266c548c820451412f254e",
+      "candidate_hash": "cd266c548c820451412f254e469d11b17b7956224a87ac70070726a39ac2ada7",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[57]",
+      "bounded_source_text": "Квартира BSR 157. Да, если признак «Клиент проживает в частном доме» = «Нет» Да Поле ввода Текст Строка BSR 158. Видимость: Да, если признак «Ввести вручную» = «Да» BSR 159. Возможен ввод только числовых символов.",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-f71d0897c9c73e735025233d",
+      "candidate_hash": "f71d0897c9c73e735025233d8dd51f0c9b770020eb0651780ddf796a010b21dc",
+      "region_id": "4-3-client-addresses-testable-33-58",
+      "element_kind": "tr",
+      "canonical_xpath": "/*/*[2]/*[116]/*[58]",
+      "bounded_source_text": "Почтовый индекс Нет Да Поле ввода Текст Строка BSR 160. Видимость: Да, если признак «Ввести вручную» = «Да». BSR 161. Ограничение на формат: только 6 числовых символов.",
+      "source_context_class": "scope-local"
+    },
+    {
+      "candidate_id": "SRC-CAND-9fd6a1be4b785ec10b5cac7f",
+      "candidate_hash": "9fd6a1be4b785ec10b5cac7faaddc488cfddc3400a0bb1a37bc5867701d1154f",
+      "region_id": "4-3-client-addresses-xref-BSR-324-address-decomposition",
+      "element_kind": "li",
+      "canonical_xpath": "/*/*[2]/*[119]/*[1]",
+      "bounded_source_text": "BSR 324. Если адрес клиента (регистрации / места жительства) заполнен посредством запроса DaData, то он раскладывается по полям в блоке для ручного ввода, в модели данных должно заполняться поле kladr (код КЛАДР).",
+      "source_context_class": "cross-referenced-constraints"
+    }
+  ]
+}
