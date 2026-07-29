@@ -308,7 +308,10 @@ def _duplicate_obligation_case_coverage_allowed(
             expected = {
                 "allowed-class-valid": {"executable"},
                 "allowed-class-invalid": {"candidate-ui-calibration"},
-                "allowed-class-calibration": {"candidate-ui-calibration"},
+                "allowed-class-calibration": {
+                    "candidate-ui-calibration",
+                    "executable",
+                },
             }
             return all(
                 variant in expected and status in expected[variant]
@@ -362,7 +365,10 @@ def _duplicate_obligation_case_coverage_allowed(
             expected = {
                 "required-empty-positive-outcome": {"executable"},
                 "required-empty-negative-outcome": {"executable"},
-                "required-empty-calibration-outcome": {"candidate-ui-calibration"},
+                "required-empty-calibration-outcome": {
+                    "candidate-ui-calibration",
+                    "executable",
+                },
             }
             return all(
                 variant in expected and status in expected[variant]

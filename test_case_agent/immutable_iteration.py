@@ -1347,7 +1347,11 @@ def _prepare_revision_split_plan(
                 case_key=child.case_key,
                 tc_id=child.tc_id,
                 obligation_ids=parent_graph_case.obligation_ids,
-                status=child.status,
+                status=(
+                    parent_graph_case.status
+                    if child.status == "candidate-ui-calibration"
+                    else child.status
+                ),
             )
             for child in children
         )
