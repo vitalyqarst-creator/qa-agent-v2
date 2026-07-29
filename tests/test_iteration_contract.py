@@ -2354,7 +2354,8 @@ class IterationContractTests(unittest.TestCase):
         self.assertTrue(
             acceptance["test_case_findings_require_exact_binding_role"]
         )
-        self.assertTrue(acceptance["primary_coverage_mapping_is_one_per_case"])
+        self.assertTrue(acceptance["primary_coverage_mapping_covers_case_obligations"])
+        self.assertFalse(acceptance["primary_coverage_mapping_is_one_per_case"])
         self.assertTrue(acceptance["adversarial_false_pass_check"])
         self.assertTrue(acceptance["adversarial_false_fail_check"])
         self.assertTrue(acceptance["failure_attribution_check"])
@@ -3142,6 +3143,80 @@ class IterationContractTests(unittest.TestCase):
 
         self.assertFalse(accepted)
         self.assertEqual("changes-required", decision)
+
+    def test_reviewer_v2_schema_accepts_merged_case_primary_obligations(self) -> None:
+        graph = _graph()
+        second_obligation = replace(
+            graph.obligations[0],
+            obligation_id="OBL-002",
+            atom_id="ATOM-002",
+            observable_oracle="Р”РѕРїРѕР»РЅРёС‚РµР»СЊРЅР°СЏ СЃРІСЏР·Р°РЅРЅР°СЏ РїСЂРѕРІРµСЂРєР° РІС‹РїРѕР»РЅРµРЅР°.",
+        )
+        graph = replace(
+            graph,
+            obligations=(graph.obligations[0], second_obligation),
+            cases=(
+                replace(
+                    graph.cases[0],
+                    obligation_ids=("OBL-001", "OBL-002"),
+                ),
+            ),
+        )
+        plan = build_test_design_plan(graph, context=_context())
+        cases = plan.deterministic_cases
+        markdown = render_test_cases(cases, scope_title="Р”Р°РЅРЅС‹Рµ РєР»РёРµРЅС‚Р°")
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        pack = _v2_pack(graph, cases, gate, markdown)
+        primary = pack["coverage_mapping"][0]
+        pack["coverage_mapping"].insert(
+            1,
+            {
+                **primary,
+                "obligation_id": "OBL-002",
+            },
+        )
+        request = build_reviewer_request(
+            graph=graph,
+            cases=cases,
+            gate=gate,
+            evidence_pack=pack,
+        )
+        bindings = [
+            (case.case_key, case.tc_id, obligation_id, case.status)
+            for case in graph.cases
+            for obligation_id in case.obligation_ids
+        ]
+
+        schema = reviewer_response_schema(
+            bindings,
+            graph_digest=graph.digest,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+
+        validate_openai_strict_output_schema(schema)
+        missing_request = copy.deepcopy(request)
+        missing_pack = missing_request["reviewer_evidence_pack"]
+        missing_pack["coverage_mapping"] = [
+            item
+            for item in missing_pack["coverage_mapping"]
+            if item.get("obligation_id") != "OBL-002"
+        ]
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "obligation mapping differs",
+        ):
+            reviewer_response_schema(
+                bindings,
+                graph_digest=graph.digest,
+                draft_sha256=gate.draft_sha256,
+                reviewer_request=missing_request,
+            )
 
     def test_reviewer_schema_dedupes_obligation_enum_for_split_cases(self) -> None:
         schema = reviewer_response_schema(

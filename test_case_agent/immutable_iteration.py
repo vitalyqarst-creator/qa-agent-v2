@@ -2196,12 +2196,13 @@ def run_immutable_iteration(
             (
                 item.case_key,
                 item.tc_id,
-                graph_case.obligation_ids[0],
+                obligation_id,
                 item.status,
             )
             for item in cases
             for graph_case in graph.cases
             if graph_case.case_key == item.case_key
+            for obligation_id in graph_case.obligation_ids
         ]
         with timer.phase("reviewer"):
             schema = reviewer_response_schema(

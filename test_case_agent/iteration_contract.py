@@ -398,7 +398,8 @@ def reviewer_acceptance_contract(*, schema_version: int = 1) -> dict[str, Any]:
                 "design_support_chains_must_be_reviewed": True,
                 "source_bound_cleanup_restoration_is_allowed": True,
                 "test_case_findings_require_exact_binding_role": True,
-                "primary_coverage_mapping_is_one_per_case": True,
+                "primary_coverage_mapping_covers_case_obligations": True,
+                "primary_coverage_mapping_is_one_per_case": False,
                 "adversarial_false_pass_check": True,
                 "adversarial_false_fail_check": True,
                 "failure_attribution_check": True,
@@ -2558,7 +2559,7 @@ def build_reviewer_request(
         if sorted(primary_bindings) != sorted(expected_primary_bindings):
             raise IterationContractError(
                 "reviewer evidence primary coverage mapping must bind every "
-                "graph case exactly once"
+                "graph case obligation exactly once"
             )
         design_support_mapping = pack_payload.get("design_support_mapping")
         if not isinstance(design_support_mapping, list):
@@ -2709,10 +2710,12 @@ def reviewer_response_schema(
     draft_sha256: str,
     reviewer_request: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    case_keys = [item[0] for item in case_bindings]
-    tc_ids = [item[1] for item in case_bindings]
-    case_obligation_ids = [item[2] for item in case_bindings]
-    obligation_ids = sorted(set(case_obligation_ids))
+    primary_bindings = tuple(
+        (item[0], item[1], item[2]) for item in case_bindings
+    )
+    case_keys = sorted({item[0] for item in primary_bindings})
+    tc_ids = sorted({item[1] for item in primary_bindings})
+    obligation_ids = sorted({item[2] for item in primary_bindings})
     result = {
         "type": "object",
         "properties": {
@@ -2801,21 +2804,14 @@ def reviewer_response_schema(
             for item in raw_mapping
             if isinstance(item, Mapping) and item.get("case_key")
         }
-        expected_primary = {
-            (case_key, tc_id, obligation_id)
-            for case_key, tc_id, obligation_id in zip(
-                case_keys,
-                tc_ids,
-                case_obligation_ids,
-            )
-        }
+        expected_primary = set(primary_bindings)
         if (
             len(primary_chains) != len(expected_primary)
             or {(item[-2], item[-1], item[-3]) for item in primary_chains}
             != expected_primary
         ):
             raise IterationContractError(
-                "reviewer evidence primary mapping is not one exact chain per case"
+                "reviewer evidence primary mapping does not cover every case obligation"
             )
         design_support_binding_roles = {"primary"}
         design_support_item_indices: set[int] = set()
