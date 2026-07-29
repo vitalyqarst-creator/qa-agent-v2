@@ -1689,6 +1689,40 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_rejects_single_case_mixed_acceptance_and_clearing(
+        self,
+    ) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(plan.deterministic_cases[0], case_type="негативный")
+        plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    case_type="негативный",
+                    expected_result=(
+                        "Для `9999999999` отображается `+7 (999) 999-99-99`, "
+                        "поле находится в состоянии `valid`, сообщение отсутствует. "
+                        "Для `999123456` значение поля очищается и отображается "
+                        "сообщение `Обязательно к заполнению`."
+                    ),
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "mixed positive/negative runtime prose",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_accepts_positive_absent_error_oracle(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
@@ -3399,6 +3433,82 @@ class IterationContractTests(unittest.TestCase):
                 graph_digest=graph.digest,
                 draft_sha256=gate.draft_sha256,
                 reviewer_request=missing_request,
+            )
+
+    def test_reviewer_v2_accepts_registered_merged_sibling_case_result(self) -> None:
+        graph = _graph()
+        second_obligation = replace(
+            graph.obligations[0],
+            obligation_id="OBL-002",
+            atom_id="ATOM-002",
+            observable_oracle="Связанная проверка выполнена.",
+        )
+        graph = replace(
+            graph,
+            obligations=(graph.obligations[0], second_obligation),
+            cases=(replace(graph.cases[0], obligation_ids=("OBL-001", "OBL-002")),),
+        )
+        plan = build_test_design_plan(graph, context=_context())
+        cases = plan.deterministic_cases
+        markdown = render_test_cases(cases, scope_title="Данные клиента")
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        pack = _v2_pack(graph, cases, gate, markdown)
+        primary = pack["coverage_mapping"][0]
+        pack["coverage_mapping"].insert(1, {**primary, "obligation_id": "OBL-002"})
+        request = build_reviewer_request(
+            graph=graph,
+            cases=cases,
+            gate=gate,
+            evidence_pack=pack,
+        )
+        response = _accepted_review_v2(graph, request)
+        response["case_results"][0]["obligation_id"] = "OBL-002"
+        for probe in REVIEWER_FALSIFICATION_PROBES:
+            response["case_results"][0]["falsification"][probe][
+                "obligation_id"
+            ] = "OBL-002"
+
+        accepted, decision = validate_reviewer_response(
+            response,
+            graph=graph,
+            draft_sha256=gate.draft_sha256,
+            reviewer_request=request,
+        )
+
+        self.assertTrue(accepted)
+        self.assertEqual("accepted", decision)
+
+    def test_reviewer_v2_rejects_fabricated_merged_case_result_binding(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        cases = plan.deterministic_cases
+        markdown = render_test_cases(cases, scope_title="Данные клиента")
+        gate = validate_suite(
+            graph=graph,
+            cases=cases,
+            markdown=markdown,
+            checked_path="shadow.md",
+        )
+        request = build_reviewer_request(
+            graph=graph,
+            cases=cases,
+            gate=gate,
+            evidence_pack=_v2_pack(graph, cases, gate, markdown),
+        )
+        response = _accepted_review_v2(graph, request)
+        response["case_results"][0]["obligation_id"] = "OBL-FABRICATED"
+
+        with self.assertRaisesRegex(IterationContractError, "binding mismatch"):
+            validate_reviewer_response(
+                response,
+                graph=graph,
+                draft_sha256=gate.draft_sha256,
+                reviewer_request=request,
             )
 
     def test_reviewer_schema_dedupes_obligation_enum_for_split_cases(self) -> None:

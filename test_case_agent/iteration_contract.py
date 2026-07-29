@@ -169,8 +169,11 @@ _RUNTIME_VALID_CLASS_ACTION_RE = re.compile(
     re.IGNORECASE,
 )
 _RUNTIME_VALID_ACCEPTANCE_RE = re.compile(
-    r"(?:допустим\w*|валидн\w*|valid)[^.\n;]{0,120}"
-    r"(?:принима\w*|сохраня\w*|отобража\w*|accepted|saved|displayed)",
+    r"(?:(?:допустим\w*|валидн\w*|valid)[^.\n;]{0,120}"
+    r"(?:принима\w*|сохраня\w*|отобража\w*|accepted|saved|displayed)|"
+    r"(?:отобража\w*|displayed)[^.\n;]{0,120}"
+    r"(?:допустим\w*|валидн\w*|valid)|"
+    r"состояни\w*\s+`?valid`?)",
     re.IGNORECASE,
 )
 _RUNTIME_PERSISTENCE_ORACLE_RE = re.compile(
@@ -3208,7 +3211,7 @@ def _validate_reviewer_response_v2(
     if decision not in _DECISIONS:
         raise IterationContractError(f"unsupported reviewer decision: {decision}")
     _one_line(root["summary"], "$.summary")
-    expected: dict[str, tuple[str, str, str]] = {}
+    expected: dict[str, tuple[str, tuple[str, ...], str]] = {}
     obligations = {item.obligation_id: item for item in graph.obligations}
     request_case_statuses: dict[str, str] = {}
     pack_cases = reviewer_request.get("reviewer_evidence_pack", {}).get(
@@ -3226,13 +3229,15 @@ def _validate_reviewer_response_v2(
                 if isinstance(case_key, str) and isinstance(status, str):
                     request_case_statuses[case_key] = status
     for case in graph.cases:
-        obligation_id = case.obligation_ids[0]
-        if obligation_id not in obligations:  # pragma: no cover
-            raise IterationContractError(f"graph case references unknown {obligation_id}")
+        for obligation_id in case.obligation_ids:
+            if obligation_id not in obligations:  # pragma: no cover
+                raise IterationContractError(
+                    f"graph case references unknown {obligation_id}"
+                )
         case_status = request_case_statuses.get(case.case_key, case.status)
         expected[case.case_key] = (
             case.tc_id,
-            obligation_id,
+            tuple(case.obligation_ids),
             "calibration-pending"
             if case_status == "candidate-ui-calibration"
             else "covered",
@@ -3272,8 +3277,8 @@ def _validate_reviewer_response_v2(
                 f"reviewer has unknown or duplicate case_key: {case_key}"
             )
         seen.add(case_key)
-        tc_id, obligation_id, required_status = expected[case_key]
-        if item["tc_id"] != tc_id or item["obligation_id"] != obligation_id:
+        tc_id, obligation_ids, required_status = expected[case_key]
+        if item["tc_id"] != tc_id or item["obligation_id"] not in obligation_ids:
             raise IterationContractError(f"reviewer binding mismatch for {case_key}")
         status = _one_line(item["status"], f"$.case_results[{index}].status")
         if status not in _RESULT_STATUSES:
@@ -3397,7 +3402,7 @@ def _validate_reviewer_response_v2(
     if set(designs_by_case) != set(expected):
         raise IterationContractError("reviewer v2 designs do not cover every case")
     allowed_probe_bindings: dict[str, set[tuple[str, str, int]]] = {
-        case_key: {("primary", binding[1], -1)}
+        case_key: {("primary", obligation_id, -1) for obligation_id in binding[1]}
         for case_key, binding in expected.items()
     }
     support_materialized_items: dict[
@@ -3631,7 +3636,7 @@ def _validate_reviewer_response_v2(
             obligation_id = values[-3]
             if case_key not in expected or expected[case_key][0] != tc_id:
                 raise IterationContractError(f"{path} case binding mismatch")
-            if binding_role == "primary" and expected[case_key][1] != obligation_id:
+            if binding_role == "primary" and obligation_id not in expected[case_key][1]:
                 raise IterationContractError(f"{path} primary case binding mismatch")
         return falsification_probe
 
