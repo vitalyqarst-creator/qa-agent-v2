@@ -29,6 +29,8 @@ from test_case_agent.strict_output_schema import (
 )
 from test_case_agent.test_design import (
     DesignContext,
+    TestCaseDesign,
+    TestDesignPlan,
     build_test_design_plan,
     render_test_cases,
 )
@@ -111,6 +113,111 @@ def _multi_runtime_graph():
             ),
         ),
     )
+
+
+def _split_runtime_graph_and_plan():  # type: ignore[no-untyped-def]
+    graph = _graph()
+    obligation = replace(
+        graph.obligations[0],
+        coverage_variant="required-empty",
+        fixture_values=("999123456", "99912345678", "99912A4567", "99912@4567"),
+        validation_trigger="Снять фокус с поля.",
+    )
+    graph = replace(
+        graph,
+        properties=(
+            replace(graph.properties[0], property_kind="source-requiredness"),
+            *graph.properties[1:],
+        ),
+        obligations=(obligation,),
+        cases=(
+            CoverageCase(
+                case_key=(
+                    "customer|customer-name|source-requiredness|"
+                    "required-empty-positive-outcome|always"
+                ),
+                tc_id="TC-CUST-001",
+                obligation_ids=("OBL-001",),
+                status="executable",
+            ),
+            CoverageCase(
+                case_key=(
+                    "customer|customer-name|source-requiredness|"
+                    "required-empty-negative-outcome|always"
+                ),
+                tc_id="TC-CUST-002",
+                obligation_ids=("OBL-001",),
+                status="executable",
+            ),
+            CoverageCase(
+                case_key=(
+                    "customer|customer-name|source-requiredness|"
+                    "required-empty-calibration-outcome|always"
+                ),
+                tc_id="TC-CUST-003",
+                obligation_ids=("OBL-001",),
+                status="executable",
+            ),
+        ),
+    )
+    designs = (
+        TestCaseDesign(
+            case_key=graph.cases[0].case_key,
+            tc_id=graph.cases[0].tc_id,
+            status="executable",
+            title="Проверка допустимого значения",
+            case_type="позитивный",
+            priority="высокий",
+            package_id="WP-01",
+            traceability=("OBL-001", "ASSERT-001"),
+            preconditions=("Открыть карточку клиента.",),
+            test_data=("Проверяемые значения: `9999999999`, `99912345678`.",),
+            steps=(
+                "Ввести `9999999999` и снять фокус.",
+                "Ввести `99912345678` и снять фокус.",
+            ),
+            expected_result=(
+                "Значение нормализуется, поле находится в состоянии `valid`, "
+                "сообщение отсутствует."
+            ),
+            postconditions=("Не требуются.",),
+        ),
+        TestCaseDesign(
+            case_key=graph.cases[1].case_key,
+            tc_id=graph.cases[1].tc_id,
+            status="executable",
+            title="Проверка недопустимого значения",
+            case_type="негативный",
+            priority="высокий",
+            package_id="WP-01",
+            traceability=("OBL-001", "ASSERT-001"),
+            preconditions=("Открыть карточку клиента.",),
+            test_data=("Проверяемые значения: `999123456`, `99912A4567`.",),
+            steps=(
+                "Ввести `999123456` и снять фокус.",
+                "Ввести `99912A4567` и снять фокус.",
+            ),
+            expected_result="Поле очищается и отображается сообщение `Обязательно к заполнению`.",
+            postconditions=("Не требуются.",),
+        ),
+        TestCaseDesign(
+            case_key=graph.cases[2].case_key,
+            tc_id=graph.cases[2].tc_id,
+            status="candidate-ui-calibration",
+            title="Проверка значений со специальными символами",
+            case_type="негативный",
+            priority="высокий",
+            package_id="WP-01",
+            traceability=("OBL-001", "ASSERT-001"),
+            preconditions=("Открыть карточку клиента.",),
+            test_data=("Проверяемые значения: `99912@4567`.",),
+            steps=("Ввести `99912@4567` и снять фокус.",),
+            expected_result="Точная реакция требует UI-калибровки.",
+            postconditions=("Не требуются.",),
+            calibration_question="Какой точный UI-отклик для `99912@4567`?",
+        ),
+    )
+    return graph, TestDesignPlan(1, graph.digest, designs, (), ())
 
 
 def _accepted_review(graph, draft_sha256: str):
@@ -914,6 +1021,95 @@ class IterationContractTests(unittest.TestCase):
                 missing_valid_payload,
                 graph=graph,
                 plan=valid_plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_positive_value_in_negative_split_child(self) -> None:
+        graph, plan = _split_runtime_graph_and_plan()
+        positive, negative, calibration = plan.deterministic_cases
+        negative = plan.deterministic_cases[1]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(positive),
+                _runtime_writer_case(
+                    negative,
+                    test_data=[
+                        "Проверяемые значения: `999123456`, `99912A4567`, `9999999999`."
+                    ],
+                    steps=[
+                        "Ввести `999123456` и снять фокус.",
+                        "Ввести `99912A4567` и снять фокус.",
+                        "Ввести `9999999999` и снять фокус.",
+                    ],
+                ),
+                _runtime_writer_case(calibration),
+            ],
+        )
+
+        with self.assertRaisesRegex(IterationContractError, "sibling split values"):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_negative_value_in_positive_split_child(self) -> None:
+        graph, plan = _split_runtime_graph_and_plan()
+        positive, negative, calibration = plan.deterministic_cases
+        positive = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    positive,
+                    test_data=[
+                        "Проверяемые значения: `9999999999`, `99912345678`, `99912@4567`."
+                    ],
+                    steps=[
+                        "Ввести `9999999999` и снять фокус.",
+                        "Ввести `99912345678` и снять фокус.",
+                        "Ввести `99912@4567` и снять фокус.",
+                    ],
+                ),
+                _runtime_writer_case(negative),
+                _runtime_writer_case(calibration),
+            ],
+        )
+
+        with self.assertRaisesRegex(IterationContractError, "sibling split values"):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
+    def test_runtime_writer_rejects_omitted_split_child_value(self) -> None:
+        graph, plan = _split_runtime_graph_and_plan()
+        positive, negative, calibration = plan.deterministic_cases
+        negative = plan.deterministic_cases[1]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(positive),
+                _runtime_writer_case(
+                    negative,
+                    steps=["Ввести `999123456` и снять фокус."],
+                ),
+                _runtime_writer_case(calibration),
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "left seed prepared values unexecuted.*99912A4567",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
                 context=_context(),
             )
 

@@ -1240,7 +1240,73 @@ def _revision_filtered_runtime_items(
     return tuple(selected) or tuple(items)
 
 
-def _revision_split_case_by_outcome(case: TestCaseDesign) -> tuple[TestCaseDesign, ...]:
+def _revision_input_values_for_child(
+    *,
+    case: TestCaseDesign,
+    expected_result: str,
+    polarity: str,
+    findings: Sequence[Mapping[str, Any]],
+) -> tuple[str, ...]:
+    parent_input_values = tuple(
+        dict.fromkeys(
+            value
+            for item in case.test_data
+            for value in _revision_values_in_text(item)
+            if value
+        )
+    )
+    expected_values = set(_revision_values_in_text(expected_result))
+    selected = [value for value in parent_input_values if value in expected_values]
+    if polarity == "positive":
+        for finding in findings:
+            message = str(finding.get("message") or "")
+            if "valid" not in message.casefold() and "допуст" not in message.casefold():
+                continue
+            for value in _revision_values_in_text(message):
+                if value not in selected:
+                    selected.append(value)
+    return tuple(selected)
+
+
+def _revision_child_test_data(
+    *,
+    case: TestCaseDesign,
+    values: Sequence[str],
+) -> tuple[str, ...]:
+    if not values:
+        return case.test_data
+    return (
+        "Проверяемые значения: "
+        + ", ".join(f"`{value}`" for value in values)
+        + ".",
+    )
+
+
+def _revision_child_steps(
+    *,
+    case: TestCaseDesign,
+    values: Sequence[str],
+) -> tuple[str, ...]:
+    steps = _revision_filtered_runtime_items(case.steps, values)
+    if not values:
+        return steps
+    steps_text = "\n".join(steps)
+    missing = tuple(
+        value for value in values if value not in _revision_values_in_text(steps_text)
+    )
+    if not missing:
+        return steps
+    value_steps = tuple(
+        f"Ввести `{value}` и снять фокус с поля."
+        for value in missing
+    )
+    return (*steps, *value_steps)
+
+
+def _revision_split_case_by_outcome(
+    case: TestCaseDesign,
+    findings: Sequence[Mapping[str, Any]],
+) -> tuple[TestCaseDesign, ...]:
     grouped: dict[str, list[str]] = {"positive": [], "negative": [], "calibration": []}
     neutral: list[str] = []
     for clause in _revision_expected_clauses(case.expected_result):
@@ -1266,6 +1332,12 @@ def _revision_split_case_by_outcome(case: TestCaseDesign) -> tuple[TestCaseDesig
             else "executable"
         )
         child_case_type = "позитивный" if polarity == "positive" else "негативный"
+        values = _revision_input_values_for_child(
+            case=case,
+            expected_result=expected_result,
+            polarity=polarity,
+            findings=findings,
+        )
         children.append(
             replace(
                 case,
@@ -1278,8 +1350,8 @@ def _revision_split_case_by_outcome(case: TestCaseDesign) -> tuple[TestCaseDesig
                 status=status,
                 case_type=child_case_type,
                 title=_revision_child_title(case.title, polarity),
-                test_data=_revision_filtered_runtime_items(case.test_data, values),
-                steps=_revision_filtered_runtime_items(case.steps, values),
+                test_data=_revision_child_test_data(case=case, values=values),
+                steps=_revision_child_steps(case=case, values=values),
                 expected_result=expected_result,
                 calibration_question=(
                     case.calibration_question
@@ -1341,7 +1413,10 @@ def _prepare_revision_split_plan(
             previous_cases_by_key[case_key],
             revision_context.findings_by_case[case_key],
         )
-        children = _revision_split_case_by_outcome(parent_seed)
+        children = _revision_split_case_by_outcome(
+            parent_seed,
+            revision_context.findings_by_case[case_key],
+        )
         if len(children) == 1 and children[0].case_key == case_key:
             active_seed_cases.append(parent_seed)
             active_findings[case_key] = revision_context.findings_by_case[case_key]

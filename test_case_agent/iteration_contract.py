@@ -1180,8 +1180,10 @@ def build_runtime_writer_request(
             "model-runtime-prose requires deterministic seed cases; unsupported writer cards must be split upstream"
         )
     cases: list[dict[str, Any]] = []
+    split_sibling_values = _split_sibling_partition_values(plan)
     for design in sorted(plan.deterministic_cases, key=lambda item: item.case_key):
         prop, obligation = _property_and_obligation_for_design(graph, design)
+        assigned_values = _seed_partition_values(design)
         cases.append(
             {
                 "case_key": design.case_key,
@@ -1212,6 +1214,10 @@ def build_runtime_writer_request(
                         _seed_dadata_fixture_test_data(design)
                     ),
                     "cleanup_oracles": list(_seed_cleanup_oracles(design)),
+                    "split_child_assigned_values": list(assigned_values),
+                    "split_child_forbidden_sibling_values": list(
+                        split_sibling_values.get(design.case_key, ())
+                    ),
                 },
             }
         )
@@ -1352,6 +1358,14 @@ def build_runtime_writer_request(
                     "Do not combine acceptance of a valid value and rejection of an "
                     "invalid value in one TC. Keep recovery flows out unless the "
                     "seed/source explicitly asks for recovery."
+                ),
+                "split_child_value_partition": (
+                    "When `protected_runtime_fragments.split_child_assigned_values` "
+                    "is non-empty, those exact values are the complete runner-owned "
+                    "value partition for this seed. Use every assigned value and do "
+                    "not add any value from "
+                    "`split_child_forbidden_sibling_values`; sibling partitions "
+                    "belong to their own seed cases."
                 ),
                 "case_type_consistency": (
                     "Use `позитивный` only for acceptance/visibility/editability/list "
@@ -1833,6 +1847,80 @@ def _seed_invalid_values(seed: TestCaseDesign) -> tuple[str, ...]:
     )
 
 
+_SPLIT_CHILD_PARENT_VARIANTS = {
+    "allowed-class-valid": "allowed-class",
+    "allowed-class-invalid": "allowed-class",
+    "allowed-class-calibration": "allowed-class",
+    "required-empty-positive-outcome": "required-empty",
+    "required-empty-negative-outcome": "required-empty",
+    "required-empty-calibration-outcome": "required-empty",
+}
+
+
+def _split_parent_case_key(case_key: str) -> str:
+    parts = case_key.split("|")
+    if len(parts) != 5:
+        return ""
+    parent_variant = _SPLIT_CHILD_PARENT_VARIANTS.get(parts[3])
+    if parent_variant is None:
+        return ""
+    return "|".join((*parts[:3], parent_variant, parts[4]))
+
+
+def _seed_partition_values(seed: TestCaseDesign) -> tuple[str, ...]:
+    if not _split_parent_case_key(seed.case_key):
+        return ()
+    return tuple(
+        dict.fromkeys(
+            value.strip()
+            for item in seed.test_data
+            for value in _BACKTICK_VALUE_RE.findall(item)
+            if value.strip()
+        )
+    )
+
+
+def _split_sibling_partition_values(
+    plan: TestDesignPlan,
+) -> dict[str, tuple[str, ...]]:
+    grouped: dict[str, dict[str, tuple[str, ...]]] = {}
+    for seed in plan.deterministic_cases:
+        parent_key = _split_parent_case_key(seed.case_key)
+        if not parent_key:
+            continue
+        values = _seed_partition_values(seed)
+        if not values:
+            continue
+        grouped.setdefault(parent_key, {})[seed.case_key] = values
+    sibling_values: dict[str, tuple[str, ...]] = {}
+    for by_case in grouped.values():
+        if len(by_case) < 2:
+            continue
+        for case_key, own_values in by_case.items():
+            siblings = tuple(
+                dict.fromkeys(
+                    value
+                    for other_key, values in by_case.items()
+                    if other_key != case_key
+                    for value in values
+                    if value not in own_values
+                )
+            )
+            sibling_values[case_key] = siblings
+    return sibling_values
+
+
+def _runtime_text_contains_value(text: str, value: str) -> bool:
+    if not value:
+        return False
+    if value.isalnum():
+        return re.search(
+            rf"(?<![0-9A-Za-zА-Яа-яЁё]){re.escape(value)}(?![0-9A-Za-zА-Яа-яЁё])",
+            text,
+        ) is not None
+    return value in text
+
+
 def _validate_runtime_writer_executes_seed_prepared_values(
     *,
     case_key: str,
@@ -1840,16 +1928,63 @@ def _validate_runtime_writer_executes_seed_prepared_values(
     steps: Sequence[str],
 ) -> None:
     prepared_values = tuple(
-        dict.fromkeys((*_seed_valid_values(seed), *_seed_invalid_values(seed)))
+        dict.fromkeys(
+            (
+                *_seed_valid_values(seed),
+                *_seed_invalid_values(seed),
+                *_seed_partition_values(seed),
+            )
+        )
     )
     if not prepared_values:
         return
     steps_text = "\n".join(steps)
-    missing = tuple(value for value in prepared_values if value not in steps_text)
+    missing = tuple(
+        value
+        for value in prepared_values
+        if not _runtime_text_contains_value(steps_text, value)
+    )
     if missing:
         raise IterationContractError(
             "runtime writer left seed prepared values unexecuted for "
             f"{case_key}: " + ", ".join(repr(value) for value in missing)
+        )
+
+
+def _validate_runtime_writer_split_partition_values(
+    *,
+    case_key: str,
+    seed: TestCaseDesign,
+    plan: TestDesignPlan,
+    title: str,
+    test_data: Sequence[str],
+    steps: Sequence[str],
+    expected_result: str,
+) -> None:
+    own_values = _seed_partition_values(seed)
+    if not own_values:
+        return
+    output_text = "\n".join((title, *test_data, *steps, expected_result))
+    missing = tuple(
+        value
+        for value in own_values
+        if not _runtime_text_contains_value(output_text, value)
+    )
+    if missing:
+        raise IterationContractError(
+            "runtime writer omitted split child prepared values for "
+            f"{case_key}: " + ", ".join(repr(value) for value in missing)
+        )
+    forbidden = _split_sibling_partition_values(plan).get(case_key, ())
+    leaked = tuple(
+        value
+        for value in forbidden
+        if _runtime_text_contains_value(output_text, value)
+    )
+    if leaked:
+        raise IterationContractError(
+            "runtime writer included sibling split values for "
+            f"{case_key}: " + ", ".join(repr(value) for value in leaked)
         )
 
 
@@ -2311,6 +2446,15 @@ def validate_runtime_writer_response(
             case_key=case_key,
             seed=seed,
             steps=steps,
+        )
+        _validate_runtime_writer_split_partition_values(
+            case_key=case_key,
+            seed=seed,
+            plan=plan,
+            title=title,
+            test_data=test_data,
+            steps=steps,
+            expected_result=expected_result,
         )
         _validate_runtime_writer_does_not_accept_invalid_length_boundary(
             case_key=case_key,
