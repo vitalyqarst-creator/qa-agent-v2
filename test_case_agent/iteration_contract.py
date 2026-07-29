@@ -123,6 +123,16 @@ _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE = re.compile(
     r"(?:отображ\w*|появля\w*|возника\w*|распозна\w*|фиксиру\w*))",
     re.IGNORECASE,
 )
+_RUNTIME_ABSENT_ERROR_ORACLE_RE = re.compile(
+    r"(?:"
+    r"(?:\u0441\u043e\u043e\u0431\u0449\u0435\u043d\w*|\u043e\u0448\u0438\u0431\u043a\w*|\u0432\u0430\u043b\u0438\u0434\u0430\u0446\u0438\w*)"
+    r"[^.\n;]{0,100}"
+    r"(?:\u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\w*|\u043d\u0435\s+(?:\u043e\u0442\u043e\u0431\u0440\u0430\u0436\w*|\u043f\u043e\u044f\u0432\u043b\w*|\u0432\u043e\u0437\u043d\u0438\u043a\w*|\u0444\u0438\u043a\u0441\u0438\u0440\w*))"
+    r"|"
+    r"\u0431\u0435\u0437[^.\n;]{0,100}(?:\u0441\u043e\u043e\u0431\u0449\u0435\u043d\w*)?[^.\n;]{0,100}(?:\u043e\u0448\u0438\u0431\u043a\w*|\u0432\u0430\u043b\u0438\u0434\u0430\u0446\u0438\w*)"
+    r")",
+    re.IGNORECASE,
+)
 _RUNTIME_NEGATED_REJECTION_ACCEPTANCE_RE = re.compile(
     r"(?:не\s+отклон\w*|не\s+блокир\w*)",
     re.IGNORECASE,
@@ -1550,6 +1560,7 @@ def _runtime_has_executable_step(steps: Sequence[str]) -> bool:
 
 def _runtime_has_rejection_oracle(expected_result: str) -> bool:
     inspected = _RUNTIME_NON_REJECTION_ERROR_ORACLE_RE.sub("", expected_result)
+    inspected = _RUNTIME_ABSENT_ERROR_ORACLE_RE.sub("", inspected)
     return _RUNTIME_REJECTION_ORACLE_RE.search(inspected) is not None
 
 

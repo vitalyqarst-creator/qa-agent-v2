@@ -1538,6 +1538,61 @@ class IterationContractTests(unittest.TestCase):
             designs[0].expected_result,
         )
 
+    def test_runtime_writer_accepts_positive_absent_error_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        expected_result = (
+            "\u0412 \u043f\u043e\u043b\u0435 `\u0422\u0438\u043f \u0442\u0435\u043b\u0435\u0444\u043e\u043d\u0430` "
+            "\u043e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0435\u0442\u0441\u044f "
+            "\u0437\u043d\u0430\u0447\u0435\u043d\u0438\u0435 `\u041c\u043e\u0431\u0438\u043b\u044c\u043d\u044b\u0439`; "
+            "\u0441\u043e\u043e\u0431\u0449\u0435\u043d\u0438\u0435 \u043e\u0431 "
+            "\u043e\u0448\u0438\u0431\u043a\u0435 \u043e\u0442\u0441\u0443\u0442\u0441\u0442\u0432\u0443\u0435\u0442."
+        )
+        payload = _runtime_writer_payload(
+            graph,
+            [_runtime_writer_case(seed, expected_result=expected_result)],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=plan,
+            context=_context(),
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual(expected_result, designs[0].expected_result)
+
+    def test_runtime_writer_rejects_positive_displayed_error_oracle(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = plan.deterministic_cases[0]
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(
+                    seed,
+                    expected_result=(
+                        "\u041e\u0442\u043e\u0431\u0440\u0430\u0436\u0430\u0435\u0442\u0441\u044f "
+                        "\u043e\u0448\u0438\u0431\u043a\u0430 "
+                        "\u0432\u0430\u043b\u0438\u0434\u0430\u0446\u0438\u0438."
+                    ),
+                )
+            ],
+        )
+
+        with self.assertRaisesRegex(
+            IterationContractError,
+            "positive case_type conflicts",
+        ):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=plan,
+                context=_context(),
+            )
+
     def test_runtime_writer_rejects_mixed_valid_and_invalid_input_actions(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())
