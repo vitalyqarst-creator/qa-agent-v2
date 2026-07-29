@@ -243,3 +243,174 @@ Evidence:
 - `evidence/screenshots/p2-prev-passports-before-toggle.png`
 - `evidence/screenshots/p2-prev-passports-after-toggle.png`
 - `evidence/screenshots/p2-prev-passport-issue-date-future-after-blur.png`
+
+## Second UI pass: observability blockers
+
+Date: 2026-07-29. Scope: only previously unclosed observability blockers from this stand package. Each check used a clean new card unless stated otherwise.
+
+### DaData/FIO prefix behavior
+
+Clean current-FIO checks:
+
+| Field | Typed value | Wait | Visible dropdown/options | Selection attempt | Resulting value | Gender state | Status |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `Фамилия` | `Иванова` | 2.5s and 5s | none captured | `ArrowDown+Enter` fallback, no clicked option | `Иванова` stayed in field | `Женский` checked, `Мужской` unchecked | `mismatch-ft-ui` for dropdown, `confirmed` for gender derivation |
+| `Фамилия` | `Иванов` | 2.5s and 5s | none captured | `ArrowDown+Enter` fallback, no clicked option | `Иванов` stayed in field | `Мужской` checked, `Женский` unchecked | `mismatch-ft-ui` for dropdown, `confirmed` for gender derivation |
+
+Observed DOM for delayed dropdown in retry/polluted state:
+
+- Selector: `ul.ui-autocomplete.ui-front.ui-menu.ui-widget.ui-widget-content.ui-corner-all.vcm-dropdown`.
+- Options selector: `ul.ui-autocomplete.ui-menu.vcm-dropdown > li.ui-menu-item`.
+- Example visible option texts captured after a delayed retry: `Иванова`, `Ивановас`, `Ивановайте`, `Иванова-Беспощадная`, `Ивановай`, `Иванован`, `Иванована`, `Иванова-Чуронова`, `Иванова-Ылахова`, `Иванова-Аласкирова`.
+- This retry state was not used to confirm the positive current-FIO path because the dropdown options were stale/feminine after a previous `Иванова` attempt.
+
+Evidence:
+
+- `evidence/screenshots/second-pass-dadata-clean-female-only-wait2500.png`
+- `evidence/screenshots/second-pass-dadata-clean-female-only-wait5000.png`
+- `evidence/screenshots/second-pass-dadata-clean-female-only-after-select.png`
+- `evidence/screenshots/second-pass-dadata-clean-male-only-wait2500.png`
+- `evidence/screenshots/second-pass-dadata-clean-male-only-wait5000.png`
+- `evidence/screenshots/second-pass-dadata-clean-male-only-after-select.png`
+- `evidence/screenshots/second-pass-dadata-retry-current-male-wait2500.png`
+- `evidence/screenshots/second-pass-dadata-retry-current-male-wait5000.png`
+
+### Previous-FIO positive path
+
+Steps:
+
+1. Opened a clean new card.
+2. Enabled `Клиент менял ФИО`.
+3. Tried previous-FIO DaData fields with typed values: `Иванова`, `Мария`, `Сергеевна`.
+4. Waited 2.5s and 5s per field for dropdown.
+5. Clicked `ДАЛЕЕ` through visible DOM text after the Playwright exact-text locator did not find the button.
+
+Observed:
+
+- No visible `ul.ui-autocomplete...vcm-dropdown` / `li.ui-menu-item` options were captured for previous surname/name/patronymic in this clean-card path.
+- After manual typing, the three previous-FIO fields retained values:
+  - `Предыдущая фамилия`: `Иванова`
+  - `Предыдущее имя`: `Мария`
+  - `Предыдущее отчество`: `Сергеевна`
+- Before and after the `ДАЛЕЕ` click, these three fields had no `Выберите значение` messages.
+- The whole card did not pass validation because unrelated required fields in passport/address/etc. remained empty.
+- Because no dropdown option was selected, this closes only the "typed values remove previous-FIO field messages" observation, not the DaData-selected positive branch.
+
+Status: `blocked-observability` for dropdown-selected positive path; `confirmed` for disappearance of `Выберите значение` on those three previous-FIO fields after values are present.
+
+Evidence:
+
+- `evidence/screenshots/second-pass-prev-fio-positive-enabled.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-surname-wait2500.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-surname-wait5000.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-name-wait2500.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-name-wait5000.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-patronymic-wait2500.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-patronymic-wait5000.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-before-dom-next-click.png`
+- `evidence/screenshots/second-pass-prev-fio-positive-after-dom-next-click.png`
+
+### ABS ID
+
+Clean-card observation:
+
+- `ID Клиента` value before save: empty.
+- Field state: readonly, not disabled; container class includes `empty readonly`.
+- Visible card action: `ДАЛЕЕ`.
+- No visible `СОХРАНИТЬ` action was available in the card.
+- Application header before save: `Новая заявка (Заёмщик)`.
+- No application number/id/status was assigned in this state.
+- No expected ABS/source oracle was available.
+
+Status: `blocked-observability`. Do not close ABS ID gap without a safe save path and expected-source oracle.
+
+Evidence:
+
+- `evidence/screenshots/second-pass-abs-id-clean-card-observability.png`
+
+### Actual address manual mode
+
+Steps:
+
+1. Opened a clean new card.
+2. Clicked `Адрес фактического места жительства совпадает с адресом регистрации` to make actual address separate.
+3. Clicked the last visible `Ввести вручную` control, which appeared after actual address separation.
+4. Clicked `ДАЛЕЕ`.
+5. Tested invalid values separately.
+
+Observed required behavior after `ДАЛЕЕ`:
+
+| Field | State/message |
+| --- | --- |
+| `Регион` | `empty required invalid`; exact message `Выберите значение` |
+| `Населенный пункт` | `empty required`; no inline message captured |
+| `Город` | `empty required`; no inline message captured |
+| `Дом` | `empty required`; no inline message captured |
+| `Квартира` | `empty required`; no inline message captured |
+| `Почтовый индекс` | optional empty; no invalid state/message |
+| `Корпус` | optional empty; no invalid state/message |
+
+Observed format behavior:
+
+| Field | Input | Displayed value after blur | State/message |
+| --- | --- | --- | --- |
+| `Почтовый индекс` | `12345A` | empty | no invalid state/message |
+| `Почтовый индекс` | `1234567` | `123456` | no invalid state/message |
+| `Корпус` | `12A` | `12A` | `invalid`; exact message `Введено некорректное значение` |
+| `Квартира` | `45A` | `45A` | `invalid`; exact message `Введено некорректное значение` |
+
+Status: `confirmed`.
+
+Evidence:
+
+- `evidence/screenshots/second-pass-actual-address-after-different-toggle.png`
+- `evidence/screenshots/second-pass-actual-address-manual-enabled.png`
+- `evidence/screenshots/second-pass-actual-address-required-after-next.png`
+- `evidence/screenshots/second-pass-actual-address-postal-alpha.png`
+- `evidence/screenshots/second-pass-actual-address-postal-long.png`
+- `evidence/screenshots/second-pass-actual-address-building-alpha.png`
+- `evidence/screenshots/second-pass-actual-address-flat-alpha.png`
+
+### Previous-passport delete
+
+Steps:
+
+1. Opened a clean new card.
+2. Enabled `Клиент менял паспорт`.
+3. Clicked `ДОБАВИТЬ ПАСПОРТ`.
+4. Filled visible last passport fields where possible: `Номер = 567890`, `Дата выдачи = 01.01.2020`; `Серия` remained not reliably filled/visible in the detected row.
+5. Searched visible DOM for delete/trash/remove candidates.
+6. Clicked the last visible delete-like candidate only after filtering by visible position.
+
+Observed:
+
+- A second previous-passport field group was partially visible.
+- No dedicated enabled trash/delete control for the previous-passport repeater was confirmed.
+- Visible delete-like candidates matched the unrelated `Участники` block / large container text, not a passport row action.
+- Passport-related field count before and after the delete-like click remained `9`; the passport row was not removed.
+- Therefore, exact removal semantics cannot be confirmed.
+
+Status: `blocked-observability`.
+
+Evidence:
+
+- `evidence/screenshots/second-pass-prev-passport-delete-enabled.png`
+- `evidence/screenshots/second-pass-prev-passport-delete-after-add-second.png`
+- `evidence/screenshots/second-pass-prev-passport-delete-after-fill-second.png`
+- `evidence/screenshots/second-pass-prev-passport-delete-after-delete-click.png`
+- `evidence/screenshots/second-pass-prev-passport-delete-final-state.png`
+
+### Calculator route
+
+Observed:
+
+- In the application card, no visible control matching `КРЕДИТНЫЙ КАЛЬКУЛЯТОР` / `Кредитный калькулятор` was found.
+- On `/applicationlist/`, the top action bar contains `КРЕДИТНЫЙ КАЛЬКУЛЯТОР`.
+- This is an observed route difference: calculator is list-level in this UI pass, not card-level.
+
+Status: `mismatch-ft-ui`.
+
+Evidence:
+
+- `evidence/screenshots/second-pass-calculator-card-no-route.png`
+- `evidence/screenshots/second-pass-calculator-list-top-cropped.png`
