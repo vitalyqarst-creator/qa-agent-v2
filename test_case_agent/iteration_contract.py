@@ -2051,7 +2051,37 @@ def _validate_runtime_writer_does_not_overclaim_bounded_invariant(
                 "runtime writer overclaimed bounded invariant visibility for "
                 f"{case_key} in {field}: {match.group(0)!r}; name the exact "
                 "source-backed states checked by this TC instead"
-            )
+        )
+
+
+_REVISION_CASE_TYPE_FINDING_TYPES = {
+    "case-type-expected-result-mismatch",
+}
+_REVISION_CASE_TYPE_MESSAGE_RE = re.compile(
+    r"(?:case[_ -]?type|case type|classified|classifi|polarity|positive|negative|"
+    r"split|позитивн|негативн|полярн)",
+    re.IGNORECASE,
+)
+
+
+def _runtime_revision_allows_case_type_drift(
+    *,
+    case_key: str,
+    findings_by_case: Mapping[str, Sequence[Mapping[str, Any]]] | None,
+) -> bool:
+    if findings_by_case is None:
+        return False
+    findings = findings_by_case.get(case_key)
+    if not findings:
+        return False
+    for finding in findings:
+        finding_type = str(finding.get("finding_type") or "").strip()
+        if finding_type in _REVISION_CASE_TYPE_FINDING_TYPES:
+            return True
+        message = str(finding.get("message") or "")
+        if _REVISION_CASE_TYPE_MESSAGE_RE.search(message):
+            return True
+    return False
 
 
 def validate_runtime_writer_response(
@@ -2061,6 +2091,7 @@ def validate_runtime_writer_response(
     plan: TestDesignPlan,
     context: DesignContext,
     mockup_label_aliases: Sequence[Mapping[str, str]] = (),
+    revision_findings_by_case: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
 ) -> tuple[tuple[TestCaseDesign, ...], tuple[dict[str, str], ...]]:
     try:
         validate_design_context_for_graph(graph, context)
@@ -2135,7 +2166,10 @@ def validate_runtime_writer_response(
         case_type = _one_line(item["case_type"], f"$.cases[{index}].case_type").casefold()
         if case_type not in {"позитивный", "негативный"}:
             raise IterationContractError(f"unsupported case_type for {case_key}")
-        if case_type != seed.case_type.casefold():
+        if case_type != seed.case_type.casefold() and not _runtime_revision_allows_case_type_drift(
+            case_key=case_key,
+            findings_by_case=revision_findings_by_case,
+        ):
             raise IterationContractError(
                 f"runtime writer case_type drift for {case_key}: "
                 f"expected {seed.case_type!r}, got {case_type!r}"

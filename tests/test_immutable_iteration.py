@@ -126,6 +126,7 @@ class FixtureBackend:
         runtime_writer_state_only_precondition: bool = False,
         runtime_writer_ambiguous_precondition: bool = False,
         runtime_writer_tc_id_drift: bool = False,
+        runtime_writer_case_type_override: str | None = None,
     ) -> None:
         self.calls: list[str] = []
         self.review_decision = review_decision
@@ -139,6 +140,7 @@ class FixtureBackend:
         self.runtime_writer_state_only_precondition = runtime_writer_state_only_precondition
         self.runtime_writer_ambiguous_precondition = runtime_writer_ambiguous_precondition
         self.runtime_writer_tc_id_drift = runtime_writer_tc_id_drift
+        self.runtime_writer_case_type_override = runtime_writer_case_type_override
         self.images_by_stage: dict[str, tuple[Any, ...]] = {}
 
     def run_stage(
@@ -249,7 +251,10 @@ class FixtureBackend:
                                 else seed["tc_id"]
                             ),
                             "title": f"{runtime['title']} — уточнённый сценарий",
-                            "case_type": seed["case_type"],
+                            "case_type": (
+                                self.runtime_writer_case_type_override
+                                or seed["case_type"]
+                            ),
                             "preconditions": (
                                 ["Открыта карточка `Заявка`, блок `Контактные лица`."]
                                 if self.runtime_writer_state_only_precondition
@@ -902,6 +907,41 @@ class ImmutableIterationTests(unittest.TestCase):
         )
         self.assertEqual("candidate-ui-calibration", designs["cases"][0]["status"])
         self.assertIn(previous_cases[0].tc_id, designs["cases"][0]["calibration_question"])
+
+    def test_model_runtime_revision_allows_bound_case_type_polarity_repair(self) -> None:
+        graph = _graph()
+        previous_dir, revision_input, previous_cases = self.write_revision_source_attempt(
+            graph,
+            finding_type="case-type-expected-result-mismatch",
+            message=(
+                "TC is classified as negative while expected results are "
+                "successful normalization; should be positive or split."
+            ),
+        )
+        designs_path = previous_dir / "test-case-designs.json"
+        designs_payload = json.loads(designs_path.read_text(encoding="utf-8"))
+        designs_payload["cases"][0]["case_type"] = "негативный"
+        designs_path.write_text(
+            json.dumps(designs_payload, ensure_ascii=False, sort_keys=True, indent=2),
+            encoding="utf-8",
+        )
+        backend = FixtureBackend(runtime_writer_case_type_override="позитивный")
+
+        result = self.run_engine(
+            graph,
+            "model-runtime-revision-case-type-repair",
+            backend=backend,
+            writer_mode="model-runtime-prose",
+            revision_input=revision_input,
+        )
+
+        self.assertIn(result.status, {"accepted-shadow", "accepted-with-calibration-pending"})
+        self.assertEqual(["writer", "reviewer"], backend.calls)
+        revised = json.loads(
+            (result.output_dir / "test-case-designs.json").read_text(encoding="utf-8")
+        )
+        by_tc_id = {item["tc_id"]: item for item in revised["cases"]}
+        self.assertEqual("позитивный", by_tc_id[previous_cases[0].tc_id]["case_type"])
 
     def test_model_runtime_revision_prompt_excludes_unaffected_full_prose(self) -> None:
         graph = _multi_runtime_graph()

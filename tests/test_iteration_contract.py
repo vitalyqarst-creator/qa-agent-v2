@@ -1508,6 +1508,95 @@ class IterationContractTests(unittest.TestCase):
                 context=_context(),
             )
 
+    def test_runtime_writer_revision_allows_bound_case_type_polarity_repair(
+        self,
+    ) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(plan.deterministic_cases[0], case_type="негативный")
+        revision_plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [_runtime_writer_case(seed, case_type="позитивный")],
+        )
+
+        designs, unresolved = validate_runtime_writer_response(
+            payload,
+            graph=graph,
+            plan=revision_plan,
+            context=_context(),
+            revision_findings_by_case={
+                seed.case_key: (
+                    {
+                        "finding_type": "case-type-expected-result-mismatch",
+                        "message": (
+                            "TC is classified as negative while expected results "
+                            "are successful normalization; should be positive or split."
+                        ),
+                    },
+                )
+            },
+        )
+
+        self.assertEqual((), unresolved)
+        self.assertEqual("позитивный", designs[0].case_type)
+
+    def test_runtime_writer_revision_rejects_unbound_case_type_drift(self) -> None:
+        graph = _graph()
+        plan = build_test_design_plan(graph, context=_context())
+        seed = replace(plan.deterministic_cases[0], case_type="негативный")
+        revision_plan = replace(plan, deterministic_cases=(seed,))
+        payload = _runtime_writer_payload(
+            graph,
+            [_runtime_writer_case(seed, case_type="позитивный")],
+        )
+
+        with self.assertRaisesRegex(IterationContractError, "case_type drift"):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=revision_plan,
+                context=_context(),
+                revision_findings_by_case={
+                    seed.case_key: (
+                        {
+                            "finding_type": "missing-equivalence-class",
+                            "message": "Add missing numeric-class representatives.",
+                        },
+                    )
+                },
+            )
+
+    def test_runtime_writer_revision_rejects_unaffected_case_type_drift(self) -> None:
+        graph = _multi_runtime_graph()
+        plan = build_test_design_plan(graph, context=_context())
+        affected = plan.deterministic_cases[0]
+        unaffected = replace(plan.deterministic_cases[1], case_type="негативный")
+        revision_plan = replace(plan, deterministic_cases=(affected, unaffected))
+        payload = _runtime_writer_payload(
+            graph,
+            [
+                _runtime_writer_case(affected),
+                _runtime_writer_case(unaffected, case_type="позитивный"),
+            ],
+        )
+
+        with self.assertRaisesRegex(IterationContractError, "case_type drift"):
+            validate_runtime_writer_response(
+                payload,
+                graph=graph,
+                plan=revision_plan,
+                context=_context(),
+                revision_findings_by_case={
+                    affected.case_key: (
+                        {
+                            "finding_type": "case-type-expected-result-mismatch",
+                            "message": "Affected case should be positive.",
+                        },
+                    )
+                },
+            )
+
     def test_runtime_writer_accepts_positive_optionalness_no_error_oracle(self) -> None:
         graph = _graph()
         plan = build_test_design_plan(graph, context=_context())

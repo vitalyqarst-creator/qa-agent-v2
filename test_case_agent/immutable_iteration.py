@@ -1943,6 +1943,11 @@ def run_immutable_iteration(
                     plan=active_plan,
                     context=context,
                     mockup_label_aliases=mockup_label_aliases,
+                    revision_findings_by_case=(
+                        revision_context.findings_by_case
+                        if revision_context is not None
+                        else None
+                    ),
                 )
                 if unresolved:
                     _write_json(
