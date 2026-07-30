@@ -4255,6 +4255,8 @@ class ScopeBoundaryAbsentContext:
         has_source_rows = (
             "source row" in normalized_explanation
             or "source-row" in normalized_explanation
+            or "scope-local row" in normalized_explanation
+            or "scope local row" in normalized_explanation
             or "строк" in normalized_explanation
         )
         has_inspected = (

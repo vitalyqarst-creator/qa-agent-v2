@@ -4101,6 +4101,35 @@ class SourceAssertionManifestTests(unittest.TestCase):
 
         without_cross_reference.validate(manifest)
 
+    def test_scope_boundary_accepts_scope_local_rows_absent_context_explanation(self) -> None:
+        selected = replace(
+            self._assertion(3, "\u0424\u0430\u043c\u0438\u043b\u0438\u044f"),
+            source_context_class="scope-local",
+        )
+        manifest = self._build((selected,))
+        boundary = self._scope_boundary(manifest)
+        without_cross_reference = replace(
+            boundary,
+            excluded_contexts=tuple(
+                item
+                for item in boundary.excluded_contexts
+                if item.context_class != "cross-referenced-constraints"
+            ),
+            absent_contexts=(
+                ScopeBoundaryAbsentContext(
+                    context_class="cross-referenced-constraints",
+                    basis_source_row_ids=(manifest.source_rows[0].source_row_id,),
+                    explanation=(
+                        "The selected scope-local rows were inspected and contain no "
+                        "cross-referenced obligations or citations requiring inclusion "
+                        "in this scope."
+                    ),
+                ),
+            ),
+        )
+
+        without_cross_reference.validate(manifest)
+
     def test_scope_boundary_accepts_russian_cross_reference_none_found_explanation(self) -> None:
         selected = replace(
             self._assertion(3, "\u0424\u0430\u043c\u0438\u043b\u0438\u044f"),
