@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "status": "ft-first-reviewed-with-calibration-pending",
+  "canonical_test_cases": "fts\\AutoFin\\PostFinal-v2-rc5\\test-cases\\13-4.3-employment-info.md",
+  "total_cases": 83,
+  "validated_writer_cases": 39,
+  "seed_fallback_cases": 44,
+  "calibration_pending_cases": 51,
+  "suite_gate_passed": true,
+  "reviewer_status": "not-run",
+  "production_promotion": "not-performed",
+  "non_promotable_reason": "calibration-pending-and-controlled-finalization",
+  "manual_rewrite": "manual_rewrite_employment_ui_ready.py",
+  "source_manifest_digest": "d39cabb2fa812c5b13264871402bf24cbd05d6e286474eea0eab554bad69c40a"
+}

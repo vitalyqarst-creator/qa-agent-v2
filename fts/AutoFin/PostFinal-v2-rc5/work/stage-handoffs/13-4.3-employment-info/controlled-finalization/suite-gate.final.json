@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "graph_digest": "c87e4a34d2e972a53ff09b1af700ad9e02aec05baef52bcba361402280f4e1c8",
+  "draft_sha256": "f45381e244a91ce771d4313369a5769e3a4f58788aec5e3bec54547a1f0b0d6c",
+  "expected_case_count": 83,
+  "actual_case_count": 83,
+  "findings": [],
+  "production_gate": {
+    "passed": true,
+    "validator": "production-tc-runtime-gate-v2",
+    "profile": "production-runtime-high-confidence",
+    "test_case_count": 83,
+    "execution_ready_count": 32,
+    "calibration_candidate_count": 51,
+    "suite_readiness": "ft-first-reviewed-with-calibration-pending",
+    "checked_paths": [
+      "C:\\Users\\Пользователь\\Documents\\Виталя\\GitProjects\\qa-agent-v2-rc5-clean-run\\fts\\AutoFin\\PostFinal-v2-rc5\\test-cases\\13-4.3-employment-info.md"
+    ],
+    "findings": []
+  }
+}
