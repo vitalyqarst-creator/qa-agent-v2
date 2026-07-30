@@ -72,6 +72,7 @@ Registration `Корпус`:
 |---|---|---|
 | `12` | `12` | valid |
 | `12A` | `12A` | invalid, `Введено некорректное значение` |
+| `12Д` | `12Д` | valid |
 | `1 2` | `1 2` | valid |
 | `1-2` | `1-2` | invalid, `Введено некорректное значение` |
 | `1.2` | `1.2` | invalid, `Введено некорректное значение` |
@@ -82,6 +83,7 @@ Registration/actual `Квартира`:
 |---|---|---|
 | `12` | `12` | valid |
 | `12A` | `12A` | invalid, `Введено некорректное значение` |
+| `12Д` | `12Д` | valid |
 | `1 2` | `1 2` | invalid, `Введено некорректное значение` |
 | `1-2` | `1-2` | valid |
 | `1.2` | `1.2` | invalid, `Введено некорректное значение` |
@@ -92,9 +94,9 @@ When `Клиент проживает в частном доме` is unchecked, 
 
 ## Required Test-Case Corrections
 
-`TC-ADDR-021`: do not describe `Корпус` as numeric-only. Current UI accepts `1 2` as valid and rejects `12A`, `1-2`, `1.2` with `Введено некорректное значение`.
+`TC-ADDR-021`: do not describe `Корпус` as numeric-only. Current UI accepts `1 2` and `12Д` as valid and rejects `12A`, `1-2`, `1.2` with `Введено некорректное значение`.
 
-`TC-ADDR-023` and `TC-ADDR-049`: do not describe `Квартира` as numeric-only. Current UI accepts digits and hyphen (`1-2` valid), rejects letters/spaces/dot with `Введено некорректное значение`.
+`TC-ADDR-023` and `TC-ADDR-049`: do not describe `Квартира` as numeric-only. Current UI accepts digits, hyphen (`1-2`) and the checked Cyrillic letter case `12Д`; it rejects Latin `12A`, spaces and dot with `Введено некорректное значение`.
 
 `TC-ADDR-053`: do not expect an invalid state/message for a 7-digit postal index. Current UI truncates/ignores the extra digit and leaves `443017` valid.
 
