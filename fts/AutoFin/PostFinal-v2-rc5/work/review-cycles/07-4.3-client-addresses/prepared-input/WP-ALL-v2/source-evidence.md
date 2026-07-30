@@ -80,11 +80,71 @@ Generate only source-backed behavior and mark exact UI-message expectations as c
 ## DICT-DADATA-ADDRESS-SUGGESTIONS
 
 ```json
-{"dictionary_id":"DICT-DADATA-ADDRESS-SUGGESTIONS","dictionary_name":"DaData address suggestions","source_file":"work/vendor-references/dadata-reference.md","source_location":"DaData address suggestions contract; AGENT-NOTES.md requires package-local vendor reference","extraction_status":"not-needed","active_values":["none_required:external-dynamic"],"archived_values":"-"}
+{"dictionary_id":"DICT-DADATA-ADDRESS-SUGGESTIONS","dictionary_name":"DaData address suggestions","source_file":"work/vendor-references/dadata-fixture-catalog.md","source_location":"verified local DaData snapshots","extraction_status":"verified-fixtures","active_values":[{"fixture_id":"FX-DADATA-ADDR-POS-001","query":"самара авроры 7 12","exact_suggestion":"г Самара, ул Авроры, д 7, кв 12","response":"work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json","verification":"work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json","components":{"region_with_type":"Самарская обл","city_with_type":"г Самара","street_with_type":"ул Авроры","house":"7","flat":"12","postal_code":"443017"}},{"fixture_id":"FX-DADATA-ADDR-NEG-001","query":"ZZZNOADDRESS7F3A9C2E20260721","response":"work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.response.json","verification":"work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.verification.json","expected":"suggestions=[]"}],"archived_values":"-"}
 ```
 
 ## DICT-DADATA-REGION
 
 ```json
-{"dictionary_id":"DICT-DADATA-REGION","dictionary_name":"DaData region suggestions","source_file":"work/vendor-references/dadata-reference.md","source_location":"DaData address suggestions contract; region component used as dynamic address dictionary","extraction_status":"not-needed","active_values":["none_required:external-dynamic"],"archived_values":"-"}
+{"dictionary_id":"DICT-DADATA-REGION","dictionary_name":"PAB region dictionary for manual Region fields","source_file":"support/PAB_справочники_выгрузка_v2.md","source_location":"## Регионы","extraction_status":"extracted","active_values":{"source":"support/PAB_справочники_выгрузка_v2.md","section":"## Регионы","active_count":91,"representative_values":[{"value":"г. Москва","internal_code":"77","okato":"45"},{"value":"Красноярский край","internal_code":"24","okato":"04"},{"value":"Саратовская область","internal_code":"64","okato":"63"}]},"archived_values":"-","usage_note":"available only for DaData region suggestion checks; not used by ordinary manual Region field TC"}
+```
+
+## Client Addresses Fixture Evidence
+
+```json
+{
+  "dadata_address_positive": {
+    "fixture_id": "FX-DADATA-ADDR-POS-001",
+    "query": "самара авроры 7 12",
+    "exact_suggestion": "г Самара, ул Авроры, д 7, кв 12",
+    "response": "work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json",
+    "verification": "work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json",
+    "components": {
+      "region_with_type": "Самарская обл",
+      "city_with_type": "г Самара",
+      "street_with_type": "ул Авроры",
+      "house": "7",
+      "flat": "12",
+      "postal_code": "443017"
+    }
+  },
+  "dadata_address_negative": {
+    "fixture_id": "FX-DADATA-ADDR-NEG-001",
+    "query": "ZZZNOADDRESS7F3A9C2E20260721",
+    "response": "work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.response.json",
+    "verification": "work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.verification.json",
+    "expected": "suggestions=[]"
+  },
+  "dadata_region_positive_available_not_manual_region": {
+    "fixture_id": "FX-DADATA-REGION-POS-001",
+    "query": "Саратов",
+    "bounds": "from_bound=region; to_bound=region",
+    "exact_suggestion": "Саратовская обл",
+    "response": "work/vendor-references/dadata-fixtures/FX-DADATA-REGION-POS-001.response.json",
+    "verification": "work/vendor-references/dadata-fixtures/FX-DADATA-REGION-POS-001.verification.json",
+    "usage_note": "available only for DaData region suggestion checks; not used by ordinary manual Region field TC"
+  },
+  "pab_regions": {
+    "source": "support/PAB_справочники_выгрузка_v2.md",
+    "section": "## Регионы",
+    "active_count": 91,
+    "representative_values": [
+      {
+        "value": "г. Москва",
+        "internal_code": "77",
+        "okato": "45"
+      },
+      {
+        "value": "Красноярский край",
+        "internal_code": "24",
+        "okato": "04"
+      },
+      {
+        "value": "Саратовская область",
+        "internal_code": "64",
+        "okato": "63"
+      }
+    ]
+  }
+}
 ```

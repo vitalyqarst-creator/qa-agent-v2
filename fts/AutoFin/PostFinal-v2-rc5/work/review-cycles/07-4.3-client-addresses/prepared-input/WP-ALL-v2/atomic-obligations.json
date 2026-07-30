@@ -118,9 +118,11 @@
       ],
       "dictionary_requirements": [
         {
-          "coverage_mode": "reference-only",
+          "coverage_mode": "fixture-backed",
           "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
-          "fixture_values": [],
+          "fixture_values": [
+            "FX-DADATA-ADDR-POS-001"
+          ],
           "required_values": []
         }
       ],
@@ -135,10 +137,11 @@
         "BSR 116",
         "CLR-001",
         "CLR-002",
-        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+        "DICT-DADATA-ADDRESS-SUGGESTIONS",
+        "FX-DADATA-ADDR-POS-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: Признак «Ввести вручную» для адреса регистрации имеет значение «Нет».; Action contract: Ввести часть адреса в поле «Адрес регистрации».; Design fixture: Ввести часть адреса в поле «Адрес регистрации».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: Признак «Ввести вручную» для адреса регистрации имеет значение «Нет».; Action contract: Ввести часть адреса в поле «Адрес регистрации».; Design fixture: Ввести часть адреса в поле «Адрес регистрации».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-POS-001, query `самара авроры 7 12`, suggestion `г Самара, ул Авроры, д 7, кв 12`"
     },
     {
       "atom_id": "ATOM-ADDR-005",
@@ -190,8 +193,19 @@
       "calibration_status": "none",
       "constraint_gap_ids": [],
       "coverage_status": "testable",
-      "dictionary_refs": [],
-      "dictionary_requirements": [],
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "negative-fixture-backed",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [
+            "FX-DADATA-ADDR-NEG-001"
+          ],
+          "required_values": []
+        }
+      ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-007.",
@@ -203,10 +217,11 @@
         "BSR 118",
         "CLR-001",
         "CLR-ADDR-001",
-        "CLR-002"
+        "CLR-002",
+        "FX-DADATA-ADDR-NEG-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: В поле «Адрес регистрации» введен адрес, который DaData не находит.; Action contract: Инициировать поиск адреса регистрации через DaData.; Design fixture: Инициировать поиск адреса регистрации через DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: В поле «Адрес регистрации» введен адрес, который DaData не находит.; Action contract: Инициировать поиск адреса регистрации через DaData.; Design fixture: Инициировать поиск адреса регистрации через DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-NEG-001, query `ZZZNOADDRESS7F3A9C2E20260721`, expected `suggestions=[]`"
     },
     {
       "atom_id": "ATOM-ADDR-008",
@@ -214,8 +229,19 @@
       "calibration_status": "none",
       "constraint_gap_ids": [],
       "coverage_status": "testable",
-      "dictionary_refs": [],
-      "dictionary_requirements": [],
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "fixture-backed",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [
+            "FX-DADATA-ADDR-POS-001"
+          ],
+          "required_values": []
+        }
+      ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-008.",
@@ -227,10 +253,11 @@
         "BSR 119",
         "CLR-001",
         "CLR-ADDR-001",
-        "CLR-002"
+        "CLR-002",
+        "FX-DADATA-ADDR-POS-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: DaData нашла адрес регистрации.; Action contract: Выбрать найденный адрес регистрации.; Design fixture: Выбрать найденный адрес регистрации.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: DaData нашла адрес регистрации.; Action contract: Выбрать найденный адрес регистрации.; Design fixture: Выбрать найденный адрес регистрации.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-POS-001, query `самара авроры 7 12`, suggestion `г Самара, ул Авроры, д 7, кв 12`"
     },
     {
       "atom_id": "ATOM-ADDR-009",
@@ -355,17 +382,33 @@
       ],
       "dictionary_requirements": [
         {
-          "coverage_mode": "reference-only",
+          "coverage_mode": "pab-representative-values",
           "dictionary_id": "DICT-DADATA-REGION",
           "fixture_values": [],
-          "required_values": []
+          "required_values": [
+            {
+              "value": "г. Москва",
+              "internal_code": "77",
+              "okato": "45"
+            },
+            {
+              "value": "Красноярский край",
+              "internal_code": "24",
+              "okato": "04"
+            },
+            {
+              "value": "Саратовская область",
+              "internal_code": "64",
+              "okato": "63"
+            }
+          ]
         }
       ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-014.",
       "obligation_id": "OBL-ADDR-014",
-      "observable_oracle": "Поле «Регион» отображается и использует актуальные предложения регионов DaData как external dynamic dictionary.",
+      "observable_oracle": "Поле «Регион» отображается в ручном режиме адреса регистрации и позволяет выбрать значение из PAB справочника регионов.",
       "planned_test_case_id": "TC-ADDR-014",
       "source_refs": [
         "SRC-ROW-006",
@@ -373,10 +416,11 @@
         "CLR-001",
         "CLR-ADDR-004",
         "CLR-002",
-        "DICT-DADATA-REGION"
+        "DICT-DADATA-REGION",
+        "PAB-REGIONS"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да» и открыть поле «Регион».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да» и открыть поле «Регион».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить «Ввести вручную» адреса регистрации = «Да» и открыть поле «Регион».; Design fixture: Установить «Ввести вручную» адреса регистрации = «Да» и открыть поле «Регион».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Dictionary fixture: PAB regions representative `Саратовская область`, code `64`, OKATO `63`"
     },
     {
       "atom_id": "ATOM-ADDR-015",
@@ -724,9 +768,11 @@
       ],
       "dictionary_requirements": [
         {
-          "coverage_mode": "reference-only",
+          "coverage_mode": "fixture-backed",
           "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
-          "fixture_values": [],
+          "fixture_values": [
+            "FX-DADATA-ADDR-POS-001"
+          ],
           "required_values": []
         }
       ],
@@ -741,10 +787,11 @@
         "BSR 141",
         "CLR-001",
         "CLR-002",
-        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+        "DICT-DADATA-ADDRESS-SUGGESTIONS",
+        "FX-DADATA-ADDR-POS-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: Признак совпадения адресов = «Нет», ручной режим фактического адреса = «Нет».; Action contract: Ввести часть адреса в поле фактического адреса.; Design fixture: Ввести часть адреса в поле фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: Признак совпадения адресов = «Нет», ручной режим фактического адреса = «Нет».; Action contract: Ввести часть адреса в поле фактического адреса.; Design fixture: Ввести часть адреса в поле фактического адреса.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-POS-001, query `самара авроры 7 12`, suggestion `г Самара, ул Авроры, д 7, кв 12`"
     },
     {
       "atom_id": "ATOM-ADDR-031",
@@ -796,8 +843,19 @@
       "calibration_status": "none",
       "constraint_gap_ids": [],
       "coverage_status": "testable",
-      "dictionary_refs": [],
-      "dictionary_requirements": [],
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "negative-fixture-backed",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [
+            "FX-DADATA-ADDR-NEG-001"
+          ],
+          "required_values": []
+        }
+      ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-033.",
@@ -809,10 +867,11 @@
         "BSR 143",
         "CLR-001",
         "CLR-ADDR-001",
-        "CLR-002"
+        "CLR-002",
+        "FX-DADATA-ADDR-NEG-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: В поле фактического адреса введен адрес, который DaData не находит.; Action contract: Инициировать поиск фактического адреса через DaData.; Design fixture: Инициировать поиск фактического адреса через DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: В поле фактического адреса введен адрес, который DaData не находит.; Action contract: Инициировать поиск фактического адреса через DaData.; Design fixture: Инициировать поиск фактического адреса через DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-NEG-001, query `ZZZNOADDRESS7F3A9C2E20260721`, expected `suggestions=[]`"
     },
     {
       "atom_id": "ATOM-ADDR-034",
@@ -820,8 +879,19 @@
       "calibration_status": "none",
       "constraint_gap_ids": [],
       "coverage_status": "testable",
-      "dictionary_refs": [],
-      "dictionary_requirements": [],
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "fixture-backed",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [
+            "FX-DADATA-ADDR-POS-001"
+          ],
+          "required_values": []
+        }
+      ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-034.",
@@ -833,10 +903,11 @@
         "BSR 144",
         "CLR-001",
         "CLR-ADDR-001",
-        "CLR-002"
+        "CLR-002",
+        "FX-DADATA-ADDR-POS-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: DaData нашла фактический адрес.; Action contract: Выбрать найденный фактический адрес.; Design fixture: Выбрать найденный фактический адрес.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: DaData нашла фактический адрес.; Action contract: Выбрать найденный фактический адрес.; Design fixture: Выбрать найденный фактический адрес.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-POS-001, query `самара авроры 7 12`, suggestion `г Самара, ул Авроры, д 7, кв 12`"
     },
     {
       "atom_id": "ATOM-ADDR-035",
@@ -959,17 +1030,33 @@
       ],
       "dictionary_requirements": [
         {
-          "coverage_mode": "reference-only",
+          "coverage_mode": "pab-representative-values",
           "dictionary_id": "DICT-DADATA-REGION",
           "fixture_values": [],
-          "required_values": []
+          "required_values": [
+            {
+              "value": "г. Москва",
+              "internal_code": "77",
+              "okato": "45"
+            },
+            {
+              "value": "Красноярский край",
+              "internal_code": "24",
+              "okato": "04"
+            },
+            {
+              "value": "Саратовская область",
+              "internal_code": "64",
+              "okato": "63"
+            }
+          ]
         }
       ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-040.",
       "obligation_id": "OBL-ADDR-040",
-      "observable_oracle": "Поле «Регион» отображается и использует актуальные предложения регионов DaData как external dynamic dictionary.",
+      "observable_oracle": "Поле «Регион» отображается в ручном режиме фактического адреса и позволяет выбрать значение из PAB справочника регионов.",
       "planned_test_case_id": "TC-ADDR-040",
       "source_refs": [
         "SRC-ROW-019",
@@ -977,10 +1064,11 @@
         "CLR-001",
         "CLR-ADDR-004",
         "CLR-002",
-        "DICT-DADATA-REGION"
+        "DICT-DADATA-REGION",
+        "PAB-REGIONS"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да» и открыть поле «Регион».; Design fixture: Установить ручной режим фактического адреса = «Да» и открыть поле «Регион».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: Открыт блок «Адреса клиента».; Action contract: Установить ручной режим фактического адреса = «Да» и открыть поле «Регион».; Design fixture: Установить ручной режим фактического адреса = «Да» и открыть поле «Регион».; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Dictionary fixture: PAB regions representative `Саратовская область`, code `64`, OKATO `63`"
     },
     {
       "atom_id": "ATOM-ADDR-041",
@@ -1284,8 +1372,19 @@
       "calibration_status": "none",
       "constraint_gap_ids": [],
       "coverage_status": "testable",
-      "dictionary_refs": [],
-      "dictionary_requirements": [],
+      "dictionary_refs": [
+        "DICT-DADATA-ADDRESS-SUGGESTIONS"
+      ],
+      "dictionary_requirements": [
+        {
+          "coverage_mode": "fixture-backed",
+          "dictionary_id": "DICT-DADATA-ADDRESS-SUGGESTIONS",
+          "fixture_values": [
+            "FX-DADATA-ADDR-POS-001"
+          ],
+          "required_values": []
+        }
+      ],
       "execution_semantics": "direct",
       "gap_id": "",
       "notes": "Compiled from workflow-state canonical design artifacts. Source assertion: ASSERT-ADDR-054.",
@@ -1297,10 +1396,11 @@
         "BSR 324",
         "CLR-001",
         "CLR-002",
-        "CLR-ADDR-005"
+        "CLR-ADDR-005",
+        "FX-DADATA-ADDR-POS-001"
       ],
       "state_change": null,
-      "test_intent": "Condition contract: Адрес регистрации или фактического места жительства выбран из подсказки DaData.; Action contract: Выбрать адрес клиента из подсказки DaData.; Design fixture: Выбрать адрес клиента из подсказки DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count"
+      "test_intent": "Condition contract: Адрес регистрации или фактического места жительства выбран из подсказки DaData.; Action contract: Выбрать адрес клиента из подсказки DaData.; Design fixture: Выбрать адрес клиента из подсказки DaData.; Test data: source-backed representative value; do not assert unlisted DaData ordering/count; Fixture: FX-DADATA-ADDR-POS-001, query `самара авроры 7 12`, suggestion `г Самара, ул Авроры, д 7, кв 12`"
     },
     {
       "atom_id": "ATOM-ADDR-055",

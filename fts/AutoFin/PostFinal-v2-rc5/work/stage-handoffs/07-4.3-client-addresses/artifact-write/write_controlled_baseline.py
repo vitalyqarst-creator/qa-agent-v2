@@ -9,16 +9,58 @@ FT_ROOT = ROOT / "fts" / "AutoFin" / "PostFinal-v2-rc5"
 HANDOFF = FT_ROOT / "work" / "stage-handoffs" / "07-4.3-client-addresses"
 TARGET = FT_ROOT / "test-cases" / "4-3-client-addresses.md"
 
-NEEDS_TEST_DATA = {
-    "OBL-ADDR-004": "нужен сохраненный DaData response/verification для запроса адреса регистрации, подтверждающий появление подсказок; trigger/debounce/count/order не утверждать",
-    "OBL-ADDR-007": "нужен сохраненный DaData response/verification для запроса адреса регистрации со статусом «адрес не найден»",
-    "OBL-ADDR-008": "нужен сохраненный DaData response/verification для найденного адреса регистрации и ожидаемая раскладка по ручным полям",
-    "OBL-ADDR-014": "нужен сохраненный DaData response/verification или UI evidence для актуального значения региона в external dynamic dictionary",
-    "OBL-ADDR-030": "нужен сохраненный DaData response/verification для запроса фактического адреса, подтверждающий появление подсказок; trigger/debounce/count/order не утверждать",
-    "OBL-ADDR-033": "нужен сохраненный DaData response/verification для запроса фактического адреса со статусом «адрес не найден»",
-    "OBL-ADDR-034": "нужен сохраненный DaData response/verification для найденного фактического адреса и ожидаемая раскладка по ручным полям",
-    "OBL-ADDR-040": "нужен сохраненный DaData response/verification или UI evidence для актуального значения региона фактического адреса в external dynamic dictionary",
-    "OBL-ADDR-054": "нужен сохраненный DaData response/verification для выбранного адреса и ожидаемая раскладка по ручным полям; внутренний kladr исключен",
+NEEDS_TEST_DATA: dict[str, str] = {}
+
+DADATA_POSITIVE_DATA = (
+    "Fixture `FX-DADATA-ADDR-POS-001`: query `самара авроры 7 12`; "
+    "expected suggestion `г Самара, ул Авроры, д 7, кв 12`; "
+    "response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json`; "
+    "verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json`; "
+    "exact components: `region_with_type=Самарская обл`, `city_with_type=г Самара`, "
+    "`street_with_type=ул Авроры`, `house=7`, `flat=12`, `postal_code=443017`."
+)
+
+DADATA_NEGATIVE_DATA = (
+    "Fixture `FX-DADATA-ADDR-NEG-001`: query `ZZZNOADDRESS7F3A9C2E20260721`; "
+    "response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.response.json`; "
+    "verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.verification.json`; "
+    "verified expected DaData response: `suggestions=[]`."
+)
+
+PAB_REGION_DATA = (
+    "PAB dictionary `support/PAB_справочники_выгрузка_v2.md`, section `## Регионы`, "
+    "91 active values. Representative value: `Саратовская область`, internal code `64`, OKATO `63`; "
+    "additional checked values include `г. Москва`/`77`/`45` and `Красноярский край`/`24`/`04`."
+)
+
+TEST_DATA_OVERRIDES = {
+    "OBL-ADDR-004": DADATA_POSITIVE_DATA,
+    "OBL-ADDR-007": DADATA_NEGATIVE_DATA,
+    "OBL-ADDR-008": DADATA_POSITIVE_DATA,
+    "OBL-ADDR-014": PAB_REGION_DATA,
+    "OBL-ADDR-030": DADATA_POSITIVE_DATA,
+    "OBL-ADDR-033": DADATA_NEGATIVE_DATA,
+    "OBL-ADDR-034": DADATA_POSITIVE_DATA,
+    "OBL-ADDR-040": PAB_REGION_DATA,
+    "OBL-ADDR-054": DADATA_POSITIVE_DATA + " Internal `kladr` persistence is excluded from UI TC by approved clarification.",
+}
+
+ORACLE_OVERRIDES = {
+    "OBL-ADDR-014": (
+        "Поле «Регион» отображается в ручном режиме адреса регистрации и позволяет выбрать "
+        "значение из PAB справочника регионов; проверочное значение: `Саратовская область`, "
+        "код `64`, ОКАТО `63`."
+    ),
+    "OBL-ADDR-040": (
+        "Поле «Регион» отображается в ручном режиме фактического адреса и позволяет выбрать "
+        "значение из PAB справочника регионов; проверочное значение: `Саратовская область`, "
+        "код `64`, ОКАТО `63`."
+    ),
+}
+
+TYPE_OVERRIDES = {
+    "OBL-ADDR-007": "негативный/валидационный",
+    "OBL-ADDR-033": "негативный/валидационный",
 }
 
 CANDIDATE_UI = {
@@ -66,7 +108,7 @@ def lines_for_case(assertion: dict[str, object]) -> list[str]:
         )
     condition = one(list(assertion.get("condition_clauses") or []))
     action = one(list(assertion.get("action_clauses") or []))
-    oracle = one(list(assertion.get("oracle_clauses") or []))
+    oracle = ORACLE_OVERRIDES.get(obligation_id, one(list(assertion.get("oracle_clauses") or [])))
     source_ref = "; ".join(
         item
         for item in [
@@ -78,7 +120,7 @@ def lines_for_case(assertion: dict[str, object]) -> list[str]:
         ]
         if item
     )
-    data = "Source-backed representative value from action/condition."
+    data = TEST_DATA_OVERRIDES.get(obligation_id, "Source-backed representative value from action/condition.")
     if status == "needs-test-data":
         data = note
     elif status == "candidate-ui-calibration":
@@ -89,7 +131,7 @@ def lines_for_case(assertion: dict[str, object]) -> list[str]:
         f"- **Статус тест-кейса:** `{status}`",
         f"- **Статус oracle:** `{oracle_status}`",
         f"- **Приоритет:** `{assertion.get('risk', 'medium')}`",
-        f"- **Тип:** `{'негативный/валидационный' if status == 'candidate-ui-calibration' else 'позитивный/функциональный'}`",
+        f"- **Тип:** `{TYPE_OVERRIDES.get(obligation_id, 'негативный/валидационный' if status == 'candidate-ui-calibration' else 'позитивный/функциональный')}`",
         f"- **Трассировка:** `{source_ref}`",
         f"- **Тестовые данные:** {data}",
         f"- **Требуется уточнение:** {note}",
@@ -138,7 +180,8 @@ def main() -> int:
         "## Scope Notes",
         "",
         "- DOCX остается source of truth; XHTML source rows and PDF parity are bound through the accepted source assertion manifest.",
-        "- DaData-specific cases do not invent concrete API responses, suggestion ordering, trigger length, debounce, fallback behavior, or region lists.",
+        "- DaData-specific cases use verified local snapshot fixtures and do not invent suggestion ordering, trigger length, debounce, count or fallback behavior.",
+        "- Manual `Регион` fields use PAB dictionary values from `support/PAB_справочники_выгрузка_v2.md` section `## Регионы`; `FX-DADATA-REGION-POS-001` is not used for ordinary manual region field checks.",
         "- Internal `kladr` verification from BSR 324 is excluded from UI test cases by approved clarification; only observable decomposition into manual address fields is covered.",
         "",
         "## Test Cases",

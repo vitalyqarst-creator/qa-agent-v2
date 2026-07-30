@@ -8,15 +8,16 @@
 - `route_status`: `controlled-ft-first-baseline`
 - `production_promotion`: `not-performed`
 - `test_case_count`: `59`
-- `execution_ready_count`: `33`
-- `needs_test_data_count`: `9`
+- `execution_ready_count`: `42`
+- `needs_test_data_count`: `0`
 - `calibration_candidate_count`: `17`
 - `suite_readiness`: `ft-first-reviewed-with-test-data-and-calibration-pending`
 
 ## Scope Notes
 
 - DOCX остается source of truth; XHTML source rows and PDF parity are bound through the accepted source assertion manifest.
-- DaData-specific cases do not invent concrete API responses, suggestion ordering, trigger length, debounce, fallback behavior, or region lists.
+- DaData-specific cases use verified local snapshot fixtures and do not invent suggestion ordering, trigger length, debounce, count or fallback behavior.
+- Manual `Регион` fields use PAB dictionary values from `support/PAB_справочники_выгрузка_v2.md` section `## Регионы`; `FX-DADATA-REGION-POS-001` is not used for ordinary manual region field checks.
 - Internal `kladr` verification from BSR 324 is excluded from UI test cases by approved clarification; only observable decomposition into manual address fields is covered.
 
 ## Test Cases
@@ -48,13 +49,13 @@
 
 ### TC-ADDR-004 — Поле «Адрес регистрации» использует интеграцию с DaData.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-003; ASSERT-ADDR-004; ATOM-ADDR-004; OBL-ADDR-004; BSR 116`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для запроса адреса регистрации, подтверждающий появление подсказок; trigger/debounce/count/order не утверждать
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для запроса адреса регистрации, подтверждающий появление подсказок; trigger/debounce/count/order не утверждать
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-POS-001`: query `самара авроры 7 12`; expected suggestion `г Самара, ул Авроры, д 7, кв 12`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json`; exact components: `region_with_type=Самарская обл`, `city_with_type=г Самара`, `street_with_type=ул Авроры`, `house=7`, `flat=12`, `postal_code=443017`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -123,13 +124,13 @@
 
 ### TC-ADDR-007 — Если DaData не находит адрес регистрации, отображается подсказка «Некорректно указан адрес».
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
-- **Тип:** `позитивный/функциональный`
+- **Тип:** `негативный/валидационный`
 - **Трассировка:** `SRC-ROW-003; ASSERT-ADDR-007; ATOM-ADDR-007; OBL-ADDR-007; BSR 118`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для запроса адреса регистрации со статусом «адрес не найден»
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для запроса адреса регистрации со статусом «адрес не найден»
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-NEG-001`: query `ZZZNOADDRESS7F3A9C2E20260721`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.verification.json`; verified expected DaData response: `suggestions=[]`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -148,13 +149,13 @@
 
 ### TC-ADDR-008 — Если адрес регистрации найден в DaData, он раскладывается по полям блока ручного ввода.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-003; ASSERT-ADDR-008; ATOM-ADDR-008; OBL-ADDR-008; BSR 119`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для найденного адреса регистрации и ожидаемая раскладка по ручным полям
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для найденного адреса регистрации и ожидаемая раскладка по ручным полям
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-POS-001`: query `самара авроры 7 12`; expected suggestion `г Самара, ул Авроры, д 7, кв 12`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json`; exact components: `region_with_type=Самарская обл`, `city_with_type=г Самара`, `street_with_type=ул Авроры`, `house=7`, `flat=12`, `postal_code=443017`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -298,13 +299,13 @@
 
 ### TC-ADDR-014 — Поле «Регион» адреса регистрации видимо в ручном режиме и использует справочник регионов.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-006; ASSERT-ADDR-014; ATOM-ADDR-014; OBL-ADDR-014; BSR 125`
-- **Тестовые данные:** нужен сохраненный DaData response/verification или UI evidence для актуального значения региона в external dynamic dictionary
-- **Требуется уточнение:** нужен сохраненный DaData response/verification или UI evidence для актуального значения региона в external dynamic dictionary
+- **Тестовые данные:** PAB dictionary `support/PAB_справочники_выгрузка_v2.md`, section `## Регионы`, 91 active values. Representative value: `Саратовская область`, internal code `64`, OKATO `63`; additional checked values include `г. Москва`/`77`/`45` and `Красноярский край`/`24`/`04`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -319,7 +320,7 @@
 
 **Ожидаемый результат:**
 
-Поле «Регион» отображается и использует актуальные предложения регионов DaData как external dynamic dictionary.
+Поле «Регион» отображается в ручном режиме адреса регистрации и позволяет выбрать значение из PAB справочника регионов; проверочное значение: `Саратовская область`, код `64`, ОКАТО `63`.
 
 ### TC-ADDR-015 — Поле «Район» адреса регистрации видимо в ручном режиме.
 
@@ -698,13 +699,13 @@
 
 ### TC-ADDR-030 — Поле «Адрес фактического места жительства» использует интеграцию с DaData.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-016; ASSERT-ADDR-030; ATOM-ADDR-030; OBL-ADDR-030; BSR 141`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для запроса фактического адреса, подтверждающий появление подсказок; trigger/debounce/count/order не утверждать
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для запроса фактического адреса, подтверждающий появление подсказок; trigger/debounce/count/order не утверждать
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-POS-001`: query `самара авроры 7 12`; expected suggestion `г Самара, ул Авроры, д 7, кв 12`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json`; exact components: `region_with_type=Самарская обл`, `city_with_type=г Самара`, `street_with_type=ул Авроры`, `house=7`, `flat=12`, `postal_code=443017`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -773,13 +774,13 @@
 
 ### TC-ADDR-033 — Если DaData не находит фактический адрес, отображается подсказка «Некорректно указан адрес».
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
-- **Тип:** `позитивный/функциональный`
+- **Тип:** `негативный/валидационный`
 - **Трассировка:** `SRC-ROW-016; ASSERT-ADDR-033; ATOM-ADDR-033; OBL-ADDR-033; BSR 143`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для запроса фактического адреса со статусом «адрес не найден»
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для запроса фактического адреса со статусом «адрес не найден»
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-NEG-001`: query `ZZZNOADDRESS7F3A9C2E20260721`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.verification.json`; verified expected DaData response: `suggestions=[]`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -798,13 +799,13 @@
 
 ### TC-ADDR-034 — Если фактический адрес найден в DaData, он раскладывается по полям блока ручного ввода.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-016; ASSERT-ADDR-034; ATOM-ADDR-034; OBL-ADDR-034; BSR 144`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для найденного фактического адреса и ожидаемая раскладка по ручным полям
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для найденного фактического адреса и ожидаемая раскладка по ручным полям
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-POS-001`: query `самара авроры 7 12`; expected suggestion `г Самара, ул Авроры, д 7, кв 12`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json`; exact components: `region_with_type=Самарская обл`, `city_with_type=г Самара`, `street_with_type=ул Авроры`, `house=7`, `flat=12`, `postal_code=443017`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -948,13 +949,13 @@
 
 ### TC-ADDR-040 — Поле «Регион» фактического адреса видимо в ручном режиме и использует справочник регионов.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-019; ASSERT-ADDR-040; ATOM-ADDR-040; OBL-ADDR-040; BSR 150`
-- **Тестовые данные:** нужен сохраненный DaData response/verification или UI evidence для актуального значения региона фактического адреса в external dynamic dictionary
-- **Требуется уточнение:** нужен сохраненный DaData response/verification или UI evidence для актуального значения региона фактического адреса в external dynamic dictionary
+- **Тестовые данные:** PAB dictionary `support/PAB_справочники_выгрузка_v2.md`, section `## Регионы`, 91 active values. Representative value: `Саратовская область`, internal code `64`, OKATO `63`; additional checked values include `г. Москва`/`77`/`45` and `Красноярский край`/`24`/`04`.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 
@@ -969,7 +970,7 @@
 
 **Ожидаемый результат:**
 
-Поле «Регион» отображается и использует актуальные предложения регионов DaData как external dynamic dictionary.
+Поле «Регион» отображается в ручном режиме фактического адреса и позволяет выбрать значение из PAB справочника регионов; проверочное значение: `Саратовская область`, код `64`, ОКАТО `63`.
 
 ### TC-ADDR-041 — Поле «Район» фактического адреса видимо в ручном режиме.
 
@@ -1298,13 +1299,13 @@
 
 ### TC-ADDR-054 — Если адрес клиента заполнен посредством запроса DaData, он раскладывается по полям блока ручного ввода.
 
-- **Статус тест-кейса:** `needs-test-data`
-- **Статус oracle:** `ui-calibration-required`
+- **Статус тест-кейса:** `fully-ready`
+- **Статус oracle:** `source-backed`
 - **Приоритет:** `high`
 - **Тип:** `позитивный/функциональный`
 - **Трассировка:** `SRC-ROW-028; ASSERT-ADDR-054; ATOM-ADDR-054; OBL-ADDR-054; BSR 324`
-- **Тестовые данные:** нужен сохраненный DaData response/verification для выбранного адреса и ожидаемая раскладка по ручным полям; внутренний kladr исключен
-- **Требуется уточнение:** нужен сохраненный DaData response/verification для выбранного адреса и ожидаемая раскладка по ручным полям; внутренний kladr исключен
+- **Тестовые данные:** Fixture `FX-DADATA-ADDR-POS-001`: query `самара авроры 7 12`; expected suggestion `г Самара, ул Авроры, д 7, кв 12`; response `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json`; verification `work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json`; exact components: `region_with_type=Самарская обл`, `city_with_type=г Самара`, `street_with_type=ул Авроры`, `house=7`, `flat=12`, `postal_code=443017`. Internal `kladr` persistence is excluded from UI TC by approved clarification.
+- **Требуется уточнение:** Не требуется.
 
 **Предусловия:**
 

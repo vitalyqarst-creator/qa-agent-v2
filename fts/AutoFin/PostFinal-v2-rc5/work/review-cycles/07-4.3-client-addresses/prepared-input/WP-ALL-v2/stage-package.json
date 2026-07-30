@@ -10,16 +10,16 @@
   "input_fingerprint": "e9a028ae3a5ac343d4d5d59814b619cec6fd6c2bf75184131eb9a3c977e98d30",
   "package_artifacts": [
     {
-      "bytes": 277048,
+      "bytes": 280278,
       "kind": "source-evidence",
       "path": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/source-evidence.md",
-      "sha256": "c013d3113b899afd4502a13a4191aa39517728236d0ccfc4400fd7948dc37ff2"
+      "sha256": "75840cdbcfc40f73280ab214fcfe1d7bc45ebb41475c5a5ba63f3b96e748508f"
     },
     {
-      "bytes": 87155,
+      "bytes": 89674,
       "kind": "atomic-obligations",
       "path": "fts/AutoFin/PostFinal-v2-rc5/work/review-cycles/07-4.3-client-addresses/prepared-input/WP-ALL-v2/atomic-obligations.json",
-      "sha256": "a73b3ccc09ab8636db259fc7c7640b482c5db20deefa71a1307a05c008d9dda9"
+      "sha256": "9469a7b046d4a04e9c3c7a79821d309747a3b91105237d14806cb846ad635f55"
     },
     {
       "bytes": 1415,
@@ -28,7 +28,7 @@
       "sha256": "0c73952925c4e5140d30ae75f9f203b72cd3c2fc1d9bf1a36d4e6a9fdb911f92"
     }
   ],
-  "package_digest": "e13eacf38d4592a1088527bdad4781a279be24ad90f4c9653ee105a07f67be51",
+  "package_digest": "41224b726ecd3727a9eba91ea4c22bb94ef7d24bb6b226e913ef4454e97db7d1",
   "package_id": "WP-ALL-v2",
   "package_version": 9,
   "release_status": {
@@ -61,6 +61,54 @@
       "path": "fts/AutoFin/PostFinal-v2-rc5/source/PostFinal-v2.pdf",
       "role": "structural-cross-check",
       "sha256": "9ac89905a8f51ccc0539a35dd2617dc1fb1bda9c4eea6ccc31ee765c0d5ff218"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/support/PAB_справочники_выгрузка_v2.md",
+      "role": "support-dictionary",
+      "sha256": "9575b628b90e8b45aeade393679cb45d6f8f241088b87c99b97f88ba338cc345"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixture-catalog.md",
+      "role": "vendor-fixture-catalog",
+      "sha256": "43d105ee932229e823f7b33dcb8a8707b670ebf51e257de03b346ba25944db34"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.response.json",
+      "role": "vendor-fixture",
+      "sha256": "1e889abe30cd94b7f83fd847167e9848472a4837bf2a88978c56f53e45b7058a"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-POS-001.verification.json",
+      "role": "vendor-fixture",
+      "sha256": "abc59b0ee0bee2741e0b508dc7ab71219a189bc2caa2164862c0fe5e0c301932"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.response.json",
+      "role": "vendor-fixture",
+      "sha256": "8e5e36d9bf781113e259d054939c9dfefe858cc0240844aa224405d7a69f482e"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixtures/FX-DADATA-ADDR-NEG-001.verification.json",
+      "role": "vendor-fixture",
+      "sha256": "e1a4417853d7ed0c98f7f3ed27b4dc65c2045a2f34578272e2686f963b2cae8d"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixtures/FX-DADATA-REGION-POS-001.response.json",
+      "role": "vendor-fixture",
+      "sha256": "1a6cffc2b87187995bd90db4e4acbae13dbadc9812cf56a5aa2d0906d7d120d3"
+    },
+    {
+      "locator": "controlled baseline evidence repair",
+      "path": "fts/AutoFin/PostFinal-v2-rc5/work/vendor-references/dadata-fixtures/FX-DADATA-REGION-POS-001.verification.json",
+      "role": "vendor-fixture",
+      "sha256": "5ab8a3ca8da8959d71066e97d53d3c1476bfeb1f0f5b50feaa7f09a904e8f014"
     }
   ],
   "unsupported_dimensions": [
