@@ -1,0 +1,31 @@
+# UI evidence index: 06-4.3-previous-passports
+
+All paths are repo-relative.
+
+| TC-ID | Status | Topic | Trigger/action | Evidence file | Screenshots |
+|---|---|---|---|---|---|
+| `TC-PASSPREV-001` | confirmed | Block visible when changed-passport flag is on | Click `Клиент менял паспорт` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-001.md` | `evidence/screenshots/client-changed-passport-on-previous-passports-row.png` |
+| `TC-PASSPREV-002` | confirmed | Block hidden when changed-passport flag is off | Leave/click flag off | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-002.md` | `evidence/screenshots/client-changed-passport-off-previous-passports-hidden.png` |
+| `TC-PASSPREV-003` | confirmed | Add button visible | Inspect previous-passports block | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-003.md` | `evidence/screenshots/client-changed-passport-on-previous-passports-row.png` |
+| `TC-PASSPREV-004` | confirmed | Add row | Click `ДОБАВИТЬ ПАСПОРТ` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-004.md` | `evidence/screenshots/previous-passports-after-add-second-row.png` |
+| `TC-PASSPREV-005` | confirmed | Delete/trash visible | Inspect row header | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-005.md` | `evidence/screenshots/client-changed-passport-on-previous-passports-row.png`, `evidence/screenshots/previous-passports-after-add-second-row.png` |
+| `TC-PASSPREV-006` | confirmed | Delete row | Click second row delete/trash | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-006.md` | `evidence/screenshots/previous-passports-after-add-second-row.png`, `evidence/screenshots/previous-passports-after-delete-second-row.png` |
+| `TC-PASSPREV-007` | confirmed | `Серия` visible | Inspect row | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-007.md` | `evidence/screenshots/client-changed-passport-on-previous-passports-row.png` |
+| `TC-PASSPREV-008` | confirmed | Valid `Серия` | Enter `1234` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-008.md` | `evidence/screenshots/fresh-tc-passprev-008-series-1234.png` |
+| `TC-PASSPREV-009` | confirmed | Short `Серия` | Enter `123`, blur | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-009.md` | `evidence/screenshots/fresh-tc-passprev-009-series-123.png` |
+| `TC-PASSPREV-010` | confirmed | Long `Серия` | Enter `12345` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-010.md` | `evidence/screenshots/fresh-tc-passprev-010-series-12345.png` |
+| `TC-PASSPREV-011` | confirmed | Nonnumeric `Серия` | Enter `12A4`, blur | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-011.md` | `evidence/screenshots/fresh-tc-passprev-011-series-12A4.png` |
+| `TC-PASSPREV-012` | confirmed | Repeated `Серия` | Enter `1112`, blur | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-012.md` | `evidence/screenshots/fresh-tc-passprev-012-series-1112.png` |
+| `TC-PASSPREV-013` | confirmed | `Номер` visible | Inspect row | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-013.md` | `evidence/screenshots/client-changed-passport-on-previous-passports-row.png` |
+| `TC-PASSPREV-014` | confirmed | Valid `Номер` | Enter `123456` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-014.md` | `evidence/screenshots/tab-tc-passprev-014-number-123456.png` |
+| `TC-PASSPREV-015` | confirmed | Short `Номер` | Enter `12345` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-015.md` | `evidence/screenshots/tab-tc-passprev-015-number-12345.png` |
+| `TC-PASSPREV-016` | confirmed | Long `Номер` | Enter `1234567` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-016.md` | `evidence/screenshots/tab-tc-passprev-016-number-1234567.png` |
+| `TC-PASSPREV-017` | confirmed | Nonnumeric `Номер` | Enter `12345A` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-017.md` | `evidence/screenshots/tab-tc-passprev-017-number-12345A.png` |
+| `TC-PASSPREV-018` | confirmed | Repeated `Номер` | Enter `111111` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-018.md` | `evidence/screenshots/tab-tc-passprev-018-number-111111.png` |
+| `TC-PASSPREV-019` | confirmed | `Дата выдачи` visible | Inspect/focus date field | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-019.md` | `evidence/screenshots/tc-passprev-021-date-empty-after-tab.png` |
+| `TC-PASSPREV-020` | blocked-observability | Empty BSR 114 | Inspect date UI | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-020.md` | `evidence/screenshots/tc-passprev-021-date-empty-after-ctrl-enter.png` |
+| `TC-PASSPREV-021` | confirmed | Date requiredness | Focus empty date, trigger `Ctrl+Enter` | `fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/evidence/per-tc/TC-PASSPREV-021.md` | `evidence/screenshots/tc-passprev-021-date-empty-after-ctrl-enter.png` |
+
+## Canonical Report
+
+`fts/AutoFin/PostFinal-v2-rc5/work/ui-automation-prep/06-4.3-previous-passports-ui-calibration/ui-validation-report.md`
