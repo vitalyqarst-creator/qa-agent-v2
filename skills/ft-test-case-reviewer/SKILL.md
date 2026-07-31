@@ -129,6 +129,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 - findings по severity в порядке `error -> warning -> info`;
 - structured findings artifact;
 - human summary;
+- для final practical release review: проверка единого release-файла, lightweight coverage matrix и release quality report по `references/qa/practical-release-quality-gate.md`;
 - при `traceability` и `full`:
   - отдельный traceability matrix artifact;
   - обязательный `.xlsx`-дубль traceability matrix artifact с теми же строками и колонками;
@@ -192,6 +193,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 27. Если найдены unresolved findings, сохрани `prompt.reviewer-to-writer.round-N.md` для следующего writer round.
 27a. Если review verdict = `not signed-off`, не записывай `stage_status: not-signed-off` в `workflow-state.yaml`: такого process-status нет. Для обычного следующего writer round используй `stage_status: ready-for-writer-revision` и `next_skill: ft-test-case-writer`; если достигнут round cap, используй `stage_status: round-cap-reached`; если нужен внешний input, используй `stage_status: blocked-input`.
 28. Если набор подписан без unresolved findings, перед handoff проверь группировку, сквозную нумерацию `TC-*` и выполни `python scripts\validate_agent_artifacts.py --root <ft-package> --json` или runner validator gate по текущему scope. Final reviewer output должен содержать блок `Reviewer Sign-off Self-check` по `reviewer-output-format.md`; `validator_checked: yes`/`blocking_findings_absent: yes` допустимы только без scope `error`/`warning` либо с валидным `Validator Warning Waivers`. Затем сохрани `prompt.reviewer-to-ui-prep.md` и обнови handoff state.
+28a. Для practical production-oriented release перед передачей пользователю выполни или проверь `scripts\build_test_case_release.py --root <ft-package> --release-name <ft-version>-all-test-cases`. Reviewer обязан прочитать release quality report и coverage matrix, затем вручную проверить PDF/table/applications, source code coverage, file/dictionary/DaData/status/boundary dimensions по `practical-release-quality-gate.md`. Ошибки release gate блокируют sign-off; warnings могут быть оставлены только как явно принятый non-blocking residual.
 29. Не выдавай handoff в `ft-ui-automation-prep`, если остаются `error`, `warning` или traceability `gap`, кроме явно допустимых `unclear`; для одиночного reviewer-pass без orchestrator-а не подменяй lifecycle sign-off, если sign-off должен фиксировать `ft-test-case-iteration`.
 
 ## Test-design Applicability Matrix Rule
@@ -224,6 +226,7 @@ Rules:
 - Deterministic Source Row Baseline: [../../references/agent/source-row-baseline-format.md](../../references/agent/source-row-baseline-format.md)
 - Формат Dictionary Inventory: [../../references/agent/dictionary-inventory-format.md](../../references/agent/dictionary-inventory-format.md)
 - Формат тест-кейса: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
+- Practical release quality gate: [../../references/qa/practical-release-quality-gate.md](../../references/qa/practical-release-quality-gate.md)
 - Test-design review rubric: [../../references/qa/test-design-review-rubric.md](../../references/qa/test-design-review-rubric.md)
 - Test-design defect taxonomy: [../../references/agent/test-design-defect-taxonomy.md](../../references/agent/test-design-defect-taxonomy.md)
 - Coverage obligation table format: [../../references/agent/coverage-obligation-table-format.md](../../references/agent/coverage-obligation-table-format.md)

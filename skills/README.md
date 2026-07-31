@@ -20,12 +20,13 @@ Canonical list of active skills:
 - Incremental FT-version update, full-process observation, benchmark, overnight, semantic-design bridge and sharding routes are forbidden in this production profile. Use a separate development/qualification repository if one of them is explicitly required.
 - The old session-based writer/reviewer cycle and legacy deterministic-only routes are qualification/development compatibility tools and are not production routes.
 - If cases already exist and review is needed: `ft-test-case-reviewer`. By default, it runs in `full` mode and performs `traceability` -> `structure` -> `test-design`.
+- Before handing a completed FT/scope set to the user, run the practical release gate: `scripts\build_test_case_release.py --root fts/<ft-slug>/<ft-version>`. This creates the combined file, lightweight coverage matrix, and release quality report.
 - If the suite already has `signed-off` and must be checked against the real UI before automation: `ft-ui-automation-prep`.
 - If the request is about agent architecture, duplication, knowledge placement, and skill boundaries: `agent-architecture-auditor`.
 
 ## Typical Chains
 
-- New test-case suite: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` -> bounded writer revision when needed.
+- New test-case suite: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` -> bounded writer revision when needed -> practical release gate/export.
 - Optional strict shadow after explicit qualification request: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config and `writer_mode: model-runtime-prose`.
 - Full new scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> optional independent source review -> `ft-test-case-iteration`.
 - Automation-ready preparation after sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` -> `ft-ui-automation-prep`
@@ -51,6 +52,7 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
 - Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
 - Production route allowlist: [../references/agent/production-route-allowlist.md](../references/agent/production-route-allowlist.md)
+- Practical release quality gate: [../references/qa/practical-release-quality-gate.md](../references/qa/practical-release-quality-gate.md)
 - Legacy session review-cycle format: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
 - Codex SDK orchestration format: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)
 - Quality feedback loop: [../references/agent/quality-feedback-loop.md](../references/agent/quality-feedback-loop.md)

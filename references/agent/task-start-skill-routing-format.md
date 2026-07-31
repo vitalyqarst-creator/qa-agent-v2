@@ -128,13 +128,37 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
         {
           "skill": "ft-test-case-reviewer",
           "scenario": "reviewer.full_existing_cases"
+        },
+        {
+          "skill": "ft-test-case-reviewer",
+          "scenario": "release.practical_quality"
         }
       ],
       "verification_gates": [
         "source rows and coverage gaps are recorded",
         "test-case file exists",
         "pending UI/data issues use explicit statuses",
-        "manual or independent review findings are applied or reported"
+        "manual or independent review findings are applied or reported",
+        "combined release file and coverage matrix are built"
+      ]
+    },
+    {
+      "id": "release.practical_quality",
+      "task_type": "Build or verify the final practical release package for existing test cases.",
+      "skill_chain": [
+        "ft-test-case-reviewer"
+      ],
+      "instruction_scenarios": [
+        {
+          "skill": "ft-test-case-reviewer",
+          "scenario": "release.practical_quality"
+        }
+      ],
+      "verification_gates": [
+        "combined release file exists",
+        "coverage matrix exists",
+        "release quality report has no blocking errors",
+        "validator has no current-scope errors or warnings"
       ]
     },
     {
@@ -511,7 +535,8 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
         "source_locator.discovery",
         "scope.bounded_production",
         "writer.initial_draft.table",
-        "reviewer.full_existing_cases"
+        "reviewer.full_existing_cases",
+        "release.practical_quality"
       ]
     },
     {

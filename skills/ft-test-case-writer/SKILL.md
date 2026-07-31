@@ -44,6 +44,7 @@ explicitly provided, follow it and return `blocked-input` on conflicts.
 - for revision in a session-based cycle: `fts/<ft-slug>/work/review-cycles/<scope-slug>/outputs/writer-rN-response.md`;
 - traceability matrix and mandatory `.xlsx` duplicate when writer creates or updates the matrix;
 - `coverage-obligation-table.md`, `coverage-metrics.md`, `fixture-catalog.md` when applicable, coverage gaps, open questions, `test-design-review.md`, Writer Quality Gate, and writer self-check in the appropriate split artifacts;
+- after final per-scope or FT-wide delivery: practical release package with one combined file, lightweight coverage matrix, and release quality report by `references/qa/practical-release-quality-gate.md`;
 - `writer-session-log.md` and `agent-decision-log.md` when required by the stage workflow;
 - `workflow-state.yaml` with `ready-for-review` only after successful gates;
 - `prompt.writer-to-reviewer.round-N.md` in the current handoff folder.
@@ -94,6 +95,7 @@ Minimum runtime rules:
 16. Do not use non-canonical status aliases in writer-side artifacts: `Writer Quality Gate` and `Test Design Review` accept only `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` accepts only `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed`, and local variants are validator defects.
 17. `writer-self-check.md` must not contain empty sections. Every heading section, including `Artifact Write Evidence`, must have evidence, a table/list, a link to session log / split artifact, or explicit `not-applicable` with reason.
 18. `placeholder-sentinel-normalization`: in traceability-bearing split-artifact tables and reviewer matrices, do not use placeholder `-` / `N/A` in link or traceability columns. Write an explicit sentinel: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>`, or `none_required:<reason>`.
+19. Before handing a completed suite to the user, run `scripts\build_test_case_release.py --root fts/<ft-slug>/<ft-version> --release-name <ft-version>-all-test-cases` and inspect the quality report. Fix `error` findings before release; do not start bridge/benchmark/sharding to fix release-quality smells.
 
 ## Test-design Applicability Matrix Rule
 
@@ -131,6 +133,7 @@ Rules:
 - Mockup visual inventory format: [../../references/agent/mockup-visual-inventory-format.md](../../references/agent/mockup-visual-inventory-format.md)
 - Test case runtime format: [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md)
 - Test case format: [../../references/qa/test-case-format.md](../../references/qa/test-case-format.md)
+- Practical release quality gate: [../../references/qa/practical-release-quality-gate.md](../../references/qa/practical-release-quality-gate.md)
 - Review findings format: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)
 - Traceability matrix format: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
 - Coverage runtime checklist: [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md)

@@ -3,6 +3,27 @@
 Source-first агент для подготовки трассируемых тест-кейсов по DOCX с
 обязательным XHTML-представлением и опциональной PDF-сверкой.
 
+## Practical-quality profile
+
+Текущий development profile ориентирован на быстрый production-like выпуск
+тест-кейсов без автоматического ухода в bridge, benchmark или sharding. Рабочая
+цепочка:
+
+```text
+ft-source-locator -> ft-scope-analyzer -> ft-test-case-writer -> ft-test-case-reviewer -> practical release gate
+```
+
+Перед передачей результата пользователю запускается:
+
+```powershell
+python scripts\build_test_case_release.py `
+  --root fts/<ft-slug>/<ft-version> `
+  --release-name <ft-version>-all-test-cases
+```
+
+Он создает единый Markdown-файл со сквозной нумерацией, lightweight coverage
+matrix и release quality report в `work/exports/`.
+
 ## Production runtime
 
 Публичный runtime намеренно решает одну задачу: получает уже независимо

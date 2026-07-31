@@ -72,6 +72,12 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/qa/traceability-rules.md"
       ]
     },
+    "practical_release_quality": {
+      "rationale": "Final practical release gate and one-file export after writer/reviewer cleanup; not needed during source discovery or ordinary style remediation.",
+      "paths": [
+        "references/qa/practical-release-quality-gate.md"
+      ]
+    },
     "writer_process_artifacts": {
       "rationale": "Detailed process artifact formats for workflow/session/decision logs and next-step prompts.",
       "paths": [
@@ -641,6 +647,17 @@ Resolver должен читать JSON-блок ниже как канонич�
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 272,
       "rationale": "Direct review of an existing test-case set for an already confirmed FT package and scope; includes mandatory semantic rubric, defect taxonomy and dictionary checks. The limit includes a small explicit reserve for source-bound runtime quality rules such as oracle polarity, equivalence classes and priority-risk checks."
+    },
+    {
+      "id": "release.practical_quality",
+      "phase": "release",
+      "mode": "practical_quality",
+      "scope_profile": "ft-package",
+      "required_groups": ["global_core", "reviewer_core", "practical_release_quality"],
+      "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 286,
+      "rationale": "Final practical-quality release pass after writer/reviewer cleanup: run the export/gate script, inspect the lightweight coverage matrix, and perform manual Senior QA checks without bridge/benchmark/sharding."
     },
     {
       "id": "reviewer.session_prepared_semantic",

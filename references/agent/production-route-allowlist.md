@@ -15,6 +15,10 @@ benchmarking or route research.
 - `ft-test-case-reviewer` for independent manual-quality review of existing or
   newly written cases, including traceability, structure, and test-design
   passes.
+- Practical release quality gate through `scripts\build_test_case_release.py`
+  after writer/reviewer cleanup. It creates one combined Markdown export,
+  lightweight coverage matrix, and release quality report without invoking
+  bridge, benchmark, sharding, or model stages.
 - `ft-ui-automation-prep` after baseline/sign-off when a real UI stand is
   available.
 
@@ -56,7 +60,8 @@ or artifact-contract details. Operational production work should prioritize:
 2. clear coverage gaps;
 3. a controlled writer baseline with explicit statuses;
 4. independent test-case review and bounded revision;
-5. UI calibration as a separate phase.
+5. practical release export with coverage/status proof;
+6. UI calibration as a separate phase.
 
 ## Runtime enforcement
 
