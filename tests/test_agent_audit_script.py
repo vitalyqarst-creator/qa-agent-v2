@@ -52,7 +52,7 @@ class AgentAuditScriptTests(unittest.TestCase):
             {
                 "iteration.incremental_update",
                 "iteration.lean_v2",
-                "iteration.deterministic_production",
+                "iteration.source_qualified_model_runtime",
             }.issubset(budget_scenarios)
         )
 

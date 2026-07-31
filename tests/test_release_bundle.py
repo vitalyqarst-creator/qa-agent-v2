@@ -280,6 +280,7 @@ class ReleaseBundleTests(unittest.TestCase):
             "scope",
             "source_evidence",
             "obligations",
+            "writer_mode",
         }
         with tempfile.TemporaryDirectory(prefix="production-config-example-") as raw:
             for index, instruction_path in enumerate(instruction_paths):
@@ -298,6 +299,7 @@ class ReleaseBundleTests(unittest.TestCase):
                 self.assertIsNone(loaded.derivations)
                 self.assertIsNone(loaded.design_context)
                 self.assertIsNone(loaded.ft_slug)
+                self.assertEqual("model-runtime-prose", loaded.writer_mode)
 
     def test_qualification_profile_keeps_curated_configs_not_raw_runs(self) -> None:
         receipt = build_release_bundle(
@@ -384,7 +386,7 @@ class ReleaseBundleTests(unittest.TestCase):
             self.assertIn("{run}", help_result.stdout)
             self.assertNotIn("quality-proof", help_result.stdout)
 
-            for scenario in ("iteration.deterministic_production",):
+            for scenario in ("iteration.source_qualified_model_runtime",):
                 context_result = subprocess.run(
                     [
                         sys.executable,

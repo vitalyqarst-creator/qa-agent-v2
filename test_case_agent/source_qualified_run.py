@@ -103,7 +103,7 @@ _RUN_CONFIG_OPTIONAL_FIELDS = {
     "revision_findings",
     "revision_input",
 }
-_WRITER_MODES = {"deterministic-first", "model-runtime-prose"}
+_WRITER_MODES = {"model-runtime-prose"}
 _DESIGN_CONTEXT_FIELDS_V1 = {
     "package_id",
     "scope_title",
@@ -159,7 +159,7 @@ class SourceQualifiedRunConfig:
     derivations: str | None
     design_context: str | None
     ft_slug: str | None = None
-    writer_mode: str = "deterministic-first"
+    writer_mode: str = "model-runtime-prose"
     mockup_label_aliases: tuple[Mapping[str, str], ...] = ()
     revision_findings: Mapping[str, Any] | None = None
     revision_input: str | None = None
@@ -342,6 +342,11 @@ def _source_qualified_run_config_from_bytes(
     scope = _text(payload["scope"], "scope")
     if _SCOPE_ID.fullmatch(scope) is None:
         _fail("invalid-scope", "scope must be a lowercase slug")
+    if version == RUN_CONFIG_SCHEMA_VERSION and "writer_mode" not in payload:
+        _fail(
+            "run-config-writer-mode-required",
+            "schema-v2 production run config must set writer_mode=model-runtime-prose",
+        )
     return SourceQualifiedRunConfig(
         schema_version=version,
         registry=_relative_path(payload["registry"], "registry"),
@@ -363,7 +368,7 @@ def _source_qualified_run_config_from_bytes(
         writer_mode=(
             _writer_mode(payload["writer_mode"])
             if "writer_mode" in payload
-            else "deterministic-first"
+            else "model-runtime-prose"
         ),
         mockup_label_aliases=(
             _mockup_label_aliases(payload["mockup_label_aliases"])

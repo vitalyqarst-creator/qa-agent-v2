@@ -251,7 +251,7 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/negative-ui-calibration-policy.md"
       ]
     },
-    "deterministic_production_core": {
+    "source_qualified_model_runtime_core": {
       "rationale": "Single public schema-v2 source-qualified production route; qualification-only orchestration and compatibility control planes are excluded.",
       "paths": [
         "skills/ft-test-case-iteration/SKILL.md",
@@ -779,15 +779,26 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Narrow old-to-new FT update context with deterministic unchanged-case reuse; normal full-loop instructions remain unloaded."
     },
     {
+      "id": "iteration.source_qualified_model_runtime",
+      "phase": "iteration",
+      "mode": "source_qualified_model_runtime",
+      "scope_profile": "source-qualified-schema-v2",
+      "required_groups": ["prepared_global_core", "source_qualified_model_runtime_core"],
+      "conditional_groups": [],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 60,
+      "rationale": "Public schema-v2 production route. The historical scenario id is retained, but production configs must set writer_mode=model-runtime-prose and run one independent reviewer for every admitted draft."
+    },
+    {
       "id": "iteration.deterministic_production",
       "phase": "iteration",
       "mode": "deterministic_production",
       "scope_profile": "source-qualified-schema-v2",
-      "required_groups": ["prepared_global_core", "deterministic_production_core"],
+      "required_groups": ["prepared_global_core", "source_qualified_model_runtime_core"],
       "conditional_groups": [],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 60,
-      "rationale": "Public schema-v2 production route with deterministic rendering, at most one bounded writer for complex cards and exactly one independent reviewer for every admitted draft."
+      "rationale": "Compatibility-only historical scenario id. It is not routed by production task-start routing; active production uses iteration.source_qualified_model_runtime."
     },
     {
       "id": "iteration.lean_v2",
@@ -798,7 +809,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": [],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 90,
-      "rationale": "Short source-qualified iteration; compatibility mode can stay deterministic-first, while new production configs should run model-runtime-prose writer plus one independent reviewer."
+      "rationale": "Compatibility-only historical lean context. It is not routed by production task-start routing; production work uses schema-v2 model-runtime-prose instead."
     },
     {
       "id": "iteration.full_loop",
@@ -809,7 +820,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["source_locator_core", "scope_manual_core", "scope_table_artifacts", "scope_ui_artifacts", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "format_remediation", "style_remediation", "reviewer_core"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 445,
-      "rationale": "Orchestration-only full-loop dispatcher. It loads lifecycle, stage routing and compact quality summaries; source, scope, writer and reviewer rules load in their stage-specific scenarios."
+      "rationale": "Development/compatibility-only full-loop dispatcher. It is not routed by production task-start routing."
     },
     {
       "id": "ui_automation_prep.signed_off",

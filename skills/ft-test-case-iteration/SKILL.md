@@ -26,11 +26,12 @@ The new `run-config.json` uses schema v2. Base required fields:
   "ft_root": "fts/example-ft",
   "scope": "confirmed-scope",
   "source_evidence": "fts/example-ft/work/handoff-001/source-evidence.md",
-  "obligations": "fts/example-ft/work/handoff-001/obligations.json"
+  "obligations": "fts/example-ft/work/handoff-001/obligations.json",
+  "writer_mode": "model-runtime-prose"
 }
 ```
 
-For new production attempts, add `writer_mode: model-runtime-prose`. Allowed route fields: `writer_mode`, `mockup_label_aliases`, `revision_findings`. If `writer_mode` is absent, the runner uses compatibility default `deterministic-first`. Do not add `ft_slug`, design context, ready derivations, `tc_prefix`, source/canonical allowlists, model responses, publication target, or lifecycle status. The runner derives slug and context from accepted contracts and builds derivations itself.
+For new production attempts, `writer_mode: model-runtime-prose` is mandatory. Allowed route fields: `writer_mode`, `mockup_label_aliases`, `revision_findings`. If `writer_mode` is absent or different, stop before the attempt; do not fall back to a compatibility or deterministic-only route. Do not add `ft_slug`, design context, ready derivations, `tc_prefix`, source/canonical allowlists, model responses, publication target, or lifecycle status. The runner derives slug and context from accepted contracts and builds derivations itself.
 
 If an input is missing, stale, ambiguous, or not hash-bound, do not bypass the check: route back to `ft-source-locator` / `ft-scope-analyzer` or close the scope as `blocked-input`.
 
@@ -63,6 +64,8 @@ After a separate signed-off handoff, real UI verification is a post-iteration en
 ## Out of Profile
 
 Incremental FT-version updates, benchmarks, UI automation, and historical session/cycle orchestration are outside this production profile. They require a separate qualification/development environment; do not mix their procedures, artifacts, or fallback routes into the current attempt.
+
+Semantic-design bridge materialization, semantic sharding, full-process observation, benchmark wrappers, overnight controllers, and legacy deterministic-only writer/reviewer routes are also forbidden by the production allowlist. See `references/agent/production-route-allowlist.md`.
 
 ## Canonical References
 

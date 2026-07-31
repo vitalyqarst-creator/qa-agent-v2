@@ -41,7 +41,7 @@ REQUIRED_SCENARIOS = {
     "scope.agent_proposed",
     "iteration.checked_in_observation",
     "iteration.incremental_update",
-    "iteration.deterministic_production",
+    "iteration.source_qualified_model_runtime",
     "iteration.lean_v2",
     "iteration.full_loop",
     "ui_automation_prep.signed_off",
@@ -439,9 +439,9 @@ class InstructionContextResolverTests(unittest.TestCase):
                 scenario_id,
             )
 
-    def test_deterministic_production_context_is_small_and_single_route(self) -> None:
+    def test_source_qualified_model_runtime_context_is_small_and_single_route(self) -> None:
         payload = self.resolve_json(
-            "--scenario", "iteration.deterministic_production"
+            "--scenario", "iteration.source_qualified_model_runtime"
         )
         paths = {item["path"] for item in payload["files"]}
 

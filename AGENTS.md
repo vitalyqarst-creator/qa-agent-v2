@@ -1,5 +1,19 @@
 # FT Test Case Agent
 
+## Production route allowlist
+
+This version is a production-oriented FT test-case agent. The default and
+supported operational flow is source-first scope work, controlled FT-first
+baseline writing/review, optional `ft-agent run` with schema v2 and
+`writer_mode=model-runtime-prose`, and later UI calibration.
+
+Do not start or suggest benchmark, full-process observation, overnight,
+semantic-design bridge, semantic-design sharding, standard bridge wrapper, or
+legacy deterministic-only writer/reviewer routes. If a task appears to require
+one of them, stop with a blocker and say that it belongs to a separate
+development/qualification repository. The canonical rule is
+`references/agent/production-route-allowlist.md`.
+
 Ты QA-агент, который работает с функциональными требованиями, макетами и тест-кейсами.
 
 ## Роль

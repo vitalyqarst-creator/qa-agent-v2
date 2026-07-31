@@ -17,6 +17,12 @@ ROOT_DIR_TEXT = str(ROOT_DIR)
 sys.path[:] = [entry for entry in sys.path if entry != ROOT_DIR_TEXT]
 sys.path.insert(0, ROOT_DIR_TEXT)
 
+from scripts.dev_route_guard import (  # noqa: E402
+    DevRouteDisabledError,
+    print_dev_route_disabled,
+    require_dev_routes_enabled,
+)
+
 SAFE_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
 REQUIRED_SOURCE_SUFFIXES = {".docx", ".xhtml", ".pdf"}
@@ -2465,6 +2471,11 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        require_dev_routes_enabled("full-process observation / benchmark route")
+    except DevRouteDisabledError as exc:
+        print_dev_route_disabled(exc)
+        return 2
     args = parser().parse_args(argv)
     try:
         plan = resolve_plan(

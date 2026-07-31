@@ -194,7 +194,7 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("PDF-версия основного ФТ", scope)
         self.assertIn("сверки структуры разделов", reviewer)
 
-    def test_session_based_review_cycle_contract_is_wired(self) -> None:
+    def test_session_based_review_cycle_contract_is_development_only(self) -> None:
         index = (REFERENCES_DIR / "agent" / "instruction-contract-index.md").read_text(
             encoding="utf-8"
         )
@@ -215,7 +215,8 @@ class AgentArchitectureTests(unittest.TestCase):
         self.assertIn("tests/test_review_cycle_backend_matrix.py", index)
         self.assertIn("tests/test_review_cycle_stage_contract.py", index)
         self.assertIn("review-cycle-stage-contract-v2.md", index)
-        self.assertIn("review_cycle.session_based", routing)
+        self.assertNotIn("review_cycle.session_based", routing)
+        self.assertIn("production.controlled_ft_first_baseline", routing)
         self.assertIn("writer.session_initial_draft", manifest)
         self.assertIn("reviewer.scope_gap_review", manifest)
         self.assertIn("reviewer.scope_gap_review", routing)

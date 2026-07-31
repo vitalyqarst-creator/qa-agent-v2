@@ -839,6 +839,7 @@ class SourceQualifiedRunTests(unittest.TestCase):
                 "scope": "sample-scope",
                 "source_evidence": self._relative(self.source_evidence),
                 "obligations": self._relative(self.obligations),
+                "writer_mode": "model-runtime-prose",
             },
         )
         if not (account_for_source_signals and materialize_gap_artifact):
@@ -1401,6 +1402,24 @@ class SourceQualifiedRunTests(unittest.TestCase):
         self.assertIsNone(candidate["non_promotable_reason"])
         self.assertEqual("not-performed", candidate["canonical_publication"])
         self.assertIn("separate promotion transaction", candidate["recommended_next_action"])
+
+    def test_v2_run_config_requires_model_runtime_writer_mode(self) -> None:
+        self._enable_v2_generated_derivations()
+        config = json.loads(self.config.read_text(encoding="utf-8"))
+        config.pop("writer_mode", None)
+        self._write_json(self.config, config)
+
+        with self.assertRaisesRegex(
+            SourceQualifiedRunError,
+            "run-config-writer-mode-required",
+        ):
+            load_source_qualified_run_config(self.config)
+
+        config["writer_mode"] = "deterministic-first"
+        self._write_json(self.config, config)
+
+        with self.assertRaisesRegex(SourceQualifiedRunError, "invalid-writer-mode"):
+            load_source_qualified_run_config(self.config)
 
     def test_v2_run_config_consumes_revision_input_package(self) -> None:
         self._enable_v2_generated_derivations()

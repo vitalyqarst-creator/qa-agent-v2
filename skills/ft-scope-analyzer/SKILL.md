@@ -7,15 +7,16 @@ description: Выделяет релевантные разделы ФТ, суж
 
 ## Default source-first production route
 
-For new `standard-production` work, use boundary-v2/source-first routing by
-default. Do not materialize the semantic-design bridge merely because a scope is
-large or not lean-eligible. The bridge route remains available only when the
-user or a recovery procedure explicitly requests it.
+For new production work, use source-first routing by default. Do not materialize
+the semantic-design bridge merely because a scope is large or not lean-eligible.
+The bridge route is disabled in this production profile; if it appears necessary,
+stop and report that the task belongs to a separate development/qualification
+repository.
 
 The default standard path is: boundary/source inventory -> source assertions ->
 independent source assertion review -> production input finalization ->
-`ft-agent run` schema v2. When no semantic bridge projection is embedded, the
-runner builds typed derivations from the accepted source-first contract.
+`ft-agent run` schema v2 with `writer_mode=model-runtime-prose`. The runner
+builds typed derivations from the accepted source-first contract.
 
 ## Source-first contract for new production cycles
 

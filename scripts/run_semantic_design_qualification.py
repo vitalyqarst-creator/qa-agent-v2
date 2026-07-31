@@ -11,6 +11,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from scripts.dev_route_guard import (  # noqa: E402
+    DevRouteDisabledError,
+    print_dev_route_disabled,
+    require_dev_routes_enabled,
+)
 from scripts.codex_exec_semantic_design_author import main as semantic_main  # noqa: E402
 from scripts.run_standard_scope_bridge import (  # noqa: E402
     StandardScopeBridgeError,
@@ -190,6 +195,11 @@ def _run_targeted_shard(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    try:
+        require_dev_routes_enabled("semantic-design sharding qualification route")
+    except DevRouteDisabledError as exc:
+        print_dev_route_disabled(exc)
+        return 2
     args = parser().parse_args(argv)
     root = args.repo_root.resolve()
     context = _under(root, args.context, label="context")

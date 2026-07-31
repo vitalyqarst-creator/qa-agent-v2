@@ -32,15 +32,15 @@ Global profile rules live in [production-global-rules.md](production-global-rule
   },
   "scenarios": [
     {
-      "id": "iteration.deterministic_production",
+      "id": "iteration.source_qualified_model_runtime",
       "phase": "iteration",
-      "mode": "deterministic_production",
+      "mode": "source_qualified_model_runtime",
       "scope_profile": "source-qualified-schema-v2",
       "required_groups": ["production_global", "production_iteration"],
       "conditional_groups": [],
       "audit_only_groups": [],
       "budget_limit_kib": 60,
-      "rationale": "Single public schema-v2 production iteration."
+      "rationale": "Single public schema-v2 production iteration with required writer_mode=model-runtime-prose."
     }
   ]
 }
@@ -51,6 +51,6 @@ Resolver runs inside the production bundle must always use this file explicitly:
 ```powershell
 python scripts/resolve_instruction_context.py `
   --manifest references/agent/production-instruction-loading.md `
-  --scenario iteration.deterministic_production `
+  --scenario iteration.source_qualified_model_runtime `
   --budget-report --fail-on-budget
 ```

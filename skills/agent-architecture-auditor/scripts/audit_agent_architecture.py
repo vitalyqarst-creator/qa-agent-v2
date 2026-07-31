@@ -31,7 +31,7 @@ SECTIONS=("## Входы","## Выходы","## Ограничения")
 REQUIRED_INSTRUCTION_CONTEXT_SCENARIOS=frozenset({
     "source_locator.discovery",
     "scope.bounded_production",
-    "iteration.deterministic_production",
+    "iteration.source_qualified_model_runtime",
     "architecture.audit",
 })
 TASK_ROUTING_RE=re.compile(r"<!--\s*task-start-skill-routing:v1\s*-->\s*```json\s*(.*?)\s*```",re.DOTALL)
@@ -260,10 +260,27 @@ def audit_task_start_routing(root:Path,checks,findings):
     route_skills={skill for item in routes for skill in item.get("skill_chain",[])}
     route_scenarios={entry.get("scenario") for item in routes for entry in item.get("instruction_scenarios",[]) if entry.get("scenario")}
 
+    disabled_production_scenarios={
+        "iteration.checked_in_observation",
+        "iteration.deterministic_production",
+        "iteration.incremental_update",
+        "iteration.lean_v2",
+        "iteration.full_loop",
+        "reviewer.structure_format_final",
+        "reviewer.structure_preflight",
+        "reviewer.semantic_traceability_test_design",
+        "reviewer.semantic_regression",
+        "writer.session_format_revision",
+        "writer.session_initial_draft",
+        "writer.session_semantic_revision",
+        "sdk_orchestration.review_cycle",
+    }
     errors=[]
     missing_skills=sorted(active_skills-route_skills)
     unknown_skills=sorted(route_skills-active_skills)
-    missing_scenarios=sorted(manifest_scenarios-route_scenarios)
+    missing_scenarios=sorted(
+        (manifest_scenarios-route_scenarios)-disabled_production_scenarios
+    )
     unknown_scenarios=sorted(route_scenarios-manifest_scenarios)
     if duplicate_route_ids:errors.append(f"duplicate route ids: {', '.join(duplicate_route_ids)}")
     if missing_skills:errors.append(f"active skills without route: {', '.join(missing_skills)}")
@@ -301,7 +318,7 @@ def audit_task_start_routing(root:Path,checks,findings):
             "warning",
             "dispatch-map",
             "Task-start skill routing is out of sync",
-            "Every active skill and instruction-loading scenario should be reachable from the preflight routing map, and golden examples must match their routes.",
+            "Every active skill and production instruction-loading scenario should be reachable from the preflight routing map, and golden examples must match their routes. Development-only scenarios may remain in the manifest without a production route.",
             errors,
             "Update task-start-skill-routing-format.md or instruction-loading-manifest.md so routing and scenarios agree.",
             paths,

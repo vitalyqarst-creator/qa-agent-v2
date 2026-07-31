@@ -1,8 +1,9 @@
 # Source-qualified iteration
 
-Этот reference задаёт короткий production-маршрут `ft-test-case-iteration` для
-уже квалифицированного bounded scope. Историческое имя instruction scenario —
-`iteration.lean_v2`; публичная точка запуска — `ft-agent run`.
+Этот reference задаёт source-qualified production-маршрут `ft-test-case-iteration`
+для уже квалифицированного bounded scope. Историческое имя instruction scenario —
+`iteration.lean_v2`; активная публичная точка запуска — `ft-agent run` со schema v2
+и обязательным `writer_mode: model-runtime-prose`.
 
 Маршрут не является benchmark. Он не передаёт reviewer старые тест-кейсы,
 benchmark configs, результаты прошлых попыток и произвольные пути из командной
@@ -44,17 +45,20 @@ ft-agent run `
   "ft_root": "fts/example-ft",
   "scope": "confirmed-scope",
   "source_evidence": "fts/example-ft/work/handoff-001/source-evidence.md",
-  "obligations": "fts/example-ft/work/handoff-001/obligations.json"
+  "obligations": "fts/example-ft/work/handoff-001/obligations.json",
+  "writer_mode": "model-runtime-prose"
 }
 ```
 
 Schema v1 с явным `derivations` остаётся только compatibility API для старых
 внутренних handoff. Новые production-конфиги используют schema v2.
 
-Для новых production попыток добавляй `writer_mode: model-runtime-prose`.
-Допустимые route-поля: `writer_mode`, `mockup_label_aliases`,
-`revision_findings`. Если `writer_mode` отсутствует, runner использует
-compatibility default `deterministic-first`. Он не принимает `ft_slug`, design
+Для новых production попыток `writer_mode: model-runtime-prose` является
+обязательным полем config. Допустимые route-поля: `writer_mode`,
+`mockup_label_aliases`,
+`revision_findings`. В production schema v2 `writer_mode` обязателен и должен
+быть равен `model-runtime-prose`; отсутствие поля или `deterministic-first`
+является fail-closed ошибкой конфигурации. Runner не принимает `ft_slug`, design
 context, `tc_prefix`, source/canonical allowlists, output status, promotion
 target или готовый файл derivations. Slug и prefix выводятся из `ft_root` и
 registry; защищаемые sources — из accepted manifest и registry; canonical
@@ -95,8 +99,10 @@ Scopes выполняются последовательно. Внутренне
 
 ## Model boundary
 
-В `deterministic-first` единственный model stage — reviewer. В рекомендуемом
-`model-runtime-prose` есть два model stage: writer для runtime prose и reviewer.
+В production-профиле используется только `model-runtime-prose`: два model stage,
+writer для runtime prose и reviewer. Внутренний compatibility mode
+`deterministic-first` не является публичным production route и не выбирается
+через schema-v2 config.
 Writer запускается до suite gate и получает только source-bound seed cases,
 локальный source/obligation projection, mockup label aliases и optional
 `revision_findings`; старые TC и benchmark/history ему недоступны. Runner

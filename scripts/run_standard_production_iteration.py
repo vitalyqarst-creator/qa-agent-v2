@@ -17,6 +17,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from scripts.dev_route_guard import (  # noqa: E402
+    DevRouteDisabledError,
+    print_dev_route_disabled,
+    require_dev_routes_enabled,
+)
 from scripts.run_lean_production_iteration import main as downstream_main  # noqa: E402
 from scripts.run_standard_scope_bridge import (  # noqa: E402
     load_published_handoff_receipt,
@@ -1068,6 +1073,11 @@ def main(
     bridge_runner: Callable[[Sequence[str] | None], int] = bridge_main,
     downstream_runner: Callable[[Sequence[str] | None], int] = downstream_main,
 ) -> int:
+    try:
+        require_dev_routes_enabled("standard production bridge orchestration route")
+    except DevRouteDisabledError as exc:
+        print_dev_route_disabled(exc)
+        return 2
     args = parser().parse_args(argv)
     started = time.perf_counter_ns()
     invocation_started_epoch_ms = time.time_ns() // 1_000_000

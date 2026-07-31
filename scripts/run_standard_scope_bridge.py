@@ -16,6 +16,11 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
+from scripts.dev_route_guard import (  # noqa: E402
+    DevRouteDisabledError,
+    print_dev_route_disabled,
+    require_dev_routes_enabled,
+)
 from scripts.codex_exec_bounded_scope_analyzer import main as boundary_main  # noqa: E402
 from scripts.codex_exec_semantic_design_author import main as semantic_main  # noqa: E402
 from scripts.materialize_semantic_design_bridge import main as materialize_main  # noqa: E402
@@ -1117,6 +1122,11 @@ def main(
     semantic_runner: Callable[[Sequence[str] | None], int] = semantic_main,
     materializer_runner: Callable[[Sequence[str] | None], int] = materialize_main,
 ) -> int:
+    try:
+        require_dev_routes_enabled("semantic-design bridge route")
+    except DevRouteDisabledError as exc:
+        print_dev_route_disabled(exc)
+        return 2
     args = parser().parse_args(argv)
     started = time.perf_counter_ns()
     terminal: dict[str, Any] = {

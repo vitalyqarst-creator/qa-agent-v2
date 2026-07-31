@@ -5,7 +5,7 @@ import re
 import unittest
 from pathlib import Path
 
-from scripts.resolve_instruction_context import load_manifest, resolve_instruction_context
+from scripts.resolve_instruction_context import load_manifest
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -59,14 +59,14 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             for skill in route["skill_chain"]:
                 self.assertIn(skill, active_skills, route["id"])
 
-    def test_every_manifest_scenario_is_routable(self) -> None:
+    def test_production_routes_are_a_subset_of_manifest_scenarios(self) -> None:
         manifest_scenarios = {item["id"] for item in self.manifest["scenarios"]}
         routed_scenarios = {
             item["scenario"]
             for route in self.routes
             for item in route["instruction_scenarios"]
         }
-        self.assertEqual(manifest_scenarios, routed_scenarios)
+        self.assertTrue(routed_scenarios.issubset(manifest_scenarios))
 
     def test_every_route_scenario_exists_in_manifest(self) -> None:
         manifest_scenarios = {item["id"] for item in self.manifest["scenarios"]}
@@ -86,38 +86,12 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
 
     def test_representative_route_expectations(self) -> None:
         self.assertEqual(
-            ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
-            self.route_by_id["iteration.full_loop"]["skill_chain"],
+            ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
+            self.route_by_id["production.controlled_ft_first_baseline"]["skill_chain"],
         )
         self.assertEqual(
-            [
-                "ft-source-locator",
-                "ft-scope-analyzer",
-                "ft-test-case-writer",
-                "ft-test-case-reviewer",
-            ],
-            self.route_by_id["review_cycle.session_based"]["skill_chain"],
-        )
-        self.assertEqual(
-            [
-                "source_locator.discovery",
-                "scope.manual",
-                "reviewer.scope_gap_review",
-                "writer.session_initial_draft",
-                "reviewer.structure_preflight",
-                "reviewer.semantic_traceability_test_design",
-                "writer.session_semantic_revision",
-                "reviewer.structure_format_final",
-                "writer.session_format_revision",
-                "reviewer.semantic_regression",
-                "sdk_orchestration.review_cycle",
-            ],
-            [
-                item["scenario"]
-                for item in self.route_by_id["review_cycle.session_based"][
-                    "instruction_scenarios"
-                ]
-            ],
+            ["ft-test-case-iteration"],
+            self.route_by_id["iteration.source_qualified_model_runtime"]["skill_chain"],
         )
         self.assertEqual(
             ["writer.initial_draft.table"],
@@ -142,52 +116,16 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["reviewer.full_existing_cases"]["verification_gates"],
         )
 
-    def test_checked_in_observation_is_narrow_and_generic_route_is_unchanged(self) -> None:
-        fast = self.route_by_id["production.checked_in_observation"]
-        generic = self.route_by_id["production.bounded_full_loop"]
-
-        self.assertEqual(["ft-test-case-iteration"], fast["skill_chain"])
-        self.assertEqual(
-            ["iteration.checked_in_observation"],
-            [item["scenario"] for item in fast["instruction_scenarios"]],
-        )
-        self.assertNotIn("ft-source-locator", fast["skill_chain"])
-        self.assertNotIn("ft-scope-analyzer", fast["skill_chain"])
-        self.assertEqual(
-            ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
-            generic["skill_chain"],
-        )
-        self.assertEqual(
-            [
-                "source_locator.discovery",
-                "scope.bounded_production",
-                "iteration.full_loop",
-            ],
-            [item["scenario"] for item in generic["instruction_scenarios"]],
-        )
-
-    def test_incremental_update_is_conditional_and_does_not_expand_full_loop(self) -> None:
-        update = self.route_by_id["iteration.incremental_update"]
-        full = self.route_by_id["iteration.full_loop"]
-
-        self.assertEqual(["ft-test-case-iteration"], update["skill_chain"])
-        self.assertEqual(
-            ["iteration.incremental_update"],
-            [item["scenario"] for item in update["instruction_scenarios"]],
-        )
-        resolved = {
-            item["path"]
-            for item in resolve_instruction_context(
-                root=ROOT_DIR,
-                manifest=self.manifest,
-                scenario_id="iteration.incremental_update",
-            )["files"]
-        }
-        self.assertIn("references/agent/incremental-update-iteration.md", resolved)
-        self.assertNotIn(
+    def test_forbidden_development_routes_are_not_routable(self) -> None:
+        forbidden = {
+            "production.checked_in_observation",
+            "production.bounded_full_loop",
+            "review_cycle.session_based",
             "iteration.incremental_update",
-            [item["scenario"] for item in full["instruction_scenarios"]],
-        )
+            "iteration.lean_v2",
+            "iteration.full_loop",
+        }
+        self.assertTrue(forbidden.isdisjoint(self.route_by_id))
 
 
 if __name__ == "__main__":
