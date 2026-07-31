@@ -31,7 +31,10 @@ If the package, source, or scope is not selected yet, use `ft-source-locator` an
 
 If a verified `stage-package.json` is provided, use the prepared fast path: read only the four package files, do not repeat source discovery/extraction, and access the full source only through the targeted fallback contract from [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
 
-For source-first packages, follow the accepted exact-digest contract; conflicts return `blocked-input`.
+For normal practical source-first handoffs, follow the source/gap/oracle artifacts
+linked from `prompt.scope-to-writer.md`; do not require an accepted
+`source-assertion-review.json`. If a strict exact-digest source contract is
+explicitly provided, follow it and return `blocked-input` on conflicts.
 
 ## Выходы
 

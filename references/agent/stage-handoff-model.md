@@ -94,13 +94,14 @@ NN-<scope-slug>/
 - после подтверждения одного scope: `scope-contract.md`
 - после подтверждения одного scope и при наличии DOCX+PDF основного ФТ: `source-parity-check.md`
 - после подтверждения одного scope и при наличии row-level/table parity: `source-row-inventory.md`
-- для нового production/promotion-capable workflow: `source-row-extraction-spec.json`, `source-row-baseline.json`, `source-assertions.json`
-- для нового production/promotion-capable workflow: `prompt.scope-assertions-to-reviewer.md`
+- для strict source-contract route: `source-row-extraction-spec.json`, `source-row-baseline.json`, `source-assertions.json`
+- для strict source-contract route: `prompt.scope-assertions-to-reviewer.md`
 - после подтверждения одного scope: `scope-coverage-gaps.md`
 - после подтверждения одного scope: `scope-clarification-requests.md`, если в `scope-coverage-gaps.md` есть хотя бы один gap
 - опционально после подтверждения одного scope: `scope-execution-options.md`
-- `prompt.scope-gaps-to-reviewer.md`, если в `scope-coverage-gaps.md` есть хотя бы один `GAP-*`
-- `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` только после accepted source assertion review либо для явно legacy/non-promotion route
+- `prompt.scope-gaps-to-reviewer.md`, если пользователь явно попросил отдельный pre-writer gap review
+- `prompt.scope-to-writer.md` после practical source-first handoff
+- `prompt.scope-to-iteration.md` только после accepted source assertion review либо для явно запрошенной strict/qualification route
 - `agent-decision-log.md`
 - обновленный `workflow-state.yaml`
 
@@ -152,9 +153,10 @@ NN-<scope-slug>/
 - `scope-clarification-requests.md` создается как conditional companion к `scope-coverage-gaps.md`, если в gaps есть хотя бы один `GAP-*`; он должен соответствовать `scope-clarification-requests-format.md`.
 - `scope-clarification-requests.md` не заменяет `scope-coverage-gaps.md` и не является источником process-status.
 - `scope-execution-options.md` — optional helper artifact для пользователя; он не заменяет `workflow-state.yaml` и не является обязательным входом downstream этапов.
-- `prompt.scope-gaps-to-reviewer.md` является legacy entrypoint после scope analysis, если найдены `GAP-*` и требуется отдельная reviewer-сессия до writer. Для compiler contract v3 gap challenge входит в source assertion review.
-- `prompt.scope-assertions-to-reviewer.md` является активным pre-writer entrypoint для нового production/promotion-capable workflow.
-- `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` являются user-facing entrypoints только после accepted source assertion review либо для явно legacy/non-promotion route: первый запускает один writer-pass, второй запускает полный writer-reviewer loop.
+- `prompt.scope-gaps-to-reviewer.md` является opt-in entrypoint после scope analysis, если требуется отдельная reviewer-сессия до writer. Наличие `GAP-*` само по себе не делает этот prompt обязательным.
+- `prompt.scope-assertions-to-reviewer.md` является активным pre-writer entrypoint только для явно выбранного strict compiler-v3 source-contract route.
+- `prompt.scope-to-writer.md` является default user-facing entrypoint после practical source-first handoff: он запускает один writer-pass по `scope-contract.md`, gaps, row/parity/oracle/dictionary/mockup artifacts и честным статусам unresolved obligations.
+- `prompt.scope-to-iteration.md` является user-facing entrypoint только для strict source-qualified iteration after accepted source assertion review или другой явно запрошенной qualification route.
 - Каждый новый `*-traceability-matrix.md` в `review-cycles/<scope-slug>/outputs/` должен иметь соседний XLSX companion-файл с тем же basename.
 - Для новых или обновленных traceability matrices каждая строка должна иметь `atom_id`; findings и writer response связываются с matrix через `traceability_ref`, а не через text-only `req_id` / `source_path`.
 - После завершения session-based cycle `cycle-state.yaml` должен иметь terminal status `signed-off`, `round-cap-reached` или `blocked-input`, а `latest_artifacts` должен ссылаться на final outputs and terminal snapshot.

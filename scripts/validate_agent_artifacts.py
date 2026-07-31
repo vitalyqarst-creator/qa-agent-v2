@@ -111,10 +111,18 @@ REQUIRED_SOURCE_SELECTION_CONTEXT_FIELDS = {
     "selection_status",
 }
 ALLOWED_SOURCE_SELECTION_STATUSES = {"selected", "ambiguous", "blocked-input"}
-SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE = re.compile(
-    r"(?im)^\s*(?:[-*]\s*)?(?:outputs|выходы)\s*:\s*.*prompt\.scope-to-(?:writer|iteration)\.md"
+SCOPE_SELECTION_PROMPT_WRITER_OUTPUT_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:outputs|выходы)\s*:\s*.*prompt\.scope-to-writer\.md"
 )
-SCOPE_SELECTION_PROMPT_SOURCE_FIRST_MARKERS = (
+SCOPE_SELECTION_PROMPT_ITERATION_OUTPUT_RE = re.compile(
+    r"(?im)^\s*(?:[-*]\s*)?(?:outputs|выходы)\s*:\s*.*prompt\.scope-to-iteration\.md"
+)
+SCOPE_SELECTION_PROMPT_WRITER_ROUTE_MARKERS = (
+    "scope-contract.md",
+    "scope-coverage-gaps.md",
+    "prompt.scope-to-writer.md",
+)
+SCOPE_SELECTION_PROMPT_STRICT_ROUTE_MARKERS = (
     "source-assertions.json",
     "prompt.scope-assertions-to-reviewer.md",
     "source_assertion_review",
@@ -4047,32 +4055,39 @@ def validate_scope_selection_prompts_artifact(path: Path, root: Path) -> tuple[l
         checks.append(Check("scope-selection-prompts-source-first-route", "fail", "File is not UTF-8.", display_path))
         return findings, checks
 
-    direct_output_lines = [
+    writer_output_lines = [
         match.group(0).strip()
-        for match in SCOPE_SELECTION_PROMPT_DIRECT_OUTPUT_RE.finditer(content)
+        for match in SCOPE_SELECTION_PROMPT_WRITER_OUTPUT_RE.finditer(content)
     ]
-    missing_source_first_markers = [
-        marker for marker in SCOPE_SELECTION_PROMPT_SOURCE_FIRST_MARKERS if marker not in content
+    iteration_output_lines = [
+        match.group(0).strip()
+        for match in SCOPE_SELECTION_PROMPT_ITERATION_OUTPUT_RE.finditer(content)
     ]
-    if direct_output_lines and missing_source_first_markers:
+    missing_writer_route_markers = [
+        marker for marker in SCOPE_SELECTION_PROMPT_WRITER_ROUTE_MARKERS if marker not in content
+    ]
+    missing_strict_route_markers = [
+        marker for marker in SCOPE_SELECTION_PROMPT_STRICT_ROUTE_MARKERS if marker not in content
+    ]
+    if writer_output_lines and missing_writer_route_markers:
         findings.append(
             Finding(
-                id="scope-selection-prompts-direct-writer-route",
+                id="scope-selection-prompts-writer-route-missing-source-handoff",
                 severity="error",
                 category="prompt-format",
-                title="Scope selection prompt routes directly to writer/iteration",
+                title="Scope selection prompt routes to writer without source handoff",
                 details=(
-                    "A scope-selection prompt confirms one candidate scope. New production-capable workflows "
-                    "must route to source_assertion_review before writer or iteration."
+                    "A scope-selection prompt may produce a practical writer route only when it "
+                    "also promises the bounded source/scope/gap handoff needed by writer."
                 ),
                 path=display_path,
                 evidence=[
-                    *direct_output_lines[:5],
-                    f"missing_source_first_markers={missing_source_first_markers}",
+                    *writer_output_lines[:5],
+                    f"missing_writer_route_markers={missing_writer_route_markers}",
                 ],
                 recommended_action=(
-                    "Replace direct writer/iteration outputs with source-assertions.json, "
-                    "prompt.scope-assertions-to-reviewer.md and source_assertion_review routing."
+                    "Include scope-contract.md, scope-coverage-gaps.md and prompt.scope-to-writer.md "
+                    "in the manual-scope outputs, or keep the workflow at scope analysis."
                 ),
             )
         )
@@ -4080,7 +4095,37 @@ def validate_scope_selection_prompts_artifact(path: Path, root: Path) -> tuple[l
             Check(
                 "scope-selection-prompts-source-first-route",
                 "fail",
-                "Scope selection prompt bypasses source-first review.",
+                "Scope selection prompt bypasses practical source-first handoff.",
+                display_path,
+            )
+        )
+    elif iteration_output_lines and missing_strict_route_markers:
+        findings.append(
+            Finding(
+                id="scope-selection-prompts-direct-iteration-route",
+                severity="error",
+                category="prompt-format",
+                title="Scope selection prompt routes to iteration without strict source review",
+                details=(
+                    "Strict ft-agent iteration is opt-in and requires an accepted source assertion "
+                    "review before prompt.scope-to-iteration.md is offered."
+                ),
+                path=display_path,
+                evidence=[
+                    *iteration_output_lines[:5],
+                    f"missing_strict_route_markers={missing_strict_route_markers}",
+                ],
+                recommended_action=(
+                    "Remove prompt.scope-to-iteration.md from the default manual-scope outputs, "
+                    "or add the explicit strict source_assertion_review route."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "scope-selection-prompts-source-first-route",
+                "fail",
+                "Scope selection prompt routes to strict iteration without source assertion review.",
                 display_path,
             )
         )
@@ -4089,7 +4134,7 @@ def validate_scope_selection_prompts_artifact(path: Path, root: Path) -> tuple[l
             Check(
                 "scope-selection-prompts-source-first-route",
                 "pass",
-                "Scope selection prompt does not bypass source-first review.",
+                "Scope selection prompt preserves the allowed source-first route.",
                 display_path,
             )
         )

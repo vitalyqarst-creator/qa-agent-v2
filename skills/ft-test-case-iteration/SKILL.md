@@ -5,7 +5,15 @@ description: Run one source-qualified test-case iteration for an already selecte
 
 # FT Test Case Iteration
 
-Use this skill only after an FT package is selected and the external scope is confirmed. The production profile has one public entrypoint: schema-v2 config → fresh immutable attempt → source-bound writer route → deterministic gates → exactly one independent reviewer → `accepted-shadow`, honest `accepted-with-calibration-pending`, or explicit terminal failure.
+Use this skill only after an FT package is selected and the external scope is
+confirmed, and only when the user explicitly requests a strict source-qualified
+shadow run. Normal production test-case delivery uses `ft-test-case-writer`
+followed by `ft-test-case-reviewer`; do not escalate into this skill merely
+because a scope is table-heavy, has gaps, or needs UI calibration. The strict
+entrypoint remains: schema-v2 config → fresh immutable attempt → source-bound
+writer route → deterministic gates → exactly one independent reviewer →
+`accepted-shadow`, honest `accepted-with-calibration-pending`, or explicit
+terminal failure.
 
 ## Входы
 
@@ -33,7 +41,11 @@ The new `run-config.json` uses schema v2. Base required fields:
 
 For new production attempts, `writer_mode: model-runtime-prose` is mandatory. Allowed route fields: `writer_mode`, `mockup_label_aliases`, `revision_findings`. If `writer_mode` is absent or different, stop before the attempt; do not fall back to a compatibility or deterministic-only route. Do not add `ft_slug`, design context, ready derivations, `tc_prefix`, source/canonical allowlists, model responses, publication target, or lifecycle status. The runner derives slug and context from accepted contracts and builds derivations itself.
 
-If an input is missing, stale, ambiguous, or not hash-bound, do not bypass the check: route back to `ft-source-locator` / `ft-scope-analyzer` or close the scope as `blocked-input`.
+If an input is missing, stale, ambiguous, or not hash-bound, do not bypass the
+check inside strict iteration. Route back to `ft-source-locator` /
+`ft-scope-analyzer`, close the strict attempt as `blocked-input`, or use the
+normal writer/reviewer route if the user wants test cases rather than strict
+route qualification.
 
 ## Workflow
 

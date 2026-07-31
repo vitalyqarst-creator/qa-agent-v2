@@ -2,12 +2,12 @@
 
 Этот документ задает канонический формат для `scope-execution-options.md`.
 
-`scope-execution-options.md` — optional helper artifact после подтверждения scope и source-first review. Он помогает пользователю выбрать следующий маршрут выполнения, но не заменяет `workflow-state.yaml`, `scope-contract.md`, `prompt.scope-assertions-to-reviewer.md`, `prompt.scope-to-writer.md` или `prompt.scope-to-iteration.md`.
+`scope-execution-options.md` — optional helper artifact после подтверждения scope, если есть реальный выбор маршрута. Он помогает пользователю выбрать следующий маршрут выполнения, но не заменяет `workflow-state.yaml`, `scope-contract.md`, `prompt.scope-to-writer.md`, `prompt.scope-to-iteration.md` или strict `prompt.scope-assertions-to-reviewer.md`.
 
 ## Когда создавать
 
 - только после подтвержденного scope;
-- после создания `scope-contract.md`, `scope-coverage-gaps.md` и accepted `source_assertion_review` для production/promotion-capable workflow;
+- после создания `scope-contract.md`, `scope-coverage-gaps.md` и active writer-ready handoff;
 - только как user-facing helper, а не как обязательный downstream-вход.
 
 ## Где хранить
@@ -19,8 +19,8 @@
 - `## Контекст`
 - `## Подтвержденные Входы`
 - `## Рекомендуемый Следующий Шаг`
-- `## Вариант 1. Запуск Через Iteration`
-- `## Вариант 2. Ручной Loop Через Writer И Reviewer`
+- `## Вариант 1. Practical Writer/Reviewer Loop`
+- `## Вариант 2. Strict Iteration`
 - `## Обязательные Guardrails`
 - `## Ожидаемые Выходы По Выбранному Пути`
 - `## Что Этот Файл Не Делает`
@@ -30,8 +30,8 @@
 - файл относится к одному подтвержденному `scope_slug`;
 - файл не меняет process-status и не подтверждает scope повторно;
 - файл не является обязательным входом для writer, reviewer или iteration;
-- `ft-test-case-iteration` должен быть указан как рекомендуемый путь по умолчанию;
-- ручной `writer -> reviewer` loop должен быть описан как допустимая альтернатива;
+- `ft-test-case-writer` -> `ft-test-case-reviewer` должен быть указан как рекомендуемый путь по умолчанию;
+- strict `ft-test-case-iteration` должен быть описан как opt-in альтернатива только при явном запросе;
 - prompt-блоки должны быть готовы к копированию пользователем в новую сессию.
 
 ## Минимальный шаблон
@@ -58,68 +58,48 @@
 
 ## Рекомендуемый Следующий Шаг
 
-`ft-test-case-iteration`
+`ft-test-case-writer` -> `ft-test-case-reviewer`
 
 Почему рекомендуется:
-- проходит полный writer/reviewer loop;
-- снижает ручную оркестрацию;
-- лучше подходит для доведения набора до `signed-off` или `round-cap-reached`.
+- быстрее доводит scope до написанных тест-кейсов;
+- оставляет unresolved UI/data/source issues видимыми в самих TC;
+- избегает pre-writer repair loop вокруг strict source-contract artifacts.
 
-## Вариант 1. Запуск Через Iteration
+## Вариант 1. Practical Writer/Reviewer Loop
 
 Когда использовать:
-- нужен полный цикл;
-- не требуется вручную управлять каждым этапом;
-- цель — получить финальный status по scope.
+- нужно получить итоговые тест-кейсы;
+- допустимы честные пометки `candidate-ui-calibration`, `blocked-observability`, `needs-test-data`;
+- strict source-contract qualification не является целью.
 
 Готовый prompt:
-```md
-FT-пакет: `fts/<ft-slug>`
-Этап: `ft-test-case-iteration`
-Scope: `<scope-slug>`
-Входы: использовать `scope-contract.md`, `scope-coverage-gaps.md`, `prompt.scope-to-iteration.md`, `workflow-state.yaml` и связанные материалы FT-пакета
-Задача: пройти полный writer/reviewer loop для этого scope
-Выходы: канонический набор тест-кейсов, session-based cycle artifacts under `work/review-cycles/<scope-slug>/`, terminal `cycle-state.yaml`, snapshots
-Ограничения: не расширять scope
-```
-
-## Вариант 2. Ручной Loop Через Writer И Reviewer
-
-Когда использовать:
-- нужен ручной контроль каждого этапа;
-- нужно отдельно остановиться после draft или после review;
-- пользователь хочет сам решать, когда запускать revision.
-
-Последовательность:
-1. `ft-test-case-writer`
-2. `ft-test-case-reviewer`
-3. при findings: снова `ft-test-case-writer`
-4. затем снова `ft-test-case-reviewer`
-
-### Prompt Для Initial Writer Run
-
 ```md
 FT-пакет: `fts/<ft-slug>`
 Этап: `ft-test-case-writer`
 Scope: `<scope-slug>`
 Входы: использовать `scope-contract.md`, `scope-coverage-gaps.md`, `prompt.scope-to-writer.md`, `workflow-state.yaml` и связанные материалы FT-пакета
-Режим: `initial_draft`
-Задача: подготовить initial draft тест-кейсов по подтвержденному scope
-Выходы: канонический файл тест-кейсов, snapshot initial draft, `prompt.writer-to-reviewer.round-1.md`, обновленный `workflow-state.yaml`
+Задача: написать тест-кейсы для этого scope и подготовить handoff на independent review
+Выходы: канонический набор тест-кейсов, writer artifacts, `prompt.writer-to-reviewer.round-1.md`
 Ограничения: не расширять scope
 ```
 
-### Prompt Для First Review
+## Вариант 2. Strict Iteration
+
+Когда использовать:
+- пользователь явно попросил source-qualified shadow / qualification;
+- есть accepted exact-digest source assertion review;
+- цель — проверить strict route, а не просто получить тест-кейсы.
+
+Готовый prompt:
 
 ```md
 FT-пакет: `fts/<ft-slug>`
-Этап: `ft-test-case-reviewer`
+Этап: `ft-test-case-iteration`
 Scope: `<scope-slug>`
-Входы: использовать канонический файл тест-кейсов, `scope-contract.md`, `workflow-state.yaml`, `prompt.writer-to-reviewer.round-1.md` и основной FT
-Режим review: `full`
-Задача: провести review initial draft тест-кейсов
-Выходы: `round-1-findings.md`, `round-1-traceability-matrix.md` при необходимости, `prompt.reviewer-to-writer.round-1.md` или `prompt.reviewer-to-ui-prep.md`, обновленный `workflow-state.yaml`
-Ограничения: не исправлять тест-кейсы, не расширять scope
+Входы: использовать accepted exact-digest source assertion review, `run-config.json`, `prompt.scope-to-iteration.md`
+Задача: выполнить один strict immutable source-qualified writer/reviewer attempt
+Выходы: immutable attempt directory, terminal summary, shadow suite или explicit terminal blocker
+Ограничения: не запускать bridge/benchmark/sharding, не использовать старые failed attempts как input
 ```
 
 ## Обязательные Guardrails
@@ -133,16 +113,14 @@ Scope: `<scope-slug>`
 
 ## Ожидаемые Выходы По Выбранному Пути
 
-Если выбран `ft-test-case-iteration`:
-- `test-cases/<section-id>-<scope-slug>.md`
-- `work/review-cycles/<scope-slug>/cycle-state.yaml`
-- `work/review-cycles/<scope-slug>/outputs/*`
-- `work/review-cycles/<scope-slug>/versions/*/snapshot-manifest.yaml`
-- обновленный `workflow-state.yaml`
-
-Если выбран ручной loop:
+Если выбран practical writer/reviewer loop:
 - после writer: `test-cases/<section-id>-<scope-slug>.md`, `prompt.writer-to-reviewer.round-1.md`
 - после reviewer: `round-1-findings.md`, при необходимости `round-1-traceability-matrix.md`, следующий prompt-файл
+
+Если выбран strict `ft-test-case-iteration`:
+- `test-cases/<section-id>-<scope-slug>.md`
+- `work/iterations/<attempt-id>/*`
+- terminal summary and reviewer receipt when reached
 
 ## Что Этот Файл Не Делает
 

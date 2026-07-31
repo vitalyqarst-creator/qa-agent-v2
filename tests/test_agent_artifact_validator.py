@@ -1958,7 +1958,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertNotIn("workflow-state-source-selection-missing-required-xhtml", finding_ids)
         self.assertNotIn("workflow-state-source-selection-xhtml-missing-routes-downstream", finding_ids)
 
-    def test_scope_selection_prompts_reject_direct_writer_outputs(self) -> None:
+    def test_scope_selection_prompts_reject_direct_iteration_outputs_without_strict_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
             fixture_root = Path(tmp_dir)
             self.write_valid_source_selection(fixture_root / "source-selection.md")
@@ -1995,7 +1995,7 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         payload = json.loads(result.stdout)
         finding_ids = {finding["id"] for finding in payload["findings"]}
-        self.assertIn("scope-selection-prompts-direct-writer-route", finding_ids)
+        self.assertIn("scope-selection-prompts-direct-iteration-route", finding_ids)
 
     def test_scope_selection_prompts_accept_source_first_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -2016,8 +2016,8 @@ class AgentArtifactValidatorTests(unittest.TestCase):
                         "```md",
                         "Этап: `ft-scope-analyzer`",
                         "Режим scope: `manual-scope`",
-                        "Выходы: `scope-contract.md`, `scope-coverage-gaps.md`, `source-assertions.json`, `prompt.scope-assertions-to-reviewer.md`, обновленный `workflow-state.yaml`",
-                        "Следующий активный маршрут: `ft-test-case-reviewer` в режиме `source_assertion_review`",
+                        "Выходы: `scope-contract.md`, `scope-coverage-gaps.md`, `source-row-inventory.md`, `prompt.scope-to-writer.md`, обновленный `workflow-state.yaml`",
+                        "Следующий активный маршрут: `ft-test-case-writer`",
                         "```",
                     ]
                 ),
@@ -2036,7 +2036,8 @@ class AgentArtifactValidatorTests(unittest.TestCase):
         payload = json.loads(result.stdout)
         self.assertEqual(1, payload["summary"]["scope_selection_prompts_checked"])
         finding_ids = {finding["id"] for finding in payload["findings"]}
-        self.assertNotIn("scope-selection-prompts-direct-writer-route", finding_ids)
+        self.assertNotIn("scope-selection-prompts-writer-route-missing-source-handoff", finding_ids)
+        self.assertNotIn("scope-selection-prompts-direct-iteration-route", finding_ids)
 
     def test_source_selection_selected_without_xhtml_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp_dir:

@@ -45,14 +45,14 @@ class StageHandoffContractTests(unittest.TestCase):
         self.assertIn("Accepted-risk Deferral", scope_gaps)
         self.assertIn("## Требуемые Уточнения", scope_gaps)
         self.assertIn("## Рекомендуемый Следующий Шаг", scope_execution)
-        self.assertIn("## Вариант 1. Запуск Через Iteration", scope_execution)
+        self.assertIn("## Вариант 1. Practical Writer/Reviewer Loop", scope_execution)
         self.assertIn("optional helper artifact", scope_execution)
         self.assertIn("## Candidate Scope", scope_options)
         self.assertIn("`scope-options.md`", scope_options)
         self.assertIn("## Prompt Templates", scope_selection_prompts)
         self.assertIn("`scope-selection-prompts.md`", scope_selection_prompts)
         self.assertIn("`prompt.scope-assertions-to-reviewer.md`", scope_selection_prompts)
-        self.assertIn("`source_assertion_review`", scope_selection_prompts)
+        self.assertIn("strict source-contract route", scope_selection_prompts)
 
     def test_locator_and_scope_analyzer_produce_stage_handoff_artifacts(self) -> None:
         locator = (ROOT_DIR / "skills" / "ft-source-locator" / "SKILL.md").read_text(encoding="utf-8")

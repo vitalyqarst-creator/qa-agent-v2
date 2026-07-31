@@ -26,7 +26,7 @@
 - Нет сиротских references, на которые никто не ссылается.
 - `skills/README.md` совпадает с реальным набором активных skill-ов.
 - `references/agent/instruction-loading-manifest.md` содержит актуальные scenario budgets, а `scripts/resolve_instruction_context.py` возвращает только нужные runtime references для выбранного сценария.
-- Новый production/promotion-capable workflow использует compiler contract v3, полный source assertion manifest и независимый exact-digest receipt; marker-only/legacy package не допускается к promotion.
+- Новый practical production workflow использует writer-ready source/gap/context handoff и independent TC review. Strict compiler contract v3, полный source assertion manifest и независимый exact-digest receipt используются только для явно запрошенной source-qualified qualification/promotion route.
 
 ## Ревью agent instructions
 
@@ -87,5 +87,4 @@ references/agent/source-quality-strict-warning-review-2026-05-25.md
 ```powershell
 python scripts/run_tests.py
 ```
-
 

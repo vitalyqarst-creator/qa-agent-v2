@@ -7,17 +7,26 @@ benchmarking or route research.
 
 - `ft-source-locator` for selecting an FT package and primary sources.
 - `ft-scope-analyzer` for source-first scope boundaries, source rows, coverage
-  gaps, clarification requests, dictionaries, mockup context, and production
-  input materialization.
-- `ft-test-case-writer` for a controlled FT-first baseline when the user needs
-  test cases quickly and unresolved UI/data issues are represented as explicit
-  statuses.
-- `ft-test-case-reviewer` for manual-quality review of existing or newly written
-  cases.
-- `ft-test-case-iteration` only through `ft-agent run` with schema v2 and
-  `writer_mode=model-runtime-prose`.
+  gaps, clarification requests, dictionaries, mockup context, and writer-ready
+  handoff.
+- `ft-test-case-writer` for a controlled FT-first baseline. Missing UI/data
+  evidence must stay visible in the cases as explicit statuses such as
+  `candidate-ui-calibration`, `blocked-observability`, or `needs-test-data`.
+- `ft-test-case-reviewer` for independent manual-quality review of existing or
+  newly written cases, including traceability, structure, and test-design
+  passes.
 - `ft-ui-automation-prep` after baseline/sign-off when a real UI stand is
   available.
+
+## Allowed only by explicit request
+
+- Strict source-qualified `ft-test-case-iteration` through `ft-agent run` with
+  schema v2 and `writer_mode=model-runtime-prose`.
+- Compiler-v3 `source_assertion_review` before writer.
+
+These routes are not the default way to write production test cases. Use them
+only when the user asks for a strict source-contract shadow run, route
+qualification, or agent-layer debugging.
 
 ## Forbidden in this production profile
 
@@ -45,8 +54,8 @@ or artifact-contract details. Operational production work should prioritize:
 
 1. source-bound scope extraction;
 2. clear coverage gaps;
-3. a controlled baseline with explicit statuses;
-4. independent/manual review;
+3. a controlled writer baseline with explicit statuses;
+4. independent test-case review and bounded revision;
 5. UI calibration as a separate phase.
 
 ## Runtime enforcement

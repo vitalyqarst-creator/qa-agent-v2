@@ -23,12 +23,12 @@ Required guardrails:
 - reviewer mode is `scope_gap_review`;
 - reviewer checks gap anchors, classification, clarification requests and routing readiness;
 - reviewer must not write, rewrite or review test cases in this mode;
-- passed review routes to `prompt.scope-assertions-to-reviewer.md` for compiler contract v3, or to `prompt.scope-to-writer.md` only for legacy/non-promotion workflow;
+- passed review routes to `prompt.scope-to-writer.md`; strict compiler-v3 work may route to `prompt.scope-assertions-to-reviewer.md` only when that strict source-contract route was explicitly requested;
 - failed review routes back to `ft-scope-analyzer` or `blocked-input`.
 
 ## Special Contract `prompt.scope-assertions-to-reviewer.md`
 
-`prompt.scope-assertions-to-reviewer.md` is the active pre-writer handoff for compiler contract v3. It must route reviewer mode `source_assertion_review`, require `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`, `source-row-inventory.md`, `source-row-extraction-spec.json`, `source-row-baseline.json`, `source-assertions.json`, and conditional parity/mockup/package notes. Reviewer verifies source evidence and digest bindings, does not write/review test cases, routes accepted review to writer/iteration, and routes rejected or ambiguous review back to `ft-scope-analyzer` or `blocked-input`.
+`prompt.scope-assertions-to-reviewer.md` is the active pre-writer handoff only for an explicitly requested strict compiler-v3 source-contract route. It must route reviewer mode `source_assertion_review`, require `source-selection.md`, `scope-contract.md`, `scope-coverage-gaps.md`, `workflow-state.yaml`, `source-row-inventory.md`, `source-row-extraction-spec.json`, `source-row-baseline.json`, `source-assertions.json`, and conditional parity/mockup/package notes. Reviewer verifies source evidence and digest bindings, does not write/review test cases, routes accepted review to strict writer/iteration, and routes rejected or ambiguous review back to `ft-scope-analyzer` or `blocked-input`.
 
 ## Специальный Контракт `prompt.scope-to-writer.md`
 
@@ -135,8 +135,9 @@ Prompt-файлы хранятся в:
 - Prompt должен ссылаться только на актуальные артефакты текущего `scope-slug`.
 - Prompt не заменяет `workflow-state.yaml`: process-status остается в state-файле.
 - Prompt не должен дублировать полный workflow skill-а; он фиксирует только handoff для конкретного этапа и конкретного scope.
-- В compiler contract v3 после scope analysis активный prompt до writer всегда `prompt.scope-assertions-to-reviewer.md`.
-- `prompt.scope-to-writer.md` используется для единичного writer-pass, а `prompt.scope-to-iteration.md` — для полного writer-reviewer loop через `ft-test-case-iteration` только после accepted source assertion review либо для явно legacy/non-promotion route.
+- В practical source-first route после scope analysis активный prompt до writer — `prompt.scope-to-writer.md`.
+- В явно запрошенном strict compiler contract v3 после scope analysis активный prompt до strict writer/iteration — `prompt.scope-assertions-to-reviewer.md`.
+- `prompt.scope-to-writer.md` используется для единичного writer-pass, а `prompt.scope-to-iteration.md` — для полного strict writer-reviewer loop через `ft-test-case-iteration` только после accepted source assertion review или другой явно запрошенной qualification route.
 
 ## Минимум автоматической проверки
 

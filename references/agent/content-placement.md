@@ -52,7 +52,14 @@ This document defines canonical knowledge placement in the project.
 
 The canonical test-case file in `test-cases/` stores links, a short summary, and the `TC-*` cases themselves, but not full copies of those tables.
 
-## What Belongs in Source-First Handoff
+## What Belongs in Practical Source-First Handoff
+
+- scope boundaries, source rows, coverage gaps, clarification requests, source
+  parity, dictionaries, oracle inventories, and mockup inventory for the concrete
+  scope;
+- one active `prompt.scope-to-writer.md` for normal production TC writing.
+
+## What Belongs in Strict Source-Contract Handoff
 
 - `source-assertions.json` next to confirmed scope/source-row artifacts;
 - a separate `source-assertion-review.json` created by an independent reviewer and bound to the exact manifest digest;

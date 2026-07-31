@@ -13,15 +13,46 @@ The bridge route is disabled in this production profile; if it appears necessary
 stop and report that the task belongs to a separate development/qualification
 repository.
 
-The default standard path is: boundary/source inventory -> source assertions ->
-independent source assertion review -> production input finalization ->
-`ft-agent run` schema v2 with `writer_mode=model-runtime-prose`. The runner
-builds typed derivations from the accepted source-first contract.
+The default standard path is: boundary/source inventory -> coverage gaps and
+clarification requests -> dictionaries/oracle inventories/mockup inventory as
+needed -> `prompt.scope-to-writer.md` -> `ft-test-case-writer` ->
+`ft-test-case-reviewer`.
 
-## Source-first contract for new production cycles
+Do not route to `source_assertion_review`, compiler-v3 materialization, or
+`ft-agent run` by default. Those are strict opt-in routes for source-contract
+qualification or agent-layer debugging, not the normal way to deliver production
+test cases.
 
-For every new promotion-capable workflow, produce `source-assertions.json` from the
-complete selected `source-row-inventory.md` before writer routing. Follow
+## Practical source-first contract for new production cycles
+
+For normal production work, create a writer-ready handoff that is complete
+enough for a human-executable baseline:
+
+- `source-selection.md` with `xhtml_available: yes`;
+- `scope-contract.md`;
+- `source-parity-check.md` when DOCX+PDF are present;
+- `source-row-inventory.md` when the scope is table/row-based;
+- `dictionary-inventory.md` when source/support references a dictionary or
+  fixed value list;
+- `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` when the
+  scope has validation/requiredness obligations;
+- `mockup-visual-inventory.md` when mockups/screens are in scope;
+- `scope-coverage-gaps.md` and `scope-clarification-requests.md` when any
+  information is missing or ambiguous;
+- `prompt.scope-to-writer.md` as the active downstream prompt.
+
+Open source/UI/data questions do not automatically block writing. If an
+obligation is clear but the exact UI oracle or data fixture is missing, route it
+to writer as a candidate test case with an explicit status such as
+`candidate-ui-calibration`, `blocked-observability`, or `needs-test-data`.
+Block writer only when the scope boundary, mandatory XHTML, or source meaning is
+too ambiguous to produce a traceable case.
+
+## Strict source assertion contract, opt-in only
+
+When the user explicitly asks for a strict source-qualified shadow run or
+agent-layer qualification, produce `source-assertions.json` from the complete
+selected `source-row-inventory.md` before writer routing. Follow
 `source-assertions-format.md` and `source-assertion-semantic-rule-card.md` for
 hash binding, source row -> assertion -> `ATOM-*` -> `OBL-*` lineage,
 condition/action/oracle clauses, `primary_gap_id`, dependency gaps, document-global constraints
@@ -32,12 +63,15 @@ Create `prompt.scope-assertions-to-reviewer.md` and route one independent
 `source_assertion_review` before writer. That review also challenges gap
 classification, so do not run a second `scope_gap_review` over the same manifest-v4 source
 model. A rejected assertion or receipt routes back to this skill; only an accepted
-receipt with the exact manifest digest may route to writer/iteration. Compiler v2
+receipt with the exact manifest digest may route to strict iteration. Compiler v2
 remains diagnostic-only and cannot be promoted.
 
 ## Rules for `prompt.scope-gaps-to-reviewer.md`
 
-If confirmed scope analysis creates at least one `GAP-*` in `scope-coverage-gaps.md`, create `prompt.scope-gaps-to-reviewer.md` and make it the active transition before writer starts.
+Create `prompt.scope-gaps-to-reviewer.md` only when the user explicitly asks for
+a separate pre-writer gap review or when the agent cannot classify a gap well
+enough to pass it honestly to writer. Do not make gap review the active
+transition merely because `scope-coverage-gaps.md` contains `GAP-*`.
 
 Minimum for `prompt.scope-gaps-to-reviewer.md`:
 
@@ -94,15 +128,15 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 - `scope-contract.md` с подтвержденными границами анализа;
 - `source-parity-check.md`, если для основного ФТ доступны DOCX и PDF;
 - `source-row-inventory.md`, если `source-parity-check.md` содержит row-level/table parity или scope основан на таблице полей/действий;
-- `source-assertions.json` для нового production/promotion-capable workflow;
-- `prompt.scope-assertions-to-reviewer.md` для независимой проверки source model;
+- `source-assertions.json` только для явно запрошенного strict source-contract route;
+- `prompt.scope-assertions-to-reviewer.md` только для явно запрошенной независимой проверки source model;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope включает mockup / screen image / `mockups/`;
 - `scope-coverage-gaps.md` с неоднозначностями и отсутствующими данными;
 - `scope-clarification-requests.md`, если в `scope-coverage-gaps.md` есть хотя бы один gap;
-- `scope-execution-options.md` с рекомендуемым следующим шагом;
-- `prompt.scope-gaps-to-reviewer.md`, если в `scope-coverage-gaps.md` есть хотя бы один `GAP-*`;
+- `scope-execution-options.md` только если есть неоднозначный выбор следующего действия;
+- `prompt.scope-gaps-to-reviewer.md`, если пользователь явно попросил отдельный pre-writer gap review;
 - `prompt.scope-to-writer.md`, только если scope подтвержден и следующий этап действительно writer;
-- `prompt.scope-to-iteration.md`, если scope подтвержден и доступен полный writer-reviewer loop;
+- `prompt.scope-to-iteration.md`, только если явно выбран strict source-qualified iteration route;
 - при необходимости результаты `resolve_sections()` или `preview_chunks()`.
 
 ## Workflow
@@ -131,8 +165,9 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 10a. Если complexity/source rows выявляют validation/format/date/email/length/numeric/allowed-values ограничения или обязательность, создай `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` до handoff. Для каждого invalid/requiredness item проверь observable oracle: сообщение, подсветка, blocked transition, input filtering, save rejection, API response, visible marker или другой source-backed pass/fail artifact.
 10b. Если source задает restriction/requiredness, но exact UI oracle отсутствует, не теряй obligation: укажи `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, stable `scope_obligation_id` (`SO-NEG-*` / `SO-REQ-*`) и передай writer-у как candidate TC по `negative-ui-calibration-policy.md`. Parent `GAP-*` используй только для общего неизвестного oracle, но child obligations перечисляй отдельно. `gap_required` оставляй для случаев, когда нельзя сформировать даже candidate TC.
 10c. Если scope содержит буквальный UI-текст/сообщение или неоднозначное преобразование единиц, создай `source-to-package-fidelity.json` по canonical format и зарегистрируй его в `latest_artifacts`. Не преобразуй `МБ` в точные байты без source-backed policy; неизвестную точную boundary fixture сохрани как отдельный `GAP-*` obligation.
-10d. Для нового production/promotion-capable workflow создай `source-assertions.json` по `source-assertions-format.md`, примени `source-assertion-semantic-rule-card.md` и покрой ровно все строки `source-row-inventory.md`. Если manifest не готов к независимому source review, оставь workflow в `blocked-input`.
-10e. При материализации `source-assertions.json` не копируй в `evidence_sources`
+10d. Для обычного production workflow не создавай `source-assertions.json` и не отправляй scope на `source_assertion_review` только из-за наличия gaps, таблиц или обязательности. Вместо этого создай writer-ready `prompt.scope-to-writer.md`, где все unresolved source/UI/data obligations переданы как `GAP-*`, `candidate-ui-calibration`, `blocked-observability` или `needs-test-data`. Writer блокируется только при отсутствии обязательного XHTML, незафиксированной границе scope или source ambiguity, из-за которой нельзя написать traceable TC даже с честной пометкой.
+10e. Только для явно запрошенного strict source-contract route создай `source-assertions.json` по `source-assertions-format.md`, примени `source-assertion-semantic-rule-card.md` и покрой ровно все строки `source-row-inventory.md`. Если manifest не готов к независимому source review, оставь strict route в `blocked-input`, но не навязывай этот blocker обычному writer route.
+10f. При материализации `source-assertions.json` не копируй в `evidence_sources`
 `approved-clarification` files из shared `source-selection.md`, если для текущего
 `scope_slug` нет typed `clarifications[]` records из этого exact path. Чужие
 clarification artifacts не являются supporting context и должны быть omitted, а
@@ -147,8 +182,8 @@ clarification artifacts не являются supporting context и должны
 при intake закрывай только подтверждённые подпункты, остаток оставляй residual
 gap.
 15. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для контейнера выбора и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
-16. После подтверждения scope сохрани `scope-contract.md`, `scope-coverage-gaps.md` и один активный downstream prompt; условно добавь `source-parity-check.md`, `source-row-inventory.md`, oracle inventories, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`, когда их требуют правила выше. `scope-execution-options.md` создавай только для неоднозначного выбора следующего действия; в однозначном lean-run он запрещён как дубликат active route.
-17. В `workflow-state.yaml` укажи один активный downstream `next_skill`, но сохраняй второй prompt в `latest_artifacts` как альтернативный user-facing entrypoint, если он применим. Для compiler contract v3 активный downstream до writer всегда `ft-test-case-reviewer` в режиме `source_assertion_review`, а `latest_artifacts` содержит `source_assertions` и `active_transition_prompt: prompt.scope-assertions-to-reviewer.md`; наличие gaps не создаёт дублирующий gap-review. Legacy workflow с gaps сохраняет маршрут через `prompt.scope-gaps-to-reviewer.md`, но не допускается к production promotion.
+16. После подтверждения scope сохрани `scope-contract.md`, `scope-coverage-gaps.md` и один активный downstream prompt. Для обычного production workflow активный prompt — `prompt.scope-to-writer.md`; условно добавь `source-parity-check.md`, `source-row-inventory.md`, oracle inventories, `scope-clarification-requests.md` и `mockup-visual-inventory.md`, когда они требуются правилами выше. `scope-execution-options.md` создавай только для неоднозначного выбора следующего действия; в однозначном production-run он запрещён как дубликат active route.
+17. В `workflow-state.yaml` укажи один активный downstream `next_skill`. По умолчанию после scope analysis это `ft-test-case-writer`, `stage_status: ready-for-next-stage`, `active_transition_prompt: prompt.scope-to-writer.md`. Для явно запрошенного strict compiler contract v3 активный downstream до writer — `ft-test-case-reviewer` в режиме `source_assertion_review`, а `latest_artifacts` содержит `source_assertions` и `active_transition_prompt: prompt.scope-assertions-to-reviewer.md`. Не создавай одновременно два конкурирующих prompts одного направления.
 18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о XHTML extraction notes, source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.
 
 ## Канонические references

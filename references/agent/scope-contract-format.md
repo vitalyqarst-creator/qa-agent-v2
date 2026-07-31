@@ -115,10 +115,10 @@ Complexity decision:
 
 ## Условия Старта Следующего Этапа
 
-- Новый production/promotion-capable workflow сначала использует `prompt.scope-assertions-to-reviewer.md` и независимый `source_assertion_review`.
-- Source assertion reviewer использует `scope-contract.md`, `scope-coverage-gaps.md`, `source-assertions.json`, source-row registry и условные parity/oracle/mockup artifacts.
-- Scope готов к source-first handoff, когда созданы все обязательные артефакты и `workflow-state.yaml` указывает active prompt `prompt.scope-assertions-to-reviewer.md`.
-- Writer/iteration prompts создаются после accepted source assertion review либо для явно legacy/non-promotion route; они должны переносить package-by-package gate, обязательный `package_id` для `ATOM-*`/`TC-*`, Package Test Design Plan gate и запрет переходить к следующему package без package self-check.
+- Обычный production workflow сначала использует `prompt.scope-to-writer.md` и передает writer-у полный source/gap/context handoff.
+- Scope готов к practical source-first handoff, когда созданы все обязательные артефакты и `workflow-state.yaml` указывает active prompt `prompt.scope-to-writer.md`.
+- Writer prompt должен переносить package-by-package gate, обязательный `package_id` для `ATOM-*`/`TC-*`, Package Test Design Plan gate и запрет переходить к следующему package без package self-check.
+- Strict source assertion reviewer используется только по явному запросу: он использует `scope-contract.md`, `scope-coverage-gaps.md`, `source-assertions.json`, source-row registry и условные parity/oracle/mockup artifacts.
 
 ## Ограничения И Правила Интерпретации
 

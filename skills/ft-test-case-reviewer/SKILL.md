@@ -37,7 +37,7 @@ description: Делает review существующих тест-кейсов 
 Для нового Codex SDK process split reviewer запускается отдельными сессиями, но физически остается этим umbrella-skill:
 
 - `scope_gap_review` - pre-writer review of `scope-coverage-gaps.md`, `scope-clarification-requests.md`, source anchors and handoff routing. This mode does not review or edit test cases because the canonical TC file may not exist yet.
-- `source_assertion_review` - обязательный независимый pre-writer review для compiler contract v3. Сверяет каждое assertion непосредственно с XHTML/DOCX-parity evidence и mockup inventory, проверяет polarity/disposition/risk/condition/action/oracle и выпускает hash-bound `source-assertion-review.json`. Не доверяет производному ledger и не проверяет TC.
+- `source_assertion_review` - строгий opt-in pre-writer review для compiler contract v3. Сверяет каждое assertion непосредственно с XHTML/DOCX-parity evidence и mockup inventory, проверяет polarity/disposition/risk/condition/action/oracle и выпускает hash-bound `source-assertion-review.json`. Не доверяет производному ledger и не проверяет TC. Не использовать как default route для обычного написания тест-кейсов.
 - `structure_preflight` — только parseability, handoff completeness, обязательные секции и blockers, которые мешают semantic review; не выполняет polishing.
 - `semantic_traceability_test_design` — объединяет traceability и test-design review, строит или обновляет reviewer traceability matrix и возвращает semantic findings.
 - `structure_format_final` — финальная проверка оформления после semantic closure: шаблон, группировка, сквозная нумерация, wording, format smells и обязательный validator gate по текущему scope.
@@ -117,7 +117,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 - `dictionary-inventory.md`, если source/support или split artifacts содержат `dictionary-source` / reference-list rows;
 - `mockup-visual-inventory.md`, если подтвержденный UI scope содержит mockup / screen image / `mockups/`;
 - `review_mode = full | traceability | structure | test-design`;
-- для pre-writer source-first: `review_mode = source_assertion_review`, manifest v4 `source-assertions.json`, полный `source-row-inventory.md`, source parity/gaps и mockup inventory;
+- для явно запрошенного strict pre-writer source contract: `review_mode = source_assertion_review`, manifest v4 `source-assertions.json`, полный `source-row-inventory.md`, source parity/gaps и mockup inventory;
 - при необходимости связанные материалы FT-пакета для уточнения трассировки;
 - при second review:
   - structured findings artifact предыдущего раунда;
@@ -148,7 +148,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 
 1. Найди файл тест-кейсов и соответствующий FT-пакет с нужным scope.
 2. Подтверди, что review выполняется только в пределах уже выбранного scope.
-3. Определи `review_mode`. Если режим не указан явно, используй `full`. Для source-first pre-writer handoff используй только `source_assertion_review` и заверши его до любого TC review.
+3. Определи `review_mode`. Если режим не указан явно, используй `full`. Для явно запрошенного strict pre-writer source-contract handoff используй `source_assertion_review` и заверши его до любого TC review. Для обычного practical source-first route начинай review только после появления тест-кейсов.
 4. Перед review проверь `source-selection.md`: если для нового workflow `xhtml_available != yes`, зафиксируй blocking finding и не подписывай набор.
 5. Проверь, что writer использовал XHTML для таблиц, строк, списков, вложенных списков, перечней значений, source rows и dictionary-source rows. Потеря строк/списков, которые присутствуют в XHTML, является traceability/test-design finding.
 6. Если PDF-версия основного ФТ доступна, используй ее для сверки структуры разделов, заголовков и границ scope до начала review.

@@ -2,10 +2,17 @@
 
 ## Production route allowlist
 
-This version is a production-oriented FT test-case agent. The default and
-supported operational flow is source-first scope work, controlled FT-first
-baseline writing/review, optional `ft-agent run` with schema v2 and
-`writer_mode=model-runtime-prose`, and later UI calibration.
+This version is a production-oriented FT test-case agent. The default
+operational flow is practical source-first work: source/package selection,
+bounded scope analysis, writer-ready source/gap/context handoff, test-case
+writer, independent test-case reviewer, bounded revision if needed, and later UI
+calibration.
+
+Strict compiler/source-contract iteration through `ft-agent run` with schema v2
+and `writer_mode=model-runtime-prose` is opt-in. Do not use it merely because a
+scope is table-heavy, large, or promotion-capable; use it only when the user
+explicitly asks for a strict source-qualified shadow run or an agent-layer
+qualification task.
 
 Do not start or suggest benchmark, full-process observation, overnight,
 semantic-design bridge, semantic-design sharding, standard bridge wrapper, or

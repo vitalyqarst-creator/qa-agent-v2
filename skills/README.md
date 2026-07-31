@@ -4,7 +4,7 @@ Canonical list of active skills:
 
 - `ft-source-locator` - locate the target FT package and related materials.
 - `ft-scope-analyzer` - propose external scopes by FT sections/subsections, confirm selected-scope boundaries, and record `coverage gaps`.
-- `ft-test-case-iteration` - build a source-bound shadow suite from an accepted source package and run the writer/gate/reviewer route through `ft-agent run`.
+- `ft-test-case-iteration` - optional strict source-qualified shadow run through `ft-agent run` when explicitly requested.
 - `ft-test-case-writer` - write new test cases for an already selected scope.
 - `ft-test-case-reviewer` - review existing test cases.
 - `ft-ui-automation-prep` - post-iteration verification of signed-off cases in the real UI and preparation of an automation-ready version.
@@ -14,9 +14,9 @@ Canonical list of active skills:
 
 - If the first task is to identify which FT to use: `ft-source-locator`.
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
-- If the scope is fixed and new cases must be written in one writer pass without a review cycle: `ft-test-case-writer`.
-- If the scope is independently qualified and a production shadow is needed: `ft-test-case-iteration` through `ft-agent run` with schema v2 and `writer_mode: model-runtime-prose`.
-- If the scope has compiler-v3 obligations and an independently accepted v4 source contract: source-qualified `ft-test-case-iteration` through one public `ft-agent run`; `writer_mode: model-runtime-prose` is mandatory.
+- If the scope is fixed and new cases must be written: `ft-test-case-writer`, then `ft-test-case-reviewer` for independent review.
+- If the user explicitly requests a strict source-qualified shadow run: `ft-test-case-iteration` through `ft-agent run` with schema v2 and `writer_mode: model-runtime-prose`.
+- If the scope already has compiler-v3 obligations and an independently accepted v4 source contract, they may be used by that strict iteration route; they are not required for the default writer/reviewer route.
 - Incremental FT-version update, full-process observation, benchmark, overnight, semantic-design bridge and sharding routes are forbidden in this production profile. Use a separate development/qualification repository if one of them is explicitly required.
 - The old session-based writer/reviewer cycle and legacy deterministic-only routes are qualification/development compatibility tools and are not production routes.
 - If cases already exist and review is needed: `ft-test-case-reviewer`. By default, it runs in `full` mode and performs `traceability` -> `structure` -> `test-design`.
@@ -25,10 +25,10 @@ Canonical list of active skills:
 
 ## Typical Chains
 
-- New test-case suite: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer`
-- Recommended production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config and `writer_mode: model-runtime-prose`.
-- Full new scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
-- Automation-ready preparation after sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-iteration` -> `ft-ui-automation-prep`
+- New test-case suite: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` -> bounded writer revision when needed.
+- Optional strict shadow after explicit qualification request: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config and `writer_mode: model-runtime-prose`.
+- Full new scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> optional independent source review -> `ft-test-case-iteration`.
+- Automation-ready preparation after sign-off: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` -> `ft-ui-automation-prep`
 - Existing-suite review: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-reviewer`
 - Agent-layer audit: `agent-architecture-auditor` with script-first workflow (`skills/agent-architecture-auditor/scripts/audit_agent_architecture.py` -> manual interpretation)
 

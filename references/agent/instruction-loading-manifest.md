@@ -185,8 +185,6 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/scope-clarification-requests-format.md",
         "references/agent/scope-decomposition-policy.md",
         "references/agent/source-parity-check-format.md",
-        "references/agent/source-assertions-format.md",
-        "references/agent/source-assertion-semantic-rule-card.md",
         "references/agent/source-row-baseline-format.md",
         "references/agent/stage-handoff-model.md",
         "references/agent/workflow-state-format.md",
@@ -286,8 +284,6 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Compact source-first instructions for one bounded production scope; excludes process logs, broad format packs and audit-only history.",
       "paths": [
         "references/agent/lean-production-workflow.md",
-        "references/agent/source-assertions-format.md",
-        "references/agent/source-assertion-semantic-rule-card.md",
         "references/agent/source-row-baseline-format.md"
       ]
     },
@@ -743,7 +739,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 274,
-      "rationale": "Manual scope selection when the user already provides the intended section or boundary. The 274 KiB cap preserves the mandatory source-assertion/gap/clarification and promotion-recovery contracts plus at least 15 KiB safety headroom after the analyst-friendly clarification format; it is an instruction-context cap, not a release-quality waiver."
+      "rationale": "Manual scope selection when the user already provides the intended section or boundary. The 274 KiB cap preserves practical source/gap/clarification and writer-ready handoff contracts plus safety headroom after the analyst-friendly clarification format; it is an instruction-context cap, not a release-quality waiver."
     },
     {
       "id": "scope.agent_proposed",
