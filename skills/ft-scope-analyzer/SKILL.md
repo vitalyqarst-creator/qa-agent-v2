@@ -5,13 +5,34 @@ description: Выделяет релевантные разделы ФТ, суж
 
 # FT Scope Analyzer
 
+## Default practical route
+
+For ordinary work where the user wants test cases, use practical route v0.6 from
+[../../references/agent/practical-test-case-route-v0.6.md](../../references/agent/practical-test-case-route-v0.6.md).
+
+In this route, scope analysis prepares enough context for writing without
+starting a heavy source contract:
+
+- confirm external scope boundaries by FT section/subsection;
+- create one compact `scope-brief.md` under
+  `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
+- include relevant FT text/table rows/PDF pages, support files, mockups,
+  dictionaries, open questions and candidate UI-calibration points;
+- route next to `ft-test-case-writer`, not to `source_assertion_review` or
+  `ft-test-case-iteration`.
+
+Do not materialize `source-assertions.json`, semantic bridge artifacts,
+immutable run configs, sharding artifacts or benchmark artifacts in
+`practical_v0_6`.
+
 ## Bounded lean-production path
 
 Если scope удовлетворяет eligibility из
-`references/agent/lean-production-workflow.md`, используй этот профиль по
-умолчанию. Его цель — пройти scope → source review → writer → reviewer →
-promotion в одной пользовательской задаче, сохранив независимые модельные
-сессии и все source/compiler/quality gates.
+`references/agent/lean-production-workflow.md`, используй этот профиль только
+когда пользователь явно запросил lean/source-qualified/immutable production
+route. Его цель — пройти scope → source review → writer → reviewer → promotion
+в одной пользовательской задаче, сохранив независимые модельные сессии и все
+source/compiler/quality gates.
 
 Для lean-run:
 
@@ -42,9 +63,11 @@ scope целиком и передай его в standard semantic-design bridge
 ## Standard-production source-first route
 
 For new `standard-production` work, use boundary-v2/source-first routing by
-default. Do not materialize the semantic-design bridge merely because a scope is
-large or not lean-eligible. The bridge route remains available only when the
-user or a recovery procedure explicitly requests it.
+default only when the user explicitly selected the standard production route.
+For ordinary test-case writing, use `practical_v0_6` instead. Do not materialize
+the semantic-design bridge merely because a scope is large or not lean-eligible.
+The bridge route remains available only when the user or a recovery procedure
+explicitly requests it.
 
 The default standard path is: boundary/source inventory -> source assertions ->
 independent source assertion review -> production input finalization ->
@@ -73,7 +96,8 @@ Create `prompt.scope-assertions-to-reviewer.md` and route one independent
 classification, so do not run a second `scope_gap_review` over the same manifest-v4 source
 model. A rejected assertion or receipt routes back to this skill; only an accepted
 receipt with the exact manifest digest may route to writer/iteration. Compiler v2
-remains diagnostic-only and cannot be promoted.
+remains diagnostic-only and cannot be promoted. This contract is not part of
+`practical_v0_6`.
 
 ## Rules for `prompt.scope-gaps-to-reviewer.md`
 
@@ -171,9 +195,9 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 10a. Если complexity/source rows выявляют validation/format/date/email/length/numeric/allowed-values ограничения или обязательность, создай `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` до handoff. Для каждого invalid/requiredness item проверь observable oracle: сообщение, подсветка, blocked transition, input filtering, save rejection, API response, visible marker или другой source-backed pass/fail artifact.
 10b. Если source задает restriction/requiredness, но exact UI oracle отсутствует, не теряй obligation: укажи `decision = candidate_tc_required`, `oracle_status = ui-calibration-required`, stable `scope_obligation_id` (`SO-NEG-*` / `SO-REQ-*`) и передай writer-у как candidate TC по `negative-ui-calibration-policy.md`. Parent `GAP-*` используй только для общего неизвестного oracle, но child obligations перечисляй отдельно. `gap_required` оставляй для случаев, когда нельзя сформировать даже candidate TC.
 10c. Если scope содержит буквальный UI-текст/сообщение или неоднозначное преобразование единиц, создай `source-to-package-fidelity.json` по canonical format и зарегистрируй его в `latest_artifacts`. Не преобразуй `МБ` в точные байты без source-backed policy; неизвестную точную boundary fixture сохрани как отдельный `GAP-*` obligation.
-10d. Для нового production/promotion-capable workflow создай `source-assertions.json` по `source-assertions-format.md`, примени `source-assertion-semantic-rule-card.md` и покрой ровно все строки `source-row-inventory.md`. Если manifest не готов к независимому source review, оставь workflow в `blocked-input`.
-11. Добавь в `scope-contract.md` секцию `Внутренние Рабочие Пакеты` для каждого подтвержденного scope. Если scope простой, создай один `WP-01`; если неоднородный, раздели работу на несколько `WP-*`. Не используй внутренние рабочие пакеты как замену внешнему split для всего ФТ.
-12. Каждый внутренний рабочий пакет должен иметь focus, source_refs, included_requirements, design_method, expected_outputs и split_required. Это рабочий план writer-а, а не новый внешний scope. `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` должны явно требовать `package_id`, package ledger gate, Package Test Design Plan gate и package TC gate.
+10d. Только для explicit production/promotion-capable workflow создай `source-assertions.json` по `source-assertions-format.md`, примени `source-assertion-semantic-rule-card.md` и покрой ровно все строки `source-row-inventory.md`. Если manifest не готов к независимому source review, оставь workflow в `blocked-input`. Для `practical_v0_6` этот шаг не выполняется.
+11. Для legacy/session/production route добавь в `scope-contract.md` секцию `Внутренние Рабочие Пакеты` для каждого подтвержденного scope. Если scope простой, создай один `WP-01`; если неоднородный, раздели работу на несколько `WP-*`. Не используй внутренние рабочие пакеты как замену внешнему split для всего ФТ. Для `practical_v0_6` достаточно `scope-brief.md`.
+12. Каждый legacy/session внутренний рабочий пакет должен иметь focus, source_refs, included_requirements, design_method, expected_outputs и split_required. Это рабочий план writer-а, а не новый внешний scope. `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` должны явно требовать `package_id`, package ledger gate, Package Test Design Plan gate и package TC gate. Для `practical_v0_6` не требуй package ledger gate.
 13. Если PDF для structural cross-check отсутствует, явно укажи это в промежуточных заметках или `coverage gaps`, а не оставляй неявным.
 14. Отдельно перечисли отсутствующие данные и неоднозначности как `coverage gaps`; для каждого gap укажи точное утверждение ФТ, к которому он относится: раздел, GSR/код, таблицу/строку, поле/условие, цитату или `ATOM-*`, если атом уже создан.
 14a. Для `scope-clarification-requests.md` применяй правило достаточности:
@@ -182,8 +206,8 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 при intake закрывай только подтверждённые подпункты, остаток оставляй residual
 gap.
 15. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для контейнера выбора и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
-16. После подтверждения scope сохрани `scope-contract.md`, `scope-coverage-gaps.md` и один активный downstream prompt; условно добавь `source-parity-check.md`, `source-row-inventory.md`, oracle inventories, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`, когда их требуют правила выше. `scope-execution-options.md` создавай только для неоднозначного выбора следующего действия; в однозначном lean-run он запрещён как дубликат active route.
-17. В `workflow-state.yaml` укажи один активный downstream `next_skill`, но сохраняй второй prompt в `latest_artifacts` как альтернативный user-facing entrypoint, если он применим. Для compiler contract v3 активный downstream до writer всегда `ft-test-case-reviewer` в режиме `source_assertion_review`, а `latest_artifacts` содержит `source_assertions` и `active_transition_prompt: prompt.scope-assertions-to-reviewer.md`; наличие gaps не создаёт дублирующий gap-review. Legacy workflow с gaps сохраняет маршрут через `prompt.scope-gaps-to-reviewer.md`, но не допускается к production promotion.
+16. После подтверждения scope сохрани один активный downstream prompt. Для `practical_v0_6` создай/обнови `scope-brief.md` и route к `ft-test-case-writer`; `scope-contract.md`, `workflow-state.yaml`, `source-assertions.json`, `prompt.scope-assertions-to-reviewer.md` и `prompt.scope-gaps-to-reviewer.md` не обязательны. Для legacy/session/production route сохрани `scope-contract.md`, `scope-coverage-gaps.md` и условно добавь `source-parity-check.md`, `source-row-inventory.md`, oracle inventories, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`, когда их требуют правила выше. `scope-execution-options.md` создавай только для неоднозначного выбора следующего действия; в однозначном lean-run он запрещён как дубликат active route.
+17. В legacy/session/production `workflow-state.yaml` укажи один активный downstream `next_skill`, но сохраняй второй prompt в `latest_artifacts` как альтернативный user-facing entrypoint, если он применим. Для compiler contract v3 активный downstream до writer всегда `ft-test-case-reviewer` в режиме `source_assertion_review`, а `latest_artifacts` содержит `source_assertions` и `active_transition_prompt: prompt.scope-assertions-to-reviewer.md`; наличие gaps не создаёт дублирующий gap-review. Legacy workflow с gaps сохраняет маршрут через `prompt.scope-gaps-to-reviewer.md`, но не допускается к production promotion. Для `practical_v0_6` не перенаправляй scope в `source_assertion_review`.
 18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о XHTML extraction notes, source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.
 
 ## Канонические references

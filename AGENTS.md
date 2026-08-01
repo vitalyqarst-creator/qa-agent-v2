@@ -27,6 +27,8 @@
 - Если в ФТ есть буквенно-цифровой код требования, например `GSR 22`, указывай именно его.
 - Если основной ФТ доступен в DOCX и PDF, перед handoff к writer/reviewer по подтвержденному scope выполни `source-parity-check.md`; коды требований, найденные только в PDF, обязательны для `req_id` и трассировки. PDF используется для structural/visual cross-check структуры, кодов требований и визуальных расхождений; PDF не заменяет DOCX как source of truth или XHTML как mandatory extraction source. Канонический формат хранится в `references/agent/source-parity-check-format.md`.
 - Файлы тест-кейсов в `fts/<ft-slug>/test-cases/` именуй с префиксом номера раздела ФТ: `<section-id>-<scope-slug>.md`; подробности хранятся в `references/qa/test-case-versioning-policy.md`.
+- Для обычной задачи “написать тест-кейсы по ФТ” используй practical route v0.6 из `references/agent/practical-test-case-route-v0.6.md`: compact scope brief → `test-design-matrix.md` → canonical test cases → один independent review → одна revision pass при необходимости. `benchmark`, `sharding`, `semantic bridge`, `source_assertion_review`, immutable `ft-agent run`, source-qualified iteration и incremental update не являются default-маршрутом и допускаются только по явному запросу.
+- Production `fts/**/test-cases/*.md` пиши на русском языке. Английские значения допустимы только для согласованных metadata enums, например `Positive`, `Negative`, `High`, `Medium`, `Low`; runtime-поля вроде `Цель`, `Предусловия`, `Тестовые данные`, `Шаги`, `Ожидаемый результат`, `Требуется подтверждение` не должны содержать agent-process формулировки на английском.
 - Большое ФТ, весь документ или несколько разнородных разделов сначала разбивай на внешние scope-ы по разделам/подразделам ФТ; внутренние рабочие пакеты создавай только внутри уже выбранного внешнего scope. Каноническое правило хранится в `references/agent/scope-decomposition-policy.md`.
 - Не дублируй доменные инструкции между `AGENTS.md`, `skills/` и `references/`, если для них уже есть канонический источник.
 - Информацию в формируемых отчетах и других человекочитаемых артефактах указывай на русском языке, если иной язык не запрошен явно.
@@ -45,10 +47,10 @@
 
 - `ft-source-locator` - найти нужный FT-пакет, основное ФТ, support-файлы и макеты.
 - `ft-scope-analyzer` - выделить релевантные внешние scope-ы по разделам/подразделам ФТ, подтвердить границы выбранного scope и зафиксировать `coverage gaps`.
-- `ft-test-case-iteration` - провести writer-reviewer iteration по уже выбранному scope и довести набор до reviewer sign-off или зафиксировать unresolved findings.
+- `ft-test-case-iteration` - только по явному запросу выполнить source-qualified immutable / observation / incremental route. Не используй этот skill как default для обычного написания тест-кейсов.
 - `ft-test-case-writer` - писать новые тест-кейсы по уже выбранному фрагменту требований.
 - `ft-test-case-reviewer` - review существующих кейсов и поиск пробелов покрытия. По умолчанию работает как umbrella-reviewer в режиме `full`, но допускает узкие режимы `traceability`, `structure`, `test-design`.
-- `ft-ui-automation-prep` - после `ft-test-case-iteration` со статусом `signed-off` пройти готовые кейсы в реальном UI, собрать Playwright evidence, использовать package-level UI notes при их наличии и выпустить отдельную automation-ready версию без перезаписи FT-first baseline. Если `automation-ready` файл для scope отсутствует, но baseline файл уже есть, skill может сначала создать initial `automation-ready` версию и только затем переходить к UI-прогону.
+- `ft-ui-automation-prep` - после выпуска baseline test cases пройти готовые кейсы в реальном UI, собрать Playwright evidence, использовать package-level UI notes при их наличии и выпустить отдельную automation-ready версию без перезаписи FT-first baseline. Если `automation-ready` файл для scope отсутствует, но baseline файл уже есть, skill может сначала создать initial `automation-ready` версию и только затем переходить к UI-прогону.
 - `agent-architecture-auditor` - аудит структуры `AGENTS.md`, `skills/`, `references/` и scripts.
 
 Карту skill-ов и канонических references смотри в `skills/README.md`. Архитектурный аудит agent-layer выполняй через `agent-architecture-auditor`, а не через ad-hoc procedural checklist в ответе.

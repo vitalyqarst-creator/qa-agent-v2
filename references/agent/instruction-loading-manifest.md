@@ -50,6 +50,25 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/runtime-quality-rule-cards.md"
       ]
     },
+    "practical_route_core": {
+      "rationale": "Default practical route for ordinary FT test-case writing without bridge, benchmark, sharding or immutable runner loops.",
+      "paths": [
+        "references/agent/practical-test-case-route-v0.6.md"
+      ]
+    },
+    "scope_practical_core": {
+      "rationale": "Compact scope brief context for practical v0.6 test-case writing.",
+      "paths": [
+        "skills/ft-scope-analyzer/SKILL.md",
+        "references/agent/practical-test-case-route-v0.6.md",
+        "references/agent/source-selection-format.md",
+        "references/agent/scope-options-format.md",
+        "references/agent/scope-clarification-requests-format.md",
+        "references/agent/source-parity-check-format.md",
+        "references/agent/dictionary-inventory-format.md",
+        "references/agent/mockup-visual-inventory-format.md"
+      ]
+    },
     "writer_prepared_package_core": {
       "rationale": "Compact structured writer path for a verified prepared fast or standard package; source discovery and deep process formats are intentionally excluded.",
       "paths": [
@@ -282,6 +301,19 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/qa/traceability-rules.md"
       ]
     },
+    "reviewer_practical_core": {
+      "rationale": "Compact practical v0.6 reviewer context for one-pass review of matrix and canonical test cases.",
+      "paths": [
+        "skills/ft-test-case-reviewer/SKILL.md",
+        "references/agent/practical-test-case-route-v0.6.md",
+        "references/agent/runtime-quality-rule-cards.md",
+        "references/agent/reviewer-output-format.md",
+        "references/qa/review-findings-format.md",
+        "references/qa/test-case-runtime-format.md",
+        "references/qa/coverage-runtime-checklist.md",
+        "references/qa/traceability-rules.md"
+      ]
+    },
     "scope_bounded_production_core": {
       "rationale": "Compact source-first instructions for one bounded production scope; excludes process logs, broad format packs and audit-only history.",
       "paths": [
@@ -465,10 +497,43 @@ Resolver должен читать JSON-блок ниже как канонич�
       "mode": "discovery",
       "scope_profile": "any",
       "required_groups": ["global_core", "source_locator_core"],
-      "conditional_groups": ["scope_manual_core", "scope_agent_proposed_core", "scope_table_artifacts", "scope_ui_artifacts"],
+      "conditional_groups": ["scope_practical_core", "scope_manual_core", "scope_agent_proposed_core", "scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 130,
+      "budget_limit_kib": 132,
       "rationale": "FT package and source discovery before scope or test-case work."
+    },
+    {
+      "id": "scope.practical_v0_6",
+      "phase": "scope",
+      "mode": "practical_v0_6",
+      "scope_profile": "any",
+      "required_groups": ["global_core", "scope_practical_core"],
+      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 160,
+      "rationale": "Compact practical scope brief for ordinary test-case writing without source assertions, bridge or immutable runner routing."
+    },
+    {
+      "id": "writer.practical_v0_6",
+      "phase": "writer",
+      "mode": "practical_v0_6",
+      "scope_profile": "any",
+      "required_groups": ["global_core", "practical_route_core", "writer_core", "quality_rule_cards"],
+      "conditional_groups": ["scope_practical_core", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 190,
+      "rationale": "Default practical writer context: scope brief, compact test-design matrix and canonical test cases."
+    },
+    {
+      "id": "reviewer.practical_v0_6",
+      "phase": "reviewer",
+      "mode": "practical_v0_6",
+      "scope_profile": "any",
+      "required_groups": ["global_core", "reviewer_practical_core", "quality_rule_cards"],
+      "conditional_groups": ["scope_practical_core", "writer_revision_artifacts", "style_remediation_compact"],
+      "audit_only_groups": ["audit_only_history", "governance_audit_only"],
+      "budget_limit_kib": 160,
+      "rationale": "One-pass practical independent review of matrix and canonical test cases."
     },
     {
       "id": "writer.initial_draft.simple",
@@ -742,8 +807,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "required_groups": ["global_core", "source_locator_core", "scope_manual_core"],
       "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
-      "budget_limit_kib": 274,
-      "rationale": "Manual scope selection when the user already provides the intended section or boundary. The 274 KiB cap preserves the mandatory source-assertion/gap/clarification and promotion-recovery contracts plus at least 15 KiB safety headroom after the analyst-friendly clarification format; it is an instruction-context cap, not a release-quality waiver."
+      "budget_limit_kib": 280,
+      "rationale": "Manual scope selection when the user already provides the intended section or boundary. The 280 KiB cap preserves the mandatory source-assertion/gap/clarification and promotion-recovery contracts plus at least 15 KiB safety headroom after the analyst-friendly clarification format; it is an instruction-context cap, not a release-quality waiver."
     },
     {
       "id": "scope.agent_proposed",

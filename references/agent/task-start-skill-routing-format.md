@@ -72,8 +72,20 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "verification_gates": ["scope-contract.md exists", "coverage gaps are linked to source evidence"]
     },
     {
+      "id": "test_cases.practical_v0_6",
+      "task_type": "Default route for ordinary FT test-case writing: compact scope brief, test-design matrix, canonical test cases, one independent review and one bounded revision.",
+      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
+      "instruction_scenarios": [
+        {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
+        {"skill": "ft-scope-analyzer", "scenario": "scope.practical_v0_6"},
+        {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_6"},
+        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_6"}
+      ],
+      "verification_gates": ["scope-brief.md exists", "test-design-matrix.md exists", "canonical test-case file exists", "review-findings.md exists or reviewer accepted without findings", "no benchmark/sharding/bridge/immutable attempt artifacts are created"]
+    },
+    {
       "id": "production.bounded_full_loop",
-      "task_type": "Run one eligible bounded scope through source review, writer, reviewer and promotion with user wall-clock limits.",
+      "task_type": "Explicit-only route: run one eligible bounded scope through source review, writer, reviewer and promotion with user wall-clock limits.",
       "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
       "instruction_scenarios": [
         {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
@@ -323,6 +335,12 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
       "expected_route_id": "scope.propose_candidates",
       "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer"],
       "expected_instruction_scenarios": ["source_locator.discovery", "scope.agent_proposed"]
+    },
+    {
+      "prompt": "Напиши тест-кейсы по выбранному scope ФТ и доведи их до ревью.",
+      "expected_route_id": "test_cases.practical_v0_6",
+      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
+      "expected_instruction_scenarios": ["source_locator.discovery", "scope.practical_v0_6", "writer.practical_v0_6", "reviewer.practical_v0_6"]
     },
     {
       "prompt": "Пройди весь процесс по одному небольшому scope и измерь полное время пользователя.",

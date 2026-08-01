@@ -27,6 +27,14 @@ description: Делает review существующих тест-кейсов 
 
 ## Режимы review
 
+- `practical_v0_6` — default review for ordinary newly written test cases. It
+  reviews FT/PDF context, `scope-brief.md`, `test-design-matrix.md` and the
+  canonical test-case file in one independent pass. It produces
+  `review-findings.md` and may request one writer revision pass for blocking
+  findings. It must not require source assertion receipts, semantic bridge,
+  immutable runner attempts, benchmark artifacts, separate structure preflight,
+  separate final-format review or semantic regression unless the user explicitly
+  selected those routes.
 - `full` — канонический режим по умолчанию для direct review. Выполняет `traceability`, затем `structure`, затем `test-design`; возвращает findings и traceability matrix при необходимости. Direct `full` не заменяет session-based sign-off: для `signed-off` используй `ft-test-case-iteration`.
 - `traceability` — строит traceability matrix по атомарным утверждениям ФТ и проверяет, что каждое утверждение покрыто тест-кейсом или зафиксировано как `gap` / `unclear`.
 - `structure` — проверяет формат тест-кейса, группировку набора, сквозную нумерацию `TC-*`, порядок позитивных и негативных кейсов, наличие базовых проверок по полю, если такие свойства явно описаны в ФТ.
@@ -43,9 +51,44 @@ description: Делает review существующих тест-кейсов 
 - `structure_format_final` — финальная проверка оформления после semantic closure: шаблон, группировка, сквозная нумерация, wording, format smells и обязательный validator gate по текущему scope.
 - `semantic_regression` — финальная проверка, что format-only revision не изменила смысл, coverage, `ATOM-*` links, traceability matrix и expected results.
 
-Порядок нового session-based cycle: optional `scope_gap_review` after scope analysis and before writer, then `structure_preflight -> semantic_traceability_test_design` до двух semantic rounds, затем `structure_format_final`, optional format-only writer revision и `semantic_regression`. Если final format review находит semantic problem, это не format finding: routing возвращается в semantic loop или фиксирует `round-cap-reached` при исчерпанном лимите.
+Порядок нового session-based cycle применяется только для explicit
+qualification/development route: optional `scope_gap_review` after scope analysis
+and before writer, then `structure_preflight ->
+semantic_traceability_test_design` до двух semantic rounds, затем
+`structure_format_final`, optional format-only writer revision и
+`semantic_regression`. Если final format review находит semantic problem, это не
+format finding: routing возвращается в semantic loop или фиксирует
+`round-cap-reached` при исчерпанном лимите. Не применяй этот порядок к
+`practical_v0_6`.
 
 Semantic review is mandatory for sign-off. Do not remove semantic checks to satisfy instruction budget; move detailed rules to references and load them selectively. Reviewer must block sign-off for process markers in `Название`, candidate title leaks, generic test data placeholders, missing positive allowed-class TC, numbered passive preconditions, overmerged TC, candidate TC without concrete invalid value, candidate TC with invented rejection mechanism, and source-backed positive checks replaced by candidate negatives.
+
+### `practical_v0_6` contract
+
+Use
+[../../references/agent/practical-test-case-route-v0.6.md](../../references/agent/practical-test-case-route-v0.6.md)
+as the controlling route.
+
+Review in one pass:
+
+1. Source coverage: every source-backed obligation in the scope maps to a TC or
+   to an explicit allowed deferred status.
+2. Test design: positive, negative, boundary, dictionary, dependency and
+   repeatable-block classes are present when the FT requires them.
+3. Runtime executability: steps are user actions/checks; expected results are
+   observable or marked `blocked-observability`.
+4. Language and wording: runtime fields are Russian; English is allowed only for
+   approved metadata enum values such as `Positive`, `Negative`, `High`,
+   `Medium`, `Low`; no agent-process phrases leak into test cases.
+5. Source precedence: FT text wins over mockups for business rules; mockups may
+   refine visible labels and navigation.
+6. Data readiness: concrete values are used where available; otherwise the case
+   has `needs-test-data` with a clear fixture need.
+
+Return `review-findings.md` with `blocking`, `nonblocking`,
+`needs-ui-calibration` and `needs-test-data` findings. Do not block release only
+because some cases legitimately remain `candidate-ui-calibration`,
+`blocked-observability` or `needs-test-data`.
 
 ### `source_assertion_review` contract
 
