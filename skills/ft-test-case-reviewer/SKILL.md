@@ -27,11 +27,11 @@ description: Делает review существующих тест-кейсов 
 
 ## Режимы review
 
-- `practical_v0_6` — default review for ordinary newly written test cases. It
+- `practical_v0_7` — default review for ordinary newly written test cases. It
   reviews FT/PDF context, `scope-brief.md`, `test-design-matrix.md` and the
   canonical test-case file in one independent pass. It produces
-  `review-findings.md` and may request one writer revision pass for blocking
-  findings. It must not require source assertion receipts, semantic bridge,
+  `review-findings.md` and `review-independence.md`, and may request one writer
+  revision pass for blocking findings. It must not require source assertion receipts, semantic bridge,
   immutable runner attempts, benchmark artifacts, separate structure preflight,
   separate final-format review or semantic regression unless the user explicitly
   selected those routes.
@@ -59,14 +59,14 @@ semantic_traceability_test_design` до двух semantic rounds, затем
 `semantic_regression`. Если final format review находит semantic problem, это не
 format finding: routing возвращается в semantic loop или фиксирует
 `round-cap-reached` при исчерпанном лимите. Не применяй этот порядок к
-`practical_v0_6`.
+`practical_v0_7`.
 
 Semantic review is mandatory for sign-off. Do not remove semantic checks to satisfy instruction budget; move detailed rules to references and load them selectively. Reviewer must block sign-off for process markers in `Название`, candidate title leaks, generic test data placeholders, missing positive allowed-class TC, numbered passive preconditions, overmerged TC, candidate TC without concrete invalid value, candidate TC with invented rejection mechanism, and source-backed positive checks replaced by candidate negatives.
 
-### `practical_v0_6` contract
+### `practical_v0_7` contract
 
 Use
-[../../references/agent/practical-test-case-route-v0.6.md](../../references/agent/practical-test-case-route-v0.6.md)
+[../../references/agent/practical-test-case-route-v0.7.md](../../references/agent/practical-test-case-route-v0.7.md)
 as the controlling route.
 
 Review in one pass:
@@ -74,7 +74,9 @@ Review in one pass:
 1. Source coverage: every source-backed obligation in the scope maps to a TC or
    to an explicit allowed deferred status.
 2. Test design: positive, negative, boundary, dictionary, dependency and
-   repeatable-block classes are present when the FT requires them.
+   repeatable-block classes are present when the FT requires them; a single
+   invalid representative does not cover multiple independently derivable
+   classes.
 3. Runtime executability: steps are user actions/checks; expected results are
    observable or marked `blocked-observability`.
 4. Language and wording: runtime fields are Russian; English is allowed only for
@@ -84,6 +86,11 @@ Review in one pass:
    refine visible labels and navigation.
 6. Data readiness: concrete values are used where available; otherwise the case
    has `needs-test-data` with a clear fixture need.
+
+Also verify `review-independence.md`. If the reviewer was not run in a separate
+Codex task/session or received writer transcript/private reasoning, review may
+continue but the suite must be labeled `reviewed-not-independent`, not
+independently signed off.
 
 Return `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only

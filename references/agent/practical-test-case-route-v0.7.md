@@ -1,4 +1,4 @@
-# Practical Test Case Route v0.6
+# Practical Test Case Route v0.7
 
 This is the default route for ordinary FT test-case writing.
 
@@ -6,7 +6,16 @@ The goal is to produce useful, source-bound manual test cases quickly, without
 benchmark, sharding, semantic bridge, immutable runner, source assertion receipt
 loops or multi-session repair cycles.
 
-Use the heavier routes only when the user explicitly asks for them by name, for
+Compared with v0.6, v0.7 keeps the same lightweight route but tightens two
+quality gates:
+
+- every source-backed validation or allowed-value rule must be decomposed into
+  explicit coverage classes before test cases are written;
+- reviewer independence must be evidence-backed. If the reviewer is not run in
+  a separate Codex task/session, the result may be called a practical review but
+  not an independent sign-off.
+
+Use heavier routes only when the user explicitly asks for them by name, for
 example benchmark, sharding, semantic bridge, source-qualified immutable
 `ft-agent run`, incremental update, or UI automation preparation.
 
@@ -47,9 +56,13 @@ example benchmark, sharding, semantic bridge, source-qualified immutable
      route.
 
 4. `ft-test-case-reviewer`
-   - Run one independent practical review over the FT/PDF context,
-     `scope-brief.md`, `test-design-matrix.md` and canonical test cases.
-   - Produce `review-findings.md` in the practical scope folder.
+   - Run one practical review over the FT/PDF context, `scope-brief.md`,
+     `test-design-matrix.md` and canonical test cases.
+   - Prefer a separate Codex task/session for the reviewer. The reviewer input
+     must exclude writer transcript, writer private reasoning, and process
+     diagnostics that are not needed to judge the suite.
+   - Produce `review-findings.md` and `review-independence.md` in the practical
+     scope folder.
    - Classify findings as:
      - `blocking` when the test case is materially wrong or misleading;
      - `nonblocking` when the issue is wording, grouping or minor priority;
@@ -93,18 +106,70 @@ large ledgers.
 
 Minimum columns:
 
-| source_ref | atomic_check | design_dimension | positive_class | negative_or_boundary_class | tc_id | status | notes |
-| --- | --- | --- | --- | --- | --- | --- | --- |
+| source_ref | atomic_check | design_dimension | coverage_classes | tc_id | status | notes |
+| --- | --- | --- | --- | --- | --- | --- |
 
 Rules:
 
-- one row represents one source-backed check or one consciously deferred check;
+- one row represents one source-backed check, one coverage class, or one
+  consciously deferred check;
 - every executable FT obligation must map to a `TC-*`;
 - every unexecutable obligation must map to a `candidate-ui-calibration`,
   `blocked-observability` or `needs-test-data` `TC-*`;
+- `coverage_classes` is mandatory for validation, format, length, mask,
+  allowed-symbol, dictionary, requiredness, visibility-condition, dependency,
+  file-upload, integration, status/lifecycle and repeatable-block rules;
 - do not create test cases for glossary/status-table rows when later FT sections
-  already define the actual screen, action and expected result; use those rows as
+  define the actual screen, action and expected result; use those rows as
   supporting context in `source_ref`.
+
+## Mandatory coverage class decomposition
+
+The writer must not treat one sample invalid value as complete negative
+coverage. For every source-backed restriction, decompose the rule into explicit
+classes first, then write or defer each class.
+
+Minimum practical classes:
+
+- `digits-only` / numeric-symbol input:
+  - valid digits;
+  - Latin letters;
+  - Cyrillic letters;
+  - spaces;
+  - hyphen or sign;
+  - decimal separator;
+  - punctuation or special symbol.
+- exact length `N`:
+  - `N`;
+  - `N-1`;
+  - `N+1`.
+- min/max numeric or date boundary:
+  - below boundary;
+  - on boundary;
+  - above boundary.
+- fixed dictionary/list:
+  - full relevant list or a justified representative set;
+  - absence of values outside the list only if closed-set behavior follows from
+    FT/support/UI evidence, otherwise a narrow clarification/calibration item.
+- requiredness:
+  - empty value trigger;
+  - valid value recovery only when the recovery behavior is source-backed or
+    needed to make the negative case attributable.
+- repeatable block:
+  - first add;
+  - second independent add;
+  - delete one of several;
+  - delete last or record a narrow gap if empty-state behavior is not described.
+- file upload:
+  - allowed file;
+  - forbidden extension/type;
+  - max size / over max size when a limit is defined;
+  - multiple files only when count rules are in scope.
+
+If the exact UI reaction is unknown, do not drop the class. Keep the class in the
+matrix and create a `candidate-ui-calibration` or `blocked-observability` case
+with concrete input and a clear `Требуется подтверждение`. Unknown UI mechanism
+changes status and expected-result precision; it does not remove the obligation.
 
 ## Canonical test-case quality gates
 
@@ -112,10 +177,11 @@ Before handing off to reviewer, the writer checks every canonical file:
 
 - no service/debug sections such as UI Automation Prep details, benchmark data,
   runner diagnostics, bridge/attempt metadata or internal process logs;
-- human-facing text is Russian, except allowed metadata values such as
+- human-facing runtime text is Russian, except allowed metadata values such as
   `Positive`, `Negative`, `High`, `Medium`, `Low`;
 - no phrases such as `source-backed`, `observable source`, `registered-card`,
-  `semantic projection`, `exact credit-conveyor screen`, or other agent-process language in runtime test cases;
+  `semantic projection`, `exact credit-conveyor screen`, or other agent-process
+  language in runtime test cases;
 - title describes user-visible behavior, not traceability IDs or internal
   obligations;
 - `Предусловия` first open the relevant form/card/screen/section before entering
@@ -162,12 +228,40 @@ The practical reviewer must block:
 - generic fixtures such as “valid entity” without concrete data or a
   `needs-test-data` status;
 - merged checks that hide independent positive/negative/boundary behavior;
+- one invalid representative that claims to cover several independently
+  derivable classes;
+- a `candidate-ui-calibration` case that drops a source-backed class instead of
+  preserving it with concrete input and a calibration question;
 - invented UI messages, validation triggers, buttons, integrations or statuses;
 - English agent-process wording in Russian runtime fields;
-- missed dictionaries, missing boundary classes, and missing negative classes
-  when the FT states restrictions;
+- missed dictionaries, missing boundary classes, missing equivalence classes and
+  missing negative classes when the FT states restrictions;
 - use of status/glossary rows as standalone tests when later FT sections define
   the actual behavior.
 
 The reviewer should not require heavy process artifacts when the matrix,
 scope brief and canonical test cases are sufficient to prove coverage.
+
+## Reviewer independence evidence
+
+Create `review-independence.md` in the practical scope folder.
+
+Minimum fields:
+
+| field | value |
+| --- | --- |
+| reviewer_task_or_session | `<id or not-available>` |
+| reviewer_was_separate_session | `yes/no` |
+| reviewer_input_excluded_writer_transcript | `yes/no` |
+| reviewer_input_excluded_writer_private_reasoning | `yes/no` |
+| reviewer_modified_test_cases | `no` |
+| independent_signoff_claim_allowed | `yes/no` |
+
+Rules:
+
+- `independent_signoff_claim_allowed = yes` only when
+  `reviewer_was_separate_session = yes` and the reviewer did not receive writer
+  transcript/private reasoning.
+- If a separate reviewer session is not available, complete the practical review
+  but label it `reviewed-not-independent`; do not call the suite independently
+  signed off.

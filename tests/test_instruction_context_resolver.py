@@ -13,9 +13,9 @@ MANIFEST_PATH = ROOT_DIR / "references" / "agent" / "instruction-loading-manifes
 
 REQUIRED_SCENARIOS = {
     "source_locator.discovery",
-    "scope.practical_v0_6",
-    "writer.practical_v0_6",
-    "reviewer.practical_v0_6",
+    "scope.practical_v0_7",
+    "writer.practical_v0_7",
+    "reviewer.practical_v0_7",
     "writer.initial_draft.simple",
     "writer.initial_draft.table",
     "writer.initial_draft.table.deep_debug",

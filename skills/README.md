@@ -14,7 +14,7 @@ Canonical list of active skills:
 
 - If the first task is to identify which FT to use: `ft-source-locator`.
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
-- If the user asks to write test cases for a normal FT scope, use the practical route v0.6: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer`, then one revision pass if blocking findings remain.
+- If the user asks to write test cases for a normal FT scope, use the practical route v0.7: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer`, then one revision pass if blocking findings remain.
 - If the scope is fixed and new cases must be written in one writer pass without independent review: `ft-test-case-writer`, but still follow practical-route quality gates.
 - If the scope is independently qualified and the user explicitly asks for a production shadow: `ft-test-case-iteration` through `ft-agent run`.
 - If the scope has compiler-v3 obligations and the user explicitly asks for source-qualified immutable execution: `ft-test-case-iteration` `lean_v2` through one public `ft-agent run`; for new production attempts, explicitly set `writer_mode: model-runtime-prose`.
@@ -27,7 +27,7 @@ Canonical list of active skills:
 
 ## Typical Chains
 
-- New test-case suite, default: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` using practical route v0.6.
+- New test-case suite, default: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> `ft-test-case-reviewer` using practical route v0.7.
 - Explicit production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
 - Explicit full source-qualified scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
 - New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.
@@ -52,7 +52,7 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Instruction contracts: [../references/agent/instruction-contract-index.md](../references/agent/instruction-contract-index.md)
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
-- Practical test-case route v0.6: [../references/agent/practical-test-case-route-v0.6.md](../references/agent/practical-test-case-route-v0.6.md)
+- Practical test-case route v0.7: [../references/agent/practical-test-case-route-v0.7.md](../references/agent/practical-test-case-route-v0.7.md)
 - Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
 - Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
 - Codex SDK orchestration: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)

@@ -53,14 +53,14 @@ Resolver должен читать JSON-блок ниже как канонич�
     "practical_route_core": {
       "rationale": "Default practical route for ordinary FT test-case writing without bridge, benchmark, sharding or immutable runner loops.",
       "paths": [
-        "references/agent/practical-test-case-route-v0.6.md"
+        "references/agent/practical-test-case-route-v0.7.md"
       ]
     },
     "scope_practical_core": {
-      "rationale": "Compact scope brief context for practical v0.6 test-case writing.",
+      "rationale": "Compact scope brief context for practical v0.7 test-case writing.",
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
-        "references/agent/practical-test-case-route-v0.6.md",
+        "references/agent/practical-test-case-route-v0.7.md",
         "references/agent/source-selection-format.md",
         "references/agent/scope-options-format.md",
         "references/agent/scope-clarification-requests-format.md",
@@ -302,10 +302,10 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "reviewer_practical_core": {
-      "rationale": "Compact practical v0.6 reviewer context for one-pass review of matrix and canonical test cases.",
+      "rationale": "Compact practical v0.7 reviewer context for one-pass review of matrix and canonical test cases.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
-        "references/agent/practical-test-case-route-v0.6.md",
+        "references/agent/practical-test-case-route-v0.7.md",
         "references/agent/runtime-quality-rule-cards.md",
         "references/agent/reviewer-output-format.md",
         "references/qa/review-findings-format.md",
@@ -503,9 +503,9 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "FT package and source discovery before scope or test-case work."
     },
     {
-      "id": "scope.practical_v0_6",
+      "id": "scope.practical_v0_7",
       "phase": "scope",
-      "mode": "practical_v0_6",
+      "mode": "practical_v0_7",
       "scope_profile": "any",
       "required_groups": ["global_core", "scope_practical_core"],
       "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
@@ -514,9 +514,9 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Compact practical scope brief for ordinary test-case writing without source assertions, bridge or immutable runner routing."
     },
     {
-      "id": "writer.practical_v0_6",
+      "id": "writer.practical_v0_7",
       "phase": "writer",
-      "mode": "practical_v0_6",
+      "mode": "practical_v0_7",
       "scope_profile": "any",
       "required_groups": ["global_core", "practical_route_core", "writer_core", "quality_rule_cards"],
       "conditional_groups": ["scope_practical_core", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact"],
@@ -525,9 +525,9 @@ Resolver должен читать JSON-блок ниже как канонич�
       "rationale": "Default practical writer context: scope brief, compact test-design matrix and canonical test cases."
     },
     {
-      "id": "reviewer.practical_v0_6",
+      "id": "reviewer.practical_v0_7",
       "phase": "reviewer",
-      "mode": "practical_v0_6",
+      "mode": "practical_v0_7",
       "scope_profile": "any",
       "required_groups": ["global_core", "reviewer_practical_core", "quality_rule_cards"],
       "conditional_groups": ["scope_practical_core", "writer_revision_artifacts", "style_remediation_compact"],
