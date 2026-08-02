@@ -77,7 +77,7 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
 - In `revision_from_findings`, use the structured findings artifact and traceability matrix artifact; process findings according to `review_mode`.
 - For traceability findings and writer response, preserve `traceability_ref = ATOM-*`.
 - Handoff by review mode: `traceability` closes coverage gaps; `structure` aligns template, order, grouping, and continuous numbering; `test-design` adds or corrects checks and expected results.
-- In `practical_v0_7`, the compact `test-design-matrix.md` is the coverage proof; it must include explicit `coverage_classes` rows for validation, format, length, mask, requiredness, dictionary, dependency, repeatable-block and integration rules. Do not build a large atomic ledger unless an explicit legacy/development route requires it. In legacy `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
+- In `practical_v0_7`, the compact `test-design-matrix.md` is the coverage proof; it must include explicit `coverage_classes` rows for every source-backed class required by [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md), including validation, format, length, mask, requiredness, dictionary, dependency, repeatable-block and integration rules when those rules exist in the source. Do not build a large atomic ledger unless an explicit legacy/development route requires it. In legacy `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
 - If writer creates or updates a matrix, a `.xlsx` duplicate of the traceability matrix is mandatory.
 - Check smell markers from canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-unsupported-numeric-validation-feedback-smell, test-case-mechanical-field-step-smell.
 
@@ -155,6 +155,7 @@ Rules:
 - Review findings format: [../../references/qa/review-findings-format.md](../../references/qa/review-findings-format.md)
 - Traceability matrix format: [../../references/qa/traceability-matrix-format.md](../../references/qa/traceability-matrix-format.md)
 - Coverage runtime checklist: [../../references/qa/coverage-runtime-checklist.md](../../references/qa/coverage-runtime-checklist.md)
+- Coverage class catalog: [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)
 - Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
 - Coverage obligation table format: [../../references/agent/coverage-obligation-table-format.md](../../references/agent/coverage-obligation-table-format.md)
 - Test-design coverage metrics format: [../../references/agent/test-design-coverage-metrics-format.md](../../references/agent/test-design-coverage-metrics-format.md)

@@ -119,6 +119,9 @@ Rules:
 - `coverage_classes` is mandatory for validation, format, length, mask,
   allowed-symbol, dictionary, requiredness, visibility-condition, dependency,
   file-upload, integration, status/lifecycle and repeatable-block rules;
+- choose the exact class group from
+  [../qa/coverage-class-catalog.md](../qa/coverage-class-catalog.md); activate a
+  group only when the current source contains the matching rule;
 - do not create test cases for glossary/status-table rows when later FT sections
   define the actual screen, action and expected result; use those rows as
   supporting context in `source_ref`.
@@ -129,42 +132,26 @@ The writer must not treat one sample invalid value as complete negative
 coverage. For every source-backed restriction, decompose the rule into explicit
 classes first, then write or defer each class.
 
-Minimum practical classes:
+Use the canonical catalog:
+[../qa/coverage-class-catalog.md](../qa/coverage-class-catalog.md).
 
-- `digits-only` / numeric-symbol input:
-  - valid digits;
-  - Latin letters;
-  - Cyrillic letters;
-  - spaces;
-  - hyphen or sign;
-  - decimal separator;
-  - punctuation or special symbol.
-- exact length `N`:
-  - `N`;
-  - `N-1`;
-  - `N+1`.
-- min/max numeric or date boundary:
-  - below boundary;
-  - on boundary;
-  - above boundary.
-- fixed dictionary/list:
-  - full relevant list or a justified representative set;
-  - absence of values outside the list only if closed-set behavior follows from
-    FT/support/UI evidence, otherwise a narrow clarification/calibration item.
-- requiredness:
-  - empty value trigger;
-  - valid value recovery only when the recovery behavior is source-backed or
-    needed to make the negative case attributable.
-- repeatable block:
-  - first add;
-  - second independent add;
-  - delete one of several;
-  - delete last or record a narrow gap if empty-state behavior is not described.
-- file upload:
-  - allowed file;
-  - forbidden extension/type;
-  - max size / over max size when a limit is defined;
-  - multiple files only when count rules are in scope.
+The catalog covers the common source-backed rule groups:
+
+- digits-only and allowed-symbol restrictions;
+- text/name-like fields;
+- alphanumeric fields;
+- masks and patterns;
+- exact length and min/max length;
+- numeric ranges and amounts;
+- dates and date/time;
+- requiredness and conditional requiredness;
+- dictionaries, closed lists, autocomplete and integrations;
+- file upload;
+- repeatable blocks and child rows;
+- uniqueness and duplicate checks;
+- status/lifecycle rules;
+- cross-field dependencies and combinations;
+- generated documents and mappings.
 
 If the exact UI reaction is unknown, do not drop the class. Keep the class in the
 matrix and create a `candidate-ui-calibration` or `blocked-observability` case

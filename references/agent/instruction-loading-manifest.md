@@ -53,7 +53,8 @@ Resolver должен читать JSON-блок ниже как канонич�
     "practical_route_core": {
       "rationale": "Default practical route for ordinary FT test-case writing without bridge, benchmark, sharding or immutable runner loops.",
       "paths": [
-        "references/agent/practical-test-case-route-v0.7.md"
+        "references/agent/practical-test-case-route-v0.7.md",
+        "references/qa/coverage-class-catalog.md"
       ]
     },
     "scope_practical_core": {
@@ -61,6 +62,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
         "references/agent/practical-test-case-route-v0.7.md",
+        "references/qa/coverage-class-catalog.md",
         "references/agent/source-selection-format.md",
         "references/agent/scope-options-format.md",
         "references/agent/scope-clarification-requests-format.md",
@@ -311,6 +313,7 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/qa/review-findings-format.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md",
+        "references/qa/coverage-class-catalog.md",
         "references/qa/traceability-rules.md"
       ]
     },

@@ -116,6 +116,10 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             "review-independence.md exists",
             self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
         )
+        self.assertIn(
+            "test-design-matrix.md exists with coverage_classes from coverage-class-catalog.md when triggered by source",
+            self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
+        )
         self.assertEqual(
             ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],
             self.route_by_id["iteration.full_loop"]["skill_chain"],

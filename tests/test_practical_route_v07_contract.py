@@ -63,12 +63,52 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         content = self.read("references/agent/practical-test-case-route-v0.7.md")
         self.assertIn("Mandatory coverage class decomposition", content)
         self.assertIn("one sample invalid value", content)
-        self.assertIn("Latin letters", content)
-        self.assertIn("Cyrillic letters", content)
-        self.assertIn("spaces", content)
-        self.assertIn("decimal separator", content)
+        self.assertIn("coverage-class-catalog.md", content)
+        self.assertIn("text/name-like fields", content)
+        self.assertIn("numeric ranges and amounts", content)
+        self.assertIn("generated documents and mappings", content)
         self.assertIn("review-independence.md", content)
         self.assertIn("independent_signoff_claim_allowed", content)
+
+    def test_coverage_class_catalog_pins_common_triggered_groups(self) -> None:
+        content = self.read("references/qa/coverage-class-catalog.md")
+        for expected in (
+            "Activation rule",
+            "`digits-only`",
+            "text-only / name-like input",
+            "exact length `N`",
+            "min/max length",
+            "Numeric ranges and amounts",
+            "Dates and date/time",
+            "Requiredness and conditional requiredness",
+            "Dictionaries, closed lists, autocomplete and integrations",
+            "File upload",
+            "Repeatable blocks and child rows",
+            "Uniqueness and duplicate checks",
+            "Status and lifecycle",
+            "Cross-field dependencies and combinations",
+            "Generated documents and mappings",
+        ):
+            self.assertIn(expected, content)
+
+        for expected in (
+            "Latin letters",
+            "Cyrillic letters",
+            "spaces",
+            "hyphen or sign",
+            "decimal separator",
+            "punctuation or special symbol",
+        ):
+            self.assertIn(expected, content)
+
+    def test_practical_writer_and_reviewer_load_coverage_class_catalog(self) -> None:
+        manifest = self.read("references/agent/instruction-loading-manifest.md")
+        writer = self.read("skills/ft-test-case-writer/SKILL.md")
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+
+        self.assertIn("references/qa/coverage-class-catalog.md", manifest)
+        self.assertIn("coverage-class-catalog.md", writer)
+        self.assertIn("coverage-class-catalog.md", reviewer)
 
 
 if __name__ == "__main__":

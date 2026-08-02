@@ -74,9 +74,10 @@ Review in one pass:
 1. Source coverage: every source-backed obligation in the scope maps to a TC or
    to an explicit allowed deferred status.
 2. Test design: positive, negative, boundary, dictionary, dependency and
-   repeatable-block classes are present when the FT requires them; a single
-   invalid representative does not cover multiple independently derivable
-   classes.
+   repeatable-block classes from
+   [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)
+   are present when the FT requires them; a single invalid representative does
+   not cover multiple independently derivable classes.
 3. Runtime executability: steps are user actions/checks; expected results are
    observable or marked `blocked-observability`.
 4. Language and wording: runtime fields are Russian; English is allowed only for
@@ -288,6 +289,7 @@ Rules:
 - Reviewer sign-off migration report: [../../references/agent/reviewer-signoff-migration-report-2026-05-25.md](../../references/agent/reviewer-signoff-migration-report-2026-05-25.md)
 - Eval run report format: [../../references/agent/eval-run-report-format.md](../../references/agent/eval-run-report-format.md)
 - Coverage checklist: [../../references/qa/coverage-checklist.md](../../references/qa/coverage-checklist.md)
+- Coverage class catalog: [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)
 - Правила трассировки: [../../references/qa/traceability-rules.md](../../references/qa/traceability-rules.md)
 - Границы skill-ов: [../../references/agent/skill-boundaries.md](../../references/agent/skill-boundaries.md)
 - Source parsing quality: [../../references/agent/source-parsing-quality.md](../../references/agent/source-parsing-quality.md)

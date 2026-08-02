@@ -53,6 +53,7 @@ The canonical loading manifest lives in `references/agent/instruction-loading-ma
 - Instruction loading manifest: [../references/agent/instruction-loading-manifest.md](../references/agent/instruction-loading-manifest.md)
 - Task-start skill routing: [../references/agent/task-start-skill-routing-format.md](../references/agent/task-start-skill-routing-format.md)
 - Practical test-case route v0.7: [../references/agent/practical-test-case-route-v0.7.md](../references/agent/practical-test-case-route-v0.7.md)
+- Coverage class catalog: [../references/qa/coverage-class-catalog.md](../references/qa/coverage-class-catalog.md)
 - Source-qualified iteration: [../references/agent/lean-v2-iteration.md](../references/agent/lean-v2-iteration.md)
 - Session-based review cycle: [../references/agent/session-based-review-cycle-format.md](../references/agent/session-based-review-cycle-format.md)
 - Codex SDK orchestration: [../references/agent/codex-sdk-orchestration-format.md](../references/agent/codex-sdk-orchestration-format.md)

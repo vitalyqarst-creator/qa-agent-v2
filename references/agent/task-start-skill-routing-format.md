@@ -73,7 +73,7 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     },
     {
       "id": "test_cases.practical_v0_7",
-      "task_type": "Default route for ordinary FT test-case writing: compact scope brief, test-design matrix with explicit coverage classes, canonical test cases, one evidence-backed independent review and one bounded revision.",
+      "task_type": "Default route for ordinary FT test-case writing: compact scope brief, test-design matrix with explicit coverage classes from the coverage class catalog, canonical test cases, one evidence-backed independent review and one bounded revision.",
       "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
       "instruction_scenarios": [
         {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
@@ -81,7 +81,7 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
         {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_7"},
         {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_7"}
       ],
-      "verification_gates": ["scope-brief.md exists", "test-design-matrix.md exists with coverage_classes", "canonical test-case file exists", "review-findings.md exists or reviewer accepted without findings", "review-independence.md exists", "no benchmark/sharding/bridge/immutable attempt artifacts are created"]
+      "verification_gates": ["scope-brief.md exists", "test-design-matrix.md exists with coverage_classes from coverage-class-catalog.md when triggered by source", "canonical test-case file exists", "review-findings.md exists or reviewer accepted without findings", "review-independence.md exists", "no benchmark/sharding/bridge/immutable attempt artifacts are created"]
     },
     {
       "id": "production.bounded_full_loop",
