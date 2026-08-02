@@ -155,7 +155,27 @@ become stale.
 Use when the source defines `О=Да/Нет`, required markers, conditional
 requiredness or optional fields.
 
-Minimum classes:
+First split requiredness by input mechanism. Do not create one generic
+requiredness test case for all required fields unless every listed field has the
+same source-backed input mechanism, the same trigger, and the same observable
+oracle.
+
+Minimum mechanism classes:
+
+- user-entered required value: the tester types or pastes the value directly;
+- dictionary/autocomplete required selection: the tester must select a value
+  from a list, dictionary, DaData, BIK or similar source;
+- system-filled required value: the application populates the value without
+  direct user input;
+- dependent autofilled required value: another user action or selected value
+  fills the field;
+- readonly required value: the field must be present/filled but cannot be edited
+  directly;
+- action-created/repeatable row required value: requiredness applies only after
+  the user creates a child row/block;
+- conditional requiredness or conditional visibility states.
+
+For each applicable mechanism, cover these classes where source-backed:
 
 - required field empty with the triggering action/source-backed commit action;
 - required field filled with valid value;
@@ -168,6 +188,12 @@ Minimum classes:
 
 Do not invent error text. If the exact UI reaction is unknown, use
 `candidate-ui-calibration` with a concrete trigger and value.
+
+If a test case lists several required fields in `Тестовые данные`, every listed
+field must be exercised in the steps, or the title/scope of the case must be
+narrowed. System-filled, autofilled and readonly fields must not be tested as
+"leave manually empty" negatives unless the source or UI evidence defines a way
+to make them empty.
 
 ## Dictionaries, closed lists, autocomplete and integrations
 
@@ -279,8 +305,14 @@ Minimum classes:
 
 Reviewer must block or return findings when:
 
-- a source-backed restriction has no `coverage_classes` row;
+- a source-backed restriction has no explicit coverage-class row in
+  `test-design-matrix.md`;
 - one invalid representative is used as proof for several independent classes;
+- a requiredness check merges fields with different input mechanisms without a
+  clear parameter table or separate `TC-*`;
+- a requiredness test lists fields that are not actually exercised in steps;
+- a system-filled, autofilled or readonly required field is tested as manually
+  empty without source-backed setup that makes the empty state reachable;
 - a candidate UI-calibration case omits the concrete representative value;
 - a source-backed class disappears because exact UI reaction is unknown;
 - a dictionary/list/integration rule uses examples instead of the relevant list

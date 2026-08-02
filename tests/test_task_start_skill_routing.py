@@ -117,7 +117,7 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
         )
         self.assertIn(
-            "test-design-matrix.md exists with coverage_classes from coverage-class-catalog.md when triggered by source",
+            "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md",
             self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
         )
         self.assertEqual(

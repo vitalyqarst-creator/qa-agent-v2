@@ -77,12 +77,15 @@ Review in one pass:
    repeatable-block classes from
    [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)
    are present when the FT requires them; a single invalid representative does
-   not cover multiple independently derivable classes.
+   not cover multiple independently derivable classes; requiredness checks are
+   split by input mechanism instead of hidden in one generic "all required
+   fields are empty" test case.
 3. Runtime executability: steps are user actions/checks; expected results are
    observable or marked `blocked-observability`.
 4. Language and wording: runtime fields are Russian; English is allowed only for
    approved metadata enum values such as `Positive`, `Negative`, `High`,
-   `Medium`, `Low`; no agent-process phrases leak into test cases.
+   `Medium`, `Low`; no agent-process phrases leak into test cases; practical
+   `test-design-matrix.md` uses Russian visible headers and human-readable text.
 5. Source precedence: FT text wins over mockups for business rules; mockups may
    refine visible labels and navigation.
 6. Data readiness: concrete values are used where available; otherwise the case

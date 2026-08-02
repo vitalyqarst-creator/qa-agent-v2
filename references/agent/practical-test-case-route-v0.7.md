@@ -104,9 +104,14 @@ contradictory enough that the requirement itself cannot be represented.
 The matrix is mandatory because it is the cheapest way to prove coverage without
 large ledgers.
 
+`test-design-matrix.md` is a user-facing artifact. Column headers and
+human-readable cell text must be Russian, because the user can inspect this file
+to verify whether the planned coverage is acceptable. English is allowed only for
+stable metadata values or source literals that are intentionally English.
+
 Minimum columns:
 
-| source_ref | atomic_check | design_dimension | coverage_classes | tc_id | status | notes |
+| Источник | Проверяемое утверждение | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |
 | --- | --- | --- | --- | --- | --- | --- |
 
 Rules:
@@ -116,7 +121,7 @@ Rules:
 - every executable FT obligation must map to a `TC-*`;
 - every unexecutable obligation must map to a `candidate-ui-calibration`,
   `blocked-observability` or `needs-test-data` `TC-*`;
-- `coverage_classes` is mandatory for validation, format, length, mask,
+- `Классы покрытия` is mandatory for validation, format, length, mask,
   allowed-symbol, dictionary, requiredness, visibility-condition, dependency,
   file-upload, integration, status/lifecycle and repeatable-block rules;
 - choose the exact class group from
@@ -124,7 +129,11 @@ Rules:
   group only when the current source contains the matching rule;
 - do not create test cases for glossary/status-table rows when later FT sections
   define the actual screen, action and expected result; use those rows as
-  supporting context in `source_ref`.
+  supporting context in `Источник`;
+- do not use English technical aliases such as `source_ref`, `atomic_check`,
+  `coverage_classes` as the visible headers in this Markdown file. Internal
+  tools may normalize the Russian columns to stable keys, but the checked-in
+  matrix remains Russian.
 
 ## Mandatory coverage class decomposition
 
@@ -157,6 +166,12 @@ If the exact UI reaction is unknown, do not drop the class. Keep the class in th
 matrix and create a `candidate-ui-calibration` or `blocked-observability` case
 with concrete input and a clear `Требуется подтверждение`. Unknown UI mechanism
 changes status and expected-result precision; it does not remove the obligation.
+
+Requiredness classes must be split by input mechanism before writing TC. A single
+"all required fields are empty" TC is valid only when all listed fields are
+reachable by the same setup, have the same user input mechanism, the same trigger
+and the same observable oracle. Otherwise use separate TC or a parameter table in
+one TC, and ensure every listed field is actually exercised in the steps.
 
 ## Canonical test-case quality gates
 
@@ -223,6 +238,11 @@ The practical reviewer must block:
 - English agent-process wording in Russian runtime fields;
 - missed dictionaries, missing boundary classes, missing equivalence classes and
   missing negative classes when the FT states restrictions;
+- generic requiredness cases that list several fields but exercise only a subset
+  of them, or merge typed input, dictionary/autocomplete, system-filled,
+  autofilled, readonly and repeatable-row fields without a clear decomposition;
+- English visible headers or English process wording in `test-design-matrix.md`
+  when Russian human-readable wording is expected;
 - use of status/glossary rows as standalone tests when later FT sections define
   the actual behavior.
 

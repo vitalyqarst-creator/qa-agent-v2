@@ -15,7 +15,9 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         content = self.read("references/agent/practical-test-case-route-v0.7.md")
         self.assertIn("default route for ordinary FT test-case writing", content)
         self.assertIn("test-design-matrix.md", content)
-        self.assertIn("coverage_classes", content)
+        self.assertIn("Классы покрытия", content)
+        self.assertIn("Column headers", content)
+        self.assertIn("must be Russian", content)
         self.assertIn("source-assertions", content)
         self.assertIn("Use heavier routes only when the user explicitly asks", content)
         for forbidden_default in (
@@ -64,11 +66,23 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         self.assertIn("Mandatory coverage class decomposition", content)
         self.assertIn("one sample invalid value", content)
         self.assertIn("coverage-class-catalog.md", content)
+        self.assertIn("Requiredness classes must be split by input mechanism", content)
+        self.assertIn("all required fields are empty", content)
         self.assertIn("text/name-like fields", content)
         self.assertIn("numeric ranges and amounts", content)
         self.assertIn("generated documents and mappings", content)
         self.assertIn("review-independence.md", content)
         self.assertIn("independent_signoff_claim_allowed", content)
+
+    def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
+        content = self.read("references/agent/practical-test-case-route-v0.7.md")
+        for expected in (
+            "| Источник | Проверяемое утверждение | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |",
+            "user-facing artifact",
+            "do not use English technical aliases",
+            "tools may normalize the Russian columns",
+        ):
+            self.assertIn(expected, content)
 
     def test_coverage_class_catalog_pins_common_triggered_groups(self) -> None:
         content = self.read("references/qa/coverage-class-catalog.md")
@@ -101,6 +115,24 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         ):
             self.assertIn(expected, content)
 
+    def test_requiredness_coverage_is_split_by_input_mechanism(self) -> None:
+        content = self.read("references/qa/coverage-class-catalog.md")
+        for expected in (
+            "First split requiredness by input mechanism",
+            "Do not create one generic",
+            "user-entered required value",
+            "dictionary/autocomplete required selection",
+            "system-filled required value",
+            "dependent autofilled required value",
+            "readonly required value",
+            "action-created/repeatable row required value",
+            "If a test case lists several required fields",
+            "every listed",
+            "field must be exercised in the steps",
+            "System-filled, autofilled and readonly fields must not be tested",
+        ):
+            self.assertIn(expected, content)
+
     def test_practical_writer_and_reviewer_load_coverage_class_catalog(self) -> None:
         manifest = self.read("references/agent/instruction-loading-manifest.md")
         writer = self.read("skills/ft-test-case-writer/SKILL.md")
@@ -108,7 +140,12 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
 
         self.assertIn("references/qa/coverage-class-catalog.md", manifest)
         self.assertIn("coverage-class-catalog.md", writer)
+        self.assertIn("Классы покрытия", writer)
+        self.assertIn("requiredness checks are split by input mechanism", writer)
         self.assertIn("coverage-class-catalog.md", reviewer)
+        self.assertIn("requiredness checks are", reviewer)
+        self.assertIn("Russian", reviewer)
+        self.assertIn("visible headers", reviewer)
 
 
 if __name__ == "__main__":
