@@ -17,8 +17,8 @@ If the package, source, or scope is not selected yet, use `ft-source-locator` an
 ## Default practical mode
 
 For ordinary user work “write test cases for this FT/scope”, use
-`practical_v0_7` from
-[../../references/agent/practical-test-case-route-v0.7.md](../../references/agent/practical-test-case-route-v0.7.md).
+`practical_v0_8` from
+[../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md).
 
 In this mode the writer optimizes for a useful released baseline, not for
 benchmark-grade process evidence:
@@ -59,7 +59,7 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
 ## Выходы
 
 - canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
-- for `practical_v0_7`: compact `test-design-matrix.md` in `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
+- for `practical_v0_8`: compact `test-design-matrix.md` in `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
 - for `initial_draft`: split test-design artifacts in `fts/<ft-slug>/work/test-design/<section-id>-<scope-slug>/`;
 - when `dictionary-source` / reference-list rows exist: `dictionary-inventory.md` next to split test-design artifacts before TDDT/plan/TC;
 - for revision in a session-based cycle: `fts/<ft-slug>/work/review-cycles/<scope-slug>/outputs/writer-rN-response.md`;
@@ -77,7 +77,7 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
 - In `revision_from_findings`, use the structured findings artifact and traceability matrix artifact; process findings according to `review_mode`.
 - For traceability findings and writer response, preserve `traceability_ref = ATOM-*`.
 - Handoff by review mode: `traceability` closes coverage gaps; `structure` aligns template, order, grouping, and continuous numbering; `test-design` adds or corrects checks and expected results.
-- In `practical_v0_7`, the compact `test-design-matrix.md` is the coverage proof and a user-facing artifact; it must use Russian visible headers/text and include explicit `Классы покрытия` rows for every source-backed class required by [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md), including validation, format, length, mask, requiredness, dictionary, dependency, repeatable-block and integration rules when those rules exist in the source. Do not build a large atomic ledger unless an explicit legacy/development route requires it. In legacy `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
+- In `practical_v0_8`, the compact `test-design-matrix.md` is a writer-authored coverage claim under review, not source of truth. It must use Russian visible headers/text and include explicit `Классы покрытия` rows for every source-backed class required by [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md), including validation, format, length, mask, requiredness, dictionary, dependency, repeatable-block and integration rules when those rules exist in the source. Do not build a large atomic ledger unless an explicit legacy/development route requires it. In legacy `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
 - If writer creates or updates a matrix, a `.xlsx` duplicate of the traceability matrix is mandatory.
 - Check smell markers from canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-unsupported-numeric-validation-feedback-smell, test-case-mechanical-field-step-smell.
 
@@ -98,10 +98,10 @@ Minimum runtime rules:
 2. Do not invent system behavior, fields, statuses, buttons, integrations, or expected results.
 3. One `TC-*` covers one check and one main expected result.
 4. Preserve requirement codes literally, for example `GSR 22`.
-5. Do not turn pure source gaps into fake executable `TC-*`. If the FT obligation is real but data, UI reaction or observability is missing, write a clearly marked `candidate-ui-calibration`, `blocked-observability` or `needs-test-data` case by practical route v0.7.
+5. Do not turn pure source gaps into fake executable `TC-*`. If the FT obligation is real but data, UI reaction or observability is missing, write a clearly marked `candidate-ui-calibration`, `blocked-observability` or `needs-test-data` case by practical route v0.8.
 6. If source/support defines a dictionary, create/update `dictionary-inventory.md` and link `DICT-*`; branch examples from the FT do not replace the full dictionary.
 6a. Production files under `fts/**/test-cases/*.md` must be self-contained runtime TC artifacts: no setup profile references in `Предусловия`, no stand/environment wording, no package-name leakage such as `AutoFin`, and no embedded diagnostic/design sections. Use split/work artifacts for diagnostics.
-7. For `practical_v0_7`, hand off to reviewer when the canonical file and `test-design-matrix.md` are internally consistent, every source-backed restriction has explicit coverage classes or class-specific deferrals, requiredness checks are split by input mechanism, and current-scope blockers are either fixed or marked with an allowed TC status. For legacy/session routes, do not set `stage_status: ready-for-review` until source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and validator blockers are closed.
+7. For `practical_v0_8`, hand off to reviewer only after creating a reviewer prompt suitable for a separate Codex session. The canonical file and `test-design-matrix.md` must be internally consistent, every source-backed restriction must have explicit coverage classes or class-specific deferrals, requiredness checks must be split by input mechanism, and current-scope blockers must be either fixed or marked with an allowed TC status. For legacy/session routes, do not set `stage_status: ready-for-review` until source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and validator blockers are closed.
 8. Before `ready-for-review`, check canonical TC for unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. These formulations are allowed only when a concrete reproducible baseline, literal/parameter, or linked fixture artifact is adjacent; otherwise fix the TC or record `GAP-*` / `unclear`.
 8a. `Предусловия`: reproducible setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
 9. Before `ready-for-review`, `semantic-review-ready`, and final handoff, check each `TC-*` by [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` is mandatory, optional source fields are allowed only when they add non-duplicating navigation or real source evidence. If `TC-*` uses `DICT-*`, the same id must appear in `Трассировка`; a synthetic quote cannot be presented as an FT quote.

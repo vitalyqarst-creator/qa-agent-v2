@@ -92,33 +92,37 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
                 "ft-test-case-writer",
                 "ft-test-case-reviewer",
             ],
-            self.route_by_id["test_cases.practical_v0_7"]["skill_chain"],
+            self.route_by_id["test_cases.practical_v0_8"]["skill_chain"],
         )
         self.assertEqual(
             [
                 "source_locator.discovery",
-                "scope.practical_v0_7",
-                "writer.practical_v0_7",
-                "reviewer.practical_v0_7",
+                "scope.practical_v0_8",
+                "writer.practical_v0_8",
+                "reviewer.practical_v0_8",
             ],
             [
                 item["scenario"]
-                for item in self.route_by_id["test_cases.practical_v0_7"][
+                for item in self.route_by_id["test_cases.practical_v0_8"][
                     "instruction_scenarios"
                 ]
             ],
         )
         self.assertIn(
             "no benchmark/sharding/bridge/immutable attempt artifacts are created",
-            self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "review-independence.md exists",
-            self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
+            "review-independence.md exists and proves a separate reviewer session for independent sign-off",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
             "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md",
-            self.route_by_id["test_cases.practical_v0_7"]["verification_gates"],
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertEqual(
             ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-iteration"],

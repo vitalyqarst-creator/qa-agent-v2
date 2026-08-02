@@ -1,4 +1,4 @@
-# Practical Test Case Route v0.7
+# Practical Test Case Route v0.8
 
 This is the default route for ordinary FT test-case writing.
 
@@ -6,18 +6,23 @@ The goal is to produce useful, source-bound manual test cases quickly, without
 benchmark, sharding, semantic bridge, immutable runner, source assertion receipt
 loops or multi-session repair cycles.
 
-Compared with v0.6, v0.7 keeps the same lightweight route but tightens two
-quality gates:
+Compared with v0.7, v0.8 keeps the lightweight practical route but makes three
+quality controls non-optional:
 
-- every source-backed validation or allowed-value rule must be decomposed into
-  explicit coverage classes before test cases are written;
-- reviewer independence must be evidence-backed. If the reviewer is not run in
-  a separate Codex task/session, the result may be called a practical review but
-  not an independent sign-off.
+- `test-design-matrix.md` is reviewed as writer output, not trusted as source;
+- independent sign-off requires a separate reviewer Codex task/session by
+  default;
+- practical-route outputs must fail closed when heavy-route artifacts appear
+  without an explicit user-selected route.
 
 Use heavier routes only when the user explicitly asks for them by name, for
 example benchmark, sharding, semantic bridge, source-qualified immutable
 `ft-agent run`, incremental update, or UI automation preparation.
+
+For a normal request such as "write test cases", the agent must not propose or
+start those heavier routes as alternatives. If a prompt is ambiguous, choose
+this practical route and record any remaining uncertainty as TC status, BA
+question, or UI-calibration candidate.
 
 ## Route
 
@@ -58,11 +63,19 @@ example benchmark, sharding, semantic bridge, source-qualified immutable
 4. `ft-test-case-reviewer`
    - Run one practical review over the FT/PDF context, `scope-brief.md`,
      `test-design-matrix.md` and canonical test cases.
-   - Prefer a separate Codex task/session for the reviewer. The reviewer input
-     must exclude writer transcript, writer private reasoning, and process
-     diagnostics that are not needed to judge the suite.
+   - Default behavior: run reviewer in a separate Codex task/session. If thread
+     orchestration is available, hand off the reviewer prompt to that separate
+     task/session. If it is not available, stop after writer handoff and ask the
+     user to run the reviewer prompt in a new session.
+   - The reviewer input must exclude writer transcript, writer private
+     reasoning, and process diagnostics that are not needed to judge the suite.
+   - A same-session review is allowed only as a fallback practical review and
+     must be labeled `reviewed-not-independent`; it cannot produce an
+     independent sign-off.
    - Produce `review-findings.md` and `review-independence.md` in the practical
      scope folder.
+   - Produce an explicit matrix verdict before the final TC verdict:
+     `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`.
    - Classify findings as:
      - `blocking` when the test case is materially wrong or misleading;
      - `nonblocking` when the issue is wording, grouping or minor priority;
@@ -74,7 +87,8 @@ example benchmark, sharding, semantic bridge, source-qualified immutable
 5. Revision
    - The writer performs one revision pass for blocking findings.
    - A second reviewer pass is allowed only to confirm that blocking findings
-     were resolved.
+     were resolved; for independent sign-off it also runs in a separate
+     reviewer task/session.
    - Do not enter an unbounded repair loop. If unresolved information remains,
      release the cases with explicit statuses instead of blocking the whole
      scope.
@@ -109,6 +123,13 @@ human-readable cell text must be Russian, because the user can inspect this file
 to verify whether the planned coverage is acceptable. English is allowed only for
 stable metadata values or source literals that are intentionally English.
 
+The matrix is writer output under review, not an accepted source of truth.
+Reviewer must re-derive coverage from FT/PDF/XHTML/support/dictionaries/mockups
+and then compare that independent view with the matrix. If the matrix is
+incomplete or misleading, reviewer returns `matrix-changes-required` or
+`matrix-rejected`; canonical test cases must not be independently signed off
+until the matrix is accepted.
+
 Minimum columns:
 
 | Источник | Проверяемое утверждение | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |
@@ -134,6 +155,15 @@ Rules:
   `coverage_classes` as the visible headers in this Markdown file. Internal
   tools may normalize the Russian columns to stable keys, but the checked-in
   matrix remains Russian.
+
+Matrix review gate:
+
+- `matrix-accepted` means every current-scope source obligation is represented
+  as a TC, a class-specific deferred TC, or a narrow documented gap;
+- `matrix-changes-required` means writer can repair the matrix and affected TC
+  in one bounded revision;
+- `matrix-rejected` means the coverage plan is materially unreliable and TC
+  review must stop until the matrix is rebuilt.
 
 ## Mandatory coverage class decomposition
 
@@ -182,8 +212,11 @@ Before handing off to reviewer, the writer checks every canonical file:
 - human-facing runtime text is Russian, except allowed metadata values such as
   `Positive`, `Negative`, `High`, `Medium`, `Low`;
 - no phrases such as `source-backed`, `observable source`, `registered-card`,
-  `semantic projection`, `exact credit-conveyor screen`, or other agent-process
-  language in runtime test cases;
+  `semantic projection`, `exact credit-conveyor screen`, `fixture`, `support`,
+  `oracle`, `lifecycle`, `signed-off`, `hash`, `receipt`, `scope`, or other
+  agent-process language in runtime test cases; stable IDs such as
+  `FX-DADATA-*` may appear only as code-like fixture identifiers in `Трассировка`
+  or `Тестовые данные`, while the surrounding prose remains Russian;
 - title describes user-visible behavior, not traceability IDs or internal
   obligations;
 - `Предусловия` first open the relevant form/card/screen/section before entering
@@ -201,6 +234,24 @@ Before handing off to reviewer, the writer checks every canonical file:
 - if DaData or another integration is in scope, test cases use a fixed verified
   fixture with exact query/input and exact expected suggestion/result; do not ask
   the tester to call a live service during test execution.
+
+## Practical-route heavy-artifact guard
+
+In `practical_v0_8`, these artifacts are forbidden unless the user explicitly
+selected a heavy/development route by name:
+
+- `source-assertions.json`;
+- `source-assertion-review.json`;
+- `source-evidence.md`;
+- `semantic-design*` / `semantic_design*`;
+- `*shard*` artifacts;
+- `run-config*.json` for `ft-agent run`;
+- `work/iterations/`;
+- benchmark/eval configs inside the active FT package.
+
+If any of these appear during ordinary practical work, stop the route and repair
+the handoff. Do not silently continue through a mixed practical/source-qualified
+process.
 
 ## Business-analyst questions
 
@@ -226,6 +277,10 @@ the test case with `candidate-ui-calibration`, `blocked-observability` or
 
 The practical reviewer must block:
 
+- a matrix that has not been independently checked against FT/PDF/XHTML/support;
+- a suite that claims independent sign-off without separate-session evidence;
+- any final verdict called `signed-off` when `independent_signoff_claim_allowed`
+  is not `yes`;
 - pseudo-test cases that cannot be executed;
 - generic fixtures such as “valid entity” without concrete data or a
   `needs-test-data` status;
@@ -269,6 +324,8 @@ Rules:
 - `independent_signoff_claim_allowed = yes` only when
   `reviewer_was_separate_session = yes` and the reviewer did not receive writer
   transcript/private reasoning.
-- If a separate reviewer session is not available, complete the practical review
-  but label it `reviewed-not-independent`; do not call the suite independently
-  signed off.
+- If a separate reviewer session is not available, stop after writer handoff and
+  ask the user/controller to launch the reviewer prompt in a new session. If the
+  user explicitly chooses a same-session fallback, complete only a practical
+  review and label it `reviewed-not-independent`; do not call the suite signed
+  off or independently signed off.

@@ -1,7 +1,7 @@
 # Coverage Class Catalog
 
 This catalog defines the minimum practical coverage classes for ordinary FT
-test-case writing. Use it with `practical_v0_7`.
+test-case writing. Use it with `practical_v0_8`.
 
 The goal is better test-design coverage without returning to heavy production
 routes, large obligation ledgers, benchmark runs, sharding, semantic bridge or

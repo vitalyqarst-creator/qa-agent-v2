@@ -27,9 +27,9 @@ description: Делает review существующих тест-кейсов 
 
 ## Режимы review
 
-- `practical_v0_7` — default review for ordinary newly written test cases. It
+- `practical_v0_8` — default review for ordinary newly written test cases. It
   reviews FT/PDF context, `scope-brief.md`, `test-design-matrix.md` and the
-  canonical test-case file in one independent pass. It produces
+  canonical test-case file in one independent pass from a separate Codex task/session by default. It produces
   `review-findings.md` and `review-independence.md`, and may request one writer
   revision pass for blocking findings. It must not require source assertion receipts, semantic bridge,
   immutable runner attempts, benchmark artifacts, separate structure preflight,
@@ -59,18 +59,22 @@ semantic_traceability_test_design` до двух semantic rounds, затем
 `semantic_regression`. Если final format review находит semantic problem, это не
 format finding: routing возвращается в semantic loop или фиксирует
 `round-cap-reached` при исчерпанном лимите. Не применяй этот порядок к
-`practical_v0_7`.
+`practical_v0_8`.
 
 Semantic review is mandatory for sign-off. Do not remove semantic checks to satisfy instruction budget; move detailed rules to references and load them selectively. Reviewer must block sign-off for process markers in `Название`, candidate title leaks, generic test data placeholders, missing positive allowed-class TC, numbered passive preconditions, overmerged TC, candidate TC without concrete invalid value, candidate TC with invented rejection mechanism, and source-backed positive checks replaced by candidate negatives.
 
-### `practical_v0_7` contract
+### `practical_v0_8` contract
 
 Use
-[../../references/agent/practical-test-case-route-v0.7.md](../../references/agent/practical-test-case-route-v0.7.md)
+[../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md)
 as the controlling route.
 
 Review in one pass:
 
+0. Matrix review gate: treat `test-design-matrix.md` as writer output, not source
+   of truth. Re-derive coverage from FT DOCX/PDF/XHTML, support, dictionaries and
+   mockups; return `matrix-changes-required` or `matrix-rejected` if dimensions,
+   classes or source links are missing or misleading.
 1. Source coverage: every source-backed obligation in the scope maps to a TC or
    to an explicit allowed deferred status.
 2. Test design: positive, negative, boundary, dictionary, dependency and

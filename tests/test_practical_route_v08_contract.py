@@ -7,12 +7,12 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
-class PracticalRouteV07ContractTests(unittest.TestCase):
+class PracticalRouteV08ContractTests(unittest.TestCase):
     def read(self, relative: str) -> str:
         return (ROOT_DIR / relative).read_text(encoding="utf-8")
 
     def test_reference_defines_default_practical_route_and_explicit_heavy_routes(self) -> None:
-        content = self.read("references/agent/practical-test-case-route-v0.7.md")
+        content = self.read("references/agent/practical-test-case-route-v0.8.md")
         self.assertIn("default route for ordinary FT test-case writing", content)
         self.assertIn("test-design-matrix.md", content)
         self.assertIn("Классы покрытия", content)
@@ -20,6 +20,9 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         self.assertIn("must be Russian", content)
         self.assertIn("source-assertions", content)
         self.assertIn("Use heavier routes only when the user explicitly asks", content)
+        self.assertIn("must not propose or", content)
+        self.assertIn("separate Codex task/session", content)
+        self.assertIn("Matrix review gate", content)
         for forbidden_default in (
             "benchmark",
             "sharding",
@@ -33,10 +36,11 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         agents = self.read("AGENTS.md")
         skills = self.read("skills/README.md")
 
-        self.assertIn("practical route v0.7", agents)
+        self.assertIn("practical route v0.8", agents)
         self.assertIn("не являются default-маршрутом", agents)
         self.assertIn("New test-case suite, default", skills)
-        self.assertIn("practical route v0.7", skills)
+        self.assertIn("practical route v0.8", skills)
+        self.assertIn("separate-session", skills)
         self.assertIn("Explicit production shadow", skills)
 
     def test_writer_and_reviewer_do_not_require_heavy_process_for_practical_route(self) -> None:
@@ -44,25 +48,26 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
         scope = self.read("skills/ft-scope-analyzer/SKILL.md")
 
-        self.assertIn("practical_v0_7", writer)
+        self.assertIn("practical_v0_8", writer)
         self.assertIn("test-design-matrix.md", writer)
         self.assertIn("do not create source assertions", writer)
-        self.assertIn("practical_v0_7", reviewer)
+        self.assertIn("practical_v0_8", reviewer)
         self.assertIn("must not require source assertion receipts", reviewer)
         self.assertIn("review-independence.md", reviewer)
+        self.assertIn("Re-derive coverage from FT DOCX/PDF/XHTML", reviewer)
         self.assertIn("route next to `ft-test-case-writer`", scope)
         self.assertIn("not to `source_assertion_review`", scope)
 
     def test_runtime_language_rule_allows_metadata_enums_but_not_agent_process_text(self) -> None:
-        content = self.read("references/agent/practical-test-case-route-v0.7.md")
+        content = self.read("references/agent/practical-test-case-route-v0.8.md")
         self.assertIn("human-facing runtime text is Russian", content)
         self.assertIn("`Positive`, `Negative`, `High`, `Medium`, `Low`", content)
         self.assertIn("no phrases such as `source-backed`", content)
         self.assertIn("agent-process", content)
         self.assertIn("language in runtime test cases", content)
 
-    def test_v07_requires_coverage_class_decomposition_and_reviewer_independence(self) -> None:
-        content = self.read("references/agent/practical-test-case-route-v0.7.md")
+    def test_v08_requires_coverage_class_decomposition_and_reviewer_independence(self) -> None:
+        content = self.read("references/agent/practical-test-case-route-v0.8.md")
         self.assertIn("Mandatory coverage class decomposition", content)
         self.assertIn("one sample invalid value", content)
         self.assertIn("coverage-class-catalog.md", content)
@@ -73,9 +78,11 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         self.assertIn("generated documents and mappings", content)
         self.assertIn("review-independence.md", content)
         self.assertIn("independent_signoff_claim_allowed", content)
+        self.assertIn("`test-design-matrix.md` is reviewed as writer output", content)
+        self.assertIn("separate reviewer Codex task/session", content)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
-        content = self.read("references/agent/practical-test-case-route-v0.7.md")
+        content = self.read("references/agent/practical-test-case-route-v0.8.md")
         for expected in (
             "| Источник | Проверяемое утверждение | Измерение тест-дизайна | Классы покрытия | TC-ID | Статус | Примечания |",
             "user-facing artifact",
@@ -141,7 +148,7 @@ class PracticalRouteV07ContractTests(unittest.TestCase):
         self.assertIn("references/qa/coverage-class-catalog.md", manifest)
         self.assertIn("coverage-class-catalog.md", writer)
         self.assertIn("Классы покрытия", writer)
-        self.assertIn("requiredness checks are split by input mechanism", writer)
+        self.assertIn("requiredness checks must be split by input mechanism", writer)
         self.assertIn("coverage-class-catalog.md", reviewer)
         self.assertIn("requiredness checks are", reviewer)
         self.assertIn("Russian", reviewer)
