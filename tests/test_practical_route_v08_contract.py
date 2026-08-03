@@ -153,6 +153,35 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         ):
             self.assertIn(expected, content)
 
+    def test_parameterized_tc_must_not_cross_ui_levels(self) -> None:
+        tc_format = self.read("references/qa/test-case-format.md")
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        rule_cards = self.read("references/agent/runtime-quality-rule-cards.md")
+        writer = self.read("skills/ft-test-case-writer/SKILL.md")
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+
+        for expected in (
+            "одинаковый стартовый экран",
+            "UI-уровень",
+            "Parent entity",
+            "child entity",
+            "партнеры в списке партнеров и реквизиты внутри карточки партнера",
+        ):
+            self.assertIn(expected, tc_format)
+
+        for expected in (
+            "same start screen",
+            "UI level",
+            "parent/child entities",
+            "automation-readiness",
+        ):
+            self.assertIn(expected, route)
+            self.assertIn(expected, writer)
+
+        self.assertIn("R-PARAMETER-UI-LEVEL", rule_cards)
+        self.assertIn("parameterized-tc-crosses-ui-levels", rule_cards)
+        self.assertIn("non-atomic-parameterization", reviewer)
+
     def test_practical_writer_and_reviewer_load_coverage_class_catalog(self) -> None:
         manifest = self.read("references/agent/instruction-loading-manifest.md")
         writer = self.read("skills/ft-test-case-writer/SKILL.md")

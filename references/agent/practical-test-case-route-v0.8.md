@@ -262,6 +262,12 @@ reachable by the same setup, have the same user input mechanism, the same trigge
 and the same observable oracle. Otherwise use separate TC or a parameter table in
 one TC, and ensure every listed field is actually exercised in the steps.
 
+Parameter tables are allowed only when every row keeps the same start screen,
+same UI level, same navigation path, user action, trigger, pass/fail oracle and
+expected result. If rows cross parent/child entities, different cards, nested
+blocks, tables, lists or screens, split them into separate `TC-*`; do not
+optimize the case count at the cost of automation-readiness.
+
 ## Canonical test-case quality gates
 
 Before handing off to reviewer, the writer checks every canonical file:
