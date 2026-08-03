@@ -17991,6 +17991,8 @@ def expected_transition_prompt(state: dict[str, Any]) -> str | None:
         and next_skill == "ft-test-case-reviewer"
     ):
         return "prompt.scope-gaps-to-reviewer.md"
+    if next_skill == "ft-test-case-reviewer" and state.get("review_mode") == "matrix_review":
+        return "prompt.matrix-to-reviewer.md"
     if stage_status == "ready-for-review" or next_skill == "ft-test-case-reviewer":
         return f"prompt.writer-to-reviewer.round-{current_round}.md"
     if stage_status == "ready-for-writer-revision":
@@ -18007,6 +18009,8 @@ def transition_prompt_kind(prompt_name: str | None) -> str | None:
     if not prompt_name:
         return None
     name = Path(strip_quotes(prompt_name)).name.lower()
+    if name == "prompt.matrix-to-reviewer.md":
+        return "matrix-to-reviewer"
     if name.startswith("prompt.writer-to-reviewer."):
         return "writer-to-reviewer"
     if name.startswith("prompt.reviewer-to-writer."):
@@ -18057,6 +18061,8 @@ def is_signed_off_state(state: dict[str, Any]) -> bool:
 
 
 def is_ready_for_review_state(state: dict[str, Any]) -> bool:
+    if state.get("review_mode") == "matrix_review":
+        return False
     return state.get("stage_status") == "ready-for-review" or (
         state.get("next_skill") == "ft-test-case-reviewer"
         and not is_source_assertion_review_transition(state)
