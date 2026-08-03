@@ -308,8 +308,6 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
         "references/agent/practical-test-case-route-v0.8.md",
-        "references/agent/runtime-quality-rule-cards.md",
-        "references/agent/reviewer-output-format.md",
         "references/qa/review-findings-format.md",
         "references/qa/test-case-runtime-format.md",
         "references/qa/coverage-runtime-checklist.md",
@@ -344,9 +342,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "reviewer_process_artifacts": {
-      "rationale": "Process artifact formats for a direct reviewer pass outside the full iteration orchestrator.",
+      "rationale": "Compact process artifact formats for reviewer session logs and decision logs. Workflow state is loaded only by explicit workflow-state scenarios, not by default semantic review.",
       "paths": [
-        "references/agent/workflow-state-format.md",
         "references/agent/session-log-format.md",
         "references/agent/agent-decision-log-format.md"
       ]

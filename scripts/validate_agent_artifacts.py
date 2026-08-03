@@ -4311,6 +4311,184 @@ def is_production_test_case_path(path: Path) -> bool:
     return path.suffix.lower() == ".md" and "fts" in parts and "test-cases" in parts and "work" not in parts
 
 
+PRACTICAL_RELEASE_CLAIM_RE = re.compile(
+    r"\b(?:released-ft-first|released-with-[a-z-]+|independently[-_ ]signed[-_ ]off|"
+    r"independent[-_ ]sign[-_ ]off)\b|"
+    r"(?:suite[_\s-]?readiness|статус\s+набора)[^\n]{0,100}"
+    r"(?:released|signed-off|выпущ|подписан)",
+    flags=re.IGNORECASE,
+)
+
+
+def practical_scope_dir_for_test_case_path(path: Path) -> Path | None:
+    for parent in path.parents:
+        if parent.name == "test-cases":
+            return parent.parent / "work" / "practical" / path.stem
+    return None
+
+
+def parse_review_independence_fields(content: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    for rows in [markdown_table_rows_from_text(content)]:
+        if len(rows) < 2:
+            continue
+        header = normalize_table_header(rows[0])
+        if "field" not in header or "value" not in header:
+            continue
+        field_index = header.index("field")
+        value_index = header.index("value")
+        for row in rows[1:]:
+            if field_index >= len(row) or value_index >= len(row):
+                continue
+            field = row[field_index].strip().strip("`").strip()
+            value = row[value_index].strip().strip("`").strip()
+            if field:
+                fields[field] = value
+    return fields
+
+
+def validate_practical_review_independence_gate(
+    content: str,
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    if not is_production_test_case_path(path):
+        return findings, checks
+
+    practical_dir = practical_scope_dir_for_test_case_path(path)
+    if practical_dir is None:
+        return findings, checks
+
+    review_findings_path = practical_dir / "review-findings.md"
+    independence_path = practical_dir / "review-independence.md"
+    release_claimed = bool(PRACTICAL_RELEASE_CLAIM_RE.search(content))
+    review_artifacts_present = review_findings_path.exists() or independence_path.exists()
+
+    if not release_claimed and not review_artifacts_present:
+        checks.append(
+            Check(
+                "practical-review-independence",
+                "pass",
+                "No practical release or review claim to validate.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    if not independence_path.exists():
+        severity = "error" if release_claimed else "warning"
+        findings.append(
+            Finding(
+                id="practical-release-missing-review-independence",
+                severity=severity,
+                category="review-independence",
+                title="Practical suite lacks review independence evidence",
+                details=(
+                    "A practical-route suite that claims release/independent sign-off, or has practical review "
+                    "artifacts, must include review-independence.md next to the practical scope artifacts."
+                ),
+                path=display_path,
+                evidence=[
+                    f"expected={rel(independence_path, root)}",
+                    f"release_claimed={str(release_claimed).lower()}",
+                    f"review_findings_present={str(review_findings_path.exists()).lower()}",
+                ],
+                recommended_action=(
+                    "Run the reviewer in a separate Codex task/session and create review-independence.md, "
+                    "or remove the independent release/sign-off claim."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "practical-review-independence",
+                "fail" if severity == "error" else "warn",
+                "Review independence evidence is missing.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    try:
+        independence_content = independence_path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="practical-review-independence-not-utf8",
+                severity="error" if release_claimed else "warning",
+                category="review-independence",
+                title="Review independence evidence is not UTF-8",
+                details=str(exc),
+                path=rel(independence_path, root),
+                evidence=[],
+                recommended_action="Save review-independence.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("practical-review-independence", "fail", "Independence evidence is not UTF-8.", display_path))
+        return findings, checks
+
+    fields = parse_review_independence_fields(independence_content)
+    required_values = {
+        "reviewer_was_separate_session": "yes",
+        "reviewer_input_excluded_writer_transcript": "yes",
+        "reviewer_input_excluded_writer_private_reasoning": "yes",
+        "reviewer_modified_test_cases": "no",
+        "independent_signoff_claim_allowed": "yes",
+    }
+    issues = [
+        f"{field}={fields.get(field, '<missing>')}; expected={expected}"
+        for field, expected in required_values.items()
+        if fields.get(field, "").strip().lower() != expected
+    ]
+    reviewer_session = fields.get("reviewer_task_or_session", "").strip().lower()
+    if reviewer_session in {"", "-", "not-available", "none", "n/a"}:
+        issues.append(f"reviewer_task_or_session={fields.get('reviewer_task_or_session', '<missing>')}; expected=<separate session id>")
+
+    if issues:
+        severity = "error" if release_claimed else "warning"
+        findings.append(
+            Finding(
+                id="practical-release-invalid-review-independence",
+                severity=severity,
+                category="review-independence",
+                title="Review independence evidence does not allow independent release",
+                details=(
+                    "Independent practical release requires proof that reviewer ran in a separate session and did "
+                    "not receive writer transcript/private reasoning or edit test cases."
+                ),
+                path=rel(independence_path, root),
+                evidence=issues,
+                recommended_action=(
+                    "Re-run review in a separate Codex task/session and update review-independence.md, "
+                    "or downgrade the suite to reviewed-not-independent."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "practical-review-independence",
+                "fail" if severity == "error" else "warn",
+                "Review independence evidence is invalid.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    checks.append(
+        Check(
+            "practical-review-independence",
+            "pass",
+            "Review independence evidence allows independent practical release.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def parsed_test_design_applicability_rows(content: str) -> list[dict[str, str]]:
     section = extract_test_design_applicability_section(content)
     if section is None:
@@ -15446,6 +15624,14 @@ def validate_test_case_file(
         )
         findings.extend(artifact_findings)
         checks.extend(artifact_checks)
+
+    review_independence_findings, review_independence_checks = validate_practical_review_independence_gate(
+        raw_content,
+        path,
+        root,
+    )
+    findings.extend(review_independence_findings)
+    checks.extend(review_independence_checks)
 
     duplicated_split_sections = duplicate_split_sections_in_test_case(raw_content, path)
     if duplicated_split_sections:
