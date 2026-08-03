@@ -1,4 +1,4 @@
-"""Session-based writer/reviewer cycle runner.
+﻿"""Session-based writer/reviewer cycle runner.
 
 This script validates and dry-runs the new Codex SDK orchestration contract for
 test-case writer/reviewer work. It intentionally keeps domain decisions in

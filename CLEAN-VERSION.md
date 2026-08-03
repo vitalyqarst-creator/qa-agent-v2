@@ -22,6 +22,8 @@
 - `test_case_agent/`
 - минимальные regression tests для practical-route governance
 
+`scripts/` в clean-version намеренно сокращён: оставлены только общие runtime/helper scripts для environment probe, instruction resolving, markdown/artifact writing, source JSON utilities, DaData fixture verification, validation and controlled review-cycle orchestration. AutoFin-specific, benchmark, canary, replay and historical debug helper scripts исключены.
+
 Исключено:
 
 - `fts/`
