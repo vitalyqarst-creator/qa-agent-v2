@@ -36,9 +36,10 @@ conditions occurs:
 
 - canonical test cases are accepted by independent TC review and published as an
   accepted baseline;
-- one bounded writer revision was performed and the remaining issue is
-  represented by explicit `candidate-ui-calibration`, `blocked-observability` or
-  `needs-test-data` statuses;
+- one bounded matrix repair or one bounded TC revision was performed and the
+  remaining issue is represented by explicit `candidate-ui-calibration`,
+  `blocked-observability`, `needs-test-data` or `needs-future-clarification`
+  statuses;
 - source/support/mockup input is contradictory or missing enough to require a BA
   answer before the obligation can be represented;
 - a real tool/runtime failure prevents safe continuation.
@@ -48,12 +49,25 @@ prompt is already materialized and no external decision is needed. In particular
 continue automatically across:
 
 - matrix-only writer handoff -> independent matrix review;
-- `matrix-changes-required` -> one bounded matrix repair -> independent matrix
-  re-review;
+- `matrix-changes-required` -> one bounded matrix repair -> TC writing from the
+  repaired matrix, without a second matrix review by default;
 - `matrix-accepted` -> canonical TC writing;
 - TC writer handoff -> independent TC review;
-- `tc-changes-required` -> one bounded TC revision -> focused independent TC
-  re-review.
+- `tc-changes-required` -> one bounded TC revision -> release with explicit
+  residual statuses, without a second TC review by default.
+
+Default review budget per scope is capped at:
+
+- one independent matrix review;
+- one independent TC review;
+- one bounded writer repair/revision.
+
+Do not start a second matrix review, second TC review, final-format review,
+semantic regression or another repair loop unless a validator contract failure
+prevents publication or the user explicitly requests another review round. A
+reviewer finding is not by itself permission to loop indefinitely: after the
+bounded revision, publish a transparent FT-first baseline and keep unresolved
+execution details in the case statuses.
 
 After each internal handoff, run the relevant validator gate. If the gate fails
 because practical-route infrastructure is inconsistent with this contract, fix
@@ -186,9 +200,9 @@ planned TC), use the fast path inside this same route:
 
 7. Revision
    - The writer performs one revision pass for blocking findings.
-   - A second reviewer pass is allowed only to confirm that blocking findings
-     were resolved; for independent sign-off it also runs in a separate
-     reviewer task/session.
+   - A second reviewer pass is not part of the default practical route. It is
+     allowed only when a validator contract failure prevents publication or the
+     user explicitly requests another review round.
    - Do not enter an unbounded repair loop. If unresolved information remains,
      release the cases with explicit statuses instead of blocking the whole
      scope.
@@ -201,6 +215,7 @@ Use these statuses in canonical test cases:
 - `candidate-ui-calibration`
 - `blocked-observability`
 - `needs-test-data`
+- `needs-future-clarification`
 - `not-automatable-manual-only`
 
 The scope can be released as:
@@ -258,12 +273,14 @@ Rules:
 
 Matrix review gate:
 
-- Canonical TC writing is unlocked only by verdict `matrix-accepted` from
-  `test-design-matrix-review.md`.
+- Canonical TC writing is unlocked by verdict `matrix-accepted` from
+  `test-design-matrix-review.md`, or by exactly one bounded matrix repair after
+  `matrix-changes-required`, recorded in `matrix-repair-summary.md`.
 - `matrix-accepted` means every current-scope source obligation is represented
   as a planned TC, a class-specific deferred TC, or a narrow documented gap;
 - `matrix-changes-required` means writer can repair the matrix in one bounded
-  revision;
+  revision. After this repair, do not run a second matrix review by default; TC
+  reviewer will judge the repaired matrix together with the canonical test cases;
 - `matrix-rejected` means the coverage plan is materially unreliable and TC
   review must stop until the matrix is rebuilt.
 

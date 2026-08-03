@@ -37,6 +37,11 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("Do not stop for user confirmation", route)
         self.assertIn("matrix-only writer handoff -> independent matrix review", route)
         self.assertIn("one bounded TC revision", route)
+        self.assertIn("without a second matrix review by default", route)
+        self.assertIn("without a second TC review by default", route)
+        self.assertIn("Default review budget per scope is capped", route)
+        self.assertIn("Do not start a second matrix review", route)
+        self.assertIn("baseline after bounded revision", skills)
         self.assertIn("fast path", route)
         self.assertIn("without user confirmation", routing)
 
@@ -114,7 +119,36 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("do not create or modify", writer)
         self.assertIn("fail closed unless", writer)
         self.assertIn("This pass must run before canonical test-case writing", reviewer)
-        self.assertIn("If the accepted matrix review is absent, block TC review", reviewer)
+        self.assertIn("If both the accepted matrix and bounded matrix repair are", reviewer)
+
+    def test_practical_route_caps_default_review_rounds(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        skills = (ROOT_DIR / "skills" / "README.md").read_text(encoding="utf-8")
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        routing = (ROOT_DIR / "references" / "agent" / "task-start-skill-routing-format.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (route, skills, reviewer, routing):
+            self.assertIn("second matrix review", content)
+            self.assertIn("second TC review", content)
+
+        self.assertIn("второй matrix review", agents)
+        self.assertIn("второй TC review", agents)
+        self.assertIn("matrix-repair-summary.md", route)
+        self.assertIn("matrix-repair-summary.md", writer)
+        self.assertIn("matrix-repair-summary.md", reviewer)
+        self.assertIn("one bounded writer repair/revision", route)
+        self.assertIn("at most one bounded TC revision", writer)
+        self.assertIn("one bounded revision", routing)
 
     def test_session_based_cycle_is_not_default_practical_route(self) -> None:
         lifecycle = (
