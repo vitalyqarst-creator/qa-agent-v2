@@ -22,6 +22,7 @@ Before writing `TC-*`, check whether the scope contains:
 - integration/API/async/internal effects;
 - repeated blocks, tables, files or documents;
 - generated document content mapping;
+- source-bound test data and fixture provenance;
 - role/status/security/NFR dimensions.
 
 ## Runtime Rules
@@ -34,6 +35,7 @@ Before writing `TC-*`, check whether the scope contains:
 - For numeric/date/length/mask rules, load the deep coverage reference for the relevant scenario.
 - For numeric-only, exact length, repeatable/action-created blocks, checkbox-list, and generated documents, use `Coverage Obligation Table`; do not stop at one generic TC.
 - For allowed-symbol/input restrictions, do not replace class coverage with one mixed invalid value. If the source says `only ...`, decompose it into source-derivable classes: valid representative, whitespace, alphabet/script class, special/disallowed symbols, and relevant boundaries. Unknown UI reaction for a class becomes a narrow `GAP-*` / `candidate-ui-calibration`, not silent coverage.
+- For concrete domain test data, prove its provenance before marking a TC executable: source literal, dictionary value, verified fixture, execution-relative formula, or neutral synthetic value for an unrestricted free-text field. If the value is source-bound by integration, dictionary, rights, status, search/filter, autofill, backend mapping or similar business logic, a plausible synthetic value is not enough.
 - For 3+ independent factors with multiple values, pairwise/combinatorial coverage is mandatory; choose `2-way | 3-way | t-way`, prove coverage strength, or record a gap.
 - For reusable baseline and negative transition, use a concrete fixture or `fixture-catalog.md`.
 - Record coverage metrics for applicable dimensions; missing metrics mean unfinished design work.
@@ -47,6 +49,7 @@ Load the full `coverage-checklist.md` or a specialized deep reference when the s
 - integration/API/server-side validation;
 - async/race/retry behavior;
 - security/roles/permissions;
+- source-bound test data whose fixture/provenance is not explicit;
 - complex decision table;
 - pairwise/combinatorial factors;
 - file upload/download or generated documents;

@@ -66,6 +66,7 @@ Review нельзя делать только по `package-test-design-plan.md`
 - `coverage-class-completeness`: plan раскладывает правила validation, equivalence, boundary, dependency и action на конкретные positive/negative/boundary/branch проверки или `GAP-*`.
 - `coverage-metrics-completeness`: каждая applicable dimension имеет counted obligations/classes/branches/transitions, covered count и gap/unclear count.
 - `fixture-specificity`: reusable baselines и negative transition fixtures раскрыты в `fixture-catalog.md` или полностью в TC/test data.
+- `test-data-provenance`: конкретные доменные значения в plan/TC имеют допустимое происхождение: source/support/mockup/UI literal, dictionary value, verified fixture, execution-relative formula или neutral synthetic value для unrestricted free-text; source-bound значения без provenance вынесены в `GAP-*` / `needs-test-data` / `candidate-ui-calibration`.
 - `risk-model-completeness`: high-risk atoms имеют `impact x likelihood`, priority и residual risk decision.
 - `numeric-length-boundaries`: правила точного количества цифр/длины включают принимаемую точную длину и отклоняемые короткий/длинный digit-only классы, если недостающие классы не вынесены в трассируемый gap.
 - `unsupported-ui-mechanism`: TC/plan не ожидают механизм UI-обработки, текст ошибки, disabled-state, автоочистку, автоформатирование или фильтрацию ввода без прямого source evidence.
@@ -91,6 +92,7 @@ Review нельзя делать только по `package-test-design-plan.md`
 - `Coverage Obligation Table` отсутствует или не содержит обязательные классы для `exact-length`, action-created block, repeatable block, checkbox-list или generated document output, когда такие property types есть в source/plan;
 - `coverage-metrics.md` отсутствует или не содержит applicable dimension из matrix;
 - `fixture-catalog.md` отсутствует при reusable/generic baseline или negative transition fixture, если baseline не раскрыт полностью в TC;
+- `test-data-provenance` не доказан для source-bound значения, которое влияет на интеграцию, справочник, поиск/фильтрацию, автозаполнение, статус/права, backend mapping или другой бизнес-результат;
 - `risk-priority-map.md` отсутствует или не содержит `impact x likelihood` для high-risk atoms;
 - covered atom не имеет реальной executable строки plan или TC mapping;
 - правило точного количества цифр/длины не имеет короткого/длинного digit-only класса и нет `GAP-*`, объясняющего отсутствие;

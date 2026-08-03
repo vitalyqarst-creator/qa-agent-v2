@@ -37,6 +37,8 @@
 - `planned_tc_or_gap`: будущий/существующий `TC-*` или `GAP-*`.
 - `status`: `planned | covered | gap | unclear | blocked`.
 
+Если planned check требует конкретных доменных тестовых данных, provenance фиксируется в `planned_check`, `coverage_class`, `input_class`, `oracle_source` или linked fixture/gap без добавления новой обязательной колонки. Reviewer должен видеть, почему выбранное значение допустимо: literal из ФТ/support/mockup/UI-evidence, справочник, verified fixture, execution-relative формула или нейтральное synthetic value для свободного поля. Source-bound значения без такого provenance не могут вести к `ready` TC; строка должна ссылаться на `GAP-*`, `needs-test-data` или `candidate-ui-calibration`.
+
 Для reset/state-transition строк поддерживается обязательное расширение таблицы:
 
 - `initial_state_capture`: какое видимое исходное состояние фиксируется в начале этого же теста;
@@ -67,6 +69,7 @@
 - Для checkbox/multi-select lists plan должен содержать rows для list visibility, `DICT-*` values, no selection, single selection, multiple selection и clear selection, когда они применимы.
 - Для generated documents plan должен разделять `print-form-generated` и `print-form-content-mapping`; content mapping без source-backed маппинга должен быть `GAP-*`.
 - Для `dictionary-source`, tags и fixed-list rules план должен ссылаться на `DICT-*` из `dictionary-inventory.md`; `input_class` должен быть `active dictionary values`, `archived dictionary values`, `extra value` или другой конкретный класс, а не два случайных примера из ФТ.
+- Для integration/dictionary/search/filter/autofill/status/rights/backend-mapping rules план не должен использовать “реалистичные” synthetic values как готовые тестовые данные. Выбери verified fixture / dictionary value / source literal, либо оставь узкий `GAP-*` / `needs-test-data` / `candidate-ui-calibration`.
 - Для action flows план должен перечислять branches: available action, unavailable/forbidden action, repeated action, cancel/back/refresh, если эти ветки следуют из scope.
 - Для reset action flow до целевого действия план должен отдельно зафиксировать исходное состояние, подготовить состояние `different-from-captured-initial` и проверить видимое отличие. Проверка только post-reset результата не закрывает changed-prestate setup.
 - Для dependency rules план должен ссылаться на `Dependency Matrix` или перечислять controlling value, dependent field и branch.
