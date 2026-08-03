@@ -24,8 +24,10 @@ starting a heavy source contract:
 - include relevant FT text/table rows/PDF pages, support files, mockups,
   dictionaries, source parity conclusions, open questions and candidate
   UI-calibration points;
-- route next to `ft-test-case-writer`, not to `source_assertion_review` or
-  `ft-test-case-iteration`.
+- route next to `ft-test-case-writer` in `practical_v0_8_matrix` mode, not to
+  `source_assertion_review` or `ft-test-case-iteration`.
+
+Exact routing invariant: route next to `ft-test-case-writer`, not to `source_assertion_review`.
 
 Do not materialize `source-assertions.json`, semantic bridge artifacts,
 immutable run configs, sharding artifacts or benchmark artifacts in
@@ -140,7 +142,11 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 - требовать `Artifact Write Strategy` preflight до записи больших generated artifacts и canonical file: если ожидается больше `20` `TC-*`, больше `30` `ATOM-*`, Markdown больше `20 000` символов, scope содержит `WP-*` или создаются `source-row-inventory.md` / `source-normalization-diagnostic.md`, stage должен сразу использовать `scripts/write_artifact_sections.py --manifest <manifest.json>`; one-shot PowerShell/here-string/inline giant command, compact draft, summary draft, ad-hoc `tmp/generate_*.py` и объединение требований ради сокращения canonical file запрещены;
 - если есть previous `gap` / `unclear` lessons, запретить silently promote to `covered` без нового источника или observable artifact;
 - если scope содержит internal/API/RabbitMQ/DB/model/persistence/async effects, требовать observable artifact gate: без artifact такие assertions остаются `gap` / `unclear`;
-- явно указать writer outputs и gate: canonical test-case file, ledger, applicability/dependency/risk matrices, writer self-check, `prompt.writer-to-reviewer.round-1.md`, `stage_status: ready-for-review`; writer не ставит `signed-off`.
+- для `practical_v0_8` явно указать первый writer pass: `practical_v0_8_matrix`;
+  output только `test-design-matrix.md`, matrix writer self-check и
+  `prompt.matrix-to-reviewer.md`; writer не создает и не обновляет
+  `fts/**/test-cases/*.md` до отдельного `matrix-accepted` review.
+- для legacy/session route явно указать writer outputs и gate: canonical test-case file, ledger, applicability/dependency/risk matrices, writer self-check, `prompt.writer-to-reviewer.round-1.md`, `stage_status: ready-for-review`; writer не ставит `signed-off`.
 
 Используй этот skill после выбора FT-пакета и до написания или review тест-кейсов.
 

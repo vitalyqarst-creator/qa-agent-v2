@@ -88,6 +88,13 @@ Accepted-risk не превращает gap в покрытое требован
 
 Для `current_stage: ft-test-case-writer` и `stage_status: ready-for-review` writer output должен содержать split artifact `work/test-design/<scope-slug>/writer-quality-gate.md` с `Writer Quality Gate`.
 
+Для `practical_v0_8` matrix-only handoff не используй `ready-for-review`: это
+не TC review gate и canonical test-case file еще не должен существовать.
+Используй `stage_status: ready-for-next-stage`, `next_skill:
+ft-test-case-reviewer` и downstream/review mode `matrix_review`; в
+`latest_artifacts`/`required_inputs` укажи `scope-brief.md`,
+`test-design-matrix.md` и `prompt.matrix-to-reviewer.md`.
+
 `ready-for-review` допустим только если:
 
 - `latest_artifacts` или `required_inputs` указывают на canonical test-case file;

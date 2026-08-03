@@ -10,7 +10,8 @@ Use this skill only when these are already defined:
 - target FT package;
 - scope boundaries;
 - main FT source and related materials;
-- work mode: `initial_draft`, `revision_from_findings`, or remediation.
+- work mode: `practical_v0_8_matrix`, `practical_v0_8_tc_after_matrix_accepted`,
+  `initial_draft`, `revision_from_findings`, or remediation.
 
 If the package, source, or scope is not selected yet, use `ft-source-locator` and `ft-scope-analyzer` first.
 
@@ -21,9 +22,12 @@ For ordinary user work “write test cases for this FT/scope”, use
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md).
 
 In this mode the writer optimizes for a useful released baseline, not for
-benchmark-grade process evidence:
+benchmark-grade process evidence. It is split into two writer passes:
 
-- write `test-design-matrix.md` and the canonical test-case file;
+- first write only `test-design-matrix.md` and route it to independent matrix
+  review;
+- write the canonical test-case file only after `test-design-matrix-review.md`
+  has verdict `matrix-accepted`;
 - create `dictionary-inventory.md`, `fixture-catalog.md` or BA-question files
   only when the current scope needs them;
 - require `source-parity-check.md` before writing when the main FT has both
@@ -57,7 +61,11 @@ only when explicitly requested by the user or by an already selected route.
 - `mockup-visual-inventory.md`, when the confirmed UI scope contains a mockup / screen image / `mockups/`;
 - selected section, subsection, or narrow requirement fragment;
 - package-specific `AGENT-NOTES.md`, when present;
-- mode: `initial_draft`, `revision_from_findings`, or remediation;
+- mode: `practical_v0_8_matrix`, `practical_v0_8_tc_after_matrix_accepted`,
+  `initial_draft`, `revision_from_findings`, or remediation;
+- for `practical_v0_8_tc_after_matrix_accepted`: accepted
+  `test-design-matrix-review.md` and `review-independence.md` from a separate
+  reviewer session;
 - for `revision_from_findings`: existing test-case suite, structured findings artifact, review round number, `review_mode`, and traceability matrix when available.
 
 If a verified `stage-package.json` is provided, use the prepared fast path: read only the four package files, do not repeat source discovery/extraction, and access the full source only through the targeted fallback contract from [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
@@ -66,8 +74,8 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
 
 ## Выходы
 
-- canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
-- for `practical_v0_8`: compact `test-design-matrix.md` in `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
+- for `practical_v0_8_matrix`: compact `test-design-matrix.md` in `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`, matrix writer self-check, and `prompt.matrix-to-reviewer.md`;
+- canonical test-case file: `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`, only in `practical_v0_8_tc_after_matrix_accepted`, legacy `initial_draft`, or revision modes;
 - for `initial_draft`: split test-design artifacts in `fts/<ft-slug>/work/test-design/<section-id>-<scope-slug>/`;
 - when `dictionary-source` / reference-list rows exist: `dictionary-inventory.md` next to split test-design artifacts before TDDT/plan/TC;
 - for revision in a session-based cycle: `fts/<ft-slug>/work/review-cycles/<scope-slug>/outputs/writer-rN-response.md`;
@@ -76,8 +84,10 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
   export, not for `practical_v0_8` by default;
 - `coverage-obligation-table.md`, `coverage-metrics.md`, `fixture-catalog.md` when applicable, coverage gaps, open questions, `test-design-review.md`, Writer Quality Gate, and writer self-check in the appropriate split artifacts;
 - `writer-session-log.md` and `agent-decision-log.md` when required by the stage workflow;
-- `workflow-state.yaml` with `ready-for-review` only after successful gates;
-- `prompt.writer-to-reviewer.round-N.md` in the current handoff folder.
+- `workflow-state.yaml` routing to matrix review after `practical_v0_8_matrix`, or
+  to TC review only after successful canonical TC gates;
+- `prompt.matrix-to-reviewer.md` after matrix-only writing;
+- `prompt.tc-to-reviewer.md` after TC drafting, or `prompt.writer-to-reviewer.round-N.md` in legacy/session routes.
 
 ## Runtime Contract Anchors
 
@@ -88,6 +98,14 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
 - For traceability findings and writer response, preserve `traceability_ref = ATOM-*`.
 - Handoff by review mode: `traceability` closes coverage gaps; `structure` aligns template, order, grouping, and continuous numbering; `test-design` adds or corrects checks and expected results.
 - In `practical_v0_8`, the compact `test-design-matrix.md` is a writer-authored coverage claim under review, not source of truth. It must use Russian visible headers/text and include explicit `Классы покрытия` rows for every source-backed class required by [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md), including validation, format, length, mask, requiredness, dictionary, dependency, repeatable-block and integration rules when those rules exist in the source. Do not build a large atomic ledger unless an explicit legacy/development route requires it. In legacy `initial_draft`, writer builds the atomic requirements ledger first, then test cases with canonical fields and writer self-check.
+- In `practical_v0_8`, the first writer invocation is always
+  `practical_v0_8_matrix`: write the matrix only and do not create or modify
+  `fts/**/test-cases/*.md`. If the user asks to "write test cases" but no
+  accepted matrix review exists, this still means matrix-only first.
+- In `practical_v0_8_tc_after_matrix_accepted`, fail closed unless
+  `test-design-matrix-review.md` exists, verdict is `matrix-accepted`, and
+  `review-independence.md` records a separate reviewer session. A same-session or
+  missing matrix review cannot unlock canonical TC writing.
 - In `practical_v0_8`, Markdown `test-design-matrix.md` is the required matrix
   artifact and XLSX is optional only by explicit user request. In
   session-based/promotion routes, follow the route-specific XLSX companion
@@ -114,7 +132,21 @@ Minimum runtime rules:
 5. Do not turn pure source gaps into fake executable `TC-*`. If the FT obligation is real but data, UI reaction or observability is missing, write a clearly marked `candidate-ui-calibration`, `blocked-observability` or `needs-test-data` case by practical route v0.8.
 6. If source/support defines a dictionary, create/update `dictionary-inventory.md` and link `DICT-*`; branch examples from the FT do not replace the full dictionary.
 6a. Production files under `fts/**/test-cases/*.md` must be self-contained runtime TC artifacts: no setup profile references in `Предусловия`, no stand/environment wording, no package-name leakage such as `AutoFin`, and no embedded diagnostic/design sections. Use split/work artifacts for diagnostics.
-7. For `practical_v0_8`, hand off to reviewer only after creating a reviewer prompt suitable for a separate Codex session. The canonical file and `test-design-matrix.md` must be internally consistent, every source-backed restriction must have explicit coverage classes or class-specific deferrals, requiredness checks must be split by input mechanism, current-scope blockers must be either fixed or marked with an allowed TC status, and the canonical file must remain `draft-ready-for-review` / `review-ready` rather than `released-*` or `signed-off`. For legacy/session routes, do not set `stage_status: ready-for-review` until source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and validator blockers are closed.
+7. For `practical_v0_8_matrix`, hand off to reviewer only after creating
+   `prompt.matrix-to-reviewer.md` suitable for a separate Codex session. The
+   matrix must be internally consistent, every source-backed restriction must
+   have explicit coverage classes or class-specific deferrals. Exact invariant:
+   requiredness checks must be split by input mechanism. Current-scope blockers must be
+   visible as allowed planned statuses. Do not create or update canonical TC in
+   this pass.
+7a. For `practical_v0_8_tc_after_matrix_accepted`, hand off to reviewer only
+   after creating `prompt.tc-to-reviewer.md` suitable for a separate Codex
+   session. The canonical file and accepted `test-design-matrix.md` must be
+   synchronized, and the canonical file must remain `draft-ready-for-review` /
+   `review-ready` rather than `released-*` or `signed-off`. For legacy/session
+   routes, do not set `stage_status: ready-for-review` until
+   source/parity/mockup/table/dictionary inputs, Writer Quality Gate, and
+   validator blockers are closed.
 8. Before `ready-for-review`, check canonical TC for unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. These formulations are allowed only when a concrete reproducible baseline, literal/parameter, or linked fixture artifact is adjacent; otherwise fix the TC or record `GAP-*` / `unclear`.
 8a. `Предусловия`: reproducible setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
 9. Before `ready-for-review`, `semantic-review-ready`, and final handoff, check each `TC-*` by [../../references/qa/test-case-runtime-format.md](../../references/qa/test-case-runtime-format.md): `Трассировка` is mandatory, optional source fields are allowed only when they add non-duplicating navigation or real source evidence. If `TC-*` uses `DICT-*`, the same id must appear in `Трассировка`; a synthetic quote cannot be presented as an FT quote.

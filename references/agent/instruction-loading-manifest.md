@@ -304,7 +304,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       ]
     },
     "reviewer_practical_core": {
-      "rationale": "Compact practical v0.8 reviewer context for one-pass review of matrix and canonical test cases.",
+      "rationale": "Compact practical v0.8 reviewer context for matrix review before TC writing and TC review after matrix acceptance.",
       "paths": [
         "skills/ft-test-case-reviewer/SKILL.md",
         "references/agent/practical-test-case-route-v0.8.md",
@@ -522,7 +522,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["scope_practical_core", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "style_remediation_compact"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 190,
-      "rationale": "Default practical writer context: scope brief, compact test-design matrix and canonical test cases."
+      "rationale": "Default practical writer context: first matrix-only from scope brief, then canonical test cases only after accepted separate-session matrix review."
     },
     {
       "id": "reviewer.practical_v0_8",
@@ -533,7 +533,7 @@ Resolver должен читать JSON-блок ниже как канонич�
       "conditional_groups": ["scope_practical_core", "writer_revision_artifacts", "style_remediation_compact"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 160,
-      "rationale": "One-pass practical independent review of matrix and canonical test cases."
+      "rationale": "Practical independent review context for separate-session matrix review before TC writing and TC review after matrix acceptance."
     },
     {
       "id": "writer.initial_draft.simple",

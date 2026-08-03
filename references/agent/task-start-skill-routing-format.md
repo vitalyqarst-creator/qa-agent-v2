@@ -73,15 +73,17 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     },
     {
       "id": "test_cases.practical_v0_8",
-      "task_type": "Default route for ordinary FT test-case writing: compact scope brief, Russian user-facing test-design matrix with explicit coverage classes from the coverage class catalog, canonical test cases, separate-session independent review and one bounded revision.",
-      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
+      "task_type": "Default route for ordinary FT test-case writing: compact scope brief, Russian user-facing test-design matrix with explicit coverage classes from the coverage class catalog, separate-session matrix review, canonical test cases only after matrix-accepted, separate-session TC review and one bounded revision.",
+      "skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer"],
       "instruction_scenarios": [
         {"skill": "ft-source-locator", "scenario": "source_locator.discovery"},
         {"skill": "ft-scope-analyzer", "scenario": "scope.practical_v0_8"},
         {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_8"},
+        {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_8"},
+        {"skill": "ft-test-case-writer", "scenario": "writer.practical_v0_8"},
         {"skill": "ft-test-case-reviewer", "scenario": "reviewer.practical_v0_8"}
       ],
-      "verification_gates": ["scope-brief.md exists", "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md", "canonical test-case file exists", "reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix", "review-findings.md exists or reviewer accepted without findings", "review-independence.md exists and proves a separate reviewer session for independent sign-off", "no benchmark/sharding/bridge/immutable attempt artifacts are created"]
+      "verification_gates": ["scope-brief.md exists", "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md", "no current canonical test-case file is created or updated before matrix-accepted", "test-design-matrix-review.md exists with matrix-accepted from a separate reviewer session", "canonical test-case file exists only after accepted matrix review", "TC reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix", "review-findings.md exists or reviewer accepted without findings", "review-independence.md exists and proves separate reviewer sessions for matrix and TC review before independent sign-off", "no benchmark/sharding/bridge/immutable attempt artifacts are created"]
     },
     {
       "id": "production.bounded_full_loop",
@@ -339,8 +341,8 @@ The JSON block is canonical. Tests and architecture audit parse it directly.
     {
       "prompt": "Напиши тест-кейсы по выбранному scope ФТ и доведи их до ревью.",
       "expected_route_id": "test_cases.practical_v0_8",
-      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer"],
-      "expected_instruction_scenarios": ["source_locator.discovery", "scope.practical_v0_8", "writer.practical_v0_8", "reviewer.practical_v0_8"]
+      "expected_skill_chain": ["ft-source-locator", "ft-scope-analyzer", "ft-test-case-writer", "ft-test-case-reviewer", "ft-test-case-writer", "ft-test-case-reviewer"],
+      "expected_instruction_scenarios": ["source_locator.discovery", "scope.practical_v0_8", "writer.practical_v0_8", "reviewer.practical_v0_8", "writer.practical_v0_8", "reviewer.practical_v0_8"]
     },
     {
       "prompt": "Пройди весь процесс по одному небольшому scope и измерь полное время пользователя.",

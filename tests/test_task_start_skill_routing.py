@@ -91,6 +91,8 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
                 "ft-scope-analyzer",
                 "ft-test-case-writer",
                 "ft-test-case-reviewer",
+                "ft-test-case-writer",
+                "ft-test-case-reviewer",
             ],
             self.route_by_id["test_cases.practical_v0_8"]["skill_chain"],
         )
@@ -98,6 +100,8 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             [
                 "source_locator.discovery",
                 "scope.practical_v0_8",
+                "writer.practical_v0_8",
+                "reviewer.practical_v0_8",
                 "writer.practical_v0_8",
                 "reviewer.practical_v0_8",
             ],
@@ -113,15 +117,23 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "review-independence.md exists and proves a separate reviewer session for independent sign-off",
+            "review-independence.md exists and proves separate reviewer sessions for matrix and TC review before independent sign-off",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix",
+            "TC reviewer re-derived coverage from FT/PDF/XHTML/support instead of trusting the matrix",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
             "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "no current canonical test-case file is created or updated before matrix-accepted",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "test-design-matrix-review.md exists with matrix-accepted from a separate reviewer session",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertEqual(

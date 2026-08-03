@@ -6,6 +6,7 @@ This reference defines the compact runtime contract for `ft-test-case-writer`. T
 
 Use this contract for:
 
+- `writer.practical_v0_8` matrix-only and post-matrix TC drafting;
 - `writer.initial_draft.simple`;
 - `writer.initial_draft.ui`, when the scope is not table-heavy;
 - `writer.revision_from_findings`;
@@ -31,6 +32,7 @@ Conditional inputs:
 - `source-row-inventory.md` is mandatory for row-level/table parity;
 - `mockup-visual-inventory.md` is mandatory for a UI scope with mockup/screen image;
 - `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` are mandatory when the scope handoff contains validation/format restrictions or requiredness obligations;
+- accepted `test-design-matrix-review.md` and separate-session `review-independence.md` are mandatory before `practical_v0_8` canonical TC drafting;
 - structured findings and traceability matrix are mandatory for `revision_from_findings` when the reviewer provided them.
 
 ## Hard Stops
@@ -50,11 +52,12 @@ In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and 
 ## Runtime Workflow
 
 1. State the selected writer scenario and resolved instruction context.
-2. Read required inputs and record missing inputs before generating `TC-*`.
+2. Read required inputs and record missing inputs before generating matrix rows or `TC-*`.
 3. Confirm scope boundaries; do not expand scope on your own.
 4. Decompose requirements into coverage obligations, atomic statements, or explicit gaps.
 5. Build coverage plan and metrics by `coverage-runtime-checklist.md`; use `Coverage Obligation Table` for mandatory classes.
-6. Write `TC-*` by `test-case-runtime-format.md`.
+6. In `practical_v0_8_matrix`, write only `test-design-matrix.md` and a matrix-review prompt; do not create or update `TC-*`.
+6.1. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review, then write `TC-*` by `test-case-runtime-format.md`.
 6a. Runtime prose must be human-executable: do not put `subject:<hash>`,
 `OBL-*`, `ATOM-*`, `ASSERT-*` or `SRC-*` in `Название` or user-action steps.
 Keep those identifiers only in traceability/design artifacts.
@@ -68,13 +71,14 @@ Keep those identifiers only in traceability/design artifacts.
 6e. For similar fields/classes with shared restrictions, representative or pairwise coverage is allowed only when the artifact states selected combinations, omitted combinations, and residual risk. Otherwise write the missing TC/GAP items.
 7. Check traceability: every `TC-*` links to `ATOM-*` / requirement code / source reference.
 8. Run writer self-check and applicable quality gates.
-9. Update `workflow-state.yaml` and create `prompt.writer-to-reviewer.round-N.md` only when the draft is ready for review.
+9. Update `workflow-state.yaml` and create `prompt.matrix-to-reviewer.md`, `prompt.tc-to-reviewer.md` or legacy `prompt.writer-to-reviewer.round-N.md` only when the artifact is ready for the next review gate.
 
 ## Output Contract
 
 Default writer output:
 
-- canonical test-case file in `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
+- for `practical_v0_8_matrix`: `test-design-matrix.md`, short coverage summary, matrix writer self-check and `prompt.matrix-to-reviewer.md`;
+- for `practical_v0_8` after `matrix-accepted` and for legacy TC drafting: canonical test-case file in `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`;
 - short coverage summary;
 - explicit `Coverage Gaps`, when `GAP-*` exists;
 - writer self-check;

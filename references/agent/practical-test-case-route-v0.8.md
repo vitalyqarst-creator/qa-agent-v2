@@ -12,6 +12,8 @@ quality controls non-optional:
 - when DOCX and PDF are both present, `source-parity-check.md` is created before
   writer handoff, not discovered late by reviewer;
 - `test-design-matrix.md` is reviewed as writer output, not trusted as source;
+- canonical `TC-*` writing is gated by accepted matrix review, so coverage defects
+  are caught before the expensive prose-writing step;
 - independent sign-off requires a separate reviewer Codex task/session by
   default;
 - practical-route outputs must fail closed when heavy-route artifacts appear
@@ -56,15 +58,17 @@ question, or UI-calibration candidate.
      - open questions and assumptions;
      - candidate UI-calibration points.
 
-3. `ft-test-case-writer`
+3. `ft-test-case-writer` — design-matrix-only pass
    - Create or update exactly these required artifacts:
      - `test-design-matrix.md` in the practical scope folder;
-     - canonical test cases in
-       `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
-   - The writer may label the file as `draft-ready-for-review` or
-     `review-ready`, but must not mark it `released-*`, `signed-off`,
-     `independently-signed-off` or equivalent before an independent reviewer pass
-     has accepted the suite.
+     - `writer-self-check.md` or an equivalent compact writer check for the
+       matrix;
+     - `prompt.matrix-to-reviewer.md` for a separate reviewer Codex task/session.
+   - Do not create, update or overwrite canonical test cases under
+     `fts/<ft-slug>/test-cases/*.md` in this pass. If such a file already exists
+     from an earlier or failed run, do not treat it as current output until the
+     matrix review is accepted and the TC-writing pass intentionally refreshes it.
+   - Set routing to reviewer with `review_mode = matrix_review`.
    - Markdown `test-design-matrix.md` is the default and required matrix artifact.
      Do not create an XLSX duplicate in `practical_v0_8` unless the user
      explicitly asks for XLSX export.
@@ -78,9 +82,12 @@ question, or UI-calibration candidate.
      sharding artifacts, large ledgers, or final-format review artifacts in this
      route.
 
-4. `ft-test-case-reviewer`
-   - Run one practical review over the FT/PDF context, `scope-brief.md`,
-     `test-design-matrix.md` and canonical test cases.
+4. `ft-test-case-reviewer` — matrix review gate
+   - Run `matrix_review` over FT/PDF context, `scope-brief.md`,
+     `source-row-inventory.md` / dictionary / mockup context when present, and
+     `test-design-matrix.md`.
+   - Do not review canonical test cases in this pass. The expected current TC file
+     state is "not created yet" or "old draft ignored".
    - Default behavior: run reviewer in a separate Codex task/session. If thread
      orchestration is available, hand off the reviewer prompt to that separate
      task/session. If it is not available, stop after writer handoff and ask the
@@ -90,14 +97,42 @@ question, or UI-calibration candidate.
    - A same-session review is allowed only as a fallback practical review and
      must be labeled `reviewed-not-independent`; it cannot produce an
      independent sign-off.
-   - Produce `review-findings.md` and `review-independence.md` in the practical
-     scope folder.
+   - Produce `test-design-matrix-review.md` and `review-independence.md` in the
+     practical scope folder.
    - Markdown matrix review is enough for practical route. Do not require or
      create `round-N-traceability-matrix.xlsx` unless the user explicitly asks
      for XLSX export or an explicit session-based/production-promotion route was
      selected.
-   - Produce an explicit matrix verdict before the final TC verdict:
+   - Produce exactly one matrix verdict:
      `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`.
+   - If verdict is not `matrix-accepted`, route back to writer for matrix repair;
+     do not route to canonical TC writing.
+
+5. `ft-test-case-writer` — TC draft after accepted matrix
+   - Start only when `test-design-matrix-review.md` has verdict
+     `matrix-accepted` and `review-independence.md` shows the matrix reviewer ran
+     in a separate session for independent sign-off.
+   - Create or update canonical test cases in
+     `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
+   - Keep the canonical file in `draft-ready-for-review` or `review-ready`;
+     writer must not mark it `released-*`, `signed-off`,
+     `independently-signed-off` or equivalent before TC review has accepted the
+     suite.
+   - The canonical file must remain draft/review-ready before an independent
+     reviewer pass accepts it.
+   - Exact release invariant: no `released-*`, `signed-off` or equivalent status
+     before an independent reviewer pass accepts the canonical cases.
+   - Create `prompt.tc-to-reviewer.md` for a separate TC reviewer Codex
+     task/session.
+
+6. `ft-test-case-reviewer` — TC review gate
+   - Run practical TC review over FT/PDF context, `scope-brief.md`, accepted
+     `test-design-matrix.md`, `test-design-matrix-review.md`, and canonical test
+     cases.
+   - Default behavior: run reviewer in a separate Codex task/session. The reviewer
+     input must exclude writer transcript and private reasoning.
+   - Produce `review-findings.md` and update `review-independence.md` with
+     TC-review evidence.
    - Classify findings as:
      - `blocking` when the test case is materially wrong or misleading;
      - `nonblocking` when the issue is wording, grouping or minor priority;
@@ -106,7 +141,7 @@ question, or UI-calibration candidate.
      - `needs-test-data` when execution needs a fixture that is not in the
        package.
 
-5. Revision
+7. Revision
    - The writer performs one revision pass for blocking findings.
    - A second reviewer pass is allowed only to confirm that blocking findings
      were resolved; for independent sign-off it also runs in a separate
@@ -180,10 +215,12 @@ Rules:
 
 Matrix review gate:
 
+- Canonical TC writing is unlocked only by verdict `matrix-accepted` from
+  `test-design-matrix-review.md`.
 - `matrix-accepted` means every current-scope source obligation is represented
-  as a TC, a class-specific deferred TC, or a narrow documented gap;
-- `matrix-changes-required` means writer can repair the matrix and affected TC
-  in one bounded revision;
+  as a planned TC, a class-specific deferred TC, or a narrow documented gap;
+- `matrix-changes-required` means writer can repair the matrix in one bounded
+  revision;
 - `matrix-rejected` means the coverage plan is materially unreliable and TC
   review must stop until the matrix is rebuilt.
 

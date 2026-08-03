@@ -12,7 +12,8 @@ Required runtime inputs:
 - confirmed scope or stage handoff;
 - main FT source and relevant support files;
 - package `AGENT-NOTES.md` when present;
-- mode: `initial_draft`, `revision_from_findings` or remediation.
+- mode: `practical_v0_8_matrix`, `practical_v0_8_tc_after_matrix_accepted`,
+  `initial_draft`, `revision_from_findings` or remediation.
 
 Do not expand the scope while writing. New source ambiguity, missing mandatory handoff artifacts or unresolved coverage gaps must become `blocked-input` or explicit `coverage gap`, not assumed behavior.
 
@@ -28,11 +29,12 @@ When the stage input contains a verified `stage-package.json`, follow `prepared-
 4. For UI scopes, read `mockup-visual-inventory.md` before using mockups. Use mockups only to make UI steps concrete; do not infer business rules, allowed values, requiredness, validation or expected results from screenshots.
 5. For table-heavy or row-level parity scopes, follow `writer-table-workflow.md` before ledger and TC writing.
 6. Build coverage obligations and metrics for applicable dimensions before TC writing; one independently checkable obligation becomes one atom, one candidate TC obligation, or one explicit `GAP-*`.
-7. Build atomic requirements from source-backed statements. One independently checkable obligation becomes one atom.
-8. Create or update the canonical test-case file under `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
-9. Keep every `TC-*` executable, observable and traceable to `ATOM-*`, requirement code, source row or explicit `GAP-*`.
-10. Run `Test Design Review`, `Writer Quality Gate` and writer self-check before routing to reviewer.
-11. Update `workflow-state.yaml`, session log, decision log and `prompt.writer-to-reviewer.round-N.md` only after the output is actually ready for review.
+7. For `practical_v0_8_matrix`, create/update only `test-design-matrix.md` and route to `matrix_review`; do not create or update the canonical test-case file.
+8. For `practical_v0_8_tc_after_matrix_accepted`, verify accepted separate-session matrix review first, then create or update the canonical test-case file under `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
+9. For legacy `initial_draft`, build atomic requirements from source-backed statements before TC writing, then create/update the canonical test-case file.
+10. Keep every `TC-*` executable, observable and traceable to `ATOM-*`, requirement code, source row or explicit `GAP-*`.
+11. Run the applicable matrix/TC writer checks before routing to reviewer.
+12. Update `workflow-state.yaml`, session log, decision log and `prompt.matrix-to-reviewer.md`, `prompt.tc-to-reviewer.md` or legacy `prompt.writer-to-reviewer.round-N.md` only after the output is actually ready for that review gate.
 
 ## Test-Case Rules
 

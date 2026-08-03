@@ -23,6 +23,11 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("must not propose or", content)
         self.assertIn("separate Codex task/session", content)
         self.assertIn("Matrix review gate", content)
+        self.assertIn("design-matrix-only pass", content)
+        self.assertIn("Do not create, update or overwrite canonical test cases", content)
+        self.assertIn("test-design-matrix-review.md", content)
+        self.assertIn("TC draft after accepted matrix", content)
+        self.assertIn("Start only when `test-design-matrix-review.md` has verdict", content)
         for forbidden_default in (
             "benchmark",
             "sharding",
@@ -50,8 +55,15 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
         self.assertIn("practical_v0_8", writer)
         self.assertIn("test-design-matrix.md", writer)
+        self.assertIn("practical_v0_8_matrix", writer)
+        self.assertIn("practical_v0_8_tc_after_matrix_accepted", writer)
+        self.assertIn("do not create or modify", writer)
+        self.assertIn("test-design-matrix-review.md", writer)
         self.assertIn("do not create source assertions", writer)
         self.assertIn("practical_v0_8", reviewer)
+        self.assertIn("matrix_review", reviewer)
+        self.assertIn("tc_review", reviewer)
+        self.assertIn("before canonical test-case writing", reviewer)
         self.assertIn("must not require source assertion receipts", reviewer)
         self.assertIn("review-independence.md", reviewer)
         self.assertIn("Re-derive coverage from FT DOCX/PDF/XHTML", reviewer)
@@ -79,6 +91,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("review-independence.md", content)
         self.assertIn("independent_signoff_claim_allowed", content)
         self.assertIn("`test-design-matrix.md` is reviewed as writer output", content)
+        self.assertIn("canonical `TC-*` writing is gated by accepted matrix review", content)
         self.assertIn("separate reviewer Codex task/session", content)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:

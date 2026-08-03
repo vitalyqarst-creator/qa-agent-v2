@@ -27,14 +27,16 @@ description: Делает review существующих тест-кейсов 
 
 ## Режимы review
 
-- `practical_v0_8` — default review for ordinary newly written test cases. It
-  reviews FT/PDF context, `scope-brief.md`, `test-design-matrix.md` and the
-  canonical test-case file in one independent pass from a separate Codex task/session by default. It produces
-  `review-findings.md` and `review-independence.md`, and may request one writer
-  revision pass for blocking findings. It must not require source assertion receipts, semantic bridge,
-  immutable runner attempts, benchmark artifacts, separate structure preflight,
-  separate final-format review or semantic regression unless the user explicitly
-  selected those routes.
+- `practical_v0_8` — default practical review route for ordinary test-case
+  writing. It has two gates by default:
+  1) `matrix_review` checks `test-design-matrix.md` before any canonical TC is
+     written;
+  2) `tc_review` checks canonical test cases only after the matrix was accepted.
+  Each gate runs from a separate Codex task/session by default and produces
+  review evidence. It must not require source assertion receipts, semantic
+  bridge, immutable runner attempts, benchmark artifacts, separate structure
+  preflight, separate final-format review or semantic regression unless the user
+  explicitly selected those routes.
 - `full` — канонический режим по умолчанию для direct review. Выполняет `traceability`, затем `structure`, затем `test-design`; возвращает findings и traceability matrix при необходимости. Direct `full` не заменяет session-based sign-off: для `signed-off` используй `ft-test-case-iteration`.
 - `traceability` — строит traceability matrix по атомарным утверждениям ФТ и проверяет, что каждое утверждение покрыто тест-кейсом или зафиксировано как `gap` / `unclear`.
 - `structure` — проверяет формат тест-кейса, группировку набора, сквозную нумерацию `TC-*`, порядок позитивных и негативных кейсов, наличие базовых проверок по полю, если такие свойства явно описаны в ФТ.
@@ -69,13 +71,17 @@ Use
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md)
 as the controlling route.
 
-Review in one pass:
+Review in two practical gates:
 
 0. Matrix review gate: treat `test-design-matrix.md` as writer output, not source
    of truth. Re-derive coverage from FT DOCX/PDF/XHTML, support, dictionaries and
    mockups; return `matrix-changes-required` or `matrix-rejected` if dimensions,
    classes or source links are missing or misleading.
-1. Source coverage: every source-backed obligation in the scope maps to a TC or
+   This pass must run before canonical test-case writing. If current input
+   already contains a newly written canonical TC file but no accepted matrix
+   review, do not sign off the TC file; mark it as an old/unaccepted draft and
+   complete `matrix_review` first.
+1. TC review gate: after `matrix-accepted`, every source-backed obligation in the scope maps to a TC or
    to an explicit allowed deferred status.
 2. Test design: positive, negative, boundary, dictionary, dependency and
    repeatable-block classes from
@@ -95,10 +101,19 @@ Review in one pass:
 6. Data readiness: concrete values are used where available; otherwise the case
    has `needs-test-data` with a clear fixture need.
 
-Also verify `review-independence.md`. If the reviewer was not run in a separate
-Codex task/session or received writer transcript/private reasoning, review may
-continue but the suite must be labeled `reviewed-not-independent`, not
-independently signed off.
+For `matrix_review`, return `test-design-matrix-review.md` with exactly one
+verdict: `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`. Do
+not produce final TC sign-off from this pass.
+
+For `tc_review`, return `review-findings.md` and verify that
+`test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
+coverage. If the accepted matrix review is absent, block TC review and route back
+to matrix review.
+
+Also verify `review-independence.md` for each gate. If the reviewer was not run
+in a separate Codex task/session or received writer transcript/private reasoning,
+review may continue but the matrix/suite must be labeled `reviewed-not-independent`,
+not independently signed off.
 
 Return `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only

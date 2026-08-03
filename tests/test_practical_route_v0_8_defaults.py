@@ -64,6 +64,26 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("draft-ready-for-review", route)
         self.assertIn("review-ready", writer)
 
+    def test_writer_cannot_create_tc_before_matrix_review(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("design-matrix-only pass", route)
+        self.assertIn("Do not create, update or overwrite canonical test cases", route)
+        self.assertIn("verdict `matrix-accepted`", route)
+        self.assertIn("first writer invocation is always", writer)
+        self.assertIn("do not create or modify", writer)
+        self.assertIn("fail closed unless", writer)
+        self.assertIn("This pass must run before canonical test-case writing", reviewer)
+        self.assertIn("If the accepted matrix review is absent, block TC review", reviewer)
+
     def test_session_based_cycle_is_not_default_practical_route(self) -> None:
         lifecycle = (
             ROOT_DIR / "references" / "agent" / "session-based-review-cycle-format.md"
