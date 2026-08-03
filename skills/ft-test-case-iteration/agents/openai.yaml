@@ -1,0 +1,4 @@
+interface:
+  display_name: "FT Test Iteration"
+  short_description: "Runs writer-reviewer iteration with full reviewer mode and sign-off rules"
+  default_prompt: "Use $ft-test-case-iteration to prepare and run the session-based writer/reviewer cycle through scripts/codex_review_cycle_runner.py, following session-based-review-cycle-format.md and codex-sdk-orchestration-format.md."

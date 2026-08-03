@@ -1,0 +1,4 @@
+interface:
+  display_name: "FT Source Locator"
+  short_description: "Finds the correct FT package and related files"
+  default_prompt: "Use $ft-source-locator to find the right FT package and related files, write source-selection.md, workflow-state.yaml, source-locator-session-log.md, and agent-decision-log.md, then hand off to $ft-scope-analyzer only when source selection is unambiguous. For clean diagnostic runs, do not use neighboring fts packages and record the selected package boundary plus excluded sibling/baseline inputs in Inputs Not Used and Contamination Check."

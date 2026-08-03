@@ -1,0 +1,187 @@
+from __future__ import annotations
+
+import json
+import re
+from dataclasses import dataclass
+from typing import Any, Sequence
+
+from test_case_agent.review_cycle.prepared_package import SourceRegistryEntry
+
+
+def _normalized(value: str) -> str:
+    return value.replace("\\", "/").lower()
+
+
+@dataclass(frozen=True)
+class EvidenceAccessResult:
+    passed: bool
+    commands_checked: int
+    fallback_authorizations: int
+    accesses: tuple[dict[str, Any], ...]
+    findings: tuple[dict[str, Any], ...]
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "passed": self.passed,
+            "validator": "prepared-evidence-access-gate-v1",
+            "commands_checked": self.commands_checked,
+            "fallback_authorizations": self.fallback_authorizations,
+            "accesses": list(self.accesses),
+            "findings": list(self.findings),
+        }
+
+
+def validate_evidence_access(
+    *,
+    events_text: str,
+    forbidden_roots: Sequence[str],
+    source_registry: Sequence[SourceRegistryEntry],
+    allowed_stage_roots: Sequence[str] = (),
+    allowed_command_fragments: Sequence[str] = (),
+    reject_unlisted_commands: bool = False,
+    require_source_fallback_authorization: bool = True,
+    allow_read_only_git_status_checks: bool = False,
+    allowed_bounded_scan_roots: Sequence[str] = (),
+) -> EvidenceAccessResult:
+    fallback_messages: list[str] = []
+    commands: list[tuple[str, str, tuple[str, ...]]] = []
+    seen_commands: set[str] = set()
+
+    for raw_line in events_text.splitlines():
+        try:
+            event = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        item = event.get("item")
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or "")
+        if item_type in {"agent_message", "message"}:
+            text = item.get("text") or item.get("content") or item.get("message")
+            if isinstance(text, str) and "targeted_source_fallback" in text:
+                fallback_messages.append(_normalized(text))
+        if item_type != "command_execution":
+            continue
+        command = item.get("command")
+        if not isinstance(command, str) or not command.strip():
+            continue
+        command_id = str(item.get("id") or command)
+        if command_id in seen_commands:
+            continue
+        seen_commands.add(command_id)
+        commands.append((command_id, command, tuple(fallback_messages)))
+
+    findings: list[dict[str, Any]] = []
+    accesses: list[dict[str, Any]] = []
+    normalized_forbidden = [(_normalized(path), path) for path in forbidden_roots]
+    normalized_stage_roots = sorted(
+        (_normalized(path).rstrip("/") for path in allowed_stage_roots),
+        key=len,
+        reverse=True,
+    )
+    normalized_allowed = tuple(_normalized(item) for item in allowed_command_fragments)
+
+    for command_id, command, command_fallbacks in commands:
+        normalized_command = _normalized(command)
+        command_for_forbidden_check = normalized_command
+        has_path_traversal = re.search(r"(?:^|/)\.\.(?:/|$)", normalized_command) is not None
+        if not has_path_traversal:
+            for stage_root in normalized_stage_roots:
+                command_for_forbidden_check = re.sub(
+                    re.escape(stage_root) + r"(?=$|/|[\s'\";|&)])",
+                    "<allowed-stage-root>",
+                    command_for_forbidden_check,
+                )
+        if reject_unlisted_commands and not any(
+            allowed in normalized_command for allowed in normalized_allowed
+        ):
+            findings.append(
+                {
+                    "id": "unapproved-prepared-stage-command",
+                    "severity": "error",
+                    "command_id": command_id,
+                    "message": "Prepared stage executed a command outside its explicit allowlist.",
+                }
+            )
+        for root, original_root in normalized_forbidden:
+            if root in command_for_forbidden_check:
+                status_marker = " status --short -- "
+                status_index = command_for_forbidden_check.find(status_marker)
+                root_index = command_for_forbidden_check.find(root)
+                if (
+                    allow_read_only_git_status_checks
+                    and status_index >= 0
+                    and root_index > status_index
+                ):
+                    continue
+                findings.append(
+                    {
+                        "id": "forbidden-evidence-root-access",
+                        "severity": "error",
+                        "command_id": command_id,
+                        "path": original_root,
+                        "message": "Prepared stage command accessed a forbidden evidence root.",
+                    }
+                )
+        broad_scan = (
+            "rg --files" in normalized_command
+            and not any(scope in normalized_command for scope in ("prepared-input", "runner-input"))
+        ) or (
+            "get-childitem" in normalized_command
+            and "-recurse" in normalized_command
+            and not any(scope in normalized_command for scope in ("prepared-input", "runner-input"))
+        )
+        bounded_scan_allowed = any(
+            re.search(
+                rf"\brg\s+--files\s+{re.escape(_normalized(root).strip('/'))}(?:\s*\||\s*$)",
+                normalized_command,
+            )
+            is not None
+            for root in allowed_bounded_scan_roots
+        )
+        if broad_scan and not bounded_scan_allowed:
+            findings.append(
+                {
+                    "id": "unbounded-prepared-stage-scan",
+                    "severity": "error",
+                    "command_id": command_id,
+                    "message": "Prepared stage used a broad filesystem scan outside prepared inputs.",
+                }
+            )
+        for source in source_registry:
+            source_path = _normalized(source.path)
+            if source_path not in normalized_command:
+                continue
+            locator = _normalized(source.locator)
+            authorized = any(
+                source_path in message and locator in message for message in command_fallbacks
+            )
+            accesses.append(
+                {
+                    "command_id": command_id,
+                    "path": source.path,
+                    "locator": source.locator,
+                    "authorized": authorized,
+                }
+            )
+            if require_source_fallback_authorization and not authorized:
+                findings.append(
+                    {
+                        "id": "unapproved-full-source-access",
+                        "severity": "error",
+                        "command_id": command_id,
+                        "path": source.path,
+                        "locator": source.locator,
+                        "message": "Registered full source was accessed without exact targeted fallback authorization.",
+                    }
+                )
+
+    return EvidenceAccessResult(
+        passed=not findings,
+        commands_checked=len(commands),
+        fallback_authorizations=len(fallback_messages),
+        accesses=tuple(accesses),
+        findings=tuple(findings),
+    )

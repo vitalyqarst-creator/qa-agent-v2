@@ -1,0 +1,4 @@
+interface:
+  display_name: "FT UI Automation Prep"
+  short_description: "Runs post-iteration UI validation and prepares automation-ready FT test cases"
+  default_prompt: "Use $ft-ui-automation-prep after `ft-test-case-iteration` sign-off to validate FT test cases through a normal UI path, collect Playwright evidence under ui-evidence-policy.md, and produce an automation-ready version without overwriting the FT-first baseline."

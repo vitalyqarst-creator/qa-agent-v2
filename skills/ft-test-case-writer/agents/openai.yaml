@@ -1,0 +1,4 @@
+interface:
+  display_name: "FT Test Writer"
+  short_description: "Writes or revises FT test cases from confirmed scope and review findings"
+  default_prompt: "Use $ft-test-case-writer only after FT package and scope are confirmed; write FT-first manual test cases or revise the existing set from reviewer findings without expanding scope."

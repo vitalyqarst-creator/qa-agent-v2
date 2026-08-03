@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Architecture Auditor"
+  short_description: "Audits skills, references, and agent structure"
+  default_prompt: "Use -architecture-auditor to audit the agent-layer structure, duplication, and canonical knowledge placement."
