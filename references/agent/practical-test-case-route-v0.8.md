@@ -330,6 +330,12 @@ Before handing off to reviewer, the writer checks every canonical file:
 - `Предусловия` first open the relevant form/card/screen/section before entering
   a block;
 - `Тестовые данные` contain concrete values or a clear `needs-test-data` reason;
+- setup/precondition data must respect the source-defined input mechanism of the
+  fields used to create it. If a TC creates or prepares an entity through fields
+  backed by DaData, BIK, dictionary/autocomplete or another integration, use a
+  verified fixture for those fields even when the integration itself is not the
+  main test objective; otherwise keep the TC `needs-test-data` with the exact
+  missing fixture named;
 - steps are executable user actions or checks, not restatements of `BSR-*`,
   `ATOM-*`, `ASSERT-*`, hashes, source rows or abstract obligations;
 - expected result is observable in UI/API/document output or explicitly marked
