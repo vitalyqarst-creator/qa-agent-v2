@@ -110,6 +110,11 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
   artifact and XLSX is optional only by explicit user request. In
   session-based/promotion routes, follow the route-specific XLSX companion
   contract.
+- In production TC files, use Russian user-facing headings with natural sentence
+  casing. Examples: `## Сведения о наборе`, `## Границы покрытия`, `## Сводка`.
+  Do not write English process headings such as `## Summary` / `## Coverage
+  Summary`, and do not title-case Russian service words as in `Сведения О
+  Наборе`.
 - Check smell markers from canonical QA references: test-case-forbidden-formulation-smell, test-case-abstract-oracle-smell, test-case-input-restriction-transition-oracle-smell, test-case-unsupported-numeric-validation-feedback-smell, test-case-mechanical-field-step-smell.
 
 ## Workflow

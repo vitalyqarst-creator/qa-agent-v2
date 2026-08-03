@@ -122,9 +122,12 @@ SCOPE_SELECTION_PROMPT_SOURCE_FIRST_MARKERS = (
 REQUIRED_FINAL_ARTIFACT_ALIASES = {
     "final_findings",
     "final_traceability_matrix",
-    "final_traceability_matrix_xlsx",
     "loop_summary",
 }
+CODEX_THREAD_ID_RE = re.compile(
+    r"^(?:thread:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
 ALLOWED_REVIEW_MODES = {"traceability", "structure", "test-design", "scope_gap_review"}
 ALLOWED_FINDING_SEVERITIES = {"error", "warning", "info"}
 ALLOWED_FINDING_CATEGORIES = {
@@ -4444,9 +4447,16 @@ def validate_practical_review_independence_gate(
         for field, expected in required_values.items()
         if fields.get(field, "").strip().lower() != expected
     ]
-    reviewer_session = fields.get("reviewer_task_or_session", "").strip().lower()
+    reviewer_session_raw = fields.get("reviewer_task_or_session", "").strip()
+    reviewer_session = reviewer_session_raw.lower()
     if reviewer_session in {"", "-", "not-available", "none", "n/a"}:
-        issues.append(f"reviewer_task_or_session={fields.get('reviewer_task_or_session', '<missing>')}; expected=<separate session id>")
+        issues.append(
+            f"reviewer_task_or_session={fields.get('reviewer_task_or_session', '<missing>')}; expected=<actual Codex thread/session id>"
+        )
+    elif not CODEX_THREAD_ID_RE.match(reviewer_session_raw):
+        issues.append(
+            f"reviewer_task_or_session={reviewer_session_raw}; expected=<actual Codex thread/session id>, not a role alias"
+        )
 
     if issues:
         severity = "error" if release_claimed else "warning"
@@ -12863,6 +12873,18 @@ def validate_test_case_quality_smells(
         production_glued_headings, production_glued_metadata_fields = production_line_structure_evidence(
             physical_content if physical_content is not None else content
         )
+        for line_number, line in enumerate(content.splitlines(), start=1):
+            stripped_line = line.strip()
+            if stripped_line in {
+                "## Summary",
+                "## Coverage Summary",
+                "## Test Cases",
+                "## Сведения О Наборе",
+                "## Границы Покрытия",
+            }:
+                forbidden_formulations.append(
+                    f"line {line_number}: noncanonical production heading `{stripped_line}`"
+                )
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and not REPRESENTATIVE_STRATEGY_RE.search(content):
         missing_representative_strategy.append("partial representative coverage is declared without representative/pairwise strategy or residual risk")
     if REPRESENTATIVE_PARTIAL_COVERAGE_RE.search(content) and REPRESENTATIVE_STRATEGY_RE.search(content):
@@ -18377,8 +18399,8 @@ def validate_workflow_state(
                         path=display_path,
                         evidence=missing_final_aliases,
                         recommended_action=(
-                            "Add final_findings, final_traceability_matrix, final_traceability_matrix_xlsx, "
-                            "loop_summary, and final_writer_response when applicable."
+                            "Add final_findings, final_traceability_matrix, loop_summary, "
+                            "and final_writer_response when applicable."
                         ),
                     )
                 )

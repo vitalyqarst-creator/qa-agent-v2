@@ -155,10 +155,10 @@ NN-<scope-slug>/
 - `prompt.scope-gaps-to-reviewer.md` является legacy entrypoint после scope analysis, если найдены `GAP-*` и требуется отдельная reviewer-сессия до writer. Для compiler contract v3 gap challenge входит в source assertion review.
 - `prompt.scope-assertions-to-reviewer.md` является активным pre-writer entrypoint для нового production/promotion-capable workflow.
 - `prompt.scope-to-writer.md` и `prompt.scope-to-iteration.md` являются user-facing entrypoints только после accepted source assertion review либо для явно legacy/non-promotion route: первый запускает один writer-pass, второй запускает полный writer-reviewer loop.
-- Каждый новый `*-traceability-matrix.md` в `review-cycles/<scope-slug>/outputs/` должен иметь соседний XLSX companion-файл с тем же basename.
+- XLSX companion для `*-traceability-matrix.md` создавай только для explicit XLSX/session-based promotion routes или по прямому запросу пользователя. Default practical route не требует XLSX.
 - Для новых или обновленных traceability matrices каждая строка должна иметь `atom_id`; findings и writer response связываются с matrix через `traceability_ref`, а не через text-only `req_id` / `source_path`.
 - После завершения session-based cycle `cycle-state.yaml` должен иметь terminal status `signed-off`, `round-cap-reached` или `blocked-input`, а `latest_artifacts` должен ссылаться на final outputs and terminal snapshot.
-- После завершения session-based cycle используй final aliases в `latest_artifacts`: `final_findings`, `final_traceability_matrix`, `final_traceability_matrix_xlsx`, `final_writer_response`, `signed_off_snapshot` или `round_cap_snapshot`.
+- После завершения session-based cycle используй final aliases в `latest_artifacts`: `final_findings`, `final_traceability_matrix`, `final_writer_response`, `signed_off_snapshot` или `round_cap_snapshot`. XLSX companion указывай только для explicit XLSX/session-based promotion routes, не для default practical route.
 - Для новых или обновленных traceability matrices findings и writer response связываются с matrix через `traceability_ref`; это основной key для closure, а не `req_id`.
 - Не создавай несколько конкурирующих `workflow-state.yaml` для одного `scope-slug`.
 - Не используй prompt-файлы как замену findings, traceability matrix, writer response, final output summary или `cycle-state.yaml`.

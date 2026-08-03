@@ -114,11 +114,20 @@ Also verify `review-independence.md` for each gate. If the reviewer was not run
 in a separate Codex task/session or received writer transcript/private reasoning,
 review may continue but the matrix/suite must be labeled `reviewed-not-independent`,
 not independently signed off.
+For an independent verdict, `review-independence.md` must record the actual
+Codex thread/session id in `reviewer_task_or_session`. Role aliases such as
+`matrix-review-round-2`, `<scope>-tc-review`, `not-available`, or invented
+pseudo ids do not prove independence. If the reviewer cannot introspect its own
+id, use the id that the controller passed in the reviewer prompt.
 
 Return `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only
 because some cases legitimately remain `candidate-ui-calibration`,
 `blocked-observability` or `needs-test-data`.
+Block production sign-off when user-facing TC headings contain English process
+headings such as `Summary` / `Coverage Summary` or unnatural title casing such
+as `Сведения О Наборе`; require Russian sentence-style headings like
+`Сведения о наборе`, `Границы покрытия`, `Сводка`.
 
 ### `source_assertion_review` contract
 

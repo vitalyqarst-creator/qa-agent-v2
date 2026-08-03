@@ -374,7 +374,7 @@ Minimum fields:
 
 | field | value |
 | --- | --- |
-| reviewer_task_or_session | `<id or not-available>` |
+| reviewer_task_or_session | `<actual Codex thread/session id>` |
 | reviewer_was_separate_session | `yes/no` |
 | reviewer_input_excluded_writer_transcript | `yes/no` |
 | reviewer_input_excluded_writer_private_reasoning | `yes/no` |
@@ -386,8 +386,26 @@ Rules:
 - `independent_signoff_claim_allowed = yes` only when
   `reviewer_was_separate_session = yes` and the reviewer did not receive writer
   transcript/private reasoning.
+- `reviewer_task_or_session` must be the actual Codex thread/session id, for
+  example `019fc5cf-8bfe-7693-bf2f-c3c55cca4824`. Do not write role aliases
+  such as `matrix-review-round-2`, `<scope>-tc-review`, `not-available`, or
+  invented pseudo ids. If the reviewer cannot know its own id, the controller
+  that launches the separate session must pass that id into the reviewer prompt
+  and the reviewer must copy it verbatim.
 - If a separate reviewer session is not available, stop after writer handoff and
   ask the user/controller to launch the reviewer prompt in a new session. If the
   user explicitly chooses a same-session fallback, complete only a practical
   review and label it `reviewed-not-independent`; do not call the suite signed
   off or independently signed off.
+
+## Production TC visible headings
+
+Production files under `fts/**/test-cases/*.md` are user-facing Russian
+artifacts. Use natural Russian sentence casing for visible headings:
+
+- `## Сведения о наборе`, not `## Сведения О Наборе`;
+- `## Границы покрытия`, not `## Границы Покрытия`;
+- `## Сводка`, not `## Summary` or `## Coverage Summary`.
+
+English remains allowed only for approved metadata enum values such as
+`Positive`, `Negative`, `High`, `Medium`, `Low`.

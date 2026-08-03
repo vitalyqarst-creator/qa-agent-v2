@@ -9,7 +9,7 @@ Fixture: `tests/fixtures/agent-artifacts/canonical-signed-off`
 Required properties:
 
 - `workflow-state.yaml` has `stage_status: signed-off` and `next_skill: ft-ui-automation-prep`;
-- `latest_artifacts` includes `final_findings`, `final_traceability_matrix`, `final_traceability_matrix_xlsx`, `loop_summary`, and `signed_off_snapshot`;
+- `latest_artifacts` includes `final_findings`, `final_traceability_matrix`, `loop_summary`, and `signed_off_snapshot`;
 - `loop-summary.md` has `Reviewer Sign-off Self-check` with `applicability_dimensions_checked: yes`, `test_case_grouping_checked: yes`, `test_case_numbering_checked: yes`, `validator_checked: yes`, and `source_parity_checked: yes | not-applicable`;
 - `prompt.reviewer-to-ui-prep.md` exists and points only to the signed-off baseline.
 
@@ -26,7 +26,7 @@ Fixture: `tests/fixtures/agent-artifacts/canonical-round-cap`
 Required properties:
 
 - `workflow-state.yaml` has `stage_status: round-cap-reached` and `next_skill: none`;
-- `latest_artifacts` includes `final_findings`, `final_traceability_matrix`, `final_traceability_matrix_xlsx`, `final_writer_response`, `loop_summary`, and `round_cap_snapshot`;
+- `latest_artifacts` includes `final_findings`, `final_traceability_matrix`, `final_writer_response`, `loop_summary`, and `round_cap_snapshot`;
 - `loop-summary.md` has `Final Residual Risk`;
 - residual `FINDING-*` and `ATOM-*` refs resolve to linked final artifacts and match their semantic status.
 

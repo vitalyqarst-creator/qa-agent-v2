@@ -60,7 +60,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 - V3 pre-writer review: `current_stage: ft-scope-analyzer`, `stage_status: ready-for-next-stage`, `next_skill: ft-test-case-reviewer`, `prepared_compiler_contract_version: 3`, active prompt `prompt.scope-assertions-to-reviewer.md`, plus resolving source-selection/scope/gaps/source-row/source-assertions artifacts. Accepted review идёт к writer/iteration; rejected или ambiguous review возвращает workflow к scope analyzer или `blocked-input`.
 - Прямой `ft-scope-analyzer` → `ft-test-case-writer | ft-test-case-iteration` route допустим только для legacy/non-promotion workflow; он не считается production/promotion-capable без accepted source assertion review.
 - Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, handoff обязан ссылаться на `scope-clarification-requests.md`. Даже non-blocking gap должен быть передан downstream явно, а не только упомянут в summary.
-- Для session-based review-cycle итогов `latest_artifacts` должен содержать canonical aliases: `cycle_state`, `final_findings`, `final_traceability_matrix`, `final_traceability_matrix_xlsx`, `final_writer_response` если была revision, and `signed_off_snapshot` или `round_cap_snapshot`.
+- Для session-based review-cycle итогов `latest_artifacts` должен содержать canonical aliases: `cycle_state`, `final_findings`, `final_traceability_matrix`, `final_writer_response` если была revision, and `signed_off_snapshot` или `round_cap_snapshot`. XLSX companion artifacts are optional only when the route or user explicitly requests XLSX.
 - `open_questions` — список еще не снятых неоднозначностей по scope или coverage.
 - `blocking_reasons` — список причин, почему этап нельзя продвигать дальше.
 - `accepted_risks` — необязательный список явно принятых blocking `GAP-*`, если владелец продукта/аналитик разрешил передать набор дальше без закрытия gap.
@@ -151,7 +151,7 @@ python scripts\validate_agent_artifacts.py --root <ft-package> --json --fail-on 
 Для `stage_status: signed-off` и `stage_status: round-cap-reached` state должен позволять восстановить итоговую трассировку без чтения истории чата:
 
 - `latest_artifacts.final_traceability_matrix` указывает на последнюю matrix, по которой принято решение;
-- `latest_artifacts.final_traceability_matrix_xlsx` указывает на XLSX-дубль той же matrix;
+- `latest_artifacts.final_traceability_matrix_xlsx` указывает на XLSX-дубль той же matrix только для explicit XLSX/session-based promotion routes; practical route v0.8 не требует XLSX;
 - `latest_artifacts.final_findings` указывает на findings последнего review round;
 - `latest_artifacts.final_writer_response` указывает на writer response, если sign-off или round cap наступили после revision;
 - `latest_artifacts.loop_summary` указывает на summary, где перечислены remaining `gap` / `unclear` refs через `traceability_ref` / `atom_id`.
