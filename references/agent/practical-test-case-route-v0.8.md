@@ -28,6 +28,49 @@ start those heavier routes as alternatives. If a prompt is ambiguous, choose
 this practical route and record any remaining uncertainty as TC status, BA
 question, or UI-calibration candidate.
 
+## Macro-stage execution
+
+Default user-facing execution for "write test cases for this scope" is one
+macro-stage: continue from the current valid handoff until one of these terminal
+conditions occurs:
+
+- canonical test cases are accepted by independent TC review and published as an
+  accepted baseline;
+- one bounded writer revision was performed and the remaining issue is
+  represented by explicit `candidate-ui-calibration`, `blocked-observability` or
+  `needs-test-data` statuses;
+- source/support/mockup input is contradictory or missing enough to require a BA
+  answer before the obligation can be represented;
+- a real tool/runtime failure prevents safe continuation.
+
+Do not stop for user confirmation after internal practical handoffs when the next
+prompt is already materialized and no external decision is needed. In particular,
+continue automatically across:
+
+- matrix-only writer handoff -> independent matrix review;
+- `matrix-changes-required` -> one bounded matrix repair -> independent matrix
+  re-review;
+- `matrix-accepted` -> canonical TC writing;
+- TC writer handoff -> independent TC review;
+- `tc-changes-required` -> one bounded TC revision -> focused independent TC
+  re-review.
+
+After each internal handoff, run the relevant validator gate. If the gate fails
+because practical-route infrastructure is inconsistent with this contract, fix
+the smallest agent-layer rule that unlocks the documented route; do not create
+fake canonical TC files, fake review evidence, heavy-route artifacts or
+placeholder outputs just to satisfy a stale validator.
+
+For small scopes (rough guide: no more than 15 source rows and no more than 20
+planned TC), use the fast path inside this same route:
+
+- keep `test-design-matrix.md` and both independent reviews;
+- skip optional diagnostics, XLSX companions, large ledgers and alias prompts
+  unless a validator or reviewer finding proves they are required;
+- write only the artifacts required for the next gate and final traceability;
+- report timings and blockers in the final summary rather than stopping between
+  gates.
+
 ## Route
 
 1. `ft-source-locator`

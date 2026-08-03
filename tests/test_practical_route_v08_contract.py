@@ -26,6 +26,10 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("design-matrix-only pass", content)
         self.assertIn("Do not create, update or overwrite canonical test cases", content)
         self.assertIn("test-design-matrix-review.md", content)
+        self.assertIn("Macro-stage execution", content)
+        self.assertIn("Do not stop for user confirmation", content)
+        self.assertIn("one bounded TC revision", content)
+        self.assertIn("fast path", content)
         self.assertIn("TC draft after accepted matrix", content)
         self.assertIn("Start only when `test-design-matrix-review.md` has verdict", content)
         for forbidden_default in (
@@ -43,7 +47,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
         self.assertIn("practical route v0.8", agents)
         self.assertIn("не являются default-маршрутом", agents)
-        self.assertIn("New test-case suite, default", skills)
+        self.assertIn("New test-case suite, macro-stage default", skills)
         self.assertIn("practical route v0.8", skills)
         self.assertIn("separate-session", skills)
         self.assertIn("Explicit production shadow", skills)

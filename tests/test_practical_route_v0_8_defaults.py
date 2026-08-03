@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,36 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 class PracticalRouteV08DefaultsTests(unittest.TestCase):
+    def load_validator(self):
+        module_path = ROOT_DIR / "scripts" / "validate_agent_artifacts.py"
+        spec = importlib.util.spec_from_file_location("validate_agent_artifacts_for_v08_tests", module_path)
+        self.assertIsNotNone(spec)
+        self.assertIsNotNone(spec.loader)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        return module
+
+    def test_practical_route_runs_as_macro_stage_by_default(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        skills = (ROOT_DIR / "skills" / "README.md").read_text(encoding="utf-8")
+        routing = (ROOT_DIR / "references" / "agent" / "task-start-skill-routing-format.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (route, agents, skills, routing):
+            self.assertIn("macro-stage", content)
+            self.assertIn("accepted baseline", content)
+
+        self.assertIn("Do not stop for user confirmation", route)
+        self.assertIn("matrix-only writer handoff -> independent matrix review", route)
+        self.assertIn("one bounded TC revision", route)
+        self.assertIn("fast path", route)
+        self.assertIn("without user confirmation", routing)
+
     def test_scope_analyzer_requires_source_parity_before_practical_writer(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
             encoding="utf-8"
@@ -96,6 +128,39 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("explicit automated review-cycle", lifecycle)
         self.assertIn("without", route)
         self.assertIn("multi-session repair cycles", route)
+
+    def test_validator_routes_matrix_review_without_tc_review_prompt(self) -> None:
+        validator = self.load_validator()
+
+        matrix_state = {
+            "current_stage": "ft-test-case-writer",
+            "stage_status": "ready-for-next-stage",
+            "next_skill": "ft-test-case-reviewer",
+            "current_round": 1,
+            "review_mode": "matrix_review",
+        }
+        self.assertEqual(
+            validator.expected_transition_prompt(matrix_state),
+            "prompt.matrix-to-reviewer.md",
+        )
+        self.assertEqual(
+            validator.transition_prompt_kind("prompt.matrix-to-reviewer.md"),
+            "matrix-to-reviewer",
+        )
+        self.assertFalse(validator.is_ready_for_review_state(matrix_state))
+
+        tc_state = {
+            "current_stage": "ft-test-case-writer",
+            "stage_status": "ready-for-review",
+            "next_skill": "ft-test-case-reviewer",
+            "current_round": 1,
+            "review_mode": "tc_review",
+        }
+        self.assertEqual(
+            validator.expected_transition_prompt(tc_state),
+            "prompt.writer-to-reviewer.round-1.md",
+        )
+        self.assertTrue(validator.is_ready_for_review_state(tc_state))
 
 
 if __name__ == "__main__":
