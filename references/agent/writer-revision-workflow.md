@@ -24,7 +24,9 @@ Do not add new source documents or expand scope during revision unless a separat
 5. Keep existing stable `TC-*` ids where possible. If renumbering is unavoidable, update all references.
 6. Create `round-N-writer-response.md` with canonical response fields, resolution status and affected refs.
 7. Update the canonical test-case file and any required traceability matrix.
-8. Create mandatory `.xlsx` duplicate if the writer creates or updates a traceability matrix.
+8. Create an `.xlsx` duplicate only when the selected route requires it
+   (explicit session-based/promotion route) or the user explicitly requests XLSX
+   export. Do not create XLSX by default in `practical_v0_8`.
 9. Update workflow state, session log, decision log and reviewer prompt.
 
 ## Rules

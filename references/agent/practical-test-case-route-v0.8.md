@@ -9,6 +9,8 @@ loops or multi-session repair cycles.
 Compared with v0.7, v0.8 keeps the lightweight practical route but makes three
 quality controls non-optional:
 
+- when DOCX and PDF are both present, `source-parity-check.md` is created before
+  writer handoff, not discovered late by reviewer;
 - `test-design-matrix.md` is reviewed as writer output, not trusted as source;
 - independent sign-off requires a separate reviewer Codex task/session by
   default;
@@ -37,9 +39,18 @@ question, or UI-calibration candidate.
    - Confirm one or more external scopes by FT section/subsection.
    - For each selected scope, create one compact `scope-brief.md` under
      `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`.
+   - If the main FT has both DOCX and PDF, create `source-parity-check.md`
+     before writer handoff and list it in the brief. Missing parity evidence is
+     `blocked-input`; do not let writer or reviewer discover it late.
+   - If the scope is based on table rows, actions, fields, document mappings or
+     status rows, create a compact `source-row-inventory.md` before writer
+     handoff. It may be lightweight, but it must name every in-scope row/value
+     class the writer must cover or defer.
    - The brief must contain:
      - scope boundary and source references;
      - relevant FT text / table rows / PDF pages;
+     - source parity conclusions and mandatory requirement IDs, when
+       `source-parity-check.md` exists;
      - relevant mockups and support references;
      - dictionary values required by the scope;
      - open questions and assumptions;
@@ -50,6 +61,13 @@ question, or UI-calibration candidate.
      - `test-design-matrix.md` in the practical scope folder;
      - canonical test cases in
        `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`.
+   - The writer may label the file as `draft-ready-for-review` or
+     `review-ready`, but must not mark it `released-*`, `signed-off`,
+     `independently-signed-off` or equivalent before an independent reviewer pass
+     has accepted the suite.
+   - Markdown `test-design-matrix.md` is the default and required matrix artifact.
+     Do not create an XLSX duplicate in `practical_v0_8` unless the user
+     explicitly asks for XLSX export.
    - Optional artifacts are allowed only when they directly improve the current
      scope:
      - `dictionary-inventory.md`;
@@ -74,6 +92,10 @@ question, or UI-calibration candidate.
      independent sign-off.
    - Produce `review-findings.md` and `review-independence.md` in the practical
      scope folder.
+   - Markdown matrix review is enough for practical route. Do not require or
+     create `round-N-traceability-matrix.xlsx` unless the user explicitly asks
+     for XLSX export or an explicit session-based/production-promotion route was
+     selected.
    - Produce an explicit matrix verdict before the final TC verdict:
      `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`.
    - Classify findings as:
@@ -248,6 +270,9 @@ selected a heavy/development route by name:
 - `run-config*.json` for `ft-agent run`;
 - `work/iterations/`;
 - benchmark/eval configs inside the active FT package.
+
+XLSX traceability duplicates are also not practical-route defaults. They are
+allowed only by explicit user request or explicit session-based/promotion route.
 
 If any of these appear during ordinary practical work, stop the route and repair
 the handoff. Do not silently continue through a mixed practical/source-qualified

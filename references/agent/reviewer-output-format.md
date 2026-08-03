@@ -60,7 +60,8 @@ Reviewer не должен возвращать finding без проверяе�
 
 ## Traceability Matrix
 
-В режимах `traceability` и `full` reviewer должен создавать:
+В explicit session-based/promotion routes в режимах `traceability` и `full`
+reviewer должен создавать:
 
 ```text
 round-N-traceability-matrix.md
@@ -69,7 +70,12 @@ round-N-traceability-matrix.xlsx
 
 Оба файла лежат в `work/review-cycles/<scope-slug>/outputs/`.
 
-Markdown matrix является canonical text artifact. `.xlsx`-дубль обязателен и должен содержать те же строки, колонки и значения.
+Markdown matrix является canonical text artifact. `.xlsx`-дубль обязателен только для explicit session-based/promotion routes или явного пользовательского XLSX-export и должен содержать те же строки, колонки и значения.
+
+Для `practical_v0_8` reviewer может создавать только Markdown
+`review-findings.md` / matrix в practical scope folder. Отсутствие `.xlsx` не
+является defect, если пользователь не запросил XLSX и не выбран
+session-based/promotion route.
 
 Matrix должна соответствовать `references/qa/traceability-matrix-format.md` и использовать:
 

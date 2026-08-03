@@ -53,8 +53,8 @@ description: Делает review существующих тест-кейсов 
 
 Порядок нового session-based cycle применяется только для explicit
 qualification/development route: optional `scope_gap_review` after scope analysis
-and before writer, then `structure_preflight ->
-semantic_traceability_test_design` до двух semantic rounds, затем
+and before writer, then `structure_preflight -> semantic_traceability_test_design`
+до двух semantic rounds, затем
 `structure_format_final`, optional format-only writer revision и
 `semantic_regression`. Если final format review находит semantic problem, это не
 format finding: routing возвращается в semantic loop или фиксирует
@@ -187,7 +187,9 @@ addition to compiler-contract-v3 `source_assertion_review`.
 - human summary;
 - при `traceability` и `full`:
   - отдельный traceability matrix artifact;
-  - обязательный `.xlsx`-дубль traceability matrix artifact с теми же строками и колонками;
+  - `.xlsx`-дубль traceability matrix artifact с теми же строками и колонками
+    только для explicit session-based/promotion routes или если пользователь
+    явно запросил XLSX; в `practical_v0_8` Markdown matrix/review достаточно;
 - при необходимости:
   - карта coverage gaps;
   - список неоднозначностей и противоречий по ФТ;
@@ -213,7 +215,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 5b. Если source/support или `source-table-normalization.md` содержит `dictionary-source`, reference-list, tags или фиксированный перечень значений, прочитай `dictionary-inventory.md`. Если inventory отсутствует, неполный, не содержит `DICT-*` для referenced dictionary/list или plan/TC используют только примерные значения вместо inventory, создай finding по `dictionary-closed-set-missing`.
 6. В режиме `traceability` или `full` декомпозируй требования выбранного scope на атомарные утверждения.
 7. Построй traceability matrix по каноническому формату из `traceability-matrix-format.md`; каждая строка должна иметь стабильный `atom_id`, который используется как `traceability_ref` в findings. Все mandatory requirement IDs из `source-parity-check.md`, включая PDF-only коды, должны присутствовать в `req_id`.
-8. Создай рядом с Markdown matrix обязательный `.xlsx`-дубль по правилам `traceability-matrix-format.md`; строки, колонки и значения должны совпадать с Markdown matrix.
+8. Для `practical_v0_8` не создавай `.xlsx`-дубль по умолчанию: Markdown findings/matrix достаточно для быстрого review. Для explicit session-based/promotion routes или явного пользовательского XLSX-export создай рядом с Markdown matrix `.xlsx`-дубль по правилам `traceability-matrix-format.md`; строки, колонки и значения должны совпадать с Markdown matrix.
 9. Для каждой строки матрицы проставь `coverage_status = covered | gap | unclear`.
 10. Если утверждение не покрыто кейсами, но не может быть однозначно интерпретировано по ФТ, фиксируй `unclear`, а не придумывай поведение.
 11. Выполни traceability diff против разрешенного baseline/revalidation context, если он есть в scope contract, handoff, review-cycle snapshots, eval run report или пользовательском prompt-е:

@@ -101,7 +101,8 @@ class ReviewerContractTests(unittest.TestCase):
         self.assertIn("structured findings artifact", reviewer)
         self.assertIn("при `traceability` и `full`", reviewer)
         self.assertIn("отдельный traceability matrix artifact", reviewer)
-        self.assertIn("обязательный `.xlsx`-дубль", reviewer)
+        self.assertIn("только для explicit session-based/promotion routes", reviewer)
+        self.assertIn("в `practical_v0_8` Markdown matrix/review достаточно", reviewer)
 
     def test_review_findings_format_defines_mode_specific_requirements(self) -> None:
         findings = (ROOT_DIR / "references" / "qa" / "review-findings-format.md").read_text(encoding="utf-8")
@@ -135,12 +136,13 @@ class ReviewerContractTests(unittest.TestCase):
         ):
             self.assertIn(token, matrix)
 
-    def test_traceability_matrix_format_requires_xlsx_duplicate(self) -> None:
+    def test_traceability_matrix_format_makes_xlsx_optional_for_practical_route(self) -> None:
         matrix = (ROOT_DIR / "references" / "qa" / "traceability-matrix-format.md").read_text(encoding="utf-8")
-        self.assertIn("дублирующая `.xlsx`-версия", matrix)
+        self.assertIn("`.xlsx`-дубль не является default для практичного маршрута", matrix)
         self.assertIn("`round-N-traceability-matrix.xlsx`", matrix)
         self.assertIn("те же обязательные колонки и те же строки", matrix)
         self.assertIn("Markdown остается каноническим текстовым artifact", matrix)
+        self.assertIn("опциональным человекочитаемым дублем", matrix)
 
 
     def test_reviewer_test_design_rubric_eval_cases_exist(self) -> None:

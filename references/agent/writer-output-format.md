@@ -388,7 +388,7 @@ Strict atom atomicity:
 - `gap`;
 - `unclear`.
 
-Если writer использует traceability matrix вместо отдельного ledger, matrix должна содержать те же атомарные утверждения и стабильные id. Для каждой создаваемой или обновляемой traceability matrix обязателен `.xlsx`-дубль traceability matrix.
+Если writer использует traceability matrix вместо отдельного ledger, matrix должна содержать те же атомарные утверждения и стабильные id. В `practical_v0_8` Markdown matrix является достаточным artifact; `.xlsx`-дубль создавай только по явному пользовательскому запросу. В explicit session-based/promotion routes следуй route-specific contract и создавай `.xlsx` companion, если он там обязателен.
 
 `atom_id` является стабильным ключом между writer ledger, traceability matrix, reviewer findings и writer response. Не меняй `atom_id` при обычной правке текста тест-кейса. Если reviewer finding ссылается на `traceability_ref = ATOM-*`, revision response должен сохранить эту ссылку или явно описать split/merge атомарного утверждения.
 

@@ -1,6 +1,12 @@
 # Session-Based Review Cycle Format
 
-This reference defines the new writer/reviewer lifecycle that runs each stage in a separate Codex SDK session. It is the target process for new automated review-cycle orchestration.
+This reference defines the writer/reviewer lifecycle that runs each stage in a
+separate Codex SDK session. It is an explicit automated review-cycle /
+qualification route, not the default route for ordinary FT test-case writing.
+For ordinary work use `practical_v0_8` from
+`references/agent/practical-test-case-route-v0.8.md`: compact scope brief,
+Markdown test-design matrix, canonical test cases, one independent reviewer pass
+in a separate Codex session, and one bounded revision if needed.
 
 The existing pre-SDK `iteration.full_loop` flow is compatibility-only for historical artifacts. Do not make the old full-loop the source of truth for this process.
 

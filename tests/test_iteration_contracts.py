@@ -63,14 +63,17 @@ class IterationContractTests(unittest.TestCase):
         production = (ROOT_DIR / "references" / "agent" / "production-instruction-loading.md").read_text(encoding="utf-8")
         self.assertNotIn("ft-test-case-writer", production)
 
-    def test_review_cycle_requires_xlsx_traceability_duplicates(self) -> None:
+    def test_practical_route_does_not_require_xlsx_traceability_duplicates(self) -> None:
         writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(encoding="utf-8")
         reviewer_output = (ROOT_DIR / "references" / "agent" / "reviewer-output-format.md").read_text(encoding="utf-8")
+        practical = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(encoding="utf-8")
 
-        self.assertIn("`.xlsx` duplicate of the traceability matrix", writer)
+        self.assertIn("do not create XLSX duplicates", writer)
+        self.assertIn("not for `practical_v0_8` by default", writer)
         self.assertIn("round-N-traceability-matrix.xlsx", reviewer_output)
         self.assertIn("work/review-cycles/<scope-slug>/outputs/", reviewer_output)
         self.assertIn("те же строки, колонки и значения", reviewer_output)
+        self.assertIn("Do not create an XLSX duplicate in `practical_v0_8`", practical)
 
     def test_checked_in_schema_v2_observation_is_executor_owned(self) -> None:
         iteration = (

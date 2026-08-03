@@ -1,6 +1,6 @@
 # Traceability Matrix Format
 
-Канонический traceability matrix artifact хранится в Markdown и используется для проверки полноты покрытия утверждений ФТ тест-кейсами. Для каждой создаваемой traceability matrix обязательно создается дублирующая `.xlsx`-версия с теми же строками и колонками.
+Канонический traceability matrix artifact хранится в Markdown и используется для проверки полноты покрытия утверждений ФТ тест-кейсами. `.xlsx`-дубль не является default для практичного маршрута: он создается только для explicit session-based/promotion routes или по явному запросу пользователя на XLSX-export.
 
 ## Назначение
 
@@ -46,12 +46,13 @@
 
 ## XLSX-дубль
 
-- Для каждого Markdown artifact `round-N-traceability-matrix.md` создавай рядом файл `round-N-traceability-matrix.xlsx`.
+- Для `practical_v0_8` не создавай `.xlsx` по умолчанию: Markdown matrix является достаточным review artifact.
+- Для explicit session-based/promotion routes или явного пользовательского XLSX-export рядом с Markdown artifact `round-N-traceability-matrix.md` создавай файл `round-N-traceability-matrix.xlsx`.
 - `.xlsx` должен содержать те же обязательные колонки и те же строки, что и Markdown matrix; не добавляй в `.xlsx` скрытых требований или дополнительных интерпретаций.
 - Рекомендуемый лист для основной таблицы: `traceability`.
 - Допустимо добавить отдельный лист `meta` с FT-пакетом, scope, round number и ссылкой на исходный Markdown artifact.
 - Используй автофильтр, закрепленную строку заголовка и перенос текста в ячейках, чтобы матрица была пригодна для ручного анализа.
-- Markdown остается каноническим текстовым artifact для diff/review, `.xlsx` является обязательным человекочитаемым дублем для анализа и фильтрации.
+- Markdown остается каноническим текстовым artifact для diff/review, `.xlsx` является опциональным человекочитаемым дублем для анализа и фильтрации, кроме маршрутов, где отдельный contract явно требует XLSX.
 
 ## Рекомендуемый шаблон
 

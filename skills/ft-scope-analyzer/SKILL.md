@@ -16,8 +16,14 @@ starting a heavy source contract:
 - confirm external scope boundaries by FT section/subsection;
 - create one compact `scope-brief.md` under
   `fts/<ft-slug>/work/practical/<section-id>-<scope-slug>/`;
+- create `source-parity-check.md` before writer handoff when the main FT has
+  both DOCX and PDF;
+- create a compact `source-row-inventory.md` before writer handoff when the
+  selected scope is driven by FT table rows, action rows, field rows, status
+  rows, document mappings or fixed value lists;
 - include relevant FT text/table rows/PDF pages, support files, mockups,
-  dictionaries, open questions and candidate UI-calibration points;
+  dictionaries, source parity conclusions, open questions and candidate
+  UI-calibration points;
 - route next to `ft-test-case-writer`, not to `source_assertion_review` or
   `ft-test-case-iteration`.
 
@@ -207,6 +213,7 @@ Minimum for `prompt.scope-gaps-to-reviewer.md`:
 gap.
 15. Для новых handoff-папок используй numbered naming из `references/agent/stage-handoff-model.md`: `00-<container-slug>/` для контейнера выбора и `NN-<scope-slug>/` для подтвержденного scope-level handoff. Логический `scope_slug` оставляй без числового префикса.
 16. После подтверждения scope сохрани один активный downstream prompt. Для `practical_v0_8` создай/обнови `scope-brief.md` и route к `ft-test-case-writer`; `scope-contract.md`, `workflow-state.yaml`, `source-assertions.json`, `prompt.scope-assertions-to-reviewer.md` и `prompt.scope-gaps-to-reviewer.md` не обязательны. Для legacy/session/production route сохрани `scope-contract.md`, `scope-coverage-gaps.md` и условно добавь `source-parity-check.md`, `source-row-inventory.md`, oracle inventories, `scope-clarification-requests.md` и `prompt.scope-gaps-to-reviewer.md`, когда их требуют правила выше. `scope-execution-options.md` создавай только для неоднозначного выбора следующего действия; в однозначном lean-run он запрещён как дубликат active route.
+16a. Для `practical_v0_8` отсутствие `scope-contract.md` не отменяет обязательные source checks: если DOCX+PDF доступны, `scope-brief.md` обязан ссылаться на актуальный `source-parity-check.md`; если scope табличный/строковый, `scope-brief.md` обязан ссылаться на актуальный `source-row-inventory.md`. Если любой обязательный artifact отсутствует или не открывается, остановись с `blocked-input` и не создавай writer prompt.
 17. В legacy/session/production `workflow-state.yaml` укажи один активный downstream `next_skill`, но сохраняй второй prompt в `latest_artifacts` как альтернативный user-facing entrypoint, если он применим. Для compiler contract v3 активный downstream до writer всегда `ft-test-case-reviewer` в режиме `source_assertion_review`, а `latest_artifacts` содержит `source_assertions` и `active_transition_prompt: prompt.scope-assertions-to-reviewer.md`; наличие gaps не создаёт дублирующий gap-review. Legacy workflow с gaps сохраняет маршрут через `prompt.scope-gaps-to-reviewer.md`, но не допускается к production promotion. Для `practical_v0_8` не перенаправляй scope в `source_assertion_review`.
 18. Передай выбранный scope дальше в `ft-test-case-writer`, `ft-test-case-reviewer` или `ft-test-case-iteration` вместе с информацией о XHTML extraction notes, source parity, PDF cross-check, package-specific notes, scope complexity assessment и обязательными внутренними рабочими пакетами.
 

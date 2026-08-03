@@ -4,6 +4,8 @@
 
 Этот документ описывает, как пользоваться FT Test Case Agent для работы с функциональными требованиями, макетами, тест-кейсами, session-based review-cycle и подготовкой automation-ready версии. Финальные пользовательские версии руководства выпускаются в DOCX и PDF. Markdown-файл нужен как редактируемый источник.
 
+Важно для текущей рабочей версии: для обычной задачи “написать тест-кейсы” default route — `practical_v0_8` из `references/agent/practical-test-case-route-v0.8.md`. Session-based review-cycle, mandatory XLSX companion, `ft-test-case-iteration`, semantic bridge, benchmark, sharding и source-qualified routes применяются только по явному запросу или в development/qualification workflow. Если этот manual ниже описывает session-based artifacts как обязательные, это относится к explicit session-based route, а не к practical default.
+
 Руководство является навигационным документом. Если оно расходится с каноническими контрактами, приоритет имеют:
 
 1. `references/agent/instruction-contract-index.md` как карта владельцев правил и validator coverage;
@@ -24,7 +26,7 @@
 | Git-доступ к репозиторию | Всегда | Агент читает и обновляет файлы в структуре проекта. |
 | FT-документы `.docx` / `.pdf` | Для всех QA-этапов | Основной текст ФТ является приоритетным источником требований. |
 | PDF-версия основного ФТ | Желательно для scope analysis, writer и reviewer | Используется для structural cross-check разделов, границ scope и source parity. Если PDF нет, агент должен явно зафиксировать это ограничение. |
-| Табличный редактор для `.xlsx` | Для review traceability | Каждая `round-N-traceability-matrix.md` должна иметь XLSX companion-файл с теми же строками и колонками. |
+| Табличный редактор для `.xlsx` | Только для explicit session-based/promotion route или XLSX-export | В practical default XLSX не нужен; Markdown matrix достаточно для review. |
 | Playwright CLI / wrapper | Только для `ft-ui-automation-prep` | Нужен для UI-прогона, snapshot, screenshots, traces и logs. |
 | Браузеры Playwright | Только для `ft-ui-automation-prep` | Должны быть установлены и доступны wrapper-у. |
 | Runtime URL приложения | Только для `ft-ui-automation-prep` | Можно передать в запросе или зафиксировать в `UI-AGENT-NOTES.md`. |
@@ -394,14 +396,14 @@ Scope не расширяй.
 
 - structured findings artifact;
 - human summary;
-- `round-N-traceability-matrix.md` и соседний `round-N-traceability-matrix.xlsx` для `traceability` и `full`;
+- `round-N-traceability-matrix.md`; соседний `round-N-traceability-matrix.xlsx` только для explicit session-based/promotion route или XLSX-export;
 - `prompt.reviewer-to-writer.round-N.md`, если нужна доработка;
 - `prompt.reviewer-to-ui-prep.md`, если набор готов к следующему этапу;
 - обновленный `workflow-state.yaml`.
 
-### Новое правило про XLSX companion
+### XLSX companion
 
-Если создается или обновляется `round-N-traceability-matrix.md`, рядом в той же директории должен быть создан или обновлен `round-N-traceability-matrix.xlsx` с тем же basename, теми же колонками и строками. Markdown остается человекочитаемым артефактом, XLSX нужен для фильтрации, сортировки и передачи вне markdown workflow.
+В practical default `.xlsx` не создается. Если выбран explicit session-based/promotion route или пользователь запросил XLSX-export, рядом с `round-N-traceability-matrix.md` должен быть создан или обновлен `round-N-traceability-matrix.xlsx` с тем же basename, теми же колонками и строками.
 
 ### Что проверяет reviewer
 
@@ -492,7 +494,7 @@ Findings сортируются по severity:
 Запусти `ft-test-case-iteration` для scope `<scope-slug>`.
 Нужен полный цикл writer -> reviewer -> writer -> reviewer.
 Initial draft должен идти через atomic-ledger-first workflow.
-Для traceability matrix создай Markdown и XLSX companion.
+Для traceability matrix создай Markdown; XLSX companion нужен только если выбран explicit session-based/promotion route или пользователь запросил XLSX.
 Обнови `workflow-state.yaml` и все handoff-артефакты.
 ```
 

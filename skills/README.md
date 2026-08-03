@@ -14,7 +14,7 @@ Canonical list of active skills:
 
 - If the first task is to identify which FT to use: `ft-source-locator`.
 - If the FT package is selected but the exact requirement fragment is not selected yet, or a large FT must be split into scopes: `ft-scope-analyzer`.
-- If the user asks to write test cases for a normal FT scope, use the practical route v0.8: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` -> separate-session `ft-test-case-reviewer`, then one bounded revision pass if blocking findings remain.
+- If the user asks to write test cases for a normal FT scope, use the practical route v0.8: `ft-source-locator` -> `ft-scope-analyzer` with early DOCX/PDF source parity when available -> `ft-test-case-writer` -> separate-session `ft-test-case-reviewer`, then one bounded revision pass if blocking findings remain. Markdown `test-design-matrix.md` is enough by default; XLSX export is optional only by explicit request.
 - If the scope is fixed and new cases must be written in one writer pass without independent review: `ft-test-case-writer`, but still follow practical-route quality gates.
 - Developer/legacy routes below are explicit-only. Do not propose them for ordinary "write test cases" work:
   - if the scope is independently qualified and the user explicitly asks for a production shadow: `ft-test-case-iteration` through `ft-agent run`;

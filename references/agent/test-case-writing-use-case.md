@@ -4,6 +4,13 @@
 
 Документ описывает типовой процесс работы пользователя с FT Test Case Agent: от подготовки папки с функциональными требованиями до получения согласованного набора тест-кейсов и, при необходимости, automation-ready версии. Это сценарная инструкция, а не замена каноническим правилам проекта. Детальные форматы и политики остаются в `AGENTS.md`, `skills/` и `references/`.
 
+Актуальный default для обычного написания тест-кейсов — `practical_v0_8`:
+`ft-source-locator -> ft-scope-analyzer -> ft-test-case-writer -> separate-session ft-test-case-reviewer -> one bounded revision`.
+Нижеописанный `ft-test-case-iteration` / session-based cycle является explicit
+production/qualification route, а не default practical route. XLSX companion в
+этом документе обязателен только для explicit session-based/promotion routes или
+по явному запросу пользователя.
+
 ## Цель
 
 Показать последовательность действий пользователя и ответов агента при создании тест-кейсов по одному FT-пакету (папке внутри `qa-agent/fts/`, где хранятся материалы по одному функциональному требованию или группе связанных требований).
@@ -122,7 +129,7 @@ Scope не расширять.
 Запусти `ft-test-case-iteration` для выбранного scope.
 Нужен полный цикл writer -> reviewer -> writer -> reviewer.
 Initial draft должен идти через atomic-ledger-first workflow.
-Для traceability matrix создай Markdown и XLSX companion.
+Для traceability matrix создай Markdown; XLSX companion нужен только для explicit session-based/promotion route или явного XLSX-export.
 Обнови `workflow-state.yaml` и все handoff-артефакты.
 ```
 
