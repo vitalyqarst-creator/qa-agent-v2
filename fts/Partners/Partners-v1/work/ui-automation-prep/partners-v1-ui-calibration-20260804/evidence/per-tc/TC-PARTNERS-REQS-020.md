@@ -21,3 +21,7 @@ fts/AutoFin/Partners1/work/ui-automation-prep/9-3-1-9-3-2-requisites-and-partner
 ## Reproducibility Notes
 
 Do not add a confirmation-dialog step. The blocker here is that the requisite-level unarchive control was not visible/observable in the checked UI state.
+
+## Screenshots
+
+- [TC-PARTNERS-STRUCTURE-004-partner-card-requisites.png](../screenshots/TC-PARTNERS-STRUCTURE-004-partner-card-requisites.png)

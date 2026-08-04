@@ -21,3 +21,7 @@ fts/AutoFin/Partners1/work/ui-automation-prep/novaya-papka-pms-ui-pass/evidence/
 ## Reproducibility Notes
 
 No baseline rewrite was made. If old TC fixture names such as PART-* / REQ-* / Поставщик Скрытый 9.3.1 are present, this evidence records whether they matched actual stand data instead of correcting them.
+
+## Screenshots
+
+- [TC-PARTNERS-CARD-001-add-partner-fields.png](../screenshots/TC-PARTNERS-CARD-001-add-partner-fields.png)

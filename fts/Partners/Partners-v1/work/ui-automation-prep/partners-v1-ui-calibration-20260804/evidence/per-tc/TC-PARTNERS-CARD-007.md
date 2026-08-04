@@ -21,3 +21,7 @@ fts/AutoFin/Partners1/work/ui-automation-prep/9-3-1-9-3-2-requisites-and-partner
 ## Reproducibility Notes
 
 No baseline rewrite was made. If old TC fixture names such as PART-* / REQ-* / Поставщик Скрытый 9.3.1 are present, this evidence records whether they matched actual stand data instead of correcting them.
+
+## Screenshots
+
+- [TC-PARTNERS-CARD-008-after-inn-select-autofill.png](../screenshots/TC-PARTNERS-CARD-008-after-inn-select-autofill.png)

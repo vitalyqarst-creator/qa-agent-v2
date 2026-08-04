@@ -21,3 +21,7 @@ fts/Partners/Partners-v1/work/ui-automation-prep/partners-v1-ui-calibration-2026
 ## Reproducibility Notes
 
 Old TC expected exact label from earlier baseline.
+
+## Screenshots
+
+- [TC-PARTNERS-MENU-003-groups-companies-label.png](../screenshots/TC-PARTNERS-MENU-003-groups-companies-label.png)

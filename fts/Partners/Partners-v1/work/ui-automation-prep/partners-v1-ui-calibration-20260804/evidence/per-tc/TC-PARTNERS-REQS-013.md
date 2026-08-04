@@ -21,3 +21,7 @@ fts/AutoFin/Partners1/work/ui-automation-prep/9-3-1-9-3-2-requisites-and-partner
 ## Reproducibility Notes
 
 No baseline rewrite was made. If old TC fixture names such as PART-* / REQ-* / Поставщик Скрытый 9.3.1 are present, this evidence records whether they matched actual stand data instead of correcting them.
+
+## Screenshots
+
+No screenshot added: the result depends on prepared external stand fixtures/application oracles/safe mutable PART-* or REQ-* data. The current PMS screen would not visually prove that missing data condition.

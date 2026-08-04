@@ -21,3 +21,7 @@ fts/AutoFin/Partners1/work/ui-automation-prep/9-3-1-9-3-2-requisites-and-partner
 ## Reproducibility Notes
 
 Product not implemented according to user clarification; do not change baseline expected.
+
+## Screenshots
+
+- [TC-PARTNERS-STRUCTURE-004-partner-card-requisites.png](../screenshots/TC-PARTNERS-STRUCTURE-004-partner-card-requisites.png)

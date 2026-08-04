@@ -21,3 +21,7 @@ fts/AutoFin/Partners1/work/ui-automation-prep/novaya-papka-pms-ui-pass/ui-valida
 ## Reproducibility Notes
 
 No baseline rewrite was made. If old TC fixture names such as PART-* / REQ-* / Поставщик Скрытый 9.3.1 are present, this evidence records whether they matched actual stand data instead of correcting them.
+
+## Screenshots
+
+No screenshot added: the check requires a non-admin account; the current stand user is admin, and there is no separate role-management/object-visibility screen in this package that would visually prove the missing account.
