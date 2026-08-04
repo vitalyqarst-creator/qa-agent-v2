@@ -36,10 +36,12 @@ conditions occurs:
 
 - canonical test cases are accepted by independent TC review and published as an
   accepted baseline;
-- one bounded matrix repair or one bounded TC revision was performed and the
-  remaining issue is represented by explicit `candidate-ui-calibration`,
-  `blocked-observability`, `needs-test-data` or `needs-future-clarification`
-  statuses;
+- one bounded matrix repair plus one matrix re-review was performed and the
+  matrix is still not accepted; report an honest pre-write blocker and do not
+  write canonical TC;
+- one bounded TC revision was performed and the remaining issue is represented
+  by explicit `candidate-ui-calibration`, `blocked-observability`,
+  `needs-test-data` or `needs-future-clarification` statuses;
 - source/support/mockup input is contradictory or missing enough to require a BA
   answer before the obligation can be represented;
 - a real tool/runtime failure prevents safe continuation.
@@ -49,8 +51,9 @@ prompt is already materialized and no external decision is needed. In particular
 continue automatically across:
 
 - matrix-only writer handoff -> independent matrix review;
-- `matrix-changes-required` -> one bounded matrix repair -> TC writing from the
-  repaired matrix, without a second matrix review by default;
+- `matrix-changes-required` -> one bounded matrix repair -> one independent
+  matrix re-review; if the matrix is still not `matrix-accepted`, stop before TC
+  writing;
 - `matrix-accepted` -> canonical TC writing;
 - TC writer handoff -> independent TC review;
 - `tc-changes-required` -> one bounded TC revision -> release with explicit
@@ -58,16 +61,17 @@ continue automatically across:
 
 Default review budget per scope is capped at:
 
-- one independent matrix review;
+- one independent matrix review, plus one matrix re-review only after a bounded
+  matrix repair;
 - one independent TC review;
 - one bounded writer repair/revision.
 
-Do not start a second matrix review, second TC review, final-format review,
-semantic regression or another repair loop unless a validator contract failure
-prevents publication or the user explicitly requests another review round. A
-reviewer finding is not by itself permission to loop indefinitely: after the
-bounded revision, publish a transparent FT-first baseline and keep unresolved
-execution details in the case statuses.
+Do not start an extra matrix review beyond the single repair re-review, a second
+TC review, final-format review, semantic regression or another repair loop unless
+a validator contract failure prevents publication or the user explicitly requests
+another review round. A reviewer finding is not by itself permission to loop
+indefinitely: after the bounded revision, publish a transparent FT-first baseline
+and keep unresolved execution details in the case statuses.
 
 After each internal handoff, run the relevant validator gate. If the gate fails
 because practical-route infrastructure is inconsistent with this contract, fix
@@ -143,6 +147,11 @@ planned TC), use the fast path inside this same route:
    - Run `matrix_review` over FT/PDF context, `scope-brief.md`,
      `source-row-inventory.md` / dictionary / mockup context when present, and
      `test-design-matrix.md`.
+   - Re-derive the coverage plan from FT/PDF/XHTML/support before trusting the
+     writer matrix. Check visible field names, button/action labels, table rows,
+     mockup figures and disputed source/support notes directly against the
+     source package. A matrix cannot be accepted when reviewer only validates
+     matrix formatting or traceability tokens.
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".
    - Default behavior: run reviewer in a separate Codex task/session. If thread
@@ -273,16 +282,25 @@ Rules:
 
 Matrix review gate:
 
-- Canonical TC writing is unlocked by verdict `matrix-accepted` from
-  `test-design-matrix-review.md`, or by exactly one bounded matrix repair after
-  `matrix-changes-required`, recorded in `matrix-repair-summary.md`.
+- Canonical TC writing is unlocked only by verdict `matrix-accepted` from
+  `test-design-matrix-review.md`. If the first matrix review returns
+  `matrix-changes-required`, the writer may perform exactly one bounded matrix
+  repair, record it in `matrix-repair-summary.md`, but the repaired matrix must
+  pass one matrix re-review before any canonical `TC-*` writing starts.
 - `matrix-accepted` means every current-scope source obligation is represented
-  as a planned TC, a class-specific deferred TC, or a narrow documented gap;
+  as a planned TC, a class-specific deferred TC, or a narrow documented gap, and
+  the reviewer has independently checked the plan against FT/PDF/XHTML/support
+  rather than relying on writer's matrix alone;
 - `matrix-changes-required` means writer can repair the matrix in one bounded
-  revision. After this repair, do not run a second matrix review by default; TC
-  reviewer will judge the repaired matrix together with the canonical test cases;
+  revision and route the repaired matrix to one independent matrix re-review;
+  canonical TC writing remains blocked until the verdict is `matrix-accepted`;
 - `matrix-rejected` means the coverage plan is materially unreliable and TC
   review must stop until the matrix is rebuilt.
+- Matrix review must block a plan that uses one representative invalid value as
+  complete coverage for a source-backed restriction, omits applicable classes
+  from `coverage-class-catalog.md`, creates standalone tests from glossary/status
+  rows when later FT sections define real actions, or plans TC whose expected
+  result has no observable UI/API/document artifact.
 
 ## Mandatory coverage class decomposition
 
@@ -357,6 +375,11 @@ Before handing off to reviewer, the writer checks every canonical file:
   `ATOM-*`, `ASSERT-*`, hashes, source rows or abstract obligations;
 - expected result is observable in UI/API/document output or explicitly marked
   `blocked-observability`;
+- business states/statuses are separated from observable artifacts: keep values
+  such as `Подтвержден` / `Скрыт` as setup/business state, but verify the
+  displayed indicator, available action, row visibility, API field or generated
+  output; do not expect status text unless source/support/UI evidence says it is
+  visible;
 - one test case has one main expected result;
 - positive, negative and boundary coverage is driven by the FT text, dictionaries
   and support notes, not by one-code-one-case mechanics;
@@ -365,6 +388,10 @@ Before handing off to reviewer, the writer checks every canonical file:
 - if DaData or another integration is in scope, test cases use a fixed verified
   fixture with exact query/input and exact expected suggestion/result; do not ask
   the tester to call a live service during test execution.
+- final TC source navigation stays slim: `Трассировка` carries codes/atoms/section,
+  while `Источник / цитата требования` carries only a short real quote. Do not
+  duplicate the same `ATOM-*`/`SRC-*`/section list again in `Ссылка на ФТ` or
+  `Источник требования` unless those fields add nonduplicating navigation.
 
 ## Practical-route heavy-artifact guard
 
@@ -412,6 +439,9 @@ the test case with `candidate-ui-calibration`, `blocked-observability` or
 The practical reviewer must block:
 
 - a matrix that has not been independently checked against FT/PDF/XHTML/support;
+- a matrix review that does not show source-side checks for coverage, field/button
+  labels, table rows, mockup figures and disputed notes that are relevant to the
+  scope;
 - a suite that claims independent sign-off without separate-session evidence;
 - any final verdict called `signed-off` when `independent_signoff_claim_allowed`
   is not `yes`;
@@ -434,6 +464,9 @@ The practical reviewer must block:
   when Russian human-readable wording is expected;
 - use of status/glossary rows as standalone tests when later FT sections define
   the actual behavior.
+- TC whose expected result verifies only a business/internal state label without
+  a concrete observable artifact, or assumes visible status text when source/UI
+  evidence only supports an indicator/action/list visibility/API field.
 
 The reviewer should not require heavy process artifacts when the matrix,
 scope brief and canonical test cases are sufficient to prove coverage.

@@ -17,6 +17,7 @@ Before writing `TC-*`, check whether the scope contains:
 - exact length and allowed-symbol classes;
 - conditional branches and dependencies;
 - state transition or navigation;
+- business state/status vs observable artifact;
 - persistence after save/reopen;
 - calculation oracle;
 - integration/API/async/internal effects;
@@ -30,9 +31,15 @@ Before writing `TC-*`, check whether the scope contains:
 - Add a baseline case only when the expected behavior follows from the FT or allowed package materials.
 - If a dimension applies but the oracle is not described, record `GAP-*` / `unclear`.
 - Do not close internal/integration/API/async/persistence behavior with a UI-only test case unless there is an observable artifact.
+- Do not close status/lifecycle behavior with an internal/business state label
+  alone. Name the observable artifact: UI indicator/color, available action, row
+  visibility, badge/text only when actually displayed, API field or generated
+  document output.
 - For conditional visibility, check the positive branch and the inverse branch when inverse behavior follows from the requirement; otherwise record a gap.
 - For a closed list, check expected values and absence of extra values only when closed-set behavior follows from the source.
 - For numeric/date/length/mask rules, load the deep coverage reference for the relevant scenario.
+- For common field rules, first apply `coverage-class-catalog.md` quick matrix:
+  digits-only, text/letters, dictionary/autocomplete, date and requiredness.
 - For numeric-only, exact length, repeatable/action-created blocks, checkbox-list, and generated documents, use `Coverage Obligation Table`; do not stop at one generic TC.
 - For allowed-symbol/input restrictions, do not replace class coverage with one mixed invalid value. If the source says `only ...`, decompose it into source-derivable classes: valid representative, whitespace, alphabet/script class, special/disallowed symbols, and relevant boundaries. Unknown UI reaction for a class becomes a narrow `GAP-*` / `candidate-ui-calibration`, not silent coverage.
 - For concrete domain test data, prove its provenance before marking a TC executable: source literal, dictionary value, verified fixture, execution-relative formula, or neutral synthetic value for an unrestricted free-text field. If the value is source-bound by integration, dictionary, rights, status, search/filter, autofill, backend mapping or similar business logic, a plausible synthetic value is not enough.

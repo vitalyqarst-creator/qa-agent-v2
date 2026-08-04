@@ -37,10 +37,11 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("Do not stop for user confirmation", route)
         self.assertIn("matrix-only writer handoff -> independent matrix review", route)
         self.assertIn("one bounded TC revision", route)
-        self.assertIn("without a second matrix review by default", route)
+        self.assertIn("one independent matrix re-review", route)
+        self.assertIn("stop before TC", route)
         self.assertIn("without a second TC review by default", route)
         self.assertIn("Default review budget per scope is capped", route)
-        self.assertIn("Do not start a second matrix review", route)
+        self.assertIn("Do not start an extra matrix review", route)
         self.assertIn("baseline after bounded revision", skills)
         self.assertIn("fast path", route)
         self.assertIn("without user confirmation", routing)
@@ -119,7 +120,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("do not create or modify", writer)
         self.assertIn("fail closed unless", writer)
         self.assertIn("This pass must run before canonical test-case writing", reviewer)
-        self.assertIn("If both the accepted matrix and bounded matrix repair are", reviewer)
+        self.assertIn("If an accepted matrix review is absent", reviewer)
 
     def test_practical_route_caps_default_review_rounds(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
@@ -138,14 +139,14 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         )
 
         for content in (route, skills, reviewer, routing):
-            self.assertIn("second matrix review", content)
+            self.assertIn("matrix re-review", content)
             self.assertIn("second TC review", content)
 
-        self.assertIn("второй matrix review", agents)
+        self.assertIn("повторный matrix review", agents)
         self.assertIn("второй TC review", agents)
         self.assertIn("matrix-repair-summary.md", route)
-        self.assertIn("matrix-repair-summary.md", writer)
-        self.assertIn("matrix-repair-summary.md", reviewer)
+        self.assertIn("matrix-changes-required", writer)
+        self.assertIn("matrix-changes-required", reviewer)
         self.assertIn("one bounded writer repair/revision", route)
         self.assertIn("at most one bounded TC revision", writer)
         self.assertIn("one bounded revision", routing)

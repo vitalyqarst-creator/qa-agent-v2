@@ -31,14 +31,15 @@ description: Делает review существующих тест-кейсов 
   writing. It has two gates by default:
   1) `matrix_review` checks `test-design-matrix.md` before any canonical TC is
      written;
-  2) `tc_review` checks canonical test cases only after the matrix was accepted
-     or once repaired from `matrix-changes-required`.
+  2) `tc_review` checks canonical test cases only after the matrix was accepted.
   Each gate runs from a separate Codex task/session by default and produces
   review evidence. It must not require source assertion receipts, semantic
   bridge, immutable runner attempts, benchmark artifacts, separate structure
   preflight, separate final-format review or semantic regression unless the user
-  explicitly selected those routes. It must not request a second matrix review
-  or second TC review by default; after one bounded writer revision, remaining
+  explicitly selected those routes. If matrix review returns
+  `matrix-changes-required`, exactly one bounded matrix repair and one matrix re-review
+  are allowed before TC writing. It must not request extra matrix reviews or a
+  second TC review by default; after one bounded writer revision, remaining
   execution uncertainty is represented by TC statuses.
 - `full` — канонический режим по умолчанию для direct review. Выполняет `traceability`, затем `structure`, затем `test-design`; возвращает findings и traceability matrix при необходимости. Direct `full` не заменяет session-based sign-off: для `signed-off` используй `ft-test-case-iteration`.
 - `traceability` — строит traceability matrix по атомарным утверждениям ФТ и проверяет, что каждое утверждение покрыто тест-кейсом или зафиксировано как `gap` / `unclear`.
@@ -109,10 +110,9 @@ verdict: `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`. Do
 not produce final TC sign-off from this pass.
 
 For `tc_review`, return `review-findings.md` and verify that
-`test-design-matrix-review.md` has verdict `matrix-accepted`, or verdict
-`matrix-changes-required` with one bounded `matrix-repair-summary.md`, before
-judging TC coverage. If both the accepted matrix and bounded matrix repair are
-absent, block TC review and route back to matrix review.
+`test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
+coverage. If an accepted matrix review is absent, block TC review and route back
+to matrix review.
 
 Also verify `review-independence.md` for each gate. If the reviewer was not run
 in a separate Codex task/session or received writer transcript/private reasoning,

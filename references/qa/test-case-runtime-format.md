@@ -30,6 +30,13 @@
 - If one `TC-*` references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`), split it unless a single visible source-backed workflow has explicit `**Сценарное обоснование:**` and separate atomic coverage remains traceable.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
 - `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
+- A runtime `TC-*` is materially useless and must be rewritten or downgraded to
+  an explicit non-executable status when it has no concrete object under test,
+  no concrete screen/card/form/action location, a step like "проверить
+  доступность использования" without the exact usage place/action, a
+  precondition that performs the main check instead of setup, an expected result
+  that merely repeats the requirement without an observable artifact, or a link
+  to steps of another `TC-*` instead of self-contained reproduction.
 - Не помещай проверяемое действие в предусловия. Для созданного/выбранного/настроенного UI-state укажи путь: setup-действие пользователя с кнопкой/полем/значением/блоком или fixture/setup artifact; если путь неизвестен, используй `GAP-*` / `unclear`.
 - `Предусловия`: numbered action setup или fixture/API/profile, not magic states or passive states. `Дождаться...` / `Убедиться...` допустимо только после setup; unknown path = `GAP-*` / `unclear`; vague setup (`выбрать или ввести`, `при необходимости`, `если нужно`) запрещен.
 - Production files under `fts/**/test-cases/*.md` must be self-contained: no setup profile references, stand/environment wording, project/package leakage, or create-or-take alternatives; action-created fields must include the reveal action in preconditions, e.g. `Добавить контактное лицо` before `Фамилия`/`Имя`/`Отчество`.
@@ -37,6 +44,12 @@
 - Все исполнимые разделы production `TC-*`, включая `Постусловия`, не должны содержать служебные маркеры агентного процесса (`runtime receipt`, `manifest digest`, `hash-bound`, `fixture-blocked`, `source-backed`, `writer`, `reviewer`, `runner`). Переводи их в конкретные действия, данные и наблюдаемые результаты; служебную квалификацию храни только в work/review artifacts.
 - В шагах описывай действие пользователя, а не внутреннюю реализацию.
 - Expected result должен быть наблюдаемым: visible UI state, accepted/rejected value, saved/not saved state, navigation blocked/opened, generated document, message, API/log artifact only if source explicitly allows it.
+- Separate business state from observable evidence. A source status such as
+  `Подтвержден`, `Скрыт`, `active`, `archived`, `approved` or `hidden` may be
+  stored internally while the runtime UI shows only an indicator, available
+  action, badge, row visibility, API field or document output. The expected
+  result must name the observable artifact. Do not expect a visible status text
+  unless the source/support/UI evidence says that this text is displayed.
 - Не используй invisible oracle: `считается невалидным`, `корректно обрабатывается`, `соответствует ФТ`, `по системному правилу`.
 - Не используй альтернативные negative oracles через `или`: `значение очищено, не сохранено или поле подсвечено`, `символ отклонен или значение осталось пустым/предыдущим`. Выбери один подтвержденный observable oracle или оформи `GAP-*` / `unclear`.
 - Не используй source-rule oracle: `по правилу из источника`, `по правилу видимости из источника`, `согласно источнику`, `согласно ФТ` вместо конкретного наблюдаемого результата.

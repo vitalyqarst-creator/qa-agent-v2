@@ -25,6 +25,24 @@ source-backed rule into representative classes, then map every class to one of:
 One mixed invalid value must not claim coverage for several independently
 derivable invalid classes.
 
+## Quick field-rule matrix
+
+Use this table before writing `test-design-matrix.md`. It is the minimum
+practical decomposition for the most common FT field rules. If a class applies
+but exact UI reaction is unknown, keep the class and mark the planned TC as
+`candidate-ui-calibration` or `blocked-observability`; do not remove it.
+
+| Source rule | Minimum classes to represent in `test-design-matrix.md` |
+| --- | --- |
+| `только цифры` / digits-only | valid digits; Latin letters; Cyrillic letters; spaces; hyphen/plus/minus sign; dot/comma decimal separator; other special symbol; if length is defined: `N-1`/min-1, exact/min valid length, `N+1`/max+1 |
+| text / only Cyrillic / letters-only / name-like field | valid Cyrillic text; allowed separator such as hyphen when source allows it; Latin letters when not allowed; digits; spaces when not allowed; apostrophe; dot/comma; other special symbol |
+| dictionary / closed list / autocomplete / integration-backed selector | every source-listed value or a justified full relevant subset; empty value when required; exact-value search when applicable; partial search when applicable; invalid/free-text value when manual input is possible or closed-set behavior must be proven; no-result query only with verified fixture/evidence |
+| date / date-time / current-date-dependent rule | valid date in source format; current date `D`; `D-1`; `D+1`; minimum boundary when defined; maximum boundary when defined; invalid format; impossible calendar date; empty value when required |
+| required field | empty value with the source-backed trigger/commit action; filled valid value; split by input mechanism: typed field, dictionary/autocomplete selection, system-filled, dependent autofill, readonly, repeatable-row/action-created, conditional requiredness |
+
+The quick matrix is intentionally not a Cartesian-product generator. Activate
+only the classes that follow from the current source rule.
+
 ## Input format / allowed symbols
 
 ### `digits-only` / numeric-symbol input
@@ -38,9 +56,12 @@ Minimum classes:
 - Latin letters;
 - Cyrillic letters;
 - spaces;
-- hyphen or sign;
-- decimal separator;
+- hyphen or sign, including plus/minus sign;
+- dot or comma decimal separator;
 - punctuation or special symbol.
+
+If the same field also has exact/min/max length, include the corresponding
+length boundary classes for the same source row in the matrix.
 
 ### text-only / name-like input
 
@@ -54,6 +75,7 @@ Minimum classes:
 - digits;
 - Latin letters when language is not explicitly allowed;
 - spaces when the source does not explicitly allow spaces;
+- apostrophe when it is not explicitly allowed;
 - dot/comma;
 - punctuation or special symbol.
 
@@ -202,8 +224,9 @@ or another selectable/autocomplete source.
 
 Minimum classes:
 
-- valid value from the full relevant dictionary/list or a justified
-  representative set;
+- valid values from the full relevant dictionary/list, or a justified full
+  relevant subset when the list is too large for one TC;
+- empty value when the field is required;
 - search by exact value, if search/autocomplete is source-backed;
 - search by partial value, if search/autocomplete is source-backed;
 - value outside the list only if closed-set behavior follows from source/support
@@ -273,6 +296,13 @@ Do not create standalone tests for glossary/status-table rows when later FT
 sections define the actual screen, action and expected result. Use those rows as
 supporting source context.
 
+Separate business state from the observable result. A status such as
+`Подтвержден` / `Скрыт`, `active` / `archived` or `approved` / `hidden` may be a
+business state, while the UI may expose it through a color indicator, available
+action, list presence, badge, API field or document output. The planned TC must
+name the observable artifact it checks. Do not expect status text unless the
+source/support/UI evidence confirms that the text is actually displayed.
+
 ## Cross-field dependencies and combinations
 
 Use when one field/action changes requiredness, visibility, available values,
@@ -319,3 +349,5 @@ Reviewer must block or return findings when:
   or a fixture need;
 - boundary classes are missing for exact length, min/max range, date/current-date
   or file size limits.
+- status/lifecycle coverage checks only an internal/business state label and
+  does not name an observable UI/API/document artifact.

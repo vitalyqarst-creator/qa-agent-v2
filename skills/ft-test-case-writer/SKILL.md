@@ -27,8 +27,9 @@ benchmark-grade process evidence. It is split into two writer passes:
 - first write only `test-design-matrix.md` and route it to independent matrix
   review;
 - write the canonical test-case file only after `test-design-matrix-review.md`
-  has verdict `matrix-accepted`, or after one bounded matrix repair from
-  `matrix-changes-required` is recorded in `matrix-repair-summary.md`;
+  has verdict `matrix-accepted`; if the matrix review returns
+  `matrix-changes-required`, repair only the matrix and route it to one matrix
+  re-review before any canonical TC writing;
 - create `dictionary-inventory.md`, `fixture-catalog.md` or BA-question files
   only when the current scope needs them;
 - require `source-parity-check.md` before writing when the main FT has both
@@ -69,8 +70,7 @@ only when explicitly requested by the user or by an already selected route.
   `initial_draft`, `revision_from_findings`, or remediation;
 - for `practical_v0_8_tc_after_matrix_accepted`: accepted
   `test-design-matrix-review.md` and `review-independence.md` from a separate
-  reviewer session, or `matrix-changes-required` plus one bounded
-  `matrix-repair-summary.md`;
+  reviewer session;
 - for `revision_from_findings`: existing test-case suite, structured findings artifact, review round number, `review_mode`, and traceability matrix when available.
 
 If a verified `stage-package.json` is provided, use the prepared fast path: read only the four package files, do not repeat source discovery/extraction, and access the full source only through the targeted fallback contract from [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).
@@ -109,10 +109,9 @@ For source-first packages, follow the accepted exact-digest contract; conflicts 
   accepted matrix review exists, this still means matrix-only first.
 - In `practical_v0_8_tc_after_matrix_accepted`, fail closed unless
   `test-design-matrix-review.md` exists, `review-independence.md` records a
-  separate reviewer session, and either the verdict is `matrix-accepted` or the
-  verdict is `matrix-changes-required` with exactly one bounded
-  `matrix-repair-summary.md`. A same-session or missing matrix review cannot
-  unlock canonical TC writing.
+  separate reviewer session, and the verdict is `matrix-accepted`. A
+  same-session review, missing review, or unre-reviewed `matrix-changes-required`
+  repair cannot unlock canonical TC writing.
 - In `practical_v0_8`, Markdown `test-design-matrix.md` is the required matrix
   artifact and XLSX is optional only by explicit user request. In
   session-based/promotion routes, follow the route-specific XLSX companion
