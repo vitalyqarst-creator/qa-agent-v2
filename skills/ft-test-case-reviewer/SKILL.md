@@ -116,7 +116,8 @@ prompt. It must list accepted scopes, blocked/`round-cap-reached` scopes,
 concrete blocker reasons, whether TC can be written with explicit statuses, and
 the next safe step. It must also record `code_root`, `ft_package_root`,
 `artifact_write_root`, `root_split_allowed`, `next_stage_transition`,
-`per_scope_next_stage_transitions` for package-level `writer conditional`,
+`per_scope_next_stage_transitions` for package-level `writer conditional` or
+`tc-review conditional`,
 `validator_errors_classification` and `validator_warnings_classification` when
 validation was run, plus `source_restore_provenance` and
 `source_restore_sha256` when source files were restored or copied. Link the
@@ -127,8 +128,10 @@ reached, do not treat that as automatic failure to write TC: when the source
 obligation is clear and only test data, UI reaction, observability or future
 calibration is missing, the next safe step is TC writing with
 `candidate-ui-calibration`, `needs-test-data`, `blocked-observability` or
-`needs-future-clarification`. Block TC writing only for source contradictions or
-obligations that cannot be represented without inventing behavior.
+`needs-future-clarification`. Record `source_contradiction: yes/no` per
+round-cap scope. Block TC writing only for source contradiction
+(`source_contradiction: yes`) or obligations that cannot be represented without
+inventing behavior.
 
 For `tc_review`, return `review-findings.md` and verify that
 `test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC

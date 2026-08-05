@@ -576,7 +576,7 @@ Writer не должен закрывать gaps предположениями.
 
 Split artifact heading policy: each split artifact must contain exactly one canonical section heading matching its section title. Accepted levels are `# Section` or `## Section`; missing/wrong headings and adjacent duplicates such as `# Section` plus `## Section` block writer-ready handoff.
 
-Для `initial_draft` перед `Writer Self-Check` обязателен split artifact `writer-quality-gate.md` с секцией `Writer Quality Gate` по [writer-quality-gate-format.md](writer-quality-gate-format.md).
+Для `initial_draft` перед `Writer Self-Check` обязателен split artifact `writer-quality-gate.md` с секцией `Writer Quality Gate` по [writer-quality-gate-format.md](writer-quality-gate-format.md). Не вставляй `## Writer Quality Gate` в production `fts/**/test-cases/*.md`: validator не должен принимать embedded gate как основание для `ready-for-review`.
 
 
 Gate является admission control перед review. Writer не должен ставить `stage_status: ready-for-review`, если gate содержит `status = fail` и `blocks_ready_for_review = yes`.

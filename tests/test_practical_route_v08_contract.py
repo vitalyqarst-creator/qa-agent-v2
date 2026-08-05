@@ -119,6 +119,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("validator_errors_count", content)
         self.assertIn("validator_warnings_count", content)
         self.assertIn("per_scope_next_stage_transitions", content)
+        self.assertIn("tc-review conditional", content)
+        self.assertIn("source_contradiction: yes/no", content)
         self.assertIn("source_restore_sha256", content)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:

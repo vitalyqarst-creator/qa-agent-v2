@@ -1781,6 +1781,20 @@ def split_test_design_artifact_paths(path: Path) -> dict[str, Path]:
     return paths
 
 
+def split_writer_quality_gate_path(path: Path) -> Path | None:
+    return split_test_design_artifact_paths(path).get("Writer Quality Gate")
+
+
+def split_writer_quality_gate_validation_content(path: Path) -> str | None:
+    gate_path = split_writer_quality_gate_path(path)
+    if gate_path is None:
+        return None
+    return normalize_split_test_design_section(
+        "Writer Quality Gate",
+        gate_path.read_text(encoding="utf-8"),
+    )
+
+
 def collapse_redundant_section_heading(content: str, section_title: str) -> str:
     pattern = re.compile(
         rf"(^|\n)#\s+{re.escape(section_title)}\s*\n(?:[ \t]*\n)*"
@@ -4572,8 +4586,15 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
     "writer allowed",
     "writer conditional",
     "writer blocked",
+    "tc-review allowed",
+    "tc-review conditional",
+    "tc-review blocked",
     "not-applicable",
     "not applicable",
+}
+PRACTICAL_STAGE_SUMMARY_CONDITIONAL_TRANSITIONS = {
+    "writer conditional",
+    "tc-review conditional",
 }
 PRACTICAL_STAGE_SUMMARY_ALLOWED_WARNING_CLASSIFICATIONS = {
     "none",
@@ -4593,6 +4614,19 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS = {
     "not-applicable",
     "not applicable",
 }
+ROUND_CAP_SOURCE_CONTRADICTION_RE = re.compile(
+    r"source[_ -]?contradiction\s*(?:=|:|\|)\s*`?(?:yes|no|true|false|да|нет)`?",
+    flags=re.IGNORECASE,
+)
+ROUND_CAP_GENERIC_CONTROLLER_BLOCK_RE = re.compile(
+    r"explicit\s+controller\s+decision\s+required|явн\w+\s+решени\w+\s+controller|"
+    r"решени\w+\s+контроллер\w+",
+    flags=re.IGNORECASE,
+)
+ROUND_CAP_TC_WITH_STATUS_RE = re.compile(
+    r"candidate-ui-calibration|needs-test-data|blocked-observability|needs-future-clarification",
+    flags=re.IGNORECASE,
+)
 
 
 def strip_markdown_code(value: str) -> str:
@@ -4838,11 +4872,12 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 severity="error",
                 category="practical-stage-summary",
                 title="Practical stage summary lacks explicit next-stage transition status",
-                details="The summary must state whether writer is allowed, conditional, or blocked.",
+                details="The summary must state whether writer/TC review is allowed, conditional, or blocked.",
                 path=display_path,
                 evidence=[f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}"],
                 recommended_action=(
-                    "Add next_stage_transition as writer allowed, writer conditional, writer blocked or not-applicable."
+                    "Add next_stage_transition as writer allowed/conditional/blocked, "
+                    "tc-review allowed/conditional/blocked, or not-applicable."
                 ),
             )
         )
@@ -4870,13 +4905,13 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     ),
                 )
             )
-        if transition == "writer allowed":
+        if transition in {"writer allowed", "tc-review allowed"}:
             findings.append(
                 Finding(
                     id="practical-stage-summary-validator-errors-allow-writer-unconditionally",
                     severity="error",
                     category="practical-stage-summary",
-                    title="Practical stage summary allows writer despite validator errors",
+                    title="Practical stage summary allows next stage despite validator errors",
                     details=(
                         "When errors_count > 0, the next-stage route must be conditional or blocked until the "
                         "errors are fixed or explicitly waived."
@@ -4886,7 +4921,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                         f"validator_errors_count={validator_errors_count}",
                         f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}",
                     ],
-                    recommended_action="Use writer conditional or writer blocked, with the exact error classification.",
+                    recommended_action="Use a conditional or blocked transition, with the exact error classification.",
                 )
             )
 
@@ -4917,16 +4952,16 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     ),
                 )
             )
-        if transition == "writer allowed" and warning_classification in {"blocking-for-scope", "mixed"}:
+        if transition in {"writer allowed", "tc-review allowed"} and warning_classification in {"blocking-for-scope", "mixed"}:
             findings.append(
                 Finding(
                     id="practical-stage-summary-validator-warnings-allow-writer-unconditionally",
                     severity="error",
                     category="practical-stage-summary",
-                    title="Practical stage summary allows writer despite scope-blocking warnings",
+                    title="Practical stage summary allows next stage despite scope-blocking warnings",
                     details=(
-                        "Scope-blocking or mixed warnings require per-scope writer conditional/blocked routing, "
-                        "not unconditional package-level writer allowed."
+                        "Scope-blocking or mixed warnings require per-scope conditional/blocked routing, "
+                        "not unconditional package-level writer/review allowed."
                     ),
                     path=display_path,
                     evidence=[
@@ -4935,22 +4970,23 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                         f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}",
                     ],
                     recommended_action=(
-                        "Use writer conditional and list per-scope transitions, or resolve the warnings first."
+                        "Use a conditional transition and list per-scope transitions, or resolve the warnings first."
                     ),
                 )
             )
 
     per_scope_transitions = fields.get("per_scope_next_stage_transitions", "")
-    if transition == "writer conditional" and field_is_not_applicable(per_scope_transitions):
+    if transition in PRACTICAL_STAGE_SUMMARY_CONDITIONAL_TRANSITIONS and field_is_not_applicable(per_scope_transitions):
         findings.append(
             Finding(
                 id="practical-stage-summary-missing-per-scope-transitions",
                 severity="error",
                 category="practical-stage-summary",
-                title="Conditional writer transition lacks per-scope routing",
+                title="Conditional next-stage transition lacks per-scope routing",
                 details=(
-                    "A package-level writer conditional state must say which scopes are allowed, conditional, or "
-                    "blocked so one scope-local warning does not unnecessarily stop all scopes."
+                    "A package-level conditional state must say which scopes are allowed, conditional, or "
+                    "blocked for the next writer/review stage so one scope-local warning does not unnecessarily "
+                    "stop all scopes."
                 ),
                 path=display_path,
                 evidence=[f"per_scope_next_stage_transitions={fields.get('per_scope_next_stage_transitions', '<missing>')}"],
@@ -4961,6 +4997,53 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
         )
 
     restore_mentioned = bool(re.search(r"\brestor(?:e|ed|ing)\b|восстанов", content, flags=re.IGNORECASE))
+    if "round-cap" in content.lower():
+        has_source_contradiction_classification = bool(ROUND_CAP_SOURCE_CONTRADICTION_RE.search(content))
+        has_tc_with_status_decision = bool(ROUND_CAP_TC_WITH_STATUS_RE.search(content))
+        if not has_source_contradiction_classification:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-round-cap-missing-source-contradiction-classification",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Round-cap scope lacks source-contradiction classification",
+                    details=(
+                        "After the bounded matrix repair/re-review, a round-cap scope must classify whether "
+                        "the residual issue is a source contradiction. Without `source_contradiction: yes/no`, "
+                        "the next writer route cannot know whether to block or write TC with explicit statuses."
+                    ),
+                    path=display_path,
+                    evidence=["round-cap mentioned but no source_contradiction yes/no classification found"],
+                    recommended_action=(
+                        "For every round-cap scope add `source_contradiction: yes` or "
+                        "`source_contradiction: no`; if `no`, state which TC statuses are allowed."
+                    ),
+                )
+            )
+        if ROUND_CAP_GENERIC_CONTROLLER_BLOCK_RE.search(content) and (
+            not has_source_contradiction_classification or not has_tc_with_status_decision
+        ):
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-round-cap-generic-controller-block",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Round-cap summary blocks on generic controller decision",
+                    details=(
+                        "A generic controller/user decision is not a valid practical default. If there is no "
+                        "source contradiction, the scope should advance to TC writing with statuses such as "
+                        "`candidate-ui-calibration`, `needs-test-data` or `blocked-observability`; if there is "
+                        "a source contradiction, the summary must name it as the blocker."
+                    ),
+                    path=display_path,
+                    evidence=["generic controller decision required"],
+                    recommended_action=(
+                        "Replace the generic block with per-scope `source_contradiction` and "
+                        "`tc_with_status_decision` evidence."
+                    ),
+                )
+            )
+
     source_restore_provenance = fields.get("source_restore_provenance", "")
     source_restore_sha256 = fields.get("source_restore_sha256", "")
     if restore_mentioned and field_is_not_applicable(source_restore_provenance):
@@ -16587,14 +16670,67 @@ def validate_test_case_file(
     findings.extend(design_review_findings)
     checks.extend(design_review_checks)
 
-    writer_gate_findings, writer_gate_checks = validate_writer_quality_gate(
-        content,
-        path,
-        root,
-        suppress_blocked_input_failures=suppress_blocked_input_gate_failures,
-    )
-    findings.extend(writer_gate_findings)
-    checks.extend(writer_gate_checks)
+    if is_production_test_case_path(path):
+        gate_artifact = split_writer_quality_gate_path(path)
+        if gate_artifact is not None:
+            try:
+                gate_content = split_writer_quality_gate_validation_content(path)
+            except UnicodeDecodeError as exc:
+                findings.append(
+                    Finding(
+                        id="writer-quality-gate-not-utf8",
+                        severity="warning",
+                        category="test-case-format",
+                        title="Writer Quality Gate split artifact is not UTF-8",
+                        details=str(exc),
+                        path=rel(gate_artifact, root),
+                        evidence=[],
+                        recommended_action="Save writer-quality-gate.md as UTF-8.",
+                    )
+                )
+                checks.append(Check("writer-quality-gate", "warn", "Writer Quality Gate split artifact is not UTF-8.", rel(gate_artifact, root)))
+                gate_content = None
+            if gate_content is not None:
+                writer_gate_findings, writer_gate_checks = validate_writer_quality_gate(
+                    gate_content,
+                    gate_artifact,
+                    root,
+                    suppress_blocked_input_failures=suppress_blocked_input_gate_failures,
+                )
+                findings.extend(writer_gate_findings)
+                checks.extend(writer_gate_checks)
+        elif should_require_writer_quality_gate(content):
+            findings.append(
+                Finding(
+                    id="writer-quality-gate-missing",
+                    severity="warning",
+                    category="test-case-format",
+                    title="Package-based test-case file has no split Writer Quality Gate",
+                    details=(
+                        "Production test-case files must not embed Writer Quality Gate. "
+                        "The writer quality gate must be stored as the split artifact "
+                        "`work/test-design/<scope-slug>/writer-quality-gate.md`."
+                    ),
+                    path=display_path,
+                    evidence=[f"expected={rel((split_test_design_dir_for_test_case(path) or path.parent) / 'writer-quality-gate.md', root)}"],
+                    recommended_action=(
+                        "Move `## Writer Quality Gate` to `work/test-design/<scope-slug>/writer-quality-gate.md` "
+                        "and keep the production test-case file free of internal diagnostic sections."
+                    ),
+                )
+            )
+            checks.append(Check("writer-quality-gate", "warn", "Split Writer Quality Gate is missing.", display_path))
+        else:
+            checks.append(Check("writer-quality-gate", "pass", "Writer Quality Gate is not required for this legacy/simple file.", display_path))
+    else:
+        writer_gate_findings, writer_gate_checks = validate_writer_quality_gate(
+            content,
+            path,
+            root,
+            suppress_blocked_input_failures=suppress_blocked_input_gate_failures,
+        )
+        findings.extend(writer_gate_findings)
+        checks.extend(writer_gate_checks)
 
     self_check_findings, self_check_checks = validate_writer_self_check_sections(content, path, root)
     findings.extend(self_check_findings)
@@ -20025,12 +20161,28 @@ def validate_workflow_state(
                 except UnicodeDecodeError:
                     gate_errors.append(f"{rel(test_case_artifact, root)}:not-utf8")
                     continue
-                gate_summary = writer_quality_gate_summary(test_case_content)
                 artifact_label = rel(test_case_artifact, root)
                 blocking_findings = ready_for_review_blocking_test_case_findings(test_case_artifact, root)
                 for blocking_finding in blocking_findings:
                     evidence = "; ".join(blocking_finding.evidence[:2]) if blocking_finding.evidence else "-"
                     blocking_quality_errors.append(f"{artifact_label}:{blocking_finding.id}:{evidence[:180]}")
+                gate_artifact = split_writer_quality_gate_path(test_case_artifact)
+                if gate_artifact is None:
+                    expected_gate_path = (split_test_design_dir_for_test_case(test_case_artifact) or test_case_artifact.parent) / "writer-quality-gate.md"
+                    gate_errors.append(
+                        f"{artifact_label}:missing split Writer Quality Gate at {rel(expected_gate_path, root)}"
+                    )
+                    continue
+                try:
+                    gate_content = split_writer_quality_gate_validation_content(test_case_artifact)
+                except UnicodeDecodeError:
+                    gate_errors.append(f"{rel(gate_artifact, root)}:not-utf8")
+                    continue
+                if gate_content is None:
+                    gate_errors.append(f"{artifact_label}:missing split Writer Quality Gate")
+                    continue
+                gate_summary = writer_quality_gate_summary(gate_content)
+                artifact_label = rel(gate_artifact, root)
                 if not gate_summary["present"]:
                     gate_errors.append(f"{artifact_label}:missing Writer Quality Gate")
                     continue
@@ -20062,13 +20214,14 @@ def validate_workflow_state(
                         title="ready-for-review conflicts with Writer Quality Gate",
                         details=(
                             "Writer handoff cannot be ready for reviewer unless each canonical test-case file has "
-                            "a complete passing Writer Quality Gate."
+                            "a complete passing split Writer Quality Gate in "
+                            "`work/test-design/<scope-slug>/writer-quality-gate.md`."
                         ),
                         path=display_path,
                         evidence=gate_errors[:20],
                         recommended_action=(
-                            "Rewrite affected packages, complete the Writer Quality Gate, or set stage_status to "
-                            "blocked-input instead of ready-for-review."
+                            "Move Writer Quality Gate out of production test-case files into the split artifact, "
+                            "complete the gate, or set stage_status to blocked-input instead of ready-for-review."
                         ),
                     )
                 )

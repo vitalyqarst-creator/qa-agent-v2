@@ -196,6 +196,70 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
 
         self.assertIn("practical-stage-summary-missing-per-scope-transitions", ids)
 
+    def test_rejects_conditional_tc_review_without_per_scope_transitions(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="blocking-for-scope",
+                next_stage_transition="tc-review conditional",
+                per_scope_next_stage_transitions="not-applicable",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-missing-per-scope-transitions", ids)
+
+    def test_rejects_unconditional_tc_review_for_scope_blocking_warnings(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="blocking-for-scope",
+                next_stage_transition="tc-review allowed",
+                per_scope_next_stage_transitions="yes",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-warnings-allow-writer-unconditionally", ids)
+
+    def test_rejects_round_cap_without_source_contradiction_classification(self) -> None:
+        root = self.make_package(
+            next_stage_transition="writer conditional",
+            per_scope_next_stage_transitions="yes",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8")
+            + "\n## Per-Scope Transitions\n\n"
+            + "| Scope | status | safe_next_step |\n"
+            + "| --- | --- | --- |\n"
+            + "| scope-02 | round-cap-reached | explicit controller decision required |\n",
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-round-cap-missing-source-contradiction-classification", ids)
+        self.assertIn("practical-stage-summary-round-cap-generic-controller-block", ids)
+
+    def test_accepts_round_cap_with_status_policy_and_no_source_contradiction(self) -> None:
+        root = self.make_package(
+            next_stage_transition="writer conditional",
+            per_scope_next_stage_transitions="yes",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8")
+            + "\n## Per-Scope Transitions\n\n"
+            + "| Scope | status | source_contradiction | tc_with_status_decision |\n"
+            + "| --- | --- | --- | --- |\n"
+            + "| scope-02 | round-cap-reached | source_contradiction: no | write with `needs-test-data` |\n",
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertNotIn("practical-stage-summary-round-cap-missing-source-contradiction-classification", ids)
+        self.assertNotIn("practical-stage-summary-round-cap-generic-controller-block", ids)
+
     def test_rejects_unconditional_writer_allowed_for_scope_blocking_warnings(self) -> None:
         ids = self.finding_ids(
             self.make_package(

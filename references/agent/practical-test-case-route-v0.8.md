@@ -155,7 +155,8 @@ The summary must list:
 - whether TC can still be written with explicit statuses;
 - the next safe step for each scope;
 - `next_stage_transition`: exactly one of `writer allowed`,
-  `writer conditional`, `writer blocked`, or `not-applicable`.
+  `writer conditional`, `writer blocked`, `tc-review allowed`,
+  `tc-review conditional`, `tc-review blocked`, or `not-applicable`.
 
 If a validator was run, add these fields:
 
@@ -172,9 +173,9 @@ If a validator was run, add these fields:
 | source_restore_sha256 | `<SHA-256 bindings for restored files, or not-applicable>` |
 
 When `validator_errors_count > 0`, the summary must not say unconditional
-`writer allowed`. It must classify the errors and use `writer conditional` or
-`writer blocked` unless every error is explicitly proven irrelevant or a
-validator false positive.
+`writer allowed` or `tc-review allowed`. It must classify the errors and use a
+conditional/blocked transition unless every error is explicitly proven
+irrelevant or a validator false positive.
 
 When `validator_warnings_count > 0`, classify warnings separately from errors:
 
@@ -184,11 +185,12 @@ When `validator_warnings_count > 0`, classify warnings separately from errors:
 - `nonblocking-info`: does not affect the next practical stage;
 - `mixed`: more than one category is present.
 
-A package-level `writer conditional` state must include per-scope transitions:
-which scopes are `writer allowed`, `writer conditional`, or `writer blocked`,
-and why. Do not let a scope-local warning block unrelated accepted scopes. Do
-not write package-level `writer allowed` when warnings are `blocking-for-scope`
-or `mixed`.
+A package-level conditional state must include per-scope transitions: which
+scopes are `writer allowed`, `writer conditional`, `writer blocked`,
+`tc-review allowed`, `tc-review conditional`, or `tc-review blocked`, and why.
+Do not let a scope-local warning block unrelated accepted scopes. Do not write
+package-level `writer allowed` or `tc-review allowed` when warnings are
+`blocking-for-scope` or `mixed`.
 
 When validator errors mention unresolved source/package artifacts, summary must
 distinguish the cause explicitly:
@@ -225,6 +227,12 @@ practical default:
   cannot be represented without inventing a business rule, do not write TC for
   that obligation; keep the scope or obligation as `blocked-source` /
   `blocked-input` and state the exact contradictory source references.
+
+The round-cap summary must be machine-checkable per scope: include
+`source_contradiction: yes/no` and `tc_with_status_decision:
+write-with-statuses / block-source-contradiction`. A generic "controller
+decision required" is not a valid default unless the summary also names the
+source contradiction or the exact status-based TC route.
 
 After each internal handoff, run the relevant validator gate. If the gate fails
 because practical-route infrastructure is inconsistent with this contract, fix
