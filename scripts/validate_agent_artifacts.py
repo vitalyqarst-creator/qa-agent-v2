@@ -1048,20 +1048,112 @@ ROOT_LEVEL_HANDOFF_ARTIFACT_NAMES = {
 }
 
 
+FT_PACKAGE_DIRECT_MARKER_NAMES = {
+    "source",
+    "AGENT-NOTES.md",
+    "test-cases",
+}
+
+
+PRACTICAL_SOURCE_PACKAGE_REQUIRED_ITEMS = {
+    "AGENT-NOTES.md": lambda package_root: (package_root / "AGENT-NOTES.md").is_file(),
+    "source/*.docx": lambda package_root: any(
+        path.is_file() and not path.name.startswith("~$")
+        for path in (package_root / "source").glob("*.docx")
+    )
+    if (package_root / "source").is_dir()
+    else False,
+    "source/*.xhtml": lambda package_root: any((package_root / "source").glob("*.xhtml"))
+    if (package_root / "source").is_dir()
+    else False,
+    "source/*.pdf": lambda package_root: any((package_root / "source").glob("*.pdf"))
+    if (package_root / "source").is_dir()
+    else False,
+}
+
+
+def path_is_under_fts(path: Path) -> bool:
+    return "fts" in path.resolve().parts
+
+
+def has_direct_ft_package_marker(path: Path) -> bool:
+    return any((path / marker).exists() for marker in FT_PACKAGE_DIRECT_MARKER_NAMES)
+
+
+def looks_like_ft_package_root(path: Path) -> bool:
+    return path_is_under_fts(path) and has_direct_ft_package_marker(path)
+
+
+def nearest_ft_package_root(path: Path) -> Path | None:
+    candidates = [path if path.is_dir() else path.parent, *path.parents]
+    for candidate in candidates:
+        if looks_like_ft_package_root(candidate):
+            return candidate
+    return None
+
+
+def dedupe_paths_local(paths: list[Path]) -> list[Path]:
+    deduped: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = path.resolve().as_posix()
+        if key in seen:
+            continue
+        deduped.append(path)
+        seen.add(key)
+    return deduped
+
+
 def iter_ft_package_roots(root: Path) -> list[Path]:
     if root.is_file():
         return []
-    if root.parent.name == "fts" and ((root / "source").is_dir() or (root / "AGENT-NOTES.md").exists()):
-        return [root]
-    fts_root = root / "fts"
-    if fts_root.is_dir():
-        return sorted(
+    search_roots: list[Path]
+    if (root / "fts").is_dir():
+        search_roots = [root / "fts"]
+    elif path_is_under_fts(root) or root.name == "fts":
+        search_roots = [root]
+    else:
+        search_roots = []
+
+    candidates: list[Path] = []
+    for search_root in search_roots:
+        if looks_like_ft_package_root(search_root):
+            candidates.append(search_root)
+        candidates.extend(path for path in search_root.rglob("*") if path.is_dir() and looks_like_ft_package_root(path))
+    return sorted(dedupe_paths_local(candidates))
+
+
+def iter_domain_level_handoff_roots(root: Path, package_roots: list[Path]) -> list[Path]:
+    if root.is_file():
+        return []
+    if (root / "fts").is_dir():
+        domain_roots = [path for path in (root / "fts").iterdir() if path.is_dir()]
+    elif root.name == "fts":
+        domain_roots = [path for path in root.iterdir() if path.is_dir()]
+    elif root.parent.name == "fts":
+        domain_roots = [root]
+    else:
+        return []
+
+    package_root_set = {path.resolve() for path in package_roots}
+    offenders: list[Path] = []
+    for domain_root in domain_roots:
+        nested_package_roots = [
             package_root
-            for package_root in fts_root.iterdir()
-            if package_root.is_dir()
-            and ((package_root / "source").is_dir() or (package_root / "AGENT-NOTES.md").exists())
+            for package_root in package_roots
+            if package_root.resolve() != domain_root.resolve()
+            and path_text_is_within(package_root.resolve().as_posix(), domain_root.resolve().as_posix())
+        ]
+        if not nested_package_roots:
+            continue
+        if domain_root.resolve() in package_root_set:
+            continue
+        has_handoff = (domain_root / "work" / "stage-handoffs").exists() or any(
+            (domain_root / artifact_name).exists() for artifact_name in ROOT_LEVEL_HANDOFF_ARTIFACT_NAMES
         )
-    return []
+        if has_handoff:
+            offenders.append(domain_root)
+    return sorted(dedupe_paths_local(offenders))
 
 
 def validate_ft_package_handoff_layout(root: Path) -> tuple[list[Finding], list[Check]]:
@@ -1070,6 +1162,40 @@ def validate_ft_package_handoff_layout(root: Path) -> tuple[list[Finding], list[
     package_roots = iter_ft_package_roots(root)
     if not package_roots:
         return findings, checks
+
+    for domain_root in iter_domain_level_handoff_roots(root, package_roots):
+        display_path = rel(domain_root, root)
+        findings.append(
+            Finding(
+                id="ft-domain-level-handoff-artifacts",
+                severity="error",
+                category="stage-transition",
+                title="Domain-level folder contains handoff artifacts outside nested FT package",
+                details=(
+                    "When an FT package is nested, for example `fts/<domain>/<ft-package>`, workflow and handoff "
+                    "artifacts must stay under that exact FT package root. Creating `work/stage-handoffs` under "
+                    "`fts/<domain>` masks package-root detection defects and can route later stages to the wrong root."
+                ),
+                path=display_path,
+                evidence=[
+                    f"{display_path}/work/stage-handoffs",
+                    *[rel(package_root, root) for package_root in package_roots if path_text_is_within(package_root.as_posix(), domain_root.as_posix())],
+                ],
+                recommended_action=(
+                    "Remove the domain-level handoff/index artifact and link summaries from workflow-state.yaml files "
+                    "inside the actual FT package root. If the validator cannot discover the nested package, fix the "
+                    "validator/root selection instead of creating artifacts above ft_package_root."
+                ),
+            )
+        )
+        checks.append(
+            Check(
+                "ft-domain-level-handoff-layout",
+                "fail",
+                "Domain-level handoff artifacts found outside nested FT package.",
+                display_path,
+            )
+        )
 
     for package_root in package_roots:
         root_level_artifacts = sorted(
@@ -1115,6 +1241,69 @@ def validate_ft_package_handoff_layout(root: Path) -> tuple[list[Finding], list[
                     "ft-package-handoff-layout",
                     "pass",
                     "No root-level handoff artifacts found.",
+                    display_path,
+                )
+            )
+    return findings, checks
+
+
+def practical_package_source_missing_items(package_root: Path) -> list[str]:
+    return [
+        item
+        for item, exists in PRACTICAL_SOURCE_PACKAGE_REQUIRED_ITEMS.items()
+        if not exists(package_root)
+    ]
+
+
+def validate_practical_source_package_completeness(root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    practical_packages = sorted(
+        {
+            ft_root
+            for summary in iter_practical_stage_summaries(root)
+            for ft_root in [ft_package_root_for_artifact(summary)]
+            if ft_root is not None
+        }
+    )
+    for package_root in practical_packages:
+        missing = practical_package_source_missing_items(package_root)
+        display_path = rel(package_root, root)
+        if missing:
+            findings.append(
+                Finding(
+                    id="practical-route-source-package-incomplete",
+                    severity="error",
+                    category="source-selection",
+                    title="Practical route package is missing required source files",
+                    details=(
+                        "Matrix/writer stages must not start from a package that lacks the package notes and the "
+                        "physical DOCX/XHTML/PDF source set. This is a source package completeness blocker, not a "
+                        "reason to create handoff/index artifacts outside ft_package_root."
+                    ),
+                    path=display_path,
+                    evidence=missing,
+                    recommended_action=(
+                        "Restore AGENT-NOTES.md and source/*.docx, source/*.xhtml, source/*.pdf under the FT package "
+                        "root, or keep next_stage_transition as writer blocked and classify the validator error as "
+                        "next-stage-blocker."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "practical-route-source-package-completeness",
+                    "fail",
+                    "Practical source package files are missing.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "practical-route-source-package-completeness",
+                    "pass",
+                    "Practical source package files are present.",
                     display_path,
                 )
             )
@@ -1405,6 +1594,9 @@ def normalized_path(path: Path) -> str:
 
 def ft_scope_key(path: Path, root: Path) -> str:
     base = repository_root(root).resolve()
+    package_root = nearest_ft_package_root(path)
+    if package_root is not None:
+        return package_root.resolve().as_posix()
     try:
         relative_parts = path.resolve().relative_to(base).parts
     except ValueError:
@@ -2214,11 +2406,22 @@ def validate_source_support_duplicates(root: Path, declared_paths: set[str]) -> 
 
 
 def find_ft_root(path: Path, root: Path, state: dict[str, Any]) -> Path:
+    nearest = nearest_ft_package_root(path)
+    if nearest is not None:
+        return nearest
+
     ft_slug = state.get("ft_slug")
     if isinstance(ft_slug, str):
         candidate = root / "fts" / ft_slug
         if candidate.is_dir():
             return candidate
+        nested_candidates = sorted(
+            candidate
+            for candidate in (root / "fts").rglob(ft_slug)
+            if candidate.is_dir() and looks_like_ft_package_root(candidate)
+        ) if (root / "fts").is_dir() else []
+        if nested_candidates:
+            return nested_candidates[0]
 
     parts = path.parts
     if "fts" in parts:
@@ -4434,10 +4637,7 @@ def path_text_is_within(child: str, parent: str) -> bool:
 
 
 def ft_package_root_for_artifact(path: Path) -> Path | None:
-    for candidate in [path.parent, *path.parents]:
-        if candidate.parent.name == "fts":
-            return candidate
-    return None
+    return nearest_ft_package_root(path)
 
 
 def workflow_states_for_ft_package(ft_root: Path) -> list[Path]:
@@ -12909,6 +13109,9 @@ def representative_strategy_data_mismatch_evidence(test_case_id: str, strategy_t
 
 
 def ft_package_root_for_path(path: Path) -> Path | None:
+    nearest = nearest_ft_package_root(path)
+    if nearest is not None:
+        return nearest
     parts = list(path.resolve().parts)
     if "fts" not in parts:
         return None
@@ -20318,6 +20521,9 @@ def validate(
         path_findings, path_checks = validate_ft_package_handoff_layout(root)
         findings.extend(path_findings)
         checks.extend(path_checks)
+        source_package_findings, source_package_checks = validate_practical_source_package_completeness(root)
+        findings.extend(source_package_findings)
+        checks.extend(source_package_checks)
 
     if (
         not workflow_states

@@ -26,6 +26,13 @@ Writer may start only when these are already defined:
 - `workflow-state.yaml` or an equivalent handoff with `next_skill = ft-test-case-writer`;
 - package-specific `AGENT-NOTES.md`, when present in the FT package root.
 
+For `writer.practical_v0_8`, the declared `ft_package_root` must be physically
+complete before matrix or TC writing starts: `AGENT-NOTES.md`, at least one main
+`source/*.docx`, mandatory `source/*.xhtml`, and PDF cross-check `source/*.pdf`
+must exist under that exact root. Nested package roots such as
+`fts/<domain>/<ft-package>` are valid, but writer artifacts must remain inside
+the nested package root, not under the parent `fts/<domain>` folder.
+
 Conditional inputs:
 
 - `source-parity-check.md` is mandatory when the main FT is available as DOCX and PDF;
@@ -48,6 +55,8 @@ Do not set `stage_status: ready-for-review` when:
 - the simple runtime context is insufficient and table/UI/revision/validator deep context from the manifest is required;
 - `practical-stage-summary.md` is missing, not linked, lacks root consistency fields, records an unapproved split between `code_root` and `ft_package_root`, or sets `next_stage_transition = writer blocked`;
 - validator errors exist and the summary does not classify them as `next-stage-blocker`, `pre-existing-unrelated`, `validator-false-positive` or `mixed`, or it claims unconditional `writer allowed` while `validator_errors_count > 0`;
+- practical source package completeness fails: missing `AGENT-NOTES.md`, missing main DOCX, missing mandatory XHTML, or missing PDF cross-check under `ft_package_root`;
+- practical artifacts, package summary or package index are placed above `ft_package_root` to work around nested package discovery;
 - technical fallback produced a compact draft, loss of detail, one-shot giant write, or unchecked mojibake output.
 
 In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and route the task to the right skill or to the user through a handoff prompt.
@@ -63,6 +72,7 @@ In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and 
 6.1. After matrix review or matrix re-review, require `practical-stage-summary.md` with accepted scopes, blocked/round-cap scopes, reasons, whether TC may be written with explicit statuses, `next_stage_transition`, root consistency fields, and validator-error classification before continuing.
 6.2. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review or a bounded round-cap practical-policy decision in `practical-stage-summary.md`, verify that the summary is linked from affected workflow-state/package state, then write `TC-*` by `test-case-runtime-format.md`.
 6.3. If `code_root`, `ft_package_root` and `artifact_write_root` are not the same tree, continue only when `root_split_allowed = yes` and `root_split_authority` names the explicit user/controller approval. Otherwise set `blocked-input`.
+6.4. If validator errors are present before writer, distinguish `physical-source-missing`, `workflow-link-stale`, `validator-root-selection-defect`, or `mixed` in the practical summary. Fix stale links only when the files exist. Restore missing source files when they are physically absent. Fix validator/root-selection rules when nested package discovery is wrong; do not create parent-level `work/stage-handoffs` artifacts outside `ft_package_root`.
 6a. Runtime prose must be human-executable: do not put `subject:<hash>`,
 `OBL-*`, `ATOM-*`, `ASSERT-*` or `SRC-*` in `Название` or user-action steps.
 Keep those identifiers only in traceability/design artifacts.

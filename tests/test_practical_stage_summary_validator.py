@@ -47,6 +47,13 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         ft_root = ft_root or base / "fts" / "Sample"
         artifact_write_root = artifact_write_root or ft_root / "work"
         artifact_write_root.mkdir(parents=True, exist_ok=True)
+        (ft_root / "AGENT-NOTES.md").parent.mkdir(parents=True, exist_ok=True)
+        (ft_root / "AGENT-NOTES.md").write_text("# Notes\n", encoding="utf-8")
+        source_dir = ft_root / "source"
+        source_dir.mkdir(parents=True, exist_ok=True)
+        (source_dir / "Sample.docx").write_text("fake-docx", encoding="utf-8")
+        (source_dir / "Sample.xhtml").write_text("<html></html>", encoding="utf-8")
+        (source_dir / "Sample.pdf").write_text("fake-pdf", encoding="utf-8")
         summary = artifact_write_root / "practical-stage-summary.md"
         summary.write_text(
             "\n".join(
@@ -181,6 +188,102 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         ids = self.finding_ids(root)
 
         self.assertIn("workflow-state-active-transition-prompt-unresolved", ids)
+
+    def test_nested_package_summary_resolves_without_domain_level_index(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        nested_ft_root = base / "fts" / "Partners" / "Partners-v1"
+        self.make_package(
+            code_root=base,
+            ft_root=nested_ft_root,
+            artifact_write_root=nested_ft_root / "work",
+        )
+
+        ids = self.finding_ids(base / "fts" / "Partners")
+
+        self.assertNotIn("practical-stage-summary-not-linked-from-workflow", ids)
+        self.assertNotIn("workflow-state-active-transition-prompt-unresolved", ids)
+
+    def test_rejects_domain_level_handoff_outside_nested_ft_package(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        base = Path(tmp.name)
+        domain_root = base / "fts" / "Partners"
+        nested_ft_root = domain_root / "Partners-v1"
+        self.make_package(
+            code_root=base,
+            ft_root=nested_ft_root,
+            artifact_write_root=nested_ft_root / "work",
+        )
+        index_dir = domain_root / "work" / "stage-handoffs" / "00-partners-v1-package-index"
+        index_dir.mkdir(parents=True, exist_ok=True)
+        (index_dir / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "ft_slug: Partners",
+                    "scope_slug: Partners-v1-package-index",
+                    "current_stage: ft-test-case-reviewer",
+                    "stage_status: blocked-input",
+                    "current_round: 1",
+                    "next_skill: none",
+                    "required_inputs: []",
+                    "latest_artifacts: {}",
+                    "open_questions: []",
+                    "blocking_reasons: []",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(domain_root)
+
+        self.assertIn("ft-domain-level-handoff-artifacts", ids)
+
+    def test_practical_summary_requires_physical_source_package_files(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name) / "fts" / "Partners" / "Partners-v1"
+        root.mkdir(parents=True)
+        (root / "test-cases").mkdir()
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.parent.mkdir(parents=True)
+        summary.write_text(
+            "\n".join(
+                [
+                    "# Practical Stage Summary",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    f"| code_root | `{Path(tmp.name)}` |",
+                    f"| ft_package_root | `{root}` |",
+                    f"| artifact_write_root | `{root / 'work'}` |",
+                    "| root_split_allowed | `no` |",
+                    "| root_split_authority | `not-applicable` |",
+                    "| validator_errors_count | `1` |",
+                    "| validator_errors_classification | `next-stage-blocker` |",
+                    "| validator_errors_evidence | `missing source package` |",
+                    "| next_stage_transition | `writer blocked` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        workflow = root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+        workflow.parent.mkdir(parents=True)
+        workflow.write_text(
+            "\n".join(
+                [
+                    "latest_artifacts:",
+                    "  practical_stage_summary: work/practical-stage-summary.md",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-route-source-package-incomplete", ids)
 
 
 if __name__ == "__main__":

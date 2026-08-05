@@ -94,6 +94,25 @@ approved that exact arrangement. Otherwise stop as `blocked-input`; do not
 silently read requirements from one checkout and write artifacts after checking a
 different checkout.
 
+Nested FT packages are valid. For example, `fts/Partners/Partners-v1` is the FT
+package root when that directory contains the selected package materials. In such
+cases all practical artifacts, `workflow-state.yaml`, handoffs, summaries and
+test cases must stay under `fts/Partners/Partners-v1`. Do not create
+`fts/Partners/work/stage-handoffs/*` or other parent/domain-level workflow files
+as a workaround for package discovery. If a validator or prompt cannot recognize
+the nested package root, classify it as an agent-layer/root-detection defect and
+fix the rule/tooling; do not mask the problem by adding a fake package index
+outside `ft_package_root`.
+
+Before matrix writing, matrix review or canonical TC writing, perform a physical
+source package completeness preflight for the declared `ft_package_root`.
+`AGENT-NOTES.md`, at least one main `source/*.docx`, mandatory
+`source/*.xhtml`, and PDF cross-check `source/*.pdf` must exist in the package.
+If any are missing, set `next_stage_transition = writer blocked`, classify the
+validator/preflight issue as `next-stage-blocker`, and restore or relink the
+source package before continuing. Do not treat this as a reason to create
+handoff artifacts above `ft_package_root`.
+
 When split-root is approved, the summary and final report must state it plainly
 and must name both roots. The stage must not claim that version gate covers data
 artifacts that live outside the version-gated root.
@@ -136,6 +155,26 @@ When `validator_errors_count > 0`, the summary must not say unconditional
 `writer allowed`. It must classify the errors and use `writer conditional` or
 `writer blocked` unless every error is explicitly proven irrelevant or a
 validator false positive.
+
+When validator errors mention unresolved source/package artifacts, summary must
+distinguish the cause explicitly:
+
+- `physical-source-missing`: the files are absent under `ft_package_root`;
+- `workflow-link-stale`: files exist, but `required_inputs` /
+  `latest_artifacts` point to stale or wrong paths;
+- `validator-root-selection-defect`: files and links are correct, but the
+  validator resolved the wrong package root;
+- `mixed`: more than one of the above is true.
+
+Only `workflow-link-stale` may be repaired by editing links. Physical missing
+source files must be restored. Root-selection defects must be fixed in the
+agent-layer validator/policy, not by writing new parent-level handoff artifacts.
+
+`practical-stage-summary.md` must be linked from workflow-state files inside the
+actual FT package root. An "equivalent package-level state/index pointer" is
+allowed only inside that same `ft_package_root`; a parent folder such as
+`fts/<domain>/work/stage-handoffs` is outside the package and is invalid unless
+the user explicitly selected that parent folder as the FT package root.
 
 For `round-cap-reached` after the bounded matrix repair/re-review, use this
 practical default:
