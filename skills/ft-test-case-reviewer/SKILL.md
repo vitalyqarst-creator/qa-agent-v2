@@ -122,9 +122,13 @@ the next safe step. It must also record `code_root`, `ft_package_root`,
 `validator_warnings_classification` when validation was run, plus
 `source_restore_provenance`, `source_restore_sha256` and `git_persistence`.
 After repair/re-review, rerun validation and refresh the declared
-validator counts/evidence from the latest report before handing off.
+validator counts/evidence from the latest report before handing off. Use
+`python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
+to compute those fields and keep summary enum fields enum-only.
 When changed FT/package artifacts are git-ignored, record that explicitly in
-`git_persistence` because ordinary commit/push will not persist them.
+`git_persistence` because ordinary commit/push will not persist them; the
+stage/final response must name `git add -f <paths>` or export/bundle as the
+persistence path.
 Link the summary from every affected `workflow-state.yaml` or
 package-level state/index inside the actual FT package root so the next stage
 cannot miss it. If the bounded matrix repair/re-review cap is

@@ -142,6 +142,12 @@ For a single-scope stage, place the summary in
 For a multi-scope package stage, place the package-level summary in
 `fts/<ft-slug>/work/practical-stage-summary.md`.
 
+Create the file from
+[practical-stage-summary-template.md](./practical-stage-summary-template.md).
+Canonical path: `references/agent/practical-stage-summary-template.md`.
+Machine enum fields must contain only enum values; explanatory prose belongs in
+`next_safe_step`, scope `reason` or notes. Do not improvise new enum values.
+
 The summary must be linked from `workflow-state.yaml` for every affected scope
 through `latest_artifacts.practical_stage_summary` or an equivalent package-level
 state/index pointer. A summary that is not linked is not a safe handoff for the
@@ -220,9 +226,14 @@ that provenance, the next stage cannot audit contamination risk.
 After every repair, rerun the validator and refresh
 `validator_errors_count`, `validator_warnings_count` and evidence ids from the
 latest report. Stale counts or stale finding ids block the next practical stage.
+Use
+`python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
+to compute the current validator counts/evidence and `git_persistence` before
+updating the summary.
 If changed FT/package artifacts are ignored by git, set
 `git_persistence = ignored-by-git` or `mixed` and state that ordinary
-commit/push will not persist those files.
+commit/push will not persist those files. The stage/final response must also
+say that persistence requires `git add -f <paths>` or an export/bundle.
 
 `practical-stage-summary.md` must be linked from workflow-state files inside the
 actual FT package root. An "equivalent package-level state/index pointer" is

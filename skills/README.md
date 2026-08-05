@@ -29,6 +29,7 @@ Canonical list of active skills:
 ## Typical Chains
 
 - New test-case suite, macro-stage default: `ft-source-locator` -> `ft-scope-analyzer` -> `ft-test-case-writer` matrix-only -> one separate-session `ft-test-case-reviewer` matrix review -> linked matrix-stage summary with root/validator transition fields -> `ft-test-case-writer` TC draft -> one separate-session `ft-test-case-reviewer` TC review using practical route v0.8, continuing without user prompts until accepted baseline, baseline after one bounded revision with explicit residual statuses, or an external blocker.
+- Practical summaries use `references/agent/practical-stage-summary-template.md`; refresh validator counts/evidence and git persistence with `scripts/refresh_practical_stage_summary.py`.
 - Explicit production shadow after qualification: `ft-test-case-iteration` through `ft-agent run` with schema-v2 config.
 - Explicit full source-qualified scope in the development environment: `ft-source-locator` -> `ft-scope-analyzer` -> independent source review -> `ft-test-case-iteration`.
 - New FT-version update: `ft-test-case-iteration` in `incremental-update` mode after explicit selection of both versions and target scope.

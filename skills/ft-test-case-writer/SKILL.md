@@ -72,7 +72,9 @@ benchmark-grade process evidence. It is split into two writer passes:
   `nonblocking-info` or `mixed`, then route per scope;
 - after any repair, rerun validation, reread `practical-stage-summary.md`, and
   ensure validator counts/evidence and git persistence fields reflect the latest
-  run before handing off;
+  run before handing off; use
+  `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
+  to compute these values, and keep summary enum fields enum-only;
 - do not create XLSX duplicates for practical matrices unless the user
   explicitly requests XLSX export;
 - do not create source assertions, source assertion review prompts, semantic

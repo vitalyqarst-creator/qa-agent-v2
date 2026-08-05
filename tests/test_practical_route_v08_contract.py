@@ -121,10 +121,26 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("per_scope_next_stage_transitions", content)
         self.assertIn("production_tc_clean", content)
         self.assertIn("git_persistence", content)
+        self.assertIn("practical-stage-summary-template.md", content)
+        self.assertIn("refresh_practical_stage_summary.py", content)
+        self.assertIn("commit/push will not persist", content)
+        self.assertIn("git add -f", content)
         self.assertIn("Stale counts", content)
         self.assertIn("tc-review conditional", content)
         self.assertIn("source_contradiction: yes/no", content)
         self.assertIn("source_restore_sha256", content)
+
+    def test_practical_stage_summary_template_pins_enum_fields(self) -> None:
+        template = self.read("references/agent/practical-stage-summary-template.md")
+
+        self.assertIn("practical route v0.8.1", template)
+        self.assertIn("Enum fields must contain only the enum value", template)
+        self.assertIn("writer allowed / writer conditional / writer blocked", template)
+        self.assertIn("tc-review allowed / tc-review conditional / tc-review blocked", template)
+        self.assertIn("tracked / ignored-by-git / mixed / not-applicable", template)
+        self.assertIn("refresh_practical_stage_summary.py", template)
+        self.assertIn("ordinary commit/push will not", template)
+        self.assertIn("git add -f <paths>", template)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")
