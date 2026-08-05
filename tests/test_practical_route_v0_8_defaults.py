@@ -46,6 +46,51 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("fast path", route)
         self.assertIn("without user confirmation", routing)
 
+    def test_matrix_review_requires_stage_summary_before_next_prompt(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        routing = (ROOT_DIR / "references" / "agent" / "task-start-skill-routing-format.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (route, writer, reviewer, routing):
+            self.assertIn("practical-stage-summary.md", content)
+            self.assertIn("accepted", content)
+            self.assertIn("round-cap", content)
+            self.assertIn("next safe step", content)
+
+        self.assertIn("before sending the next prompt", route)
+        self.assertIn("TC-with-status decision", routing)
+
+    def test_round_cap_policy_prefers_explicit_status_tc_over_blocking_when_source_is_clear(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        agents = (ROOT_DIR / "AGENTS.md").read_text(encoding="utf-8")
+        skills = (ROOT_DIR / "skills" / "README.md").read_text(encoding="utf-8")
+        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (route, agents, skills, writer, reviewer):
+            self.assertIn("source contradiction", content)
+            self.assertIn("candidate-ui-calibration", content)
+            self.assertIn("needs-test-data", content)
+            self.assertIn("blocked-observability", content)
+
+        self.assertIn("do not write TC", route)
+        self.assertIn("не выдумывай TC", agents)
+
     def test_scope_analyzer_requires_source_parity_before_practical_writer(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
             encoding="utf-8"

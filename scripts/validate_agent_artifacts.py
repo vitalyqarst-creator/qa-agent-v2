@@ -4449,6 +4449,8 @@ def validate_practical_review_independence_gate(
     ]
     reviewer_session_raw = fields.get("reviewer_task_or_session", "").strip()
     reviewer_session = reviewer_session_raw.lower()
+    execution_surface = fields.get("reviewer_execution_surface", "").strip().strip("`").strip().lower()
+    reviewer_thread_url_or_id = fields.get("reviewer_thread_url_or_id", "").strip().strip("`").strip()
     if reviewer_session in {"", "-", "not-available", "none", "n/a"}:
         issues.append(
             f"reviewer_task_or_session={fields.get('reviewer_task_or_session', '<missing>')}; expected=<actual Codex thread/session id>"
@@ -4456,6 +4458,23 @@ def validate_practical_review_independence_gate(
     elif not CODEX_THREAD_ID_RE.match(reviewer_session_raw):
         issues.append(
             f"reviewer_task_or_session={reviewer_session_raw}; expected=<actual Codex thread/session id>, not a role alias"
+        )
+    if execution_surface not in {"codex-task", "codex-thread"}:
+        issues.append(
+            "reviewer_execution_surface="
+            f"{fields.get('reviewer_execution_surface', '<missing>')}; expected=codex-task|codex-thread, not sub-agent/same-session/local-helper"
+        )
+    if reviewer_thread_url_or_id in {"", "-", "not-available", "none", "n/a"}:
+        issues.append(
+            "reviewer_thread_url_or_id="
+            f"{fields.get('reviewer_thread_url_or_id', '<missing>')}; expected=<auditable Codex task/thread id or URL>"
+        )
+    elif not (
+        CODEX_THREAD_ID_RE.search(reviewer_thread_url_or_id)
+        or re.search(r"\bcodex\b.*\b(?:thread|task)\b", reviewer_thread_url_or_id, flags=re.IGNORECASE)
+    ):
+        issues.append(
+            f"reviewer_thread_url_or_id={reviewer_thread_url_or_id}; expected=<auditable Codex task/thread id or URL>"
         )
 
     if issues:

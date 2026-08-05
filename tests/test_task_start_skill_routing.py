@@ -117,7 +117,11 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "review-independence.md exists and proves separate reviewer sessions for matrix and TC review before independent sign-off",
+            "review-independence.md exists and proves separate reviewer Codex task/thread sessions for matrix and TC review before independent sign-off; sub-agents do not count",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, and next safe step",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
@@ -133,7 +137,7 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "test-design-matrix-review.md exists with matrix-accepted from a separate reviewer session",
+            "test-design-matrix-review.md exists with matrix-accepted from a separate reviewer session or round-cap practical-policy evidence",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertEqual(

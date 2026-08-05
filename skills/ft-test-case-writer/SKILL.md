@@ -41,6 +41,14 @@ benchmark-grade process evidence. It is split into two writer passes:
 - after the independent TC review, perform at most one bounded TC revision and
   publish the baseline with explicit residual statuses; do not request a second
   reviewer pass by default;
+- after matrix review or matrix re-review, require `practical-stage-summary.md`
+  before sending the next prompt: accepted scopes, blocked/round-cap scopes,
+  reasons, whether TC may be written with explicit statuses, and next safe step;
+- when a matrix stays `round-cap-reached` after the bounded repair/re-review,
+  write TC with `candidate-ui-calibration`, `blocked-observability`,
+  `needs-test-data` or `needs-future-clarification` if the source obligation is
+  clear and only data/UI/observability is missing; block only a `source contradiction`
+  or unrepresentable source obligations;
 - do not create XLSX duplicates for practical matrices unless the user
   explicitly requests XLSX export;
 - do not create source assertions, source assertion review prompts, semantic
@@ -150,7 +158,11 @@ Minimum runtime rules:
    requiredness checks must be split by input mechanism. Current-scope blockers must be
    visible as allowed planned statuses. Do not create or update canonical TC in
    this pass.
-7a. For `practical_v0_8_tc_after_matrix_accepted`, hand off to reviewer only
+7a. For matrix review completion, do not silently continue to TC writing or stop
+   with only raw reviewer findings. Ensure `practical-stage-summary.md` exists
+   and names accepted scopes, `round-cap-reached`/blocked scopes, concrete
+   reasons, whether status-marked TC writing is allowed, and the next safe step.
+7b. For `practical_v0_8_tc_after_matrix_accepted`, hand off to reviewer only
    after creating `prompt.tc-to-reviewer.md` suitable for a separate Codex
    session. The canonical file and accepted or once-repaired
    `test-design-matrix.md` must be synchronized, and the canonical file must

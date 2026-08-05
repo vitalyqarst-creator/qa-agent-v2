@@ -68,6 +68,8 @@ VALID_REVIEW_INDEPENDENCE = """# Review Independence
 | field | value |
 | --- | --- |
 | reviewer_task_or_session | `019fc5cf-8bfe-7693-bf2f-c3c55cca4824` |
+| reviewer_execution_surface | `codex-task` |
+| reviewer_thread_url_or_id | `019fc5cf-8bfe-7693-bf2f-c3c55cca4824` |
 | reviewer_was_separate_session | `yes` |
 | reviewer_input_excluded_writer_transcript | `yes` |
 | reviewer_input_excluded_writer_private_reasoning | `yes` |
@@ -81,6 +83,8 @@ INVALID_REVIEW_INDEPENDENCE = """# Review Independence
 | field | value |
 | --- | --- |
 | reviewer_task_or_session | `not-available` |
+| reviewer_execution_surface | `same-session` |
+| reviewer_thread_url_or_id | `not-available` |
 | reviewer_was_separate_session | `no` |
 | reviewer_input_excluded_writer_transcript | `no` |
 | reviewer_input_excluded_writer_private_reasoning | `yes` |
@@ -94,6 +98,23 @@ PSEUDO_ALIAS_REVIEW_INDEPENDENCE = """# Review Independence
 | field | value |
 | --- | --- |
 | reviewer_task_or_session | `019fc5c2-tc-review-round-2` |
+| reviewer_execution_surface | `codex-task` |
+| reviewer_thread_url_or_id | `019fc5c2-tc-review-round-2` |
+| reviewer_was_separate_session | `yes` |
+| reviewer_input_excluded_writer_transcript | `yes` |
+| reviewer_input_excluded_writer_private_reasoning | `yes` |
+| reviewer_modified_test_cases | `no` |
+| independent_signoff_claim_allowed | `yes` |
+"""
+
+
+SUB_AGENT_REVIEW_INDEPENDENCE = """# Review Independence
+
+| field | value |
+| --- | --- |
+| reviewer_task_or_session | `019fc5cf-8bfe-7693-bf2f-c3c55cca4824` |
+| reviewer_execution_surface | `sub-agent` |
+| reviewer_thread_url_or_id | `019fc5cf-8bfe-7693-bf2f-c3c55cca4824` |
 | reviewer_was_separate_session | `yes` |
 | reviewer_input_excluded_writer_transcript | `yes` |
 | reviewer_input_excluded_writer_private_reasoning | `yes` |
@@ -134,6 +155,11 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
 
     def test_released_practical_suite_rejects_pseudo_session_alias(self) -> None:
         ids = self.finding_ids(self.make_package(review_independence=PSEUDO_ALIAS_REVIEW_INDEPENDENCE))
+
+        self.assertIn("practical-release-invalid-review-independence", ids)
+
+    def test_released_practical_suite_rejects_sub_agent_review_surface(self) -> None:
+        ids = self.finding_ids(self.make_package(review_independence=SUB_AGENT_REVIEW_INDEPENDENCE))
 
         self.assertIn("practical-release-invalid-review-independence", ids)
 

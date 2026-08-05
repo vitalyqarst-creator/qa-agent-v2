@@ -111,6 +111,9 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("`test-design-matrix.md` is reviewed as writer output", content)
         self.assertIn("canonical `TC-*` writing is gated by accepted matrix review", content)
         self.assertIn("separate reviewer Codex task/session", content)
+        self.assertIn("sub-agent", content)
+        self.assertIn("reviewer_execution_surface", content)
+        self.assertIn("reviewer_thread_url_or_id", content)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")

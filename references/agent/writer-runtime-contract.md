@@ -32,7 +32,7 @@ Conditional inputs:
 - `source-row-inventory.md` is mandatory for row-level/table parity;
 - `mockup-visual-inventory.md` is mandatory for a UI scope with mockup/screen image;
 - `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` are mandatory when the scope handoff contains validation/format restrictions or requiredness obligations;
-- accepted `test-design-matrix-review.md` and separate-session `review-independence.md` are mandatory before `practical_v0_8` canonical TC drafting;
+- accepted `test-design-matrix-review.md` and separate-session `review-independence.md` are mandatory before `practical_v0_8` canonical TC drafting, unless the bounded matrix review cap was reached and `practical-stage-summary.md` explicitly allows status-marked TC writing because the source obligation is clear and only data/UI/observability remains unresolved;
 - structured findings and traceability matrix are mandatory for `revision_from_findings` when the reviewer provided them.
 
 ## Hard Stops
@@ -57,7 +57,8 @@ In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and 
 4. Decompose requirements into coverage obligations, atomic statements, or explicit gaps.
 5. Build coverage plan and metrics by `coverage-runtime-checklist.md`; use `Coverage Obligation Table` for mandatory classes.
 6. In `practical_v0_8_matrix`, write only `test-design-matrix.md` and a matrix-review prompt; do not create or update `TC-*`.
-6.1. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review, then write `TC-*` by `test-case-runtime-format.md`.
+6.1. After matrix review or matrix re-review, require `practical-stage-summary.md` with accepted scopes, blocked/round-cap scopes, reasons, whether TC may be written with explicit statuses, and next safe step before continuing.
+6.2. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review or a bounded round-cap practical-policy decision in `practical-stage-summary.md`, then write `TC-*` by `test-case-runtime-format.md`.
 6a. Runtime prose must be human-executable: do not put `subject:<hash>`,
 `OBL-*`, `ATOM-*`, `ASSERT-*` or `SRC-*` in `Название` or user-action steps.
 Keep those identifiers only in traceability/design artifacts.

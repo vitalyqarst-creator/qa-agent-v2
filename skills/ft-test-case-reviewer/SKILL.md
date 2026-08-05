@@ -33,7 +33,8 @@ description: Делает review существующих тест-кейсов 
      written;
   2) `tc_review` checks canonical test cases only after the matrix was accepted.
   Each gate runs from a separate Codex task/session by default and produces
-  review evidence. It must not require source assertion receipts, semantic
+  review evidence. A sub-agent inside the writer/controller turn is not a
+  separate Codex task/session and cannot produce independent sign-off. It must not require source assertion receipts, semantic
   bridge, immutable runner attempts, benchmark artifacts, separate structure
   preflight, separate final-format review or semantic regression unless the user
   explicitly selected those routes. If matrix review returns
@@ -109,6 +110,18 @@ For `matrix_review`, return `test-design-matrix-review.md` with exactly one
 verdict: `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`. Do
 not produce final TC sign-off from this pass.
 
+After every matrix review or matrix re-review, produce/update
+`practical-stage-summary.md` before the controller/user gets the next-stage
+prompt. It must list accepted scopes, blocked/`round-cap-reached` scopes,
+concrete blocker reasons, whether TC can be written with explicit statuses, and
+the next safe step. If the bounded matrix repair/re-review cap is reached, do
+not treat that as automatic failure to write TC: when the source obligation is
+clear and only test data, UI reaction, observability or future calibration is
+missing, the next safe step is TC writing with `candidate-ui-calibration`,
+`needs-test-data`, `blocked-observability` or `needs-future-clarification`.
+Block TC writing only for source contradictions or obligations that cannot be
+represented without inventing behavior.
+
 For `tc_review`, return `review-findings.md` and verify that
 `test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
 coverage. If an accepted matrix review is absent, block TC review and route back
@@ -123,6 +136,10 @@ Codex thread/session id in `reviewer_task_or_session`. Role aliases such as
 `matrix-review-round-2`, `<scope>-tc-review`, `not-available`, or invented
 pseudo ids do not prove independence. If the reviewer cannot introspect its own
 id, use the id that the controller passed in the reviewer prompt.
+It must also record `reviewer_execution_surface = codex-task` or `codex-thread`
+and `reviewer_thread_url_or_id` with the durable task/thread id or URL. Values
+such as `sub-agent`, `same-session`, `in-process` or `local-helper` mean
+`reviewed-not-independent`.
 
 Return `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only

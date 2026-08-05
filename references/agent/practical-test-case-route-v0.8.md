@@ -73,6 +73,31 @@ another review round. A reviewer finding is not by itself permission to loop
 indefinitely: after the bounded revision, publish a transparent FT-first baseline
 and keep unresolved execution details in the case statuses.
 
+After every matrix review stage, the acting agent must stop the internal chain
+long enough to produce a user-facing `practical-stage-summary.md` in the scope's
+practical folder and include the same facts in the final/user-visible report
+before sending the next prompt. This is not a permission gate when no external
+decision is needed; it is a mandatory transparency gate. The summary must list:
+
+- accepted scopes that may proceed to canonical TC writing;
+- blocked / `round-cap-reached` scopes;
+- the concrete reason each scope is blocked or capped;
+- whether TC can still be written with explicit statuses;
+- the next safe step for each scope.
+
+For `round-cap-reached` after the bounded matrix repair/re-review, use this
+practical default:
+
+- if there is no source contradiction and the remaining issue is missing data,
+  unknown UI reaction, unknown observability, or a future clarification that does
+  not change the source obligation, write the TC baseline with explicit
+  `candidate-ui-calibration`, `needs-test-data`, `blocked-observability` or
+  `needs-future-clarification` statuses instead of blocking the whole scope;
+- if source/support/mockup evidence contradicts itself, or the requirement
+  cannot be represented without inventing a business rule, do not write TC for
+  that obligation; keep the scope or obligation as `blocked-source` /
+  `blocked-input` and state the exact contradictory source references.
+
 After each internal handoff, run the relevant validator gate. If the gate fails
 because practical-route infrastructure is inconsistent with this contract, fix
 the smallest agent-layer rule that unlocks the documented route; do not create
@@ -156,7 +181,9 @@ planned TC), use the fast path inside this same route:
      state is "not created yet" or "old draft ignored".
    - Default behavior: run reviewer in a separate Codex task/session. If thread
      orchestration is available, hand off the reviewer prompt to that separate
-     task/session. If it is not available, stop after writer handoff and ask the
+     task/session. A sub-agent spawned inside the writer/controller turn does not
+     count as a separate Codex task/session for independent sign-off. If separate
+     thread orchestration is not available, stop after writer handoff and ask the
      user to run the reviewer prompt in a new session.
    - The reviewer input must exclude writer transcript, writer private
      reasoning, and process diagnostics that are not needed to judge the suite.
@@ -173,6 +200,11 @@ planned TC), use the fast path inside this same route:
      `matrix-accepted`, `matrix-changes-required`, or `matrix-rejected`.
    - If verdict is not `matrix-accepted`, route back to writer for matrix repair;
      do not route to canonical TC writing.
+   - Also produce or update `practical-stage-summary.md` after the matrix review
+     or matrix re-review. The summary must expose accepted scope, blocked /
+     capped scope, reasons, whether TC can be written with explicit statuses, and
+     the next safe step. This summary is required before the controller/user
+     receives the next-stage prompt.
 
 5. `ft-test-case-writer` — TC draft after accepted matrix
    - Start only when `test-design-matrix-review.md` has verdict
@@ -497,6 +529,13 @@ Rules:
   invented pseudo ids. If the reviewer cannot know its own id, the controller
   that launches the separate session must pass that id into the reviewer prompt
   and the reviewer must copy it verbatim.
+- `reviewer_execution_surface` must be `codex-task` or `codex-thread` for
+  independent sign-off. Values such as `sub-agent`, `same-session`,
+  `in-process`, `local-helper` or `not-available` are allowed only for
+  `reviewed-not-independent`.
+- `reviewer_thread_url_or_id` must contain the same durable Codex thread/task id
+  or a user-visible Codex task URL. It exists to make the evidence auditable from
+  the Codex sidebar/task list, not merely from an internal agent transcript.
 - If a separate reviewer session is not available, stop after writer handoff and
   ask the user/controller to launch the reviewer prompt in a new session. If the
   user explicitly chooses a same-session fallback, complete only a practical
