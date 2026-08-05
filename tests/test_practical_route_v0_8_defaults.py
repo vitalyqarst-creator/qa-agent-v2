@@ -65,9 +65,19 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
             self.assertIn("accepted", content)
             self.assertIn("round-cap", content)
             self.assertIn("next safe step", content)
+            self.assertIn("next_stage_transition", content)
 
         self.assertIn("before sending the next prompt", route)
         self.assertIn("TC-with-status decision", routing)
+        for expected in (
+            "code_root",
+            "ft_package_root",
+            "artifact_write_root",
+            "root_split_allowed",
+            "validator_errors_classification",
+        ):
+            self.assertIn(expected, route)
+            self.assertIn(expected, writer)
 
     def test_round_cap_policy_prefers_explicit_status_tc_over_blocking_when_source_is_clear(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(

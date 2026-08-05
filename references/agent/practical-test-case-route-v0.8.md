@@ -37,8 +37,9 @@ conditions occurs:
 - canonical test cases are accepted by independent TC review and published as an
   accepted baseline;
 - one bounded matrix repair plus one matrix re-review was performed and the
-  matrix is still not accepted; report an honest pre-write blocker and do not
-  write canonical TC;
+  matrix is still not accepted; apply the practical round-cap policy below:
+  write status-marked TC for clear source obligations and block only source
+  contradictions or unrepresentable obligations;
 - one bounded TC revision was performed and the remaining issue is represented
   by explicit `candidate-ui-calibration`, `blocked-observability`,
   `needs-test-data` or `needs-future-clarification` statuses;
@@ -73,17 +74,68 @@ another review round. A reviewer finding is not by itself permission to loop
 indefinitely: after the bounded revision, publish a transparent FT-first baseline
 and keep unresolved execution details in the case statuses.
 
+## Root consistency gate
+
+At the start of every practical stage and in every `practical-stage-summary.md`,
+record the roots used for code, FT data and artifact writes:
+
+| field | value |
+| --- | --- |
+| code_root | `<version-gated repository/worktree root>` |
+| ft_package_root | `<FT package root used as input>` |
+| artifact_write_root | `<root where this stage writes artifacts>` |
+| root_split_allowed | `yes/no` |
+| root_split_authority | `<user/controller approval, or not-applicable>` |
+
+`ft_package_root` and `artifact_write_root` should normally be inside
+`code_root`. If the FT package is outside the version-gated worktree, this is a
+split-root run. Split-root is allowed only when the user/controller explicitly
+approved that exact arrangement. Otherwise stop as `blocked-input`; do not
+silently read requirements from one checkout and write artifacts after checking a
+different checkout.
+
+When split-root is approved, the summary and final report must state it plainly
+and must name both roots. The stage must not claim that version gate covers data
+artifacts that live outside the version-gated root.
+
 After every matrix review stage, the acting agent must stop the internal chain
-long enough to produce a user-facing `practical-stage-summary.md` in the scope's
-practical folder and include the same facts in the final/user-visible report
-before sending the next prompt. This is not a permission gate when no external
-decision is needed; it is a mandatory transparency gate. The summary must list:
+long enough to produce a user-facing `practical-stage-summary.md` and include
+the same facts in the final/user-visible report before sending the next prompt.
+This is not a permission gate when no external decision is needed; it is a
+mandatory transparency gate.
+
+For a single-scope stage, place the summary in
+`fts/<ft-slug>/work/practical/<scope-slug>/practical-stage-summary.md`.
+For a multi-scope package stage, place the package-level summary in
+`fts/<ft-slug>/work/practical-stage-summary.md`.
+
+The summary must be linked from `workflow-state.yaml` for every affected scope
+through `latest_artifacts.practical_stage_summary` or an equivalent package-level
+state/index pointer. A summary that is not linked is not a safe handoff for the
+next stage.
+
+The summary must list:
 
 - accepted scopes that may proceed to canonical TC writing;
 - blocked / `round-cap-reached` scopes;
 - the concrete reason each scope is blocked or capped;
 - whether TC can still be written with explicit statuses;
-- the next safe step for each scope.
+- the next safe step for each scope;
+- `next_stage_transition`: exactly one of `writer allowed`,
+  `writer conditional`, `writer blocked`, or `not-applicable`.
+
+If a validator was run, add these fields:
+
+| field | value |
+| --- | --- |
+| validator_errors_count | `<integer>` |
+| validator_errors_classification | `none / next-stage-blocker / pre-existing-unrelated / validator-false-positive / mixed` |
+| validator_errors_evidence | `<paths/finding ids or not-applicable>` |
+
+When `validator_errors_count > 0`, the summary must not say unconditional
+`writer allowed`. It must classify the errors and use `writer conditional` or
+`writer blocked` unless every error is explicitly proven irrelevant or a
+validator false positive.
 
 For `round-cap-reached` after the bounded matrix repair/re-review, use this
 practical default:
@@ -203,8 +255,11 @@ planned TC), use the fast path inside this same route:
    - Also produce or update `practical-stage-summary.md` after the matrix review
      or matrix re-review. The summary must expose accepted scope, blocked /
      capped scope, reasons, whether TC can be written with explicit statuses, and
-     the next safe step. This summary is required before the controller/user
-     receives the next-stage prompt.
+     the next safe step. It must include the root consistency fields,
+     validator-error classification fields when validation was run, and
+     `next_stage_transition`. It must be linked from affected `workflow-state.yaml`
+     artifacts. This summary is required before the controller/user receives the
+     next-stage prompt.
 
 5. `ft-test-case-writer` — TC draft after accepted matrix
    - Start only when `test-design-matrix-review.md` has verdict
@@ -512,6 +567,8 @@ Minimum fields:
 | field | value |
 | --- | --- |
 | reviewer_task_or_session | `<actual Codex thread/session id>` |
+| reviewer_execution_surface | `codex-task/codex-thread` |
+| reviewer_thread_url_or_id | `<durable Codex task/thread id or URL>` |
 | reviewer_was_separate_session | `yes/no` |
 | reviewer_input_excluded_writer_transcript | `yes/no` |
 | reviewer_input_excluded_writer_private_reasoning | `yes/no` |
@@ -536,6 +593,9 @@ Rules:
 - `reviewer_thread_url_or_id` must contain the same durable Codex thread/task id
   or a user-visible Codex task URL. It exists to make the evidence auditable from
   the Codex sidebar/task list, not merely from an internal agent transcript.
+- A sub-agent, local helper or same-session pass may be used only as auxiliary
+  analysis. It cannot be the final reviewer verdict for matrix acceptance, TC
+  review acceptance or independent release.
 - If a separate reviewer session is not available, stop after writer handoff and
   ask the user/controller to launch the reviewer prompt in a new session. If the
   user explicitly chooses a same-session fallback, complete only a practical

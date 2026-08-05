@@ -33,6 +33,7 @@ Conditional inputs:
 - `mockup-visual-inventory.md` is mandatory for a UI scope with mockup/screen image;
 - `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` are mandatory when the scope handoff contains validation/format restrictions or requiredness obligations;
 - accepted `test-design-matrix-review.md` and separate-session `review-independence.md` are mandatory before `practical_v0_8` canonical TC drafting, unless the bounded matrix review cap was reached and `practical-stage-summary.md` explicitly allows status-marked TC writing because the source obligation is clear and only data/UI/observability remains unresolved;
+- for `practical_v0_8` canonical TC drafting, `practical-stage-summary.md` must be linked from the affected `workflow-state.yaml` / package state and must contain `code_root`, `ft_package_root`, `artifact_write_root`, `root_split_allowed`, `next_stage_transition`, and validator-error classification fields when validation was run;
 - structured findings and traceability matrix are mandatory for `revision_from_findings` when the reviewer provided them.
 
 ## Hard Stops
@@ -45,6 +46,8 @@ Do not set `stage_status: ready-for-review` when:
 - expected behavior cannot be derived from the FT or allowed materials, and the obligation cannot honestly become a `ui-calibration-required` candidate TC;
 - writer found a new gap that blocks an executable result;
 - the simple runtime context is insufficient and table/UI/revision/validator deep context from the manifest is required;
+- `practical-stage-summary.md` is missing, not linked, lacks root consistency fields, records an unapproved split between `code_root` and `ft_package_root`, or sets `next_stage_transition = writer blocked`;
+- validator errors exist and the summary does not classify them as `next-stage-blocker`, `pre-existing-unrelated`, `validator-false-positive` or `mixed`, or it claims unconditional `writer allowed` while `validator_errors_count > 0`;
 - technical fallback produced a compact draft, loss of detail, one-shot giant write, or unchecked mojibake output.
 
 In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and route the task to the right skill or to the user through a handoff prompt.
@@ -57,8 +60,9 @@ In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and 
 4. Decompose requirements into coverage obligations, atomic statements, or explicit gaps.
 5. Build coverage plan and metrics by `coverage-runtime-checklist.md`; use `Coverage Obligation Table` for mandatory classes.
 6. In `practical_v0_8_matrix`, write only `test-design-matrix.md` and a matrix-review prompt; do not create or update `TC-*`.
-6.1. After matrix review or matrix re-review, require `practical-stage-summary.md` with accepted scopes, blocked/round-cap scopes, reasons, whether TC may be written with explicit statuses, and next safe step before continuing.
-6.2. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review or a bounded round-cap practical-policy decision in `practical-stage-summary.md`, then write `TC-*` by `test-case-runtime-format.md`.
+6.1. After matrix review or matrix re-review, require `practical-stage-summary.md` with accepted scopes, blocked/round-cap scopes, reasons, whether TC may be written with explicit statuses, `next_stage_transition`, root consistency fields, and validator-error classification before continuing.
+6.2. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review or a bounded round-cap practical-policy decision in `practical-stage-summary.md`, verify that the summary is linked from affected workflow-state/package state, then write `TC-*` by `test-case-runtime-format.md`.
+6.3. If `code_root`, `ft_package_root` and `artifact_write_root` are not the same tree, continue only when `root_split_allowed = yes` and `root_split_authority` names the explicit user/controller approval. Otherwise set `blocked-input`.
 6a. Runtime prose must be human-executable: do not put `subject:<hash>`,
 `OBL-*`, `ATOM-*`, `ASSERT-*` or `SRC-*` in `Название` or user-action steps.
 Keep those identifiers only in traceability/design artifacts.

@@ -114,13 +114,17 @@ After every matrix review or matrix re-review, produce/update
 `practical-stage-summary.md` before the controller/user gets the next-stage
 prompt. It must list accepted scopes, blocked/`round-cap-reached` scopes,
 concrete blocker reasons, whether TC can be written with explicit statuses, and
-the next safe step. If the bounded matrix repair/re-review cap is reached, do
-not treat that as automatic failure to write TC: when the source obligation is
-clear and only test data, UI reaction, observability or future calibration is
-missing, the next safe step is TC writing with `candidate-ui-calibration`,
-`needs-test-data`, `blocked-observability` or `needs-future-clarification`.
-Block TC writing only for source contradictions or obligations that cannot be
-represented without inventing behavior.
+the next safe step. It must also record `code_root`, `ft_package_root`,
+`artifact_write_root`, `root_split_allowed`, `next_stage_transition`, and
+validator-error classification fields when validation was run. Link the summary
+from every affected `workflow-state.yaml` or package-level state/index so the
+next stage cannot miss it. If the bounded matrix repair/re-review cap is
+reached, do not treat that as automatic failure to write TC: when the source
+obligation is clear and only test data, UI reaction, observability or future
+calibration is missing, the next safe step is TC writing with
+`candidate-ui-calibration`, `needs-test-data`, `blocked-observability` or
+`needs-future-clarification`. Block TC writing only for source contradictions or
+obligations that cannot be represented without inventing behavior.
 
 For `tc_review`, return `review-findings.md` and verify that
 `test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
@@ -139,7 +143,9 @@ id, use the id that the controller passed in the reviewer prompt.
 It must also record `reviewer_execution_surface = codex-task` or `codex-thread`
 and `reviewer_thread_url_or_id` with the durable task/thread id or URL. Values
 such as `sub-agent`, `same-session`, `in-process` or `local-helper` mean
-`reviewed-not-independent`.
+`reviewed-not-independent`. A sub-agent/local-helper/same-session pass can
+support analysis, but it cannot be the final independent reviewer verdict for
+matrix acceptance, TC review acceptance or practical release.
 
 Return `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only

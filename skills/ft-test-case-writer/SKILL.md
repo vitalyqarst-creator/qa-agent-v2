@@ -43,12 +43,23 @@ benchmark-grade process evidence. It is split into two writer passes:
   reviewer pass by default;
 - after matrix review or matrix re-review, require `practical-stage-summary.md`
   before sending the next prompt: accepted scopes, blocked/round-cap scopes,
-  reasons, whether TC may be written with explicit statuses, and next safe step;
+  reasons, whether TC may be written with explicit statuses, next safe step,
+  root consistency fields, `validator_errors_classification` when validation
+  was run, and `next_stage_transition`;
 - when a matrix stays `round-cap-reached` after the bounded repair/re-review,
   write TC with `candidate-ui-calibration`, `blocked-observability`,
   `needs-test-data` or `needs-future-clarification` if the source obligation is
   clear and only data/UI/observability is missing; block only a `source contradiction`
   or unrepresentable source obligations;
+- before canonical TC writing, verify that `code_root`, `ft_package_root` and
+  `artifact_write_root` in `practical-stage-summary.md` are consistent. If the
+  FT package is outside the version-gated root, continue only when
+  `root_split_allowed = yes` and `root_split_authority` names explicit
+  user/controller approval; otherwise return `blocked-input`;
+- if validator `errors_count > 0`, continue only when the summary classifies the
+  errors as `next-stage-blocker`, `pre-existing-unrelated`,
+  `validator-false-positive` or `mixed`; do not treat writer as
+  unconditionally allowed while validator errors remain;
 - do not create XLSX duplicates for practical matrices unless the user
   explicitly requests XLSX export;
 - do not create source assertions, source assertion review prompts, semantic
@@ -78,7 +89,8 @@ only when explicitly requested by the user or by an already selected route.
   `initial_draft`, `revision_from_findings`, or remediation;
 - for `practical_v0_8_tc_after_matrix_accepted`: accepted
   `test-design-matrix-review.md` and `review-independence.md` from a separate
-  reviewer session;
+  reviewer session, plus linked `practical-stage-summary.md` with root
+  consistency and next-stage transition evidence;
 - for `revision_from_findings`: existing test-case suite, structured findings artifact, review round number, `review_mode`, and traceability matrix when available.
 
 If a verified `stage-package.json` is provided, use the prepared fast path: read only the four package files, do not repeat source discovery/extraction, and access the full source only through the targeted fallback contract from [prepared-stage-package-format.md](../../references/agent/prepared-stage-package-format.md).

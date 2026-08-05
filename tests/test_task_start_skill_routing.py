@@ -121,7 +121,11 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, and next safe step",
+            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification and next_stage_transition",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "practical-stage-summary.md is linked from affected workflow-state.yaml or package state/index",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(

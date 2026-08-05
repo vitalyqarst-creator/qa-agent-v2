@@ -4350,6 +4350,320 @@ def parse_review_independence_fields(content: str) -> dict[str, str]:
     return fields
 
 
+PRACTICAL_STAGE_SUMMARY_NAME = "practical-stage-summary.md"
+PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
+    "code_root",
+    "ft_package_root",
+    "artifact_write_root",
+    "root_split_allowed",
+}
+PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
+    "writer allowed",
+    "writer conditional",
+    "writer blocked",
+    "not-applicable",
+    "not applicable",
+}
+PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS = {
+    "none",
+    "next-stage-blocker",
+    "pre-existing-unrelated",
+    "validator-false-positive",
+    "mixed",
+    "not-applicable",
+    "not applicable",
+}
+
+
+def strip_markdown_code(value: str) -> str:
+    return value.strip().strip("`").strip()
+
+
+def parse_markdown_key_value_fields(content: str) -> dict[str, str]:
+    fields: dict[str, str] = {}
+    rows = markdown_table_rows_from_text(content)
+    if len(rows) < 2:
+        return fields
+    index = 0
+    while index < len(rows) - 1:
+        header = [cell.strip().lower() for cell in rows[index]]
+        normalized_header = [normalize_markdown_field_name(cell) for cell in header]
+        has_english_header = "field" in normalized_header and "value" in normalized_header
+        has_russian_header = (
+            any(cell in {"поле", "параметр"} for cell in header)
+            and "значение" in header
+        )
+        if not has_english_header and not has_russian_header:
+            index += 1
+            continue
+        field_index = normalized_header.index("field") if has_english_header else next(
+            i for i, cell in enumerate(header) if cell in {"поле", "параметр"}
+        )
+        value_index = normalized_header.index("value") if has_english_header else header.index("значение")
+        index += 1
+        while index < len(rows):
+            row = rows[index]
+            row_header = [cell.strip().lower() for cell in row]
+            row_normalized_header = [normalize_markdown_field_name(cell) for cell in row_header]
+            if (
+                ("field" in row_normalized_header and "value" in row_normalized_header)
+                or (any(cell in {"поле", "параметр"} for cell in row_header) and "значение" in row_header)
+            ):
+                break
+            if field_index < len(row) and value_index < len(row):
+                field = strip_markdown_code(row[field_index])
+                value = strip_markdown_code(row[value_index])
+                if field:
+                    fields[field] = value
+            index += 1
+    return fields
+
+
+def normalized_path_text(value: str) -> str:
+    normalized = strip_markdown_code(value)
+    normalized = normalized.strip().strip('"').strip("'").replace("\\", "/").rstrip("/")
+    return normalized.lower()
+
+
+def path_text_is_within(child: str, parent: str) -> bool:
+    child_normalized = normalized_path_text(child)
+    parent_normalized = normalized_path_text(parent)
+    if not child_normalized or not parent_normalized:
+        return False
+    return child_normalized == parent_normalized or child_normalized.startswith(f"{parent_normalized}/")
+
+
+def ft_package_root_for_artifact(path: Path) -> Path | None:
+    for candidate in [path.parent, *path.parents]:
+        if candidate.parent.name == "fts":
+            return candidate
+    return None
+
+
+def workflow_states_for_ft_package(ft_root: Path) -> list[Path]:
+    stage_handoffs = ft_root / "work" / "stage-handoffs"
+    if not stage_handoffs.exists():
+        return []
+    return sorted(stage_handoffs.rglob("workflow-state.yaml"))
+
+
+def iter_practical_stage_summaries(root: Path) -> list[Path]:
+    if root.is_file() and root.name == PRACTICAL_STAGE_SUMMARY_NAME:
+        return [root]
+    return sorted(validation_scope(root).rglob(PRACTICAL_STAGE_SUMMARY_NAME))
+
+
+def practical_stage_summary_is_linked(path: Path, root: Path) -> bool:
+    ft_root = ft_package_root_for_artifact(path)
+    if ft_root is None:
+        return False
+    workflow_states = workflow_states_for_ft_package(ft_root)
+    if not workflow_states:
+        return False
+    try:
+        relative_to_ft = path.relative_to(ft_root).as_posix()
+    except ValueError:
+        relative_to_ft = path.name
+    for workflow_state in workflow_states:
+        try:
+            content = workflow_state.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        if path.name in content and (relative_to_ft in content or "practical_stage_summary" in content):
+            return True
+    return False
+
+
+def parse_nonnegative_int(value: str) -> int | None:
+    match = re.search(r"\d+", value)
+    if not match:
+        return None
+    try:
+        return int(match.group(0))
+    except ValueError:
+        return None
+
+
+def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-not-utf8",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary is not UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save practical-stage-summary.md as UTF-8 Markdown.",
+            )
+        )
+        checks.append(Check("practical-stage-summary", "fail", "Summary is not UTF-8.", display_path))
+        return findings, checks
+
+    fields = parse_markdown_key_value_fields(content)
+    missing_root_fields = sorted(field for field in PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS if field not in fields)
+    if missing_root_fields:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-missing-root-consistency-fields",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary lacks root consistency fields",
+                details=(
+                    "The summary must make code/data/artifact roots auditable before the next practical-stage handoff."
+                ),
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_root_fields)}"],
+                recommended_action=(
+                    "Add a field/value table with code_root, ft_package_root, artifact_write_root and "
+                    "root_split_allowed."
+                ),
+            )
+        )
+
+    code_root = fields.get("code_root", "")
+    ft_package_root = fields.get("ft_package_root", "")
+    artifact_write_root = fields.get("artifact_write_root", "")
+    split_allowed = fields.get("root_split_allowed", "").strip().lower()
+    split_authority = fields.get("root_split_authority", "").strip()
+    if code_root and ft_package_root and not path_text_is_within(ft_package_root, code_root):
+        if split_allowed not in {"yes", "true", "explicitly-approved", "approved"} or not split_authority:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-root-split-unapproved",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary uses separate code and FT package roots without approval",
+                    details=(
+                        "Version-gated code and FT package artifacts are in different roots. This split is unsafe "
+                        "unless the summary records explicit approval and authority."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"code_root={code_root}",
+                        f"ft_package_root={ft_package_root}",
+                        f"root_split_allowed={fields.get('root_split_allowed', '<missing>')}",
+                        f"root_split_authority={split_authority or '<missing>'}",
+                    ],
+                    recommended_action=(
+                        "Run the stage in one consistent worktree, or record root_split_allowed=yes with a "
+                        "root_split_authority that names the user/controller approval."
+                    ),
+                )
+            )
+    if ft_package_root and artifact_write_root and not path_text_is_within(artifact_write_root, ft_package_root):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-artifact-write-root-outside-ft-package",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary writes artifacts outside FT package root",
+                details="Practical-route artifacts must stay under the declared FT package root.",
+                path=display_path,
+                evidence=[f"ft_package_root={ft_package_root}", f"artifact_write_root={artifact_write_root}"],
+                recommended_action="Set artifact_write_root under ft_package_root or stop as blocked-input.",
+            )
+        )
+
+    transition = fields.get("next_stage_transition", "").strip().lower()
+    if transition not in PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-missing-next-stage-transition",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary lacks explicit next-stage transition status",
+                details="The summary must state whether writer is allowed, conditional, or blocked.",
+                path=display_path,
+                evidence=[f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}"],
+                recommended_action=(
+                    "Add next_stage_transition as writer allowed, writer conditional, writer blocked or not-applicable."
+                ),
+            )
+        )
+
+    validator_errors_count = parse_nonnegative_int(fields.get("validator_errors_count", ""))
+    classification = fields.get("validator_errors_classification", "").strip().lower()
+    if validator_errors_count is not None and validator_errors_count > 0:
+        if classification not in PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS or classification == "none":
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-errors-unclassified",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has validator errors without accepted classification",
+                    details=(
+                        "Validator errors must be classified before the next-stage route can be considered safe."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_errors_count={validator_errors_count}",
+                        f"validator_errors_classification={fields.get('validator_errors_classification', '<missing>')}",
+                    ],
+                    recommended_action=(
+                        "Classify errors as next-stage-blocker, pre-existing-unrelated, validator-false-positive or mixed."
+                    ),
+                )
+            )
+        if transition == "writer allowed":
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-errors-allow-writer-unconditionally",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary allows writer despite validator errors",
+                    details=(
+                        "When errors_count > 0, the next-stage route must be conditional or blocked until the "
+                        "errors are fixed or explicitly waived."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_errors_count={validator_errors_count}",
+                        f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}",
+                    ],
+                    recommended_action="Use writer conditional or writer blocked, with the exact error classification.",
+                )
+            )
+
+    linked = practical_stage_summary_is_linked(path, root)
+    if not linked:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-not-linked-from-workflow",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary is not linked from workflow-state",
+                details=(
+                    "The next practical stage may miss the summary unless it is linked from affected workflow-state "
+                    "artifacts or a package state/index."
+                ),
+                path=display_path,
+                evidence=[f"summary={display_path}"],
+                recommended_action=(
+                    "Add latest_artifacts.practical_stage_summary or equivalent package-level pointer to each "
+                    "affected workflow-state.yaml."
+                ),
+            )
+        )
+
+    has_errors = any(finding.severity == "error" for finding in findings)
+    checks.append(
+        Check(
+            "practical-stage-summary",
+            "fail" if has_errors else "pass",
+            "Practical stage summary has blocking issues." if has_errors else "Practical stage summary passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
 def validate_practical_review_independence_gate(
     content: str,
     path: Path,
@@ -19788,7 +20102,7 @@ def validate_workflow_state(
                     recommended_action="Add the prompt to required_inputs or latest_artifacts, or fix next_skill/stage_status.",
                 )
             )
-        else:
+        elif active_prompt_path is not None:
             checks.append(Check("workflow-state-active-transition-prompt", "pass", "Active transition prompt resolves.", display_path))
             prompt_findings, prompt_checks = validate_active_transition_prompt(
                 active_prompt_path,
@@ -19798,6 +20112,15 @@ def validate_workflow_state(
             )
             findings.extend(prompt_findings)
             checks.extend(prompt_checks)
+        else:
+            checks.append(
+                Check(
+                    "workflow-state-active-transition-prompt",
+                    "fail",
+                    "Active transition prompt does not resolve.",
+                    display_path,
+                )
+            )
 
     stage_status = state.get("stage_status")
     next_skill = state.get("next_skill")
@@ -19909,6 +20232,7 @@ def validate(
     source_table_normalizations = iter_source_table_normalizations(root)
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
+    practical_stage_summaries = iter_practical_stage_summaries(root)
     scope_selection_prompts = iter_named_markdown(root, "scope-selection-prompts.md")
     oracle_inventories = [
         *iter_named_markdown(root, NEGATIVE_ORACLE_INVENTORY_NAME),
@@ -19933,6 +20257,7 @@ def validate(
         source_table_normalizations = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        practical_stage_summaries = []
         scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_source_table_normalization:
@@ -19953,6 +20278,7 @@ def validate(
         generated_source_basis_artifacts = []
         dictionary_inventories = []
         mockup_visual_inventories = []
+        practical_stage_summaries = []
         scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_dictionary_inventory:
@@ -19973,6 +20299,7 @@ def validate(
         active_text_artifacts = []
         generated_source_basis_artifacts = []
         mockup_visual_inventories = []
+        practical_stage_summaries = []
         scope_selection_prompts = []
         oracle_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
@@ -20226,6 +20553,11 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in practical_stage_summaries:
+        path_findings, path_checks = validate_practical_stage_summary(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in scope_selection_prompts:
         path_findings, path_checks = validate_scope_selection_prompts_artifact(path, root)
         findings.extend(path_findings)
@@ -20294,6 +20626,7 @@ def validate(
             "active_text_artifacts_checked": len(active_text_artifacts),
             "generated_source_basis_artifacts_checked": len(generated_source_basis_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
+            "practical_stage_summaries_checked": len(practical_stage_summaries),
             "scope_selection_prompts_checked": len(scope_selection_prompts),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),
@@ -20333,6 +20666,7 @@ def text_report(report: dict[str, Any]) -> str:
         f"- active text artifacts: {summary['active_text_artifacts_checked']}",
         f"- generated source-basis artifacts: {summary['generated_source_basis_artifacts_checked']}",
         f"- mockup visual inventories: {summary['mockup_visual_inventories_checked']}",
+        f"- practical stage summaries: {summary['practical_stage_summaries_checked']}",
         f"- UI evidence indexes: {summary['ui_evidence_indexes_checked']}",
         f"- UI validation reports: {summary['ui_validation_reports_checked']}",
         (
