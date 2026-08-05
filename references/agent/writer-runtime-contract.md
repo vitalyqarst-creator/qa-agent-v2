@@ -40,7 +40,7 @@ Conditional inputs:
 - `mockup-visual-inventory.md` is mandatory for a UI scope with mockup/screen image;
 - `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` are mandatory when the scope handoff contains validation/format restrictions or requiredness obligations;
 - accepted `test-design-matrix-review.md` and separate-session `review-independence.md` are mandatory before `practical_v0_8` canonical TC drafting, unless the bounded matrix review cap was reached and `practical-stage-summary.md` explicitly allows status-marked TC writing because the source obligation is clear and only data/UI/observability remains unresolved;
-- for `practical_v0_8` canonical TC drafting, `practical-stage-summary.md` must be linked from the affected `workflow-state.yaml` / package state and must contain `code_root`, `ft_package_root`, `artifact_write_root`, `root_split_allowed`, `next_stage_transition`, per-scope transitions for package-level conditional states, and validator error/warning classification fields when validation was run;
+- for `practical_v0_8` canonical TC drafting, `practical-stage-summary.md` must be linked from the affected `workflow-state.yaml` / package state and must contain `code_root`, `ft_package_root`, `artifact_write_root`, `root_split_allowed`, `next_stage_transition`, `git_persistence`, per-scope transitions for package-level conditional states, and fresh validator error/warning count/classification/evidence fields when validation was run;
 - structured findings and traceability matrix are mandatory for `revision_from_findings` when the reviewer provided them.
 
 ## Hard Stops
@@ -56,6 +56,7 @@ Do not set `stage_status: ready-for-review` when:
 - `practical-stage-summary.md` is missing, not linked, lacks root consistency fields, records an unapproved split between `code_root` and `ft_package_root`, or sets `next_stage_transition = writer blocked`;
 - validator errors exist and the summary does not classify them as `next-stage-blocker`, `pre-existing-unrelated`, `validator-false-positive` or `mixed`, or it claims unconditional `writer allowed` while `validator_errors_count > 0`;
 - validator warnings exist and the summary does not classify them as `blocking-for-scope`, `expected-pre-writer`, `nonblocking-info` or `mixed`;
+- validator count/evidence fields in the summary are stale relative to the latest validation run;
 - package-level `next_stage_transition = writer conditional` is present without per-scope transitions saying which scopes may proceed and which remain blocked/conditional;
 - validator warnings are `blocking-for-scope` or `mixed`, but the summary claims package-level `writer allowed`;
 - practical source package completeness fails: missing `AGENT-NOTES.md`, missing main DOCX, missing mandatory XHTML, or missing PDF cross-check under `ft_package_root`;
@@ -73,7 +74,7 @@ In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and 
 4. Decompose requirements into coverage obligations, atomic statements, or explicit gaps.
 5. Build coverage plan and metrics by `coverage-runtime-checklist.md`; use `Coverage Obligation Table` for mandatory classes.
 6. In `practical_v0_8_matrix`, write only `test-design-matrix.md` and a matrix-review prompt; do not create or update `TC-*`.
-6.1. After matrix review or matrix re-review, require `practical-stage-summary.md` with accepted scopes, blocked/round-cap scopes, reasons, whether TC may be written with explicit statuses, `next_stage_transition`, root consistency fields, and validator-error classification before continuing.
+6.1. After matrix review or matrix re-review, require `practical-stage-summary.md` with accepted scopes, blocked/round-cap scopes, reasons, whether TC may be written with explicit statuses, `next_stage_transition`, root consistency fields, `git_persistence`, and fresh validator count/classification/evidence before continuing.
 6.2. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review or a bounded round-cap practical-policy decision in `practical-stage-summary.md`, verify that the summary is linked from affected workflow-state/package state, then write `TC-*` by `test-case-runtime-format.md`.
 6.3. If `code_root`, `ft_package_root` and `artifact_write_root` are not the same tree, continue only when `root_split_allowed = yes` and `root_split_authority` names the explicit user/controller approval. Otherwise set `blocked-input`.
 6.4. If validator errors are present before writer, distinguish `physical-source-missing`, `workflow-link-stale`, `validator-root-selection-defect`, or `mixed` in the practical summary. Fix stale links only when the files exist. Restore missing source files when they are physically absent. Fix validator/root-selection rules when nested package discovery is wrong; do not create parent-level `work/stage-handoffs` artifacts outside `ft_package_root`.

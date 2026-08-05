@@ -78,6 +78,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
             "validator_warnings_classification",
             "per_scope_next_stage_transitions",
             "production_tc_clean",
+            "git_persistence",
             "source_restore_provenance",
             "source_restore_sha256",
         ):
@@ -88,6 +89,7 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("exact expected commit", route)
         self.assertIn("validator-warning classification", routing)
         self.assertIn("production_tc_clean", routing)
+        self.assertIn("fresh validator counts/evidence", routing)
         self.assertIn("inside the actual FT package root", routing)
 
     def test_round_cap_policy_prefers_explicit_status_tc_over_blocking_when_source_is_clear(self) -> None:

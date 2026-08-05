@@ -42,6 +42,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         validator_warnings_evidence: str = "not-applicable",
         per_scope_next_stage_transitions: str = "not-applicable",
         production_tc_clean: str = "not-applicable",
+        git_persistence: str = "not-applicable",
         source_restore_provenance: str = "not-applicable",
         source_restore_sha256: str = "not-applicable",
         next_stage_transition: str = "writer allowed",
@@ -82,6 +83,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| validator_warnings_evidence | `{validator_warnings_evidence}` |",
                     f"| per_scope_next_stage_transitions | `{per_scope_next_stage_transitions}` |",
                     f"| production_tc_clean | `{production_tc_clean}` |",
+                    f"| git_persistence | `{git_persistence}` |",
                     f"| source_restore_provenance | `{source_restore_provenance}` |",
                     f"| source_restore_sha256 | `{source_restore_sha256}` |",
                     f"| next_stage_transition | `{next_stage_transition}` |",
@@ -118,6 +120,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-validator-errors-allow-writer-unconditionally", ids)
         self.assertNotIn("practical-stage-summary-missing-operational-fields", ids)
         self.assertNotIn("practical-stage-summary-validator-warnings-unclassified", ids)
+        self.assertNotIn("practical-stage-summary-validator-warning-count-stale", ids)
 
     def test_rejects_unapproved_split_between_code_and_ft_package_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -248,6 +251,49 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("practical-stage-summary-tc-review-with-dirty-production-testcases", ids)
+
+    def test_requires_git_persistence_field(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            "\n".join(
+                line
+                for line in summary.read_text(encoding="utf-8").splitlines()
+                if not line.startswith("| git_persistence |")
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-missing-operational-fields", ids)
+
+    def test_rejects_invalid_git_persistence_field(self) -> None:
+        ids = self.finding_ids(self.make_package(git_persistence="ordinary git maybe"))
+
+        self.assertIn("practical-stage-summary-invalid-git-persistence", ids)
+
+    def test_rejects_stale_validator_warning_count_in_summary(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="nonblocking-info",
+                validator_warnings_evidence="not-applicable",
+                next_stage_transition="writer conditional",
+                per_scope_next_stage_transitions="yes",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-warning-count-stale", ids)
+
+    def test_rejects_stale_validator_finding_evidence_in_summary(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_evidence="source-quality-old-warning-id",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-evidence-stale", ids)
 
     def test_rejects_round_cap_without_source_contradiction_classification(self) -> None:
         root = self.make_package(
@@ -420,6 +466,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     "| validator_warnings_evidence | `not-applicable` |",
                     "| per_scope_next_stage_transitions | `not-applicable` |",
                     "| production_tc_clean | `not-applicable` |",
+                    "| git_persistence | `not-applicable` |",
                     "| source_restore_provenance | `not-applicable` |",
                     "| source_restore_sha256 | `not-applicable` |",
                     "| next_stage_transition | `writer blocked` |",

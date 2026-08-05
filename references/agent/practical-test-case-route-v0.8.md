@@ -170,6 +170,7 @@ If a validator was run, add these fields:
 | validator_warnings_evidence | `<paths/finding ids or not-applicable>` |
 | per_scope_next_stage_transitions | `yes / not-applicable` |
 | production_tc_clean | `yes / no / mixed / not-applicable` |
+| git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
 | source_restore_provenance | `<source path/checkpoint used to restore package files, or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 bindings for restored files, or not-applicable>` |
 
@@ -215,6 +216,13 @@ agent-layer validator/policy, not by writing new parent-level handoff artifacts.
 When files are restored or copied from another checkout, summary must record
 `source_restore_provenance` and SHA-256 for the restored package files. Without
 that provenance, the next stage cannot audit contamination risk.
+
+After every repair, rerun the validator and refresh
+`validator_errors_count`, `validator_warnings_count` and evidence ids from the
+latest report. Stale counts or stale finding ids block the next practical stage.
+If changed FT/package artifacts are ignored by git, set
+`git_persistence = ignored-by-git` or `mixed` and state that ordinary
+commit/push will not persist those files.
 
 `practical-stage-summary.md` must be linked from workflow-state files inside the
 actual FT package root. An "equivalent package-level state/index pointer" is

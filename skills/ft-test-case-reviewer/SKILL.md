@@ -120,9 +120,12 @@ the next safe step. It must also record `code_root`, `ft_package_root`,
 `tc-review conditional`,
 `production_tc_clean`, `validator_errors_classification` and
 `validator_warnings_classification` when validation was run, plus
-`source_restore_provenance` and
-`source_restore_sha256` when source files were restored or copied. Link the
-summary from every affected `workflow-state.yaml` or
+`source_restore_provenance`, `source_restore_sha256` and `git_persistence`.
+After repair/re-review, rerun validation and refresh the declared
+validator counts/evidence from the latest report before handing off.
+When changed FT/package artifacts are git-ignored, record that explicitly in
+`git_persistence` because ordinary commit/push will not persist them.
+Link the summary from every affected `workflow-state.yaml` or
 package-level state/index inside the actual FT package root so the next stage
 cannot miss it. If the bounded matrix repair/re-review cap is
 reached, do not treat that as automatic failure to write TC: when the source

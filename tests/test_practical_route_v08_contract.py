@@ -120,6 +120,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("validator_warnings_count", content)
         self.assertIn("per_scope_next_stage_transitions", content)
         self.assertIn("production_tc_clean", content)
+        self.assertIn("git_persistence", content)
+        self.assertIn("Stale counts", content)
         self.assertIn("tc-review conditional", content)
         self.assertIn("source_contradiction: yes/no", content)
         self.assertIn("source_restore_sha256", content)

@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -4575,6 +4575,7 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
     "root_split_allowed",
 }
 PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
+    "git_persistence",
     "per_scope_next_stage_transitions",
     "production_tc_clean",
     "validator_warnings_count",
@@ -4609,6 +4610,16 @@ PRACTICAL_STAGE_SUMMARY_TRUE_VALUES = {
     "all clean",
     "pass",
     "passed",
+}
+PRACTICAL_STAGE_SUMMARY_ALLOWED_GIT_PERSISTENCE = {
+    "tracked",
+    "ignored_by_git",
+    "ignored-by-git",
+    "ignored by git",
+    "mixed",
+    "not_applicable",
+    "not-applicable",
+    "not applicable",
 }
 PRACTICAL_STAGE_SUMMARY_DIRTY_TC_WARNING_IDS = {
     "test-case-split-artifact-duplicated-sections",
@@ -4645,6 +4656,7 @@ ROUND_CAP_TC_WITH_STATUS_RE = re.compile(
     r"candidate-ui-calibration|needs-test-data|blocked-observability|needs-future-clarification",
     flags=re.IGNORECASE,
 )
+PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE = re.compile(r"\b[a-z][a-z0-9]+(?:-[a-z0-9]+){2,}\b")
 
 
 def strip_markdown_code(value: str) -> str:
@@ -4833,7 +4845,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Add per_scope_next_stage_transitions, validator_warnings_count, "
                     "validator_warnings_classification, validator_warnings_evidence, "
-                    "production_tc_clean, source_restore_provenance and source_restore_sha256."
+                    "production_tc_clean, git_persistence, source_restore_provenance and source_restore_sha256."
                 ),
             )
         )
@@ -4902,6 +4914,27 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
 
     production_tc_clean = fields.get("production_tc_clean", "")
     normalized_production_tc_clean = normalize_markdown_field_name(production_tc_clean)
+    git_persistence = fields.get("git_persistence", "")
+    normalized_git_persistence = normalize_markdown_field_name(git_persistence)
+    if "git_persistence" in fields and normalized_git_persistence not in PRACTICAL_STAGE_SUMMARY_ALLOWED_GIT_PERSISTENCE:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-invalid-git-persistence",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has invalid git persistence state",
+                details=(
+                    "A practical handoff must say whether changed FT/package artifacts are tracked by git, "
+                    "ignored by git, mixed, or not applicable."
+                ),
+                path=display_path,
+                evidence=[f"git_persistence={fields.get('git_persistence', '<missing>')}"],
+                recommended_action=(
+                    "Set git_persistence to tracked, ignored-by-git, mixed or not-applicable, and mention when "
+                    "ordinary git commit/push will not include changed FT/package artifacts."
+                ),
+            )
+        )
     tc_review_requested = transition in PRACTICAL_STAGE_SUMMARY_TC_REVIEW_TRANSITIONS
     dirty_tc_evidence_ids = sorted(
         finding_id
@@ -5178,6 +5211,147 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
             "practical-stage-summary",
             "fail" if has_errors else "pass",
             "Practical stage summary has blocking issues." if has_errors else "Practical stage summary passed.",
+            display_path,
+        )
+    )
+    return findings, checks
+
+
+def extract_finding_ids_from_summary_evidence(value: str) -> set[str]:
+    if field_is_not_applicable(value):
+        return set()
+    return {match.group(0).lower() for match in PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE.finditer(value)}
+
+
+def validate_practical_stage_summary_report_consistency(
+    path: Path,
+    root: Path,
+    existing_findings: Sequence[Finding],
+) -> tuple[list[Finding], list[Check]]:
+    findings: list[Finding] = []
+    checks: list[Check] = []
+    display_path = rel(path, root)
+
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        checks.append(
+            Check(
+                "practical-stage-summary-validator-freshness",
+                "fail",
+                "Summary freshness could not be checked because the file is not UTF-8.",
+                display_path,
+            )
+        )
+        return findings, checks
+
+    fields = parse_markdown_key_value_fields(content)
+    counted_findings = [
+        finding
+        for finding in existing_findings
+        if finding.category != "practical-stage-summary"
+    ]
+    actual_errors_count = sum(1 for finding in counted_findings if finding.severity == "error")
+    actual_warnings_count = sum(1 for finding in counted_findings if finding.severity == "warning")
+    actual_finding_ids = {finding.id for finding in counted_findings}
+
+    declared_errors_count = parse_nonnegative_int(fields.get("validator_errors_count", ""))
+    declared_warnings_count = parse_nonnegative_int(fields.get("validator_warnings_count", ""))
+
+    if "validator_errors_count" in fields and declared_errors_count is None:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-error-count-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has invalid validator error count",
+                details="validator_errors_count must be a non-negative integer from the latest validator run.",
+                path=display_path,
+                evidence=[f"validator_errors_count={fields.get('validator_errors_count', '<missing>')}"],
+                recommended_action="Rerun the validator and copy the numeric errors_count value into the summary.",
+            )
+        )
+    elif declared_errors_count is not None and declared_errors_count != actual_errors_count:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-error-count-stale",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has stale validator error count",
+                details=(
+                    "The declared validator_errors_count does not match the current validator findings outside "
+                    "practical-stage-summary self-checks."
+                ),
+                path=display_path,
+                evidence=[
+                    f"declared={declared_errors_count}",
+                    f"actual={actual_errors_count}",
+                ],
+                recommended_action="Rerun the validator after repair and update validator_errors_count before handoff.",
+            )
+        )
+
+    if "validator_warnings_count" in fields and declared_warnings_count is None:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-warning-count-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has invalid validator warning count",
+                details="validator_warnings_count must be a non-negative integer from the latest validator run.",
+                path=display_path,
+                evidence=[f"validator_warnings_count={fields.get('validator_warnings_count', '<missing>')}"],
+                recommended_action="Rerun the validator and copy the numeric warnings_count value into the summary.",
+            )
+        )
+    elif declared_warnings_count is not None and declared_warnings_count != actual_warnings_count:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-warning-count-stale",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has stale validator warning count",
+                details=(
+                    "The declared validator_warnings_count does not match the current validator findings outside "
+                    "practical-stage-summary self-checks."
+                ),
+                path=display_path,
+                evidence=[
+                    f"declared={declared_warnings_count}",
+                    f"actual={actual_warnings_count}",
+                ],
+                recommended_action="Rerun the validator after repair and update validator_warnings_count before handoff.",
+            )
+        )
+
+    declared_evidence_ids = (
+        extract_finding_ids_from_summary_evidence(fields.get("validator_errors_evidence", ""))
+        | extract_finding_ids_from_summary_evidence(fields.get("validator_warnings_evidence", ""))
+    )
+    stale_evidence_ids = sorted(finding_id for finding_id in declared_evidence_ids if finding_id not in actual_finding_ids)
+    if stale_evidence_ids:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-evidence-stale",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has stale validator finding evidence",
+                details=(
+                    "The summary references validator finding ids that are not present in the current validator "
+                    "findings outside practical-stage-summary self-checks."
+                ),
+                path=display_path,
+                evidence=stale_evidence_ids,
+                recommended_action="Remove stale finding ids or rerun the validator and refresh evidence fields.",
+            )
+        )
+
+    has_errors = any(finding.severity == "error" for finding in findings)
+    checks.append(
+        Check(
+            "practical-stage-summary-validator-freshness",
+            "fail" if has_errors else "pass",
+            "Summary validator counts/evidence are stale." if has_errors else "Summary validator counts/evidence are fresh.",
             display_path,
         )
     )
@@ -21189,6 +21363,11 @@ def validate(
 
     for path in iter_named_markdown(root, "ui-validation-report.md"):
         path_findings, path_checks = validate_ui_validation_report(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in practical_stage_summaries:
+        path_findings, path_checks = validate_practical_stage_summary_report_consistency(path, root, findings)
         findings.extend(path_findings)
         checks.extend(path_checks)
 

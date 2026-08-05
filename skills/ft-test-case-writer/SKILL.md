@@ -47,7 +47,7 @@ benchmark-grade process evidence. It is split into two writer passes:
   `artifact_write_root`, `root_split_allowed`,
   `per_scope_next_stage_transitions`, `validator_errors_classification`,
   `validator_warnings_classification`, `source_restore_provenance`,
-  `source_restore_sha256`, and `next_stage_transition`;
+  `source_restore_sha256`, `git_persistence`, and `next_stage_transition`;
 - after canonical TC writing, route written scopes to `tc-review allowed` or
   `tc-review conditional` in `practical-stage-summary.md`; do not leave the
   package-level transition as `writer conditional`; require clean production TC
@@ -70,6 +70,9 @@ benchmark-grade process evidence. It is split into two writer passes:
 - if validator warnings remain, do not collapse them into a single package
   blocker. Classify them as `blocking-for-scope`, `expected-pre-writer`,
   `nonblocking-info` or `mixed`, then route per scope;
+- after any repair, rerun validation, reread `practical-stage-summary.md`, and
+  ensure validator counts/evidence and git persistence fields reflect the latest
+  run before handing off;
 - do not create XLSX duplicates for practical matrices unless the user
   explicitly requests XLSX export;
 - do not create source assertions, source assertion review prompts, semantic
