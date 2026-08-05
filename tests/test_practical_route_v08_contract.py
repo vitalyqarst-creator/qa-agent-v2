@@ -117,6 +117,9 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("cannot be the final reviewer verdict", content)
         self.assertIn("root consistency", content)
         self.assertIn("validator_errors_count", content)
+        self.assertIn("validator_warnings_count", content)
+        self.assertIn("per_scope_next_stage_transitions", content)
+        self.assertIn("source_restore_sha256", content)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")

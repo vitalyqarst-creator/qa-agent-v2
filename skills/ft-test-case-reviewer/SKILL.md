@@ -115,10 +115,14 @@ After every matrix review or matrix re-review, produce/update
 prompt. It must list accepted scopes, blocked/`round-cap-reached` scopes,
 concrete blocker reasons, whether TC can be written with explicit statuses, and
 the next safe step. It must also record `code_root`, `ft_package_root`,
-`artifact_write_root`, `root_split_allowed`, `next_stage_transition`, and
-validator-error classification fields when validation was run. Link the summary
-from every affected `workflow-state.yaml` or package-level state/index so the
-next stage cannot miss it. If the bounded matrix repair/re-review cap is
+`artifact_write_root`, `root_split_allowed`, `next_stage_transition`,
+`per_scope_next_stage_transitions` for package-level `writer conditional`,
+`validator_errors_classification` and `validator_warnings_classification` when
+validation was run, plus `source_restore_provenance` and
+`source_restore_sha256` when source files were restored or copied. Link the
+summary from every affected `workflow-state.yaml` or
+package-level state/index inside the actual FT package root so the next stage
+cannot miss it. If the bounded matrix repair/re-review cap is
 reached, do not treat that as automatic failure to write TC: when the source
 obligation is clear and only test data, UI reaction, observability or future
 calibration is missing, the next safe step is TC writing with

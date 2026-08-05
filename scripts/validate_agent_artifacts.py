@@ -4560,10 +4560,27 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
     "artifact_write_root",
     "root_split_allowed",
 }
+PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
+    "per_scope_next_stage_transitions",
+    "validator_warnings_count",
+    "validator_warnings_classification",
+    "validator_warnings_evidence",
+    "source_restore_provenance",
+    "source_restore_sha256",
+}
 PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
     "writer allowed",
     "writer conditional",
     "writer blocked",
+    "not-applicable",
+    "not applicable",
+}
+PRACTICAL_STAGE_SUMMARY_ALLOWED_WARNING_CLASSIFICATIONS = {
+    "none",
+    "blocking-for-scope",
+    "expected-pre-writer",
+    "nonblocking-info",
+    "mixed",
     "not-applicable",
     "not applicable",
 }
@@ -4684,6 +4701,25 @@ def parse_nonnegative_int(value: str) -> int | None:
         return None
 
 
+def field_is_not_applicable(value: str) -> bool:
+    return normalize_markdown_field_name(value) in {
+        "",
+        "-",
+        "none",
+        "not_applicable",
+        "not-applicable",
+        "not applicable",
+        "n/a",
+        "n_a",
+        "na",
+        "не применимо",
+    }
+
+
+def looks_like_sha256_evidence(value: str) -> bool:
+    return bool(re.search(r"\b[a-fA-F0-9]{64}\b", value))
+
+
 def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
     findings: list[Finding] = []
     checks: list[Check] = []
@@ -4723,6 +4759,29 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Add a field/value table with code_root, ft_package_root, artifact_write_root and "
                     "root_split_allowed."
+                ),
+            )
+        )
+    missing_operational_fields = sorted(
+        field for field in PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS if field not in fields
+    )
+    if missing_operational_fields:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-missing-operational-fields",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary lacks operational routing fields",
+                details=(
+                    "The summary must make warning classification, per-scope writer transition and source restore "
+                    "provenance auditable before the next practical-stage handoff."
+                ),
+                path=display_path,
+                evidence=[f"missing={', '.join(missing_operational_fields)}"],
+                recommended_action=(
+                    "Add per_scope_next_stage_transitions, validator_warnings_count, "
+                    "validator_warnings_classification, validator_warnings_evidence, "
+                    "source_restore_provenance and source_restore_sha256."
                 ),
             )
         )
@@ -4830,6 +4889,117 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     recommended_action="Use writer conditional or writer blocked, with the exact error classification.",
                 )
             )
+
+    validator_warnings_count = parse_nonnegative_int(fields.get("validator_warnings_count", ""))
+    warning_classification = fields.get("validator_warnings_classification", "").strip().lower()
+    if validator_warnings_count is not None and validator_warnings_count > 0:
+        if (
+            warning_classification not in PRACTICAL_STAGE_SUMMARY_ALLOWED_WARNING_CLASSIFICATIONS
+            or warning_classification == "none"
+        ):
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-warnings-unclassified",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has validator warnings without accepted classification",
+                    details=(
+                        "Validator warnings must be classified so the next stage can distinguish global blockers, "
+                        "scope-local blockers, expected pre-writer findings and nonblocking information."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_warnings_count={validator_warnings_count}",
+                        f"validator_warnings_classification={fields.get('validator_warnings_classification', '<missing>')}",
+                    ],
+                    recommended_action=(
+                        "Classify warnings as blocking-for-scope, expected-pre-writer, nonblocking-info or mixed."
+                    ),
+                )
+            )
+        if transition == "writer allowed" and warning_classification in {"blocking-for-scope", "mixed"}:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-warnings-allow-writer-unconditionally",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary allows writer despite scope-blocking warnings",
+                    details=(
+                        "Scope-blocking or mixed warnings require per-scope writer conditional/blocked routing, "
+                        "not unconditional package-level writer allowed."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"validator_warnings_count={validator_warnings_count}",
+                        f"validator_warnings_classification={fields.get('validator_warnings_classification', '<missing>')}",
+                        f"next_stage_transition={fields.get('next_stage_transition', '<missing>')}",
+                    ],
+                    recommended_action=(
+                        "Use writer conditional and list per-scope transitions, or resolve the warnings first."
+                    ),
+                )
+            )
+
+    per_scope_transitions = fields.get("per_scope_next_stage_transitions", "")
+    if transition == "writer conditional" and field_is_not_applicable(per_scope_transitions):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-missing-per-scope-transitions",
+                severity="error",
+                category="practical-stage-summary",
+                title="Conditional writer transition lacks per-scope routing",
+                details=(
+                    "A package-level writer conditional state must say which scopes are allowed, conditional, or "
+                    "blocked so one scope-local warning does not unnecessarily stop all scopes."
+                ),
+                path=display_path,
+                evidence=[f"per_scope_next_stage_transitions={fields.get('per_scope_next_stage_transitions', '<missing>')}"],
+                recommended_action=(
+                    "Add a per-scope transition table and set per_scope_next_stage_transitions to yes."
+                ),
+            )
+        )
+
+    restore_mentioned = bool(re.search(r"\brestor(?:e|ed|ing)\b|восстанов", content, flags=re.IGNORECASE))
+    source_restore_provenance = fields.get("source_restore_provenance", "")
+    source_restore_sha256 = fields.get("source_restore_sha256", "")
+    if restore_mentioned and field_is_not_applicable(source_restore_provenance):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-source-restore-provenance-missing",
+                severity="error",
+                category="practical-stage-summary",
+                title="Source restore is mentioned without provenance",
+                details=(
+                    "When source package inputs are restored or copied from another checkout, the summary must state "
+                    "where they came from so later stages can audit contamination risk."
+                ),
+                path=display_path,
+                evidence=[f"source_restore_provenance={fields.get('source_restore_provenance', '<missing>')}"],
+                recommended_action=(
+                    "Record the source checkout/path and package-relative files used for restoration."
+                ),
+            )
+        )
+    if restore_mentioned and not field_is_not_applicable(source_restore_provenance) and not looks_like_sha256_evidence(source_restore_sha256):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-source-restore-sha256-missing",
+                severity="error",
+                category="practical-stage-summary",
+                title="Source restore provenance lacks SHA-256 evidence",
+                details=(
+                    "Restored source package files must be fingerprinted so the next stage can verify exactly which "
+                    "DOCX/XHTML/PDF/notes were introduced."
+                ),
+                path=display_path,
+                evidence=[f"source_restore_sha256={fields.get('source_restore_sha256', '<missing>')}"],
+                recommended_action=(
+                    "Record SHA-256 for restored source package files or state source_restore_provenance=not-applicable "
+                    "when no restore happened."
+                ),
+            )
+        )
 
     linked = practical_stage_summary_is_linked(path, root)
     if not linked:

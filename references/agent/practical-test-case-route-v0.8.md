@@ -87,6 +87,20 @@ record the roots used for code, FT data and artifact writes:
 | root_split_allowed | `yes/no` |
 | root_split_authority | `<user/controller approval, or not-applicable>` |
 
+Also record the version gate:
+
+| field | value |
+| --- | --- |
+| code_branch | `<branch name, or detached HEAD>` |
+| code_commit | `<exact commit SHA>` |
+| version_gate_status | `passed / blocked-input` |
+
+Detached HEAD is acceptable only when the exact expected commit matches and the
+named branch cannot be checked out because it is already occupied by another
+worktree. In that case, record the branch occupancy reason and continue only
+against the exact expected commit. Detached HEAD without an exact expected commit
+match is `blocked-input`.
+
 `ft_package_root` and `artifact_write_root` should normally be inside
 `code_root`. If the FT package is outside the version-gated worktree, this is a
 split-root run. Split-root is allowed only when the user/controller explicitly
@@ -150,11 +164,31 @@ If a validator was run, add these fields:
 | validator_errors_count | `<integer>` |
 | validator_errors_classification | `none / next-stage-blocker / pre-existing-unrelated / validator-false-positive / mixed` |
 | validator_errors_evidence | `<paths/finding ids or not-applicable>` |
+| validator_warnings_count | `<integer>` |
+| validator_warnings_classification | `none / blocking-for-scope / expected-pre-writer / nonblocking-info / mixed` |
+| validator_warnings_evidence | `<paths/finding ids or not-applicable>` |
+| per_scope_next_stage_transitions | `yes / not-applicable` |
+| source_restore_provenance | `<source path/checkpoint used to restore package files, or not-applicable>` |
+| source_restore_sha256 | `<SHA-256 bindings for restored files, or not-applicable>` |
 
 When `validator_errors_count > 0`, the summary must not say unconditional
 `writer allowed`. It must classify the errors and use `writer conditional` or
 `writer blocked` unless every error is explicitly proven irrelevant or a
 validator false positive.
+
+When `validator_warnings_count > 0`, classify warnings separately from errors:
+
+- `blocking-for-scope`: blocks only the affected scope(s);
+- `expected-pre-writer`: expected because TC artifacts do not exist yet, for
+  example oracle-candidate obligations before writer;
+- `nonblocking-info`: does not affect the next practical stage;
+- `mixed`: more than one category is present.
+
+A package-level `writer conditional` state must include per-scope transitions:
+which scopes are `writer allowed`, `writer conditional`, or `writer blocked`,
+and why. Do not let a scope-local warning block unrelated accepted scopes. Do
+not write package-level `writer allowed` when warnings are `blocking-for-scope`
+or `mixed`.
 
 When validator errors mention unresolved source/package artifacts, summary must
 distinguish the cause explicitly:
@@ -169,6 +203,9 @@ distinguish the cause explicitly:
 Only `workflow-link-stale` may be repaired by editing links. Physical missing
 source files must be restored. Root-selection defects must be fixed in the
 agent-layer validator/policy, not by writing new parent-level handoff artifacts.
+When files are restored or copied from another checkout, summary must record
+`source_restore_provenance` and SHA-256 for the restored package files. Without
+that provenance, the next stage cannot audit contamination risk.
 
 `practical-stage-summary.md` must be linked from workflow-state files inside the
 actual FT package root. An "equivalent package-level state/index pointer" is

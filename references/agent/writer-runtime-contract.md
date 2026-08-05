@@ -40,7 +40,7 @@ Conditional inputs:
 - `mockup-visual-inventory.md` is mandatory for a UI scope with mockup/screen image;
 - `negative-oracle-inventory.md` / `requiredness-oracle-inventory.md` are mandatory when the scope handoff contains validation/format restrictions or requiredness obligations;
 - accepted `test-design-matrix-review.md` and separate-session `review-independence.md` are mandatory before `practical_v0_8` canonical TC drafting, unless the bounded matrix review cap was reached and `practical-stage-summary.md` explicitly allows status-marked TC writing because the source obligation is clear and only data/UI/observability remains unresolved;
-- for `practical_v0_8` canonical TC drafting, `practical-stage-summary.md` must be linked from the affected `workflow-state.yaml` / package state and must contain `code_root`, `ft_package_root`, `artifact_write_root`, `root_split_allowed`, `next_stage_transition`, and validator-error classification fields when validation was run;
+- for `practical_v0_8` canonical TC drafting, `practical-stage-summary.md` must be linked from the affected `workflow-state.yaml` / package state and must contain `code_root`, `ft_package_root`, `artifact_write_root`, `root_split_allowed`, `next_stage_transition`, per-scope transitions for package-level conditional states, and validator error/warning classification fields when validation was run;
 - structured findings and traceability matrix are mandatory for `revision_from_findings` when the reviewer provided them.
 
 ## Hard Stops
@@ -55,8 +55,12 @@ Do not set `stage_status: ready-for-review` when:
 - the simple runtime context is insufficient and table/UI/revision/validator deep context from the manifest is required;
 - `practical-stage-summary.md` is missing, not linked, lacks root consistency fields, records an unapproved split between `code_root` and `ft_package_root`, or sets `next_stage_transition = writer blocked`;
 - validator errors exist and the summary does not classify them as `next-stage-blocker`, `pre-existing-unrelated`, `validator-false-positive` or `mixed`, or it claims unconditional `writer allowed` while `validator_errors_count > 0`;
+- validator warnings exist and the summary does not classify them as `blocking-for-scope`, `expected-pre-writer`, `nonblocking-info` or `mixed`;
+- package-level `next_stage_transition = writer conditional` is present without per-scope transitions saying which scopes may proceed and which remain blocked/conditional;
+- validator warnings are `blocking-for-scope` or `mixed`, but the summary claims package-level `writer allowed`;
 - practical source package completeness fails: missing `AGENT-NOTES.md`, missing main DOCX, missing mandatory XHTML, or missing PDF cross-check under `ft_package_root`;
 - practical artifacts, package summary or package index are placed above `ft_package_root` to work around nested package discovery;
+- source package files were restored/copied from another checkout, but `practical-stage-summary.md` does not record source path/checkpoint and SHA-256 evidence;
 - technical fallback produced a compact draft, loss of detail, one-shot giant write, or unchecked mojibake output.
 
 In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and route the task to the right skill or to the user through a handoff prompt.
@@ -73,6 +77,8 @@ In these cases, use `stage_status: blocked-input`, fill `blocking_reasons`, and 
 6.2. In `practical_v0_8` canonical TC drafting, first verify accepted matrix review or a bounded round-cap practical-policy decision in `practical-stage-summary.md`, verify that the summary is linked from affected workflow-state/package state, then write `TC-*` by `test-case-runtime-format.md`.
 6.3. If `code_root`, `ft_package_root` and `artifact_write_root` are not the same tree, continue only when `root_split_allowed = yes` and `root_split_authority` names the explicit user/controller approval. Otherwise set `blocked-input`.
 6.4. If validator errors are present before writer, distinguish `physical-source-missing`, `workflow-link-stale`, `validator-root-selection-defect`, or `mixed` in the practical summary. Fix stale links only when the files exist. Restore missing source files when they are physically absent. Fix validator/root-selection rules when nested package discovery is wrong; do not create parent-level `work/stage-handoffs` artifacts outside `ft_package_root`.
+6.5. If validator warnings are present before writer, classify them separately and route per scope. `oracle-candidate-obligation-without-test-case` is usually `expected-pre-writer`; mockup inventory, source parity, unresolved active prompts or artifact link warnings may be `blocking-for-scope` for the affected scope. Do not block unrelated scopes because of one local warning.
+6.6. A detached HEAD code checkout is acceptable only when `code_commit` exactly matches the expected commit and the named branch is unavailable because another worktree owns it. Record the detached state and reason in the summary.
 6a. Runtime prose must be human-executable: do not put `subject:<hash>`,
 `OBL-*`, `ATOM-*`, `ASSERT-*` or `SRC-*` in `Название` or user-action steps.
 Keep those identifiers only in traceability/design artifacts.

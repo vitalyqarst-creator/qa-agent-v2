@@ -37,6 +37,11 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         root_split_authority: str = "not-applicable",
         validator_errors_count: int = 0,
         validator_errors_classification: str = "none",
+        validator_warnings_count: int = 0,
+        validator_warnings_classification: str = "none",
+        per_scope_next_stage_transitions: str = "not-applicable",
+        source_restore_provenance: str = "not-applicable",
+        source_restore_sha256: str = "not-applicable",
         next_stage_transition: str = "writer allowed",
         link_summary: bool = True,
     ) -> Path:
@@ -70,6 +75,12 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| validator_errors_count | `{validator_errors_count}` |",
                     f"| validator_errors_classification | `{validator_errors_classification}` |",
                     f"| validator_errors_evidence | `not-applicable` |",
+                    f"| validator_warnings_count | `{validator_warnings_count}` |",
+                    f"| validator_warnings_classification | `{validator_warnings_classification}` |",
+                    f"| validator_warnings_evidence | `not-applicable` |",
+                    f"| per_scope_next_stage_transitions | `{per_scope_next_stage_transitions}` |",
+                    f"| source_restore_provenance | `{source_restore_provenance}` |",
+                    f"| source_restore_sha256 | `{source_restore_sha256}` |",
                     f"| next_stage_transition | `{next_stage_transition}` |",
                     "",
                 ]
@@ -102,6 +113,8 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-not-linked-from-workflow", ids)
         self.assertNotIn("practical-stage-summary-validator-errors-unclassified", ids)
         self.assertNotIn("practical-stage-summary-validator-errors-allow-writer-unconditionally", ids)
+        self.assertNotIn("practical-stage-summary-missing-operational-fields", ids)
+        self.assertNotIn("practical-stage-summary-validator-warnings-unclassified", ids)
 
     def test_rejects_unapproved_split_between_code_and_ft_package_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -158,6 +171,52 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("practical-stage-summary-validator-errors-allow-writer-unconditionally", ids)
+
+    def test_rejects_unclassified_validator_warnings_before_writer(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=2,
+                validator_warnings_classification="none",
+                next_stage_transition="writer conditional",
+                per_scope_next_stage_transitions="yes",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-warnings-unclassified", ids)
+
+    def test_rejects_conditional_writer_without_per_scope_transitions(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="blocking-for-scope",
+                next_stage_transition="writer conditional",
+                per_scope_next_stage_transitions="not-applicable",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-missing-per-scope-transitions", ids)
+
+    def test_rejects_unconditional_writer_allowed_for_scope_blocking_warnings(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="blocking-for-scope",
+                next_stage_transition="writer allowed",
+                per_scope_next_stage_transitions="yes",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-validator-warnings-allow-writer-unconditionally", ids)
+
+    def test_requires_sha256_when_source_restore_is_reported(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                source_restore_provenance="restored from previous clean package",
+                source_restore_sha256="missing",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-source-restore-sha256-missing", ids)
 
     def test_unresolved_explicit_active_prompt_reports_finding_without_crashing(self) -> None:
         tmp = tempfile.TemporaryDirectory()
@@ -263,6 +322,12 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     "| validator_errors_count | `1` |",
                     "| validator_errors_classification | `next-stage-blocker` |",
                     "| validator_errors_evidence | `missing source package` |",
+                    "| validator_warnings_count | `0` |",
+                    "| validator_warnings_classification | `none` |",
+                    "| validator_warnings_evidence | `not-applicable` |",
+                    "| per_scope_next_stage_transitions | `not-applicable` |",
+                    "| source_restore_provenance | `not-applicable` |",
+                    "| source_restore_sha256 | `not-applicable` |",
                     "| next_stage_transition | `writer blocked` |",
                     "",
                 ]

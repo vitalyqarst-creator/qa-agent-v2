@@ -75,9 +75,18 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
             "artifact_write_root",
             "root_split_allowed",
             "validator_errors_classification",
+            "validator_warnings_classification",
+            "per_scope_next_stage_transitions",
+            "source_restore_provenance",
+            "source_restore_sha256",
         ):
             self.assertIn(expected, route)
             self.assertIn(expected, writer)
+
+        self.assertIn("Detached HEAD", route)
+        self.assertIn("exact expected commit", route)
+        self.assertIn("validator-warning classification", routing)
+        self.assertIn("inside the actual FT package root", routing)
 
     def test_round_cap_policy_prefers_explicit_status_tc_over_blocking_when_source_is_clear(self) -> None:
         route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(

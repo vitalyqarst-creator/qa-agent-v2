@@ -44,8 +44,12 @@ benchmark-grade process evidence. It is split into two writer passes:
 - after matrix review or matrix re-review, require `practical-stage-summary.md`
   before sending the next prompt: accepted scopes, blocked/round-cap scopes,
   reasons, whether TC may be written with explicit statuses, next safe step,
-  root consistency fields, `validator_errors_classification` when validation
-  was run, and `next_stage_transition`;
+  root consistency fields, `per_scope_next_stage_transitions` for package-level
+  conditional states, `validator_errors_classification` and
+  `validator_warnings_classification` when validation was run,
+  `source_restore_provenance` and `source_restore_sha256` when package files
+  were copied/restored, and
+  `next_stage_transition`;
 - when a matrix stays `round-cap-reached` after the bounded repair/re-review,
   write TC with `candidate-ui-calibration`, `blocked-observability`,
   `needs-test-data` or `needs-future-clarification` if the source obligation is
@@ -60,6 +64,9 @@ benchmark-grade process evidence. It is split into two writer passes:
   errors as `next-stage-blocker`, `pre-existing-unrelated`,
   `validator-false-positive` or `mixed`; do not treat writer as
   unconditionally allowed while validator errors remain;
+- if validator warnings remain, do not collapse them into a single package
+  blocker. Classify them as `blocking-for-scope`, `expected-pre-writer`,
+  `nonblocking-info` or `mixed`, then route per scope;
 - do not create XLSX duplicates for practical matrices unless the user
   explicitly requests XLSX export;
 - do not create source assertions, source assertion review prompts, semantic
