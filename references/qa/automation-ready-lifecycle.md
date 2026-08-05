@@ -26,11 +26,14 @@
 
 Если для нужного scope:
 
+- выполнен UI access preflight: в FT-пакете есть `work/ui-automation-prep/UI-AGENT-NOTES.md`, runtime URL/entrypoint, способ авторизации и тестовая учетная запись или storage-state;
 - в `fts/<ft-slug>/test-cases/automation-ready/` файла еще нет;
 - в `fts/<ft-slug>/test-cases/` baseline файл уже есть;
 - набор уже пригоден как вход для `ft-ui-automation-prep`;
 
 агенту разрешено самостоятельно создать initial `automation-ready` файл на основе baseline.
+
+Если UI access preflight не пройден, агент не должен создавать initial `automation-ready`, `ui-validation-report.md`, `ui-evidence-index.md` или placeholder logs. Он должен зафиксировать `blocked-input` в workflow/summary и перейти к следующему productive practical-route scope, если такой scope есть.
 
 Если baseline файла нет, агент не должен создавать `automation-ready` с нуля.
 
@@ -113,8 +116,9 @@
 
 - Если `automation-ready` уже существует, агент не должен пересоздавать его с нуля без явной причины.
 - Если `automation-ready` отсутствует, но baseline есть, агент должен:
-  1. сначала создать initial `automation-ready`;
-  2. только потом переходить к UI-прогону.
+  1. сначала выполнить UI access preflight;
+  2. только если preflight прошел, создать initial `automation-ready`;
+  3. только потом переходить к UI-прогону.
 - Если отсутствуют и baseline, и `automation-ready`, агент должен остановиться и зафиксировать отсутствие входного артефакта.
 
 ## UI Access Stop Condition

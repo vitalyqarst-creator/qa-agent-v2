@@ -147,6 +147,41 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("refresh_practical_stage_summary.py", template)
         self.assertIn("ordinary commit/push will not", template)
         self.assertIn("git add -f <paths>", template)
+        self.assertIn("Current stage actions", template)
+        self.assertIn("Prior state context", template)
+
+    def test_ui_prep_requires_access_preflight_before_outputs(self) -> None:
+        agents = self.read("AGENTS.md")
+        skill = self.read("skills/ft-ui-automation-prep/SKILL.md")
+        lifecycle = self.read("references/qa/automation-ready-lifecycle.md")
+        ui_format = self.read("references/qa/ui-automation-prep-format.md")
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+
+        for content in (agents, skill, lifecycle, ui_format, route):
+            self.assertIn("UI-AGENT-NOTES.md", content)
+            self.assertIn("runtime", content)
+            self.assertIn("blocked-input", content)
+
+        for content in (agents, skill, lifecycle, ui_format):
+            self.assertRegex(content, r"не (?:создавай|должен создавать)|без создания")
+            self.assertIn("automation-ready", content)
+
+        self.assertIn("UI access preflight", skill)
+        self.assertIn("до создания любых UI-prep output artifacts", skill)
+        self.assertIn("перейти к следующему productive practical-route scope", lifecycle)
+        self.assertIn("continue with the next productive practical-route scope", route)
+
+    def test_ui_evidence_format_requires_package_local_artifacts(self) -> None:
+        skill = self.read("skills/ft-ui-automation-prep/SKILL.md")
+        ui_format = self.read("references/qa/ui-automation-prep-format.md")
+
+        self.assertIn("work/ui-automation-prep/<scope-slug>/evidence/", skill)
+        self.assertIn("work/ui-automation-prep/<scope>/evidence/", ui_format)
+        self.assertIn("не ссылайся", skill)
+        self.assertIn("output/playwright", skill)
+        self.assertIn("не допускаются", ui_format)
+        self.assertIn("output/playwright/...", ui_format)
+        self.assertNotIn("output/playwright/demo-scope/TC-DEMO-001", ui_format)
 
     def test_practical_matrix_uses_russian_user_facing_columns(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")

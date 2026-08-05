@@ -4884,6 +4884,32 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
         return findings, checks
 
     fields = parse_markdown_key_value_fields(content)
+    has_current_stage_actions = bool(re.search(r"(?im)^##\s+Current stage actions\s*$", content))
+    has_prior_state_context = bool(re.search(r"(?im)^##\s+Prior state context\s*$", content))
+    has_legacy_completed_stage_section = bool(re.search(r"(?im)^##\s+Completed In This Stage\s*$", content))
+    if has_legacy_completed_stage_section or (has_current_stage_actions != has_prior_state_context):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-current-prior-sections-missing",
+                severity="warning",
+                category="practical-stage-summary",
+                title="Practical stage summary does not separate current actions from prior state",
+                details=(
+                    "A practical summary must distinguish work performed in the current stage from older route "
+                    "history. Mixing both under Completed In This Stage makes controller handoff ambiguous."
+                ),
+                path=display_path,
+                evidence=[
+                    f"has_current_stage_actions={has_current_stage_actions}",
+                    f"has_prior_state_context={has_prior_state_context}",
+                    f"has_legacy_completed_in_this_stage={has_legacy_completed_stage_section}",
+                ],
+                recommended_action=(
+                    "Replace legacy Completed In This Stage sections with separate Current stage actions and "
+                    "Prior state context sections."
+                ),
+            )
+        )
     missing_root_fields = sorted(field for field in PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS if field not in fields)
     if missing_root_fields:
         findings.append(
@@ -18506,13 +18532,19 @@ def validate_ui_evidence_index(path: Path, root: Path) -> tuple[list[Finding], l
         findings.append(
             Finding(
                 id="ui-evidence-output-paths-declared-local",
-                severity="info",
+                severity="warning",
                 category="ui-evidence",
                 title="UI evidence explicitly declares local output paths",
-                details="Evidence under output/ is intentionally treated as local-only and non-portable.",
+                details=(
+                    "Evidence under output/ is local-only and non-portable. Package-local UI evidence "
+                    "indexes should reference artifacts under work/ui-automation-prep/<scope>/evidence/."
+                ),
                 path=display_path,
                 evidence=output_paths[:10],
-                recommended_action="Export durable artifacts when this evidence must be independently reproducible.",
+                recommended_action=(
+                    "Move/export screenshots, traces, snapshots and logs into the FT package evidence folder "
+                    "and update ui-evidence-index.md to use package-local paths."
+                ),
             )
         )
     elif output_paths:

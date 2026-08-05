@@ -88,6 +88,14 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| source_restore_sha256 | `{source_restore_sha256}` |",
                     f"| next_stage_transition | `{next_stage_transition}` |",
                     "",
+                    "## Current stage actions",
+                    "",
+                    "- Created current-stage handoff.",
+                    "",
+                    "## Prior state context",
+                    "",
+                    "- Previous stages are not repeated here.",
+                    "",
                 ]
             ),
             encoding="utf-8",
@@ -121,6 +129,19 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         self.assertNotIn("practical-stage-summary-missing-operational-fields", ids)
         self.assertNotIn("practical-stage-summary-validator-warnings-unclassified", ids)
         self.assertNotIn("practical-stage-summary-validator-warning-count-stale", ids)
+        self.assertNotIn("practical-stage-summary-current-prior-sections-missing", ids)
+
+    def test_warns_when_summary_uses_legacy_completed_stage_section(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        text = summary.read_text(encoding="utf-8")
+        text = text.replace("## Current stage actions", "## Completed In This Stage")
+        text = text.replace("## Prior state context\n\n- Previous stages are not repeated here.\n\n", "")
+        summary.write_text(text, encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-current-prior-sections-missing", ids)
 
     def test_rejects_unapproved_split_between_code_and_ft_package_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -78,6 +78,32 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertNotIn("test-case-absence-oracle-find-step-mismatch", ids)
 
+    def test_ui_evidence_index_warns_on_output_playwright_paths_even_when_declared_local(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "work" / "ui-automation-prep" / "scope-01" / "ui-evidence-index.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                "\n".join(
+                    [
+                        "# UI Evidence Index",
+                        "",
+                        "- `evidence_export_policy`: `local-output-index-only`",
+                        "",
+                        "| test_case_id | artifact_type | path | note |",
+                        "| --- | --- | --- | --- |",
+                        "| TC-001 | screenshot | output/playwright/scope-01/TC-001.png | local only |",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            report = self.validator.validate(root)
+            findings = {finding["id"]: finding for finding in report["findings"]}
+
+        self.assertIn("ui-evidence-output-paths-declared-local", findings)
+        self.assertEqual("warning", findings["ui-evidence-output-paths-declared-local"]["severity"])
+
     @staticmethod
     def case_with_steps(first_step: str) -> str:
         return "\n".join(

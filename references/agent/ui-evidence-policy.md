@@ -36,14 +36,13 @@ output/playwright/<scope-slug>/...
 
 являются локальными Playwright artifacts.
 
-Они допустимы как evidence index, но не являются переносимыми в чистый checkout, если не экспортированы отдельно. Если такие пути используются, `ui-evidence-index.md` должен объявлять:
+Они допустимы только как transient debug/session output. Package-local `ui-evidence-index.md` не должен ссылаться на такие пути как на handoff evidence. Перед записью `ui-evidence-index.md` экспортируй screenshots, snapshots, traces и logs в:
 
-```md
-- `evidence_export_policy`: `local-output-index-only`
-- `artifact_availability`: пути `output/` являются локальными Playwright-артефактами и не переносимы в чистый checkout.
+```text
+fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/evidence/...
 ```
 
-Local-only evidence не запрещает `confirmed`, но снижает воспроизводимость handoff. Для внешней передачи нужно экспортировать durable artifacts или явно оставить portability limitation.
+Если переносимый evidence не экспортирован, не называй `output/playwright/...` путь достаточным evidence для handoff. Зафиксируй portability blocker/limitation в session log и экспортируй durable artifacts перед статусами `confirmed` или `mismatch-ft-ui`.
 
 ### DOM-Seeded Observation
 
@@ -106,12 +105,14 @@ User comments after a run are input for rerun, not evidence for direct status ch
 ```md
 ## Evidence Policy
 
-- `evidence_export_policy`: `local-output-index-only`
-- `artifact_availability`: пути `output/` являются локальными Playwright-артефактами и не переносимы в чистый checkout.
+- `evidence_export_policy`: `package-local`
+- `artifact_availability`: evidence exported under `work/ui-automation-prep/<scope-slug>/evidence/`.
 - `dom_seeded_policy`: `non-canonical-observation`
 - `trace_policy`: `not-collected`
 - `downstream_rule`: `dom-seeded-not-confirmed`
 ```
+
+Не используй `local-output-index-only` в package-local `ui-evidence-index.md` как нормальный handoff policy. Если evidence остался только в `output/`, это portability limitation/blocker, а не переносимый automation-ready evidence.
 
 Не добавляй policy declaration, если соответствующего ограничения нет. Ложная декларация хуже отсутствующей: она скрывает качество evidence.
 
@@ -127,4 +128,3 @@ Automation-ready case может уточнять executable flow только �
 - фиксируй blocker или limitation;
 - не переписывай expected result под предположение;
 - не меняй FT смысл без `FT/UI Divergence`.
-

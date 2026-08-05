@@ -14,7 +14,8 @@
 - Если после прогона пользователь дает комментарий, уточняющий воспроизведение или ожидаемое поведение, этот комментарий используется как вход для повторной UI-проверки, а не как самостоятельное evidence для смены статуса или актуализации кейса.
 - Подробный lifecycle `baseline -> initial automation-ready -> UI rerun -> updated automation-ready` хранится в [automation-ready-lifecycle.md](./automation-ready-lifecycle.md).
 - Evidence trust levels, DOM-seeded ограничения, local `output/` portability и trace policy определяются в [../agent/ui-evidence-policy.md](../agent/ui-evidence-policy.md).
-- Если `automation-ready` файла еще нет, но baseline файл уже существует, допускается сначала создать initial `automation-ready` версию на основе baseline, а затем использовать ее как вход для UI-прогона.
+- Если `automation-ready` файла еще нет, но baseline файл уже существует, initial `automation-ready` разрешено создавать только после UI access preflight: нужен package-local `work/ui-automation-prep/UI-AGENT-NOTES.md`, runtime URL/entrypoint, способ авторизации и тестовая учетная запись или storage-state.
+- Если UI access preflight не пройден, UI-prep должен остановиться как `blocked-input` без создания пустых `automation-ready`, `ui-validation-report.md`, `ui-evidence-index.md` и placeholder logs.
 
 ## UI Validation Report
 
@@ -55,8 +56,8 @@
 3. Выполнена попытка сохранения.
 
 **Evidence:**
-- `output/playwright/demo-scope/TC-DEMO-001/screenshot-01.png`
-- `output/playwright/demo-scope/TC-DEMO-001/trace.zip`
+- `work/ui-automation-prep/demo-scope/evidence/TC-DEMO-001/screenshot-01.png`
+- `work/ui-automation-prep/demo-scope/evidence/TC-DEMO-001/trace.zip`
 
 **FT Reference:** `GSR 11`; `2.1.1.1.1.1.2`
 
@@ -67,10 +68,14 @@
 
 `ui-evidence-index.md` хранится рядом с report и индексирует все артефакты Playwright.
 
-Если evidence-артефакты намеренно остаются локальными, индекс должен явно объявить это до таблицы evidence:
+Evidence-артефакты должны быть переносимыми вместе с FT-пакетом. Индекс должен ссылаться на package-local paths внутри `work/ui-automation-prep/<scope>/evidence/`. Ссылки на `output/playwright/...` в package-local `ui-evidence-index.md` не допускаются: `output/` является локальным runtime-каталогом, а не handoff artifact.
 
-- `evidence_export_policy`: `local-output-index-only`
-- `artifact_availability`: пути `output/` являются локальными Playwright-артефактами и не переносимы в чистый checkout.
+Если evidence-артефакты намеренно остаются локальными за пределами FT-пакета, это можно фиксировать только в debug/session log, но не как portable evidence в `ui-evidence-index.md`.
+
+Если присутствуют DOM-seeded observations или trace limitations, индекс должен явно объявить это до таблицы evidence:
+
+- `evidence_export_policy`: `package-local`
+- `artifact_availability`: evidence paths are package-local.
 - `dom_seeded_policy`: `non-canonical-observation`, если присутствуют DOM-seeded наблюдения.
 - `trace_policy`: `not-collected`, если Playwright traces намеренно не собирались.
 - `downstream_rule`: `dom-seeded-not-confirmed`, если DOM-seeded наблюдения не должны считаться `confirmed`.
@@ -153,7 +158,7 @@ Automation-ready версия хранится в `fts/<ft-slug>/test-cases/auto
 
 **UI Verification Status:** confirmed
 **UI Evidence:**
-- `output/playwright/demo-scope/TC-DEMO-001/screenshot-01.png`
+- `work/ui-automation-prep/demo-scope/evidence/TC-DEMO-001/screenshot-01.png`
 
 **Automation Notes:** Для автотеста нужен стабильный селектор поля и кнопки сохранения.
 ```

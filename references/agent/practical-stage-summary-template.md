@@ -36,10 +36,20 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | --- | --- | --- | --- | --- | --- |
 | `<scope-slug>` | `matrix-accepted / matrix-changes-required / round-cap-reached / blocked` | `<enum from Summary>` | `yes / no / not-applicable` | `write-with-statuses / block-source-contradiction / not-applicable` | `<Russian reason>` |
 
+## Current stage actions
+
+- `<Only actions performed in the current stage/turn. Do not repeat older history here.>`
+
+## Prior state context
+
+- `<Older facts that explain the current state, for example previous review verdicts or already completed revisions.>`
+
 ## Rules
 
 - Enum fields must contain only the enum value, not explanatory prose.
 - Explanations belong in `next_safe_step`, scope `reason` or a short notes section.
+- Keep `Current stage actions` and `Prior state context` separate. A summary that
+  mixes old route history into current-stage actions is not a clear handoff.
 - After every repair, run:
   `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
   and update validator counts/evidence, including info fields, plus `git_persistence`

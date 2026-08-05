@@ -13,7 +13,7 @@ Skill не пересматривает scope, не заменяет session-bas
 
 - путь к FT-пакету `fts/<ft-slug>/...`;
 - package-specific `AGENT-NOTES.md`, если он есть;
-- package-level UI notes `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md`, если они есть;
+- package-level UI notes `fts/<ft-slug>/work/ui-automation-prep/UI-AGENT-NOTES.md` с runtime URL/entrypoint, способом авторизации и тестовой учетной записью или storage-state;
 - signed-off набор тест-кейсов;
 - `cycle-state.yaml` со статусом `signed-off`;
 - `prompt.reviewer-to-ui-prep.md` из фактической stage-handoff папки; для новых handoff-папок это `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`;
@@ -26,35 +26,40 @@ Skill не пересматривает scope, не заменяет session-bas
 
 Если набор содержит `**Статус тест-кейса:** candidate-ui-calibration` или `**Статус oracle:** ui-calibration-required`, UI-stage должен выполнить calibration: найти фактический trigger валидации, зафиксировать observed UI behavior, предложить regression-ready expected result и перевести oracle только в `observed-ui-backed` после evidence.
 
-Если `automation-ready` файл для нужного scope отсутствует, но baseline файл в `fts/<ft-slug>/test-cases/` уже существует, skill должен сначала создать initial `automation-ready` версию на основе baseline и только потом использовать ее как вход для UI-прогона. Подробный lifecycle см. в [../../references/qa/automation-ready-lifecycle.md](../../references/qa/automation-ready-lifecycle.md).
+Если `automation-ready` файл для нужного scope отсутствует, но baseline файл в `fts/<ft-slug>/test-cases/` уже существует, skill может создать initial `automation-ready` версию только после успешного UI access preflight. Без `UI-AGENT-NOTES.md` и runtime/access входов остановись как `blocked-input`: не создавай пустой `automation-ready`, `ui-validation-report.md`, `ui-evidence-index.md` и `ui-run-not-started.log`. Подробный lifecycle см. в [../../references/qa/automation-ready-lifecycle.md](../../references/qa/automation-ready-lifecycle.md).
 
 ## Выходы
 
 - `ui-validation-report.md` в `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/`;
 - `ui-evidence-index.md` в `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/`;
-- Playwright artifacts в `output/playwright/<scope-slug>/`;
+- Playwright artifacts в `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/evidence/`;
 - отдельная automation-ready версия тест-кейсов в `fts/<ft-slug>/test-cases/automation-ready/<section-id>-<scope-slug>.md`, уточненная по фактически наблюдаемому UI в пределах signed-off intent;
 - список blockers и limitations, если UI недоступен или шаги не наблюдаемы.
 
 ## Workflow
 
 1. Подтверди, что входной набор уже имеет статус `signed-off`. Если статус `round-cap-reached` или другой unresolved, зафиксируй blocked input и не выпускай automation-ready версию.
-2. Проверь, существует ли `fts/<ft-slug>/test-cases/automation-ready/<section-id>-<scope-slug>.md`.
+2. Выполни UI access preflight до создания любых UI-prep output artifacts:
+   - проверь наличие `work/ui-automation-prep/UI-AGENT-NOTES.md`;
+   - проверь, что в notes или prompt есть runtime URL/entrypoint приложения;
+   - проверь, что есть способ авторизации и тестовая учетная запись или storage-state.
+   Если любой из этих входов отсутствует, зафиксируй blocker в текущем `workflow-state.yaml` и practical summary, затем останови UI-prep. Не создавай initial `automation-ready`, `ui-validation-report.md`, `ui-evidence-index.md` или локальный `output/playwright` placeholder.
+3. Проверь, существует ли `fts/<ft-slug>/test-cases/automation-ready/<section-id>-<scope-slug>.md`.
    - Если файл уже есть, используй его как входной артефакт для UI-прогона.
    - Если файла нет, но существует baseline файл `fts/<ft-slug>/test-cases/<section-id>-<scope-slug>.md`, сначала создай initial `automation-ready` версию из baseline без смены UI-статусов.
    - Если нет ни `automation-ready`, ни baseline файла, зафиксируй отсутствие входного артефакта и остановись.
-3. Если в корне FT-пакета есть `AGENT-NOTES.md`, используй его как обязательный package-specific context.
-4. Если для FT-пакета есть `work/ui-automation-prep/UI-AGENT-NOTES.md`, используй его как обязательный phase-specific context для UI-прогонов: runtime entrypoints, credentials, flow создания тестовых данных и другие устойчивые operational notes должны браться оттуда, а не из памяти прошлых сессий.
-5. Возьми только уже утвержденный набор тест-кейсов и не расширяй scope самостоятельно.
-6. Если создаешь initial `automation-ready`, делай это как отдельную фазу:
+4. Если в корне FT-пакета есть `AGENT-NOTES.md`, используй его как обязательный package-specific context.
+5. Используй `work/ui-automation-prep/UI-AGENT-NOTES.md` как обязательный phase-specific context для UI-прогонов: runtime entrypoints, credentials, flow создания тестовых данных и другие устойчивые operational notes должны браться оттуда, а не из памяти прошлых сессий.
+6. Возьми только уже утвержденный набор тест-кейсов и не расширяй scope самостоятельно.
+7. Если создаешь initial `automation-ready`, делай это как отдельную фазу:
    - сохрани трассируемость к baseline;
    - не меняй baseline файл;
    - не ставь `confirmed`, `mismatch-ft-ui` или `blocked-*` только потому, что файл подготовлен;
    - не переписывай expected result под предполагаемое UI behavior до реального прогона.
    - если `Предусловия` требуют UI state, но дают только passive state без action setup steps, fixture/API setup или reusable setup profile, пометь кейс как not automation-ready до уточнения setup path; не додумывай путь подготовки.
-7. Используй Playwright CLI в CLI-first режиме. Перед обращением к element refs всегда делай свежий `snapshot`.
-8. Делай повторный `snapshot` после навигации, открытия модалок, крупных UI changes и смены вкладок.
-9. Для каждого кейса проставь один `ui_verification_status`:
+8. Используй Playwright CLI в CLI-first режиме. Перед обращением к element refs всегда делай свежий `snapshot`.
+9. Делай повторный `snapshot` после навигации, открытия модалок, крупных UI changes и смены вкладок.
+10. Для каждого кейса проставь один `ui_verification_status`:
    - `confirmed`
    - `mismatch-ft-ui`
    - `blocked-ui-unavailable`
@@ -62,24 +67,25 @@ Skill не пересматривает scope, не заменяет session-bas
    - `blocked-observability`
    - `not-automatable-manual-only`
    A test case is not automation-ready when `Предусловия` require a UI state but provide only passive state wording without action setup steps, fixture, API setup, or reusable setup profile.
-10. Для каждого кейса со статусом `confirmed` или `mismatch-ft-ui` сохраняй screenshot. Если шаг падает, происходит неожиданная навигация или найден mismatch, дополнительно сохраняй trace.
-11. Индексируй все screenshots, snapshots, traces и logs в `ui-evidence-index.md`.
-    - Evidence quality, DOM-seeded observations, local `output/` paths и trace limitations оценивай по [../../references/agent/ui-evidence-policy.md](../../references/agent/ui-evidence-policy.md).
+11. Для каждого кейса со статусом `confirmed` или `mismatch-ft-ui` сохраняй screenshot. Если шаг падает, происходит неожиданная навигация или найден mismatch, дополнительно сохраняй trace.
+12. Индексируй все screenshots, snapshots, traces и logs в `ui-evidence-index.md`.
+    - Сохраняй evidence внутри `fts/<ft-slug>/work/ui-automation-prep/<scope-slug>/evidence/`; не ссылайся из package-local artifacts на локальные `output/playwright/...` пути.
+    - Evidence quality, DOM-seeded observations и trace limitations оценивай по [../../references/agent/ui-evidence-policy.md](../../references/agent/ui-evidence-policy.md).
     - Не ставь `confirmed` или `mismatch-ft-ui` на основании DOM-seeded observation, пользовательского комментария или старого screenshot без normal UI path.
-12. Если UI расходится с ФТ, не переписывай baseline-набор. Зафиксируй `FT vs UI` divergence в report и в automation-ready версии.
-13. В automation-ready версии сохраняй все обязательные поля ручного тест-кейса из `test-case-format.md` и добавляй:
+13. Если UI расходится с ФТ, не переписывай baseline-набор. Зафиксируй `FT vs UI` divergence в report и в automation-ready версии.
+14. В automation-ready версии сохраняй все обязательные поля ручного тест-кейса из `test-case-format.md` и добавляй:
     - `UI Verification Status`
     - `UI Evidence`
     - `Automation Notes`
     - `FT/UI Divergence`, если есть расхождение
-14. Если после прогона пользователь дает комментарий с уточнением воспроизведения, ожидаемого поведения или недостающего шага, используй этот комментарий как вход для повторной UI-проверки нужного кейса, а не как прямое основание для смены статуса.
-15. Перед актуализацией статуса, evidence или automation-ready кейса перепройди затронутый кейс в UI с учетом пользовательского комментария и заново подтверди либо не подтверди воспроизводимость ожидаемого поведения.
-16. Для `confirmed` кейсов разрешено дополнять и конкретизировать предусловия, тестовые данные, шаги и ожидаемый результат под реально наблюдаемый UI, если трассировка к ФТ сохраняется.
-16a. Для `candidate-ui-calibration` кейсов зафиксируй observed UI behavior в `ui-validation-report.md` и `ui-evidence-index.md`, обнови automation-ready expected result на один конкретный observed oracle, измени `Статус oracle` на `observed-ui-backed` и сохрани связь с исходным candidate/baseline. Baseline FT-first файл не переписывай без evidence.
-17. Для `mismatch-ft-ui` кейсов разрешено отражать фактический executable flow UI, включая дополнительные действия, нужные для прохождения ветки в интерфейсе, но расхождение с ФТ должно оставаться отдельной явной пометкой `FT/UI Divergence`.
-18. Если прохождение кейса требует дополнительного действия, неочевидного из baseline, фиксируй это действие в самом automation-ready кейсе, а не оставляй его только в `Automation Notes`.
-19. Для `blocked-*` и `not-automatable-manual-only` кейсов не удаляй кейс из automation-ready версии: оставляй blocker или limitation как часть результата и не додумывай недостающий executable path.
-20. Если утверждение из ФТ не имеет наблюдаемого UI-критерия, используй `blocked-observability`, а не домысливай поведение интерфейса.
+15. Если после прогона пользователь дает комментарий с уточнением воспроизведения, ожидаемого поведения или недостающего шага, используй этот комментарий как вход для повторной UI-проверки нужного кейса, а не как прямое основание для смены статуса.
+16. Перед актуализацией статуса, evidence или automation-ready кейса перепройди затронутый кейс в UI с учетом пользовательского комментария и заново подтверди либо не подтверди воспроизводимость ожидаемого поведения.
+17. Для `confirmed` кейсов разрешено дополнять и конкретизировать предусловия, тестовые данные, шаги и ожидаемый результат под реально наблюдаемый UI, если трассировка к ФТ сохраняется.
+18. Для `candidate-ui-calibration` кейсов зафиксируй observed UI behavior в `ui-validation-report.md` и `ui-evidence-index.md`, обнови automation-ready expected result на один конкретный observed oracle, измени `Статус oracle` на `observed-ui-backed` и сохрани связь с исходным candidate/baseline. Baseline FT-first файл не переписывай без evidence.
+19. Для `mismatch-ft-ui` кейсов разрешено отражать фактический executable flow UI, включая дополнительные действия, нужные для прохождения ветки в интерфейсе, но расхождение с ФТ должно оставаться отдельной явной пометкой `FT/UI Divergence`.
+20. Если прохождение кейса требует дополнительного действия, неочевидного из baseline, фиксируй это действие в самом automation-ready кейсе, а не оставляй его только в `Automation Notes`.
+21. Для `blocked-*` и `not-automatable-manual-only` кейсов не удаляй кейс из automation-ready версии: оставляй blocker или limitation как часть результата и не додумывай недостающий executable path.
+22. Если утверждение из ФТ не имеет наблюдаемого UI-критерия, используй `blocked-observability`, а не домысливай поведение интерфейса.
 
 ## Канонические references
 

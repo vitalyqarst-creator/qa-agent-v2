@@ -60,6 +60,16 @@ continue automatically across:
 - `tc-changes-required` -> one bounded TC revision -> release with explicit
   residual statuses, without a second TC review by default.
 
+If the next stage for a signed-off scope is `ft-ui-automation-prep`, first check
+whether the FT package contains package-local UI access inputs:
+`work/ui-automation-prep/UI-AGENT-NOTES.md`, runtime URL/entrypoint, login method
+and a test account or storage-state. If these inputs are absent, do not create
+an empty `automation-ready` file, empty UI evidence, or `ui-run-not-started.log`
+just to mark the stage attempted. Record `ui-prep blocked-input` in the current
+workflow/summary and continue with the next productive practical-route scope
+when one exists. UI-prep without runtime/access input is a known external input
+blocker, not a useful stage.
+
 Default review budget per scope is capped at:
 
 - one independent matrix review, plus one matrix re-review only after a bounded
@@ -160,6 +170,10 @@ The summary must list:
 - the concrete reason each scope is blocked or capped;
 - whether TC can still be written with explicit statuses;
 - the next safe step for each scope;
+- a `Current stage actions` section that lists only actions performed in the
+  current turn/stage;
+- a `Prior state context` section for older history that explains current state
+  but was not performed in this stage;
 - `next_stage_transition`: exactly one of `writer allowed`,
   `writer conditional`, `writer blocked`, `tc-review allowed`,
   `tc-review conditional`, `tc-review blocked`, or `not-applicable`.
