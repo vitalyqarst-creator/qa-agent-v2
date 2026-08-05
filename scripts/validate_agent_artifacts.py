@@ -4576,6 +4576,7 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
 }
 PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
     "per_scope_next_stage_transitions",
+    "production_tc_clean",
     "validator_warnings_count",
     "validator_warnings_classification",
     "validator_warnings_evidence",
@@ -4595,6 +4596,23 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
 PRACTICAL_STAGE_SUMMARY_CONDITIONAL_TRANSITIONS = {
     "writer conditional",
     "tc-review conditional",
+}
+PRACTICAL_STAGE_SUMMARY_TC_REVIEW_TRANSITIONS = {
+    "tc-review allowed",
+    "tc-review conditional",
+}
+PRACTICAL_STAGE_SUMMARY_TRUE_VALUES = {
+    "yes",
+    "true",
+    "clean",
+    "all_clean",
+    "all clean",
+    "pass",
+    "passed",
+}
+PRACTICAL_STAGE_SUMMARY_DIRTY_TC_WARNING_IDS = {
+    "test-case-split-artifact-duplicated-sections",
+    "internal-diagnostic-section-in-production-testcases",
 }
 PRACTICAL_STAGE_SUMMARY_ALLOWED_WARNING_CLASSIFICATIONS = {
     "none",
@@ -4815,7 +4833,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Add per_scope_next_stage_transitions, validator_warnings_count, "
                     "validator_warnings_classification, validator_warnings_evidence, "
-                    "source_restore_provenance and source_restore_sha256."
+                    "production_tc_clean, source_restore_provenance and source_restore_sha256."
                 ),
             )
         )
@@ -4878,6 +4896,55 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Add next_stage_transition as writer allowed/conditional/blocked, "
                     "tc-review allowed/conditional/blocked, or not-applicable."
+                ),
+            )
+        )
+
+    production_tc_clean = fields.get("production_tc_clean", "")
+    normalized_production_tc_clean = normalize_markdown_field_name(production_tc_clean)
+    tc_review_requested = transition in PRACTICAL_STAGE_SUMMARY_TC_REVIEW_TRANSITIONS
+    dirty_tc_evidence_ids = sorted(
+        finding_id
+        for finding_id in PRACTICAL_STAGE_SUMMARY_DIRTY_TC_WARNING_IDS
+        if finding_id in content
+    )
+    if tc_review_requested and normalized_production_tc_clean not in PRACTICAL_STAGE_SUMMARY_TRUE_VALUES:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-production-tc-not-clean-for-review",
+                severity="error",
+                category="practical-stage-summary",
+                title="TC review transition does not prove clean production test-case files",
+                details=(
+                    "Before routing a practical scope to independent TC review, the summary must explicitly prove "
+                    "that production `fts/**/test-cases/*.md` files contain only user-facing runtime test cases "
+                    "and links/summaries, not embedded split design artifacts."
+                ),
+                path=display_path,
+                evidence=[f"production_tc_clean={fields.get('production_tc_clean', '<missing>')}"],
+                recommended_action=(
+                    "Move Coverage Gaps, Source Row Inventory, Package Test Design Plan, Writer Self-Check and "
+                    "other split artifact sections to `work/test-design/<scope>/`, then set "
+                    "`production_tc_clean` to yes for scopes routed to TC review."
+                ),
+            )
+        )
+    if tc_review_requested and dirty_tc_evidence_ids:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-tc-review-with-dirty-production-testcases",
+                severity="error",
+                category="practical-stage-summary",
+                title="TC review transition is blocked by dirty production test-case files",
+                details=(
+                    "Validator findings that indicate embedded diagnostic/design sections in production TC files "
+                    "are next-stage blockers for TC review, not expected residual warnings."
+                ),
+                path=display_path,
+                evidence=dirty_tc_evidence_ids,
+                recommended_action=(
+                    "Remove the duplicated/internal sections from production TC files before setting "
+                    "`tc-review allowed` or `tc-review conditional`."
                 ),
             )
         )
@@ -13077,16 +13144,7 @@ CONTACT_PERSON_FIELD_RE = re.compile(
     flags=re.IGNORECASE,
 )
 CONTACT_PERSON_REVEAL_ACTION_RE = re.compile(r"Добавить\s+контактное\s+лицо", flags=re.IGNORECASE)
-PRODUCTION_DIAGNOSTIC_SECTIONS = (
-    "Artifact Write Strategy",
-    "Source Row Inventory",
-    "Source Table Normalization",
-    "Test Design Decision Table",
-    "Test-design Applicability Matrix",
-    "Atomic Requirements Ledger",
-    "Coverage Obligation Table",
-    "Writer Quality Gate",
-)
+PRODUCTION_DIAGNOSTIC_SECTIONS = tuple(sorted(SPLIT_TEST_DESIGN_SECTIONS))
 
 
 def has_precondition_setup_path(preconditions: str) -> bool:

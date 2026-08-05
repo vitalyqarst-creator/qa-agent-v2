@@ -88,6 +88,9 @@ Accepted-risk не превращает gap в покрытое требован
 
 Для `current_stage: ft-test-case-writer` и `stage_status: ready-for-review` writer output должен содержать split artifact `work/test-design/<scope-slug>/writer-quality-gate.md` с `Writer Quality Gate`. `## Writer Quality Gate` внутри production `fts/**/test-cases/*.md` не считается валидным gate и должен выноситься в split artifact.
 
+Production `fts/**/test-cases/*.md` перед TC review должны быть чистыми:
+embedded split-design sections являются TC-review blockers.
+
 Для `practical_v0_8` matrix-only handoff не используй `ready-for-review`: это
 не TC review gate и canonical test-case file еще не должен существовать.
 Используй `stage_status: ready-for-next-stage`, `next_skill:

@@ -39,7 +39,9 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         validator_errors_classification: str = "none",
         validator_warnings_count: int = 0,
         validator_warnings_classification: str = "none",
+        validator_warnings_evidence: str = "not-applicable",
         per_scope_next_stage_transitions: str = "not-applicable",
+        production_tc_clean: str = "not-applicable",
         source_restore_provenance: str = "not-applicable",
         source_restore_sha256: str = "not-applicable",
         next_stage_transition: str = "writer allowed",
@@ -77,8 +79,9 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| validator_errors_evidence | `not-applicable` |",
                     f"| validator_warnings_count | `{validator_warnings_count}` |",
                     f"| validator_warnings_classification | `{validator_warnings_classification}` |",
-                    f"| validator_warnings_evidence | `not-applicable` |",
+                    f"| validator_warnings_evidence | `{validator_warnings_evidence}` |",
                     f"| per_scope_next_stage_transitions | `{per_scope_next_stage_transitions}` |",
+                    f"| production_tc_clean | `{production_tc_clean}` |",
                     f"| source_restore_provenance | `{source_restore_provenance}` |",
                     f"| source_restore_sha256 | `{source_restore_sha256}` |",
                     f"| next_stage_transition | `{next_stage_transition}` |",
@@ -215,10 +218,36 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                 validator_warnings_classification="blocking-for-scope",
                 next_stage_transition="tc-review allowed",
                 per_scope_next_stage_transitions="yes",
+                production_tc_clean="yes",
             )
         )
 
         self.assertIn("practical-stage-summary-validator-warnings-allow-writer-unconditionally", ids)
+
+    def test_rejects_tc_review_without_clean_production_tc_proof(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                next_stage_transition="tc-review conditional",
+                per_scope_next_stage_transitions="yes",
+                production_tc_clean="not-applicable",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-production-tc-not-clean-for-review", ids)
+
+    def test_rejects_tc_review_when_dirty_tc_warning_is_classified_as_expected(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                validator_warnings_count=1,
+                validator_warnings_classification="mixed",
+                validator_warnings_evidence="test-case-split-artifact-duplicated-sections",
+                next_stage_transition="tc-review conditional",
+                per_scope_next_stage_transitions="yes",
+                production_tc_clean="yes",
+            )
+        )
+
+        self.assertIn("practical-stage-summary-tc-review-with-dirty-production-testcases", ids)
 
     def test_rejects_round_cap_without_source_contradiction_classification(self) -> None:
         root = self.make_package(
@@ -390,6 +419,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     "| validator_warnings_classification | `none` |",
                     "| validator_warnings_evidence | `not-applicable` |",
                     "| per_scope_next_stage_transitions | `not-applicable` |",
+                    "| production_tc_clean | `not-applicable` |",
                     "| source_restore_provenance | `not-applicable` |",
                     "| source_restore_sha256 | `not-applicable` |",
                     "| next_stage_transition | `writer blocked` |",

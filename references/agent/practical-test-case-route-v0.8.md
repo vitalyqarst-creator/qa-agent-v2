@@ -169,6 +169,7 @@ If a validator was run, add these fields:
 | validator_warnings_classification | `none / blocking-for-scope / expected-pre-writer / nonblocking-info / mixed` |
 | validator_warnings_evidence | `<paths/finding ids or not-applicable>` |
 | per_scope_next_stage_transitions | `yes / not-applicable` |
+| production_tc_clean | `yes / no / mixed / not-applicable` |
 | source_restore_provenance | `<source path/checkpoint used to restore package files, or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 bindings for restored files, or not-applicable>` |
 
@@ -191,6 +192,12 @@ scopes are `writer allowed`, `writer conditional`, `writer blocked`,
 Do not let a scope-local warning block unrelated accepted scopes. Do not write
 package-level `writer allowed` or `tc-review allowed` when warnings are
 `blocking-for-scope` or `mixed`.
+
+`tc-review allowed` / `tc-review conditional` require clean production TC files:
+`production_tc_clean = yes` for reviewed scopes. Findings
+`test-case-split-artifact-duplicated-sections` and
+`internal-diagnostic-section-in-production-testcases` are TC-review blockers;
+move split-design sections to `work/test-design/<scope>/` before review.
 
 When validator errors mention unresolved source/package artifacts, summary must
 distinguish the cause explicitly:

@@ -134,6 +134,31 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
         self.assertIn("writer-quality-gate-missing", ids)
         self.assertIn("internal-diagnostic-section-in-production-testcases", ids)
 
+    def test_embedded_split_design_sections_dirty_production_test_cases(self) -> None:
+        root, tc_path, design_dir = self.make_package()
+        (design_dir / "coverage-gaps.md").write_text(
+            "# Coverage Gaps\n\n"
+            "| gap_id | source_ref | status | handling |\n"
+            "| --- | --- | --- | --- |\n"
+            "| `GAP-001` | `SRC-001` | `closed` | `not_applicable:covered` |\n",
+            encoding="utf-8",
+        )
+        tc_path.write_text(
+            tc_path.read_text(encoding="utf-8")
+            + "\n## Coverage Gaps\n\n"
+            + "| gap_id | source_ref | status | handling |\n"
+            + "| --- | --- | --- | --- |\n"
+            + "| `GAP-001` | `SRC-001` | `closed` | `not_applicable:covered` |\n"
+            + "\n## Writer Self-Check\n\n"
+            + "- checked\n",
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids_for_test_case(root, tc_path)
+
+        self.assertIn("internal-diagnostic-section-in-production-testcases", ids)
+        self.assertIn("test-case-split-artifact-duplicated-sections", ids)
+
 
 if __name__ == "__main__":
     unittest.main()

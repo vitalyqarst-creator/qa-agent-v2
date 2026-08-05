@@ -42,17 +42,16 @@ benchmark-grade process evidence. It is split into two writer passes:
   publish the baseline with explicit residual statuses; do not request a second
   reviewer pass by default;
 - after matrix review or matrix re-review, require `practical-stage-summary.md`
-  before sending the next prompt: accepted scopes, blocked/round-cap scopes,
-  reasons, whether TC may be written with explicit statuses, next safe step,
-  root consistency fields, `per_scope_next_stage_transitions` for package-level
-  conditional states, `validator_errors_classification` and
-  `validator_warnings_classification` when validation was run,
-  `source_restore_provenance` and `source_restore_sha256` when package files
-  were copied/restored, and
-  `next_stage_transition`;
+  before sending the next prompt: accepted/blocked scopes, round-cap reasons,
+  status-TC decision, next safe step, `code_root`, `ft_package_root`,
+  `artifact_write_root`, `root_split_allowed`,
+  `per_scope_next_stage_transitions`, `validator_errors_classification`,
+  `validator_warnings_classification`, `source_restore_provenance`,
+  `source_restore_sha256`, and `next_stage_transition`;
 - after canonical TC writing, route written scopes to `tc-review allowed` or
   `tc-review conditional` in `practical-stage-summary.md`; do not leave the
-  package-level transition as `writer conditional`;
+  package-level transition as `writer conditional`; require clean production TC
+  by `writer-output-format.md` and record `production_tc_clean`;
 - when a matrix stays `round-cap-reached` after the bounded repair/re-review,
   write TC with `candidate-ui-calibration`, `blocked-observability`,
   `needs-test-data` or `needs-future-clarification` if the source obligation is
@@ -193,7 +192,7 @@ Minimum runtime rules:
    `signed-off`. For legacy/session routes, do not set
    `stage_status: ready-for-review` until
    source/parity/mockup/table/dictionary inputs, split `Writer Quality Gate`,
-   and validator blockers are closed.
+   clean production TC files, and validator blockers are closed.
 8. Before `ready-for-review`, check canonical TC for unresolved generic fixture/test-data/oracle smells: `Минимальный валидный набор данных`, `валидные данные`, `валидная заявка`, `значение из тестовых данных принято/не принимается`. These formulations are allowed only when a concrete reproducible baseline, literal/parameter, or linked fixture artifact is adjacent; otherwise fix the TC or record `GAP-*` / `unclear`.
 8a. `Предусловия`: reproducible setup steps = numbered action setup or fixture/API/profile; passive state only after the action that creates it.
 8b. Parameter tables are allowed only when every row has the same start screen, UI level, navigation path, user action, trigger and observable expected result. Split parent/child entities, nested blocks or different screens into separate `TC-*`; do not optimize TC count over automation-readiness.
@@ -204,7 +203,7 @@ Minimum runtime rules:
 12a. For source-backed negative/requiredness restrictions with unknown UI reaction, remediation cannot simply replace one unsupported UI mechanism with another: preserve the obligation and create a candidate TC by `negative-ui-calibration-policy.md`, or a narrow `GAP-*` / `unclear` if a candidate is impossible.
 13. If an applicable dimension requires mandatory coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), decompose them in `Coverage Obligation Table`, `Package Test Design Plan`, and `coverage-metrics.md` before `TC-*`.
 14. If writer cannot prepare a verifiable result without new scope/source decisions, use `blocked-input`.
-15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables and must not embed `## Writer Quality Gate`. On any such defect, set `blocked-input` or fix artifacts before review handoff.
+15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables or embed split-design sections. On any such defect, set `blocked-input` or fix artifacts before review handoff.
 16. Do not use non-canonical status aliases in writer-side artifacts: `Writer Quality Gate` and `Test Design Review` accept only `pass | fail | blocked | needs-rewrite`; `Coverage Obligation Table` accepts only `covered | gap | unclear | blocked | not-applicable | n/a`. `pass-with-gap`, `pass-with-gaps`, `planned`, `ok`, `yes`, `passed`, `failed`, and local variants are validator defects.
 17. `writer-self-check.md` must not contain empty sections. Every heading section, including `Artifact Write Evidence`, must have evidence, a table/list, a link to session log / split artifact, or explicit `not-applicable` with reason.
 18. `placeholder-sentinel-normalization`: in traceability-bearing split-artifact tables and reviewer matrices, do not use placeholder `-` / `N/A` in link or traceability columns. Write an explicit sentinel: `not_applicable:covered`, `not_covered:<GAP-ID>`, `unclear:<GAP-ID>`, `no_requirement_code:<source_ref>`, or `none_required:<reason>`.

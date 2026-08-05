@@ -118,8 +118,9 @@ the next safe step. It must also record `code_root`, `ft_package_root`,
 `artifact_write_root`, `root_split_allowed`, `next_stage_transition`,
 `per_scope_next_stage_transitions` for package-level `writer conditional` or
 `tc-review conditional`,
-`validator_errors_classification` and `validator_warnings_classification` when
-validation was run, plus `source_restore_provenance` and
+`production_tc_clean`, `validator_errors_classification` and
+`validator_warnings_classification` when validation was run, plus
+`source_restore_provenance` and
 `source_restore_sha256` when source files were restored or copied. Link the
 summary from every affected `workflow-state.yaml` or
 package-level state/index inside the actual FT package root so the next stage
@@ -137,6 +138,13 @@ For `tc_review`, return `review-findings.md` and verify that
 `test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
 coverage. If an accepted matrix review is absent, block TC review and route back
 to matrix review.
+
+Before accepting a TC review handoff, verify `production_tc_clean = yes` for the
+reviewed scopes. Findings `test-case-split-artifact-duplicated-sections` and
+`internal-diagnostic-section-in-production-testcases` block TC review: production
+`test-cases/*.md` must not contain embedded `Coverage Gaps`, `Source Row
+Inventory`, `Package Test Design Plan`, `Writer Self-Check`, `Writer Quality
+Gate` or other split-design sections.
 
 Also verify `review-independence.md` for each gate. If the reviewer was not run
 in a separate Codex task/session or received writer transcript/private reasoning,

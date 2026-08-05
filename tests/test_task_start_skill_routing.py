@@ -121,11 +121,15 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification, validator-warning classification, per-scope transitions for package-level writer/tc-review conditional, source_contradiction yes/no for round-cap scopes, source restore provenance/SHA-256 when package files were restored, and next_stage_transition",
+            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification, validator-warning classification, production_tc_clean, per-scope transitions for package-level writer/tc-review conditional, source_contradiction yes/no for round-cap scopes, source restore provenance/SHA-256 when package files were restored, and next_stage_transition",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
             "practical-stage-summary.md is linked from affected workflow-state.yaml or package state/index inside the actual FT package root",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "TC review is blocked until production TC files contain no embedded split-design sections such as Coverage Gaps, Source Row Inventory, Package Test Design Plan, Writer Self-Check or Writer Quality Gate",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
