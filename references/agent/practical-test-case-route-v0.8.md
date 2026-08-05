@@ -579,6 +579,11 @@ Before handing off to reviewer, the writer checks every canonical file:
   agent-process language in runtime test cases; stable IDs such as
   `FX-DADATA-*` may appear only as code-like fixture identifiers in `Трассировка`
   or `Тестовые данные`, while the surrounding prose remains Russian;
+- before `review-ready`, writer must run an explicit runtime language/style
+  self-check and validator pass; if any agent-process phrase remains in
+  `Название`, `Цель`, `Предусловия`, `Тестовые данные`, `Шаги`,
+  `Итоговый ожидаемый результат`, `Постусловия`, or
+  `Требуется подтверждение`, the draft is blocked at writer gate;
 - title describes user-visible behavior, not traceability IDs or internal
   obligations;
 - `Предусловия` first open the relevant form/card/screen/section before entering

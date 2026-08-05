@@ -78,6 +78,37 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertNotIn("test-case-absence-oracle-find-step-mismatch", ids)
 
+    def test_production_tc_runtime_fields_reject_agent_process_english(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case_with_steps("1. Попытаться найти скрытого партнера в реестре.").replace(
+                    "**Цель:** Проверить, что скрытый партнер отсутствует в реестре.",
+                    "**Цель:** Проверить source-backed ограничение видимости скрытого партнера.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("production-runtime-agent-process-language-leak", ids)
+
+    def test_production_tc_runtime_fields_allow_metadata_enums(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case_with_steps("1. Попытаться найти скрытого партнера в реестре."),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("production-runtime-agent-process-language-leak", ids)
+
     def test_ui_evidence_index_warns_on_output_playwright_paths_even_when_declared_local(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

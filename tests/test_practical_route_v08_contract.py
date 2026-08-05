@@ -82,6 +82,24 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("no phrases such as `source-backed`", content)
         self.assertIn("agent-process", content)
         self.assertIn("language in runtime test cases", content)
+        self.assertIn("runtime language/style", content)
+        self.assertIn("blocked at writer gate", content)
+
+        writer_gate = self.read("references/agent/writer-quality-gate-format.md")
+        validator = self.read("scripts/validate_agent_artifacts.py")
+        self.assertIn("runtime-language-style", writer_gate)
+        self.assertIn("runtime-language-style", validator)
+        self.assertIn("production-runtime-agent-process-language-leak", validator)
+
+    def test_runtime_policy_requires_helpers_for_nontrivial_json_markdown_work(self) -> None:
+        agents = self.read("AGENTS.md")
+        policy = self.read("references/agent/runtime-environment-encoding-policy.md")
+
+        for text in (agents, policy):
+            self.assertIn("nontrivial JSON/Markdown", text)
+            self.assertIn("UTF-8", text)
+        self.assertIn("before the first attempt", policy)
+        self.assertIn("do not retry variants repeatedly", policy)
 
     def test_setup_data_must_respect_integration_backed_fields(self) -> None:
         route = self.read("references/agent/practical-test-case-route-v0.8.md")

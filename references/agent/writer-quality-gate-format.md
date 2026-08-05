@@ -23,6 +23,7 @@
 | `coverage-obligation-table` | `pass` | `numeric-format` и `amount-tags` разложены на обязательные coverage classes с `TC-*`/`GAP-*`. | `WP-01` | none_required:pass | `no` |
 | `test-design-review` | `pass` | `test-design-review.md` не содержит blocking rows. | `WP-01` | none_required:pass | `no` |
 | `gap-admissibility` | `pass` | Все `GAP-*` проверены: visible UI/API behavior не спрятан в gap, mixed rows split-нуты. | `WP-01` | none_required:pass | `no` |
+| `runtime-language-style` | `pass` | Runtime-поля TC написаны по-русски и не содержат agent-process фраз вроде `source-backed`, `runtime-prose`, `semantic projection`. | `all` | none_required:pass | `no` |
 | `tc-regression-smells` | `pass` | В canonical TC отсутствуют placeholder traceability, source-rule oracle, generic editability steps, nondeterministic negative oracles, executable TC over unresolved GAP mechanisms, ambiguous UI alias steps и read-only template postconditions. | `all` | none_required:pass | `no` |
 | `semantic-compression` | `fail` | `ATOM-017` закрывает `GSR 34`-`GSR 58` одним scenario TC. | `WP-02` | Переписать package от Source Table Normalization до TC. | `yes` |
 ```
@@ -45,6 +46,7 @@
 - `fixture-catalog`: reusable baselines и negative transition fixtures раскрыты в `fixture-catalog.md` или полностью в TC.
 - `risk-priority-map`: high-risk atoms имеют `impact x likelihood`, priority и residual risk decision по `risk-priority-map-format.md`.
 - `gap-admissibility`: `gap_unclear` и `GAP-*` не скрывают проверяемые подсказки, сообщения, красную подсветку, видимость, действия, переходы, маски, справочники/теги, date-window boundaries или другие source-backed observable outcomes; смешанные testable/blocked требования split-нуты.
+- `runtime-language-style`: canonical TC runtime-поля (`Название`, `Цель`, `Предусловия`, `Тестовые данные`, `Шаги`, `Итоговый ожидаемый результат`, `Постусловия`, `Требуется подтверждение`) написаны как пользовательский русский текст и не содержат agent-process английские фразы: `source-backed`, `source qualified`, `registered-card`, `runtime-prose`, `model-runtime-prose`, `semantic projection`, `hash-bound`, `manifest digest`, `runner-owned`, `agent-process`, `exact credit-conveyor screen`. Английские значения разрешены только для metadata enum (`Positive`, `Negative`, `High`, `Medium`, `Low`) и технических ID/fixture_id.
 - `test-design-review`: `test-design-review.md` существует для package-based `initial_draft`, совместно проверяет TDDT/ledger/plan/gaps и не содержит blocking failed rows.
 - `ledger-atomicity`: `ATOM-*` rows не объединяют независимые visibility, requiredness, editability, format, boundary, dependency, persistence, integration или action behavior.
 - `gsr-range-compression`: covered atoms не используют широкие диапазоны `GSR N-M` как замену декомпозиции.
@@ -103,6 +105,7 @@ Writer должен ставить `status = fail` и `blocks_ready_for_review =
 - expected result содержит DOCX/PDF extraction artifacts: split words, table-header residue, соседние строки таблицы, `Д а`, `П о`, `Рефинансировани е`, `Переключат ель`;
 - expected result для negative/validation TC допускает альтернативные реакции через `или`, например `значение очищено, не сохранено или поле подсвечено ошибкой`, вместо одного deterministic observable oracle;
 - expected result для negative/validation TC использует вариант `символ отклонен или значение остается незаполненным/предыдущим`; source-backed input restriction сам по себе не доказывает конкретный UI enforcement mechanism;
+- runtime-поля canonical TC содержат agent-process английские формулировки, например `source-backed`, `runtime-prose`, `semantic projection`, `manifest digest`, `runner-owned` или `exact credit-conveyor screen`;
 - numeric/input-restriction rejection TC ожидает очистку поля, неотображение введенного значения, отфильтрованные символы, красную подсветку, сообщение об ошибке, blocked transition или неоткрытие следующего раздела без прямого source evidence именно на этот UI feedback; правило `не принимает значение`, `только цифры` или `ниже минимума не принимается` доказывает только класс недопустимого значения, а не способ UI-реакции;
 - writer заменяет один unsupported numeric/input oracle другим unsupported oracle: например после запрета `значение не отображается` или `значение очищено` переписывает TC на `поле подсвечено красным` / `Следующий шаг заблокирован` / `Анкета клиента не открыта` без нового source/UI/support evidence для invalid class. Это остается blocking `tc-regression-smells`, а не remediation.
 - executable `TC-*` ссылается на `GAP-*` как на unresolved механизм действия, feedback или exact oracle, но при этом заявляет baseline pass/fail вместо split на проверяемую инвариантную часть и отдельный gap;

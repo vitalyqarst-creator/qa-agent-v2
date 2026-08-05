@@ -34,6 +34,8 @@ $env:PYTHONIOENCODING = "utf-8"
 
 - do not use Bash heredoc forms such as `python <<'PY'`;
 - for multiline logic, create or reuse a UTF-8 `.py` helper file and run it with Python;
+- for nontrivial JSON/Markdown parsing, bulk rewrites, validator-output filtering, or generated artifact assembly, use a UTF-8 helper file before the first attempt instead of PowerShell here-strings, escaped one-liners, or giant inline commands;
+- if a complex inline command fails because of quoting, encoding, truncation, or command-line transport, do not retry variants repeatedly; switch to a UTF-8 helper immediately and record the failed inline attempt only in debug/session artifacts;
 - read/write text files with explicit UTF-8, for example `Get-Content -Encoding UTF8` or `Path.read_text(encoding="utf-8")`.
 
 For Bash/POSIX:

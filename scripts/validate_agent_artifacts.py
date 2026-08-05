@@ -7335,6 +7335,7 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "test-design-decision-table",
     "test-design-review",
     "gap-admissibility",
+    "runtime-language-style",
     "ledger-atomicity",
     "gsr-range-compression",
     "design-plan-atomicity",
@@ -12642,6 +12643,23 @@ INTERNAL_ENGLISH_STRATEGY_FIELD_RE = re.compile(
     r"(?m)^\*\*(?:Representative/pairwise strategy|Omitted combinations|Residual risk):\*\*",
     flags=re.IGNORECASE,
 )
+PRODUCTION_RUNTIME_AGENT_PROCESS_LANGUAGE_RE = re.compile(
+    r"\b(?:"
+    r"source[-\s]?backed|"
+    r"source[-\s]?qualified|"
+    r"registered[-\s]?card|"
+    r"runtime[-\s]?prose|"
+    r"model[-\s]?runtime[-\s]?prose|"
+    r"semantic[-\s]?projection|"
+    r"hash[-\s]?bound|"
+    r"manifest\s+digest|"
+    r"runtime\s+receipt|"
+    r"runner[-\s]?owned|"
+    r"agent[-\s]?process|"
+    r"exact\s+credit[-\s]?conveyor\s+screen"
+    r")\b",
+    flags=re.IGNORECASE,
+)
 NEUTRAL_VALIDATION_TRIGGER_RE = re.compile(
     r"завершить\s+ввод|перевести\s+фокус|инициир\w*\s+проверк|попытаться\s+сохранить|"
     r"move\s+focus|complete\s+input|trigger\s+validation|attempt\s+to\s+save",
@@ -13970,6 +13988,7 @@ def validate_test_case_quality_smells(
     multiple_independent_assertions: list[str] = []
     representative_strategy_data_mismatches: list[str] = []
     production_internal_language_leaks: list[str] = []
+    production_runtime_agent_process_language_leaks: list[str] = []
     candidate_negative_trigger_missing: list[str] = []
     candidate_negative_trigger_too_specific: list[str] = []
     scenario_rationale_stimulus_mismatches: list[str] = []
@@ -14047,6 +14066,15 @@ def validate_test_case_quality_smells(
             ],
         )
         status = extract_test_case_field_block(block, ["Status", "status", "Статус"]).lower()
+        confirmation = extract_test_case_field_block(
+            block,
+            [
+                "Requires Confirmation",
+                "requires_confirmation",
+                "Required Confirmation",
+                "Требуется подтверждение",
+            ],
+        )
         scenario_rationale_line, _, scenario_rationale = extract_scenario_rationale_field(block)
         if scenario_rationale_line and not CANONICAL_SCENARIO_RATIONALE_FIELD_RE.match(scenario_rationale_line):
             noncanonical_scenario_rationale_fields.append(f"{test_case_id}:{scenario_rationale_line[:180]}")
@@ -14125,6 +14153,23 @@ def validate_test_case_quality_smells(
         )
         if production_test_case_file and INTERNAL_ENGLISH_STRATEGY_FIELD_RE.search(block):
             production_internal_language_leaks.append(f"{test_case_id}:internal English strategy labels")
+        if production_test_case_file:
+            runtime_fields = {
+                "Название": title,
+                "Цель": goal,
+                "Предусловия": preconditions,
+                "Тестовые данные": test_data,
+                "Шаги": steps,
+                "Итоговый ожидаемый результат": expected_result,
+                "Постусловия": postconditions,
+                "Требуется подтверждение": confirmation,
+            }
+            for field_name, field_text in runtime_fields.items():
+                match = PRODUCTION_RUNTIME_AGENT_PROCESS_LANGUAGE_RE.search(field_text or "")
+                if match:
+                    production_runtime_agent_process_language_leaks.append(
+                        f"{test_case_id}:{field_name}:`{match.group(0)}`; text={field_text[:160]}"
+                    )
         if (
             is_calibration_candidate
             and not NEUTRAL_VALIDATION_TRIGGER_RE.search(steps)
@@ -16073,6 +16118,27 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if production_runtime_agent_process_language_leaks:
+        severity = atomicity_coverage_severity(atomicity_coverage_policy)
+        findings.append(
+            Finding(
+                id="production-runtime-agent-process-language-leak",
+                severity=severity,
+                category="test-case-format",
+                title="Production TC leaks agent-process English in runtime fields",
+                details=(
+                    "Production runtime fields must be user-facing Russian text. Metadata enums may stay English, "
+                    "but phrases from agent internals or source-processing routes must not appear in titles, goals, "
+                    "preconditions, data, steps, expected results, postconditions or confirmation notes."
+                ),
+                path=display_path,
+                evidence=production_runtime_agent_process_language_leaks[:20],
+                recommended_action=(
+                    "Rewrite runtime prose in Russian and move process/source-routing notes to work artifacts."
+                ),
+            )
+        )
+
     if candidate_negative_trigger_missing:
         severity = atomicity_coverage_severity(atomicity_coverage_policy)
         findings.append(
@@ -16509,6 +16575,7 @@ def validate_test_case_quality_smells(
         or multiple_independent_assertions
         or representative_strategy_data_mismatches
         or production_internal_language_leaks
+        or production_runtime_agent_process_language_leaks
         or candidate_negative_trigger_missing
         or candidate_negative_trigger_too_specific
         or scenario_rationale_stimulus_mismatches
