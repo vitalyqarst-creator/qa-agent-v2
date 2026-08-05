@@ -31,6 +31,8 @@ class SummaryRefresh:
     validator_errors_evidence: str
     validator_warnings_count: int
     validator_warnings_evidence: str
+    validator_info_count: int
+    validator_info_evidence: str
     git_persistence: str
     git_persistence_evidence: str
 
@@ -98,6 +100,13 @@ def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, An
             if finding.get("severity") == "warning"
         }
     )
+    info_ids = sorted(
+        {
+            str(finding.get("id", "<missing-id>"))
+            for finding in counted
+            if finding.get("severity") == "info"
+        }
+    )
     return {
         "validator_errors_count": len(
             [finding for finding in counted if finding.get("severity") == "error"]
@@ -109,6 +118,10 @@ def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, An
         "validator_warnings_evidence": "; ".join(warning_ids)
         if warning_ids
         else "not-applicable",
+        "validator_info_count": len(
+            [finding for finding in counted if finding.get("severity") == "info"]
+        ),
+        "validator_info_evidence": "; ".join(info_ids) if info_ids else "not-applicable",
     }
 
 
@@ -122,6 +135,8 @@ def build_refresh(root: Path, summary_path: Path) -> SummaryRefresh:
         validator_errors_evidence=str(validator_summary["validator_errors_evidence"]),
         validator_warnings_count=int(validator_summary["validator_warnings_count"]),
         validator_warnings_evidence=str(validator_summary["validator_warnings_evidence"]),
+        validator_info_count=int(validator_summary["validator_info_count"]),
+        validator_info_evidence=str(validator_summary["validator_info_evidence"]),
         git_persistence=git_persistence.value,
         git_persistence_evidence=git_persistence.evidence,
     )
@@ -137,6 +152,8 @@ def format_field_rows(refresh: SummaryRefresh) -> str:
         ("validator_errors_evidence", refresh.validator_errors_evidence),
         ("validator_warnings_count", refresh.validator_warnings_count),
         ("validator_warnings_evidence", refresh.validator_warnings_evidence),
+        ("validator_info_count", refresh.validator_info_count),
+        ("validator_info_evidence", refresh.validator_info_evidence),
         ("git_persistence", refresh.git_persistence),
         ("git_persistence_evidence", refresh.git_persistence_evidence),
     ]

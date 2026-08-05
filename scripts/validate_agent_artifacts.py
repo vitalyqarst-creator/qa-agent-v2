@@ -1424,7 +1424,32 @@ def iter_generated_source_basis_artifacts(root: Path) -> list[Path]:
     return sorted(
         path
         for path in validation_scope(root).rglob("*.md")
-        if path.is_file() and is_canary_run_markdown(path, root)
+            if path.is_file() and is_canary_run_markdown(path, root)
+    )
+
+
+CONTROLLER_THREAD_ID_PLACEHOLDER = "CONTROLLER_THREAD_ID_REQUIRED"
+
+
+def is_practical_controller_artifact(path: Path, root: Path) -> bool:
+    relative_text = f"/{rel(path, root)}/"
+    if path.name == "workflow-state.yaml":
+        return "/work/stage-handoffs/" in relative_text
+    if path.suffix.lower() != ".md":
+        return False
+    return (
+        path.name in {"review-findings.md", "review-independence.md", "practical-stage-summary.md"}
+        and ("/work/practical/" in relative_text or "/work/" in relative_text)
+    )
+
+
+def iter_practical_controller_artifacts(root: Path) -> list[Path]:
+    if root.is_file():
+        return [root] if is_practical_controller_artifact(root, root.parent) else []
+    return sorted(
+        path
+        for path in validation_scope(root).rglob("*")
+        if path.is_file() and is_practical_controller_artifact(path, root)
     )
 
 
@@ -1520,6 +1545,58 @@ def validate_text_encoding_damage(path: Path, root: Path) -> tuple[list[Finding]
         )
 
     return [], [Check("active-text-encoding-damage", "pass", "Active text artifact has no encoding damage markers.", display_path)]
+
+
+def validate_controller_thread_id_placeholders(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
+    display_path = rel(path, root)
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as exc:
+        return (
+            [
+                Finding(
+                    id="practical-controller-artifact-not-utf8",
+                    severity="warning",
+                    category="practical-route",
+                    title="Practical controller artifact is not valid UTF-8",
+                    details=str(exc),
+                    path=display_path,
+                    evidence=[],
+                    recommended_action="Save the practical controller artifact as UTF-8 Markdown/YAML.",
+                )
+            ],
+            [Check("practical-controller-placeholders", "warn", "Artifact is not UTF-8.", display_path)],
+        )
+
+    evidence = [
+        f"line {line_number}: {line.strip()[:180]}"
+        for line_number, line in enumerate(lines, start=1)
+        if CONTROLLER_THREAD_ID_PLACEHOLDER in line
+    ][:10]
+    if evidence:
+        return (
+            [
+                Finding(
+                    id="practical-controller-thread-id-placeholder",
+                    severity="warning",
+                    category="practical-route",
+                    title="Practical review artifact still has controller thread placeholder",
+                    details=(
+                        "A completed practical review handoff must contain the actual Codex task/thread id. "
+                        "Leaving CONTROLLER_THREAD_ID_REQUIRED makes review independence evidence non-auditable."
+                    ),
+                    path=display_path,
+                    evidence=evidence,
+                    recommended_action=(
+                        "Replace CONTROLLER_THREAD_ID_REQUIRED with the actual Codex reviewer task/thread id in "
+                        "review findings, review independence evidence, workflow state and summary artifacts."
+                    ),
+                )
+            ],
+            [Check("practical-controller-placeholders", "warn", "Controller thread id placeholder remains.", display_path)],
+        )
+
+    return [], [Check("practical-controller-placeholders", "pass", "No controller thread id placeholder.", display_path)]
 
 
 def iter_mockup_visual_inventories(root: Path) -> list[Path]:
@@ -13870,6 +13947,7 @@ def validate_test_case_quality_smells(
     candidate_negative_trigger_missing: list[str] = []
     candidate_negative_trigger_too_specific: list[str] = []
     scenario_rationale_stimulus_mismatches: list[str] = []
+    absence_oracle_find_step_mismatches: list[str] = []
     persist_coverage_missing: list[str] = []
     persistence_tc_without_save_action: list[str] = []
     persistence_tc_without_reopen_verification: list[str] = []
@@ -14403,6 +14481,17 @@ def validate_test_case_quality_smells(
             and NONDETERMINISTIC_ALTERNATIVE_ORACLE_RE.search(expected_result)
         ):
             nondeterministic_alternative_oracles.append(f"{test_case_id}:expected={expected_result[:180]}")
+        if (
+            expected_result
+            and steps
+            and re.search(r"\bне\s+отобража(?:ется|ются)\b|\bотсутству(?:ет|ют)\b", expected_result, flags=re.IGNORECASE)
+            and re.search(r"\b(?:реестр|список|таблиц|карточк)", expected_result, flags=re.IGNORECASE)
+            and re.search(r"(?im)^\s*\d+\.\s*Найти\b", steps)
+            and not re.search(r"(?im)^\s*\d+\.\s*(?:Попытаться\s+найти|Проверить\b.*\bне\s+отобража)", steps)
+        ):
+            absence_oracle_find_step_mismatches.append(
+                f"{test_case_id}:step expects finding while oracle expects absence; steps={steps[:160]}; expected={expected_result[:160]}"
+            )
         gap_placeholder_context = " ".join([test_case_type, status, expected_result, steps])
         if (
             extract_gap_ids_from_text(gap_placeholder_context)
@@ -15738,6 +15827,27 @@ def validate_test_case_quality_smells(
             )
         )
 
+    if absence_oracle_find_step_mismatches:
+        findings.append(
+            Finding(
+                id="test-case-absence-oracle-find-step-mismatch",
+                severity="warning",
+                category="test-case-format",
+                title="Absence/visibility-negative TC asks tester to find the absent object",
+                details=(
+                    "When the expected result says an object is absent or not displayed in a list/registry, "
+                    "steps must not say `Find the object` as if it should be visible. This makes the TC "
+                    "ambiguous for manual execution and automation."
+                ),
+                path=display_path,
+                evidence=absence_oracle_find_step_mismatches[:20],
+                recommended_action=(
+                    "Rewrite the action as `try to find`, `search for`, or `verify the object is not displayed`, "
+                    "then check that related actions are unreachable because the object is absent."
+                ),
+            )
+        )
+
     if (
         production_test_case_file
         and source_row_inventory_required(content)
@@ -16376,6 +16486,7 @@ def validate_test_case_quality_smells(
         or candidate_negative_trigger_missing
         or candidate_negative_trigger_too_specific
         or scenario_rationale_stimulus_mismatches
+        or absence_oracle_find_step_mismatches
         or persist_coverage_missing
         or persistence_tc_without_save_action
         or persistence_tc_without_reopen_verification
@@ -20991,6 +21102,7 @@ def validate(
     dictionary_inventories = iter_dictionary_inventories(root)
     mockup_visual_inventories = iter_mockup_visual_inventories(root)
     practical_stage_summaries = iter_practical_stage_summaries(root)
+    practical_controller_artifacts = iter_practical_controller_artifacts(root)
     scope_selection_prompts = iter_named_markdown(root, "scope-selection-prompts.md")
     oracle_inventories = [
         *iter_named_markdown(root, NEGATIVE_ORACLE_INVENTORY_NAME),
@@ -21016,6 +21128,7 @@ def validate(
         dictionary_inventories = []
         mockup_visual_inventories = []
         practical_stage_summaries = []
+        practical_controller_artifacts = []
         scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_source_table_normalization:
@@ -21037,6 +21150,7 @@ def validate(
         dictionary_inventories = []
         mockup_visual_inventories = []
         practical_stage_summaries = []
+        practical_controller_artifacts = []
         scope_selection_prompts = []
         oracle_inventories = []
     if root_is_standalone_dictionary_inventory:
@@ -21058,6 +21172,7 @@ def validate(
         generated_source_basis_artifacts = []
         mockup_visual_inventories = []
         practical_stage_summaries = []
+        practical_controller_artifacts = []
         scope_selection_prompts = []
         oracle_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
@@ -21319,6 +21434,11 @@ def validate(
         findings.extend(path_findings)
         checks.extend(path_checks)
 
+    for path in practical_controller_artifacts:
+        path_findings, path_checks = validate_controller_thread_id_placeholders(path, root)
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
     for path in scope_selection_prompts:
         path_findings, path_checks = validate_scope_selection_prompts_artifact(path, root)
         findings.extend(path_findings)
@@ -21393,6 +21513,7 @@ def validate(
             "generated_source_basis_artifacts_checked": len(generated_source_basis_artifacts),
             "mockup_visual_inventories_checked": len(mockup_visual_inventories),
             "practical_stage_summaries_checked": len(practical_stage_summaries),
+            "practical_controller_artifacts_checked": len(practical_controller_artifacts),
             "scope_selection_prompts_checked": len(scope_selection_prompts),
             "ui_evidence_indexes_checked": len(iter_named_markdown(root, "ui-evidence-index.md")),
             "ui_validation_reports_checked": len(iter_named_markdown(root, "ui-validation-report.md")),

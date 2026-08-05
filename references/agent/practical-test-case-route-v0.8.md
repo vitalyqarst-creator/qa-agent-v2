@@ -174,6 +174,8 @@ If a validator was run, add these fields:
 | validator_warnings_count | `<integer>` |
 | validator_warnings_classification | `none / blocking-for-scope / expected-pre-writer / nonblocking-info / mixed` |
 | validator_warnings_evidence | `<paths/finding ids or not-applicable>` |
+| validator_info_count | `<integer>` |
+| validator_info_evidence | `<paths/finding ids or not-applicable>` |
 | per_scope_next_stage_transitions | `yes / not-applicable` |
 | production_tc_clean | `yes / no / mixed / not-applicable` |
 | git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
@@ -224,12 +226,13 @@ When files are restored or copied from another checkout, summary must record
 that provenance, the next stage cannot audit contamination risk.
 
 After every repair, rerun the validator and refresh
-`validator_errors_count`, `validator_warnings_count` and evidence ids from the
-latest report. Stale counts or stale finding ids block the next practical stage.
+`validator_errors_count`, `validator_warnings_count`, `validator_info_count` and
+evidence ids from the latest report. Stale counts or stale finding ids block the
+next practical stage.
 Use
 `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
-to compute the current validator counts/evidence and `git_persistence` before
-updating the summary.
+to compute the current validator counts/evidence, including info findings, and
+`git_persistence` before updating the summary.
 If changed FT/package artifacts are ignored by git, set
 `git_persistence = ignored-by-git` or `mixed` and state that ordinary
 commit/push will not persist those files. The stage/final response must also
@@ -341,12 +344,15 @@ planned TC), use the fast path inside this same route:
      matrix formatting or traceability tokens.
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".
-   - Default behavior: run reviewer in a separate Codex task/session. If thread
-     orchestration is available, hand off the reviewer prompt to that separate
-     task/session. A sub-agent spawned inside the writer/controller turn does not
-     count as a separate Codex task/session for independent sign-off. If separate
-     thread orchestration is not available, stop after writer handoff and ask the
-     user to run the reviewer prompt in a new session.
+  - Default behavior: run reviewer in a separate Codex task/session. If thread
+    orchestration is available, hand off the reviewer prompt to that separate
+    task/session. A sub-agent spawned inside the writer/controller turn does not
+    count as a separate Codex task/session for independent sign-off. If separate
+    thread orchestration is not available, stop after writer handoff and ask the
+    user to run the reviewer prompt in a new session.
+  - When the controller creates a separate reviewer Codex task/thread, set a
+    short human-readable title such as `Partners-v1 TC review 9.1+9.3.1`;
+    never leave the full reviewer prompt as the task title.
    - The reviewer input must exclude writer transcript, writer private
      reasoning, and process diagnostics that are not needed to judge the suite.
    - A same-session review is allowed only as a fallback practical review and
@@ -393,7 +399,9 @@ planned TC), use the fast path inside this same route:
      `test-design-matrix.md`, `test-design-matrix-review.md`, and canonical test
      cases.
    - Default behavior: run reviewer in a separate Codex task/session. The reviewer
-     input must exclude writer transcript and private reasoning.
+     input must exclude writer transcript and private reasoning. The controller
+     must give the separate reviewer task/thread a concise title, not the full
+     prompt body.
    - Produce `review-findings.md` and update `review-independence.md` with
      TC-review evidence.
    - Classify findings as:

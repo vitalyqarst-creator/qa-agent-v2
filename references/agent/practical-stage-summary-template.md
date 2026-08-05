@@ -25,6 +25,8 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | validator_warnings_count | `<integer>` |
 | validator_warnings_classification | `none / blocking-for-scope / expected-pre-writer / nonblocking-info / mixed / not-applicable` |
 | validator_warnings_evidence | `<finding ids or not-applicable>` |
+| validator_info_count | `<integer>` |
+| validator_info_evidence | `<finding ids or not-applicable>` |
 | source_restore_provenance | `<source path/checkpoint or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 or not-applicable>` |
 
@@ -40,7 +42,8 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 - Explanations belong in `next_safe_step`, scope `reason` or a short notes section.
 - After every repair, run:
   `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
-  and update validator counts/evidence plus `git_persistence` from the output.
+  and update validator counts/evidence, including info fields, plus `git_persistence`
+  from the output.
 - If `git_persistence = ignored-by-git`, the stage/final response must explicitly
   say that changed FT/package artifacts are local, ordinary commit/push will not
   include them, and persistence requires `git add -f <paths>` or an export/bundle.

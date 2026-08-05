@@ -13,6 +13,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
     def test_reference_defines_default_practical_route_and_explicit_heavy_routes(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")
+        normalized_content = " ".join(content.split())
         self.assertIn("default route for ordinary FT test-case writing", content)
         self.assertIn("test-design-matrix.md", content)
         self.assertIn("Классы покрытия", content)
@@ -98,6 +99,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
 
     def test_v08_requires_coverage_class_decomposition_and_reviewer_independence(self) -> None:
         content = self.read("references/agent/practical-test-case-route-v0.8.md")
+        normalized_content = " ".join(content.split())
         self.assertIn("Mandatory coverage class decomposition", content)
         self.assertIn("one sample invalid value", content)
         self.assertIn("coverage-class-catalog.md", content)
@@ -115,9 +117,12 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("reviewer_execution_surface", content)
         self.assertIn("reviewer_thread_url_or_id", content)
         self.assertIn("cannot be the final reviewer verdict", content)
+        self.assertIn("short human-readable title", content)
+        self.assertIn("not the full prompt body", normalized_content)
         self.assertIn("root consistency", content)
         self.assertIn("validator_errors_count", content)
         self.assertIn("validator_warnings_count", content)
+        self.assertIn("validator_info_count", content)
         self.assertIn("per_scope_next_stage_transitions", content)
         self.assertIn("production_tc_clean", content)
         self.assertIn("git_persistence", content)
@@ -138,6 +143,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("writer allowed / writer conditional / writer blocked", template)
         self.assertIn("tc-review allowed / tc-review conditional / tc-review blocked", template)
         self.assertIn("tracked / ignored-by-git / mixed / not-applicable", template)
+        self.assertIn("validator_info_count", template)
         self.assertIn("refresh_practical_stage_summary.py", template)
         self.assertIn("ordinary commit/push will not", template)
         self.assertIn("git add -f <paths>", template)

@@ -54,6 +54,8 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
             result["validator_warnings_evidence"],
             "oracle-candidate-obligation-without-test-case",
         )
+        self.assertEqual(result["validator_info_count"], 1)
+        self.assertEqual(result["validator_info_evidence"], "source-quality-many-untitled-sections")
 
     def test_detect_git_persistence_reports_gitignored_summary(self) -> None:
         helper = self.load_helper()
@@ -86,6 +88,8 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
             validator_errors_evidence="not-applicable",
             validator_warnings_count=3,
             validator_warnings_evidence="warning-a; warning-b",
+            validator_info_count=4,
+            validator_info_evidence="info-a; info-b",
             git_persistence="ignored-by-git",
             git_persistence_evidence=".gitignore:1:fts/* fts/Partners/Partners-v1",
         )
@@ -94,8 +98,10 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
 
         self.assertIn("| validator_errors_count | `0` |", output)
         self.assertIn("| validator_warnings_count | `3` |", output)
+        self.assertIn("| validator_info_count | `4` |", output)
         self.assertIn("| git_persistence | `ignored-by-git` |", output)
         self.assertIn("warning-a; warning-b", output)
+        self.assertIn("info-a; info-b", output)
 
 
 if __name__ == "__main__":
