@@ -174,6 +174,48 @@ class PracticalReviewPreflightTests(unittest.TestCase):
 
         self.assertTrue(result["allowed"])
 
+    def test_ignores_practical_artifact_error_owned_by_another_scope(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        other_handoff = ft_root / "work" / "stage-handoffs" / "02-other-scope"
+        other_handoff.mkdir()
+        (other_handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "ft_slug: Sample-v1",
+                    "scope_slug: other-scope",
+                    "current_stage: ft-test-case-writer",
+                    "stage_status: ready-for-review",
+                    "next_skill: ft-test-case-reviewer",
+                    "review_mode: tc_review",
+                    "current_round: 1",
+                    "required_inputs: []",
+                    "latest_artifacts: {}",
+                    "open_questions: []",
+                    "blocking_reasons: []",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {
+            "findings": [
+                {
+                    "id": "review-findings-nonrussian-human-field",
+                    "severity": "error",
+                    "category": "language",
+                    "path": "work/practical/other-scope/review-findings.md",
+                }
+            ]
+        }
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertTrue(result["allowed"])
+
     def test_reviewer_receipt_verification_blocks_changed_commit(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

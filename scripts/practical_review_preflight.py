@@ -149,6 +149,25 @@ def scope_descriptors(ft_package_root: Path, scope_ids: Iterable[str]) -> tuple[
     return descriptors, issues
 
 
+def all_scope_descriptors(ft_package_root: Path) -> list[ScopeDescriptor]:
+    """Resolve every numbered scope so unrelated practical findings stay local."""
+
+    handoff_root = ft_package_root / "work" / "stage-handoffs"
+    if not handoff_root.is_dir():
+        return []
+    scope_ids = sorted(
+        {
+            match.group(1)
+            for path in handoff_root.iterdir()
+            if path.is_dir()
+            for match in [re.match(r"(\d{2})-", path.name)]
+            if match is not None
+        }
+    )
+    descriptors, _ = scope_descriptors(ft_package_root, scope_ids)
+    return descriptors
+
+
 def scope_id_for_finding_path(path_text: str, descriptors: Iterable[ScopeDescriptor], ft_package_root: Path) -> str | None:
     normalized = path_text.replace("\\", "/").lstrip("./")
     for descriptor in descriptors:
@@ -168,6 +187,7 @@ def relevant_validator_errors(
     ft_package_root: Path,
 ) -> list[str]:
     requested_ids = {item.scope_id for item in descriptors}
+    ownership_descriptors = all_scope_descriptors(ft_package_root)
     issues: list[str] = []
     for finding in findings:
         if str(finding.get("severity", "")).casefold() != "error":
@@ -178,7 +198,7 @@ def relevant_validator_errors(
         if category == "practical-stage-summary":
             issues.append(f"{finding_id}: practical-stage-summary gate failed")
             continue
-        owner_scope_id = scope_id_for_finding_path(path_text, descriptors, ft_package_root)
+        owner_scope_id = scope_id_for_finding_path(path_text, ownership_descriptors, ft_package_root)
         if owner_scope_id is None:
             issues.append(f"{finding_id}: package-global or unclassified error at {path_text or '<missing-path>'}")
         elif owner_scope_id in requested_ids:
