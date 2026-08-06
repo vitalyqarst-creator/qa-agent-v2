@@ -72,6 +72,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("must not require source assertion receipts", reviewer)
         self.assertIn("review-independence.md", reviewer)
         self.assertIn("Re-derive coverage from FT DOCX/PDF/XHTML", reviewer)
+        self.assertIn("advisory-review-findings.md", reviewer)
+        self.assertIn("controller_authorized_advisory_revision", reviewer)
         self.assertIn("route next to `ft-test-case-writer`", scope)
         self.assertIn("not to `source_assertion_review`", scope)
 
@@ -137,6 +139,9 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("tool_search", content)
         self.assertIn("create_thread", content)
         self.assertIn("blocked-reviewer-session-tool-unavailable", content)
+        self.assertIn("advisory-review-findings.md", content)
+        self.assertIn("controller_authorized_advisory_revision", content)
+        self.assertIn("must not set `stage_status: ready-for-writer-revision`", content)
         self.assertIn("review_mode", content)
         self.assertIn("review_round", content)
         self.assertIn("matrix-review independence receipt does not prove a later TC", content)

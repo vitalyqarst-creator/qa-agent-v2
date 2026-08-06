@@ -98,6 +98,7 @@ TC_REVIEW_FINDINGS_SAME_SESSION = """# TC Review Findings
 | review_mode | `tc_review` |
 | review_round | `3` |
 | reviewer_task_or_session | `current Codex task` |
+| reviewer_execution_surface | `same-session` |
 
 ## Verdict
 
@@ -165,6 +166,7 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         review_independence: str | None,
         tc_content: str = TC_CONTENT,
         review_findings: str | None = None,
+        review_findings_name: str = "review-findings.md",
     ) -> Path:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -176,8 +178,44 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         if review_independence is not None:
             (practical / "review-independence.md").write_text(review_independence, encoding="utf-8")
         if review_findings is not None:
-            (practical / "review-findings.md").write_text(review_findings, encoding="utf-8")
+            (practical / review_findings_name).write_text(review_findings, encoding="utf-8")
         return root
+
+    def write_ready_for_writer_revision_workflow(
+        self,
+        root: Path,
+        *,
+        controller_authorized_advisory_revision: bool = False,
+    ) -> None:
+        handoff = root / "work" / "stage-handoffs" / "01-sample"
+        handoff.mkdir(parents=True)
+        auth_line = (
+            "controller_authorized_advisory_revision: yes\n"
+            if controller_authorized_advisory_revision
+            else ""
+        )
+        (handoff / "workflow-state.yaml").write_text(
+            "\n".join(
+                [
+                    "ft_slug: Sample",
+                    "scope_slug: sample-scope",
+                    "current_stage: ft-test-case-writer",
+                    "stage_status: ready-for-writer-revision",
+                    "current_round: 3",
+                    "next_skill: ft-test-case-writer",
+                    "review_mode: tc_review",
+                    auth_line.rstrip(),
+                    "required_inputs:",
+                    "- work/practical/sample-scope/review-independence.md",
+                    "latest_artifacts:",
+                    "  review_independence: work/practical/sample-scope/review-independence.md",
+                    "open_questions: []",
+                    "blocking_reasons: []",
+                    "",
+                ]
+            ).replace("\n\n", "\n"),
+            encoding="utf-8",
+        )
 
     def finding_ids(self, root: Path) -> set[str]:
         report = self.validator.validate(root)
@@ -228,6 +266,54 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("practical-release-invalid-review-independence", ids)
+
+    def test_non_independent_review_must_not_be_named_release_grade_review_findings(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                review_independence=INVALID_REVIEW_INDEPENDENCE,
+                review_findings=TC_REVIEW_FINDINGS_SAME_SESSION,
+            )
+        )
+
+        self.assertIn("practical-advisory-review-findings-misnamed", ids)
+
+    def test_advisory_review_findings_filename_does_not_claim_release_grade_review(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                review_independence=INVALID_REVIEW_INDEPENDENCE,
+                review_findings=TC_REVIEW_FINDINGS_SAME_SESSION,
+                review_findings_name="advisory-review-findings.md",
+            )
+        )
+
+        self.assertNotIn("practical-advisory-review-findings-misnamed", ids)
+
+    def test_workflow_rejects_advisory_review_routed_to_writer_without_controller_authority(self) -> None:
+        root = self.make_package(
+            review_independence=INVALID_REVIEW_INDEPENDENCE,
+            review_findings=TC_REVIEW_FINDINGS_SAME_SESSION,
+            review_findings_name="advisory-review-findings.md",
+        )
+        self.write_ready_for_writer_revision_workflow(root)
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("workflow-state-advisory-review-routed-to-writer", ids)
+
+    def test_workflow_allows_controller_authorized_advisory_writer_revision(self) -> None:
+        root = self.make_package(
+            review_independence=INVALID_REVIEW_INDEPENDENCE,
+            review_findings=TC_REVIEW_FINDINGS_SAME_SESSION,
+            review_findings_name="advisory-review-findings.md",
+        )
+        self.write_ready_for_writer_revision_workflow(
+            root,
+            controller_authorized_advisory_revision=True,
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertNotIn("workflow-state-advisory-review-routed-to-writer", ids)
 
     def test_released_practical_suite_rejects_noncanonical_english_summary_heading(self) -> None:
         ids = self.finding_ids(

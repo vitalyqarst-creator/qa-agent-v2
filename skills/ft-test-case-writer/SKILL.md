@@ -201,7 +201,10 @@ Minimum runtime rules:
    remain `draft-ready-for-review` / `review-ready` rather than `released-*` or
    `signed-off`. Use the same Codex thread-tool handoff contract as matrix
    review; same-session review can be advisory only and cannot authorize bounded
-   revision, acceptance or release. For legacy/session routes, do not set
+   revision, acceptance or release unless the workflow explicitly records
+   `controller_authorized_advisory_revision: yes`. Advisory review findings must
+   be read from `advisory-review-findings.md`, not from release-grade
+   `review-findings.md`. For legacy/session routes, do not set
    `stage_status: ready-for-review` until
    source/parity/mockup/table/dictionary inputs, split `Writer Quality Gate`,
    clean production TC files, and validator blockers are closed.

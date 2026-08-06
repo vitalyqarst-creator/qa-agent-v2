@@ -5478,9 +5478,14 @@ def validate_practical_review_independence_gate(
         return findings, checks
 
     review_findings_path = practical_dir / "review-findings.md"
+    advisory_review_findings_path = practical_dir / "advisory-review-findings.md"
     independence_path = practical_dir / "review-independence.md"
     release_claimed = bool(PRACTICAL_RELEASE_CLAIM_RE.search(content))
-    review_artifacts_present = review_findings_path.exists() or independence_path.exists()
+    review_artifacts_present = (
+        review_findings_path.exists()
+        or advisory_review_findings_path.exists()
+        or independence_path.exists()
+    )
     review_findings_fields: dict[str, str] = {}
     if review_findings_path.exists():
         try:
@@ -5623,6 +5628,32 @@ def validate_practical_review_independence_gate(
             )
 
     if issues:
+        review_surface = review_findings_fields.get("reviewer_execution_surface", "").strip().strip("`").lower()
+        if review_findings_path.exists() and (
+            review_surface
+            and review_surface not in {"codex-task", "codex-thread"}
+        ):
+            findings.append(
+                Finding(
+                    id="practical-advisory-review-findings-misnamed",
+                    severity="warning",
+                    category="review-independence",
+                    title="Advisory non-independent review is stored as release-grade review-findings.md",
+                    details=(
+                        "Practical `review-findings.md` is reserved for validator-accepted separate Codex "
+                        "task/thread review. Sub-agent, same-session, local-helper or other advisory review "
+                        "outputs must use `advisory-review-findings.md` so downstream writer routing cannot "
+                        "mistake them for independent review evidence."
+                    ),
+                    path=rel(review_findings_path, root),
+                    evidence=[f"reviewer_execution_surface={review_surface}"],
+                    recommended_action=(
+                        "Rename this artifact to advisory-review-findings.md, keep review-independence.md as "
+                        "reviewed-not-independent, and do not route writer revision unless the controller "
+                        "explicitly sets controller_authorized_advisory_revision=yes."
+                    ),
+                )
+            )
         severity = "error" if release_claimed else "warning"
         findings.append(
             Finding(
@@ -19690,6 +19721,31 @@ def is_signed_off_state(state: dict[str, Any]) -> bool:
     return workflow_final_status(state) == "signed-off"
 
 
+def field_value_is_yes(value: Any) -> bool:
+    return str(value or "").strip().strip("`").strip().lower() in {
+        "yes",
+        "true",
+        "1",
+        "да",
+        "approved",
+        "controller-approved",
+        "explicitly-approved",
+    }
+
+
+def review_independence_fields_are_release_grade(fields: dict[str, str]) -> bool:
+    return (
+        field_value_is_yes(fields.get("reviewer_was_separate_session"))
+        and field_value_is_yes(fields.get("reviewer_input_excluded_writer_transcript"))
+        and field_value_is_yes(fields.get("reviewer_input_excluded_writer_private_reasoning"))
+        and str(fields.get("reviewer_modified_test_cases", "")).strip().strip("`").lower() == "no"
+        and field_value_is_yes(fields.get("independent_signoff_claim_allowed"))
+        and str(fields.get("reviewer_execution_surface", "")).strip().strip("`").lower()
+        in {"codex-task", "codex-thread"}
+        and CODEX_THREAD_ID_RE.match(str(fields.get("reviewer_task_or_session", "")).strip().strip("`").strip())
+    )
+
+
 def is_ready_for_review_state(state: dict[str, Any]) -> bool:
     if state.get("review_mode") == "matrix_review":
         return False
@@ -20103,6 +20159,84 @@ def validate_workflow_state(
                 recommended_action="Use a canonical skill name, `none`, or `null`.",
             )
         )
+
+    if (
+        state.get("stage_status") == "ready-for-writer-revision"
+        and state.get("next_skill") == "ft-test-case-writer"
+        and state.get("review_mode") == "tc_review"
+    ):
+        advisory_revision_authorized = field_value_is_yes(
+            state.get("controller_authorized_advisory_revision")
+        )
+        linked_review_independence_paths = dedupe_paths(
+            [
+                resolved
+                for value in [*latest_artifact_values, *required_input_values]
+                if Path(strip_quotes(value)).name.startswith("review-independence")
+                for resolved in [resolve_artifact_path(value, path, root, ft_root)]
+                if resolved is not None
+            ]
+        )
+        invalid_independence_paths: list[str] = []
+        invalid_independence_evidence: list[str] = []
+        for review_independence_path in linked_review_independence_paths:
+            try:
+                review_independence_fields = parse_review_independence_fields(
+                    review_independence_path.read_text(encoding="utf-8")
+                )
+            except UnicodeDecodeError:
+                invalid_independence_paths.append(rel(review_independence_path, root))
+                invalid_independence_evidence.append("review-independence-not-utf8")
+                continue
+            if not review_independence_fields_are_release_grade(review_independence_fields):
+                invalid_independence_paths.append(rel(review_independence_path, root))
+                invalid_independence_evidence.append(
+                    "reviewer_execution_surface="
+                    f"{review_independence_fields.get('reviewer_execution_surface', '<missing>')}; "
+                    "independent_signoff_claim_allowed="
+                    f"{review_independence_fields.get('independent_signoff_claim_allowed', '<missing>')}"
+                )
+        if invalid_independence_paths and not advisory_revision_authorized:
+            findings.append(
+                Finding(
+                    id="workflow-state-advisory-review-routed-to-writer",
+                    severity="error",
+                    category="workflow-state",
+                    title="Workflow routes advisory review findings to writer without controller authorization",
+                    details=(
+                        "`ready-for-writer-revision` after `tc_review` requires validator-accepted separate "
+                        "Codex task/thread review evidence. Advisory sub-agent/same-session/local-helper review "
+                        "findings may be used for writer revision only when the workflow explicitly records "
+                        "`controller_authorized_advisory_revision: yes`."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        *invalid_independence_paths[:8],
+                        *invalid_independence_evidence[:8],
+                    ],
+                    recommended_action=(
+                        "Run a real separate Codex task/thread review, or set stage_status=blocked-input until "
+                        "the controller explicitly authorizes advisory findings as writer input."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "workflow-state-review-independence-before-writer",
+                    "fail",
+                    "Advisory review is routed to writer without controller authorization.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "workflow-state-review-independence-before-writer",
+                    "pass",
+                    "Writer revision route has independent review evidence or controller authorization.",
+                    display_path,
+                )
+            )
 
     linked_source_selection_paths = dedupe_paths(
         [

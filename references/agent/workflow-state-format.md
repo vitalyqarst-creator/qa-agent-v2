@@ -267,7 +267,7 @@ accepted_risks: []
 - Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, добавляй `scope-clarification-requests.md` в `latest_artifacts`; добавляй его в `required_inputs`, когда следующий этап должен учитывать открытые или подтвержденные ответы по gaps.
 - Если этап заблокирован, используй `stage_status = blocked-input` и явно заполняй `blocking_reasons`.
 - Статус `signed-off` используется только для завершенного review-cycle и handoff в `ft-ui-automation-prep`.
-- Не используй `stage_status: not-signed-off`: это итоговая оценка review, но не process-status. При blocker findings выбирай `ready-for-writer-revision`, при лимите раундов `round-cap-reached`, при нехватке внешнего input `blocked-input`.
+- Не используй `stage_status: not-signed-off`: это итоговая оценка review, но не process-status. При blocker findings выбирай `ready-for-writer-revision` только если findings получены validator-accepted separate Codex task/thread review. Если findings получены advisory review (`sub-agent`, `same-session`, `local-helper`), используй `blocked-input` до настоящего separate-session review или до явного поля `controller_authorized_advisory_revision: yes`. При лимите раундов используй `round-cap-reached`, при нехватке внешнего input `blocked-input`.
 
 ## Transition contract
 

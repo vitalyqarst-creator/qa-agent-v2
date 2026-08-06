@@ -407,7 +407,9 @@ planned TC), use the fast path inside this same route:
      advisory non-independent review. It must be labeled
      `reviewed-not-independent`; it cannot produce matrix acceptance, TC review
      acceptance, writer-revision authority, independent sign-off or release
-     routing.
+     routing. Store advisory matrix review output as
+     `advisory-test-design-matrix-review.md`, not as
+     `test-design-matrix-review.md`.
    - Produce `test-design-matrix-review.md` and `review-independence.md` in the
      practical scope folder.
    - Markdown matrix review is enough for practical route. Do not require or
@@ -456,8 +458,16 @@ planned TC), use the fast path inside this same route:
      task/thread a concise title, not the full prompt body. If the tool path is
      unavailable, stop as `blocked-reviewer-session-tool-unavailable` and do not
      issue a same-session route verdict.
-   - Produce `review-findings.md` and update `review-independence.md` with
+   - Produce `review-findings.md` only for validator-accepted separate
+     Codex-task/thread TC review and update `review-independence.md` with
      TC-review evidence.
+   - If the user explicitly requests advisory non-independent review, or if a
+     controller performs auxiliary sub-agent/same-session analysis, store its
+     output as `advisory-review-findings.md`. It may inform a later human
+     decision, but it must not set `stage_status: ready-for-writer-revision`,
+     `next_skill: ft-test-case-writer`, matrix/TC acceptance, sign-off or release
+     unless the workflow explicitly records
+     `controller_authorized_advisory_revision: yes`.
    - Classify findings as:
      - `blocking` when the test case is materially wrong or misleading;
      - `nonblocking` when the issue is wording, grouping or minor priority;
@@ -778,7 +788,9 @@ Rules:
   review.
 - A sub-agent, local helper or same-session pass may be used only as auxiliary
   analysis. It cannot be the final reviewer verdict for matrix acceptance, TC
-  review acceptance or independent release.
+  review acceptance or independent release. Its findings must be stored in an
+  `advisory-*` artifact (`advisory-review-findings.md` for TC review), never in
+  release-grade `review-findings.md`.
 - If Codex thread tools are not already loaded, discover them with `tool_search`
   and use `list_projects` / `create_thread` as the standard reviewer launch
   path. If the runtime genuinely cannot expose thread tools, stop after writer

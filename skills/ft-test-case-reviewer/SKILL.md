@@ -146,10 +146,18 @@ round-cap scope. Block TC writing only for source contradiction
 (`source_contradiction: yes`) or obligations that cannot be represented without
 inventing behavior.
 
-For `tc_review`, return `review-findings.md` and verify that
+For independent `tc_review`, return `review-findings.md` and verify that
 `test-design-matrix-review.md` has verdict `matrix-accepted` before judging TC
 coverage. If an accepted matrix review is absent, block TC review and route back
 to matrix review.
+
+`review-findings.md` is release-grade review evidence and is allowed only when
+the reviewer ran in a separate Codex task/thread. If review is performed as a
+sub-agent, same-session pass, local helper or any other non-independent advisory
+analysis, write `advisory-review-findings.md` instead. Advisory findings cannot
+authorize `ready-for-writer-revision`, matrix/TC acceptance, sign-off or release
+unless the workflow explicitly records
+`controller_authorized_advisory_revision: yes`.
 
 Before accepting a TC review handoff, verify `production_tc_clean = yes` for the
 reviewed scopes. Findings `test-case-split-artifact-duplicated-sections` and
@@ -172,12 +180,13 @@ and `reviewer_thread_url_or_id` with the durable task/thread id or URL. Values
 such as `sub-agent`, `same-session`, `in-process` or `local-helper` mean
 `reviewed-not-independent`. A sub-agent/local-helper/same-session pass can
 support analysis, but it cannot be the final independent reviewer verdict for
-matrix acceptance, TC review acceptance or practical release.
+matrix acceptance, TC review acceptance, writer-revision routing or practical
+release.
 For `practical_v0_8`, `review-independence.md` must also include `review_mode`
 and `review_round` matching the current review artifact. Matrix-review
 independence does not prove TC-review independence.
 
-Return `review-findings.md` with `blocking`, `nonblocking`,
+Return independent `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only
 because some cases legitimately remain `candidate-ui-calibration`,
 `blocked-observability`, `needs-test-data` or `needs-future-clarification`.
@@ -334,7 +343,7 @@ addition to compiler-contract-v3 `source_assertion_review`.
 25. Если findings artifact предыдущего раунда, writer response artifact или traceability matrix структурно невалидны, фиксируй это как blocking review finding.
 26. Во втором review проверяй закрытие traceability findings по `traceability_ref`, а не по похожему тексту `source_path` или повторяющемуся `req_id`.
 27. Если найдены unresolved findings, сохрани `prompt.reviewer-to-writer.round-N.md` для следующего writer round.
-27a. Если review verdict = `not signed-off`, не записывай `stage_status: not-signed-off` в `workflow-state.yaml`: такого process-status нет. Для обычного следующего writer round используй `stage_status: ready-for-writer-revision` и `next_skill: ft-test-case-writer`; если достигнут round cap, используй `stage_status: round-cap-reached`; если нужен внешний input, используй `stage_status: blocked-input`.
+27a. Если review verdict = `not signed-off`, не записывай `stage_status: not-signed-off` в `workflow-state.yaml`: такого process-status нет. Для обычного следующего writer round используй `stage_status: ready-for-writer-revision` и `next_skill: ft-test-case-writer` только после validator-accepted separate Codex task/thread review. Если findings получены advisory review (`sub-agent`, `same-session`, `local-helper`), используй `stage_status: blocked-input` до separate-session review или до явного `controller_authorized_advisory_revision: yes`; если достигнут round cap, используй `stage_status: round-cap-reached`; если нужен внешний input, используй `stage_status: blocked-input`.
 28. Если набор подписан без unresolved findings, перед handoff проверь группировку, сквозную нумерацию `TC-*` и выполни `python scripts\validate_agent_artifacts.py --root <ft-package> --json` или runner validator gate по текущему scope. Final reviewer output должен содержать блок `Reviewer Sign-off Self-check` по `reviewer-output-format.md`; `validator_checked: yes`/`blocking_findings_absent: yes` допустимы только без scope `error`/`warning` либо с валидным `Validator Warning Waivers`. Затем сохрани `prompt.reviewer-to-ui-prep.md` и обнови handoff state.
 29. Не выдавай handoff в `ft-ui-automation-prep`, если остаются `error`, `warning` или traceability `gap`, кроме явно допустимых `unclear`; для одиночного reviewer-pass без orchestrator-а не подменяй lifecycle sign-off, если sign-off должен фиксировать `ft-test-case-iteration`.
 

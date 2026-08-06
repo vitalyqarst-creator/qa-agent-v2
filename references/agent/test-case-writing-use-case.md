@@ -36,7 +36,10 @@ ft-source-locator
    - Run in a separate Codex task/session by default.
    - Re-derive coverage from FT/PDF/XHTML/support/mockups instead of trusting
      the writer matrix.
-   - Produce `review-findings.md` and `review-independence.md`.
+   - Produce `review-findings.md` and `review-independence.md` only for
+     separate-session review. Advisory non-independent review uses
+     `advisory-review-findings.md` and cannot authorize writer revision without
+     explicit controller approval.
 
 5. Revision
    - Perform one bounded writer revision for blocking findings.

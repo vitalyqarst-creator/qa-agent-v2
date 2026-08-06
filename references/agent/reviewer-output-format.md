@@ -130,7 +130,8 @@ Reviewer не должен переоткрывать закрытый finding �
 
 ## Handoff To Writer
 
-Если остаются `error`, `warning` или нерешенные `gap`, reviewer создает:
+Если остаются `error`, `warning` или нерешенные `gap`, и review был выполнен
+как validator-accepted separate Codex task/thread, reviewer создает:
 
 ```text
 prompt.reviewer-to-writer.round-N.md
@@ -143,7 +144,15 @@ stage_status: ready-for-writer-revision
 next_skill: ft-test-case-writer
 ```
 
-Нельзя использовать `stage_status: not-signed-off`. Это human summary verdict, а не lifecycle status. Если review не подписан и требуется writer revision, используй `ready-for-writer-revision`; если достигнут лимит раундов, используй `round-cap-reached`; если нужен внешний input, используй `blocked-input`.
+Нельзя использовать `stage_status: not-signed-off`. Это human summary verdict,
+а не lifecycle status. Если review не подписан и требуется writer revision,
+используй `ready-for-writer-revision` только после validator-accepted separate
+Codex task/thread review. Если findings получены advisory review (`sub-agent`,
+`same-session`, `local-helper`), используй `blocked-input` до настоящего
+separate-session review или до явного поля
+`controller_authorized_advisory_revision: yes`. Если достигнут лимит раундов,
+используй `round-cap-reached`; если нужен внешний input, используй
+`blocked-input`.
 
 `latest_artifacts` должен ссылаться на актуальные findings и traceability matrix, если она создана.
 

@@ -59,6 +59,9 @@ Use:
 
 - `ready-for-review` only after the writer output, gates, logs and prompt are complete;
 - `blocked-input` when required source/scope/gap decisions are missing;
-- `ready-for-writer-revision` only when reviewer findings require a new writer round.
+- `ready-for-writer-revision` only when validator-accepted separate Codex
+  task/thread reviewer findings require a new writer round, or when the workflow
+  explicitly records `controller_authorized_advisory_revision: yes` for advisory
+  findings.
 
 Store `prompt.writer-to-reviewer.round-N.md` in the current stage-handoff folder. For new scopes, use `fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/`.
