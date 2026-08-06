@@ -183,8 +183,13 @@ Minimum runtime rules:
    matrix must be internally consistent, every source-backed restriction must
    have explicit coverage classes or class-specific deferrals. Exact invariant:
    requiredness checks must be split by input mechanism. Current-scope blockers must be
-   visible as allowed planned statuses. Do not create or update canonical TC in
-   this pass.
+   visible as allowed planned statuses. Use Codex thread tools as the default
+   handoff path: if they are not loaded, discover them with `tool_search`, then
+   use `list_projects` / `create_thread` to launch the reviewer prompt in a
+   separate Codex task and record the returned thread id. If the runtime cannot
+   expose thread tools, set `blocked-reviewer-session-tool-unavailable`; do not
+   run same-session review as the route verdict. Do not create or update
+   canonical TC in this pass.
 7a. For matrix review completion, do not silently continue to TC writing or stop
    with only raw reviewer findings. Ensure `practical-stage-summary.md` exists
    and names accepted scopes, `round-cap-reached`/blocked scopes, concrete
@@ -194,7 +199,9 @@ Minimum runtime rules:
    session. The canonical file and accepted or once-repaired
    `test-design-matrix.md` must be synchronized, and the canonical file must
    remain `draft-ready-for-review` / `review-ready` rather than `released-*` or
-   `signed-off`. For legacy/session routes, do not set
+   `signed-off`. Use the same Codex thread-tool handoff contract as matrix
+   review; same-session review can be advisory only and cannot authorize bounded
+   revision, acceptance or release. For legacy/session routes, do not set
    `stage_status: ready-for-review` until
    source/parity/mockup/table/dictionary inputs, split `Writer Quality Gate`,
    clean production TC files, and validator blockers are closed.

@@ -33,8 +33,13 @@ description: Делает review существующих тест-кейсов 
      written;
   2) `tc_review` checks canonical test cases only after the matrix was accepted.
   Each gate runs from a separate Codex task/session by default and produces
-  review evidence. A sub-agent inside the writer/controller turn is not a
-  separate Codex task/session and cannot produce independent sign-off. It must not require source assertion receipts, semantic
+  review evidence. The controller/writer session must launch that task through
+  Codex thread tools (`tool_search` discovery if needed, then `list_projects` /
+  `create_thread`) and pass the durable thread id into reviewer evidence. A
+  sub-agent inside the writer/controller turn is not a separate Codex
+  task/session and cannot produce independent sign-off. If thread tools are
+  genuinely unavailable, stop as `blocked-reviewer-session-tool-unavailable`
+  instead of issuing a same-session route verdict. It must not require source assertion receipts, semantic
   bridge, immutable runner attempts, benchmark artifacts, separate structure
   preflight, separate final-format review or semantic regression unless the user
   explicitly selected those routes. If matrix review returns
@@ -168,6 +173,9 @@ such as `sub-agent`, `same-session`, `in-process` or `local-helper` mean
 `reviewed-not-independent`. A sub-agent/local-helper/same-session pass can
 support analysis, but it cannot be the final independent reviewer verdict for
 matrix acceptance, TC review acceptance or practical release.
+For `practical_v0_8`, `review-independence.md` must also include `review_mode`
+and `review_round` matching the current review artifact. Matrix-review
+independence does not prove TC-review independence.
 
 Return `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only

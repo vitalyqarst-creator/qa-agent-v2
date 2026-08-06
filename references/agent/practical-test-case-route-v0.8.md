@@ -358,20 +358,26 @@ planned TC), use the fast path inside this same route:
      matrix formatting or traceability tokens.
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".
-  - Default behavior: run reviewer in a separate Codex task/session. If thread
-    orchestration is available, hand off the reviewer prompt to that separate
-    task/session. A sub-agent spawned inside the writer/controller turn does not
-    count as a separate Codex task/session for independent sign-off. If separate
-    thread orchestration is not available, stop after writer handoff and ask the
-    user to run the reviewer prompt in a new session.
+  - Default behavior: run reviewer in a separate Codex task/session. The
+    controller/writer session must discover Codex thread tools with
+    `tool_search` when they are not already loaded, use `list_projects` and
+    `create_thread` to launch the reviewer prompt in a separate Codex task,
+    then use `wait_threads`/`read_thread` or the returned thread id to collect
+    the reviewer result. A sub-agent spawned inside the writer/controller turn
+    does not count as a separate Codex task/session for independent sign-off. If
+    Codex thread tools are genuinely unavailable in the runtime, stop with
+    `blocked-reviewer-session-tool-unavailable`; do not perform same-session
+    review as the route verdict.
   - When the controller creates a separate reviewer Codex task/thread, set a
     short human-readable title such as `Partners-v1 TC review 9.1+9.3.1`;
     never leave the full reviewer prompt as the task title.
    - The reviewer input must exclude writer transcript, writer private
      reasoning, and process diagnostics that are not needed to judge the suite.
-   - A same-session review is allowed only as a fallback practical review and
-     must be labeled `reviewed-not-independent`; it cannot produce an
-     independent sign-off.
+   - A same-session review is allowed only when the user explicitly asks for an
+     advisory non-independent review. It must be labeled
+     `reviewed-not-independent`; it cannot produce matrix acceptance, TC review
+     acceptance, writer-revision authority, independent sign-off or release
+     routing.
    - Produce `test-design-matrix-review.md` and `review-independence.md` in the
      practical scope folder.
    - Markdown matrix review is enough for practical route. Do not require or
@@ -412,10 +418,14 @@ planned TC), use the fast path inside this same route:
    - Run practical TC review over FT/PDF context, `scope-brief.md`, accepted
      `test-design-matrix.md`, `test-design-matrix-review.md`, and canonical test
      cases.
-   - Default behavior: run reviewer in a separate Codex task/session. The reviewer
-     input must exclude writer transcript and private reasoning. The controller
-     must give the separate reviewer task/thread a concise title, not the full
-     prompt body.
+   - Default behavior: run reviewer in a separate Codex task/session. The
+     controller/writer session must create the reviewer task with Codex thread
+     tools (`tool_search` discovery if needed, then `list_projects` /
+     `create_thread`). The reviewer input must exclude writer transcript and
+     private reasoning. The controller must give the separate reviewer
+     task/thread a concise title, not the full prompt body. If the tool path is
+     unavailable, stop as `blocked-reviewer-session-tool-unavailable` and do not
+     issue a same-session route verdict.
    - Produce `review-findings.md` and update `review-independence.md` with
      TC-review evidence.
    - Classify findings as:
@@ -711,6 +721,8 @@ Minimum fields:
 | reviewer_input_excluded_writer_private_reasoning | `yes/no` |
 | reviewer_modified_test_cases | `no` |
 | independent_signoff_claim_allowed | `yes/no` |
+| review_mode | `matrix_review/tc_review` |
+| review_round | `<round number>` |
 
 Rules:
 
@@ -730,14 +742,21 @@ Rules:
 - `reviewer_thread_url_or_id` must contain the same durable Codex thread/task id
   or a user-visible Codex task URL. It exists to make the evidence auditable from
   the Codex sidebar/task list, not merely from an internal agent transcript.
+- `review_mode` and `review_round` must match the current review artifact:
+  `test-design-matrix-review.md` for matrix review or `review-findings.md` for
+  TC review. A matrix-review independence receipt does not prove a later TC
+  review.
 - A sub-agent, local helper or same-session pass may be used only as auxiliary
   analysis. It cannot be the final reviewer verdict for matrix acceptance, TC
   review acceptance or independent release.
-- If a separate reviewer session is not available, stop after writer handoff and
-  ask the user/controller to launch the reviewer prompt in a new session. If the
-  user explicitly chooses a same-session fallback, complete only a practical
-  review and label it `reviewed-not-independent`; do not call the suite signed
-  off or independently signed off.
+- If Codex thread tools are not already loaded, discover them with `tool_search`
+  and use `list_projects` / `create_thread` as the standard reviewer launch
+  path. If the runtime genuinely cannot expose thread tools, stop after writer
+  handoff with `blocked-reviewer-session-tool-unavailable` and ask the
+  user/controller to launch the reviewer prompt in a new session. If the user
+  explicitly chooses a same-session fallback, complete only an advisory practical
+  review and label it `reviewed-not-independent`; do not use it for matrix
+  acceptance, TC review acceptance, writer revision routing, sign-off or release.
 
 ## Production TC visible headings
 

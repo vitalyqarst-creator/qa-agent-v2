@@ -5481,6 +5481,12 @@ def validate_practical_review_independence_gate(
     independence_path = practical_dir / "review-independence.md"
     release_claimed = bool(PRACTICAL_RELEASE_CLAIM_RE.search(content))
     review_artifacts_present = review_findings_path.exists() or independence_path.exists()
+    review_findings_fields: dict[str, str] = {}
+    if review_findings_path.exists():
+        try:
+            review_findings_fields = parse_review_independence_fields(review_findings_path.read_text(encoding="utf-8"))
+        except UnicodeDecodeError:
+            review_findings_fields = {}
 
     if not release_claimed and not review_artifacts_present:
         checks.append(
@@ -5562,6 +5568,11 @@ def validate_practical_review_independence_gate(
     reviewer_session = reviewer_session_raw.lower()
     execution_surface = fields.get("reviewer_execution_surface", "").strip().strip("`").strip().lower()
     reviewer_thread_url_or_id = fields.get("reviewer_thread_url_or_id", "").strip().strip("`").strip()
+    review_findings_mode = review_findings_fields.get("review_mode", "").strip().strip("`").strip()
+    review_findings_round = review_findings_fields.get("review_round", "").strip().strip("`").strip()
+    review_findings_reviewer = review_findings_fields.get("reviewer_task_or_session", "").strip().strip("`").strip()
+    independence_mode = fields.get("review_mode", "").strip().strip("`").strip()
+    independence_round = fields.get("review_round", "").strip().strip("`").strip()
     if reviewer_session in {"", "-", "not-available", "none", "n/a"}:
         issues.append(
             f"reviewer_task_or_session={fields.get('reviewer_task_or_session', '<missing>')}; expected=<actual Codex thread/session id>"
@@ -5587,6 +5598,29 @@ def validate_practical_review_independence_gate(
         issues.append(
             f"reviewer_thread_url_or_id={reviewer_thread_url_or_id}; expected=<auditable Codex task/thread id or URL>"
         )
+    if review_findings_path.exists() and review_findings_mode:
+        if independence_mode != review_findings_mode:
+            issues.append(
+                f"review_independence.review_mode={independence_mode or '<missing>'}; expected={review_findings_mode} from review-findings.md"
+            )
+        if review_findings_round and independence_round != review_findings_round:
+            issues.append(
+                f"review_independence.review_round={independence_round or '<missing>'}; expected={review_findings_round} from review-findings.md"
+            )
+    if review_findings_reviewer:
+        review_findings_reviewer_lower = review_findings_reviewer.lower()
+        if (
+            review_findings_reviewer_lower in {"current codex task", "current task", "same-session", "same session"}
+            or "current codex task" in review_findings_reviewer_lower
+            or "same-session" in review_findings_reviewer_lower
+        ):
+            issues.append(
+                f"review-findings.reviewer_task_or_session={review_findings_reviewer}; expected=<separate Codex thread/session id>"
+            )
+        elif CODEX_THREAD_ID_RE.match(review_findings_reviewer) and reviewer_session_raw != review_findings_reviewer:
+            issues.append(
+                f"review_independence.reviewer_task_or_session={reviewer_session_raw}; expected={review_findings_reviewer} from review-findings.md"
+            )
 
     if issues:
         severity = "error" if release_claimed else "warning"

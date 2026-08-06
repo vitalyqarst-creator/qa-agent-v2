@@ -75,7 +75,40 @@ VALID_REVIEW_INDEPENDENCE = """# Review Independence
 | reviewer_input_excluded_writer_private_reasoning | `yes` |
 | reviewer_modified_test_cases | `no` |
 | independent_signoff_claim_allowed | `yes` |
+| review_mode | `tc_review` |
+| review_round | `3` |
 """
+
+
+MATRIX_ONLY_REVIEW_INDEPENDENCE = VALID_REVIEW_INDEPENDENCE.replace(
+    "| review_mode | `tc_review` |",
+    "| review_mode | `matrix_review` |",
+).replace(
+    "| review_round | `3` |",
+    "| review_round | `2` |",
+)
+
+
+TC_REVIEW_FINDINGS_SAME_SESSION = """# TC Review Findings
+
+## Review Metadata
+
+| field | value |
+| --- | --- |
+| review_mode | `tc_review` |
+| review_round | `3` |
+| reviewer_task_or_session | `current Codex task` |
+
+## Verdict
+
+`tc-changes-required`
+"""
+
+
+TC_REVIEW_FINDINGS_SEPARATE_SESSION = TC_REVIEW_FINDINGS_SAME_SESSION.replace(
+    "`current Codex task`",
+    "`019fc5cf-8bfe-7693-bf2f-c3c55cca4824`",
+)
 
 
 INVALID_REVIEW_INDEPENDENCE = """# Review Independence
@@ -127,7 +160,12 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
     def setUp(self) -> None:
         self.validator = load_validator_module()
 
-    def make_package(self, review_independence: str | None, tc_content: str = TC_CONTENT) -> Path:
+    def make_package(
+        self,
+        review_independence: str | None,
+        tc_content: str = TC_CONTENT,
+        review_findings: str | None = None,
+    ) -> Path:
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         root = Path(tmp.name) / "fts" / "Sample"
@@ -137,6 +175,8 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         practical.mkdir(parents=True)
         if review_independence is not None:
             (practical / "review-independence.md").write_text(review_independence, encoding="utf-8")
+        if review_findings is not None:
+            (practical / "review-findings.md").write_text(review_findings, encoding="utf-8")
         return root
 
     def finding_ids(self, root: Path) -> set[str]:
@@ -168,6 +208,26 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
 
         self.assertNotIn("practical-release-missing-review-independence", ids)
         self.assertNotIn("practical-release-invalid-review-independence", ids)
+
+    def test_tc_review_requires_matching_review_independence_mode_and_round(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                review_independence=MATRIX_ONLY_REVIEW_INDEPENDENCE,
+                review_findings=TC_REVIEW_FINDINGS_SEPARATE_SESSION,
+            )
+        )
+
+        self.assertIn("practical-release-invalid-review-independence", ids)
+
+    def test_tc_review_rejects_current_codex_task_as_reviewer_session(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                review_independence=VALID_REVIEW_INDEPENDENCE,
+                review_findings=TC_REVIEW_FINDINGS_SAME_SESSION,
+            )
+        )
+
+        self.assertIn("practical-release-invalid-review-independence", ids)
 
     def test_released_practical_suite_rejects_noncanonical_english_summary_heading(self) -> None:
         ids = self.finding_ids(
