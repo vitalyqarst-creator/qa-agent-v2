@@ -12696,6 +12696,7 @@ PRODUCTION_RUNTIME_AGENT_PROCESS_LANGUAGE_RE = re.compile(
 )
 NEUTRAL_VALIDATION_TRIGGER_RE = re.compile(
     r"завершить\s+ввод|перевести\s+фокус|инициир\w*\s+проверк|попытаться\s+сохранить|"
+    r"нажать[\s\S]{0,40}сохран|"
     r"move\s+focus|complete\s+input|trigger\s+validation|attempt\s+to\s+save",
     flags=re.IGNORECASE,
 )
@@ -12816,7 +12817,8 @@ PERSISTENCE_CALIBRATION_PACKAGE_REQUIRED_FILES = (
     "persistence-calibration-evaluation-report.md",
 )
 PERSISTENCE_SAVE_ACTION_RE = re.compile(
-    r"\bsave\b|save\s+card|save\s+application|сохран\w*\s+(?:карточк|заявк|данн|изменен|значен)",
+    r"\bsave\b|save\s+card|save\s+application|сохран\w*\s+(?:карточк|заявк|данн|изменен|значен)|"
+    r"нажать[\s\S]{0,40}сохран",
     flags=re.IGNORECASE,
 )
 PERSISTENCE_REOPEN_ACTION_RE = re.compile(
@@ -13537,7 +13539,7 @@ SAVE_ACTION_RE = re.compile(
     r"\bsave\b|"
     r"\u043d\u0430\u0436\u0430\u0442\u044c\s+(?:\u043a\u043d\u043e\u043f\u043a\u0443\s+)?`?"
     r"\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c`?|"
-    r"\u0441\u043e\u0445\u0440\u0430\u043d\w+",
+    r"\u043f\u043e\u043f\u044b\u0442\u0430\u0442\u044c\u0441\u044f\s+\u0441\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c",
     flags=re.IGNORECASE,
 )
 FIELD_INPUT_ACTION_RE = re.compile(
@@ -14366,6 +14368,10 @@ def validate_test_case_quality_smells(
         persistence_context = " ".join([title, scenario_rationale, expected_result])
         persistence_body = " ".join([steps, expected_result, postconditions])
         if PERSISTENCE_TC_SIGNAL_RE.search(persistence_context):
+            is_negative_no_save_tc = bool(
+                is_negative_test_case_type(test_case_type)
+                and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result or "")
+            )
             is_persistence_candidate = bool(PERSISTENCE_CANDIDATE_STATUS_RE.search(block))
             if is_persistence_candidate and not (
                 PERSISTENCE_CALIBRATION_LINK_RE.search(block)
@@ -14387,7 +14393,7 @@ def validate_test_case_quality_smells(
                 persistence_save_placeholder_in_executable_tc.append(
                     f"{test_case_id}:placeholder save wording remains in executable persistence TC"
                 )
-            if preconditions and PERSISTENCE_PASSIVE_PRECONDITION_RE.search(preconditions):
+            if not is_negative_no_save_tc and preconditions and PERSISTENCE_PASSIVE_PRECONDITION_RE.search(preconditions):
                 persistence_precondition_passive_state.append(
                     f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}"
                 )
@@ -14422,9 +14428,9 @@ def validate_test_case_quality_smells(
                 persistence_grouped_smoke_without_residual_risk.append(
                     f"{test_case_id}:scenario_rationale={scenario_rationale[:180] or '<missing>'}"
                 )
-            if not PERSISTENCE_SAVE_ACTION_RE.search(steps):
+            if not is_negative_no_save_tc and not PERSISTENCE_SAVE_ACTION_RE.search(steps):
                 persistence_tc_without_save_action.append(f"{test_case_id}:steps={steps[:180] or '<missing>'}")
-            if not (
+            if not is_negative_no_save_tc and not (
                 PERSISTENCE_REOPEN_ACTION_RE.search(steps)
                 and (
                     PERSISTENCE_REOPEN_VERIFICATION_RE.search(expected_result)

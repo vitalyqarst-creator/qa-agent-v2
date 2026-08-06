@@ -221,6 +221,49 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertIn("test-case-field-input-after-save-step", ids)
 
+    def test_field_input_before_save_is_not_confused_by_save_noun(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Реквизит сохраняется с валидными данными",
+                    test_type="Positive",
+                    steps=(
+                        "1. Заполнить поля, необходимые для сохранения.\n"
+                        "2. Ввести расчетный счет.\n"
+                        "3. Нажать `Сохранить`."
+                    ),
+                    expected="Реквизит сохраняется.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("test-case-field-input-after-save-step", ids)
+
+    def test_negative_no_save_tc_does_not_require_reopen_verification(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Пустое поле `ИНН` не позволяет сохранить карточку",
+                    test_type="Negative",
+                    steps="1. Оставить поле `ИНН` пустым.\n2. Нажать `Сохранить`.",
+                    expected="Карточка не сохраняется; поле `ИНН` подсвечено красным.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("persistence-tc-without-save-action", ids)
+        self.assertNotIn("persistence-tc-without-reopen-verification", ids)
+
     def test_practical_source_token_must_be_covered_or_gapped(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
