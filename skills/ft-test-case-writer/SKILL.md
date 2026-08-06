@@ -148,6 +148,13 @@ test data, access path or observable oracle. Record each affected `TC-*` and its
 exact final status under `## Status Assertions` in `tc-revision-summary.md`.
 Route only to the final independent reviewer; writer cannot sign off, release or
 start UI preparation from a bounded revision.
+12c. If a validator detects only a status/confirmation/summary inconsistency
+after that revision and before final review, perform at most one contract-only
+status repair. It may not change coverage, test design, runtime steps, expected
+results, traceability or source interpretation. Record `## Contract-only Repair`,
+refresh `## Status Assertions` and refresh the practical stage summary with the
+current Code Version Gate commit. This repair is not permission for another
+writer/reviewer loop.
 13. If an applicable dimension requires mandatory coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), decompose them in `Coverage Obligation Table`, `Package Test Design Plan`, and `coverage-metrics.md` before `TC-*`.
 14. If writer cannot prepare a verifiable result without new scope/source decisions, use `blocked-input`.
 15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables or embed split-design sections. On any such defect, set `blocked-input` or fix artifacts before review handoff.

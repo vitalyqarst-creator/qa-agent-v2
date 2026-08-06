@@ -125,7 +125,7 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(
-            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification, validator-warning classification, production_tc_clean, git_persistence, fresh validator counts/evidence, per-scope transitions for package-level writer/tc-review conditional, source_contradiction yes/no for round-cap scopes, source restore provenance/SHA-256 when package files were restored, and next_stage_transition",
+            "practical-stage-summary.md exists after matrix review and lists accepted scopes, blocked/round-cap scopes, reasons, TC-with-status decision, next safe step, code_root, execution_working_directory equal to code_root, ft_package_root, artifact_write_root, root_split_allowed, validator-error classification, validator-warning classification, production_tc_clean, git_persistence, fresh validator counts/evidence, per-scope transitions for package-level writer/tc-review conditional, source_contradiction yes/no for round-cap scopes, source restore provenance/SHA-256 when package files were restored, and next_stage_transition",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(

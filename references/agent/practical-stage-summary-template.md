@@ -10,6 +10,7 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | route_profile | `practical route v0.8.1` |
 | summary_stage | `<short-stage-id>` |
 | code_root | `<absolute path>` |
+| execution_working_directory | `<absolute path; must equal code_root>` |
 | ft_package_root | `<absolute path>` |
 | artifact_write_root | `<absolute path>` |
 | root_split_allowed | `yes / no` |
@@ -68,6 +69,11 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
   `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
   and update validator counts/evidence, including info fields, plus `git_persistence`
   from the output.
+- `execution_working_directory` must equal `code_root`. If the current Codex task
+  is attached to another worktree, hand it off or recreate it in `code_root`
+  before the stage; changing into an external repository mid-stage is invalid.
+- The `Code Version Gate` must record the exact current `code_root` commit. Refresh
+  this summary after any contract-only repair before the next handoff.
 - For FT-package practical stages, primary validation is:
   `python scripts/validate_agent_artifacts.py --root <FT package root> --json`.
   Repo-root validation is supplementary. Keep primary package-root findings

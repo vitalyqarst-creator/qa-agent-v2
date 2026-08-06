@@ -47,6 +47,29 @@ suffix records already available evidence and does not introduce an unresolved
 input. The writer must route this revision to a final independent
 full-scope TC review; writer cannot sign off, release or start UI preparation.
 
+## Contract-only Status Repair
+
+Before the final independent review, one narrow repair is allowed only to resolve
+a validator-detected inconsistency in execution status or confirmation metadata.
+It does not create another writer round only when it changes no coverage, test
+design, steps, expected results, traceability or source interpretation.
+
+Record it in the same revision summary:
+
+```md
+## Contract-only Repair
+
+| field | value |
+| --- | --- |
+| repair_type | `contract_only_status_repair` |
+| semantic_change | `no` |
+| affected_tc_ids | `TC-EXAMPLE-001` |
+| evidence | `<validator finding id or exact inconsistency>` |
+```
+
+Refresh `## Status Assertions` and `practical-stage-summary.md`, including its
+exact Code Version Gate commit, before the final review handoff.
+
 ## Writer Response Rules
 
 For each finding:

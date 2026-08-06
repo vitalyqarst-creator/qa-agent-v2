@@ -96,6 +96,7 @@ record the roots used for code, FT data and artifact writes:
 | field | value |
 | --- | --- |
 | code_root | `<version-gated repository/worktree root>` |
+| execution_working_directory | `<actual task working directory; must equal code_root>` |
 | ft_package_root | `<FT package root used as input>` |
 | artifact_write_root | `<root where this stage writes artifacts>` |
 | root_split_allowed | `yes/no` |
@@ -114,6 +115,11 @@ named branch cannot be checked out because it is already occupied by another
 worktree. In that case, record the branch occupancy reason and continue only
 against the exact expected commit. Detached HEAD without an exact expected commit
 match is `blocked-input`.
+
+The task must run in `code_root`. If its current Codex worktree differs, the
+controller must hand off or recreate the task in `code_root` before stage
+preflight. Switching into an external repository during a stage is not an
+approved root arrangement, even when the external checkout has the same branch.
 
 `ft_package_root` and `artifact_write_root` should normally be inside
 `code_root`. If the FT package is outside the version-gated worktree, this is a
@@ -595,6 +601,15 @@ affected canonical `TC-*` with its concrete runtime inputs:
   `work/practical/<scope>/tc-revision-summary.md` under `## Status Assertions`;
 - the writer may not set `signed-off`, `released-*` or route directly to
   `ft-ui-automation-prep`.
+
+If a validator discovers only a status, confirmation or summary inconsistency
+after that bounded revision and before final review, one contract-only status
+repair is allowed. It may update only execution status, `Требуется
+подтверждение`, status counters, `## Status Assertions` and the current
+practical-stage summary. Record `## Contract-only Repair` with affected TC ids,
+evidence and `semantic_change: no`. It must not change coverage, test design,
+steps, expected results, traceability, source interpretation or the number of
+writer/reviewer rounds.
 
 The next stage is always a final independent full-scope TC review in a separate
 Codex task/session. Its `Review Focus` is a priority list, not a boundary: the

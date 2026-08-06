@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -668,6 +669,54 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         ids = self.finding_ids(root)
 
         self.assertIn("practical-route-source-package-incomplete", ids)
+
+    def test_practical_v08_summary_requires_execution_working_directory(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        content = summary.read_text(encoding="utf-8").replace(
+            "| code_root |",
+            "| route_profile | `practical route v0.8.1` |\n| code_root |",
+        )
+        summary.write_text(content, encoding="utf-8")
+
+        findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertIn(
+            "practical-stage-summary-missing-execution-working-directory",
+            {finding.id for finding in findings},
+        )
+
+    def test_practical_v08_summary_rejects_stale_code_commit(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        stale_commit = "b" * 40
+        current_commit = "a" * 40
+        content = summary.read_text(encoding="utf-8").replace(
+            "| code_root |",
+            "| route_profile | `practical route v0.8.1` |\n"
+            f"| execution_working_directory | `{root.parent.parent}` |\n"
+            "| code_root |",
+        )
+        content += "\n".join(
+            [
+                "",
+                "## Code Version Gate",
+                "",
+                "| field | expected | actual | status |",
+                "| --- | --- | --- | --- |",
+                f"| commit | `{stale_commit}` | `{stale_commit}` | `pass` |",
+                "",
+            ]
+        )
+        summary.write_text(content, encoding="utf-8")
+
+        with patch.object(self.validator, "current_git_commit_for_code_root", return_value=current_commit):
+            findings, _ = self.validator.validate_practical_stage_summary(summary, root)
+
+        self.assertIn(
+            "practical-stage-summary-code-version-stale",
+            {finding.id for finding in findings},
+        )
 
 
 if __name__ == "__main__":

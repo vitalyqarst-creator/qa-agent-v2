@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import re
+import subprocess
 import sys
 import warnings
 from collections import Counter, defaultdict
@@ -4828,6 +4829,69 @@ def parse_markdown_key_value_fields(content: str) -> dict[str, str]:
     return fields
 
 
+def revision_summary_revision_type(content: str) -> str:
+    """Return revision_type from the supported table or legacy bold metadata.
+
+    Practical summaries use a field/value table.  Older generated summaries
+    used a bold inline field; accepting both keeps validation backward
+    compatible without letting the table format bypass the bounded-revision
+    gate.
+    """
+
+    table_value = parse_markdown_key_value_fields(content).get("revision_type", "").strip()
+    if table_value:
+        return table_value.casefold()
+    legacy_match = re.search(
+        r"^\*\*revision_type:\*\*\s*(.*)$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    return legacy_match.group(1).strip().casefold() if legacy_match else ""
+
+
+def practical_summary_recorded_commit(content: str) -> str:
+    """Extract the actual commit from the Code Version Gate table."""
+
+    section = extract_markdown_section(content, "Code Version Gate")
+    if not section:
+        return ""
+    rows = markdown_table_rows_from_text(section)
+    if len(rows) < 2:
+        return ""
+    header = normalize_table_header(rows[0])
+    if "field" not in header or "actual" not in header:
+        return ""
+    field_index = header.index("field")
+    actual_index = header.index("actual")
+    for row in rows[1:]:
+        if field_index >= len(row) or actual_index >= len(row):
+            continue
+        if normalize_markdown_field_name(row[field_index]) in {"commit", "code_commit"}:
+            return strip_markdown_code(row[actual_index])
+    return ""
+
+
+def current_git_commit_for_code_root(code_root: str) -> str | None:
+    """Resolve the current commit only when the declared code root is usable."""
+
+    root = Path(strip_markdown_code(code_root))
+    if not root.is_dir():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            check=False,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError:
+        return None
+    commit = result.stdout.strip().lower()
+    return commit if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", commit) else None
+
+
 def normalized_path_text(value: str) -> str:
     normalized = strip_markdown_code(value)
     normalized = normalized.strip().strip('"').strip("'").replace("\\", "/").rstrip("/")
@@ -5210,6 +5274,91 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action="Set artifact_write_root under ft_package_root or stop as blocked-input.",
             )
         )
+
+    route_profile = fields.get("route_profile", "").casefold()
+    execution_working_directory = fields.get("execution_working_directory", "")
+    if "practical route v0.8" in route_profile:
+        if not execution_working_directory:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-missing-execution-working-directory",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary lacks execution working directory",
+                    details=(
+                        "A practical stage must record the directory in which it executed. This prevents a Codex "
+                        "task from validating one worktree and silently writing FT artifacts in another."
+                    ),
+                    path=display_path,
+                    evidence=["missing=execution_working_directory"],
+                    recommended_action=(
+                        "Run or hand off the task in the declared code_root and record that exact path as "
+                        "execution_working_directory."
+                    ),
+                )
+            )
+        elif code_root and normalized_path_text(execution_working_directory) != normalized_path_text(code_root):
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-execution-working-directory-mismatch",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage executed outside declared code root",
+                    details=(
+                        "The recorded execution directory differs from code_root. A practical task must be handed "
+                        "off or relaunched in the declared worktree instead of switching to another repository."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"execution_working_directory={execution_working_directory}",
+                        f"code_root={code_root}",
+                    ],
+                    recommended_action="Hand off or recreate the Codex task in code_root, then rerun the stage preflight.",
+                )
+            )
+
+        current_commit = current_git_commit_for_code_root(code_root)
+        if current_commit:
+            recorded_commit = practical_summary_recorded_commit(content).casefold()
+            if not recorded_commit:
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-code-version-gate-missing",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary lacks Code Version Gate commit",
+                        details=(
+                            "The declared code_root is a Git worktree, but the summary has no actual commit in its "
+                            "Code Version Gate. The next handoff cannot verify which agent version wrote the artifacts."
+                        ),
+                        path=display_path,
+                        evidence=[f"current_code_commit={current_commit}"],
+                        recommended_action=(
+                            "Record branch and the exact current commit in Code Version Gate before the next handoff."
+                        ),
+                    )
+                )
+            elif recorded_commit != current_commit:
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-code-version-stale",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary records a stale code commit",
+                        details=(
+                            "The Code Version Gate commit differs from the current declared code_root HEAD. The summary "
+                            "must be refreshed after an agent-layer update or a contract-only repair."
+                        ),
+                        path=display_path,
+                        evidence=[
+                            f"recorded_commit={recorded_commit}",
+                            f"current_commit={current_commit}",
+                        ],
+                        recommended_action=(
+                            "Rerun the code gate in code_root and refresh practical-stage-summary.md before the next stage."
+                        ),
+                    )
+                )
     if PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids) and ft_package_root:
         handoff_root = Path(strip_markdown_code(ft_package_root)) / "work" / "stage-handoffs"
         if handoff_root.is_dir():
@@ -18674,12 +18823,7 @@ def validate_tc_revision_summary_status_assertions(
             )
         ], [Check("writer-revision-status-assertions", "warn", "Writer revision summary is not UTF-8.", display_path)]
 
-    revision_type_match = re.search(
-        r"^\*\*revision_type:\*\*\s*(.*)$",
-        content,
-        flags=re.IGNORECASE | re.MULTILINE,
-    )
-    revision_type = revision_type_match.group(1).strip().casefold() if revision_type_match else ""
+    revision_type = revision_summary_revision_type(content)
     status_section = extract_markdown_section(content, "Status Assertions")
     if status_section is None:
         if "bounded_tc_revision" in revision_type:

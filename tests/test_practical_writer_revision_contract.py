@@ -177,6 +177,40 @@ class PracticalWriterRevisionContractTests(unittest.TestCase):
                 {finding.id for finding in findings},
             )
 
+    def test_table_metadata_bounded_revision_requires_status_assertions(self) -> None:
+        """The real writer format stores revision_type in a metadata table."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "fts" / "Sample"
+            self.make_test_case(root, status="needs-test-data", confirmation="Нужна проверенная фикстура.")
+            summary_path = root / "work" / "practical" / "9.1-sample" / "tc-revision-summary.md"
+            summary_path.parent.mkdir(parents=True)
+            summary_path.write_text(
+                "\n".join(
+                    [
+                        "# TC Revision Summary: sample",
+                        "",
+                        "## Revision Metadata",
+                        "",
+                        "| field | value |",
+                        "| --- | --- |",
+                        "| revision_type | `bounded_tc_revision_after_independent_review` |",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            findings, _ = self.validator.validate_tc_revision_summary_status_assertions(
+                summary_path,
+                root,
+                {},
+            )
+
+            self.assertIn(
+                "writer-revision-summary-missing-status-assertions",
+                {finding.id for finding in findings},
+            )
+
     def test_revision_status_assertion_accepts_matching_canonical_case(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "fts" / "Sample"
