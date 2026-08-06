@@ -4657,6 +4657,65 @@ def parse_review_independence_fields(content: str) -> dict[str, str]:
     return fields
 
 
+def practical_review_preflight_required(practical_dir: Path) -> bool:
+    """Return whether the scope was produced by the v0.8.2 launch protocol."""
+
+    candidates = [practical_dir / "practical-stage-summary.md"]
+    for parent in practical_dir.parents:
+        if parent.name == "work":
+            candidates.append(parent / "practical-stage-summary.md")
+            break
+    for candidate in candidates:
+        try:
+            fields = parse_markdown_key_value_fields(candidate.read_text(encoding="utf-8"))
+        except (FileNotFoundError, UnicodeDecodeError):
+            continue
+        if normalize_markdown_field_name(fields.get("route_profile", "")) == "practical_route_v0_8_2":
+            return True
+    return False
+
+
+def practical_review_preflight_issues(
+    fields: Mapping[str, str],
+    practical_dir: Path,
+    root: Path,
+) -> list[str]:
+    """Validate the persisted controller preflight referenced by a review receipt."""
+
+    receipt_value = strip_markdown_code(fields.get("review_launch_preflight", ""))
+    status = strip_markdown_code(fields.get("review_launch_preflight_status", "")).casefold()
+    if not receipt_value:
+        return ["review_launch_preflight=<missing>"]
+    if status != "allowed":
+        return [f"review_launch_preflight_status={status or '<missing>'}; expected=allowed"]
+
+    receipt_path = Path(receipt_value)
+    if not receipt_path.is_absolute():
+        local_candidate = practical_dir / receipt_path
+        root_candidate = root / receipt_path
+        receipt_path = local_candidate if local_candidate.is_file() else root_candidate
+    try:
+        payload = json.loads(receipt_path.read_text(encoding="utf-8"))
+    except (FileNotFoundError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [f"review_launch_preflight={receipt_value}; unreadable={exc}"]
+
+    issues: list[str] = []
+    if payload.get("allowed") is not True or payload.get("status") != "allowed":
+        issues.append("review-launch-preflight receipt is not allowed")
+    expected_mode = strip_markdown_code(fields.get("review_mode", ""))
+    if payload.get("review_mode") != expected_mode:
+        issues.append(
+            f"review-launch-preflight review_mode={payload.get('review_mode', '<missing>')}; expected={expected_mode or '<missing>'}"
+        )
+    if not isinstance(payload.get("scope_ids"), list) or not payload.get("scope_ids"):
+        issues.append("review-launch-preflight scope_ids is missing")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(payload.get("code_commit", "")).casefold()):
+        issues.append("review-launch-preflight code_commit is invalid")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(payload.get("summary_sha256", "")).casefold()):
+        issues.append("review-launch-preflight summary_sha256 is invalid")
+    return issues
+
+
 PRACTICAL_STAGE_SUMMARY_NAME = "practical-stage-summary.md"
 PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
     "code_root",
@@ -4711,6 +4770,9 @@ PRACTICAL_TC_REVIEW_SNAPSHOT_COLUMNS = {
     "reviewer_execution_surface",
 }
 PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
+    "matrix-review allowed",
+    "matrix-review conditional",
+    "matrix-review blocked",
     "writer allowed",
     "writer conditional",
     "writer blocked",
@@ -4721,6 +4783,7 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
     "not applicable",
 }
 PRACTICAL_STAGE_SUMMARY_CONDITIONAL_TRANSITIONS = {
+    "matrix-review conditional",
     "writer conditional",
     "tc-review conditional",
 }
@@ -5595,7 +5658,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     ),
                 )
             )
-        if transition in {"writer allowed", "tc-review allowed"}:
+        if transition in {"matrix-review allowed", "writer allowed", "tc-review allowed"}:
             findings.append(
                 Finding(
                     id="practical-stage-summary-validator-errors-allow-writer-unconditionally",
@@ -5642,7 +5705,7 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                     ),
                 )
             )
-        if transition in {"writer allowed", "tc-review allowed"} and warning_classification in {"blocking-for-scope", "mixed"}:
+        if transition in {"matrix-review allowed", "writer allowed", "tc-review allowed"} and warning_classification in {"blocking-for-scope", "mixed"}:
             findings.append(
                 Finding(
                     id="practical-stage-summary-validator-warnings-allow-writer-unconditionally",
@@ -6244,6 +6307,8 @@ def validate_practical_review_independence_gate(
             issues.append(
                 f"review_independence.reviewer_task_or_session={reviewer_session_raw}; expected={review_findings_reviewer} from review-findings.md"
             )
+    if practical_review_preflight_required(practical_dir):
+        issues.extend(practical_review_preflight_issues(fields, practical_dir, root))
 
     if issues:
         review_surface = review_findings_fields.get("reviewer_execution_surface", "").strip().strip("`").lower()

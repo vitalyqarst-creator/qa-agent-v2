@@ -106,7 +106,9 @@ Minimum runtime rules:
    have explicit coverage classes or class-specific deferrals. Exact invariant:
    requiredness checks must be split by input mechanism. Current-scope blockers must be
    visible as allowed planned statuses. Use Codex thread tools as the default
-   handoff path: if they are not loaded, discover them with `tool_search`, then
+   handoff path: first run `scripts/practical_review_preflight.py` and write an
+   `allowed` `review-launch-preflight.json`; if it is blocked, do not create a
+   reviewer task. If it passes and thread tools are not loaded, discover them with `tool_search`, then
    use `list_projects` / `create_thread` to launch the reviewer prompt in a
    separate Codex task and record the returned thread id. If the runtime cannot
    expose thread tools, set `blocked-reviewer-session-tool-unavailable`; do not
@@ -118,7 +120,8 @@ Minimum runtime rules:
    reasons, whether status-marked TC writing is allowed, and the next safe step.
 7b. For `practical_v0_8_tc_after_matrix_accepted`, hand off to reviewer only
    after creating `prompt.tc-to-reviewer.md` suitable for a separate Codex
-   session. The canonical file and accepted or once-repaired
+   session. First run `scripts/practical_review_preflight.py` for `tc_review`
+   and create the reviewer task only on `allowed: true`. The canonical file and accepted or once-repaired
    `test-design-matrix.md` must be synchronized, and the canonical file must
    remain `draft-ready-for-review` / `review-ready` rather than `released-*` or
    `signed-off`. Use the same Codex thread-tool handoff contract as matrix

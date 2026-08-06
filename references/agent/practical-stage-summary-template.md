@@ -1,13 +1,13 @@
 # Practical Stage Summary Template
 
 Use this template verbatim for `practical-stage-summary.md` in practical route
-v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
+v0.8.2. The file is a user-facing handoff and a machine-checkable gate.
 
 ## Summary
 
 | field | value |
 | --- | --- |
-| route_profile | `practical route v0.8.1` |
+| route_profile | `practical route v0.8.2` |
 | summary_stage | `<short-stage-id>` |
 | code_root | `<absolute path>` |
 | execution_working_directory | `<absolute path; must equal code_root>` |
@@ -15,7 +15,7 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | artifact_write_root | `<absolute path>` |
 | root_split_allowed | `yes / no` |
 | root_split_authority | `<user/controller approval or not-applicable>` |
-| next_stage_transition | `writer allowed / writer conditional / writer blocked / tc-review allowed / tc-review conditional / tc-review blocked / not-applicable` |
+| next_stage_transition | `matrix-review allowed / matrix-review conditional / matrix-review blocked / writer allowed / writer conditional / writer blocked / tc-review allowed / tc-review conditional / tc-review blocked / not-applicable` |
 | next_safe_step | `<one Russian sentence>` |
 | per_scope_next_stage_transitions | `yes / not-applicable` |
 | production_tc_clean | `yes / no / mixed / not-applicable` |
@@ -62,6 +62,12 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 ## Rules
 
 - Enum fields must contain only the enum value, not explanatory prose.
+- Before creating any separate reviewer task, run
+  `python scripts/practical_review_preflight.py` with this summary, the selected
+  scope id and the review mode. Create the task only when its JSON result has
+  `allowed: true`; store that result as `review-launch-preflight.json` next to
+  the practical scope artifacts. The reviewer repeats the same command with
+  `--verify-receipt <review-launch-preflight.json>` before reviewing.
 - Explanations belong in `next_safe_step`, scope `reason` or a short notes section.
 - Keep `Current stage actions` and `Prior state context` separate. A summary that
   mixes old route history into current-stage actions is not a clear handoff.

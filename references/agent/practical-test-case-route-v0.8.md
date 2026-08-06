@@ -121,6 +121,36 @@ controller must hand off or recreate the task in `code_root` before stage
 preflight. Switching into an external repository during a stage is not an
 approved root arrangement, even when the external checkout has the same branch.
 
+## Reviewer launch preflight
+
+Before the controller creates **any** separate Codex reviewer task for either
+`matrix_review` or `tc_review`, it must run the deterministic preflight from
+the exact version-gated `code_root`:
+
+```text
+python scripts/practical_review_preflight.py --repo-root . --ft-package-root <FT package root> --summary <practical-stage-summary.md> --scope-id <two-digit scope id> --review-mode <matrix_review|tc_review> --output <FT package root>/work/practical/<scope-slug>/review-launch-preflight.json
+```
+
+Only a JSON result with `allowed: true` permits `create_thread`. The preflight
+checks the real working directory, Git branch/commit and tracked state against
+the summary's Code Version Gate, keeps code/data/artifact roots consistent,
+checks requested scope routing, and reruns the package validator. A stale code
+version, a changed checkout, a current-scope validator error, or a malformed
+summary is `blocked-input`; do not create a reviewer task and do not work around
+the failure by switching directories inside the task.
+
+The controller passes the receipt path to the reviewer. Before reading the
+matrix or test cases, the separate reviewer reruns the same command with
+`--verify-receipt <receipt path>`. If the receipt no longer matches the current
+branch, commit, roots, summary digest or scope/mode, it must stop without
+creating review artifacts. This is required because another active Codex task
+can otherwise switch a shared checkout between controller and reviewer turns.
+
+For the first matrix review, create/update the practical summary before launch
+and use `next_stage_transition = matrix-review allowed` or
+`matrix-review conditional`. This makes the preflight equally strict for the
+matrix gate and the later TC gate.
+
 `ft_package_root` and `artifact_write_root` should normally be inside
 `code_root`. If the FT package is outside the version-gated worktree, this is a
 split-root run. Split-root is allowed only when the user/controller explicitly
@@ -373,7 +403,10 @@ planned TC), use the fast path inside this same route:
      - `test-design-matrix.md` in the practical scope folder;
      - `writer-self-check.md` or an equivalent compact writer check for the
        matrix;
-     - `prompt.matrix-to-reviewer.md` for a separate reviewer Codex task/session.
+     - `prompt.matrix-to-reviewer.md` for a separate reviewer Codex task/session,
+       and an updated `practical-stage-summary.md` with
+       `next_stage_transition = matrix-review allowed` or
+       `matrix-review conditional` before launch.
    - Do not create, update or overwrite canonical test cases under
      `fts/<ft-slug>/test-cases/*.md` in this pass. If such a file already exists
      from an earlier or failed run, do not treat it as current output until the
@@ -404,7 +437,8 @@ planned TC), use the fast path inside this same route:
    - Do not review canonical test cases in this pass. The expected current TC file
      state is "not created yet" or "old draft ignored".
   - Default behavior: run reviewer in a separate Codex task/session. The
-    controller/writer session must discover Codex thread tools with
+    controller/writer session must run the Reviewer launch preflight, then
+    discover Codex thread tools with
     `tool_search` when they are not already loaded, use `list_projects` and
     `create_thread` to launch the reviewer prompt in a separate Codex task,
     then use `wait_threads`/`read_thread` or the returned thread id to collect
@@ -468,7 +502,8 @@ planned TC), use the fast path inside this same route:
      `test-design-matrix.md`, `test-design-matrix-review.md`, and canonical test
      cases.
    - Default behavior: run reviewer in a separate Codex task/session. The
-     controller/writer session must create the reviewer task with Codex thread
+     controller/writer session must pass the Reviewer launch preflight before it
+     creates the reviewer task with Codex thread
      tools (`tool_search` discovery if needed, then `list_projects` /
      `create_thread`). The reviewer input must exclude writer transcript and
      private reasoning. The controller must give the separate reviewer
@@ -809,6 +844,8 @@ Minimum fields:
 | independent_signoff_claim_allowed | `yes/no` |
 | review_mode | `matrix_review/tc_review` |
 | review_round | `<round number>` |
+| review_launch_preflight | `<path to review-launch-preflight.json>` |
+| review_launch_preflight_status | `allowed` |
 
 Rules:
 
@@ -832,6 +869,9 @@ Rules:
   `test-design-matrix-review.md` for matrix review or `review-findings.md` for
   TC review. A matrix-review independence receipt does not prove a later TC
   review.
+- `review_launch_preflight` must point to the controller receipt created before
+  `create_thread`; the reviewer must have validated it with `--verify-receipt`
+  before it began source or test-case assessment.
 - A sub-agent, local helper or same-session pass may be used only as auxiliary
   analysis. It cannot be the final reviewer verdict for matrix acceptance, TC
   review acceptance or independent release. Its findings must be stored in an

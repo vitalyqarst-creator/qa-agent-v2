@@ -37,7 +37,10 @@ description: Делает review существующих тест-кейсов 
   Codex thread tools (`tool_search` discovery if needed, then `list_projects` /
   `create_thread`) and pass the durable thread id into reviewer evidence. A
   sub-agent inside the writer/controller turn is not a separate Codex
-  task/session and cannot produce independent sign-off. If thread tools are
+  task/session and cannot produce independent sign-off. Before the controller
+  creates that task, it must pass `scripts/practical_review_preflight.py`; the
+  reviewer repeats it with `--verify-receipt` before it reads review inputs. If
+  either preflight is blocked, create no review artifact. If thread tools are
   genuinely unavailable, stop as `blocked-reviewer-session-tool-unavailable`
   instead of issuing a same-session route verdict. It must not require source assertion receipts, semantic
   bridge, immutable runner attempts, benchmark artifacts, separate structure

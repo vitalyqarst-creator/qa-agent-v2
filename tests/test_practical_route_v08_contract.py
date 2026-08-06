@@ -190,7 +190,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
     def test_practical_stage_summary_template_pins_enum_fields(self) -> None:
         template = self.read("references/agent/practical-stage-summary-template.md")
 
-        self.assertIn("practical route v0.8.1", template)
+        self.assertIn("practical route v0.8.2", template)
         self.assertIn("Enum fields must contain only the enum value", template)
         self.assertIn("writer allowed / writer conditional / writer blocked", template)
         self.assertIn("tc-review allowed / tc-review conditional / tc-review blocked", template)
@@ -206,6 +206,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("git add -f <paths>", template)
         self.assertIn("Current stage actions", template)
         self.assertIn("Prior state context", template)
+        self.assertIn("practical_review_preflight.py", template)
+        self.assertIn("matrix-review allowed", template)
 
     def test_ui_prep_requires_access_preflight_before_outputs(self) -> None:
         agents = self.read("AGENTS.md")

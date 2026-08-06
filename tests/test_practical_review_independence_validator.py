@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -274,6 +275,71 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         ids = self.finding_ids(self.make_package(review_independence=VALID_REVIEW_INDEPENDENCE))
 
         self.assertNotIn("practical-release-missing-review-independence", ids)
+        self.assertNotIn("practical-release-invalid-review-independence", ids)
+
+    def test_v082_release_requires_a_valid_reviewer_launch_preflight_receipt(self) -> None:
+        root = self.make_package(review_independence=VALID_REVIEW_INDEPENDENCE)
+        (root / "work" / "practical-stage-summary.md").write_text(
+            "\n".join(
+                [
+                    "# Practical Stage Summary",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    "| route_profile | `practical route v0.8.2` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-release-invalid-review-independence", ids)
+
+    def test_v082_release_accepts_matching_reviewer_launch_preflight_receipt(self) -> None:
+        root = self.make_package(
+            review_independence=VALID_REVIEW_INDEPENDENCE.replace(
+                "| review_round | `3` |",
+                "\n".join(
+                    [
+                        "| review_round | `3` |",
+                        "| review_launch_preflight | `review-launch-preflight.json` |",
+                        "| review_launch_preflight_status | `allowed` |",
+                    ]
+                ),
+            )
+        )
+        (root / "work" / "practical-stage-summary.md").write_text(
+            "\n".join(
+                [
+                    "# Practical Stage Summary",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    "| route_profile | `practical route v0.8.2` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        (root / "work" / "practical" / "sample-scope" / "review-launch-preflight.json").write_text(
+            json.dumps(
+                {
+                    "status": "allowed",
+                    "allowed": True,
+                    "review_mode": "tc_review",
+                    "scope_ids": ["01"],
+                    "code_branch": "codex/test",
+                    "code_commit": "a" * 40,
+                    "summary_sha256": "b" * 64,
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
         self.assertNotIn("practical-release-invalid-review-independence", ids)
 
     def test_tc_review_requires_matching_review_independence_mode_and_round(self) -> None:
