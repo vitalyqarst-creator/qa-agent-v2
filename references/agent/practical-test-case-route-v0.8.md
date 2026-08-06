@@ -152,6 +152,11 @@ For a single-scope stage, place the summary in
 For a multi-scope package stage, place the package-level summary in
 `fts/<ft-slug>/work/practical-stage-summary.md`.
 
+For a multi-scope practical stage, the scope ids explicitly named by the
+controller are the `active_scope_ids` allowlist. Do not modify artifacts of an
+outside scope merely to make a package-level validator green: record and
+classify that finding as external to the current stage instead.
+
 Create the file from
 [practical-stage-summary-template.md](./practical-stage-summary-template.md).
 Canonical path: `references/agent/practical-stage-summary-template.md`.

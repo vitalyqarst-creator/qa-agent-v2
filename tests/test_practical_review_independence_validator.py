@@ -129,6 +129,18 @@ TC_REVIEW_FINDING_WITH_ENGLISH_PROSE = """# TC Review Findings
 """
 
 
+TC_REVIEW_FINDING_WITH_MIXED_PROSE = TC_REVIEW_FINDING_WITH_ENGLISH_PROSE.replace(
+    "**Title:** Missing lower boundary coverage for the numeric field",
+    "**Title:** Для поля не хватает проверки lower boundary",
+).replace(
+    "**Problem:** The test case checks only the maximum value and omits the minimum accepted value.",
+    "**Problem:** TC проверяет `Наименование поля`, но misses lower boundary acceptance.",
+).replace(
+    "**Required Change:** Add one atomic test case for the lower boundary acceptance.",
+    "**Required Change:** Добавить отдельный TC для lower boundary acceptance.",
+)
+
+
 INVALID_REVIEW_INDEPENDENCE = """# Review Independence
 
 | field | value |
@@ -347,6 +359,16 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
             self.make_package(
                 review_independence=VALID_REVIEW_INDEPENDENCE,
                 review_findings=TC_REVIEW_FINDING_WITH_ENGLISH_PROSE,
+            )
+        )
+
+        self.assertIn("review-findings-nonrussian-human-field", ids)
+
+    def test_review_findings_reject_mixed_english_prose_hidden_by_russian_literal(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                review_independence=VALID_REVIEW_INDEPENDENCE,
+                review_findings=TC_REVIEW_FINDING_WITH_MIXED_PROSE,
             )
         )
 

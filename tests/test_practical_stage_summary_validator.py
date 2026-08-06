@@ -104,12 +104,39 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
             encoding="utf-8",
         )
         if tc_review_snapshot:
+            practical = ft_root / "work" / "practical" / "sample"
+            practical.mkdir(parents=True, exist_ok=True)
+            (practical / "review-findings.md").write_text(
+                "\n".join(
+                    [
+                        "# TC Review Findings",
+                        "",
+                        "## Verdict",
+                        "",
+                        "`tc-accepted`",
+                        "",
+                        "## Review Metadata",
+                        "",
+                        "| field | value |",
+                        "| --- | --- |",
+                        "| scope_slug | `sample` |",
+                        "| review_mode | `tc_review` |",
+                        "| review_round | `1` |",
+                        "| reviewer_task_or_session | `task-001` |",
+                        "| reviewer_execution_surface | `codex-task` |",
+                        "",
+                        "## Blocking Findings",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
             with summary.open("a", encoding="utf-8") as handle:
                 handle.write(
                     "## TC Review Snapshot\n\n"
                     "| scope | verdict | blocking_finding_count | reviewer_task_or_session | reviewer_execution_surface |\n"
                     "| --- | --- | ---: | --- | --- |\n"
-                    "| sample | tc-accepted | 0 | `task-001` | `separate-codex-task` |\n"
+                    "| sample | tc-accepted | 0 | `task-001` | `codex-task` |\n"
                 )
         if link_summary:
             workflow = ft_root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
@@ -292,6 +319,53 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         )
 
         self.assertNotIn("practical-stage-summary-tc-review-snapshot-missing", ids)
+        self.assertNotIn("practical-stage-summary-tc-review-snapshot-mismatch", ids)
+
+    def test_rejects_tc_review_snapshot_with_stale_finding_count(self) -> None:
+        root = self.make_package(
+            summary_stage="release-grade-independent-tc-review",
+            next_stage_transition="writer conditional",
+            per_scope_next_stage_transitions="yes",
+            tc_review_snapshot=True,
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "| sample | tc-accepted | 0 | `task-001` | `codex-task` |",
+                "| sample | tc-accepted | 1 | `task-001` | `codex-task` |",
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-tc-review-snapshot-mismatch", ids)
+
+    def test_accepts_tc_review_snapshot_with_matching_blocking_finding_count(self) -> None:
+        root = self.make_package(
+            summary_stage="release-grade-independent-tc-review",
+            next_stage_transition="writer conditional",
+            per_scope_next_stage_transitions="yes",
+            tc_review_snapshot=True,
+        )
+        review = root / "work" / "practical" / "sample" / "review-findings.md"
+        review.write_text(
+            review.read_text(encoding="utf-8")
+            + "\n### FINDING-001\n\n**Severity:** error\n",
+            encoding="utf-8",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "| sample | tc-accepted | 0 | `task-001` | `codex-task` |",
+                "| sample | tc-accepted | 1 | `task-001` | `codex-task` |",
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertNotIn("practical-stage-summary-tc-review-snapshot-mismatch", ids)
 
     def test_rejects_tc_review_when_dirty_tc_warning_is_classified_as_expected(self) -> None:
         ids = self.finding_ids(

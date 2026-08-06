@@ -4673,6 +4673,13 @@ PRACTICAL_TC_REVIEW_CURRENT_ARTIFACT_ALIASES = {
     "decision_log": ("tc_review_decision_log", "reviewer_tc_decision_log"),
     "review_findings": ("tc_review_findings", "reviewer_tc_findings"),
 }
+PRACTICAL_TC_REVIEW_SNAPSHOT_COLUMNS = {
+    "scope",
+    "verdict",
+    "blocking_finding_count",
+    "reviewer_task_or_session",
+    "reviewer_execution_surface",
+}
 PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
     "writer allowed",
     "writer conditional",
@@ -4871,6 +4878,86 @@ def field_is_not_applicable(value: str) -> bool:
 
 def looks_like_sha256_evidence(value: str) -> bool:
     return bool(re.search(r"\b[a-fA-F0-9]{64}\b", value))
+
+
+def current_tc_review_records(root: Path) -> dict[str, dict[str, str | int]]:
+    """Return the newest practical TC-review receipt for each scope."""
+    records: dict[str, tuple[tuple[int, int], dict[str, str | int]]] = {}
+    for review_path in iter_review_findings(root):
+        try:
+            content = review_path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        metadata = parse_markdown_key_value_fields(content)
+        if normalize_markdown_field_name(metadata.get("review_mode", "")) != "tc_review":
+            continue
+        scope = strip_markdown_code(metadata.get("scope_slug", "")).strip()
+        if not scope:
+            continue
+        verdict_section = extract_markdown_section(content, "Verdict") or ""
+        verdict_match = re.search(r"(?m)^\s*`?([a-z][a-z-]+)`?\s*$", verdict_section.lower())
+        blocking_count = sum(
+            1
+            for _, block in extract_finding_blocks(content)
+            if normalize_markdown_field_name(parse_markdown_fields(block).get("severity", "")) == "error"
+        )
+        round_match = re.search(r"\d+", metadata.get("review_round", ""))
+        review_round = int(round_match.group(0)) if round_match else 0
+        priority = (1 if review_path.name == "review-findings.md" else 0, review_round)
+        record = {
+            "verdict": verdict_match.group(1) if verdict_match else "",
+            "blocking_finding_count": blocking_count,
+            "reviewer_task_or_session": strip_markdown_code(metadata.get("reviewer_task_or_session", "")).strip(),
+            "reviewer_execution_surface": strip_markdown_code(metadata.get("reviewer_execution_surface", "")).strip().lower(),
+            "path": rel(review_path, root),
+        }
+        previous = records.get(scope)
+        if previous is None or priority >= previous[0]:
+            records[scope] = (priority, record)
+    return {scope: record for scope, (_, record) in records.items()}
+
+
+def tc_review_snapshot_issues(content: str, root: Path) -> list[str]:
+    section = extract_markdown_section(content, "TC Review Snapshot")
+    if section is None:
+        return ["missing-section"]
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return ["missing-table"]
+    header = normalize_table_header(rows[0])
+    missing_columns = sorted(PRACTICAL_TC_REVIEW_SNAPSHOT_COLUMNS - set(header))
+    if missing_columns:
+        return [f"missing-columns={','.join(missing_columns)}"]
+    indexes = {column: header.index(column) for column in PRACTICAL_TC_REVIEW_SNAPSHOT_COLUMNS}
+    expected_records = current_tc_review_records(root)
+    issues: list[str] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        values = {
+            column: strip_markdown_code(row[index]).strip() if index < len(row) else ""
+            for column, index in indexes.items()
+        }
+        scope = values["scope"]
+        record = expected_records.get(scope)
+        if record is None:
+            issues.append(f"row={row_number}:scope={scope or '<missing>'}:no-current-tc-review")
+            continue
+        if normalize_markdown_field_name(values["verdict"]) != normalize_markdown_field_name(str(record["verdict"])):
+            issues.append(f"row={row_number}:scope={scope}:verdict={values['verdict']}; expected={record['verdict']}")
+        try:
+            blocking_count = int(values["blocking_finding_count"])
+        except ValueError:
+            issues.append(f"row={row_number}:scope={scope}:blocking_finding_count={values['blocking_finding_count']}")
+        else:
+            if blocking_count != record["blocking_finding_count"]:
+                issues.append(
+                    f"row={row_number}:scope={scope}:blocking_finding_count={blocking_count}; "
+                    f"expected={record['blocking_finding_count']}"
+                )
+        for field in ("reviewer_task_or_session", "reviewer_execution_surface"):
+            actual = values[field].lower() if field == "reviewer_execution_surface" else values[field]
+            if actual != record[field]:
+                issues.append(f"row={row_number}:scope={scope}:{field}={values[field]}; expected={record[field]}")
+    return issues
 
 
 def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Finding], list[Check]]:
@@ -5321,6 +5408,27 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 ),
             )
         )
+    elif is_tc_review_summary:
+        snapshot_issues = tc_review_snapshot_issues(content, root)
+        if snapshot_issues:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-tc-review-snapshot-mismatch",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="TC review snapshot disagrees with current reviewer artifacts",
+                    details=(
+                        "The stage summary must be derived from the current TC-review receipts; stale verdicts, "
+                        "finding counts or reviewer identities make the writer handoff unsafe."
+                    ),
+                    path=display_path,
+                    evidence=snapshot_issues[:20],
+                    recommended_action=(
+                        "Refresh the TC Review Snapshot from current review-findings.md metadata and Blocking Findings "
+                        "before routing writer revision."
+                    ),
+                )
+            )
 
     linked = practical_stage_summary_is_linked(path, root)
     if not linked:
@@ -6948,15 +7056,21 @@ def validate_review_findings(
         if status is not None and status not in ALLOWED_FINDING_STATUSES:
             invalid_enums.append(f"{finding_id}:status={status}")
 
-        # Technical field names and enums are canonical English, but review prose
-        # is handed to Russian-speaking users and writers. English-only prose is
-        # a process leak, not a release-grade finding.
+        # Technical ids and literals in code spans may stay English, but review
+        # prose is user-facing and therefore must be Russian. A Russian source
+        # quote inside backticks must not mask an English sentence around it.
         for field_name in ("title", "problem", "required_change", "human_summary", "change_summary"):
             value = fields.get(field_name, "").strip()
-            ascii_words = re.findall(r"[A-Za-z]{3,}", value)
-            has_cyrillic = bool(re.search(r"[А-Яа-яЁё]", value))
-            if value and not has_cyrillic and len(" ".join(ascii_words)) >= 12:
-                non_russian_human_fields.append(f"{finding_id}:{field_name}={value[:100]}")
+            prose = re.sub(r"`[^`]*`", "", value)
+            english_words = [
+                word
+                for word in re.findall(r"[A-Za-z]{3,}", prose)
+                if word.lower() not in {"api", "dadata", "docx", "json", "pdf", "ui", "url", "xhtml", "yaml"}
+            ]
+            if len(english_words) >= 2:
+                non_russian_human_fields.append(
+                    f"{finding_id}:{field_name}:english_prose={','.join(english_words[:8])}"
+                )
 
         if review_mode == "traceability":
             traceability_ref = fields.get("traceability_ref")

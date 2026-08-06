@@ -33,6 +33,7 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | validator_info_evidence | `<finding ids or not-applicable>` |
 | source_restore_provenance | `<source path/checkpoint or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 or not-applicable>` |
+| active_scope_ids | `<explicitly authorized scope ids; one scope or a comma-separated list>` |
 
 ## TC Review Snapshot
 
@@ -82,3 +83,6 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 - После `tc_review` generic aliases `review_independence`, `session_log`,
   `decision_log` и `review_findings` в каждом `workflow-state.yaml` должны
   ссылаться на те же текущие артефакты, что и dedicated `tc_review_*` aliases.
+- Для multi-scope stage `active_scope_ids` — allowlist текущего этапа. Не
+  изменяй artifacts scope вне этого перечня ради общего package-level validator;
+  классифицируй такие findings как внешние для текущего этапа.
