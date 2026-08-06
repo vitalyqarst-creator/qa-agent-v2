@@ -20,9 +20,32 @@ Create or update:
 
 - canonical test-case file;
 - `round-N-writer-response.md`;
+- for a practical bounded TC revision:
+  `work/practical/<scope>/tc-revision-summary.md`;
 - updated traceability matrix only if writer changes coverage mapping or matrix was an input requiring update;
 - `prompt.writer-to-reviewer.round-N.md`;
-- `workflow-state.yaml` with `stage_status: ready-for-review`, if all blocking findings are addressed.
+- `workflow-state.yaml` with `stage_status: ready-for-review`, if all blocking findings are addressed and the next stage is the final independent TC review.
+
+## Practical Status Assertions
+
+For a bounded revision under `practical_v0_8`, the revision summary must contain
+the following exact section and table for every affected case:
+
+```md
+## Status Assertions
+
+| tc_id | status_after_revision |
+| --- | --- |
+| TC-EXAMPLE-001 | needs-test-data |
+```
+
+`status_after_revision` must be the exact current status in the canonical test
+case, not a planned status. A case may be `ready` only when it has no pending
+confirmation and no unresolved fixture, test-data, access or observability
+dependency. `Требуется подтверждение: Не требуется; ...` is valid only when the
+suffix records already available evidence and does not introduce an unresolved
+input. The writer must route this revision to a final independent
+full-scope TC review; writer cannot sign off, release or start UI preparation.
 
 ## Writer Response Rules
 
@@ -44,3 +67,7 @@ Do not route to reviewer if:
 - a traceability finding changed atom split/merge without explaining new mapping;
 - revision silently promotes `GAP-*` / `unclear` to covered without new source evidence;
 - TC numbering changed but links in matrix/response were not updated.
+- a `ready` case still contains a pending confirmation, unverified fixture,
+  missing test data, access path or observable oracle;
+- `tc-revision-summary.md` is missing required `## Status Assertions` or its
+  declared statuses disagree with canonical cases.

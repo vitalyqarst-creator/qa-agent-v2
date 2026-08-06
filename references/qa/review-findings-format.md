@@ -22,6 +22,24 @@
 - `source_reference`
 - `status`
 
+## Practical Final Review Scope Attestation
+
+For the final independent TC review after a bounded `practical_v0_8` revision,
+the reviewer must add this section to the review receipt or findings artifact:
+
+```md
+## Подтверждение охвата финального ревью
+
+**Проверенный охват:** весь текущий canonical набор scope.
+**Проверено тест-кейсов:** `<число>`.
+**Применение Review Focus:** список приоритетов, не ограничение охвата.
+**Проверено дополнительно:** соответствие статусов `ready` разделам `Требуется подтверждение`, тестовым данным, доступу и наблюдаемому oracle.
+```
+
+The finding list may prioritize known weak points, but it does not narrow the
+required full-scope comparison with FT/PDF/XHTML/support. A final reviewer may
+not accept the revised suite without this attestation.
+
 ### Допустимые значения
 
 - `review_mode` = `traceability | structure | test-design`

@@ -39,10 +39,10 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
         self.assertIn("one bounded TC revision", route)
         self.assertIn("one independent matrix re-review", route)
         self.assertIn("stop before TC", route)
-        self.assertIn("without a second TC review by default", route)
+        self.assertIn("one final independent TC review after that bounded revision", route)
         self.assertIn("Default review budget per scope is capped", route)
         self.assertIn("Do not start an extra matrix review", route)
-        self.assertIn("baseline after bounded revision", skills)
+        self.assertIn("final independent TC review in a separate session", skills)
         self.assertIn("fast path", route)
         self.assertIn("without user confirmation", routing)
 
@@ -208,16 +208,44 @@ class PracticalRouteV08DefaultsTests(unittest.TestCase):
 
         for content in (route, skills, reviewer, routing):
             self.assertIn("matrix re-review", content)
-            self.assertIn("second TC review", content)
+            self.assertIn("final independent TC review", content)
 
-        self.assertIn("повторный matrix review", agents)
-        self.assertIn("второй TC review", agents)
+        self.assertIn("repair re-review", route)
+        self.assertIn("final independent TC review", agents)
         self.assertIn("matrix-repair-summary.md", route)
         self.assertIn("matrix-changes-required", writer)
         self.assertIn("matrix-changes-required", reviewer)
         self.assertIn("one bounded writer repair/revision", route)
         self.assertIn("at most one bounded TC revision", writer)
         self.assertIn("one bounded revision", routing)
+        self.assertIn("a third\nTC review", route)
+
+    def test_practical_bounded_revision_requires_status_assertions_and_full_final_review(self) -> None:
+        route = (ROOT_DIR / "references" / "agent" / "practical-test-case-route-v0.8.md").read_text(
+            encoding="utf-8"
+        )
+        writer = (ROOT_DIR / "skills" / "ft-test-case-writer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        reviewer = (ROOT_DIR / "skills" / "ft-test-case-reviewer" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        revision = (ROOT_DIR / "references" / "agent" / "writer-revision-output-format.md").read_text(
+            encoding="utf-8"
+        )
+        review_format = (ROOT_DIR / "references" / "qa" / "review-findings-format.md").read_text(
+            encoding="utf-8"
+        )
+
+        for content in (route, writer):
+            self.assertIn("Status Assertions", content)
+            self.assertIn("Требуется подтверждение", content)
+
+        self.assertIn("Status Assertions", revision)
+
+        for content in (route, reviewer, review_format):
+            self.assertIn("Review Focus", content)
+            self.assertIn("full-scope", content)
 
     def test_session_based_cycle_is_not_default_practical_route(self) -> None:
         lifecycle = (

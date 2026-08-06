@@ -40,7 +40,8 @@ conditions occurs:
   matrix is still not accepted; apply the practical round-cap policy below:
   write status-marked TC for clear source obligations and block only source
   contradictions or unrepresentable obligations;
-- one bounded TC revision was performed and the remaining issue is represented
+- one bounded TC revision was performed, its result was accepted by a final
+  independent TC review, and any remaining execution uncertainty is represented
   by explicit `candidate-ui-calibration`, `blocked-observability`,
   `needs-test-data` or `needs-future-clarification` statuses;
 - source/support/mockup input is contradictory or missing enough to require a BA
@@ -57,8 +58,10 @@ continue automatically across:
   writing;
 - `matrix-accepted` -> canonical TC writing;
 - TC writer handoff -> independent TC review;
-- `tc-changes-required` -> one bounded TC revision -> release with explicit
-  residual statuses, without a second TC review by default.
+- `tc-changes-required` -> one bounded TC revision -> one final independent TC
+  review; if that review accepts the suite, release the status-marked baseline.
+  If it returns `tc-changes-required`, do not start another automatic revision:
+  stop and report the remaining findings or external blocker.
 
 If the next stage for a signed-off scope is `ft-ui-automation-prep`, first check
 whether the FT package contains package-local UI access inputs:
@@ -75,14 +78,15 @@ Default review budget per scope is capped at:
 - one independent matrix review, plus one matrix re-review only after a bounded
   matrix repair;
 - one independent TC review;
-- one bounded writer repair/revision.
+- one bounded writer repair/revision only after `tc-changes-required`;
+- one final independent TC review after that bounded revision.
 
-Do not start an extra matrix review beyond the single repair re-review, a second
+Do not start an extra matrix review beyond the single repair re-review, a third
 TC review, final-format review, semantic regression or another repair loop unless
 a validator contract failure prevents publication or the user explicitly requests
 another review round. A reviewer finding is not by itself permission to loop
-indefinitely: after the bounded revision, publish a transparent FT-first baseline
-and keep unresolved execution details in the case statuses.
+indefinitely: if the final independent review after the bounded revision still
+finds defects, report them rather than applying another automatic repair.
 
 ## Root consistency gate
 
@@ -485,12 +489,12 @@ planned TC), use the fast path inside this same route:
 
 7. Revision
    - The writer performs one revision pass for blocking findings.
-   - A second reviewer pass is not part of the default practical route. It is
-     allowed only when a validator contract failure prevents publication or the
-     user explicitly requests another review round.
-   - Do not enter an unbounded repair loop. If unresolved information remains,
-     release the cases with explicit statuses instead of blocking the whole
-     scope.
+   - Route the revised canonical suite to one final independent full-scope TC
+     review in a separate Codex task/session. The reviewer must validate the
+     writer's status assertions against canonical metadata before acceptance.
+   - Do not enter an unbounded repair loop. If the final review still returns
+     `tc-changes-required`, report its findings and stop; do not apply another
+     automatic revision.
 
 ## Release statuses
 
@@ -577,6 +581,26 @@ Matrix review gate:
   from `coverage-class-catalog.md`, creates standalone tests from glossary/status
   rows when later FT sections define real actions, or plans TC whose expected
   result has no observable UI/API/document artifact.
+
+## Bounded TC Revision And Final Review Gate
+
+When the first independent TC review returns `tc-changes-required`, the writer
+may make exactly one bounded revision. Before handoff, it must compare every
+affected canonical `TC-*` with its concrete runtime inputs:
+
+- `Статус исполнения: ready` is allowed only when the case has no pending
+  `Требуется подтверждение`, unverified fixture, missing test data, access or
+  observability dependency;
+- each affected case and its exact status after the revision must be recorded in
+  `work/practical/<scope>/tc-revision-summary.md` under `## Status Assertions`;
+- the writer may not set `signed-off`, `released-*` or route directly to
+  `ft-ui-automation-prep`.
+
+The next stage is always a final independent full-scope TC review in a separate
+Codex task/session. Its `Review Focus` is a priority list, not a boundary: the
+reviewer must inspect the entire current canonical suite against the FT, PDF,
+XHTML, support and current statuses. Only that final review can accept the
+revised baseline.
 
 ## Mandatory coverage class decomposition
 

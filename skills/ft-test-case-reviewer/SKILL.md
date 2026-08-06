@@ -44,9 +44,10 @@ description: Делает review существующих тест-кейсов 
   preflight, separate final-format review or semantic regression unless the user
   explicitly selected those routes. If matrix review returns
   `matrix-changes-required`, exactly one bounded matrix repair and one matrix re-review
-  are allowed before TC writing. It must not request extra matrix reviews or a
-  second TC review by default; after one bounded writer revision, remaining
-  execution uncertainty is represented by TC statuses.
+  are allowed before TC writing. If the first TC review returns
+  `tc-changes-required`, exactly one bounded writer revision and one final independent TC review in a separate session are allowed. It must not request extra matrix
+  reviews, a third TC review or another automatic repair loop; remaining
+  execution uncertainty is represented by accurate TC statuses.
 - `full` — канонический режим по умолчанию для direct review. Выполняет `traceability`, затем `structure`, затем `test-design`; возвращает findings и traceability matrix при необходимости. Direct `full` не заменяет session-based sign-off: для `signed-off` используй `ft-test-case-iteration`.
 - `traceability` — строит traceability matrix по атомарным утверждениям ФТ и проверяет, что каждое утверждение покрыто тест-кейсом или зафиксировано как `gap` / `unclear`.
 - `structure` — проверяет формат тест-кейса, группировку набора, сквозную нумерацию `TC-*`, порядок позитивных и негативных кейсов, наличие базовых проверок по полю, если такие свойства явно описаны в ФТ.
@@ -92,7 +93,11 @@ Review in two practical gates:
    review, do not sign off the TC file; mark it as an old/unaccepted draft and
    complete `matrix_review` first.
 1. TC review gate: after `matrix-accepted`, every source-backed obligation in the scope maps to a TC or
-   to an explicit allowed deferred status.
+   to an explicit allowed deferred status. `Review Focus` is a priority list,
+   not a scope boundary: a normal or final TC review must inspect the full
+   current canonical suite, re-derive coverage from FT/PDF/XHTML/support and
+   check that `ready` cases have no unresolved confirmation, fixture, data,
+   access or observability dependency.
 2. Test design: positive, negative, boundary, dictionary, dependency and
    repeatable-block classes from
    [../../references/qa/coverage-class-catalog.md](../../references/qa/coverage-class-catalog.md)
@@ -190,9 +195,11 @@ Return independent `review-findings.md` with `blocking`, `nonblocking`,
 `needs-ui-calibration` and `needs-test-data` findings. Do not block release only
 because some cases legitimately remain `candidate-ui-calibration`,
 `blocked-observability`, `needs-test-data` or `needs-future-clarification`.
-Do not ask for another reviewer pass after the writer applies the single
-bounded revision unless a validator contract failure prevents publication or the
-user explicitly requests another review round.
+After the writer applies the single bounded revision, require one final
+independent full-scope reviewer pass before acceptance or release. Do not ask
+for a third TC review or another automatic writer repair unless a validator
+contract failure prevents publication or the user explicitly requests another
+review round.
 Block production sign-off when user-facing TC headings contain English process
 headings such as `Summary` / `Coverage Summary` or unnatural title casing such
 as `Сведения О Наборе`; require Russian sentence-style headings like

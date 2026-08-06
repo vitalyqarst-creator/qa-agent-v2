@@ -93,6 +93,8 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
                 "ft-test-case-reviewer",
                 "ft-test-case-writer",
                 "ft-test-case-reviewer",
+                "ft-test-case-writer",
+                "ft-test-case-reviewer",
             ],
             self.route_by_id["test_cases.practical_v0_8"]["skill_chain"],
         )
@@ -100,6 +102,8 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
             [
                 "source_locator.discovery",
                 "scope.practical_v0_8",
+                "writer.practical_v0_8",
+                "reviewer.practical_v0_8",
                 "writer.practical_v0_8",
                 "reviewer.practical_v0_8",
                 "writer.practical_v0_8",
@@ -138,6 +142,14 @@ class TaskStartSkillRoutingTests(unittest.TestCase):
         )
         self.assertIn(
             "test-design-matrix.md exists with Russian headers and source-triggered classes from coverage-class-catalog.md",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "a tc-changes-required verdict permits exactly one bounded writer revision followed by one final independent TC review in a separate full-scope session; no third TC review or automatic extra repair",
+            self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
+        )
+        self.assertIn(
+            "final TC review treats Review Focus as priority only, re-derives full-scope coverage and verifies that ready TC have no pending confirmation, fixture, test-data, access or observability dependency",
             self.route_by_id["test_cases.practical_v0_8"]["verification_gates"],
         )
         self.assertIn(

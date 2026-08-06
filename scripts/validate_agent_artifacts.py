@@ -1340,6 +1340,12 @@ def iter_writer_responses(root: Path) -> list[Path]:
     return sorted(validation_scope(root).rglob("round-*-writer-response.md"))
 
 
+def iter_tc_revision_summaries(root: Path) -> list[Path]:
+    if root.is_file() and root.name == "tc-revision-summary.md":
+        return [root]
+    return sorted(validation_scope(root).rglob("tc-revision-summary.md"))
+
+
 def iter_test_case_files(root: Path) -> list[Path]:
     if root.is_file() and root.suffix == ".md" and root.parent.name == "test-cases" and root.name != "README.md":
         return [root]
@@ -7944,6 +7950,7 @@ READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS = {
     "test-case-sparse-required-fields",
     "test-case-missing-numbered-steps",
     "test-case-missing-traceability-token",
+    "test-case-ready-status-with-unresolved-execution-input",
     "writer-quality-gate-scoped-validator-profile-invalid",
 }
 
@@ -13686,6 +13693,118 @@ def validate_ui_calibration_candidate_test_cases(
     ]
 
 
+READY_EXECUTION_STATUS = "ready"
+NO_CONFIRMATION_REQUIRED_RE = re.compile(
+    r"^\s*(?:не\s+требуется|not\s+required)(?:\s*[.;:—–-]\s*(?P<detail>.*))?\s*$",
+    flags=re.IGNORECASE,
+)
+READY_STATUS_UNRESOLVED_DATA_RE = re.compile(
+    r"(?:\bneeds-test-data\b|\bneeds-future-clarification\b|"
+    r"\bblocked-observability\b|\bcandidate-ui-calibration\b|"
+    r"нужн\w*\s+(?:проверенн\w+\s+)?(?:фикстур\w*|набор\w*\s+данных|"
+    r"тестов\w*\s+данных)|"
+    r"требу\w*\s+(?:проверенн\w+\s+)?(?:фикстур\w*|набор\w*\s+данных|"
+    r"тестов\w*\s+данных))",
+    flags=re.IGNORECASE,
+)
+
+
+def normalize_test_case_execution_status(value: str) -> str:
+    return value.strip().strip("`*_ .").casefold()
+
+
+def validate_ready_test_case_execution_inputs(
+    blocks: list[tuple[str, str]],
+    path: Path,
+    root: Path,
+) -> tuple[list[Finding], list[Check]]:
+    """Reject a ready status that still advertises unresolved execution input.
+
+    `ready` is an execution-status claim, not merely a source-coverage claim.
+    A case may be source-complete yet still need a fixture, UI observation or BA
+    answer; in that situation it must use the corresponding explicit status.
+    """
+
+    display_path = rel(path, root)
+    inconsistencies: list[str] = []
+    for test_case_id, block in blocks:
+        status = normalize_test_case_execution_status(
+            extract_test_case_field_block(block, ["Статус исполнения", "Статус тест-кейса", "Status"])
+        )
+        if status != READY_EXECUTION_STATUS:
+            continue
+
+        confirmation = extract_test_case_field_block(
+            block,
+            ["Требуется подтверждение", "Requires Confirmation"],
+        )
+        if confirmation:
+            confirmation_match = NO_CONFIRMATION_REQUIRED_RE.fullmatch(confirmation.strip())
+            if confirmation_match is None:
+                inconsistencies.append(
+                    f"{test_case_id}:status=ready; confirmation={confirmation[:180]}"
+                )
+                continue
+            confirmation_detail = confirmation_match.group("detail") or ""
+            unresolved_confirmation_match = READY_STATUS_UNRESOLVED_DATA_RE.search(
+                confirmation_detail
+            )
+            if unresolved_confirmation_match:
+                inconsistencies.append(
+                    f"{test_case_id}:status=ready; unresolved_confirmation="
+                    f"{unresolved_confirmation_match.group(0)[:140]}"
+                )
+                continue
+
+        test_data = extract_test_case_field_block(block, ["Тестовые данные", "Test Data"])
+        preconditions = extract_test_case_field_block(block, ["Предусловия", "Preconditions"])
+        unresolved_match = READY_STATUS_UNRESOLVED_DATA_RE.search(
+            "\n".join([test_data, preconditions])
+        )
+        if unresolved_match:
+            inconsistencies.append(
+                f"{test_case_id}:status=ready; unresolved_execution_input={unresolved_match.group(0)[:140]}"
+            )
+
+    if not inconsistencies:
+        return [], [
+            Check(
+                "test-case-ready-status-execution-inputs",
+                "pass",
+                "Ready test cases have no unresolved execution input.",
+                display_path,
+            )
+        ]
+
+    return [
+        Finding(
+            id="test-case-ready-status-with-unresolved-execution-input",
+            severity="warning",
+            category="test-case-status",
+            title="Ready test-case status conflicts with unresolved execution input",
+            details=(
+                "`ready` is allowed only for a reproducible case with no pending confirmation, fixture, "
+                "test-data or observability dependency. Keep the concrete dependency, but change the "
+                "execution status to `needs-test-data`, `candidate-ui-calibration`, "
+                "`blocked-observability` or `needs-future-clarification` as applicable."
+            ),
+            path=display_path,
+            evidence=inconsistencies[:20],
+            recommended_action=(
+                "Either provide the missing executable input and set `Требуется подтверждение: Не требуется`, "
+                "or downgrade the test-case execution status to the matching explicit residual status."
+            ),
+        )
+    ], [
+        Check(
+            "test-case-ready-status-execution-inputs",
+            "warn",
+            "Ready test cases retain unresolved execution input.",
+            display_path,
+        )
+    ]
+
+
 def generic_test_case_smell_matches(test_case_id: str, field_values: list[tuple[str, str]]) -> list[str]:
     matches: list[str] = []
     for field_name, value in field_values:
@@ -17753,6 +17872,14 @@ def validate_test_case_file(
     findings.extend(calibration_findings)
     checks.extend(calibration_checks)
 
+    execution_input_findings, execution_input_checks = validate_ready_test_case_execution_inputs(
+        blocks,
+        path,
+        root,
+    )
+    findings.extend(execution_input_findings)
+    checks.extend(execution_input_checks)
+
     calculation_findings, calculation_checks = validate_calculation_oracles(content, path, root, blocks)
     findings.extend(calculation_findings)
     checks.extend(calculation_checks)
@@ -18499,6 +18626,202 @@ def ready_for_review_blocking_test_case_findings(
         finding
         for finding in findings
         if finding.id in READY_FOR_REVIEW_BLOCKING_TEST_CASE_FINDING_IDS
+    ]
+
+
+def build_test_case_execution_status_index(test_case_files: list[Path]) -> dict[str, str]:
+    statuses: dict[str, str] = {}
+    for test_case_file in test_case_files:
+        try:
+            content = test_case_validation_content(test_case_file, test_case_file.parent.parent)
+        except (OSError, UnicodeDecodeError):
+            continue
+        for test_case_id, block in extract_test_case_blocks(content):
+            status = normalize_test_case_execution_status(
+                extract_test_case_field_block(block, ["Статус исполнения", "Статус тест-кейса", "Status"])
+            )
+            if status:
+                statuses[test_case_id] = status
+    return statuses
+
+
+def validate_tc_revision_summary_status_assertions(
+    path: Path,
+    root: Path,
+    test_case_statuses: Mapping[str, str],
+) -> tuple[list[Finding], list[Check]]:
+    """Validate the explicit writer claim about statuses after a bounded revision.
+
+    A writer response is useful evidence only if its status claim matches the
+    canonical TC metadata. The table is deliberately small so it can be checked
+    without duplicating the canonical test-case text in a work artifact.
+    """
+
+    display_path = rel(path, root)
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        return [
+            Finding(
+                id="writer-revision-summary-not-utf8",
+                severity="warning",
+                category="writer-response",
+                title="Writer revision summary is not valid UTF-8",
+                details=str(exc),
+                path=display_path,
+                evidence=[],
+                recommended_action="Save tc-revision-summary.md as UTF-8 Markdown.",
+            )
+        ], [Check("writer-revision-status-assertions", "warn", "Writer revision summary is not UTF-8.", display_path)]
+
+    revision_type_match = re.search(
+        r"^\*\*revision_type:\*\*\s*(.*)$",
+        content,
+        flags=re.IGNORECASE | re.MULTILINE,
+    )
+    revision_type = revision_type_match.group(1).strip().casefold() if revision_type_match else ""
+    status_section = extract_markdown_section(content, "Status Assertions")
+    if status_section is None:
+        if "bounded_tc_revision" in revision_type:
+            return [
+                Finding(
+                    id="writer-revision-summary-missing-status-assertions",
+                    severity="error",
+                    category="writer-response",
+                    title="Bounded writer revision has no status assertions",
+                    details=(
+                        "A bounded writer revision must declare the post-revision status of every affected TC so "
+                        "the validator can compare the writer response with canonical TC metadata."
+                    ),
+                    path=display_path,
+                    evidence=["missing section: ## Status Assertions"],
+                    recommended_action=(
+                        "Add a `Status Assertions` table with `tc_id` and `status_after_revision` for every "
+                        "affected test case."
+                    ),
+                )
+            ], [Check("writer-revision-status-assertions", "fail", "Bounded revision has no status assertions.", display_path)]
+        return [], [Check("writer-revision-status-assertions", "pass", "Status assertions are not applicable.", display_path)]
+
+    rows = markdown_table_rows_from_text(status_section)
+    if not rows:
+        return [
+            Finding(
+                id="writer-revision-summary-status-assertions-no-table",
+                severity="error",
+                category="writer-response",
+                title="Writer revision status assertions have no table",
+                details="The Status Assertions section must contain a parseable Markdown table.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the required `tc_id | status_after_revision` table.",
+            )
+        ], [Check("writer-revision-status-assertions", "fail", "Status assertion table is missing.", display_path)]
+
+    if len(rows) == 1:
+        return [
+            Finding(
+                id="writer-revision-summary-status-assertions-empty-table",
+                severity="error",
+                category="writer-response",
+                title="Writer revision status assertions have no affected test cases",
+                details="The Status Assertions table must contain one row for every affected test case.",
+                path=display_path,
+                evidence=[],
+                recommended_action="Add the affected test cases and their exact canonical statuses.",
+            )
+        ], [Check("writer-revision-status-assertions", "fail", "Status assertion table has no data rows.", display_path)]
+
+    header = normalize_table_header(rows[0])
+    required_columns = {"tc_id", "status_after_revision"}
+    missing_columns = sorted(required_columns - set(header))
+    if missing_columns:
+        return [
+            Finding(
+                id="writer-revision-summary-status-assertions-missing-columns",
+                severity="error",
+                category="writer-response",
+                title="Writer revision status assertions miss required columns",
+                details="The Status Assertions table must identify the TC and its actual post-revision status.",
+                path=display_path,
+                evidence=[", ".join(missing_columns)],
+                recommended_action="Use table columns `tc_id` and `status_after_revision`.",
+            )
+        ], [Check("writer-revision-status-assertions", "fail", "Status assertion table has missing columns.", display_path)]
+
+    id_index = header.index("tc_id")
+    status_index = header.index("status_after_revision")
+    unknown_ids: list[str] = []
+    mismatches: list[str] = []
+    empty_rows: list[str] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        test_case_id = row[id_index].strip().strip("`") if id_index < len(row) else ""
+        asserted_status = normalize_test_case_execution_status(
+            row[status_index] if status_index < len(row) else ""
+        )
+        if not test_case_id or not asserted_status:
+            empty_rows.append(f"row {row_number}: tc_id={test_case_id or '<empty>'}; status={asserted_status or '<empty>'}")
+            continue
+        actual_status = test_case_statuses.get(test_case_id)
+        if actual_status is None:
+            unknown_ids.append(f"row {row_number}: {test_case_id}")
+        elif actual_status != asserted_status:
+            mismatches.append(
+                f"{test_case_id}: asserted={asserted_status}; canonical={actual_status}"
+            )
+
+    findings: list[Finding] = []
+    if empty_rows:
+        findings.append(
+            Finding(
+                id="writer-revision-summary-status-assertions-empty-row",
+                severity="error",
+                category="writer-response",
+                title="Writer revision status assertions contain incomplete rows",
+                details="Every status assertion must name one TC and one post-revision status.",
+                path=display_path,
+                evidence=empty_rows[:20],
+                recommended_action="Complete or remove incomplete Status Assertions rows.",
+            )
+        )
+    if unknown_ids:
+        findings.append(
+            Finding(
+                id="writer-revision-summary-status-assertions-unknown-tc",
+                severity="error",
+                category="writer-response",
+                title="Writer revision status assertion references an unknown test case",
+                details="A status assertion must use an exact canonical TC id from the FT package.",
+                path=display_path,
+                evidence=unknown_ids[:20],
+                recommended_action="Use the exact canonical TC id or restore the referenced test case.",
+            )
+        )
+    if mismatches:
+        findings.append(
+            Finding(
+                id="writer-revision-summary-status-assertion-mismatch",
+                severity="error",
+                category="writer-response",
+                title="Writer revision status assertion differs from canonical test case",
+                details=(
+                    "The writer response says a TC has one post-revision status while the canonical test case "
+                    "declares another. This makes the handoff unreliable."
+                ),
+                path=display_path,
+                evidence=mismatches[:20],
+                recommended_action="Correct the canonical TC status or the writer Status Assertions table before review handoff.",
+            )
+        )
+
+    has_issues = bool(findings)
+    return findings, [
+        Check(
+            "writer-revision-status-assertions",
+            "fail" if has_issues else "pass",
+            "Writer revision status assertions have issues." if has_issues else "Writer revision status assertions match canonical test cases.",
+            display_path,
+        )
     ]
 
 
@@ -22057,6 +22380,7 @@ def validate(
     traceability_matrices = iter_traceability_matrices(root)
     review_findings = iter_review_findings(root)
     writer_responses = iter_writer_responses(root)
+    tc_revision_summaries = iter_tc_revision_summaries(root)
     test_case_files = iter_test_case_files(root)
     source_normalization_diagnostics = iter_source_normalization_diagnostics(root)
     writer_process_diagnostics = iter_writer_process_diagnostics(root)
@@ -22088,6 +22412,7 @@ def validate(
         traceability_matrices = []
         review_findings = []
         writer_responses = []
+        tc_revision_summaries = []
         test_case_files = []
         source_normalization_diagnostics = [root]
         writer_process_diagnostics = []
@@ -22111,6 +22436,7 @@ def validate(
         traceability_matrices = []
         review_findings = []
         writer_responses = []
+        tc_revision_summaries = []
         test_case_files = []
         source_normalization_diagnostics = []
         writer_process_diagnostics = []
@@ -22133,6 +22459,7 @@ def validate(
         traceability_matrices = []
         review_findings = []
         writer_responses = []
+        tc_revision_summaries = []
         test_case_files = []
         source_normalization_diagnostics = []
         source_table_normalizations = []
@@ -22149,6 +22476,7 @@ def validate(
         scope_selection_prompts = []
         oracle_inventories = []
     test_case_id_index = build_test_case_id_index(test_case_files, root)
+    test_case_status_index = build_test_case_execution_status_index(test_case_files)
     findings: list[Finding] = []
     checks: list[Check] = []
     declared_artifact_paths: set[str] = set()
@@ -22275,6 +22603,15 @@ def validate(
             root,
             writer_response_policy=writer_response_policy,
             known_test_case_ids=known_test_case_ids_for_artifact(path, root, test_case_id_index),
+        )
+        findings.extend(path_findings)
+        checks.extend(path_checks)
+
+    for path in tc_revision_summaries:
+        path_findings, path_checks = validate_tc_revision_summary_status_assertions(
+            path,
+            root,
+            test_case_status_index,
         )
         findings.extend(path_findings)
         checks.extend(path_checks)
@@ -22473,6 +22810,7 @@ def validate(
             "traceability_matrices_checked": len(traceability_matrices),
             "review_findings_checked": len(review_findings),
             "writer_responses_checked": len(writer_responses),
+            "tc_revision_summaries_checked": len(tc_revision_summaries),
             "test_case_files_checked": len(test_case_files),
             "source_normalization_diagnostics_checked": len(source_normalization_diagnostics),
             "source_table_normalizations_checked": len(source_table_normalizations),

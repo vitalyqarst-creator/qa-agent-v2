@@ -29,6 +29,14 @@
 - Один `TC-*` проверяет одну обязанность системы и один основной pass/fail результат.
 - If one `TC-*` references more than two independent source-backed obligations (`ATOM`/`BSR`/`GSR`/`REQ`), split it unless a single visible source-backed workflow has explicit `**Сценарное обоснование:**` and separate atomic coverage remains traceable.
 - Не смешивай acceptance valid value и rejection invalid value в одном `TC-*`.
+- `Статус исполнения: ready` допустим только для кейса без незакрытого
+  `Требуется подтверждение` и без зависимости от неподготовленного fixture,
+  тестовых данных, доступа или наблюдаемого oracle. При наличии такой
+  зависимости назначь точный статус, например `needs-test-data`,
+  `candidate-ui-calibration`, `blocked-observability` или
+  `needs-future-clarification`. Формулировка `Не требуется; ...` допустима,
+  если продолжение только фиксирует уже доступное evidence и не объявляет новую
+  неполученную зависимость.
 - `Название` описывает бизнес-проверку. Не пиши в названии process markers: `UI calibration`, `candidate`, `oracle`, `requires confirmation`, `требует подтверждения`, `требуется подтверждение`.
 - A runtime `TC-*` is materially useless and must be rewritten or downgraded to
   an explicit non-executable status when it has no concrete object under test,

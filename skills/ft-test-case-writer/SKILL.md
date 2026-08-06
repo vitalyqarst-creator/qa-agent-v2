@@ -22,8 +22,8 @@ For ordinary user work “write test cases for this FT/scope”, use
 [../../references/agent/practical-test-case-route-v0.8.md](../../references/agent/practical-test-case-route-v0.8.md).
 
 The practical route is fixed: matrix only → separate-session matrix review →
-canonical TC → separate-session TC review → at most one bounded revision. Do
-not create canonical TC until `test-design-matrix-review.md` is
+canonical TC → separate-session TC review → at most one bounded revision →
+final separate-session TC review. Do not create canonical TC until `test-design-matrix-review.md` is
 `matrix-accepted`. Record matrix and TC-review routing in the linked
 `practical-stage-summary.md` with `next_stage_transition`; write status-marked TC when the obligation is
 clear but UI/data evidence is missing, and block only a source contradiction.
@@ -35,7 +35,7 @@ the user explicitly selects such a route. The detailed transition, validation,
 root-consistency and round-cap policy is canonical in
 `practical-test-case-route-v0.8.md`.
 
-The first writer invocation is always `practical_v0_8_matrix`; fail closed unless a separate-session matrix review has verdict `matrix-accepted` before canonical TC writing. For `matrix-changes-required`, at most one bounded TC revision.
+The first writer invocation is always `practical_v0_8_matrix`; fail closed unless a separate-session matrix review has verdict `matrix-accepted` before canonical TC writing. For `matrix-changes-required`, at most one bounded matrix repair; for `tc-changes-required`, at most one bounded TC revision followed by a final separate-session TC review.
 Default: do not create XLSX duplicates.
 
 The practical-stage summary records `code_root`, `ft_package_root`,
@@ -64,7 +64,8 @@ invent behavior.
   `prompt.matrix-to-reviewer.md`, with no canonical TC change;
 - TC pass: canonical `test-cases/<section-id>-<scope>.md`, current prompt,
   quality gate and only applicable split artifacts;
-- revision: affected canonical TC and response to the structured findings;
+- revision: affected canonical TC, response to the structured findings and
+  `work/practical/<scope>/tc-revision-summary.md` with `## Status Assertions`;
 - always: current workflow links, session/decision logs only when the selected
   route requires them, and an accurate practical stage summary.
 
@@ -140,6 +141,13 @@ Minimum runtime rules:
 11. After any change to `TC-*`, `ATOM-*`, `GAP-*`, `DICT-*`, or `package_id`, synchronize canonical TC, ledger, traceability matrix, Test-design Decision Table, Package Test Design Plan, coverage artifacts, and writer response. Status `fixed` is allowed only after all affected artifacts are checked, not only the canonical file.
 12. Writer-ready handoff (`ready-for-review`, `writer-draft-ready`, `semantic-review-ready`) is allowed only when current-scope validator warning/error from canonical TC, active test-design dir, and cycle outputs is either fixed, recorded as a valid `false-positive`/waiver with id/path/evidence/rationale, or unrelated to the current scope. Writer self-check and Writer Quality Gate must link to scoped validator evidence or runner validator gate evidence; do not expect reviewer to handle an obvious current-scope validator blocker after handoff.
 12a. For source-backed negative/requiredness restrictions with unknown UI reaction, remediation cannot simply replace one unsupported UI mechanism with another: preserve the obligation and create a candidate TC by `negative-ui-calibration-policy.md`, or a narrow `GAP-*` / `unclear` if a candidate is impossible.
+12b. After a bounded TC revision, compare every affected canonical case with its
+runtime inputs. `Статус исполнения: ready` is forbidden when `Требуется
+подтверждение` remains, or the case still needs an unverified fixture, concrete
+test data, access path or observable oracle. Record each affected `TC-*` and its
+exact final status under `## Status Assertions` in `tc-revision-summary.md`.
+Route only to the final independent reviewer; writer cannot sign off, release or
+start UI preparation from a bounded revision.
 13. If an applicable dimension requires mandatory coverage classes (`numeric-format`, `exact-length`, dependency transitions, repeatable blocks, checkbox-list, generated document mapping), decompose them in `Coverage Obligation Table`, `Package Test Design Plan`, and `coverage-metrics.md` before `TC-*`.
 14. If writer cannot prepare a verifiable result without new scope/source decisions, use `blocked-input`.
 15. Before writer-ready handoff, run `artifact-shape-preflight` from `writer-output-format.md` and `writer-quality-gate-format.md`: split artifacts must use exact canonical headings/table columns without alias columns and without neighboring duplicates such as `# X` + `## X`; `writer-quality-gate.md` must have `gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review`; canonical TC file must not duplicate split artifact tables or embed split-design sections. On any such defect, set `blocked-input` or fix artifacts before review handoff.
