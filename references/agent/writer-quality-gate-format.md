@@ -24,7 +24,7 @@
 | `test-design-review` | `pass` | `test-design-review.md` не содержит blocking rows. | `WP-01` | none_required:pass | `no` |
 | `gap-admissibility` | `pass` | Все `GAP-*` проверены: visible UI/API behavior не спрятан в gap, mixed rows split-нуты. | `WP-01` | none_required:pass | `no` |
 | `runtime-language-style` | `pass` | Runtime-поля TC написаны по-русски и не содержат agent-process фраз вроде `source-backed`, `runtime-prose`, `semantic projection`. | `all` | none_required:pass | `no` |
-| `tc-regression-smells` | `pass` | В canonical TC отсутствуют placeholder traceability, source-rule oracle, generic editability steps, nondeterministic negative oracles, executable TC over unresolved GAP mechanisms, ambiguous UI alias steps и read-only template postconditions. | `all` | none_required:pass | `no` |
+| `tc-regression-smells` | `pass` | В canonical TC отсутствуют placeholder traceability, source-rule oracle, duplicate-positive, downstream-local rejection, injected requiredness, optional-as-required, post-save input, generic editability, nondeterministic negative oracle, executable unresolved GAP, ambiguous UI alias и read-only cleanup smells. | `all` | none_required:pass | `no` |
 | `semantic-compression` | `fail` | `ATOM-017` закрывает `GSR 34`-`GSR 58` одним scenario TC. | `WP-02` | Переписать package от Source Table Normalization до TC. | `yes` |
 ```
 
@@ -54,7 +54,7 @@
 - `scenario-does-not-replace-atomic`: scenario/use-case TC являются дополнительными и не заменяют atomic positive, negative, boundary, dependency или action TC.
 - `tc-atomicity`: `TC-*` не объединяют независимые pass/fail decisions.
 - `test-data-specificity`: validation/boundary/equivalence TC используют конкретные значения или именованные классы, а не placeholders вроде `значение, нарушающее правило`.
-- `tc-regression-smells`: canonical TC file не содержит повторяющиеся canary-defects: placeholder `-` / `N/A` в traceability fields, expected result `по правилу из источника`, generic editability steps `Активировать элемент` + `Изменить значение на тестовое значение`, dictionary TC без `все и только активные значения`, nondeterministic negative oracle через `или`, executable TC over unresolved `GAP-*` mechanism, ambiguous UI alias/action steps, test-design-derived checks без source/rule derivation (`derived-obligation-contamination`), шаблонное cleanup-постусловие в read-only TC.
+- `tc-regression-smells`: canonical TC file не содержит повторяющиеся canary-defects: placeholder `-` / `N/A`, source-rule oracle, duplicate modeled as positive save, downstream local rejection, injected requiredness, optional-as-required, field input after save, generic editability steps, dictionary TC без `все и только активные значения`, nondeterministic negative oracle через `или`, executable unresolved `GAP-*`, ambiguous UI alias/action, derived checks без source/rule derivation, шаблонное cleanup-постусловие в read-only TC.
 - `internal-observability`: internal/API/RabbitMQ/model/database behavior без observable artifact остается `GAP-*`/`unclear`.
 - `action-observability`: action/async TC со статусом `covered` называют конкретный observable result или artifact; `action initiated` без evidence остается `GAP-*`/`unclear`.
 - `semantic-req-id-parity`: requirement codes связаны с тем же source statement/field/expected behavior, что и в source parity, а не просто присутствуют где-то в файле.

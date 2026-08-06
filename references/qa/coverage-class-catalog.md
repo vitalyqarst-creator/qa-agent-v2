@@ -280,6 +280,11 @@ Minimum classes:
 - duplicate across the stated container only, for example same partner, same
   application or global scope.
 
+The duplicate class is negative by default. Do not model duplicate prevention as
+a positive save/reopen TC. The expected result must use the source-backed
+no-save, popup, validation, conflict or "duplicate is not created" oracle. A
+unique-value save is a separate positive TC.
+
 ## Status and lifecycle
 
 Use when the source defines statuses, transitions or allowed actions by status.
@@ -302,6 +307,23 @@ business state, while the UI may expose it through a color indicator, available
 action, list presence, badge, API field or document output. The planned TC must
 name the observable artifact it checks. Do not expect status text unless the
 source/support/UI evidence confirms that the text is actually displayed.
+
+## Downstream or future-stage obligations
+
+Use when the source describes a rule whose pass/fail can be observed only in a
+later FT, another module, an issuance/payment stage, an external system or a
+future role/status model.
+
+- Do not convert a downstream applicability rule into a current-screen
+  save/validation rejection unless the source explicitly defines local
+  enforcement.
+- Cover only the observable current-scope part in executable TC.
+- Put the downstream/use-stage part into a narrow `blocked-observability`,
+  `needs-future-clarification`, `GAP-*` or `unclear` entry with the same source
+  token.
+- If the current screen only stores data later consumed elsewhere, the current
+  TC may verify field presence, allowed input and save/reopen persistence, but
+  not the later business decision.
 
 ## Cross-field dependencies and combinations
 

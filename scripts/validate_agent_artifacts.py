@@ -13363,6 +13363,77 @@ def normalize_test_case_ref_tokens(value: str) -> list[str]:
     ]
 
 
+def normalize_source_token(value: str) -> str:
+    return re.sub(r"\s+", " ", value.replace("`", "").strip()).upper()
+
+
+def extract_practical_source_tokens(value: str) -> set[str]:
+    return {normalize_source_token(match.group(0)) for match in PRACTICAL_SOURCE_TOKEN_RE.finditer(value or "")}
+
+
+def practical_design_dir_for_test_case_file(path: Path, root: Path) -> Path | None:
+    try:
+        relative = path.relative_to(root)
+    except ValueError:
+        return None
+    parts = relative.parts
+    if "test-cases" not in parts:
+        return None
+    test_case_index = parts.index("test-cases")
+    if test_case_index + 1 >= len(parts):
+        return None
+    stem = Path(parts[test_case_index + 1]).stem
+    design_dir = root / "work" / "test-design" / stem
+    return design_dir if design_dir.exists() else None
+
+
+def missing_practical_source_token_coverage(path: Path, root: Path, content: str) -> list[str]:
+    design_dir = practical_design_dir_for_test_case_file(path, root)
+    if design_dir is None:
+        return []
+    source_token_files = [
+        design_dir / "source-row-inventory.md",
+        design_dir / "test-design-matrix.md",
+    ]
+    handled_token_files = [
+        design_dir / "coverage-gaps.md",
+    ]
+    required_tokens: set[str] = set()
+    handled_tokens = extract_practical_source_tokens(content)
+    for token_path in source_token_files:
+        if token_path.exists():
+            try:
+                required_tokens.update(extract_practical_source_tokens(token_path.read_text(encoding="utf-8")))
+            except UnicodeDecodeError:
+                continue
+    for token_path in handled_token_files:
+        if token_path.exists():
+            try:
+                handled_tokens.update(extract_practical_source_tokens(token_path.read_text(encoding="utf-8")))
+            except UnicodeDecodeError:
+                continue
+    return sorted(required_tokens - handled_tokens)
+
+
+def post_save_field_interaction_evidence(test_case_id: str, steps: str) -> str | None:
+    save_line_index: int | None = None
+    save_line = ""
+    for index, raw_line in enumerate((steps or "").splitlines(), start=1):
+        line = raw_line.strip()
+        if not line:
+            continue
+        if save_line_index is None and SAVE_ACTION_RE.search(line):
+            save_line_index = index
+            save_line = line
+            continue
+        if save_line_index is not None and FIELD_INPUT_ACTION_RE.search(line):
+            return (
+                f"{test_case_id}:save_step={save_line_index}:{save_line[:100]}; "
+                f"later_step={index}:{line[:100]}"
+            )
+    return None
+
+
 def normalized_text_for_comparison(value: str) -> str:
     return re.sub(r"\s+", " ", value.replace("`", "").strip()).casefold()
 
@@ -13420,6 +13491,74 @@ MULTI_INVALID_CLASS_RE = re.compile(
     r"(?:\u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u043c\w+\s+)?"
     r"(?:\u0437\u043d\u0430\u0447\u0435\u043d|\u0432\u0432\u043e\u0434)|"
     r"\u043f\u043e\s+\u043e\u0447\u0435\u0440\u0435\u0434\u0438",
+    flags=re.IGNORECASE,
+)
+
+PRACTICAL_SOURCE_TOKEN_RE = re.compile(
+    r"\bAS\.\d+(?:\.\d+)?\b|"
+    r"\b(?:BSR|GSR|REQ)\s+\d+(?:\.\d+)?\b",
+    flags=re.IGNORECASE,
+)
+DUPLICATE_CONSTRAINT_CONTEXT_RE = re.compile(
+    r"\bduplicate\b|\bduplication\b|"
+    r"\u0434\u0443\u0431\u043b\w+|"
+    r"\u043f\u043e\u0432\u0442\u043e\u0440\w+\s+(?:\u043a\u043b\u044e\u0447|\u0437\u043d\u0430\u0447\u0435\u043d|\u0437\u0430\u043f\u0438\u0441)",
+    flags=re.IGNORECASE,
+)
+DUPLICATE_CONSTRAINT_NEGATIVE_ORACLE_RE = re.compile(
+    r"\bnot\s+saved\b|\bsave\s+is\s+blocked\b|\bpopup\b|\berror\b|"
+    r"\u043d\u0435\s+\u0441\u043e\u0445\u0440\u0430\u043d|"
+    r"\u0441\u043e\u0445\u0440\u0430\u043d\w+\s+\u043d\u0435\s+\u0432\u044b\u043f\u043e\u043b\u043d|"
+    r"\u043e\u0448\u0438\u0431\u043a|"
+    r"\u0431\u043b\u043e\u043a\w+|"
+    r"\u0432\u0441\u043f\u043b\u044b\u0432\u0430\u044e\u0449\w+\s+\u043e\u043a\u043d|"
+    r"\u0434\u0443\u0431\u043b\w+\s+\u043d\u0435\s+\u0441\u043e\u0437\u0434",
+    flags=re.IGNORECASE,
+)
+DOWNSTREAM_SCOPE_CONTEXT_RE = re.compile(
+    r"\bdownstream\b|\bfuture\s+FT\b|\bFT\s*6\b|"
+    r"\u0424\u0422\s*6|"
+    r"\u0431\u0443\u0434\u0443\u0449\w+\s+\u0424\u0422|"
+    r"\u0432\u043d\u0435\u0448\u043d\w+\s+\u0441\u0446\u0435\u043d\u0430\u0440|"
+    r"\u0434\u0430\u043b\u044c\u043d\u0435\u0439\u0448\w+\s+\u044d\u0442\u0430\u043f|"
+    r"\u0441\u0442\u0430\u0434\w+\s+\u0432\u044b\u043f\u0443\u0441\u043a",
+    flags=re.IGNORECASE,
+)
+LOCAL_REJECTION_ORACLE_RE = re.compile(
+    r"\bnot\s+saved\b|\bsave\s+is\s+blocked\b|\brejected\b|\berror\b|"
+    r"\u043d\u0435\s+\u0441\u043e\u0445\u0440\u0430\u043d|"
+    r"\u043e\u0442\u043a\u043b\u043e\u043d|"
+    r"\u043e\u0448\u0438\u0431\u043a|"
+    r"\u0431\u043b\u043e\u043a\w+|"
+    r"\u043f\u043e\u0434\u0441\u0432\u0435\w+",
+    flags=re.IGNORECASE,
+)
+SAVE_ACTION_RE = re.compile(
+    r"\bsave\b|"
+    r"\u043d\u0430\u0436\u0430\u0442\u044c\s+(?:\u043a\u043d\u043e\u043f\u043a\u0443\s+)?`?"
+    r"\u0421\u043e\u0445\u0440\u0430\u043d\u0438\u0442\u044c`?|"
+    r"\u0441\u043e\u0445\u0440\u0430\u043d\w+",
+    flags=re.IGNORECASE,
+)
+FIELD_INPUT_ACTION_RE = re.compile(
+    r"\b(?:enter|type|fill|finish\s+input)\b|"
+    r"\u0432\u0432\u0435\u0441\u0442\u0438\b|"
+    r"\u0443\u043a\u0430\u0437\u0430\u0442\u044c\b|"
+    r"\u0437\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u044c\b|"
+    r"\u0437\u0430\u0432\u0435\u0440\u0448\u0438\u0442\u044c\s+\u0432\u0432\u043e\u0434",
+    flags=re.IGNORECASE,
+)
+OPTIONAL_SOURCE_CONTEXT_RE = re.compile(
+    r"\boptional\b|"
+    r"\u041e\s*=\s*\u041d\u0435\u0442|"
+    r"\u043d\u0435\s+\u043e\u0431\u044f\u0437\u0430\u0442|"
+    r"\u043d\u0435\u043e\u0431\u044f\u0437\u0430\u0442",
+    flags=re.IGNORECASE,
+)
+REQUIREDNESS_TITLE_CONTEXT_RE = re.compile(
+    r"\brequired(?:ness)?\b|"
+    r"\u043e\u0431\u044f\u0437\u0430\u0442\w+|"
+    r"\u043f\u0443\u0441\u0442\w+\s+\u043f\u043e\u043b",
     flags=re.IGNORECASE,
 )
 
@@ -14043,6 +14182,12 @@ def validate_test_case_quality_smells(
     executable_persistence_with_unconfirmed_save_flow: list[str] = []
     persistence_save_placeholder_in_executable_tc: list[str] = []
     persistence_terminology_source_mismatch: list[str] = []
+    duplicate_constraint_positive_type: list[str] = []
+    downstream_local_rejection: list[str] = []
+    requiredness_injected_into_positive: list[str] = []
+    optional_field_treated_as_required: list[str] = []
+    post_save_field_interactions: list[str] = []
+    source_tokens_missing_from_tc_or_gap: list[str] = []
     non_reproducible_preconditions: list[str] = []
     ambiguous_precondition_setup: list[str] = []
     branch_oracle_records: list[dict[str, str]] = []
@@ -14074,6 +14219,8 @@ def validate_test_case_quality_smells(
             representative_strategy_without_residual_risk.append(
                 "representative/pairwise strategy does not state residual risk"
             )
+    if production_test_case_file:
+        source_tokens_missing_from_tc_or_gap = missing_practical_source_token_coverage(path, root, content)
     for test_case_id, block in blocks:
         is_calibration_candidate = is_ui_calibration_candidate_block(block)
         expected_result = extract_test_case_expected_result(block)
@@ -14551,6 +14698,44 @@ def validate_test_case_quality_smells(
             process_marker_titles.append(f"{test_case_id}:{title[:160]}")
         if is_positive_test_case_type(test_case_type) and expected_result and NEGATIVE_OR_REJECTION_EXPECTED_RE.search(expected_result):
             positive_type_negative_oracle.append(f"{test_case_id}:type={test_case_type}; expected={expected_result[:150]}")
+        duplicate_context = " ".join([title, goal, test_data, steps, expected_result, traceability, requirement_quote])
+        if (
+            is_positive_test_case_type(test_case_type)
+            and DUPLICATE_CONSTRAINT_CONTEXT_RE.search(duplicate_context)
+            and not DUPLICATE_CONSTRAINT_NEGATIVE_ORACLE_RE.search(expected_result or "")
+        ):
+            duplicate_constraint_positive_type.append(
+                f"{test_case_id}:type={test_case_type}; expected={expected_result[:160] or '<missing>'}"
+            )
+        downstream_context = " ".join([title, goal, traceability, ft_reference, requirement_source, requirement_quote, confirmation])
+        if (
+            DOWNSTREAM_SCOPE_CONTEXT_RE.search(downstream_context)
+            and SAVE_ACTION_RE.search(steps)
+            and LOCAL_REJECTION_ORACLE_RE.search(expected_result or "")
+            and not re.search(r"blocked-observability|needs-future-clarification|candidate-ui-calibration|unclear", block, flags=re.IGNORECASE)
+        ):
+            downstream_local_rejection.append(
+                f"{test_case_id}:steps={steps[:100]}; expected={expected_result[:160]}"
+            )
+        if (
+            is_positive_test_case_type(test_case_type)
+            and REQUIREDNESS_RE.search(" ".join([test_data, steps, expected_result]))
+            and not REQUIREDNESS_TITLE_CONTEXT_RE.search(" ".join([title, goal]))
+        ):
+            requiredness_injected_into_positive.append(
+                f"{test_case_id}:title={title[:100]}; requiredness_text={' '.join([test_data, steps, expected_result])[:160]}"
+            )
+        if (
+            OPTIONAL_SOURCE_CONTEXT_RE.search(" ".join([title, goal, test_data, requirement_source, requirement_quote]))
+            and REQUIREDNESS_RE.search(" ".join([steps, expected_result]))
+        ):
+            optional_field_treated_as_required.append(
+                f"{test_case_id}:optional context with requiredness oracle; steps={steps[:100]}; expected={expected_result[:120]}"
+            )
+        if steps:
+            post_save_evidence = post_save_field_interaction_evidence(test_case_id, steps)
+            if post_save_evidence:
+                post_save_field_interactions.append(post_save_evidence)
         if is_negative_test_case_type(test_case_type) and not negative_oracle:
             if expected_result and POSITIVE_ACCEPTANCE_EXPECTED_RE.search(expected_result):
                 negative_type_without_negative_oracle.append(
@@ -14886,6 +15071,126 @@ def validate_test_case_quality_smells(
                 path=display_path,
                 evidence=missing_target_revealing_actions[:20],
                 recommended_action="Add `Нажать кнопку «Добавить контактное лицо»` to preconditions before field input steps.",
+            )
+        )
+
+    if source_tokens_missing_from_tc_or_gap:
+        findings.append(
+            Finding(
+                id="test-case-source-token-not-covered-or-gapped",
+                severity="warning",
+                category="traceability",
+                title="Source tokens from practical design are missing from TC or gaps",
+                details=(
+                    "Every practical-route source token extracted into the design artifacts must be visible in "
+                    "canonical TC traceability or explicitly handled by a coverage gap/status artifact. A token "
+                    "present only in the matrix or row inventory is not enough for release readiness."
+                ),
+                path=display_path,
+                evidence=source_tokens_missing_from_tc_or_gap[:30],
+                recommended_action=(
+                    "Add the missing source token to a TC traceability field when the behavior is covered, or add "
+                    "a narrow coverage gap / blocked-observability / needs-future-clarification entry for the "
+                    "uncovered part."
+                ),
+            )
+        )
+
+    if duplicate_constraint_positive_type:
+        findings.append(
+            Finding(
+                id="test-case-duplicate-constraint-positive-oracle-smell",
+                severity="warning",
+                category="test-design",
+                title="Duplicate constraint is modeled as a positive save case",
+                details=(
+                    "When the source defines duplicate prevention, the duplicate input class is a negative check by "
+                    "default. A positive save/reopen oracle for a duplicate value hides the no-save/error behavior."
+                ),
+                path=display_path,
+                evidence=duplicate_constraint_positive_type[:20],
+                recommended_action=(
+                    "Make the duplicate TC `Negative`, use the exact source-backed duplicate key, and assert the "
+                    "confirmed no-save/popup/blocking oracle. Keep unique-value save as a separate positive TC."
+                ),
+            )
+        )
+
+    if downstream_local_rejection:
+        findings.append(
+            Finding(
+                id="test-case-downstream-obligation-local-rejection-smell",
+                severity="warning",
+                category="expected-result",
+                title="Downstream obligation is converted into local save rejection",
+                details=(
+                    "A requirement that is checked in a downstream/future stage must not be turned into a local "
+                    "card-level validation error unless source/support explicitly defines that local enforcement."
+                ),
+                path=display_path,
+                evidence=downstream_local_rejection[:20],
+                recommended_action=(
+                    "Limit the TC to the observable current-scope behavior, or mark the downstream/use-stage part "
+                    "as `blocked-observability` / `needs-future-clarification` with traceability to the source token."
+                ),
+            )
+        )
+
+    if requiredness_injected_into_positive:
+        findings.append(
+            Finding(
+                id="test-case-requiredness-injected-into-positive-flow",
+                severity="warning",
+                category="test-design",
+                title="Requiredness check is injected into an unrelated positive flow",
+                details=(
+                    "Requiredness marker/enforcement is an independent behavior. Adding it to a positive autofill, "
+                    "dictionary, editability or save TC makes the case non-atomic and often leaves empty-value "
+                    "requiredness untested."
+                ),
+                path=display_path,
+                evidence=requiredness_injected_into_positive[:20],
+                recommended_action=(
+                    "Split requiredness into its own TC or remove the injected marker/enforcement step from the "
+                    "positive flow. Unknown exact UI reaction should become `candidate-ui-calibration`."
+                ),
+            )
+        )
+
+    if optional_field_treated_as_required:
+        findings.append(
+            Finding(
+                id="test-case-optional-field-treated-as-required",
+                severity="warning",
+                category="test-design",
+                title="Optional field is checked as required",
+                details=(
+                    "A field marked optional or `О = Нет` must not have required-marker or empty-requiredness "
+                    "expectations unless a separate conditional requiredness rule is source-backed."
+                ),
+                path=display_path,
+                evidence=optional_field_treated_as_required[:20],
+                recommended_action=(
+                    "Rewrite the TC as optional-empty/optional-filled coverage, or add the missing conditional "
+                    "requiredness source before expecting a required marker or save blocking."
+                ),
+            )
+        )
+
+    if post_save_field_interactions:
+        findings.append(
+            Finding(
+                id="test-case-field-input-after-save-step",
+                severity="warning",
+                category="steps",
+                title="Field input step appears after save action",
+                details=(
+                    "A TC sequence that saves the form and then continues entering or finishing input in fields is "
+                    "usually a mechanically injected step order defect. Field input must precede the commit action."
+                ),
+                path=display_path,
+                evidence=post_save_field_interactions[:20],
+                recommended_action="Move field input before save, or split post-save verification into a separate reopen/assertion step.",
             )
         )
 

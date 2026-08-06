@@ -70,6 +70,18 @@
 - Negative input TC не должен объединять несколько независимых invalid classes под одним generic oracle. Разделяй классы или используй параметризованный набор только когда реакция на каждый класс source-backed и наблюдаемо одинаковая.
 - Representative/pairwise coverage across similar fields/classes must state selected combinations, omitted combinations and residual risk. Without that, add missing TC/GAP coverage instead of relying on an implicit sample.
 - `Тип` должен соответствовать oracle: rejection, validation feedback, blocked transition, no-save or requiredness feedback = `Negative`; acceptance, visibility, editability or closed-list composition without invalid action = `Positive`.
+- Duplicate input is `Negative` by default: assert no-save/popup/conflict or
+  duplicate-not-created; unique-value save is a separate positive TC.
+- Downstream/future-stage rules do not imply local save rejection. Current-scope
+  TC checks current behavior/persistence; later decisions become
+  `blocked-observability`, `needs-future-clarification`, `GAP-*` or `unclear`.
+- Requiredness is atomic: do not inject marker/save-block checks into unrelated
+  positive/autofill/dictionary TC; use a separate empty-value/marker or
+  `candidate-ui-calibration` TC.
+- Optional fields do not expect required marker/save block unless a separate
+  conditional-requiredness source exists.
+- Field input precedes commit; no entering/finishing field input after save
+  unless that post-save input is source-backed behavior under test.
 - Implementation observations, including discovered integrations, are not FT-first requirements by themselves. Add baseline TC only after the behavior is registered as FT/support/UI evidence; otherwise keep the observation in exploratory notes, a narrow `GAP-*` or a calibration candidate.
 
 ## Field-Level Checks

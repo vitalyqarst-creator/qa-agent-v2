@@ -233,6 +233,7 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             "Repeatable blocks and child rows",
             "Uniqueness and duplicate checks",
             "Status and lifecycle",
+            "Downstream or future-stage obligations",
             "Cross-field dependencies and combinations",
             "Generated documents and mappings",
         ):
@@ -247,6 +248,50 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             "punctuation or special symbol",
         ):
             self.assertIn(expected, content)
+
+    def test_duplicate_and_downstream_rules_are_pinned(self) -> None:
+        content = self.read("references/qa/coverage-class-catalog.md")
+        runtime = self.read("references/qa/test-case-runtime-format.md")
+        writer = self.read("skills/ft-test-case-writer/SKILL.md")
+        reviewer = self.read("skills/ft-test-case-reviewer/SKILL.md")
+        gate = self.read("references/agent/writer-quality-gate-format.md")
+        for expected in (
+            "The duplicate class is negative by default",
+            "positive save/reopen TC",
+            "unique-value save is a separate positive TC",
+            "Do not convert a downstream applicability rule into a current-screen",
+            "Put the downstream/use-stage part into a narrow `blocked-observability`",
+        ):
+            self.assertIn(expected, content)
+        for expected in (
+            "Duplicate input is `Negative` by default",
+            "Downstream/future-stage rules do not imply local save rejection",
+            "Requiredness is atomic",
+            "Optional fields do not expect required marker/save block",
+            "Field input precedes commit",
+        ):
+            self.assertIn(expected, runtime)
+        for expected in (
+            "duplicate input = negative by default",
+            "no downstream-as-local-rejection",
+            "no injected requiredness",
+            "no optional-as-required",
+            "no field input after save",
+        ):
+            self.assertIn(expected, writer)
+        for expected in (
+            "duplicate prevention не должен быть positive save TC",
+            "downstream/future-stage rule не должен превращаться в local save rejection",
+            "optional field не должен ожидать required marker/save block",
+        ):
+            self.assertIn(expected, reviewer)
+        for expected in (
+            "duplicate-positive",
+            "downstream-local rejection",
+            "optional-as-required",
+            "post-save input",
+        ):
+            self.assertIn(expected, gate)
 
     def test_requiredness_coverage_is_split_by_input_mechanism(self) -> None:
         content = self.read("references/qa/coverage-class-catalog.md")
