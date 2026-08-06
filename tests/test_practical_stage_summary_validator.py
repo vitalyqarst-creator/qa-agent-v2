@@ -45,6 +45,7 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         git_persistence: str = "not-applicable",
         source_restore_provenance: str = "not-applicable",
         source_restore_sha256: str = "not-applicable",
+        active_scope_ids: str = "01",
         next_stage_transition: str = "writer allowed",
         summary_stage: str = "not-applicable",
         tc_review_snapshot: bool = False,
@@ -88,16 +89,18 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     f"| git_persistence | `{git_persistence}` |",
                     f"| source_restore_provenance | `{source_restore_provenance}` |",
                     f"| source_restore_sha256 | `{source_restore_sha256}` |",
+                    f"| active_scope_ids | `{active_scope_ids}` |",
                     f"| next_stage_transition | `{next_stage_transition}` |",
+                    "| next_safe_step | `Продолжить работу на следующем разрешенном этапе.` |",
                     f"| summary_stage | `{summary_stage}` |",
                     "",
                     "## Current stage actions",
                     "",
-                    "- Created current-stage handoff.",
+                    "- Подготовлен handoff текущего этапа.",
                     "",
                     "## Prior state context",
                     "",
-                    "- Previous stages are not repeated here.",
+                    "- Результаты предыдущих этапов здесь не повторяются.",
                     "",
                 ]
             ),
@@ -396,6 +399,52 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
         ids = self.finding_ids(root)
 
         self.assertIn("practical-stage-summary-missing-operational-fields", ids)
+
+    def test_requires_explicit_active_scope_allowlist(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            "\n".join(
+                line
+                for line in summary.read_text(encoding="utf-8").splitlines()
+                if not line.startswith("| active_scope_ids |")
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-missing-operational-fields", ids)
+
+    def test_rejects_nonexplicit_active_scope_allowlist(self) -> None:
+        ids = self.finding_ids(self.make_package(active_scope_ids="all"))
+
+        self.assertIn("practical-stage-summary-invalid-active-scope-ids", ids)
+
+    def test_rejects_not_applicable_active_scope_allowlist(self) -> None:
+        ids = self.finding_ids(self.make_package(active_scope_ids="not-applicable"))
+
+        self.assertIn("practical-stage-summary-invalid-active-scope-ids", ids)
+
+    def test_rejects_active_scope_id_without_handoff_directory(self) -> None:
+        ids = self.finding_ids(self.make_package(active_scope_ids="99"))
+
+        self.assertIn("practical-stage-summary-active-scope-id-unresolved", ids)
+
+    def test_rejects_english_human_prose_in_summary(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "Продолжить работу на следующем разрешенном этапе.",
+                "Run the next writer revision after validation.",
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-nonrussian-human-prose", ids)
 
     def test_rejects_invalid_git_persistence_field(self) -> None:
         ids = self.finding_ids(self.make_package(git_persistence="ordinary git maybe"))

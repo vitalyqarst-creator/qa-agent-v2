@@ -33,7 +33,7 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | validator_info_evidence | `<finding ids or not-applicable>` |
 | source_restore_provenance | `<source path/checkpoint or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 or not-applicable>` |
-| active_scope_ids | `<explicitly authorized scope ids; one scope or a comma-separated list>` |
+| active_scope_ids | `<обязательный allowlist: один id или список через запятую, например 02, 05>` |
 
 ## TC Review Snapshot
 
@@ -86,3 +86,9 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 - Для multi-scope stage `active_scope_ids` — allowlist текущего этапа. Не
   изменяй artifacts scope вне этого перечня ради общего package-level validator;
   классифицируй такие findings как внешние для текущего этапа.
+- `active_scope_ids` обязателен и содержит только номера handoff-папок текущего
+  этапа. `all`, диапазоны и неявные описания не допускаются.
+- `next_safe_step`, `reason` в таблице переходов, а также текст в разделах
+  `Current stage actions` и `Prior state context` пиши по-русски. Английскими
+  могут остаться только канонические enum-значения, идентификаторы, пути и
+  технические литералы в code span.

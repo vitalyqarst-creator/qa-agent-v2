@@ -215,6 +215,34 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
         self.assertIn("internal-diagnostic-section-in-production-testcases", ids)
         self.assertIn("test-case-split-artifact-duplicated-sections", ids)
 
+    def test_rejects_pass_row_substituted_by_reviewer_finding(self) -> None:
+        root, _, design_dir = self.make_package()
+        gate_path = design_dir / "writer-quality-gate.md"
+        gate_path.write_text(
+            "\n".join(
+                [
+                    "# Writer Quality Gate",
+                    "",
+                    "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
+                    "| --- | --- | --- | --- | --- | --- |",
+                    "| `step-executability` | `pass` | Дефект отмечен ревьюером. | `WP-01` | `none_required:tracked_in_tc_review_findings` | `no` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_writer_quality_gate(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+
+        self.assertIn(
+            "writer-quality-gate-pass-uses-postreview-substitution",
+            {finding.id for finding in findings},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

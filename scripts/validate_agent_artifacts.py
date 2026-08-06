@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -3694,7 +3694,7 @@ def extract_test_design_applicability_section(content: str) -> str | None:
 
 def extract_markdown_section(content: str, heading: str) -> str | None:
     match = re.search(
-        rf"^#{{2,6}}\s+{re.escape(heading)}\s*$",
+        rf"^#{{1,6}}\s+{re.escape(heading)}\s*$",
         content,
         flags=re.IGNORECASE | re.MULTILINE,
     )
@@ -4658,6 +4658,7 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_ROOT_FIELDS = {
     "root_split_allowed",
 }
 PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
+    "active_scope_ids",
     "git_persistence",
     "per_scope_next_stage_transitions",
     "production_tc_clean",
@@ -4666,6 +4667,28 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
     "validator_warnings_evidence",
     "source_restore_provenance",
     "source_restore_sha256",
+}
+PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE = re.compile(r"^\d{2}(?:\s*,\s*\d{2})*$")
+PRACTICAL_STAGE_SUMMARY_HUMAN_FIELDS = {
+    "next_safe_step",
+    "writer_stage_continuation",
+    "reviewer_stage_continuation",
+}
+PRACTICAL_STAGE_SUMMARY_ALLOWED_ENGLISH_TOKENS = {
+    "api",
+    "codex",
+    "dadata",
+    "docx",
+    "ft",
+    "git",
+    "json",
+    "pdf",
+    "sha",
+    "tc",
+    "ui",
+    "url",
+    "xhtml",
+    "yaml",
 }
 PRACTICAL_TC_REVIEW_CURRENT_ARTIFACT_ALIASES = {
     "review_independence": ("tc_review_independence", "reviewer_tc_independence"),
@@ -4876,6 +4899,55 @@ def field_is_not_applicable(value: str) -> bool:
     }
 
 
+def english_prose_words(value: str) -> list[str]:
+    prose = re.sub(r"`[^`]*`", "", value)
+    return [
+        word
+        for word in re.findall(r"[A-Za-z]{3,}", prose)
+        if word.lower() not in PRACTICAL_STAGE_SUMMARY_ALLOWED_ENGLISH_TOKENS
+    ]
+
+
+def practical_stage_summary_nonrussian_prose_issues(content: str, fields: Mapping[str, str]) -> list[str]:
+    issues: list[str] = []
+
+    for field_name, value in fields.items():
+        normalized_name = normalize_markdown_field_name(field_name)
+        if normalized_name not in PRACTICAL_STAGE_SUMMARY_HUMAN_FIELDS:
+            continue
+        english_words = english_prose_words(value)
+        if len(english_words) >= 2:
+            issues.append(f"field:{field_name}:english_prose={','.join(english_words[:8])}")
+
+    for heading in ("Current stage actions", "Prior state context"):
+        section = extract_markdown_section(content, heading)
+        if section is None:
+            continue
+        for line_number, line in enumerate(section.splitlines(), start=1):
+            if not re.match(r"^\s*(?:[-*]|\d+\.)\s+", line):
+                continue
+            english_words = english_prose_words(line)
+            if len(english_words) >= 2:
+                issues.append(f"section:{heading}:line={line_number}:english_prose={','.join(english_words[:8])}")
+
+    transition_section = extract_markdown_section(content, "Scope transitions")
+    if transition_section:
+        rows = markdown_table_rows_from_text(transition_section)
+        if rows:
+            header = normalize_table_header(rows[0])
+            if "reason" in header:
+                reason_index = header.index("reason")
+                for row_index, row in enumerate(rows[1:], start=2):
+                    if reason_index >= len(row):
+                        continue
+                    english_words = english_prose_words(row[reason_index])
+                    if len(english_words) >= 2:
+                        issues.append(
+                            f"scope-transitions:row={row_index}:reason:english_prose={','.join(english_words[:8])}"
+                        )
+    return issues
+
+
 def looks_like_sha256_evidence(value: str) -> bool:
     return bool(re.search(r"\b[a-fA-F0-9]{64}\b", value))
 
@@ -5052,6 +5124,43 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
             )
         )
 
+    active_scope_ids = fields.get("active_scope_ids", "").strip()
+    normalized_scope_ids = re.sub(r"\s+", "", active_scope_ids)
+    if not PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-invalid-active-scope-ids",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has an invalid active scope allowlist",
+                details=(
+                    "`active_scope_ids` must name explicit two-digit handoff ids, separated by commas. "
+                    "Broad values such as `all`, `not-applicable` or a range do not protect scopes outside the current stage."
+                ),
+                path=display_path,
+                evidence=[f"active_scope_ids={active_scope_ids or '<missing>'}"],
+                recommended_action="Use one explicit id or a comma-separated list, for example `02, 05, 06, 07`.",
+            )
+        )
+
+    nonrussian_prose_issues = practical_stage_summary_nonrussian_prose_issues(content, fields)
+    if nonrussian_prose_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-nonrussian-human-prose",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary contains English prose in human-facing content",
+                details=(
+                    "The practical summary is a user-facing handoff. Narrative field values, scope-transition "
+                    "reasons and current/prior stage notes must be Russian; technical ids, paths and enums may remain canonical."
+                ),
+                path=display_path,
+                evidence=nonrussian_prose_issues[:20],
+                recommended_action="Rewrite the affected narrative prose in Russian without translating technical ids or enum values.",
+            )
+        )
+
     code_root = fields.get("code_root", "")
     ft_package_root = fields.get("ft_package_root", "")
     artifact_write_root = fields.get("artifact_write_root", "")
@@ -5095,6 +5204,31 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action="Set artifact_write_root under ft_package_root or stop as blocked-input.",
             )
         )
+    if PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids) and ft_package_root:
+        handoff_root = Path(strip_markdown_code(ft_package_root)) / "work" / "stage-handoffs"
+        if handoff_root.is_dir():
+            available_scope_ids = {
+                handoff_path.name.split("-", 1)[0]
+                for handoff_path in handoff_root.iterdir()
+                if handoff_path.is_dir() and re.fullmatch(r"\d{2}", handoff_path.name.split("-", 1)[0])
+            }
+            unknown_scope_ids = sorted(set(normalized_scope_ids.split(",")) - available_scope_ids)
+            if unknown_scope_ids:
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-active-scope-id-unresolved",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary allowlist references no handoff scope",
+                        details=(
+                            "Every id in `active_scope_ids` must resolve to an existing `work/stage-handoffs/<id>-*` "
+                            "directory in the FT package."
+                        ),
+                        path=display_path,
+                        evidence=[f"unknown={', '.join(unknown_scope_ids)}"],
+                        recommended_action="Correct the allowlist to the actual handoff ids for the scopes changed in this stage.",
+                    )
+                )
 
     transition = fields.get("next_stage_transition", "").strip().lower()
     if transition not in PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS:
@@ -8084,11 +8218,13 @@ def writer_quality_gate_summary(content: str) -> dict[str, Any]:
     invalid_status_rows: list[str] = []
     invalid_blocks_rows: list[str] = []
     failed_rows: list[str] = []
+    post_review_pass_rows: list[str] = []
     package_ready_pass = False
     for index, row in enumerate(rows, start=2):
         gate_item = row.get("gate_item", "").strip().strip("`") or f"row-{index}"
         status = row.get("status", "").strip().strip("`").lower()
         blocks = row.get("blocks_ready_for_review", "").strip().strip("`").lower()
+        required_action = row.get("required_action", "").strip().strip("`").lower()
         if gate_item == "package-ready" and status in WRITER_QUALITY_GATE_PASS_STATUSES:
             package_ready_pass = True
         if status and status not in WRITER_QUALITY_GATE_PASS_STATUSES | WRITER_QUALITY_GATE_FAIL_STATUSES:
@@ -8102,6 +8238,12 @@ def writer_quality_gate_summary(content: str) -> dict[str, Any]:
         if blocks == "yes" and status in WRITER_QUALITY_GATE_PASS_STATUSES:
             failed_rows.append(f"{gate_item}:status={status};blocks=yes")
             invalid_blocks_rows.append(f"{gate_item}:status={status};blocks_ready_for_review=yes")
+        if status in WRITER_QUALITY_GATE_PASS_STATUSES and re.search(
+            r"(?:tc[_\s-]*)?review[_\s-]*findings|review[_\s-]*finding",
+            required_action,
+            flags=re.IGNORECASE,
+        ):
+            post_review_pass_rows.append(f"{gate_item}:required_action={required_action}")
 
     failed_rows = sorted(set(failed_rows))
     package_ready_conflicts = failed_rows if package_ready_pass and failed_rows else []
@@ -8126,6 +8268,7 @@ def writer_quality_gate_summary(content: str) -> dict[str, Any]:
         "invalid_status_rows": invalid_status_rows,
         "invalid_blocks_rows": invalid_blocks_rows,
         "failed_rows": failed_rows,
+        "post_review_pass_rows": sorted(set(post_review_pass_rows)),
         "package_ready_conflicts": package_ready_conflicts,
         "known_risk_not_blocking": known_risk_not_blocking,
     }
@@ -9676,6 +9819,25 @@ def validate_writer_quality_gate(
                 path=display_path,
                 evidence=summary["invalid_blocks_rows"][:20],
                 recommended_action="Set `blocks_ready_for_review` to `yes` only for blocking failed gate rows, otherwise `no`.",
+            )
+        )
+    if summary["post_review_pass_rows"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-pass-uses-postreview-substitution",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate uses reviewer findings to justify a pass",
+                details=(
+                    "A writer-stage gate cannot retroactively pass because a reviewer finding was recorded. "
+                    "The finding must remain open until a writer revision is completed and a new gate run proves the correction."
+                ),
+                path=display_path,
+                evidence=summary["post_review_pass_rows"][:20],
+                recommended_action=(
+                    "Keep the reviewer finding as the revision input; do not mark the affected writer gate row pass "
+                    "until the revised artifact has been checked directly."
+                ),
             )
         )
     if summary["failed_rows"] and not suppress_blocked_input_failures:

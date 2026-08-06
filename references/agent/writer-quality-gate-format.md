@@ -6,6 +6,22 @@
 
 Человекочитаемые поля `evidence` и `required_action` пиши на русском языке, если пользователь явно не запросил другой язык. Технические имена колонок, gate items, enum-значения, ids и имена файлов остаются каноническими.
 
+## Семантика статусов
+
+`Writer Quality Gate` фиксирует результат именно writer-этапа. `pass` означает,
+что writer на момент передачи в review проверил условие прямым evidence и не
+оставил действий для исправления: `required_action` должен быть
+`none_required:pass`.
+
+Reviewer finding не является evidence для задним числом поставленного `pass`.
+Нельзя дописывать в уже пройденный gate строку `pass` с формулировкой вроде
+`tracked_in_tc_review_findings`: это скрывает дефект writer draft. Такой finding
+остается в `review-findings.md` до writer revision. После фактического исправления
+writer запускает gate для новой revision и только тогда может зафиксировать `pass`.
+
+Если writer сам обнаружил дефект до review, используй `needs-rewrite` или `fail`
+с `blocks_ready_for_review = yes`; не заменяй этот статус ссылкой на будущий review.
+
 ## Минимальный Формат
 
 ```md

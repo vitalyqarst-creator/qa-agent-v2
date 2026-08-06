@@ -430,7 +430,9 @@ planned TC), use the fast path inside this same route:
      capped scope, reasons, whether TC can be written with explicit statuses, and
      the next safe step. It must include the root consistency fields,
      validator-error classification fields when validation was run, and
-     `next_stage_transition`. It must be linked from affected `workflow-state.yaml`
+     `next_stage_transition` and an explicit `active_scope_ids` allowlist. Its
+     human-readable narrative (`next_safe_step`, transition reasons and current/prior
+     stage notes) must be Russian. It must be linked from affected `workflow-state.yaml`
      artifacts. This summary is required before the controller/user receives the
      next-stage prompt.
 
