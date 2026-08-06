@@ -27,6 +27,10 @@ class GitPersistence:
 
 @dataclass(frozen=True)
 class SummaryRefresh:
+    validator_primary_command: str
+    validator_primary_root: str
+    validator_supplementary_command: str
+    validator_findings_breakdown: str
     validator_errors_count: int
     validator_errors_evidence: str
     validator_warnings_count: int
@@ -125,12 +129,78 @@ def summarize_validator_findings(findings: list[dict[str, Any]]) -> dict[str, An
     }
 
 
+def classify_validator_finding(finding: dict[str, Any]) -> str:
+    finding_id = str(finding.get("id", "")).lower()
+    category = str(finding.get("category", "")).lower()
+    text = " ".join(
+        str(finding.get(key, ""))
+        for key in ("id", "category", "title", "details", "recommended_move")
+    ).lower()
+
+    if any(token in text for token in ("path-resolution", "root-selection", "wrong package root")):
+        return "validator_path_resolution"
+    if "profile path not found" in text or "path not found" in text:
+        return "validator_path_resolution"
+    if "test-case" in category or "test-case" in finding_id or finding_id.startswith("production-"):
+        return "tc_quality"
+    if any(
+        token in category
+        for token in (
+            "workflow",
+            "practical",
+            "writer",
+            "review",
+            "matrix",
+            "coverage",
+            "dictionary",
+            "session",
+            "decision",
+        )
+    ):
+        return "process_artifact"
+    return "unrelated_repo"
+
+
+def format_validator_findings_breakdown(findings: list[dict[str, Any]]) -> str:
+    counts = {
+        "tc_quality": 0,
+        "process_artifact": 0,
+        "validator_path_resolution": 0,
+        "unrelated_repo": 0,
+    }
+    for finding in findings:
+        if str(finding.get("category", "")) == SUMMARY_CATEGORY:
+            continue
+        if str(finding.get("severity", "")).lower() not in {"warning", "error"}:
+            continue
+        counts[classify_validator_finding(finding)] += 1
+    return "; ".join(f"{name}={counts[name]}" for name in counts)
+
+
 def build_refresh(root: Path, summary_path: Path) -> SummaryRefresh:
     root = root.resolve()
-    report = artifact_validator.validate(root)
+    summary_abs = summary_path if summary_path.is_absolute() else root / summary_path
+    primary_root = artifact_validator.ft_package_root_for_path(summary_abs) or root
+    primary_root = primary_root.resolve()
+    primary_root_display = _relative_to_root(root, primary_root)
+    report = artifact_validator.validate(primary_root)
     validator_summary = summarize_validator_findings(report.get("findings", []))
+    validator_findings_breakdown = format_validator_findings_breakdown(
+        report.get("findings", [])
+    )
     git_persistence = detect_git_persistence(root, summary_path)
+    supplementary_command = (
+        f"python scripts/validate_agent_artifacts.py --root {_relative_to_root(root, root)} --json"
+        if root != primary_root
+        else "not-run"
+    )
     return SummaryRefresh(
+        validator_primary_command=(
+            f"python scripts/validate_agent_artifacts.py --root {primary_root_display} --json"
+        ),
+        validator_primary_root=primary_root.as_posix(),
+        validator_supplementary_command=supplementary_command,
+        validator_findings_breakdown=validator_findings_breakdown,
         validator_errors_count=int(validator_summary["validator_errors_count"]),
         validator_errors_evidence=str(validator_summary["validator_errors_evidence"]),
         validator_warnings_count=int(validator_summary["validator_warnings_count"]),
@@ -148,6 +218,10 @@ def _cell(value: object) -> str:
 
 def format_field_rows(refresh: SummaryRefresh) -> str:
     rows = [
+        ("validator_primary_command", refresh.validator_primary_command),
+        ("validator_primary_root", refresh.validator_primary_root),
+        ("validator_supplementary_command", refresh.validator_supplementary_command),
+        ("validator_findings_breakdown", refresh.validator_findings_breakdown),
         ("validator_errors_count", refresh.validator_errors_count),
         ("validator_errors_evidence", refresh.validator_errors_evidence),
         ("validator_warnings_count", refresh.validator_warnings_count),

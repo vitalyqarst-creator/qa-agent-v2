@@ -19,6 +19,10 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | per_scope_next_stage_transitions | `yes / not-applicable` |
 | production_tc_clean | `yes / no / mixed / not-applicable` |
 | git_persistence | `tracked / ignored-by-git / mixed / not-applicable` |
+| validator_primary_command | `python scripts/validate_agent_artifacts.py --root <FT package root> --json / not-run` |
+| validator_primary_root | `<absolute FT package root or not-applicable>` |
+| validator_supplementary_command | `<repo-root validator command or not-run>` |
+| validator_findings_breakdown | `tc_quality=<n>; process_artifact=<n>; validator_path_resolution=<n>; unrelated_repo=<n>` |
 | validator_errors_count | `<integer>` |
 | validator_errors_classification | `none / next-stage-blocker / pre-existing-unrelated / validator-false-positive / mixed / not-applicable` |
 | validator_errors_evidence | `<finding ids or not-applicable>` |
@@ -54,6 +58,13 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
   `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
   and update validator counts/evidence, including info fields, plus `git_persistence`
   from the output.
+- For FT-package practical stages, primary validation is:
+  `python scripts/validate_agent_artifacts.py --root <FT package root> --json`.
+  Repo-root validation is supplementary. Keep primary package-root findings
+  separate from repo-root-only findings.
+- Classify validator warning/error findings in `validator_findings_breakdown` as:
+  `tc_quality`, `process_artifact`, `validator_path_resolution` or
+  `unrelated_repo`.
 - If `git_persistence = ignored-by-git`, the stage/final response must explicitly
   say that changed FT/package artifacts are local, ordinary commit/push will not
   include them, and persistence requires `git add -f <paths>` or an export/bundle.

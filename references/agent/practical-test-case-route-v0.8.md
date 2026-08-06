@@ -180,8 +180,21 @@ The summary must list:
 
 If a validator was run, add these fields:
 
+For FT-package practical stages, the canonical validator verdict is the
+package-root run:
+`python scripts/validate_agent_artifacts.py --root <FT package root> --json`.
+Repo-root validation may be run only as supplementary validation. Do not merge
+package-root and repo-root counts into one verdict. The stage summary must show
+the package-root verdict separately from any repo-root finding; a repo-root-only
+path-resolution failure is a `validator_path_resolution` / agent-layer defect,
+not proof that the current scope test cases are bad.
+
 | field | value |
 | --- | --- |
+| validator_primary_command | `python scripts/validate_agent_artifacts.py --root <FT package root> --json` |
+| validator_primary_root | `<absolute FT package root>` |
+| validator_supplementary_command | `<repo-root validator command or not-run>` |
+| validator_findings_breakdown | `tc_quality=<n>; process_artifact=<n>; validator_path_resolution=<n>; unrelated_repo=<n>` |
 | validator_errors_count | `<integer>` |
 | validator_errors_classification | `none / next-stage-blocker / pre-existing-unrelated / validator-false-positive / mixed` |
 | validator_errors_evidence | `<paths/finding ids or not-applicable>` |
@@ -231,6 +244,23 @@ distinguish the cause explicitly:
 - `validator-root-selection-defect`: files and links are correct, but the
   validator resolved the wrong package root;
 - `mixed`: more than one of the above is true.
+
+When reporting validator output, classify every warning/error into one of these
+groups before deciding the next-stage transition:
+
+- `tc_quality`: production test-case content is wrong, non-executable,
+  non-atomic, mistraced, language-invalid or otherwise not review-ready;
+- `process_artifact`: handoff, summary, workflow, matrix, review receipt,
+  writer gate or other practical-route artifact is incomplete or stale;
+- `validator_path_resolution`: artifacts exist and links are correct, but the
+  validator resolved a wrong package/root/path;
+- `unrelated_repo`: finding belongs to another scope/package or old artifact and
+  does not affect the current stage.
+
+Only `tc_quality` and current-scope `process_artifact` findings may block the
+current scope by default. `validator_path_resolution` must be fixed in tooling
+or policy; `unrelated_repo` must be reported separately and must not be used as a
+reason to loop on the current TC content.
 
 Only `workflow-link-stale` may be repaired by editing links. Physical missing
 source files must be restored. Root-selection defects must be fixed in the

@@ -8020,6 +8020,7 @@ def validate_writer_quality_gate_scoped_validator_profile(
     issues: list[str] = []
     evidence: list[str] = []
     validation_root = root.parent if root.is_file() else root
+    writer_gate_ft_root = ft_package_root_for_path(path) or ft_package_root_for_path(root) or validation_root
     for index, row in enumerate(rows, start=2):
         gate_item = row.get("gate_item", "").strip().strip("`")
         status = row.get("status", "").strip().strip("`").lower()
@@ -8041,7 +8042,7 @@ def validate_writer_quality_gate_scoped_validator_profile(
             )
         resolved_profiles: list[Path] = []
         for profile_ref in profile_refs:
-            resolved = resolve_artifact_path(profile_ref, path, root, validation_root)
+            resolved = resolve_artifact_path(profile_ref, path, root, writer_gate_ft_root)
             if resolved is not None:
                 resolved_profiles.append(resolved)
         if not resolved_profiles:

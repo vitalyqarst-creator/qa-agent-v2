@@ -57,6 +57,45 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertEqual(result["validator_info_count"], 1)
         self.assertEqual(result["validator_info_evidence"], "source-quality-many-untitled-sections")
 
+    def test_validator_findings_breakdown_classifies_actionable_groups(self) -> None:
+        helper = self.load_helper()
+
+        result = helper.format_validator_findings_breakdown(
+            [
+                {
+                    "severity": "warning",
+                    "category": "test-cases",
+                    "id": "test-case-non-atomic",
+                },
+                {
+                    "severity": "error",
+                    "category": "workflow",
+                    "id": "workflow-state-stale",
+                },
+                {
+                    "severity": "warning",
+                    "category": "references",
+                    "id": "writer-quality-gate-scoped-validator-profile-invalid",
+                    "details": "profile path not found",
+                },
+                {
+                    "severity": "warning",
+                    "category": "source-quality",
+                    "id": "old-source-quality-note",
+                },
+                {
+                    "severity": "info",
+                    "category": "test-cases",
+                    "id": "ignored-info",
+                },
+            ]
+        )
+
+        self.assertEqual(
+            result,
+            "tc_quality=1; process_artifact=1; validator_path_resolution=1; unrelated_repo=1",
+        )
+
     def test_detect_git_persistence_reports_gitignored_summary(self) -> None:
         helper = self.load_helper()
 
@@ -81,9 +120,49 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
         self.assertIn(".gitignore", result.evidence)
         self.assertIn("fts/*", result.evidence)
 
+    def test_build_refresh_uses_nearest_ft_package_root_as_primary_validator_root(self) -> None:
+        helper = self.load_helper()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            ft_root = repo_root / "fts" / "Partners" / "Partners-v1"
+            summary = ft_root / "work" / "practical-stage-summary.md"
+            (ft_root / "test-cases").mkdir(parents=True)
+            summary.parent.mkdir(parents=True)
+            summary.write_text("# Practical Stage Summary\n", encoding="utf-8")
+            validate_roots: list[Path] = []
+            original_validate = helper.artifact_validator.validate
+            original_detect_git_persistence = helper.detect_git_persistence
+
+            def fake_validate(root: Path):
+                validate_roots.append(root.resolve())
+                return {"findings": []}
+
+            helper.artifact_validator.validate = fake_validate
+            helper.detect_git_persistence = lambda root, summary_path: helper.GitPersistence(
+                "not-applicable",
+                "stubbed",
+            )
+            try:
+                refresh = helper.build_refresh(
+                    repo_root,
+                    Path("fts") / "Partners" / "Partners-v1" / "work" / "practical-stage-summary.md",
+                )
+            finally:
+                helper.artifact_validator.validate = original_validate
+                helper.detect_git_persistence = original_detect_git_persistence
+
+        self.assertEqual([ft_root.resolve()], validate_roots)
+        self.assertIn("--root fts/Partners/Partners-v1 --json", refresh.validator_primary_command)
+        self.assertEqual("python scripts/validate_agent_artifacts.py --root . --json", refresh.validator_supplementary_command)
+
     def test_format_field_rows_outputs_copyable_summary_rows(self) -> None:
         helper = self.load_helper()
         refresh = helper.SummaryRefresh(
+            validator_primary_command="python scripts/validate_agent_artifacts.py --root fts/Partners/Partners-v1 --json",
+            validator_primary_root="C:/repo/fts/Partners/Partners-v1",
+            validator_supplementary_command="python scripts/validate_agent_artifacts.py --root . --json",
+            validator_findings_breakdown="tc_quality=0; process_artifact=3; validator_path_resolution=0; unrelated_repo=0",
             validator_errors_count=0,
             validator_errors_evidence="not-applicable",
             validator_warnings_count=3,
@@ -96,6 +175,9 @@ class RefreshPracticalStageSummaryTests(unittest.TestCase):
 
         output = helper.format_field_rows(refresh)
 
+        self.assertIn("| validator_primary_command | `python scripts/validate_agent_artifacts.py --root fts/Partners/Partners-v1 --json` |", output)
+        self.assertIn("| validator_supplementary_command | `python scripts/validate_agent_artifacts.py --root . --json` |", output)
+        self.assertIn("| validator_findings_breakdown | `tc_quality=0; process_artifact=3; validator_path_resolution=0; unrelated_repo=0` |", output)
         self.assertIn("| validator_errors_count | `0` |", output)
         self.assertIn("| validator_warnings_count | `3` |", output)
         self.assertIn("| validator_info_count | `4` |", output)

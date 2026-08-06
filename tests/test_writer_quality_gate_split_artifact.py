@@ -115,6 +115,62 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
         self.assertNotIn("writer-quality-gate-missing", ids)
         self.assertNotIn("internal-diagnostic-section-in-production-testcases", ids)
 
+    def test_package_relative_scoped_profile_resolves_from_package_and_repo_root(self) -> None:
+        root, _, design_dir = self.make_package()
+        repo_root = root.parents[1]
+        profile_path = (
+            root
+            / "work"
+            / "stage-handoffs"
+            / "01-sample"
+            / "outputs"
+            / "scoped-validator-profile.writer-r1.json"
+        )
+        profile_path.parent.mkdir(parents=True)
+        profile_path.write_text(
+            json.dumps(
+                {
+                    "command": "python scripts/validate_agent_artifacts.py --root fts/Sample --json",
+                    "generated_by": "codex_review_cycle_runner",
+                    "scope_slug": "9.1-sample",
+                    "canonical_test_cases": "test-cases/9.1-sample.md",
+                    "test_design_dir": "work/test-design/9.1-sample",
+                    "current_scope_findings": [],
+                    "unresolved_warning_error_count": 0,
+                }
+            ),
+            encoding="utf-8",
+        )
+        package_relative_profile = "work/stage-handoffs/01-sample/outputs/scoped-validator-profile.writer-r1.json"
+        gate_path = design_dir / "writer-quality-gate.md"
+        gate_path.write_text(
+            "\n".join(
+                [
+                    "# Writer Quality Gate",
+                    "",
+                    "| gate_item | status | evidence | affected_package | required_action | blocks_ready_for_review |",
+                    "| --- | --- | --- | --- | --- | --- |",
+                    f"| `scoped-validator-findings` | `pass` | `{package_relative_profile}` | `WP-01` | `none_required:pass` | `no` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        package_root_issues, _ = self.validator.validate_writer_quality_gate_scoped_validator_profile(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+        repo_root_issues, _ = self.validator.validate_writer_quality_gate_scoped_validator_profile(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            repo_root,
+        )
+
+        self.assertEqual([], package_root_issues)
+        self.assertEqual([], repo_root_issues)
+
     def test_embedded_writer_quality_gate_does_not_satisfy_production_validator(self) -> None:
         root, tc_path, _ = self.make_package()
         embedded_gate = (
