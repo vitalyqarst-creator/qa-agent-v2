@@ -4769,6 +4769,13 @@ PRACTICAL_STAGE_SUMMARY_ALLOWED_ERROR_CLASSIFICATIONS = {
     "not-applicable",
     "not applicable",
 }
+PRACTICAL_CONTRACT_ONLY_REPAIR_STAGE = "contract_only_status_repair"
+PRACTICAL_CONTRACT_ONLY_REPAIR_REQUIRED_FIELDS = {
+    "repair_type",
+    "semantic_change",
+    "affected_tc_ids",
+    "evidence",
+}
 ROUND_CAP_SOURCE_CONTRADICTION_RE = re.compile(
     r"source[_ -]?contradiction\s*(?:=|:|\|)\s*`?(?:yes|no|true|false|да|нет)`?",
     flags=re.IGNORECASE,
@@ -4915,6 +4922,53 @@ def workflow_states_for_ft_package(ft_root: Path) -> list[Path]:
     if not stage_handoffs.exists():
         return []
     return sorted(stage_handoffs.rglob("workflow-state.yaml"))
+
+
+def practical_contract_only_repair_issues(fields: Mapping[str, str]) -> list[str]:
+    """Return concise receipt defects for an explicitly declared status repair."""
+
+    if normalize_markdown_field_name(fields.get("summary_stage", "")) != PRACTICAL_CONTRACT_ONLY_REPAIR_STAGE:
+        return []
+    ft_root_text = strip_markdown_code(fields.get("ft_package_root", ""))
+    ft_root = Path(ft_root_text) if ft_root_text else None
+    scope_ids = [scope_id.strip() for scope_id in fields.get("active_scope_ids", "").split(",") if scope_id.strip()]
+    if ft_root is None or not ft_root.is_dir() or not scope_ids:
+        return ["ft_package_root or active_scope_ids cannot resolve repair receipts"]
+
+    issues: list[str] = []
+    handoff_root = ft_root / "work" / "stage-handoffs"
+    for scope_id in scope_ids:
+        handoffs = sorted(handoff_root.glob(f"{scope_id}-*"))
+        if len(handoffs) != 1:
+            issues.append(f"scope {scope_id}: matching handoff count={len(handoffs)}")
+            continue
+        revision_path = ft_root / "work" / "practical" / handoffs[0].name.split("-", 1)[1] / "tc-revision-summary.md"
+        try:
+            revision_content = revision_path.read_text(encoding="utf-8")
+        except (FileNotFoundError, UnicodeDecodeError):
+            issues.append(f"scope {scope_id}: tc-revision-summary.md is missing or not UTF-8")
+            continue
+        repair_fields = parse_markdown_key_value_fields(
+            extract_markdown_section(revision_content, "Contract-only Repair") or ""
+        )
+        missing_fields = sorted(PRACTICAL_CONTRACT_ONLY_REPAIR_REQUIRED_FIELDS - set(repair_fields))
+        invalid_fields = []
+        if normalize_markdown_field_name(repair_fields.get("repair_type", "")) != PRACTICAL_CONTRACT_ONLY_REPAIR_STAGE:
+            invalid_fields.append("repair_type")
+        if normalize_markdown_field_name(repair_fields.get("semantic_change", "")) not in {"no", "нет"}:
+            invalid_fields.append("semantic_change")
+        if field_is_not_applicable(repair_fields.get("affected_tc_ids", "")):
+            invalid_fields.append("affected_tc_ids")
+        if field_is_not_applicable(repair_fields.get("evidence", "")):
+            invalid_fields.append("evidence")
+        if extract_markdown_section(revision_content, "Status Assertions") is None:
+            invalid_fields.append("Status Assertions")
+        if missing_fields or invalid_fields:
+            details = [f"missing={','.join(missing_fields)}"] if missing_fields else []
+            if invalid_fields:
+                details.append(f"invalid={','.join(invalid_fields)}")
+            issues.append(f"scope {scope_id}: {'; '.join(details)}")
+    return issues
 
 
 def iter_practical_stage_summaries(root: Path) -> list[Path]:
@@ -5128,7 +5182,32 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
     has_current_stage_actions = bool(re.search(r"(?im)^##\s+Current stage actions\s*$", content))
     has_prior_state_context = bool(re.search(r"(?im)^##\s+Prior state context\s*$", content))
     has_legacy_completed_stage_section = bool(re.search(r"(?im)^##\s+Completed In This Stage\s*$", content))
-    if has_legacy_completed_stage_section or (has_current_stage_actions != has_prior_state_context):
+    summary_stage = normalize_markdown_field_name(fields.get("summary_stage", ""))
+    requires_stage_context_split = not field_is_not_applicable(summary_stage)
+    if requires_stage_context_split and (not has_current_stage_actions or not has_prior_state_context):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-current-prior-sections-required",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary does not separate current actions from prior state",
+                details=(
+                    "A named practical stage must distinguish work performed in the current stage from older route "
+                    "history. Otherwise controller handoff can attribute a prior writer revision to a later repair."
+                ),
+                path=display_path,
+                evidence=[
+                    f"summary_stage={fields.get('summary_stage', '<missing>')}",
+                    f"has_current_stage_actions={has_current_stage_actions}",
+                    f"has_prior_state_context={has_prior_state_context}",
+                ],
+                recommended_action=(
+                    "Add separate Current stage actions and Prior state context sections; keep each statement in "
+                    "the section that reflects when it actually occurred."
+                ),
+            )
+        )
+    elif has_legacy_completed_stage_section or (has_current_stage_actions != has_prior_state_context):
         findings.append(
             Finding(
                 id="practical-stage-summary-current-prior-sections-missing",
@@ -5148,6 +5227,26 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Replace legacy Completed In This Stage sections with separate Current stage actions and "
                     "Prior state context sections."
+                ),
+            )
+        )
+    contract_repair_issues = practical_contract_only_repair_issues(fields)
+    if contract_repair_issues:
+        findings.append(
+            Finding(
+                id="practical-contract-only-status-repair-receipt-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Contract-only repair receipts are incomplete",
+                details=(
+                    "Every active scope must record the repair type, semantic_change=no, affected test cases, "
+                    "validator evidence and refreshed Status Assertions in its writer revision summary."
+                ),
+                path=display_path,
+                evidence=contract_repair_issues[:20],
+                recommended_action=(
+                    "Add the canonical Contract-only Repair table and Status Assertions to each active scope "
+                    "tc-revision-summary.md without changing test design."
                 ),
             )
         )
@@ -5788,10 +5887,12 @@ def validate_practical_stage_summary_report_consistency(
     ]
     actual_errors_count = sum(1 for finding in counted_findings if finding.severity == "error")
     actual_warnings_count = sum(1 for finding in counted_findings if finding.severity == "warning")
+    actual_info_count = sum(1 for finding in counted_findings if finding.severity == "info")
     actual_finding_ids = {finding.id for finding in counted_findings}
 
     declared_errors_count = parse_nonnegative_int(fields.get("validator_errors_count", ""))
     declared_warnings_count = parse_nonnegative_int(fields.get("validator_warnings_count", ""))
+    declared_info_count = parse_nonnegative_int(fields.get("validator_info_count", ""))
 
     if "validator_errors_count" in fields and declared_errors_count is None:
         findings.append(
@@ -5858,6 +5959,91 @@ def validate_practical_stage_summary_report_consistency(
                 recommended_action="Rerun the validator after repair and update validator_warnings_count before handoff.",
             )
         )
+
+    if "validator_info_count" in fields and declared_info_count is None:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-info-count-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has invalid validator info count",
+                details="validator_info_count must be a non-negative integer from the latest validator run.",
+                path=display_path,
+                evidence=[f"validator_info_count={fields.get('validator_info_count', '<missing>')}"],
+                recommended_action="Rerun the validator and copy the numeric info_count value into the summary.",
+            )
+        )
+    elif declared_info_count is not None and declared_info_count != actual_info_count:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-validator-info-count-stale",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has stale validator info count",
+                details=(
+                    "The declared validator_info_count does not match the current validator findings outside "
+                    "practical-stage-summary self-checks."
+                ),
+                path=display_path,
+                evidence=[
+                    f"declared={declared_info_count}",
+                    f"actual={actual_info_count}",
+                ],
+                recommended_action="Rerun the validator after repair and update validator_info_count before handoff.",
+            )
+        )
+
+    for short_field, canonical_field, actual_count in (
+        ("errors_count", "validator_errors_count", actual_errors_count),
+        ("warnings_count", "validator_warnings_count", actual_warnings_count),
+        ("info_count", "validator_info_count", actual_info_count),
+    ):
+        if short_field not in fields:
+            continue
+        short_count = parse_nonnegative_int(fields[short_field])
+        canonical_count = parse_nonnegative_int(fields.get(canonical_field, ""))
+        if short_count is None:
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-duplicate-count-invalid",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has an invalid duplicate validator count",
+                    details=(
+                        "A repeated validator count in a secondary summary table must be numeric and agree with "
+                        "the canonical validator_* count fields."
+                    ),
+                    path=display_path,
+                    evidence=[f"{short_field}={fields[short_field]}"],
+                    recommended_action=(
+                        "Remove the duplicate count row or refresh it from the same validator result as the "
+                        "canonical Gate Fields."
+                    ),
+                )
+            )
+        elif short_count != actual_count or (canonical_count is not None and short_count != canonical_count):
+            findings.append(
+                Finding(
+                    id="practical-stage-summary-validator-duplicate-count-mismatch",
+                    severity="error",
+                    category="practical-stage-summary",
+                    title="Practical stage summary has inconsistent duplicate validator counts",
+                    details=(
+                        "A secondary validator table conflicts with the canonical validator_* fields or current "
+                        "validator result, making the stage summary ambiguous."
+                    ),
+                    path=display_path,
+                    evidence=[
+                        f"{short_field}={short_count}",
+                        f"{canonical_field}={canonical_count if canonical_count is not None else '<missing>'}",
+                        f"actual={actual_count}",
+                    ],
+                    recommended_action=(
+                        "Remove duplicate validator count rows or make every repeated count match the latest "
+                        "validator result exactly."
+                    ),
+                )
+            )
 
     declared_evidence_ids = (
         extract_finding_ids_from_summary_evidence(fields.get("validator_errors_evidence", ""))

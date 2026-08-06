@@ -185,6 +185,117 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
 
         self.assertIn("practical-stage-summary-current-prior-sections-missing", ids)
 
+    def test_named_stage_requires_current_and_prior_state_sections(self) -> None:
+        root = self.make_package(summary_stage="contract-only-status-repair")
+        summary = root / "work" / "practical-stage-summary.md"
+        text = summary.read_text(encoding="utf-8")
+        text = text.replace("## Current stage actions\n\n- Подготовлен handoff текущего этапа.\n\n", "")
+        text = text.replace("## Prior state context\n\n- Результаты предыдущих этапов здесь не повторяются.\n\n", "")
+        summary.write_text(text, encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-current-prior-sections-required", ids)
+
+    def test_contract_only_status_repair_requires_per_scope_receipt(self) -> None:
+        root = self.make_package(summary_stage="contract-only-status-repair")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-contract-only-status-repair-receipt-invalid", ids)
+
+    def test_contract_only_status_repair_accepts_complete_receipt(self) -> None:
+        root = self.make_package(summary_stage="contract-only-status-repair")
+        revision = root / "work" / "practical" / "sample" / "tc-revision-summary.md"
+        revision.parent.mkdir(parents=True)
+        revision.write_text(
+            "\n".join(
+                [
+                    "# TC Revision Summary: sample",
+                    "",
+                    "## Status Assertions",
+                    "",
+                    "| tc_id | status_after_revision |",
+                    "| --- | --- |",
+                    "| `TC-SAMPLE-001` | `needs-test-data` |",
+                    "",
+                    "## Contract-only Repair",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    "| repair_type | `contract_only_status_repair` |",
+                    "| semantic_change | `no` |",
+                    "| affected_tc_ids | `TC-SAMPLE-001` |",
+                    "| evidence | `writer-revision-summary-missing-status-assertions` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertNotIn("practical-contract-only-status-repair-receipt-invalid", ids)
+
+    def test_contract_only_status_repair_rejects_semantic_change(self) -> None:
+        root = self.make_package(summary_stage="contract-only-status-repair")
+        revision = root / "work" / "practical" / "sample" / "tc-revision-summary.md"
+        revision.parent.mkdir(parents=True)
+        revision.write_text(
+            "\n".join(
+                [
+                    "## Status Assertions",
+                    "",
+                    "| tc_id | status_after_revision |",
+                    "| --- | --- |",
+                    "| `TC-SAMPLE-001` | `needs-test-data` |",
+                    "",
+                    "## Contract-only Repair",
+                    "",
+                    "| field | value |",
+                    "| --- | --- |",
+                    "| repair_type | `contract_only_status_repair` |",
+                    "| semantic_change | `yes` |",
+                    "| affected_tc_ids | `TC-SAMPLE-001` |",
+                    "| evidence | `writer-revision-summary-missing-status-assertions` |",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-contract-only-status-repair-receipt-invalid", ids)
+
+    def test_rejects_conflicting_duplicate_validator_count(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        with summary.open("a", encoding="utf-8") as handle:
+            handle.write(
+                "\n## Secondary Validator Report\n\n"
+                "| field | value |\n"
+                "| --- | --- |\n"
+                "| errors_count | `1` |\n"
+            )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-validator-duplicate-count-mismatch", ids)
+
+    def test_rejects_stale_validator_info_count(self) -> None:
+        root = self.make_package()
+        summary = root / "work" / "practical-stage-summary.md"
+        text = summary.read_text(encoding="utf-8").replace(
+            "| validator_warnings_count | `0` |",
+            "| validator_info_count | `1` |\n| validator_warnings_count | `0` |",
+        )
+        summary.write_text(text, encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-validator-info-count-stale", ids)
+
     def test_rejects_unapproved_split_between_code_and_ft_package_roots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)

@@ -69,6 +69,11 @@ Record it in the same revision summary:
 
 Refresh `## Status Assertions` and `practical-stage-summary.md`, including its
 exact Code Version Gate commit, before the final review handoff.
+For this repair, the package summary's `Current stage actions` must describe
+only the contract repair; describe the earlier bounded writer revision under
+`Prior state context`. Its canonical `validator_*_count` values must come from
+the same latest validator result; do not leave conflicting duplicate counts in
+another summary table.
 
 ## Writer Response Rules
 

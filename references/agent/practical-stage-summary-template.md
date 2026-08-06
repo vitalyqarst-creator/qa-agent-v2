@@ -65,6 +65,9 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 - Explanations belong in `next_safe_step`, scope `reason` or a short notes section.
 - Keep `Current stage actions` and `Prior state context` separate. A summary that
   mixes old route history into current-stage actions is not a clear handoff.
+- For every named `summary_stage`, both sections are mandatory. In a
+  `contract-only-status-repair`, `Current stage actions` may describe only the
+  repair; the preceding writer revision belongs in `Prior state context`.
 - After every repair, run:
   `python scripts/refresh_practical_stage_summary.py --root . --summary <path> --print-fields`
   and update validator counts/evidence, including info fields, plus `git_persistence`
@@ -81,6 +84,11 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 - Classify validator warning/error findings in `validator_findings_breakdown` as:
   `tc_quality`, `process_artifact`, `validator_path_resolution` or
   `unrelated_repo`.
+- `validator_errors_count`, `validator_warnings_count` and
+  `validator_info_count` are the canonical counts. Do not repeat them as
+  unprefixed `errors_count`, `warnings_count` or `info_count`; if a secondary
+  report table keeps such fields for a consumer, every duplicate must exactly
+  match the canonical fields and the same validator run.
 - If `git_persistence = ignored-by-git`, the stage/final response must explicitly
   say that changed FT/package artifacts are local, ordinary commit/push will not
   include them, and persistence requires `git add -f <paths>` or an export/bundle.
