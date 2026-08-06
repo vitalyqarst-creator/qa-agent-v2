@@ -25,6 +25,11 @@
 | `gap-admissibility` | `pass` | Все `GAP-*` проверены: visible UI/API behavior не спрятан в gap, mixed rows split-нуты. | `WP-01` | none_required:pass | `no` |
 | `runtime-language-style` | `pass` | Runtime-поля TC написаны по-русски и не содержат agent-process фраз вроде `source-backed`, `runtime-prose`, `semantic projection`. | `all` | none_required:pass | `no` |
 | `tc-regression-smells` | `pass` | В canonical TC отсутствуют placeholder traceability, source-rule oracle, duplicate-positive, downstream-local rejection, injected requiredness, optional-as-required, post-save input, generic editability, nondeterministic negative oracle, executable unresolved GAP, ambiguous UI alias и read-only cleanup smells. | `all` | none_required:pass | `no` |
+| `tc-metadata-integrity` | `pass` | У каждого `TC-*` заполнены канонические metadata-поля; тип соответствует полярности проверки. | `all` | none_required:pass | `no` |
+| `step-executability` | `pass` | Шаги пронумерованы, не ссылаются на шаги другого TC и не содержат условных альтернатив выполнения. | `all` | none_required:pass | `no` |
+| `fixture-resolution` | `pass` | Каждый упомянутый fixture существует в каталоге либо полностью раскрыт в текущем TC. | `all` | none_required:pass | `no` |
+| `closed-dictionary-completeness` | `pass` | Для закрытого справочника проверено «все и только» значения из `dictionary-inventory.md`. | `WP-01` | none_required:pass | `no` |
+| `boundary-class-completeness` | `pass` | Для применимых ограничений описаны границы, допустимые и недопустимые эквивалентные значения. | `WP-01` | none_required:pass | `no` |
 | `semantic-compression` | `fail` | `ATOM-017` закрывает `GSR 34`-`GSR 58` одним scenario TC. | `WP-02` | Переписать package от Source Table Normalization до TC. | `yes` |
 ```
 
@@ -53,7 +58,12 @@
 - `design-plan-atomicity`: одна executable plan row имеет один `check_type`, один `input_class`, один `single_expected_behavior` и один `TC-*`/`GAP-*`.
 - `scenario-does-not-replace-atomic`: scenario/use-case TC являются дополнительными и не заменяют atomic positive, negative, boundary, dependency или action TC.
 - `tc-atomicity`: `TC-*` не объединяют независимые pass/fail decisions.
+- `tc-metadata-integrity`: у каждого `TC-*` есть канонические поля `Название`, `Тип`, `Приоритет`, `package_id`, `Трассировка`; `Positive` не используется для проверки отказа, а `Negative` не скрывает позитивную приемку.
+- `step-executability`: шаги имеют непрерывную нумерацию внутри TC, содержат конкретное действие или проверку, не ссылаются на другой TC и не предлагают альтернативы вида «если действие доступно».
 - `test-data-specificity`: validation/boundary/equivalence TC используют конкретные значения или именованные классы, а не placeholders вроде `значение, нарушающее правило`.
+- `fixture-resolution`: ссылка на `FX-*` допустима только на существующий fixture catalog или на полностью раскрытые данные в самом TC. Нельзя подменять реальную интеграционную/DaData запись выдуманным названием организации.
+- `closed-dictionary-completeness`: если source/support определяет закрытый перечень, план и TC проверяют присутствие всех разрешенных значений и отсутствие дополнительных; два случайных примера не являются покрытием перечня.
+- `boundary-class-completeness`: для digits-only отдельно представлены допустимые цифры и недопустимые классы (латиница, кириллица, пробел, знак/дефис, точка/десятичный разделитель, спецсимвол) в применимом объеме; для exact/min/max length есть границы и соседние значения.
 - `tc-regression-smells`: canonical TC file не содержит повторяющиеся canary-defects: placeholder `-` / `N/A`, source-rule oracle, duplicate modeled as positive save, downstream local rejection, injected requiredness, optional-as-required, field input after save, generic editability steps, dictionary TC без `все и только активные значения`, nondeterministic negative oracle через `или`, executable unresolved `GAP-*`, ambiguous UI alias/action, derived checks без source/rule derivation, шаблонное cleanup-постусловие в read-only TC.
 - `internal-observability`: internal/API/RabbitMQ/model/database behavior без observable artifact остается `GAP-*`/`unclear`.
 - `action-observability`: action/async TC со статусом `covered` называют конкретный observable result или artifact; `action initiated` без evidence остается `GAP-*`/`unclear`.

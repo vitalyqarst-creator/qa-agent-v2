@@ -30,6 +30,12 @@ Resolver должен читать JSON-блок ниже как канонич�
         "AGENTS.md"
       ]
     },
+    "policy_core": {
+      "rationale": "Global policy only for a skill and route already selected by the controller; the dispatch map is not needed again.",
+      "paths": [
+        "AGENTS.md"
+      ]
+    },
     "review_cycle_core": {
       "rationale": "Session-based writer/reviewer cycle contract and Codex SDK orchestration rules.",
       "paths": [
@@ -62,13 +68,23 @@ Resolver должен читать JSON-блок ниже как канонич�
       "paths": [
         "skills/ft-scope-analyzer/SKILL.md",
         "references/agent/practical-test-case-route-v0.8.md",
-        "references/qa/coverage-class-catalog.md",
-        "references/agent/source-selection-format.md",
         "references/agent/scope-options-format.md",
         "references/agent/scope-clarification-requests-format.md",
         "references/agent/source-parity-check-format.md",
         "references/agent/dictionary-inventory-format.md",
         "references/agent/mockup-visual-inventory-format.md"
+      ]
+    },
+    "scope_practical_source_details": {
+      "rationale": "Load only while repairing source selection or its evidence, not for ordinary scoped analysis.",
+      "paths": [
+        "references/agent/source-selection-format.md"
+      ]
+    },
+    "scope_practical_design_details": {
+      "rationale": "Load coverage classes only when the scope analysis must classify a concrete test-design dimension.",
+      "paths": [
+        "references/qa/coverage-class-catalog.md"
       ]
     },
     "writer_prepared_package_core": {
@@ -310,7 +326,12 @@ Resolver должен читать JSON-блок ниже как канонич�
         "references/agent/practical-test-case-route-v0.8.md",
         "references/qa/review-findings-format.md",
         "references/qa/test-case-runtime-format.md",
-        "references/qa/coverage-runtime-checklist.md",
+        "references/qa/coverage-runtime-checklist.md"
+      ]
+    },
+    "reviewer_practical_coverage_details": {
+      "rationale": "Load for a concrete coverage, boundary, dictionary or traceability finding; excluded from a first compact independent pass.",
+      "paths": [
         "references/qa/coverage-class-catalog.md",
         "references/qa/traceability-rules.md"
       ]
@@ -507,8 +528,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "scope",
       "mode": "practical_v0_8",
       "scope_profile": "any",
-      "required_groups": ["global_core", "scope_practical_core"],
-      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts"],
+      "required_groups": ["policy_core", "scope_practical_core"],
+      "conditional_groups": ["scope_table_artifacts", "scope_ui_artifacts", "scope_practical_source_details", "scope_practical_design_details"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 160,
       "rationale": "Compact practical scope brief for ordinary test-case writing without source assertions, bridge or immutable runner routing."
@@ -529,8 +550,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "reviewer",
       "mode": "practical_v0_8",
       "scope_profile": "any",
-      "required_groups": ["global_core", "reviewer_practical_core", "quality_rule_cards"],
-      "conditional_groups": ["scope_practical_core", "writer_revision_artifacts", "style_remediation_compact"],
+      "required_groups": ["policy_core", "reviewer_practical_core", "quality_rule_cards"],
+      "conditional_groups": ["scope_practical_core", "reviewer_practical_coverage_details", "writer_revision_artifacts", "style_remediation_compact"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 160,
       "rationale": "Practical independent review context for separate-session matrix review before TC writing and TC review after matrix acceptance."
@@ -606,8 +627,8 @@ Resolver должен читать JSON-блок ниже как канонич�
       "phase": "writer",
       "mode": "revision_from_findings",
       "scope_profile": "any",
-      "required_groups": ["global_core", "writer_core", "quality_rule_cards", "writer_process_artifacts", "writer_revision_artifacts"],
-      "conditional_groups": ["writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
+      "required_groups": ["policy_core", "writer_core", "quality_rule_cards", "writer_revision_artifacts"],
+      "conditional_groups": ["writer_process_artifacts", "writer_table_artifacts", "writer_ui_artifacts", "writer_numeric_coverage", "writer_integration_coverage", "writer_validator_failure_deep", "style_remediation"],
       "audit_only_groups": ["audit_only_history", "governance_audit_only"],
       "budget_limit_kib": 180,
       "rationale": "Revision of an existing TC set by structured reviewer findings without changing source/scope."

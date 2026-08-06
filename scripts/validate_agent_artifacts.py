@@ -128,7 +128,7 @@ CODEX_THREAD_ID_RE = re.compile(
     r"^(?:thread:)?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
     re.IGNORECASE,
 )
-ALLOWED_REVIEW_MODES = {"traceability", "structure", "test-design", "scope_gap_review"}
+ALLOWED_REVIEW_MODES = {"traceability", "structure", "test-design", "scope_gap_review", "matrix_review", "tc_review"}
 ALLOWED_FINDING_SEVERITIES = {"error", "warning", "info"}
 ALLOWED_FINDING_CATEGORIES = {
     "coverage",
@@ -1323,9 +1323,15 @@ def iter_traceability_matrices(root: Path) -> list[Path]:
 
 
 def iter_review_findings(root: Path) -> list[Path]:
-    if root.is_file() and re.fullmatch(r"round-\d+-findings\.md", root.name):
+    if root.is_file() and (re.fullmatch(r"round-\d+-findings\.md", root.name) or root.name == "review-findings.md"):
         return [root]
-    return sorted(validation_scope(root).rglob("round-*-findings.md"))
+    scope = validation_scope(root)
+    return sorted(
+        {
+            *scope.rglob("round-*-findings.md"),
+            *scope.rglob("review-findings.md"),
+        }
+    )
 
 
 def iter_writer_responses(root: Path) -> list[Path]:
@@ -4661,6 +4667,12 @@ PRACTICAL_STAGE_SUMMARY_REQUIRED_OPERATIONAL_FIELDS = {
     "source_restore_provenance",
     "source_restore_sha256",
 }
+PRACTICAL_TC_REVIEW_CURRENT_ARTIFACT_ALIASES = {
+    "review_independence": ("tc_review_independence", "reviewer_tc_independence"),
+    "session_log": ("tc_review_session_log", "reviewer_tc_session_log"),
+    "decision_log": ("tc_review_decision_log", "reviewer_tc_decision_log"),
+    "review_findings": ("tc_review_findings", "reviewer_tc_findings"),
+}
 PRACTICAL_STAGE_SUMMARY_ALLOWED_TRANSITIONS = {
     "writer allowed",
     "writer conditional",
@@ -5283,6 +5295,29 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action=(
                     "Record SHA-256 for restored source package files or state source_restore_provenance=not-applicable "
                     "when no restore happened."
+                ),
+            )
+        )
+
+    summary_stage = normalize_markdown_field_name(fields.get("summary_stage", ""))
+    is_tc_review_summary = "tc-review" in summary_stage or "tc_review" in summary_stage
+    if is_tc_review_summary and not re.search(r"(?im)^##\s+TC Review Snapshot\s*$", content):
+        findings.append(
+            Finding(
+                id="practical-stage-summary-tc-review-snapshot-missing",
+                severity="error",
+                category="practical-stage-summary",
+                title="TC review summary lacks the current-scope snapshot",
+                details=(
+                    "A TC-review handoff must contain a TC Review Snapshot so the next writer stage can see the "
+                    "accepted scopes, blocking finding counts, and the independent reviewer evidence without "
+                    "reconstructing state from stale narrative sections."
+                ),
+                path=display_path,
+                evidence=[f"summary_stage={fields.get('summary_stage', '<missing>')}"],
+                recommended_action=(
+                    "Add a TC Review Snapshot table with scope, verdict, blocking_finding_count, "
+                    "reviewer_task_or_session and reviewer_execution_surface columns."
                 ),
             )
         )
@@ -6887,6 +6922,7 @@ def validate_review_findings(
     invalid_traceability_refs: list[str] = []
     missing_traceability_refs: list[str] = []
     duplicate_ids: list[str] = []
+    non_russian_human_fields: list[str] = []
 
     for finding_id, block in blocks:
         if finding_id in seen_ids:
@@ -6911,6 +6947,16 @@ def validate_review_findings(
             invalid_enums.append(f"{finding_id}:category={category}")
         if status is not None and status not in ALLOWED_FINDING_STATUSES:
             invalid_enums.append(f"{finding_id}:status={status}")
+
+        # Technical field names and enums are canonical English, but review prose
+        # is handed to Russian-speaking users and writers. English-only prose is
+        # a process leak, not a release-grade finding.
+        for field_name in ("title", "problem", "required_change", "human_summary", "change_summary"):
+            value = fields.get(field_name, "").strip()
+            ascii_words = re.findall(r"[A-Za-z]{3,}", value)
+            has_cyrillic = bool(re.search(r"[А-Яа-яЁё]", value))
+            if value and not has_cyrillic and len(" ".join(ascii_words)) >= 12:
+                non_russian_human_fields.append(f"{finding_id}:{field_name}={value[:100]}")
 
         if review_mode == "traceability":
             traceability_ref = fields.get("traceability_ref")
@@ -6975,6 +7021,22 @@ def validate_review_findings(
                 recommended_action="Use traceability_ref from the matrix atom_id column or a coverage_gap:<short-id> placeholder.",
             )
         )
+    if non_russian_human_fields:
+        findings.append(
+            Finding(
+                id="review-findings-nonrussian-human-field",
+                severity="error",
+                category="review-findings",
+                title="Review findings contain English prose in user-facing fields",
+                details=(
+                    "Russian is required for title, problem, required change and human summaries; "
+                    "only canonical field names, enums, ids and source literals may remain English."
+                ),
+                path=display_path,
+                evidence=non_russian_human_fields[:20],
+                recommended_action="Rewrite the affected finding prose in Russian without translating technical ids or enum values.",
+            )
+        )
     if missing_traceability_refs:
         severity = "warning" if findings_policy == "strict" else "info"
         findings.append(
@@ -6993,12 +7055,13 @@ def validate_review_findings(
             )
         )
 
+    has_errors = any(finding.severity == "error" for finding in findings)
     has_warnings = any(finding.severity == "warning" for finding in findings)
     checks.append(
         Check(
             "review-findings-format",
-            "warn" if has_warnings else "pass",
-            "Review findings format contract has issues." if has_warnings else "Review findings format contract passed.",
+            "fail" if has_errors else ("warn" if has_warnings else "pass"),
+            "Review findings format contract has issues." if (has_errors or has_warnings) else "Review findings format contract passed.",
             display_path,
         )
     )
@@ -7406,7 +7469,12 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "design-plan-atomicity",
     "scenario-does-not-replace-atomic",
     "tc-atomicity",
+    "tc-metadata-integrity",
+    "step-executability",
     "test-data-specificity",
+    "fixture-resolution",
+    "closed-dictionary-completeness",
+    "boundary-class-completeness",
     "internal-observability",
     "action-observability",
     "semantic-req-id-parity",
@@ -20018,6 +20086,56 @@ def validate_workflow_state(
             checks.append(Check("workflow-state-latest-artifact-links", "warn", "Some latest artifact links are missing.", display_path))
         else:
             checks.append(Check("workflow-state-latest-artifact-links", "pass", "Latest artifact links resolve.", display_path))
+
+        # Writer revision follows TC review. Generic aliases must therefore expose
+        # the same current artifacts as the dedicated TC-review aliases; otherwise
+        # the writer can silently consume an older matrix-review handoff.
+        if (
+            state.get("current_stage") == "ft-test-case-writer"
+            and state.get("stage_status") == "ready-for-writer-revision"
+            and normalize_markdown_field_name(str(state.get("review_mode", ""))) == "tc_review"
+        ):
+            stale_current_aliases: list[str] = []
+            missing_current_aliases: list[str] = []
+            for generic_alias, dedicated_aliases in PRACTICAL_TC_REVIEW_CURRENT_ARTIFACT_ALIASES.items():
+                dedicated_values = [
+                    latest_artifacts.get(alias)
+                    for alias in dedicated_aliases
+                    if isinstance(latest_artifacts.get(alias), str) and latest_artifacts.get(alias).strip()
+                ]
+                if not dedicated_values:
+                    continue
+                generic_value = latest_artifacts.get(generic_alias)
+                if not isinstance(generic_value, str) or not generic_value.strip():
+                    missing_current_aliases.append(
+                        f"{generic_alias}; expected={dedicated_aliases[0]}={dedicated_values[0]}"
+                    )
+                elif generic_value.strip() not in {value.strip() for value in dedicated_values}:
+                    stale_current_aliases.append(
+                        f"{generic_alias}={generic_value}; expected={dedicated_values[0]}"
+                    )
+            if missing_current_aliases or stale_current_aliases:
+                findings.append(
+                    Finding(
+                        id="workflow-state-stale-current-tc-review-alias",
+                        severity="error",
+                        category="workflow-state",
+                        title="Workflow state points generic current artifacts to an older review",
+                        details=(
+                            "A writer revision after TC review must expose the current independent review through "
+                            "generic latest_artifacts aliases as well as the dedicated tc_review aliases."
+                        ),
+                        path=display_path,
+                        evidence=[*missing_current_aliases, *stale_current_aliases][:20],
+                        recommended_action=(
+                            "Set review_independence, session_log, decision_log and review_findings to the "
+                            "current TC-review artifacts before routing writer revision."
+                        ),
+                    )
+                )
+                checks.append(Check("workflow-state-current-tc-review-aliases", "fail", "Current TC-review aliases are missing or stale.", display_path))
+            else:
+                checks.append(Check("workflow-state-current-tc-review-aliases", "pass", "Current TC-review aliases are synchronized.", display_path))
 
         scope_requires_mockup_inventory = workflow_requires_mockup_visual_inventory(state, path, root, ft_root)
         if scope_requires_mockup_inventory and state.get("current_stage") in {"ft-scope-analyzer", "ft-test-case-writer"}:

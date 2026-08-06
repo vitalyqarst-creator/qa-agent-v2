@@ -34,6 +34,15 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
 | source_restore_provenance | `<source path/checkpoint or not-applicable>` |
 | source_restore_sha256 | `<SHA-256 or not-applicable>` |
 
+## TC Review Snapshot
+
+Заполняй этот раздел только после `tc_review`. Он фиксирует именно текущий review
+и не заменяет полные `review-findings.md` / `review-independence.md`.
+
+| scope | verdict | blocking_finding_count | reviewer_task_or_session | reviewer_execution_surface |
+| --- | --- | --- | --- | --- |
+| `<scope-slug>` | `tc-accepted / tc-changes-required` | `<integer>` | `<Codex task/thread id>` | `codex-task / codex-thread` |
+
 ## Scope transitions
 
 | scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |
@@ -70,3 +79,6 @@ v0.8.1. The file is a user-facing handoff and a machine-checkable gate.
   include them, and persistence requires `git add -f <paths>` or an export/bundle.
 - Link this file from affected `workflow-state.yaml` files or from a
   package-level state/index inside the actual `ft_package_root`.
+- После `tc_review` generic aliases `review_independence`, `session_log`,
+  `decision_log` и `review_findings` в каждом `workflow-state.yaml` должны
+  ссылаться на те же текущие артефакты, что и dedicated `tc_review_*` aliases.

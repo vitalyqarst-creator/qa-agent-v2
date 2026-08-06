@@ -112,6 +112,23 @@ TC_REVIEW_FINDINGS_SEPARATE_SESSION = TC_REVIEW_FINDINGS_SAME_SESSION.replace(
 )
 
 
+TC_REVIEW_FINDING_WITH_ENGLISH_PROSE = """# TC Review Findings
+
+### FINDING-001
+**Review Mode:** tc_review
+**Severity:** error
+**Category:** test-design
+**Coverage Dimension:** boundary
+**Test Case ID:** TC-SAMPLE-001
+**Title:** Missing lower boundary coverage for the numeric field
+**Problem:** The test case checks only the maximum value and omits the minimum accepted value.
+**Evidence:** `TC-SAMPLE-001`
+**Required Change:** Add one atomic test case for the lower boundary acceptance.
+**Source Reference:** `Table 1`
+**Status:** open
+"""
+
+
 INVALID_REVIEW_INDEPENDENCE = """# Review Independence
 
 | field | value |
@@ -324,6 +341,48 @@ class PracticalReviewIndependenceValidatorTests(unittest.TestCase):
         )
 
         self.assertIn("test-case-forbidden-formulation-smell", ids)
+
+    def test_review_findings_reject_english_only_human_prose(self) -> None:
+        ids = self.finding_ids(
+            self.make_package(
+                review_independence=VALID_REVIEW_INDEPENDENCE,
+                review_findings=TC_REVIEW_FINDING_WITH_ENGLISH_PROSE,
+            )
+        )
+
+        self.assertIn("review-findings-nonrussian-human-field", ids)
+
+    def test_workflow_rejects_stale_generic_aliases_after_tc_review(self) -> None:
+        root = self.make_package(
+            review_independence=VALID_REVIEW_INDEPENDENCE,
+            review_findings=TC_REVIEW_FINDINGS_SEPARATE_SESSION,
+        )
+        self.write_ready_for_writer_revision_workflow(root)
+        practical = root / "work" / "practical" / "sample-scope"
+        for name in ("old-session.md", "current-session.md", "old-decision.md", "current-decision.md"):
+            (practical / name).write_text("# Artifact\n", encoding="utf-8")
+        workflow = root / "work" / "stage-handoffs" / "01-sample" / "workflow-state.yaml"
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8").replace(
+                "  review_independence: work/practical/sample-scope/review-independence.md",
+                "\n".join(
+                    [
+                        "  review_independence: work/practical/sample-scope/review-independence.md",
+                        "  tc_review_independence: work/practical/sample-scope/current-independence.md",
+                        "  session_log: work/practical/sample-scope/old-session.md",
+                        "  reviewer_tc_session_log: work/practical/sample-scope/current-session.md",
+                        "  decision_log: work/practical/sample-scope/old-decision.md",
+                        "  reviewer_tc_decision_log: work/practical/sample-scope/current-decision.md",
+                    ]
+                ),
+            ),
+            encoding="utf-8",
+        )
+        (practical / "current-independence.md").write_text(VALID_REVIEW_INDEPENDENCE, encoding="utf-8")
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("workflow-state-stale-current-tc-review-alias", ids)
 
 
 if __name__ == "__main__":

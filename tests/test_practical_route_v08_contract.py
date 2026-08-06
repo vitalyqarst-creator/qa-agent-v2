@@ -93,6 +93,22 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("runtime-language-style", validator)
         self.assertIn("production-runtime-agent-process-language-leak", validator)
 
+    def test_writer_gate_contains_recurrent_reviewer_defect_checks(self) -> None:
+        writer = self.read("skills/ft-test-case-writer/SKILL.md")
+        gate = self.read("references/agent/writer-quality-gate-format.md")
+        validator = self.read("scripts/validate_agent_artifacts.py")
+
+        for item in (
+            "tc-metadata-integrity",
+            "step-executability",
+            "fixture-resolution",
+            "closed-dictionary-completeness",
+            "boundary-class-completeness",
+        ):
+            self.assertIn(item, writer)
+            self.assertIn(item, gate)
+            self.assertIn(item, validator)
+
     def test_runtime_policy_requires_helpers_for_nontrivial_json_markdown_work(self) -> None:
         agents = self.read("AGENTS.md")
         policy = self.read("references/agent/runtime-environment-encoding-policy.md")
