@@ -89,10 +89,18 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
             "| --- | --- | --- | --- | --- | --- |",
         ]
         for item in sorted(self.validator.WRITER_QUALITY_GATE_REQUIRED_ITEMS):
-            evidence = "`validator.json`" if item == "scoped-validator-findings" else "checked"
+            evidence = {
+                "scoped-validator-findings": "`validator.json`",
+                "source-obligation-completeness": "`source-row-inventory.md` и `test-design-matrix.md` сопоставлены.",
+                "expected-result-singularity": "`test-cases/9.1-sample.md`: `TC-SAMPLE-001`.",
+                "creation-form-isolation-coverage": "`test-design-matrix.md`: `TC-SAMPLE-001`; создание независимого объекта не применимо: `not_applicable:SRC-001`.",
+            }.get(item, "checked")
             rows.append(f"| `{item}` | `pass` | {evidence} | `WP-01` | `none_required:pass` | `no` |")
         (design_dir / "writer-quality-gate.md").write_text(
-            "# Writer Quality Gate\n\n" + "\n".join(rows) + "\n",
+            "# Writer Quality Gate\n\n"
+            f"**Версия контракта:** `{self.validator.WRITER_QUALITY_GATE_CONTRACT_VERSION}`\n\n"
+            + "\n".join(rows)
+            + "\n",
             encoding="utf-8",
         )
 
@@ -137,6 +145,52 @@ class WriterQualityGateSplitArtifactTests(unittest.TestCase):
 
         self.assertIn(
             "writer-quality-gate-missing-required-items",
+            {finding.id for finding in findings},
+        )
+
+    def test_current_gate_contract_and_semantic_evidence_are_required(self) -> None:
+        root, _, design_dir = self.make_package()
+        self.write_valid_gate(design_dir)
+        gate_path = design_dir / "writer-quality-gate.md"
+        invalid_content = gate_path.read_text(encoding="utf-8").replace(
+            f"**Версия контракта:** `{self.validator.WRITER_QUALITY_GATE_CONTRACT_VERSION}`\n\n",
+            "",
+        ).replace(
+            "`test-design-matrix.md`: `TC-SAMPLE-001`; создание независимого объекта не применимо: `not_applicable:SRC-001`.",
+            "checked",
+        )
+        gate_path.write_text(invalid_content, encoding="utf-8")
+
+        findings, _ = self.validator.validate_writer_quality_gate(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+
+        ids = {finding.id for finding in findings}
+        self.assertIn("writer-quality-gate-contract-version-missing", ids)
+        self.assertIn("writer-quality-gate-semantic-evidence-insufficient", ids)
+
+    def test_stale_gate_contract_requires_real_revalidation(self) -> None:
+        root, _, design_dir = self.make_package()
+        self.write_valid_gate(design_dir)
+        gate_path = design_dir / "writer-quality-gate.md"
+        gate_path.write_text(
+            gate_path.read_text(encoding="utf-8").replace(
+                self.validator.WRITER_QUALITY_GATE_CONTRACT_VERSION,
+                "writer-quality-gate-v1",
+            ),
+            encoding="utf-8",
+        )
+
+        findings, _ = self.validator.validate_writer_quality_gate(
+            gate_path.read_text(encoding="utf-8"),
+            gate_path,
+            root,
+        )
+
+        self.assertIn(
+            "writer-quality-gate-contract-version-stale",
             {finding.id for finding in findings},
         )
 

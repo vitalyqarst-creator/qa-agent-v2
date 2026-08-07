@@ -788,6 +788,12 @@ write a fictional availability test.
 
 Before handing off to reviewer, the writer checks every canonical file:
 
+- Writer Quality Gate uses the current contract version from
+  `writer-quality-gate-format.md`. If a later agent version adds a required
+  semantic gate, an older draft is `blocked-quality-gate` until writer reruns
+  its matrix/TC self-check; it must not append an unsupported `pass` row only to
+  migrate the table.
+
 - no service/debug sections such as UI Automation Prep details, benchmark data,
   runner diagnostics, bridge/attempt metadata or internal process logs;
 - human-facing runtime text is Russian, except allowed metadata values such as

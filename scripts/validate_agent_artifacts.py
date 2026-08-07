@@ -8202,6 +8202,11 @@ WRITER_QUALITY_GATE_REQUIRED_COLUMNS = {
     "blocks_ready_for_review",
 }
 
+WRITER_QUALITY_GATE_CONTRACT_VERSION = "writer-quality-gate-v2"
+WRITER_QUALITY_GATE_CONTRACT_VERSION_RE = re.compile(
+    r"(?mi)^\s*\*\*Версия контракта:\*\*\s*`?([^`\r\n]+)"
+)
+
 WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
     "artifact-write-strategy",
     "mockup-visual-inventory",
@@ -8236,6 +8241,15 @@ WRITER_QUALITY_GATE_REQUIRED_ITEMS = {
 WRITER_QUALITY_GATE_FAIL_STATUSES = {"fail", "blocked", "needs-rewrite"}
 WRITER_QUALITY_GATE_PASS_STATUSES = {"pass"}
 WRITER_QUALITY_GATE_BLOCK_VALUES = {"yes", "no"}
+WRITER_QUALITY_GATE_SEMANTIC_ITEMS = {
+    "source-obligation-completeness",
+    "expected-result-singularity",
+    "creation-form-isolation-coverage",
+}
+WRITER_QUALITY_GATE_GENERIC_EVIDENCE_RE = re.compile(
+    r"^\s*(?:checked|check|проверено|проверка выполнена|выполнено)\s*\.?\s*$",
+    flags=re.IGNORECASE,
+)
 SCOPED_VALIDATOR_PROFILE_REQUIRED_KEYS = {
     "command",
     "generated_by",
@@ -8714,9 +8728,59 @@ def parsed_writer_quality_gate_rows(content: str) -> tuple[list[str], list[dict[
     return header, parsed_rows
 
 
+def writer_quality_gate_semantic_evidence_issues(rows: list[dict[str, str]]) -> list[str]:
+    """Reject semantic gate passes that have no checkable artifact evidence."""
+
+    issues: list[str] = []
+    for row in rows:
+        item = row.get("gate_item", "").strip().strip("`")
+        status = row.get("status", "").strip().strip("`").casefold()
+        if item not in WRITER_QUALITY_GATE_SEMANTIC_ITEMS or status != "pass":
+            continue
+
+        evidence = row.get("evidence", "").strip().strip("`")
+        normalized = evidence.casefold()
+        if not evidence or WRITER_QUALITY_GATE_GENERIC_EVIDENCE_RE.fullmatch(evidence):
+            issues.append(f"{item}:generic-or-empty-evidence")
+            continue
+
+        if item == "source-obligation-completeness":
+            if "test-design-matrix.md" not in normalized:
+                issues.append(f"{item}:missing-artifact-ref:test-design-matrix.md")
+            if (
+                "source-row-inventory.md" not in normalized
+                and "scope-brief.md" not in normalized
+            ):
+                issues.append(
+                    f"{item}:missing-source-basis-ref:source-row-inventory.md-or-scope-brief.md"
+                )
+            continue
+
+        if item == "expected-result-singularity":
+            if not re.search(r"test-cases[\\/]", normalized):
+                issues.append(f"{item}:missing-canonical-tc-ref")
+            if not TEST_CASE_ID_RE.search(evidence):
+                issues.append(f"{item}:missing-tc-id")
+            continue
+
+        # creation-form-isolation-coverage
+        if "not_applicable:" in normalized:
+            if not re.search(r"(?:SRC-|BSR\s*\d|GSR\s*\d|AS\.\d|таблиц|table\s*\d)", evidence, flags=re.IGNORECASE):
+                issues.append(f"{item}:not-applicable-without-source-reason")
+        else:
+            if "test-design-matrix.md" not in normalized:
+                issues.append(f"{item}:missing-matrix-ref")
+            if not TEST_CASE_ID_RE.search(evidence):
+                issues.append(f"{item}:missing-tc-id")
+
+    return sorted(set(issues))
+
+
 def writer_quality_gate_summary(content: str) -> dict[str, Any]:
     section = extract_markdown_section(content, "Writer Quality Gate")
     header, rows = parsed_writer_quality_gate_rows(content)
+    version_match = WRITER_QUALITY_GATE_CONTRACT_VERSION_RE.search(content)
+    contract_version = version_match.group(1).strip() if version_match else ""
     missing_columns = sorted(WRITER_QUALITY_GATE_REQUIRED_COLUMNS - set(header))
     present_items = {
         row.get("gate_item", "").strip().strip("`")
@@ -8775,6 +8839,9 @@ def writer_quality_gate_summary(content: str) -> dict[str, Any]:
         "parseable": bool(header and rows),
         "missing_columns": missing_columns,
         "missing_items": missing_items,
+        "contract_version": contract_version,
+        "contract_version_is_current": contract_version == WRITER_QUALITY_GATE_CONTRACT_VERSION,
+        "semantic_evidence_issues": writer_quality_gate_semantic_evidence_issues(rows),
         "invalid_status_rows": invalid_status_rows,
         "invalid_blocks_rows": invalid_blocks_rows,
         "failed_rows": failed_rows,
@@ -10303,6 +10370,66 @@ def validate_writer_quality_gate(
                 path=display_path,
                 evidence=summary["missing_items"][:20],
                 recommended_action="Add one row for each required gate item before moving the writer artifact to review.",
+            )
+        )
+    if not summary["contract_version"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-contract-version-missing",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate has no contract version",
+                details=(
+                    "A gate created under an older contract cannot be silently upgraded by adding pass rows. "
+                    "It must be rerun under the current writer gate contract."
+                ),
+                path=display_path,
+                evidence=[f"expected={WRITER_QUALITY_GATE_CONTRACT_VERSION}"],
+                recommended_action=(
+                    "Run a fresh writer self-check for the current matrix and canonical TC, then write "
+                    f"`**Версия контракта:** `{WRITER_QUALITY_GATE_CONTRACT_VERSION}``."
+                ),
+            )
+        )
+    elif not summary["contract_version_is_current"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-contract-version-stale",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate uses a stale contract version",
+                details=(
+                    "A stale Writer Quality Gate cannot authorize review even when all listed rows say pass. "
+                    "The current writer must revalidate the matrix and canonical TC first."
+                ),
+                path=display_path,
+                evidence=[
+                    f"actual={summary['contract_version']}",
+                    f"expected={WRITER_QUALITY_GATE_CONTRACT_VERSION}",
+                ],
+                recommended_action=(
+                    "Do not edit only the gate table. Rerun writer self-check against current artifacts and "
+                    "write the current contract version after evidence is collected."
+                ),
+            )
+        )
+    if summary["semantic_evidence_issues"]:
+        findings.append(
+            Finding(
+                id="writer-quality-gate-semantic-evidence-insufficient",
+                severity="warning",
+                category="test-design",
+                title="Writer Quality Gate semantic pass lacks artifact evidence",
+                details=(
+                    "A semantic gate pass must cite the concrete current matrix/TC artifacts it checked, "
+                    "or a source-bound not-applicable decision. Generic prose does not prove the check."
+                ),
+                path=display_path,
+                evidence=summary["semantic_evidence_issues"][:20],
+                recommended_action=(
+                    "Replace the generic evidence with exact artifact paths and affected TC ids, or record "
+                    "`not_applicable:` plus the source reason after a fresh writer self-check."
+                ),
             )
         )
     if summary["invalid_status_rows"]:
@@ -22568,6 +22695,18 @@ def validate_workflow_state(
                 if gate_summary["missing_items"]:
                     gate_errors.append(
                         f"{artifact_label}:missing items {', '.join(gate_summary['missing_items'][:8])}"
+                    )
+                if not gate_summary["contract_version"]:
+                    gate_errors.append(
+                        f"{artifact_label}:missing gate contract version {WRITER_QUALITY_GATE_CONTRACT_VERSION}"
+                    )
+                elif not gate_summary["contract_version_is_current"]:
+                    gate_errors.append(
+                        f"{artifact_label}:stale gate contract version {gate_summary['contract_version']}"
+                    )
+                if gate_summary["semantic_evidence_issues"]:
+                    gate_errors.append(
+                        f"{artifact_label}:semantic evidence {', '.join(gate_summary['semantic_evidence_issues'][:5])}"
                     )
                 if gate_summary["invalid_status_rows"]:
                     gate_errors.append(f"{artifact_label}:invalid status values")
