@@ -391,6 +391,29 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         ), self.assertRaisesRegex(SystemExit, "mutually exclusive"):
             helper.main()
 
+    def test_planned_active_receipt_link_is_the_only_missing_latest_artifact_allowed(self) -> None:
+        helper = self.load_helper()
+        state = {
+            "next_skill": "ft-test-case-reviewer",
+            "review_mode": "tc_review",
+            "latest_artifacts": {
+                "active_transition_prompt": "prompt.writer-to-reviewer.round-8.md",
+                "review_launch_preflight": "work/practical/sample/review-launch-preflight-r8.json",
+            },
+        }
+        latest = state["latest_artifacts"]
+
+        self.assertTrue(
+            helper.artifact_validator.is_planned_active_review_preflight_link(
+                state, latest, "work/practical/sample/review-launch-preflight-r8.json"
+            )
+        )
+        self.assertFalse(
+            helper.artifact_validator.is_planned_active_review_preflight_link(
+                state, latest, "work/practical/sample/review-launch-preflight-r7.json"
+            )
+        )
+
     def test_ignores_practical_artifact_error_owned_by_another_scope(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

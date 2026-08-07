@@ -21996,6 +21996,38 @@ def validate_reviewer_signoff_self_check(
     return findings, checks
 
 
+def is_planned_active_review_preflight_link(
+    state: dict[str, Any],
+    latest_artifacts: dict[str, Any],
+    value: str,
+) -> bool:
+    """Allow the one receipt path that the controller is about to materialize.
+
+    The controller must hash-bind the final workflow state before the receipt
+    exists. Treating that exact active receipt link as missing creates a
+    validator-count cycle: the preflight cannot create the artifact without
+    first invalidating the summary it will hash-bind. The exception is limited
+    to the active prompt's round and does not cover unrelated missing links.
+    """
+
+    active_prompt = str(
+        explicit_active_transition_prompt_value(state)
+        or state.get("active_transition_prompt")
+        or ""
+    )
+    prompt_rounds = practical_revision_numbers(active_prompt)
+    if len(prompt_rounds) != 1:
+        return False
+    active_round = next(iter(prompt_rounds))
+    expected_name = f"review-launch-preflight-r{active_round}.json"
+    return (
+        latest_artifacts.get("review_launch_preflight") == value
+        and Path(strip_quotes(value)).name == expected_name
+        and str(state.get("next_skill", "")) == "ft-test-case-reviewer"
+        and str(state.get("review_mode", "")) in {"matrix_review", "tc_review"}
+    )
+
+
 def validate_workflow_state(
     path: Path,
     root: Path,
@@ -22159,6 +22191,9 @@ def validate_workflow_state(
             item
             for item in latest_artifact_values
             if not artifact_exists(item, path, root, ft_root)
+            and not is_planned_active_review_preflight_link(
+                state, latest_artifacts, item
+            )
         ]
         if missing_latest_artifacts:
             findings.append(

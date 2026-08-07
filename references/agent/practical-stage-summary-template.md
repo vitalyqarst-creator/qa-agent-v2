@@ -77,6 +77,10 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
   edit controller-owned artifacts after that output is written. The reviewer
   repeats the same command with `--verify-receipt <review-launch-preflight.json>`
   before reviewing.
+- The controller may pre-link only the exact active-round receipt path in
+  `latest_artifacts.review_launch_preflight` before materialization. This is a
+  planned artifact, not a stale link; any other missing `latest_artifacts` link
+  remains a validator warning.
 - Immediately record a preflight result in controller state. For an allowed TC
   review, link its receipt as `latest_artifacts.review_launch_preflight`, set
   `review_launch_preflight_round_<N>: allowed`,
