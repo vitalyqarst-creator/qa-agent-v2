@@ -455,6 +455,16 @@ planned TC), use the fast path inside this same route:
     Codex thread tools are genuinely unavailable in the runtime, stop with
     `blocked-reviewer-session-tool-unavailable`; do not perform same-session
     review as the route verdict.
+  - A preflight result with `allowed: false` and `status: blocked` is a
+    controller outcome, not a reviewer failure. Save only
+    `review-launch-preflight.json`, update the affected `workflow-state.yaml`
+    and the concise `practical-stage-summary.md`; do not create reviewer task,
+    `review-findings.md`, reviewer session log, reviewer decision log or
+    reviewer-independence receipt. If the block is a failed Writer Quality Gate,
+    set `current_stage: ft-test-case-writer`,
+    `stage_status: blocked-quality-gate` and
+    `next_skill: ft-test-case-writer`. Use `blocked-input` only for missing or
+    contradictory external inputs.
   - When the controller creates a separate reviewer Codex task/thread, set a
     short human-readable title such as `Partners-v1 TC review 9.1+9.3.1`;
     never leave the full reviewer prompt as the task title.
@@ -544,6 +554,23 @@ planned TC), use the fast path inside this same route:
    - Do not enter an unbounded repair loop. If the final review still returns
      `tc-changes-required`, report its findings and stop; do not apply another
      automatic revision.
+
+## Candidate revision after a Writer Quality Gate block
+
+`blocked-quality-gate` is a draft-quality result, not an external-input state.
+It may be repaired only when the current macro-stage or controller explicitly
+authorizes one bounded writer revision. Before replacing an existing canonical
+test-case file, create a complete snapshot under
+`work/review-cycles/<scope-slug>/versions/<snapshot-id>/` according to
+`test-case-versioning-policy.md`. The snapshot manifest must identify the
+canonical source path, SHA-256 and the reason `pre_quality_gate_baseline`.
+
+After the snapshot, the writer updates the one canonical file in `test-cases/`.
+That file is the current candidate for the next independent review; do not create
+parallel `*-candidate.md`, `*-round-N.md` or other competing files in
+`test-cases/`. The workflow must link the snapshot and state that the current
+file is a candidate revision. A failed Writer Quality Gate alone does not
+authorize overwriting an already accepted/released baseline.
 
 ## Release statuses
 

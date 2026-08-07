@@ -31,6 +31,10 @@ EXPECTED_TRANSITIONS = {
     "matrix_review": {"matrix-review allowed", "matrix-review conditional"},
     "tc_review": {"tc-review allowed", "tc-review conditional"},
 }
+BLOCKED_TRANSITIONS = {
+    "matrix_review": "matrix-review blocked",
+    "tc_review": "tc-review blocked",
+}
 SCOPE_ID_RE = re.compile(r"^\d{2}$")
 
 
@@ -272,14 +276,19 @@ def build_preflight(
             blockers.append("summary artifact_write_root is outside FT package root")
         if not set(scope_ids).issubset(active_scope_ids):
             blockers.append("requested scope ids are outside summary active_scope_ids")
-        if transition not in expected_transition:
+        transition_is_explicitly_blocked = transition == BLOCKED_TRANSITIONS[review_mode]
+        if transition not in expected_transition and not transition_is_explicitly_blocked:
             blockers.append(
                 f"summary next_stage_transition={transition or '<missing>'}; expected one of {sorted(expected_transition)}"
             )
         checks.append(
             PreflightCheck(
                 "summary-contract",
-                "pass" if not blockers else "fail",
+                "pass"
+                if transition in expected_transition and not blockers
+                else "blocked"
+                if transition_is_explicitly_blocked
+                else "fail",
                 f"active_scope_ids={', '.join(sorted(active_scope_ids)) or '<missing>'}; transition={transition or '<missing>'}",
             )
         )
@@ -312,9 +321,19 @@ def build_preflight(
 
     descriptors, descriptor_issues = scope_descriptors(ft_package_root, scope_ids)
     blockers.extend(descriptor_issues)
+    quality_gate_blocked_scope_ids: list[str] = []
     for descriptor in descriptors:
         state = artifact_validator.parse_workflow_state(descriptor.workflow_path)
-        if state.get("next_skill") != "ft-test-case-reviewer":
+        if (
+            state.get("stage_status") == "blocked-quality-gate"
+            and state.get("current_stage") == "ft-test-case-writer"
+            and state.get("next_skill") == "ft-test-case-writer"
+        ):
+            quality_gate_blocked_scope_ids.append(descriptor.scope_id)
+            blockers.append(
+                f"scope {descriptor.scope_id}: Writer Quality Gate blocks reviewer launch"
+            )
+        elif state.get("next_skill") != "ft-test-case-reviewer":
             blockers.append(f"scope {descriptor.scope_id}: next_skill is not ft-test-case-reviewer")
         if str(state.get("review_mode", "")) != review_mode:
             blockers.append(
@@ -323,7 +342,11 @@ def build_preflight(
     checks.append(
         PreflightCheck(
             "scope-routing",
-            "pass" if not descriptor_issues and len(descriptors) == len(scope_ids) else "fail",
+            "pass"
+            if not descriptor_issues and len(descriptors) == len(scope_ids) and not quality_gate_blocked_scope_ids
+            else "blocked"
+            if not descriptor_issues and len(descriptors) == len(scope_ids) and quality_gate_blocked_scope_ids
+            else "fail",
             f"scopes={', '.join(scope_ids)}",
         )
     )

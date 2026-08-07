@@ -68,6 +68,12 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
   `allowed: true`; store that result as `review-launch-preflight.json` next to
   the practical scope artifacts. The reviewer repeats the same command with
   `--verify-receipt <review-launch-preflight.json>` before reviewing.
+- If the preflight result is `allowed: false` with `status: blocked`, it is a
+  controller gate result. Keep only the preflight receipt, this summary and the
+  workflow-state update; do not create reviewer findings, reviewer logs or a
+  reviewer-independence receipt. For a failed Writer Quality Gate use
+  `stage_status: blocked-quality-gate` and route back to the writer; reserve
+  `blocked-input` for missing or contradictory external inputs.
 - Explanations belong in `next_safe_step`, scope `reason` or a short notes section.
 - Keep `Current stage actions` and `Prior state context` separate. A summary that
   mixes old route history into current-stage actions is not a clear handoff.

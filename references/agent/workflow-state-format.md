@@ -39,7 +39,7 @@ fts/<ft-slug>/work/stage-handoffs/NN-<scope-slug>/workflow-state.yaml
 ## Допустимые значения
 
 - `current_stage` = `ft-source-locator | ft-scope-analyzer | ft-test-case-writer | ft-test-case-reviewer | ft-test-case-iteration | ft-ui-automation-prep`
-- `stage_status` = `ready-for-next-stage | ready-for-gap-review | ready-for-review | ready-for-writer-revision | signed-off | round-cap-reached | blocked-input`
+- `stage_status` = `ready-for-next-stage | ready-for-gap-review | ready-for-review | ready-for-writer-revision | signed-off | round-cap-reached | blocked-input | blocked-quality-gate`
 - `next_skill` = `ft-source-locator | ft-scope-analyzer | ft-test-case-writer | ft-test-case-reviewer | ft-test-case-iteration | ft-ui-automation-prep | none`
 - `current_round` — целое число, где `0` допустим для pre-writer handoff
 
@@ -111,10 +111,15 @@ ft-test-case-reviewer` и downstream/review mode `matrix_review`; в
 
 Даже если `Writer Quality Gate` формально заполнен как `pass`, workflow `ready-for-review` должен блокироваться, если validator находит такие дефекты в canonical test-case file или split test-design artifacts. Canonical finding: `workflow-state-ready-for-review-with-blocking-test-case-smells`.
 
-Если gate failed, workflow должен оставаться вне review:
+Если gate не пройден, это не блокировка входных данных: используй
+`blocked-quality-gate` и верни черновик writer-у. Этот статус применяется
+только к черновику с полным набором исходных материалов, в котором найден
+детерминированный дефект качества; он не допускает reviewer task и не является
+`accepted_risk`:
 
 ```yaml
-stage_status: blocked-input
+current_stage: ft-test-case-writer
+stage_status: blocked-quality-gate
 next_skill: ft-test-case-writer
 blocking_reasons:
   - Writer Quality Gate failed for WP-02: compressed atoms / broad scenario rows.
@@ -265,7 +270,7 @@ accepted_risks: []
 - Следующий skill не должен стартовать, если в `required_inputs` отсутствует хотя бы один обязательный файл.
 - После каждого handoff обновляй `current_stage`, `stage_status`, `next_skill`, `required_inputs` и `latest_artifacts`.
 - Если `scope-coverage-gaps.md` содержит хотя бы один `GAP-*`, добавляй `scope-clarification-requests.md` в `latest_artifacts`; добавляй его в `required_inputs`, когда следующий этап должен учитывать открытые или подтвержденные ответы по gaps.
-- Если этап заблокирован, используй `stage_status = blocked-input` и явно заполняй `blocking_reasons`.
+- При нехватке или противоречии внешних входов используй `stage_status = blocked-input`; при дефекте текущего черновика test cases — `blocked-quality-gate`. В обоих случаях явно заполняй `blocking_reasons`.
 - Статус `signed-off` используется только для завершенного review-cycle и handoff в `ft-ui-automation-prep`.
 - Не используй `stage_status: not-signed-off`: это итоговая оценка review, но не process-status. При blocker findings выбирай `ready-for-writer-revision` только если findings получены validator-accepted separate Codex task/thread review. Если findings получены advisory review (`sub-agent`, `same-session`, `local-helper`), используй `blocked-input` до настоящего separate-session review или до явного поля `controller_authorized_advisory_revision: yes`. При лимите раундов используй `round-cap-reached`, при нехватке внешнего input `blocked-input`.
 

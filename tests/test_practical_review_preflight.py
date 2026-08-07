@@ -153,6 +153,43 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertIn("workflow-state-stale", "\n".join(result["blocking_reasons"]))
 
+    def test_reports_writer_quality_gate_block_without_reviewer_launch(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        workflow = ft_root / "work" / "stage-handoffs" / "01-sample-scope" / "workflow-state.yaml"
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8")
+            .replace("stage_status: ready-for-next-stage", "stage_status: blocked-quality-gate")
+            .replace("next_skill: ft-test-case-reviewer", "next_skill: ft-test-case-writer"),
+            encoding="utf-8",
+        )
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "matrix-review allowed", "matrix-review blocked"
+            ),
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            result = self.run_preflight(helper, root, ft_root, summary)
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertEqual("blocked", result["status"])
+        checks = {item["id"]: item["status"] for item in result["checks"]}
+        self.assertEqual("blocked", checks["summary-contract"])
+        self.assertEqual("blocked", checks["scope-routing"])
+        self.assertIn(
+            "Writer Quality Gate blocks reviewer launch",
+            "\n".join(result["blocking_reasons"]),
+        )
+        self.assertNotIn(
+            "summary next_stage_transition=matrix-review blocked",
+            "\n".join(result["blocking_reasons"]),
+        )
+
     def test_ignores_error_owned_by_another_scope_in_multi_scope_package(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

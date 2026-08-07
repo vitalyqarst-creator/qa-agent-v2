@@ -110,6 +110,21 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
             self.assertIn(item, gate)
             self.assertIn(item, validator)
 
+    def test_quality_gate_recovery_is_compact_and_preserves_one_canonical_candidate(self) -> None:
+        route = self.read("references/agent/practical-test-case-route-v0.8.md")
+        workflow = self.read("references/agent/workflow-state-format.md")
+        policy = self.read("references/qa/test-case-versioning-policy.md")
+        preflight = self.read("scripts/practical_review_preflight.py")
+
+        for content in (route, workflow, preflight):
+            self.assertIn("blocked-quality-gate", content)
+        self.assertIn("A preflight result with `allowed: false`", route)
+        self.assertIn("do not create reviewer task", route)
+        self.assertIn("pre_quality_gate_baseline", route)
+        self.assertIn("snapshot-manifest.yaml", policy)
+        self.assertIn("не плодить несколько конкурирующих", policy)
+        self.assertIn("Writer Quality Gate blocks reviewer launch", preflight)
+
     def test_runtime_policy_requires_helpers_for_nontrivial_json_markdown_work(self) -> None:
         agents = self.read("AGENTS.md")
         policy = self.read("references/agent/runtime-environment-encoding-policy.md")

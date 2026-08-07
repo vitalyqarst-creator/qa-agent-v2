@@ -40,6 +40,7 @@ ALLOWED_STAGE_STATUSES = {
     "signed-off",
     "round-cap-reached",
     "blocked-input",
+    "blocked-quality-gate",
 }
 ALLOWED_NEXT_SKILLS = ALLOWED_CURRENT_STAGES | {"none", None}
 SESSION_BASED_REVIEW_CYCLE_STATUSES = {
@@ -2665,7 +2666,7 @@ def blocked_writer_gate_suppression_test_case_paths(
             continue
         if state.get("current_stage") != "ft-test-case-writer":
             continue
-        if state.get("stage_status") != "blocked-input":
+        if state.get("stage_status") not in {"blocked-input", "blocked-quality-gate"}:
             continue
         if not blocked_writer_gate_failure_reasons_present(state.get("blocking_reasons")):
             continue
@@ -21336,7 +21337,8 @@ def validate_workflow_state(
                 recommended_action=(
                     "Use one of the canonical stage_status values. For a not-signed-off reviewer verdict, "
                     "use `ready-for-writer-revision`; use `round-cap-reached` only after the review round cap, "
-                    "or `blocked-input` when external input is required."
+                    "use `blocked-input` when external input is required, or use `blocked-quality-gate` when "
+                    "a current writer draft fails its own quality gate."
                 ),
             )
         )
@@ -21355,6 +21357,49 @@ def validate_workflow_state(
                 recommended_action="Use a canonical skill name, `none`, or `null`.",
             )
         )
+
+    if stage_status == "blocked-quality-gate":
+        routing_errors: list[str] = []
+        if current_stage != "ft-test-case-writer":
+            routing_errors.append(f"current_stage={current_stage!r}")
+        if next_skill != "ft-test-case-writer":
+            routing_errors.append(f"next_skill={next_skill!r}")
+        if routing_errors:
+            findings.append(
+                Finding(
+                    id="workflow-state-blocked-quality-gate-invalid-routing",
+                    severity="error",
+                    category="workflow-state",
+                    title="blocked-quality-gate must route back to writer",
+                    details=(
+                        "A failed Writer Quality Gate is a defect in the current draft, not an absent external input "
+                        "and not a reviewer stage."
+                    ),
+                    path=display_path,
+                    evidence=routing_errors,
+                    recommended_action=(
+                        "Use current_stage and next_skill `ft-test-case-writer`, preserve the current baseline "
+                        "as a snapshot, then run one explicitly authorized bounded writer revision."
+                    ),
+                )
+            )
+            checks.append(
+                Check(
+                    "workflow-state-blocked-quality-gate-routing",
+                    "fail",
+                    "blocked-quality-gate does not route to writer.",
+                    display_path,
+                )
+            )
+        else:
+            checks.append(
+                Check(
+                    "workflow-state-blocked-quality-gate-routing",
+                    "pass",
+                    "blocked-quality-gate correctly routes to writer.",
+                    display_path,
+                )
+            )
 
     if (
         state.get("stage_status") == "ready-for-writer-revision"
@@ -22339,7 +22384,7 @@ def validate_workflow_state(
                         evidence=gate_errors[:20],
                         recommended_action=(
                             "Move Writer Quality Gate out of production test-case files into the split artifact, "
-                            "complete the gate, or set stage_status to blocked-input instead of ready-for-review."
+                            "complete the gate, or set stage_status to blocked-quality-gate instead of ready-for-review."
                         ),
                     )
                 )
@@ -22363,7 +22408,7 @@ def validate_workflow_state(
                         evidence=blocking_quality_errors[:20],
                         recommended_action=(
                             "Rewrite the affected package(s) from source inventory/normalization through ledger, "
-                            "Package Test Design Plan and TC, or set stage_status to blocked-input instead of "
+                            "Package Test Design Plan and TC, or set stage_status to blocked-quality-gate instead of "
                             "ready-for-review."
                         ),
                     )
@@ -22386,7 +22431,8 @@ def validate_workflow_state(
                     )
                 )
 
-    if state.get("stage_status") == "blocked-input":
+    if state.get("stage_status") in {"blocked-input", "blocked-quality-gate"}:
+        blocked_status = str(state.get("stage_status"))
         blocking_reasons = state.get("blocking_reasons")
         if not isinstance(blocking_reasons, list) or not blocking_reasons:
             findings.append(
@@ -22394,7 +22440,7 @@ def validate_workflow_state(
                     id="workflow-state-blocked-without-reasons",
                     severity="error",
                     category="workflow-state",
-                    title="blocked-input state has no blocking reasons",
+                    title=f"{blocked_status} state has no blocking reasons",
                     details="Blocked handoffs must explain why the pipeline cannot proceed.",
                     path=display_path,
                     evidence=[],
@@ -22420,13 +22466,13 @@ def validate_workflow_state(
             if validator_not_run_reasons:
                 findings.append(
                     Finding(
-                        id="workflow-state-blocked-input-validator-not-run",
+                        id="workflow-state-blocked-writer-validator-not-run",
                         severity="error",
                         category="workflow-state",
-                        title="writer blocked-input skips required post-write validator",
+                        title="writer blocked state skips required post-write validator",
                         details=(
-                            "A writer terminal blocked-input state may contain unresolved validator findings, "
-                            "but it must not use blocked-input merely because the scoped validator was not run."
+                            "A writer terminal blocked state may contain unresolved validator findings, "
+                            "but it must not use a blocked status merely because the scoped validator was not run."
                         ),
                         path=display_path,
                         evidence=validator_not_run_reasons[:5],
