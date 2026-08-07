@@ -98,6 +98,12 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
                     "| next_safe_step | `Продолжить работу на следующем разрешенном этапе.` |",
                     f"| summary_stage | `{summary_stage}` |",
                     "",
+                    "## Scope transitions",
+                    "",
+                    "| scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |",
+                    "| --- | --- | --- | --- | --- | --- |",
+                    "| sample | matrix-accepted | writer allowed | not-applicable | not-applicable | Матрица принята. |",
+                    "",
                     "## Current stage actions",
                     "",
                     "- Подготовлен handoff текущего этапа.",
@@ -696,6 +702,24 @@ class PracticalStageSummaryValidatorTests(unittest.TestCase):
 
         self.assertNotIn("practical-stage-summary-round-cap-missing-source-contradiction-classification", ids)
         self.assertNotIn("practical-stage-summary-round-cap-generic-controller-block", ids)
+
+    def test_rejects_active_scope_transition_with_prose_in_status_decision(self) -> None:
+        root = self.make_package(
+            next_stage_transition="tc-review conditional",
+            per_scope_next_stage_transitions="yes",
+        )
+        summary = root / "work" / "practical-stage-summary.md"
+        summary.write_text(
+            summary.read_text(encoding="utf-8").replace(
+                "| sample | matrix-accepted | writer allowed | not-applicable | not-applicable | Матрица принята. |",
+                "| sample | matrix-changes-required | tc-review conditional | no | TC-001 needs-test-data | Требуется выпуск с пометкой. |",
+            ),
+            encoding="utf-8",
+        )
+
+        ids = self.finding_ids(root)
+
+        self.assertIn("practical-stage-summary-invalid-round-cap-decision", ids)
 
     def test_rejects_unconditional_writer_allowed_for_scope_blocking_warnings(self) -> None:
         ids = self.finding_ids(

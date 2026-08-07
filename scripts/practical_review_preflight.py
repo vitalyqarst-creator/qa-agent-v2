@@ -559,6 +559,27 @@ def build_preflight(
                 f"scope {descriptor.scope_id}: review_mode={state.get('review_mode', '<missing>')}; expected={review_mode}"
             )
         if review_mode == "tc_review":
+            matrix_review_status = str(state.get("matrix_review_status", "")).strip().casefold()
+            if matrix_review_status and matrix_review_status != "matrix-accepted":
+                transition_record, transition_issues = artifact_validator.practical_scope_transition_record_for_scope(
+                    summary_content,
+                    scope_id=descriptor.scope_id,
+                    scope_slug=descriptor.scope_slug,
+                )
+                if transition_issues:
+                    blockers.extend(
+                        f"scope {descriptor.scope_id}: {issue}"
+                        for issue in transition_issues
+                    )
+                elif transition_record is not None:
+                    decision_issues = artifact_validator.practical_scope_transition_decision_issues(
+                        transition_record
+                    )
+                    if decision_issues:
+                        blockers.extend(
+                            f"scope {descriptor.scope_id}: {issue}"
+                            for issue in decision_issues
+                        )
             latest = state.get("latest_artifacts")
             snapshot_value = ""
             if isinstance(latest, dict):

@@ -4939,6 +4939,20 @@ ROUND_CAP_TC_WITH_STATUS_RE = re.compile(
     r"candidate-ui-calibration|needs-test-data|blocked-observability|needs-future-clarification",
     flags=re.IGNORECASE,
 )
+PRACTICAL_SCOPE_TRANSITION_COLUMNS = (
+    "scope",
+    "verdict",
+    "next_stage_transition",
+    "source_contradiction",
+    "tc_with_status_decision",
+    "reason",
+)
+PRACTICAL_SCOPE_TRANSITION_SOURCE_CONTRADICTIONS = {"yes", "no", "not-applicable"}
+PRACTICAL_SCOPE_TRANSITION_TC_DECISIONS = {
+    "write-with-statuses",
+    "block-source-contradiction",
+    "not-applicable",
+}
 PRACTICAL_STAGE_SUMMARY_FINDING_ID_RE = re.compile(r"\b[a-z][a-z0-9]+(?:-[a-z0-9]+){2,}\b")
 PRACTICAL_STAGE_SUMMARY_PATH_EVIDENCE_RE = re.compile(
     r"(?:^|[\s`])(?:[A-Za-z]:)?[A-Za-z0-9_./\\-]+\.(?:md|yaml|yml|json|py)(?:\b|$)",
@@ -4988,6 +5002,83 @@ def parse_markdown_key_value_fields(content: str) -> dict[str, str]:
                     fields[field] = value
             index += 1
     return fields
+
+
+def practical_scope_transition_records(content: str) -> tuple[list[dict[str, str]], list[str]]:
+    """Parse the machine-checkable practical per-scope transition table.
+
+    The table is user-facing Markdown, but its two round-cap fields decide
+    whether a non-accepted matrix may proceed to TC writing/review.  Do not
+    infer that decision from free prose or from a list of execution statuses.
+    """
+
+    section = extract_markdown_section(content, "Scope transitions")
+    if section is None:
+        return [], ["section=Scope transitions is missing"]
+    rows = markdown_table_rows_from_text(section)
+    if not rows:
+        return [], ["Scope transitions has no table"]
+    header = normalize_table_header(rows[0])
+    missing = [column for column in PRACTICAL_SCOPE_TRANSITION_COLUMNS if column not in header]
+    if missing:
+        return [], [f"Scope transitions missing columns={', '.join(missing)}"]
+
+    indexes = {column: header.index(column) for column in PRACTICAL_SCOPE_TRANSITION_COLUMNS}
+    records: list[dict[str, str]] = []
+    for row_number, row in enumerate(rows[1:], start=2):
+        if any(index >= len(row) for index in indexes.values()):
+            return [], [f"Scope transitions row={row_number} has too few columns"]
+        record = {
+            column: strip_markdown_code(row[indexes[column]])
+            for column in PRACTICAL_SCOPE_TRANSITION_COLUMNS
+        }
+        if not record["scope"]:
+            return [], [f"Scope transitions row={row_number} has an empty scope"]
+        record["_row_number"] = str(row_number)
+        records.append(record)
+    return records, []
+
+
+def practical_scope_transition_record_for_scope(
+    content: str,
+    *,
+    scope_id: str,
+    scope_slug: str,
+) -> tuple[dict[str, str] | None, list[str]]:
+    """Find one transition row by numbered handoff id or scope slug."""
+
+    records, issues = practical_scope_transition_records(content)
+    if issues:
+        return None, issues
+    aliases = {scope_id.casefold(), scope_slug.casefold()}
+    matches = [record for record in records if record["scope"].casefold() in aliases]
+    if not matches:
+        return None, [f"scope={scope_id}/{scope_slug}: transition row is missing"]
+    if len(matches) > 1:
+        return None, [f"scope={scope_id}/{scope_slug}: transition rows are duplicated"]
+    return matches[0], []
+
+
+def practical_scope_transition_decision_issues(record: Mapping[str, str]) -> list[str]:
+    """Validate the exact round-cap policy rather than matching status prose."""
+
+    scope = record.get("scope", "<missing>")
+    source_contradiction = record.get("source_contradiction", "").casefold()
+    decision = record.get("tc_with_status_decision", "").casefold()
+    issues: list[str] = []
+    if source_contradiction not in PRACTICAL_SCOPE_TRANSITION_SOURCE_CONTRADICTIONS:
+        issues.append(f"scope={scope}:source_contradiction={source_contradiction or '<missing>'}")
+        return issues
+    if decision not in PRACTICAL_SCOPE_TRANSITION_TC_DECISIONS:
+        issues.append(f"scope={scope}:tc_with_status_decision={decision or '<missing>'}")
+        return issues
+    if source_contradiction == "no" and decision != "write-with-statuses":
+        issues.append(f"scope={scope}:source_contradiction=no requires tc_with_status_decision=write-with-statuses")
+    elif source_contradiction == "yes" and decision != "block-source-contradiction":
+        issues.append(f"scope={scope}:source_contradiction=yes requires tc_with_status_decision=block-source-contradiction")
+    elif source_contradiction == "not-applicable" and decision != "not-applicable":
+        issues.append(f"scope={scope}:source_contradiction=not-applicable requires tc_with_status_decision=not-applicable")
+    return issues
 
 
 def revision_summary_revision_type(content: str) -> str:
@@ -5778,6 +5869,89 @@ def validate_practical_stage_summary(path: Path, root: Path) -> tuple[list[Findi
                 recommended_action="Use one explicit id or a comma-separated list, for example `02, 05, 06, 07`.",
             )
         )
+
+    ft_root = ft_package_root_for_artifact(path)
+    active_scope_aliases: dict[str, str] = {}
+    if ft_root is not None:
+        for workflow_path in workflow_states_for_ft_package(ft_root):
+            match = re.match(r"^(\d{2})-", workflow_path.parent.name)
+            if match is None:
+                continue
+            try:
+                workflow_state = parse_workflow_state(workflow_path)
+            except UnicodeDecodeError:
+                continue
+            active_scope_aliases[match.group(1)] = str(
+                workflow_state.get("scope_slug") or workflow_path.parent.name.split("-", 1)[1]
+            )
+
+    transition_records, transition_table_issues = practical_scope_transition_records(content)
+    if transition_table_issues:
+        findings.append(
+            Finding(
+                id="practical-stage-summary-scope-transitions-invalid",
+                severity="error",
+                category="practical-stage-summary",
+                title="Practical stage summary has an invalid Scope transitions table",
+                details=(
+                    "The per-scope table is the machine-checkable source for round-cap routing. "
+                    "It cannot be replaced by free prose or a list of execution statuses."
+                ),
+                path=display_path,
+                evidence=transition_table_issues,
+                recommended_action=(
+                    "Restore the canonical Scope transitions columns and one row for every active scope."
+                ),
+            )
+        )
+    elif PRACTICAL_STAGE_SUMMARY_SCOPE_IDS_RE.fullmatch(normalized_scope_ids):
+        for scope_id in normalized_scope_ids.split(","):
+            scope_slug = active_scope_aliases.get(scope_id, scope_id)
+            record, record_issues = practical_scope_transition_record_for_scope(
+                content,
+                scope_id=scope_id,
+                scope_slug=scope_slug,
+            )
+            if record_issues:
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-active-scope-transition-missing",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary lacks an active scope transition",
+                        details=(
+                            "Every scope in active_scope_ids must have exactly one matching Scope transitions row "
+                            "by handoff id or scope_slug."
+                        ),
+                        path=display_path,
+                        evidence=record_issues,
+                        recommended_action=(
+                            "Add one canonical row for the active scope with enum values, not explanatory prose."
+                        ),
+                    )
+                )
+                continue
+            decision_issues = practical_scope_transition_decision_issues(record)
+            if decision_issues:
+                findings.append(
+                    Finding(
+                        id="practical-stage-summary-invalid-round-cap-decision",
+                        severity="error",
+                        category="practical-stage-summary",
+                        title="Practical stage summary has an invalid round-cap decision",
+                        details=(
+                            "source_contradiction=no permits status-marked work only with the exact enum "
+                            "tc_with_status_decision=write-with-statuses; a source contradiction requires "
+                            "block-source-contradiction."
+                        ),
+                        path=display_path,
+                        evidence=decision_issues,
+                        recommended_action=(
+                            "Use only write-with-statuses, block-source-contradiction or not-applicable in the "
+                            "decision column, and keep explanatory text in reason."
+                        ),
+                    )
+                )
 
     nonrussian_prose_issues = practical_stage_summary_nonrussian_prose_issues(content, fields)
     if nonrussian_prose_issues:
@@ -14433,9 +14607,16 @@ PERSISTENCE_DELETE_FIXTURE_RE = re.compile(
     flags=re.IGNORECASE,
 )
 ROLLING_DATE_UNFORMALIZED_RELATIVE_RE = re.compile(
-    r"\bD\s*[-+]\s*\d+\s*(?:years?|лет|год|года|calendar\s+years?)\b",
+    r"(?<![A-Za-zА-Яа-яЁё])D(?![A-Za-zА-Яа-яЁё])",
     flags=re.IGNORECASE,
 )
+ROLLING_DATE_D_DEFINITION_RE = re.compile(
+    r"(?<![A-Za-zА-Яа-яЁё])`?D`?\s*(?:=|:|—|–|-)\s*"
+    r"(?:дат\w*\s+(?:выполнени\w*\s+тест\w*|проверки)|"
+    r"текущ\w*\s+дат\w*(?:\s+приложени\w*)?|current\s+(?:application|execution)\s+date)",
+    flags=re.IGNORECASE,
+)
+ROLLING_DATE_FORMAT_RE = re.compile(r"DD\.MM\.YYYY|ДД\.ММ\.ГГГГ", flags=re.IGNORECASE)
 ROLLING_DATE_FORMALIZATION_RE = re.compile(
     r"(?:DD\.MM\.YYYY|ДД\.ММ\.ГГГГ)[\s\S]{0,220}(?:example|пример|\d{2}\.\d{2}\.\d{4})|"
     r"(?:example|пример|\d{2}\.\d{2}\.\d{4})[\s\S]{0,220}(?:DD\.MM\.YYYY|ДД\.ММ\.ГГГГ)",
@@ -16171,6 +16352,19 @@ def validate_test_case_quality_smells(
             file_count_limit_save_crosschecks.append(
                 f"{test_case_id}:steps={steps[:180]}; expected={expected_result[:160]}"
             )
+        rolling_date_context = " ".join([test_data, steps, expected_result])
+        rolling_date_subject_context = " ".join([title, rolling_date_context])
+        if (
+            ROLLING_DATE_UNFORMALIZED_RELATIVE_RE.search(rolling_date_context)
+            and ROLLING_DATE_BOUNDARY_SIGNAL_RE.search(rolling_date_subject_context)
+            and not (
+                ROLLING_DATE_D_DEFINITION_RE.search(rolling_date_context)
+                and ROLLING_DATE_FORMAT_RE.search(rolling_date_context)
+            )
+        ):
+            rolling_date_boundary_unformalized_relative_value.append(
+                f"{test_case_id}:date_data={rolling_date_context[:180]}"
+            )
         if PERSISTENCE_TC_SIGNAL_RE.search(persistence_context):
             is_negative_no_save_tc = bool(
                 is_negative_test_case_type(test_case_type)
@@ -16215,14 +16409,6 @@ def validate_test_case_quality_smells(
             ):
                 persistence_delete_tc_not_self_contained.append(
                     f"{test_case_id}:preconditions={preconditions[:180] or '<missing>'}"
-                )
-            rolling_date_context = " ".join([test_data, steps, expected_result])
-            if (
-                ROLLING_DATE_UNFORMALIZED_RELATIVE_RE.search(rolling_date_context)
-                and not ROLLING_DATE_FORMALIZATION_RE.search(rolling_date_context)
-            ):
-                rolling_date_boundary_unformalized_relative_value.append(
-                    f"{test_case_id}:date_data={rolling_date_context[:180]}"
                 )
             grouped_context = " ".join([title, scenario_rationale, test_data, steps, expected_result])
             if (

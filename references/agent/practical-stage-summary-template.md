@@ -68,6 +68,11 @@ v0.8.3. The file is a user-facing handoff and a machine-checkable gate.
 ## Rules
 
 - Enum fields must contain only the enum value, not explanatory prose.
+- For each active scope with `matrix-changes-required` or `round-cap-reached`,
+  the `Scope transitions` row is authoritative: `source_contradiction = no`
+  requires `tc_with_status_decision = write-with-statuses`; `yes` requires
+  `block-source-contradiction`. Put case statuses and explanation only in
+  `reason`, never in the enum cell.
 - Before creating any separate reviewer task, run
   `python scripts/practical_review_preflight.py` with this summary, the selected
   scope id, the review mode and `--check-only`. Use it to validate the final

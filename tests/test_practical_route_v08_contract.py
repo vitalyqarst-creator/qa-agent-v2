@@ -65,6 +65,8 @@ class PracticalRouteV08ContractTests(unittest.TestCase):
         self.assertIn("do not create or modify", writer)
         self.assertIn("test-design-matrix-review.md", writer)
         self.assertIn("do not create source assertions", writer)
+        self.assertIn("needs-test-data` may contain concrete data", writer)
+        self.assertIn("unless it resolves to `fixture-catalog.md`", writer)
         self.assertIn("practical_v0_8", reviewer)
         self.assertIn("matrix_review", reviewer)
         self.assertIn("tc_review", reviewer)

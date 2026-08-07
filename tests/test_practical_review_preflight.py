@@ -230,6 +230,77 @@ class PracticalReviewPreflightTests(unittest.TestCase):
         self.assertFalse(result["allowed"])
         self.assertIn("pre-write baseline snapshot is invalid", "\n".join(result["blocking_reasons"]))
 
+    def test_blocks_tc_reviewer_for_round_cap_without_exact_write_with_statuses_decision(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        workflow = ft_root / "work" / "stage-handoffs" / "01-sample-scope" / "workflow-state.yaml"
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8")
+            .replace("review_mode: matrix_review", "review_mode: tc_review")
+            + "matrix_review_status: matrix-changes-required\n",
+            encoding="utf-8",
+        )
+        summary.write_text(
+            summary.read_text(encoding="utf-8")
+            .replace("matrix-review allowed", "tc-review conditional")
+            + "\n## Scope transitions\n\n"
+            + "| scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |\n"
+            + "| --- | --- | --- | --- | --- | --- |\n"
+            + "| sample-scope | matrix-changes-required | tc-review conditional | no | TC-001 needs-test-data | Нужна пометка. |\n",
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            with working_directory(root):
+                result = helper.build_preflight(
+                    repo_root=root,
+                    ft_package_root=ft_root,
+                    summary_path=summary,
+                    scope_ids=["01"],
+                    review_mode="tc_review",
+                )
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertFalse(result["allowed"])
+        self.assertIn("tc_with_status_decision", "\n".join(result["blocking_reasons"]))
+
+    def test_allows_tc_reviewer_for_round_cap_with_exact_write_with_statuses_decision(self) -> None:
+        helper = self.load_helper()
+        _, root, ft_root, summary = self.make_repository()
+        workflow = ft_root / "work" / "stage-handoffs" / "01-sample-scope" / "workflow-state.yaml"
+        workflow.write_text(
+            workflow.read_text(encoding="utf-8")
+            .replace("review_mode: matrix_review", "review_mode: tc_review")
+            + "matrix_review_status: matrix-changes-required\n",
+            encoding="utf-8",
+        )
+        summary.write_text(
+            summary.read_text(encoding="utf-8")
+            .replace("matrix-review allowed", "tc-review conditional")
+            + "\n## Scope transitions\n\n"
+            + "| scope | verdict | next_stage_transition | source_contradiction | tc_with_status_decision | reason |\n"
+            + "| --- | --- | --- | --- | --- |\n"
+            + "| sample-scope | matrix-changes-required | tc-review conditional | no | write-with-statuses | Матрица выпущена с пометками. |\n",
+            encoding="utf-8",
+        )
+        original_validate = helper.artifact_validator.validate
+        helper.artifact_validator.validate = lambda _: {"findings": []}
+        try:
+            with working_directory(root):
+                result = helper.build_preflight(
+                    repo_root=root,
+                    ft_package_root=ft_root,
+                    summary_path=summary,
+                    scope_ids=["01"],
+                    review_mode="tc_review",
+                )
+        finally:
+            helper.artifact_validator.validate = original_validate
+
+        self.assertTrue(result["allowed"])
+
     def test_ignores_error_owned_by_another_scope_in_multi_scope_package(self) -> None:
         helper = self.load_helper()
         _, root, ft_root, summary = self.make_repository()

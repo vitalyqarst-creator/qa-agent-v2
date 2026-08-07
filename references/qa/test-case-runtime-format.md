@@ -121,7 +121,7 @@
 
 Если такой restriction пришел из oracle inventory с `decision = candidate_tc_required`, сохраняй проверку как candidate TC по `negative-ui-calibration-policy.md`: `Статус исполнения: candidate-ui-calibration` и конкретный русский вопрос в `Требуется подтверждение` указываются в теле TC, а `Тестовые данные` или шаг содержит concrete representative invalid value.
 
-- Rolling date boundaries: use `D` current app date; future-negative = `D+1 calendar day`; no fixed sole boundary dates; BAQ if unclear.
+- Rolling date boundaries: define `D` in `Тестовые данные` as the current application/test-execution date, state format `ДД.ММ.ГГГГ`, then use formulas such as `D + 1 calendar day`; no fixed sole boundary dates; BAQ if the source of D is unclear.
 
 Для numeric/input rejection не заменяй один unsupported oracle другим. Если validator или reviewer отклонил `значение не отображается`, `значение очищено`, `символы отфильтрованы` или `значение не принято` как неподтвержденный UI-механизм, writer не должен исправлять это на `поле подсвечено красным`, `появляется ошибка`, `Следующий шаг заблокирован` или `раздел не открыт`, если source прямо не задает такую реакцию именно для invalid numeric/input class. Разрешены только:
 

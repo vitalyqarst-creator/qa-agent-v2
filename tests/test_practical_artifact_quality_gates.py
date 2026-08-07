@@ -441,6 +441,47 @@ class PracticalArtifactQualityGateTests(unittest.TestCase):
 
         self.assertNotIn("production-runtime-agent-process-language-leak", ids)
 
+    def test_rolling_date_boundary_requires_definition_and_format_for_d(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Будущая дата не принимается",
+                    test_data="- Граничная дата: `D + 1 календарный день`.",
+                    steps="1. Ввести граничную дату.\n2. Нажать `Сохранить`.",
+                    expected="Сохранение не выполняется.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertIn("rolling-date-boundary-unformalized-relative-value", ids)
+
+    def test_rolling_date_boundary_accepts_defined_d_with_format(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "fts" / "Sample" / "test-cases" / "scope.md"
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                self.case(
+                    title="Будущая дата не принимается",
+                    test_data=(
+                        "- `D` = текущая дата приложения в формате ДД.ММ.ГГГГ.\n"
+                        "- Граничная дата: `D + 1 календарный день`."
+                    ),
+                    steps="1. Ввести граничную дату.\n2. Нажать `Сохранить`.",
+                    expected="Сохранение не выполняется.",
+                ),
+                encoding="utf-8",
+            )
+
+            ids = self.finding_ids(root)
+
+        self.assertNotIn("rolling-date-boundary-unformalized-relative-value", ids)
+
     def test_duplicate_constraint_positive_save_is_warned(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
